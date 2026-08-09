@@ -1,0 +1,18 @@
+# The production driver exposes only production passes. Tests use a separate
+# binary that shares the same textual-input boundary and adds test passes.
+#
+# RUN: zkc-opt --list-passes > %t.production
+#
+# Positive control: the production list is alive. Without this, an empty or
+# truncated list would satisfy every negative check below.
+# RUN: grep -q 'pir-seal' %t.production
+#
+# No zkc test-pass family is registered in the production driver. The name
+# families cover every pass under test/lib; the match anchors on them because
+# upstream option text may legitimately contain 'test-' (canonicalize's
+# test-convergence option).
+# RUN: not grep -qE -- '--test-(artifact|compiler|interpreter|kzg|pir|seal|soundness)' %t.production
+#
+# RUN: zkc-test-opt --list-passes > %t.test
+# RUN: grep -q 'pir-seal' %t.test
+# RUN: grep -q 'test-soundness-kernel' %t.test

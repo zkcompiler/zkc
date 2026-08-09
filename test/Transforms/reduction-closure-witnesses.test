@@ -1,0 +1,15 @@
+# The two reduction-closure falsification witnesses refuse at seal under the
+# exact local contract rules (`docs/spec/kernel.md` §4.1). A shape-only reading
+# of either artifact would accept it: the transcript layout is untouched and
+# only the exact local implication is broken.
+
+# A check-free sumcheck reduction asserts the transition with no premises.
+# RUN: sed 's/checks {final = "final", round1 = "round1", round2 = "round2"}/checks {}/' %S/../Encoding/sumcheck.mlir > %t.check-free.mlir
+# RUN: not zkc-opt %pir-seal-full %t.check-free.mlir 2>&1 | FileCheck --check-prefix=CHECK-FREE %s
+# CHECK-FREE: [zkc-E321] body-check roles do not exactly match reduction contract 'sumcheck'
+
+# A KZG batch whose selected check carries an arbitrary suite is a different
+# proposition than the one the contract pins.
+# RUN: sed 's/params {suite = "bls12-381"}/params {suite = "toy-suite"}/' %S/../Encoding/kzg-after.mlir > %t.wrong-suite.mlir
+# RUN: not zkc-opt %pir-seal-full %t.wrong-suite.mlir 2>&1 | FileCheck --check-prefix=WRONG-SUITE %s
+# WRONG-SUITE: [zkc-E322] body role 'opening' has the wrong fixed parameters

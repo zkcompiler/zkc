@@ -1,0 +1,52 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.evalopen@reduction:evalopen"
+    ],
+    "resolved_parameters": {
+      "zkc.rbr.evalopen@reduction:evalopen": {
+        "field_order": {
+          "sort": "integer",
+          "value": "2305843009213697249"
+        },
+        "field_class": {
+          "sort": "string",
+          "value": "scalar"
+        }
+      }
+    },
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "7896a1f9513c75a4f9dc57e710eca5307d618d2ab5310f632a4e61d1f94445b0",
+        "claim": {
+          "claim_index": 4,
+          "descriptor_digest": "sha256:c24761c45689caabb96d65d6fc9d44e497bdb5fc62c4bf08919951db1b45d27c"
+        }
+      },
+      "index": {
+        "notion": "round_by_round",
+        "track": "soundness",
+        "variant": "standard",
+        "model": ""
+      },
+      "resource_variables": []
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "reduction",
+        "artifact_id": "7896a1f9513c75a4f9dc57e710eca5307d618d2ab5310f632a4e61d1f94445b0",
+        "owner_claim": {
+          "claim_index": 4,
+          "descriptor_digest": "sha256:c24761c45689caabb96d65d6fc9d44e497bdb5fc62c4bf08919951db1b45d27c"
+        },
+        "transformer_position": 4,
+        "output_index": 0
+      },
+      "binding": "zkc.rbr.evalopen@reduction:evalopen",
+      "premises": {}
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+ "artifact_id": "0526b051649d5d7e81ba43d89b5366e2a34d66a6707b917553613fb652e7d826",
+ "source": "sha256:ecb02fdfc351e4df1a340f5c1ee5c90cf8cf96e1d1af7fa69368b5b49d32751c",
+ "vectors": [
+  {
+   "challenges": [
+    "1193094727132841256"
+   ],
+   "expect": "accept",
+   "name": "honest",
+   "proof": "1cd59301fb10753e1c3c001230ea6733",
+   "statement": {
+    "y": "3133908059330535738"
+   }
+  },
+  {
+   "challenges": [
+    "1193094727132841256"
+   ],
+   "expect": "check_failure",
+   "name": "tampered_response",
+   "proof": "1cd59301fb10753e1c3c001230ea6734",
+   "statement": {
+    "y": "3133908059330535738"
+   }
+  },
+  {
+   "challenges": [
+    "1193094727132841256"
+   ],
+   "expect": "proof_trailing_data",
+   "name": "trailing_byte",
+   "proof": "1cd59301fb10753e1c3c001230ea673300",
+   "statement": {
+    "y": "3133908059330535738"
+   }
+  },
+  {
+   "challenges": [
+    "1193094727132841256"
+   ],
+   "expect": "abi_decode_failure",
+   "name": "truncated",
+   "proof": "1cd59301fb10753e",
+   "statement": {
+    "y": "3133908059330535738"
+   }
+  },
+  {
+   "challenges": [],
+   "expect": "abi_decode_failure",
+   "name": "noncanonical_value",
+   "proof": "40000000000019c31c3c001230ea6733",
+   "statement": {
+    "y": "3133908059330535738"
+   }
+  }
+ ]
+}

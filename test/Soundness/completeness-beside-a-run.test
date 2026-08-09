@@ -1,0 +1,57 @@
+# Completeness enters as a runnable fact (`docs/spec/soundness.md` §3.5): the
+# sealed Schnorr protocol carries a completeness judgment derived from the
+# admitted sigma completeness rule, and the same sealed artifact's derived
+# prover produces bytes its derived verifier accepts — the judgment and the
+# run, side by side. Completeness and soundness stay separate results
+# everywhere: the conclusion index is the completeness notion and track, never
+# a soundness spelling.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/routed-schnorr.mlir -o %t/sealed.mlir
+# RUN: zkc-seal %S/../Encoding/routed-schnorr.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/schnorr-completeness-request.json -o=%t/witness.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=WITNESS %s < %t/witness.json
+
+# The judgment: honest-prover acceptance-failure priced 0 (perfect), no
+# obligations inherited, and its own notion and track so it can never be
+# read as a soundness claim. The formalization state behind the rule is an
+# absence record, carried in the signature's annotation exactly as
+# soundness absences are — same shape, same honesty.
+# WITNESS-DAG: "notion": "completeness"
+# WITNESS-DAG: "track": "completeness"
+# WITNESS-DAG: "constant": "0"
+# WITNESS-DAG: "qualitative_obligations": []
+# WITNESS-DAG: "judgment_digest": "sha256:a36bd87517193fa222c455d4ed708a7a3df0df47d659ea745039fa5e5cf5e4ba"
+
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/witness.json %t/sealed.mlirbc | FileCheck --check-prefix=AGREES %s
+# AGREES: zkc-derive: witness re-derives
+
+# The run beside it: both endpoint projections of the same sealed artifact
+# complete a prove/verify round trip in-tree, so "the honest prover's proof
+# accepts" is demonstrated next to the judgment that prices it — a fact,
+# not an unfalsifiable claim. One accepted run instantiates the judgment;
+# it does not prove the bound.
+# RUN: zkc-opt %pir-project-full %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-opt %pir-project-prover-full %t/sealed.mlir -o %t/prover.mlir
+# RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" \
+# RUN:   --verify-with %t/verifier.mlir | FileCheck --check-prefix=BESIDE %s
+# BESIDE: verifier verdict: accept
+# BESIDE: round trip: the derived prover's bytes are accepted by the derived verifier
+
+# A completeness target cannot borrow a soundness spelling on the way in:
+# the mixed index never reaches a judgment.
+# RUN: sed 's/"track": "completeness"/"track": "soundness"/g' \
+# RUN:   %S/Inputs/schnorr-completeness-request.json > %t/mixed.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/mixed.json %t/sealed.mlirbc 2>&1 | FileCheck --check-prefix=MIXED %s
+# MIXED: derivation refused

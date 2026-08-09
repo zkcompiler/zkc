@@ -1,0 +1,307 @@
+# Protocol semantics have one authority: the closed, cross-admitted
+# ProtocolVocabulary. This suite contains no split-registry route.
+
+# The shipped vocabulary loads, cross-admits, and emits its normalized content.
+# RUN: zkc-registry-lint %zkc-registry-dir/protocol-vocabulary.json | FileCheck %s --check-prefix=VALID
+# VALID: {"check_contracts":
+# VALID-SAME: "claim_profiles":
+# VALID-SAME: "hole_contracts":
+# VALID-SAME: "predicate_specs":
+# VALID-SAME: "reduction_contracts":
+# VALID-SAME: "registry":"zkc.protocol_vocabulary"
+# VALID-SAME: "terminal_rules":
+
+# Object authoring order cannot change the canonical content bytes that feed
+# the vocabulary and entry digest functions. The CLI intentionally emits
+# normalized content, not a second stored digest mirror.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py reordered %zkc-registry-dir/protocol-vocabulary.json %t.reordered.json
+# RUN: zkc-registry-lint %zkc-registry-dir/protocol-vocabulary.json > %t.seed.normalized
+# RUN: zkc-registry-lint %t.reordered.json > %t.reordered.normalized
+# RUN: diff %t.seed.normalized %t.reordered.normalized
+# RUN: not grep -q '"sigma2"' %t.seed.normalized
+# RUN: grep -q '"sigma_dleq"' %t.seed.normalized
+# RUN: grep -q '"sigma_or"' %t.seed.normalized
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py anchor_reordered %zkc-registry-dir/protocol-vocabulary.json %t.anchor-reordered.json
+# RUN: zkc-registry-lint %t.anchor-reordered.json > %t.anchor-reordered.normalized
+# RUN: diff %t.seed.normalized %t.anchor-reordered.normalized
+
+# Every envelope and entry section is closed.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py unknown_top_level %zkc-registry-dir/protocol-vocabulary.json %t.unknown-top.json
+# RUN: not zkc-registry-lint %t.unknown-top.json 2>&1 | FileCheck %s --check-prefix=UNKNOWN-TOP
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py unknown_entry_field %zkc-registry-dir/protocol-vocabulary.json %t.unknown-entry.json
+# RUN: not zkc-registry-lint %t.unknown-entry.json 2>&1 | FileCheck %s --check-prefix=UNKNOWN-ENTRY
+# UNKNOWN-TOP: unknown field 'unexpected_section'
+# UNKNOWN-ENTRY: claim profile 'opaque_relation' has unknown field 'required'
+
+# The relation seam: a future relation layer attaches to the environment by
+# section name, and until it exists the fail-closed loader refuses that
+# exact spelling — relation semantics can never leak in as tolerated extra
+# content.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py relation_contracts_section %zkc-registry-dir/protocol-vocabulary.json %t.relation-seam.json
+# RUN: not zkc-registry-lint %t.relation-seam.json 2>&1 | FileCheck %s --check-prefix=RELATION-SEAM
+# RELATION-SEAM: unknown field 'relation_contracts'
+
+# Duplicate source keys are ambiguous even when both spell the same value;
+# admission never inherits LLVM JSON's last-key-wins behavior.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_json_key %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-key.json
+# RUN: not zkc-registry-lint %t.duplicate-key.json 2>&1 | FileCheck %s --check-prefix=DUPLICATE-KEY
+# DUPLICATE-KEY: duplicate JSON object key 'registry'
+
+# Floating-point and non-finite spellings are outside the canonical JSON
+# domain; authority admission never normalizes them to integers. The two
+# refusals come from different layers on purpose: a finite float survives the
+# JSON grammar and dies at the encoding-domain scan, while a non-finite
+# spelling is not canonical JSON at all and dies in the parser.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py float_json_number %zkc-registry-dir/protocol-vocabulary.json %t.float.json
+# RUN: not zkc-registry-lint %t.float.json 2>&1 | FileCheck %s --check-prefix=FLOAT-NUMBER
+# FLOAT-NUMBER: a numeric value leaves the encoding domain
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py nonfinite_json_number %zkc-registry-dir/protocol-vocabulary.json %t.nonfinite.json
+# RUN: not zkc-registry-lint %t.nonfinite.json 2>&1 | FileCheck %s --check-prefix=NONFINITE-NUMBER
+# NONFINITE-NUMBER: Invalid JSON value
+
+# Cross-references are admitted as one graph, never checked later by whichever
+# consumer happens to load a schema.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_cross_reference %zkc-registry-dir/protocol-vocabulary.json %t.bad-ref.json
+# RUN: not zkc-registry-lint %t.bad-ref.json 2>&1 | FileCheck %s --check-prefix=BAD-REF
+# BAD-REF: reduction contract 'sumcheck': consumes unknown claim profile 'missing_profile'
+
+# Claim-profile anchors are an exact name set: author order is normalized, but
+# duplicates are ambiguous authoring and refuse admission.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_anchor %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-anchor.json
+# RUN: not zkc-registry-lint %t.duplicate-anchor.json 2>&1 | FileCheck %s --check-prefix=DUPLICATE-ANCHOR
+# DUPLICATE-ANCHOR: claim profile 'opaque_relation' anchors repeats
+
+# There is no inert relaxation escape hatch in the clean vocabulary model.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py dead_relaxations %zkc-registry-dir/protocol-vocabulary.json %t.relaxations.json
+# RUN: not zkc-registry-lint %t.relaxations.json 2>&1 | FileCheck %s --check-prefix=RELAXATIONS
+# RELAXATIONS: reduction contract 'sumcheck' has unknown field 'relaxations'
+
+# Check operands have disjoint roles and one uniquely solvable cardinality.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_operand_role %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-role.json
+# RUN: not zkc-registry-lint %t.duplicate-role.json 2>&1 | FileCheck %s --check-prefix=DUPLICATE-ROLE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py ambiguous_multiplicity %zkc-registry-dir/protocol-vocabulary.json %t.ambiguous-multiplicity.json
+# RUN: not zkc-registry-lint %t.ambiguous-multiplicity.json 2>&1 | FileCheck %s --check-prefix=AMBIGUOUS-MULTIPLICITY
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py legacy_operand_class %zkc-registry-dir/protocol-vocabulary.json %t.legacy-operand-class.json
+# RUN: not zkc-registry-lint %t.legacy-operand-class.json 2>&1 | FileCheck %s --check-prefix=LEGACY-OPERAND-CLASS
+# DUPLICATE-ROLE: parameter, semantic-parameter, and operand roles must be disjoint and unique
+# AMBIGUOUS-MULTIPLICITY: introduces a second independent count capture
+# LEGACY-OPERAND-CLASS: 'class' must be a semantic payload class, not the retired producer pseudo-class 'chal'
+
+# A CheckContract commits to its mathematical acceptance predicate, not merely
+# to an ABI and a human id. Transparent contracts name the one admitted
+# normalized-expression binding mechanism; opaque contracts pin a canonical
+# predicate spec in the same closed ProtocolVocabulary by exact content digest
+# and entrypoint. The body map is the exact cited closure, its keys are
+# re-derived, and each entrypoint carries a structural ABI identical to the
+# CheckContract ABI. There is no sibling-file resolver or ABI-only route.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py missing_check_predicate %zkc-registry-dir/protocol-vocabulary.json %t.missing-check-predicate.json
+# RUN: not zkc-registry-lint %t.missing-check-predicate.json 2>&1 | FileCheck %s --check-prefix=MISSING-CHECK-PREDICATE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py unknown_check_predicate_format %zkc-registry-dir/protocol-vocabulary.json %t.unknown-check-predicate-format.json
+# RUN: not zkc-registry-lint %t.unknown-check-predicate-format.json 2>&1 | FileCheck %s --check-prefix=UNKNOWN-CHECK-PREDICATE-FORMAT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py opaque_with_transparent_predicate %zkc-registry-dir/protocol-vocabulary.json %t.opaque-transparent-predicate.json
+# RUN: not zkc-registry-lint %t.opaque-transparent-predicate.json 2>&1 | FileCheck %s --check-prefix=OPAQUE-TRANSPARENT-PREDICATE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py transparent_with_opaque_predicate %zkc-registry-dir/protocol-vocabulary.json %t.transparent-opaque-predicate.json
+# RUN: not zkc-registry-lint %t.transparent-opaque-predicate.json 2>&1 | FileCheck %s --check-prefix=TRANSPARENT-OPAQUE-PREDICATE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_check_predicate_digest %zkc-registry-dir/protocol-vocabulary.json %t.bad-check-predicate-digest.json
+# RUN: not zkc-registry-lint %t.bad-check-predicate-digest.json 2>&1 | FileCheck %s --check-prefix=BAD-CHECK-PREDICATE-DIGEST
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_check_predicate_entrypoint %zkc-registry-dir/protocol-vocabulary.json %t.bad-check-predicate-entrypoint.json
+# RUN: not zkc-registry-lint %t.bad-check-predicate-entrypoint.json 2>&1 | FileCheck %s --check-prefix=BAD-CHECK-PREDICATE-ENTRYPOINT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py unknown_check_predicate_field %zkc-registry-dir/protocol-vocabulary.json %t.unknown-check-predicate-field.json
+# RUN: not zkc-registry-lint %t.unknown-check-predicate-field.json 2>&1 | FileCheck %s --check-prefix=UNKNOWN-CHECK-PREDICATE-FIELD
+# MISSING-CHECK-PREDICATE: check contract 'zkc.check.relation-predicate' needs an object 'predicate'
+# UNKNOWN-CHECK-PREDICATE-FORMAT: predicate format is not admitted
+# OPAQUE-TRANSPARENT-PREDICATE: opaque mode requires an opaque predicate-spec descriptor
+# TRANSPARENT-OPAQUE-PREDICATE: transparent mode requires the transparent-expression descriptor
+# BAD-CHECK-PREDICATE-DIGEST: predicate content_digest must be a canonical sha256 reference
+# BAD-CHECK-PREDICATE-ENTRYPOINT: predicate needs a non-empty printable-ASCII 'entrypoint'
+# UNKNOWN-CHECK-PREDICATE-FIELD: unknown field 'content_digest'
+
+# Predicate-spec preimages are production-admitted content, not test-only
+# sibling files. Missing sections/specs and extra specs refuse; a random map key
+# cannot rename content; entrypoint bodies are closed; descriptors must resolve;
+# and structurally different ABIs refuse even after the attacker consistently
+# rekeys the changed spec and descriptor.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py missing_predicate_specs_section %zkc-registry-dir/protocol-vocabulary.json %t.missing-predicate-specs-section.json
+# RUN: not zkc-registry-lint %t.missing-predicate-specs-section.json 2>&1 | FileCheck %s --check-prefix=MISSING-PREDICATE-SPECS-SECTION
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py random_predicate_spec_digest %zkc-registry-dir/protocol-vocabulary.json %t.random-predicate-spec-digest.json
+# RUN: not zkc-registry-lint %t.random-predicate-spec-digest.json 2>&1 | FileCheck %s --check-prefix=RANDOM-PREDICATE-SPEC-DIGEST
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py missing_predicate_spec %zkc-registry-dir/protocol-vocabulary.json %t.missing-predicate-spec.json
+# RUN: not zkc-registry-lint %t.missing-predicate-spec.json 2>&1 | FileCheck %s --check-prefix=MISSING-PREDICATE-SPEC
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py extra_predicate_spec %zkc-registry-dir/protocol-vocabulary.json %t.extra-predicate-spec.json
+# RUN: not zkc-registry-lint %t.extra-predicate-spec.json 2>&1 | FileCheck %s --check-prefix=EXTRA-PREDICATE-SPEC
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_predicate_spec_entrypoint %zkc-registry-dir/protocol-vocabulary.json %t.bad-predicate-spec-entrypoint.json
+# RUN: not zkc-registry-lint %t.bad-predicate-spec-entrypoint.json 2>&1 | FileCheck %s --check-prefix=BAD-PREDICATE-SPEC-ENTRYPOINT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_predicate_spec_body %zkc-registry-dir/protocol-vocabulary.json %t.bad-predicate-spec-body.json
+# RUN: not zkc-registry-lint %t.bad-predicate-spec-body.json 2>&1 | FileCheck %s --check-prefix=BAD-PREDICATE-SPEC-BODY
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py predicate_spec_abi_mismatch %zkc-registry-dir/protocol-vocabulary.json %t.predicate-spec-abi-mismatch.json
+# RUN: not zkc-registry-lint %t.predicate-spec-abi-mismatch.json 2>&1 | FileCheck %s --check-prefix=PREDICATE-SPEC-ABI-MISMATCH
+# MISSING-PREDICATE-SPECS-SECTION: 'predicate_specs' must be an object
+# RANDOM-PREDICATE-SPEC-DIGEST: key does not match its canonical content digest
+# MISSING-PREDICATE-SPEC: predicate content_digest does not resolve in the closed predicate_specs section
+# EXTRA-PREDICATE-SPEC: is not cited by any opaque check contract
+# BAD-PREDICATE-SPEC-ENTRYPOINT: predicate entrypoint does not resolve in its cited spec
+# BAD-PREDICATE-SPEC-BODY: needs an array 'operands'
+# PREDICATE-SPEC-ABI-MISMATCH: ABI does not exactly match predicate spec entrypoint
+
+# Acceptance clauses are an exact normative list: a repeated clause is
+# ambiguous authoring, and every registry string lives in the printable-ASCII
+# encoding domain. Both refusals hold even after the attacker consistently
+# rekeys the mutated spec and its citing descriptor.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_acceptance %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-acceptance.json
+# RUN: not zkc-registry-lint %t.duplicate-acceptance.json 2>&1 | FileCheck %s --check-prefix=DUPLICATE-ACCEPTANCE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py non_ascii_title %zkc-registry-dir/protocol-vocabulary.json %t.non-ascii-title.json
+# RUN: not zkc-registry-lint %t.non-ascii-title.json 2>&1 | FileCheck %s --check-prefix=NON-ASCII-TITLE
+# DUPLICATE-ACCEPTANCE: acceptance repeats
+# NON-ASCII-TITLE: needs a non-empty printable-ASCII 'title'
+
+# Message multiplicity is a closed tagged union. Dynamic cardinality has one
+# authority: the actual input arity of a sole variadic consume pattern. Scalar
+# legacy spelling, malformed unions, and dynamic use on a fixed-arity contract
+# all refuse. A dynamic role is vector-only: neither reduction material nor a
+# terminal producer attachment may select one statically numbered occurrence.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py dynamic_message_count %zkc-registry-dir/protocol-vocabulary.json %t.dynamic-count.json
+# RUN: zkc-registry-lint %t.dynamic-count.json | FileCheck %s --check-prefix=DYNAMIC-COUNT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py scalar_message_count %zkc-registry-dir/protocol-vocabulary.json %t.scalar-count.json
+# RUN: not zkc-registry-lint %t.scalar-count.json 2>&1 | FileCheck %s --check-prefix=SCALAR-COUNT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py malformed_message_count %zkc-registry-dir/protocol-vocabulary.json %t.malformed-count.json
+# RUN: not zkc-registry-lint %t.malformed-count.json 2>&1 | FileCheck %s --check-prefix=MALFORMED-COUNT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py dynamic_message_nonvariadic %zkc-registry-dir/protocol-vocabulary.json %t.nonvariadic-count.json
+# RUN: not zkc-registry-lint %t.nonvariadic-count.json 2>&1 | FileCheck %s --check-prefix=NONVARIADIC-COUNT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py dynamic_message_selector %zkc-registry-dir/protocol-vocabulary.json %t.dynamic-selector.json
+# RUN: not zkc-registry-lint %t.dynamic-selector.json 2>&1 | FileCheck %s --check-prefix=DYNAMIC-SELECTOR
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py dynamic_producer_message_selector %zkc-registry-dir/protocol-vocabulary.json %t.dynamic-producer-selector.json
+# RUN: not zkc-registry-lint %t.dynamic-producer-selector.json 2>&1 | FileCheck %s --check-prefix=DYNAMIC-PRODUCER-SELECTOR
+# DYNAMIC-COUNT: "count":{"same_as":"consumed_claims"}
+# SCALAR-COUNT: count must be exactly one of {"exact":N} or {"same_as":"consumed_claims"}
+# MALFORMED-COUNT: count must be exactly one of {"exact":N} or {"same_as":"consumed_claims"}
+# NONVARIADIC-COUNT: count may use consumed_claims only on a contract with exactly one variadic consume pattern
+# DYNAMIC-SELECTOR: cannot select one occurrence from a dynamic message role
+# DYNAMIC-PRODUCER-SELECTOR: cannot select one producer message from a dynamic message role
+
+# Terminal rules must name real attachment targets and cover the entire claim
+# descriptor plus every intrinsic semantic parameter.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_attachment %zkc-registry-dir/protocol-vocabulary.json %t.bad-attachment.json
+# RUN: not zkc-registry-lint %t.bad-attachment.json 2>&1 | FileCheck %s --check-prefix=BAD-ATTACHMENT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_coverage %zkc-registry-dir/protocol-vocabulary.json %t.bad-coverage.json
+# RUN: not zkc-registry-lint %t.bad-coverage.json 2>&1 | FileCheck %s --check-prefix=BAD-COVERAGE
+# BAD-ATTACHMENT: references an unknown semantic parameter
+# BAD-COVERAGE: does not cover exactly its claim anchors
+
+# Nothing versions at v0: a version key is not tolerated legacy content but
+# an unknown field, and the retired schema section has no alias route.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py version_key %zkc-registry-dir/protocol-vocabulary.json %t.version-key.json
+# RUN: not zkc-registry-lint %t.version-key.json 2>&1 | FileCheck %s --check-prefix=VERSION-KEY
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py legacy_schema_section %zkc-registry-dir/protocol-vocabulary.json %t.legacy-schema.json
+# RUN: not zkc-registry-lint %t.legacy-schema.json 2>&1 | FileCheck %s --check-prefix=LEGACY-SCHEMA
+# VERSION-KEY: unknown field 'version'
+# LEGACY-SCHEMA: unknown field 'reduction_schemas'
+
+# Dependency provenance is a closed axis independent of theorem pricing.  The
+# v2 shape admits only role/source/class, legacy kind/count spellings refuse,
+# and a challenge-capability dependency may remain unpriced until a round
+# explicitly names it.  Round challenge uses are likewise closed: they must
+# resolve one dependency role, may head at most one round, omit count for a
+# scalar, and spell vector multiplicity canonically with count >= 2.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py unpriced_challenge_dependency %zkc-registry-dir/protocol-vocabulary.json %t.unpriced-challenge-dep.json
+# RUN: zkc-registry-lint %t.unpriced-challenge-dep.json > /dev/null
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py vector_challenge_use_count %zkc-registry-dir/protocol-vocabulary.json %t.vector-challenge-use.json
+# RUN: zkc-registry-lint %t.vector-challenge-use.json | FileCheck %s --check-prefix=VECTOR-CHALLENGE-USE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py legacy_dep_kind %zkc-registry-dir/protocol-vocabulary.json %t.legacy-dep-kind.json
+# RUN: not zkc-registry-lint %t.legacy-dep-kind.json 2>&1 | FileCheck %s --check-prefix=LEGACY-DEP-KIND
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py legacy_dep_count %zkc-registry-dir/protocol-vocabulary.json %t.legacy-dep-count.json
+# RUN: not zkc-registry-lint %t.legacy-dep-count.json 2>&1 | FileCheck %s --check-prefix=LEGACY-DEP-COUNT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_dep_source %zkc-registry-dir/protocol-vocabulary.json %t.bad-dep-source.json
+# RUN: not zkc-registry-lint %t.bad-dep-source.json 2>&1 | FileCheck %s --check-prefix=BAD-DEP-SOURCE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py legacy_dep_class %zkc-registry-dir/protocol-vocabulary.json %t.legacy-dep-class.json
+# RUN: not zkc-registry-lint %t.legacy-dep-class.json 2>&1 | FileCheck %s --check-prefix=LEGACY-DEP-CLASS
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py legacy_round_challenge %zkc-registry-dir/protocol-vocabulary.json %t.legacy-round.json
+# RUN: not zkc-registry-lint %t.legacy-round.json 2>&1 | FileCheck %s --check-prefix=LEGACY-ROUND
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_challenge_use_role %zkc-registry-dir/protocol-vocabulary.json %t.bad-challenge-role.json
+# RUN: not zkc-registry-lint %t.bad-challenge-role.json 2>&1 | FileCheck %s --check-prefix=BAD-CHALLENGE-ROLE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_challenge_use %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-challenge-use.json
+# RUN: not zkc-registry-lint %t.duplicate-challenge-use.json 2>&1 | FileCheck %s --check-prefix=DUPLICATE-CHALLENGE-USE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py scalar_challenge_use_count %zkc-registry-dir/protocol-vocabulary.json %t.scalar-challenge-count.json
+# RUN: not zkc-registry-lint %t.scalar-challenge-count.json 2>&1 | FileCheck %s --check-prefix=BAD-CHALLENGE-COUNT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py zero_challenge_use_count %zkc-registry-dir/protocol-vocabulary.json %t.zero-challenge-count.json
+# RUN: not zkc-registry-lint %t.zero-challenge-count.json 2>&1 | FileCheck %s --check-prefix=BAD-CHALLENGE-COUNT
+# A reduction contract states its local transition through interaction
+# rounds; a zero-round contract would cite a theorem row while pricing no
+# rounds at all, so admission refuses it.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py empty_rounds %zkc-registry-dir/protocol-vocabulary.json %t.empty-rounds.json
+# RUN: not zkc-registry-lint %t.empty-rounds.json 2>&1 | FileCheck %s --check-prefix=EMPTY-ROUNDS
+# EMPTY-ROUNDS: reduction contract 'sumcheck': needs a non-empty array 'rounds'
+
+# And exactly one produced claim. A derivation site names one output position,
+# so a second output would offer a second site over the same reduction, and
+# each conclusion would carry the whole reduction's error while nothing
+# constrained that direction. Every shipped contract already produces one, so
+# the shape is reachable by authoring alone and closing it costs no fixture.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py two_outputs %zkc-registry-dir/protocol-vocabulary.json %t.two-outputs.json
+# RUN: not zkc-registry-lint %t.two-outputs.json 2>&1 | FileCheck %s --check-prefix=TWO-OUTPUTS
+# TWO-OUTPUTS: reduction contract 'sumcheck': produces 2 claims; a reduction contract produces exactly one
+
+# The faithfulness gate refuses an anchorless produced profile, and keeps
+# admitting two producers of one anchored profile.  After the repair no
+# shipped profile is anchorless, so without the synthetic negative the gate
+# has no exercise, and without the synthetic positive a later session could
+# "strengthen" it into refusing the second arithmetizer the relation
+# programme legitimately wants.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py anchorless_output %zkc-registry-dir/protocol-vocabulary.json %t.anchorless-output.json
+# RUN: not zkc-registry-lint %t.anchorless-output.json 2>&1 | FileCheck %s --check-prefix=ANCHORLESS-OUTPUT
+# ANCHORLESS-OUTPUT: produces anchorless profile 'bare_evaluation'
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py second_producer %zkc-registry-dir/protocol-vocabulary.json %t.second-producer.json
+# RUN: zkc-registry-lint %t.second-producer.json > /dev/null
+
+# VECTOR-CHALLENGE-USE: "challenge_use":{"count":2,"role":"c1"}
+# LEGACY-DEP-KIND: unknown field 'kind'
+# LEGACY-DEP-COUNT: unknown field 'count'
+# BAD-DEP-SOURCE: 'source' must be any, public_bind, prover_slot, or challenge_capability
+# LEGACY-DEP-CLASS: 'class' must be a semantic payload class, not the retired producer pseudo-class 'chal'
+# LEGACY-ROUND: unknown field 'challenge'
+# BAD-CHALLENGE-ROLE: challenge_use must name a dependency slot
+# DUPLICATE-CHALLENGE-USE: challenge-use role 'c1' heads more than one round
+# BAD-CHALLENGE-COUNT: challenge_use 'count' must be an integer from 2 through 2^20 (omit it for a scalar use)
+
+# Reduction parameters and body-check slots are exact, typed authorities.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_parameter_sort %zkc-registry-dir/protocol-vocabulary.json %t.bad-param-sort.json
+# RUN: not zkc-registry-lint %t.bad-param-sort.json 2>&1 | FileCheck %s --check-prefix=BAD-PARAM-SORT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py overlapping_reduction_role %zkc-registry-dir/protocol-vocabulary.json %t.overlapping-role.json
+# RUN: not zkc-registry-lint %t.overlapping-role.json 2>&1 | FileCheck %s --check-prefix=OVERLAPPING-ROLE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py missing_check_parameter %zkc-registry-dir/protocol-vocabulary.json %t.missing-check-param.json
+# RUN: not zkc-registry-lint %t.missing-check-param.json 2>&1 | FileCheck %s --check-prefix=MISSING-CHECK-PARAM
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py missing_transparent_predicate %zkc-registry-dir/protocol-vocabulary.json %t.missing-predicate.json
+# RUN: not zkc-registry-lint %t.missing-predicate.json 2>&1 | FileCheck %s --check-prefix=MISSING-PREDICATE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py predicate_on_opaque %zkc-registry-dir/protocol-vocabulary.json %t.opaque-predicate.json
+# RUN: not zkc-registry-lint %t.opaque-predicate.json 2>&1 | FileCheck %s --check-prefix=OPAQUE-PREDICATE
+# BAD-PARAM-SORT: sort must be atom, material_ref, or material_ref_vector
+# OVERLAPPING-ROLE: dependency, message, parameter, and check roles must be disjoint and unique
+# MISSING-CHECK-PARAM: parameters must match the check contract exactly
+# MISSING-PREDICATE: must define a predicate exactly for transparent check contracts
+# OPAQUE-PREDICATE: must define a predicate exactly for transparent check contracts
+
+# Hole contracts expose one parameter namespace to route instances. Static and
+# semantic declarations therefore cannot reuse one name.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py overlapping_hole_parameter %zkc-registry-dir/protocol-vocabulary.json %t.overlapping-hole-parameter.json
+# RUN: not zkc-registry-lint %t.overlapping-hole-parameter.json 2>&1 | FileCheck %s --check-prefix=OVERLAPPING-HOLE-PARAMETER
+# OVERLAPPING-HOLE-PARAMETER: hole contract 'zkc.hole.sigma-commit' parameter and semantic-parameter names must be disjoint
+
+# Material expressions are closed, sorted, and profile exact. Equality is an
+# unordered identity relation, so tautologies and reversed duplicates refuse.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_reduction_attachment %zkc-registry-dir/protocol-vocabulary.json %t.bad-reduction-attachment.json
+# RUN: not zkc-registry-lint %t.bad-reduction-attachment.json 2>&1 | FileCheck %s --check-prefix=BAD-REDUCTION-ATTACHMENT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_output_coverage %zkc-registry-dir/protocol-vocabulary.json %t.bad-output-coverage.json
+# RUN: not zkc-registry-lint %t.bad-output-coverage.json 2>&1 | FileCheck %s --check-prefix=BAD-OUTPUT-COVERAGE
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_output_sort %zkc-registry-dir/protocol-vocabulary.json %t.bad-output-sort.json
+# RUN: not zkc-registry-lint %t.bad-output-sort.json 2>&1 | FileCheck %s --check-prefix=BAD-OUTPUT-SORT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py tautological_constraint %zkc-registry-dir/protocol-vocabulary.json %t.tautology.json
+# RUN: not zkc-registry-lint %t.tautology.json 2>&1 | FileCheck %s --check-prefix=TAUTOLOGY
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_reversed_constraint %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-constraint.json
+# RUN: not zkc-registry-lint %t.duplicate-constraint.json 2>&1 | FileCheck %s --check-prefix=DUPLICATE-CONSTRAINT
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py bad_common_target %zkc-registry-dir/protocol-vocabulary.json %t.bad-common-target.json
+# RUN: not zkc-registry-lint %t.bad-common-target.json 2>&1 | FileCheck %s --check-prefix=BAD-COMMON-TARGET
+# BAD-REDUCTION-ATTACHMENT: references an unknown message occurrence
+# BAD-OUTPUT-COVERAGE: anchors must match the output profile exactly
+# BAD-OUTPUT-SORT: anchor expressions must have ref sort
+# TAUTOLOGY: is tautological
+# DUPLICATE-CONSTRAINT: repeats a material constraint
+# BAD-COMMON-TARGET: requires an exactly-one operand target

@@ -1,0 +1,87 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.sumcheck@reduction:sumcheck",
+      "zkc.sr.from_rbr_knowledge@path:rbr_to_sr:knowledge:straightline",
+      "zkc.fs.duplex_knowledge@path:sr_to_fs_duplex:knowledge:straightline"
+    ],
+    "resolved_parameters": {
+      "zkc.rbr.sumcheck@reduction:sumcheck": {
+        "field_order": {
+          "sort": "integer",
+          "value": "2305843009213697249"
+        },
+        "field_class": {
+          "sort": "string",
+          "value": "scalar"
+        }
+      }
+    },
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "5337dec2241ef509cde1d670883918e0040f3cda434cbe407dfd249bcd9a3fda",
+        "claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:d561c80690036db2632b684ed23a90d55248cbe21d2696dad9ede79601b50756"
+        }
+      },
+      "index": {
+        "notion": "fiat_shamir",
+        "track": "knowledge",
+        "variant": "straightline",
+        "model": "duplex"
+      },
+      "resource_variables": [
+        {
+          "name": "t",
+          "sort": "integer"
+        }
+      ]
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "path",
+        "artifact_id": "5337dec2241ef509cde1d670883918e0040f3cda434cbe407dfd249bcd9a3fda",
+        "claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:d561c80690036db2632b684ed23a90d55248cbe21d2696dad9ede79601b50756"
+        }
+      },
+      "binding": "zkc.fs.duplex_knowledge@path:sr_to_fs_duplex:knowledge:straightline",
+      "premises": {
+        "source_sr": {
+          "kind": "apply",
+          "site": {
+            "kind": "path",
+            "artifact_id": "5337dec2241ef509cde1d670883918e0040f3cda434cbe407dfd249bcd9a3fda",
+            "claim": {
+              "claim_index": 1,
+              "descriptor_digest": "sha256:d561c80690036db2632b684ed23a90d55248cbe21d2696dad9ede79601b50756"
+            }
+          },
+          "binding": "zkc.sr.from_rbr_knowledge@path:rbr_to_sr:knowledge:straightline",
+          "premises": {
+            "source_rbr": {
+              "kind": "apply",
+              "site": {
+                "kind": "reduction",
+                "artifact_id": "5337dec2241ef509cde1d670883918e0040f3cda434cbe407dfd249bcd9a3fda",
+                "owner_claim": {
+                  "claim_index": 1,
+                  "descriptor_digest": "sha256:d561c80690036db2632b684ed23a90d55248cbe21d2696dad9ede79601b50756"
+                },
+                "transformer_position": 1,
+                "output_index": 0
+              },
+              "binding": "zkc.rbr.sumcheck@reduction:sumcheck",
+              "premises": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

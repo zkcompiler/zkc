@@ -1,0 +1,49 @@
+{
+  "registry": "zkc.construction_profiles",
+  "sponges": {
+    "plonky3_bb31_poseidon2_w16_r8_lenpad": {
+      "alphabet_order": "2013265921",
+      "capacity": 8,
+      "rate": 8
+    },
+    "toy_duplex": {
+      "alphabet_order": "256",
+      "capacity": 32,
+      "rate": 32
+    }
+  },
+  "codecs": {
+    "plonky3_bb31_ext4_tuple": {
+      "squeeze": {
+        "kind": "tuple_bijection",
+        "symbols": 4
+      }
+    },
+    "plonky3_bb31_low_bits": {
+      "squeeze": {
+        "kind": "mod_reduce",
+        "symbols": 1
+      }
+    },
+    "ts_be8": {
+      "squeeze": {
+        "kind": "mod_reduce",
+        "symbols": 8
+      }
+    },
+    "fr_be32": {
+      "squeeze": {
+        "kind": "mod_reduce",
+        "symbols": 32
+      }
+    },
+    "tg_be8": {
+      "squeeze": {
+        "kind": "mod_reduce",
+        "symbols": 8
+      }
+    },
+    "bls_g1_be48": {},
+    "plonky3_bb31_digest8": {}
+  }
+}

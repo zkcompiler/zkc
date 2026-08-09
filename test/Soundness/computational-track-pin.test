@@ -1,0 +1,46 @@
+# The restriction that decides four of five scored systems, pinned.
+#
+# No protocol whose soundness rests on a computational assumption can receive
+# a Fiat-Shamir judgment today: the round-by-round to state-restoration rules
+# require their premise to have empty game support, because multiplying a
+# premise's round maximum by a formal move budget would otherwise produce
+# resource times primitive advantage, outside the admitted normal form.  That
+# is why every KZG-terminated protocol stops short of the FS track. The
+# executable-normal-form boundary is docs/spec/soundness.md §4.3.
+#
+# Nothing in the shipped registry reaches the guard -- three rules conclude at
+# computational special soundness and no body takes it as a premise, so the
+# round-by-round track never carries a game term.  A restriction nothing
+# reaches is one that goes false in silence, which is exactly how the
+# interleaving diagnostic went false.  So this test reaches it: a scratch
+# signature whose opening entry prices a round with an ARSDH advantage beside
+# its Schwartz-Zippel term, derived from the shipped signature so the two
+# cannot drift.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: %python %S/Inputs/computational_premise_signature.py \
+# RUN:   %zkc-registry-dir/soundness-signature.json %t/computational.json
+# RUN: zkc-registry-lint %t/computational.json > /dev/null
+# RUN: zkc-seal %S/Inputs/chained-open.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# The round-by-round conclusion itself derives: the bound is inside the
+# admitted normal form, and the game term is carried, not hidden.
+# RUN: zkc-derive --signature=%t/computational.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/computational-rbr-request.json -o=%t/rbr.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=RBR %s < %t/rbr.json
+# RBR: "primitive_game_terms"
+# RBR: "zkc.assume.arsdh"
+
+# The hop that would carry it into state restoration, and from there to
+# Fiat-Shamir, refuses.  If this RUN line ever starts passing, the
+# computational track has been opened -- which is a specification change with
+# a new rule body and a normal-form extension, not a quiet one.
+# RUN: not zkc-derive --signature=%t/computational.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/computational-sr-request.json -o=/dev/null %t/sealed.mlirbc 2>&1 \
+# RUN:   | FileCheck --check-prefix=REFUSED %s
+# REFUSED: empty-game-support constraint

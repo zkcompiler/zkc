@@ -1,0 +1,14 @@
+{
+ "artifact_id": "b8aaa08e666913647712a84360abe1adf444377dfee831d30cfd46192766a53f",
+ "vectors": [
+  {
+   "challenges": [],
+   "expect": "accept",
+   "name": "not_hex",
+   "proof": "zz",
+   "statement": {
+    "y": "1"
+   }
+  }
+ ]
+}

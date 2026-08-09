@@ -1,0 +1,18 @@
+# The anchors of the identity system, recomputed and compared to what they
+# were pinned at.
+#
+# Every other cross-implementation test in this suite proves that the two
+# implementations agree with each other. None of them can notice that the two
+# now agree on something else — a coordinated change moves both legs, the diff
+# still passes, and every identity in the system has quietly become a different
+# identity. That is the failure this test exists for. It is also why the
+# re-mint tool refuses to update these values on its own: a tripwire that
+# resets itself is furniture.
+#
+# When this test fails after a deliberate identity change, read the report,
+# confirm each move is the one you meant, and run:
+#   python3 tools/remint/remint.py sentinels --accept
+# REQUIRES: uv
+
+# RUN: %python %zkc-remint sentinels | FileCheck %s
+# CHECK: 12/12 anchors hold

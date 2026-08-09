@@ -1,0 +1,14 @@
+{
+ "artifact_id": "37471e34aaf74018637d2b5513a2bf6deeb0fda0d50246137bf0828f1e168f7d",
+ "vectors": [
+  {
+   "challenges": [],
+   "expect": "public_binding_failure",
+   "name": "out_of_range_statement",
+   "proof": "",
+   "statement": {
+    "y": "4611686018427394499"
+   }
+  }
+ ]
+}

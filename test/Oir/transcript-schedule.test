@@ -1,0 +1,31 @@
+# This is the zkc-side schedule view for one synthetic Ext4 route. It is not a
+# Plonky3/FRI conformance claim: the output itself states that domains are
+# declarations, construction execution and challenge values are absent, and
+# codec selection is exact per event payload class.
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/Inputs/tuple-bijection.mlir -o %t.projected
+# RUN: zkc-translate --transcript-schedule %t.projected -o %t.schedule.json
+# RUN: %python %S/Inputs/check-transcript-schedule.py %t.schedule.json | FileCheck --check-prefix=EXT4 %s
+# EXT4: synthetic Ext4 transcript schedule matched
+
+# A derived view authenticates its source instead of republishing an authored
+# id. A forged stored id therefore refuses before any schedule row is read.
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t.projected %t.wrong-id.projected 0000000000000000000000000000000000000000000000000000000000000000
+# RUN: not zkc-translate --transcript-schedule %t.wrong-id.projected 2>&1 | FileCheck --check-prefix=WRONG-STORED-ID %s
+# WRONG-STORED-ID: [zkc-E170] stored OIR artifact id does not match its canonical identity
+
+# Codec routing is fail-closed. Dropping this event's scalar route cannot
+# produce a schedule with a guessed/default codec. The semantically changed
+# negative witness is re-minted first, so this probes codec routing rather than
+# failing at the earlier identity boundary.
+# RUN: sed 's/scalar = "plonky3_bb31_ext4_tuple", //g' %t.projected > %t.no-scalar.unminted.mlir
+# RUN: zkc-translate --oir-id %t.no-scalar.unminted.mlir -o %t.no-scalar.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t.no-scalar.unminted.mlir %t.no-scalar.mlir %t.no-scalar.id
+# RUN: not zkc-translate --transcript-schedule %t.no-scalar.mlir 2>&1 | FileCheck --check-prefix=NO-CODEC %s
+# NO-CODEC: projected program has no codec for class 'scalar'
+
+# Count is carried rather than unrolled.  A vector capability remains one
+# schedule event with its exact semantic class, decimal count, and rule.
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Transforms/pir-project-vector.mlir -o %t.vector.projected
+# RUN: zkc-translate --transcript-schedule %t.vector.projected -o %t.vector.schedule.json
+# RUN: %python %S/Inputs/check-transcript-schedule.py --vector %t.vector.schedule.json | FileCheck --check-prefix=VECTOR %s
+# VECTOR: counted vector transcript schedule matched

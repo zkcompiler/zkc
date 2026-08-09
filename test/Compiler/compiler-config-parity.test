@@ -1,0 +1,16 @@
+# REQUIRES: uv
+# The compiler-configuration identity has two independent legs: the
+# provider binds every configured ExactRef to the exact environment it was
+# constructed over, and the reference twin recomputes the same digests from
+# the same registries. Byte agreement here is the parity gate; the golden
+# values pinned in pir-compiler-provider.mlir remain the change tripwire.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py reset %t/one.artifacts
+# RUN: zkc-seal %S/../Encoding/kzg-before.mlir %zkc-seal-full -o %t/one.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/one.artifacts %t/one.mlirbc
+# RUN: zkc-test-opt \
+# RUN:   -test-pir-compiler-provider='protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json signature=%zkc-registry-dir/soundness-signature.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json source-artifact=%t/one.mlirbc expected-groups=1' \
+# RUN:   %S/pir-compiler-provider.mlir -o /dev/null 2>&1 | grep '^configured' > %t/native.txt
+# RUN: %uv python -m oracle.parity compiler-config > %t/oracle.txt
+# RUN: diff %t/native.txt %t/oracle.txt

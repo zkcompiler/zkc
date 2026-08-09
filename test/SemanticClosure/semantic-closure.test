@@ -1,0 +1,56 @@
+// The Semantic Closure suite exercises the current encoding/certificate
+// boundary directly. Artifact discovery is single-output and stale-safe;
+// there is no fallback producer or certificate format.
+
+// A relation claim seals, rechecks, emits the minimal terminal row, and is
+// re-judged by pir-recheck against the same exact registries.
+// RUN: zkc-opt %pir-seal-full %S/Inputs/relation-direct.mlir -o %t.relation.sealed
+// RUN: zkc-opt %pir-recheck-full %t.relation.sealed -o /dev/null
+// RUN: %python %S/lib/artifact_handoff.py reset %t.relation.artifacts
+// RUN: zkc-seal --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json %S/Inputs/relation-direct.mlir -o %t.relation.artifacts > /dev/null
+// RUN: %python %S/lib/artifact_handoff.py stage %t.relation.artifacts %t.relation.mlirbc
+
+// Unknown ProtocolVocabulary ids fail closed at seal.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/relation-unknown-profile.mlir 2>&1 | FileCheck --check-prefix=UNKNOWN-PROFILE %s
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/relation-unknown-contract.mlir 2>&1 | FileCheck --check-prefix=UNKNOWN-CONTRACT %s
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/relation-unknown-rule.mlir 2>&1 | FileCheck --check-prefix=UNKNOWN-RULE %s
+// UNKNOWN-PROFILE: [zkc-E300] claim profile 'unknown_relation' is not admitted by the protocol vocabulary
+// UNKNOWN-CONTRACT: [zkc-E301] check contract 'zkc.check.unknown' is not admitted
+// UNKNOWN-RULE: [zkc-E307] terminal rule 'zkc.terminal.unknown' is not admitted
+
+// Terminal attachments bind the exact claim descriptor, not merely a check
+// of the right coarse kind.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/relation-attachment-mismatch.mlir 2>&1 | FileCheck --check-prefix=RELATION-MISMATCH %s
+// RELATION-MISMATCH: [zkc-E306] semantic parameter attachment does not match role 'statement'
+
+// MaterialRef attachments are exercised positively and with one exact
+// commitment mismatch.
+// RUN: zkc-opt %pir-seal-full %S/Inputs/opening-direct.mlir -o %t.opening.sealed
+// RUN: zkc-opt %pir-recheck-full %t.opening.sealed -o /dev/null
+// RUN: %python %S/lib/artifact_handoff.py reset %t.opening.artifacts
+// RUN: zkc-seal --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json %S/Inputs/opening-direct.mlir -o %t.opening.artifacts > /dev/null
+// RUN: %python %S/lib/artifact_handoff.py stage %t.opening.artifacts %t.opening.mlirbc
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/opening-material-mismatch.mlir 2>&1 | FileCheck --check-prefix=MATERIAL-MISMATCH %s
+// MATERIAL-MISMATCH: [zkc-E306] material reference attachment does not match role 'commitment'
+
+// Semantic-closure diagnostics are part of the public conformance surface.
+// These negatives are derived from positive witnesses so each mutation changes
+// one semantic fact while retaining the current carrier syntax.
+// RUN: %python %S/Inputs/make-terminal-negative.py operand-layout %S/Inputs/opening-direct.mlir %t.e302.mlir
+// RUN: not zkc-opt %pir-seal-full %t.e302.mlir 2>&1 | FileCheck --check-prefix=E302 %s
+// RUN: %python %S/Inputs/make-terminal-negative.py malformed-expression %S/../Encoding/schnorr.mlir %t.e303.mlir
+// RUN: not zkc-opt %pir-seal-full %t.e303.mlir 2>&1 | FileCheck --check-prefix=E303 %s
+// RUN: %python %S/Inputs/make-terminal-negative.py duplicate-producer-descriptor %S/../Encoding/kzg-after.mlir %t.e304.mlir
+// RUN: not zkc-opt %pir-seal-full %t.e304.mlir 2>&1 | FileCheck --check-prefix=E304 %s
+// RUN: %python %S/Inputs/make-terminal-negative.py missing-material-binding %S/Inputs/opening-direct.mlir %t.e305.mlir
+// RUN: not zkc-opt %pir-seal-full %t.e305.mlir 2>&1 | FileCheck --check-prefix=E305 %s
+// RUN: %python %S/Inputs/make-terminal-negative.py wrong-transparent-predicate %S/../Encoding/schnorr.mlir %t.e308.mlir
+// RUN: not zkc-opt %pir-seal-full %t.e308.mlir 2>&1 | FileCheck --check-prefix=E308 %s
+// RUN: %python %S/Inputs/make-terminal-negative.py unused-material-binding %S/Inputs/opening-direct.mlir %t.unused-binding.mlir
+// RUN: not zkc-opt %pir-seal-full %t.unused-binding.mlir 2>&1 | FileCheck --check-prefix=UNUSED-BINDING %s
+// E302: [zkc-E302] operand sequence has 0 valid layouts
+// E303: [zkc-E303] transparent expression is malformed
+// E304: [zkc-E304] producer input descriptors are not unique
+// E305: [zkc-E305] selected check operand has no material binding
+// E308: [zkc-E308] transparent predicate for terminal role 'equation' does not match
+// UNUSED-BINDING: [zkc-E328] material binding is not consumed by reduction or terminal closure

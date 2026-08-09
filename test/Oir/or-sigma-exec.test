@@ -1,0 +1,26 @@
+// REQUIRES: uv
+// RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/or-sigma.mlir > %t.mlir
+// RUN: zkc-run %t.mlir --vectors %S/Inputs/or-sigma-exec-vectors.json | FileCheck %s
+//
+// Execution parity for the CDS94 OR twin: the prover-derived shares
+// c1, c2 and both responses ride the proof stream (never the
+// transcript's challenge channel) and replay bit-exactly against the
+// oracle-generated golden vectors. The ignored_challenge vector is
+// the forgery the split check exists for: BOTH branches simulated
+// with self-chosen shares, the transcript challenge never used —
+// verify1 and verify2 accept, and the split check c1 + c2 = c is the
+// only thing standing (the CDS94 2-out-of-2 sharing, exercised as an
+// executable negative). The committed vector file is the
+// cross-implementation execution contract; the uv-gated lines below
+// regenerate it from the oracle and require byte identity.
+//
+// RUN: %uv python -m oracle.exec or-sigma > %t.vectors
+// RUN: diff %t.vectors %S/Inputs/or-sigma-exec-vectors.json
+//
+// CHECK: honest: accept [1086666039797371743]
+// CHECK-NEXT: tampered_response: check_failure [1086666039797371743]
+// CHECK-NEXT: shifted_shares: check_failure [1086666039797371743]
+// CHECK-NEXT: ignored_challenge: check_failure [1407003054047796972]
+// CHECK-NEXT: trailing_byte: proof_trailing_data [1086666039797371743]
+// CHECK-NEXT: truncated: abi_decode_failure [1086666039797371743]
+// CHECK-NEXT: noncanonical_value: abi_decode_failure [1086666039797371743]

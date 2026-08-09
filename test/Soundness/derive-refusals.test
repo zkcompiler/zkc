@@ -1,0 +1,21 @@
+# Agreeing on a derivable skeleton proves the structural half only if the two
+# also agree on what is not derivable. Each case breaks one thing: an
+# occurrence the artifact does not have, a premise whose notion does not chain,
+# a value the sealed protocol supplies and a caller may not, a target the root
+# does not reach.
+#
+# REQUIRES: uv
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/sumcheck-fs.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+# RUN: %uv python %S/Inputs/request_mutations.py \
+# RUN:   %S/Inputs/sumcheck-fs-request.json %t/sealed.mlirbc \
+# RUN:   %zkc-registry-dir/soundness-signature.json \
+# RUN:   %zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   %zkc-registry-dir/construction-profiles.json zkc-derive \
+# RUN:   | FileCheck %s
+# CHECK: unexpected exceptions escape the refusal boundary
+# The control is asserted, not merely run: a non-zero exit is evidence of
+# refusal only while the tool is known to derive something.
+# CHECK: control: the unmutated request derives
+# CHECK: 19/19 refused by both

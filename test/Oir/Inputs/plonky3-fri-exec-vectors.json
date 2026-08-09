@@ -1,0 +1,27 @@
+{
+ "artifact_id": "202e179bf81e62c9092443a041d3803e5a36d6b04295378018914457212b36f0",
+ "vectors": [
+  {
+   "name": "empty-proof",
+   "statement": {
+    "f_root": "1"
+   },
+   "proof": "",
+   "expect": "abi_decode_failure",
+   "challenges": [
+    "18354221309086489836277873110628348392"
+   ]
+  },
+  {
+   "name": "non-canonical-root",
+   "statement": {
+    "f_root": "1"
+   },
+   "proof": "7800000100000000000000000000000000000000000000000000000000000000",
+   "expect": "abi_decode_failure",
+   "challenges": [
+    "18354221309086489836277873110628348392"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,5 @@
+# The diagnostic-id stability rule (docs/spec/versioning.md §3), its
+# machine-readable allocation (registry/diagnostic-allocation.json), and the
+# ids the source tree emits must agree. Every live id must have an emitter and
+# a test assertion; reserved ids must not be emitted.
+# RUN: %python %S/Inputs/diagnostic_allocation_lint.py

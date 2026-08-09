@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "dev (local llvm-project-main build)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "MLIR_DIR": "$env{HOME}/code/llvm-project-main/build/lib/cmake/mlir",
+        "LLVM_EXTERNAL_LIT": "$env{HOME}/code/llvm-project-main/build/bin/llvm-lit",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "ci (MLIR_DIR/LLVM_EXTERNAL_LIT from the environment)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MLIR_DIR": "$env{MLIR_DIR}",
+        "LLVM_EXTERNAL_LIT": "$env{LLVM_EXTERNAL_LIT}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci"
+    }
+  ]
+}

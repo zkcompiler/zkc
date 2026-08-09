@@ -1,0 +1,31 @@
+# The derivation must follow the claim graph.  The artifact chains
+# sumcheck -> evalopen and also carries an independent evalopen whose consumed
+# claim is an artifact source.  One entry-bodied binding, two occurrences: at
+# the chained occurrence the consumed claim is produced by the sumcheck and an
+# entry rule selects no premise for it, so the application refuses and names
+# the claim; at the independent occurrence the same rule derives, because a
+# premise about an artifact source stays the artifact's own hypothesis.
+#
+# Before this judgment the chained application succeeded and emitted a witness
+# pricing one reduction's rounds, with empty premises and empty obligations,
+# with nothing in the witness saying the sumcheck contributed a term.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/Inputs/chained-open.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/chained-midchain-request.json -o=%t/mid.json \
+# RUN:   %t/sealed.mlirbc 2>&1 | FileCheck --check-prefix=MIDCHAIN %s
+# MIDCHAIN: coverage_mismatch
+# MIDCHAIN-SAME: produced consumed claims outside every premise relation, in canonical claim-index order: 3
+
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/chained-entry-request.json -o=%t/entry.json \
+# RUN:   %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=ENTRY %s < %t/entry.json
+# ENTRY: "constant": "1/2305843009213693952"

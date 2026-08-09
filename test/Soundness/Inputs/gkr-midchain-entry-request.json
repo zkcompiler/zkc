@@ -1,0 +1,48 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.gkr-width2-layer@reduction:gkr_width2_addmul_layer"
+    ],
+    "resolved_parameters": {
+      "zkc.rbr.gkr-width2-layer@reduction:gkr_width2_addmul_layer": {
+        "field_class": {
+          "sort": "string",
+          "value": "scalar"
+        }
+      }
+    },
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "9f5fe6007955b880283e0c93dbf353b086f358d2b77ba8aa6949fe35c512fd5e",
+        "claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:9a0845222e4a14a666de737d5c02627eccda5f285be5c5c83e363ad71d194a0f"
+        }
+      },
+      "index": {
+        "notion": "round_by_round",
+        "track": "soundness",
+        "variant": "standard",
+        "model": ""
+      },
+      "resource_variables": []
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "reduction",
+        "artifact_id": "9f5fe6007955b880283e0c93dbf353b086f358d2b77ba8aa6949fe35c512fd5e",
+        "owner_claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:9a0845222e4a14a666de737d5c02627eccda5f285be5c5c83e363ad71d194a0f"
+        },
+        "transformer_position": 2,
+        "output_index": 0
+      },
+      "binding": "zkc.rbr.gkr-width2-layer@reduction:gkr_width2_addmul_layer",
+      "premises": {}
+    }
+  }
+}

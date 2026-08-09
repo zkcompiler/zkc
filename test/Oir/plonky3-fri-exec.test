@@ -1,0 +1,37 @@
+# REQUIRES: uv
+# The real execution profile's first artifact: the FRI-shaped family at
+# the Plonky3 witness's own parameters, sealed against the real
+# constructions (Poseidon2-16 lenpad duplex, tuple-bijection extension
+# codec, low-bits sampling, eight-word digests), projected with its
+# construction pins, and executed under the plonky3 supplier set. The
+# supplier self-checks the native permutation against the pinned
+# known-answer test before deriving anything.
+#
+# The vectors file is not self-golden: the reference twin regenerates it from
+# its own reconstruction of the artifact and its own Poseidon2 — constants
+# transcribed from the pinned upstream source, never from the C++ supplier — so
+# the pinned extension
+# challenge is cross-implementation agreement between independent
+# primitives, byte for byte. Both vectors exercise reject paths: an
+# empty proof underruns, and a first root word equal to the field order
+# is refused as non-canonical before decode.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/Inputs/plonky3-fri-real.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt -pir-seal='protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' \
+# RUN:   %t/spine.mlir -o %t/sealed.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/projected.mlir
+# RUN: zkc-run %t/projected.mlir --vectors %S/Inputs/plonky3-fri-exec-vectors.json --profile=plonky3 | FileCheck %s
+# CHECK: empty-proof: abi_decode_failure [18354221309086489836277873110628348392]
+# CHECK: non-canonical-root: abi_decode_failure [18354221309086489836277873110628348392]
+
+# The same artifact refuses under the toy profile, naming the missing
+# supplier: profiles are closed sets, never fallbacks.
+# RUN: not zkc-run %t/projected.mlir --vectors %S/Inputs/plonky3-fri-exec-vectors.json --profile=toy 2>&1 | FileCheck --check-prefix=TOY %s
+# TOY: [zkc-E400] pinned construction 'codec:plonky3_bb31_digest8' has no supplier in profile 'toy'
+
+# Leg (c): the twin regenerates the committed vectors without reading
+# them — same artifact id, same reject classes, same independently
+# derived challenge — and the diff is the cross-implementation claim.
+# RUN: %uv python -m oracle.exec plonky3-fri > %t.twin-vectors
+# RUN: diff %S/Inputs/plonky3-fri-exec-vectors.json %t.twin-vectors

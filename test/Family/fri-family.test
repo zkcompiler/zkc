@@ -1,0 +1,102 @@
+// The family frontend emits one complete ProtocolVocabulary, an exact
+// protocol vocabulary derived from an admitted base, and one honest analysis
+// artifact. It never manufactures policy authorization or a terminal rule:
+// the resulting claim is an explicit residual until that rule is researched.
+//
+// RUN: zkc-family %S/Inputs/frik2.json --emit-vocabulary=%t.k2.vocab.json --emit-spine=%t.k2.mlir
+// RUN: zkc-family %S/Inputs/frik2.json --emit-vocabulary=%t.k2b.vocab.json --emit-spine=%t.k2b.mlir
+// RUN: diff %t.k2.vocab.json %t.k2b.vocab.json
+// RUN: diff %t.k2.mlir %t.k2b.mlir
+// RUN: zkc-registry-lint %t.k2.vocab.json | FileCheck --check-prefix=LINT %s
+// RUN: FileCheck --check-prefix=K2-VOCAB %s < %t.k2.vocab.json
+// RUN: FileCheck --check-prefix=K2-SPINE %s < %t.k2.mlir
+// RUN: rm -rf %t.k2.artifacts
+// RUN: zkc-seal %t.k2.mlir --protocol-vocabulary=%t.k2.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.k2.artifacts
+//
+// LINT: "reduction_contracts"
+// LINT: "registry":"zkc.protocol_vocabulary"
+// K2-VOCAB: "registry": "zkc.protocol_vocabulary"
+// K2-VOCAB: "opaque_relation"
+// K2-VOCAB: "predicate_specs": {}
+// K2-VOCAB: "zkc.check.rs-equality"
+// K2-VOCAB: "reduction_contracts"
+// K2-VOCAB: "fri"
+// K2-VOCAB: "terminal_rules": {}
+// K2-SPINE: pir.protocol "frik2"
+// K2-SPINE-SAME: policy "analysis_only_artifact"
+// K2-SPINE: pir.check "consistency" contract "zkc.check.rs-equality"
+// K2-SPINE: pir.reduce "fri" contract "fri"
+// K2-SPINE-SAME: checks {consistency = "consistency"}
+// K2-SPINE-SAME: anchors [{statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"}]
+// K2-SPINE: pir.material_bind
+// K2-SPINE: pir.residual
+// K2-SPINE-SAME: route "fri-terminal-not-modeled"
+
+// General k is data, not a code path.  A k=3 description deterministically
+// grows the contract and carrier by one fold round and still seals under its
+// generated vocabulary and exact theorem revision.
+// RUN: zkc-family %S/Inputs/frik3.json --emit-vocabulary=%t.k3.vocab.json --emit-spine=%t.k3.mlir
+// RUN: rm -rf %t.k3.artifacts
+// RUN: zkc-seal %t.k3.mlir --protocol-vocabulary=%t.k3.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.k3.artifacts
+// RUN: FileCheck --check-prefix=K3 %s < %t.k3.mlir
+// K3: "fold3"
+// K3: deps(%fold1, %fold2, %fold3, %query
+
+// The same construction extrapolates to a depth that has no hand-written
+// fixture; the judged path, not the generator, remains the authority.
+// RUN: zkc-family %S/Inputs/frik5.json --emit-vocabulary=%t.k5.vocab.json --emit-spine=%t.k5.mlir
+// RUN: rm -rf %t.k5.artifacts
+// RUN: zkc-seal %t.k5.mlir --protocol-vocabulary=%t.k5.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.k5.artifacts
+// RUN: FileCheck --check-prefix=K5 %s < %t.k5.mlir
+// K5: "fold5"
+// K5: deps(%fold1, %fold2, %fold3, %fold4, %fold5, %query
+
+// The supported FRI analyses share the same frontend and unified vocabulary
+// shape.  These are generation and seal probes: the bound belongs to a
+// soundness rule, derived after the seal.
+// RUN: zkc-family %S/Inputs/frijohnson.json --emit-vocabulary=%t.j.vocab.json --emit-spine=%t.j.mlir
+// RUN: rm -rf %t.j.artifacts
+// RUN: zkc-seal %t.j.mlir --protocol-vocabulary=%t.j.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.j.artifacts
+// RUN: zkc-family %S/Inputs/frijlinear.json --emit-vocabulary=%t.jl.vocab.json --emit-spine=%t.jl.mlir
+// RUN: rm -rf %t.jl.artifacts
+// RUN: zkc-seal %t.jl.mlir --protocol-vocabulary=%t.jl.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.jl.artifacts
+// RUN: zkc-family %S/Inputs/friudr.json --emit-vocabulary=%t.u.vocab.json --emit-spine=%t.u.mlir
+// RUN: rm -rf %t.u.artifacts
+// RUN: zkc-seal %t.u.mlir --protocol-vocabulary=%t.u.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.u.artifacts
+// RUN: zkc-family %S/Inputs/frigrind.json --emit-vocabulary=%t.g.vocab.json --emit-spine=%t.g.mlir
+// RUN: rm -rf %t.g.artifacts
+// RUN: zkc-seal %t.g.mlir --protocol-vocabulary=%t.g.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.g.artifacts
+// RUN: FileCheck --check-prefix=GRIND %s < %t.g.mlir
+// GRIND: pir.check "pow_pin" contract "zkc.check.pow-zero"
+// GRIND: pir.reduce "grind" contract "grinding"
+// GRIND-SAME: checks {pow_pin = "pow_pin"}
+// GRIND-SAME: anchors [{statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"}]
+
+// A protocol carries no theorem citation, so the Fiat-Shamir path is chosen by
+// a derivation rather than declared here. The generated spine is therefore the
+// same shape whichever conclusion a later plan derives about it.
+// RUN: zkc-family %S/Inputs/frifs.json --emit-vocabulary=%t.fs.vocab.json --emit-spine=%t.fs.mlir
+// RUN: rm -rf %t.fs.artifacts
+// RUN: zkc-seal %t.fs.mlir --protocol-vocabulary=%t.fs.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t.fs.artifacts
+// RUN: FileCheck --check-prefix=FS %s < %t.fs.mlir
+// FS: pir.reduce "frij" contract "fri"
+
+// Input admission is closed and fail-closed.
+// RUN: not zkc-family %S/Inputs/bad-family.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=BADFAM %s
+// RUN: not zkc-family %S/Inputs/bad-k.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=BADK %s
+// RUN: not zkc-family %S/Inputs/bad-unknown-key.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=UNKNOWN %s
+// RUN: not zkc-family %S/Inputs/bad-johnson.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=JOHNSON %s
+// RUN: not zkc-family %S/Inputs/bad-field.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=FIELD %s
+// RUN: not zkc-family %S/Inputs/bad-rate.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=RATE %s
+// RUN: not zkc-family %S/Inputs/bad-embed.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=EMBED %s
+// RUN: not zkc-family %S/Inputs/bad-m.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=M %s
+// RUN: not zkc-family %S/Inputs/bad-ell.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=ELL %s
+// BADFAM: unknown family 'stir'
+// BADK: 'k' must be a positive integer
+// UNKNOWN: unknown field 'rate'
+// JOHNSON: needs the 'johnson' block
+// FIELD: 'field' must be a decimal integer string
+// RATE: 'query_log2' must exceed 'k'
+// EMBED: query space 2^query_log2 must embed in 'field'
+// M: 'johnson.m' must be an integer of at least 3
+// ELL: 'ell' must be an integer from 2 through 2^20

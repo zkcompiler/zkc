@@ -1,0 +1,12 @@
+{
+ "artifact_id": "9dc7be012046ca03849ec06aaa6c8bc6e106213ec8e314ce4784ab6aaa6c458b",
+ "vectors": [
+  {
+   "challenges": [],
+   "expect": "accept",
+   "name": "sum_reduces_before_wrap",
+   "proof": "",
+   "statement": {}
+  }
+ ]
+}

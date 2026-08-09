@@ -1,0 +1,88 @@
+# The first consumer of the Soundness Kernel outside a test, and the first
+# judgment that outlives the process that produced it.
+#
+# A witness records the question in full and the answer by digest. Checking it
+# re-runs the derivation under the signature the CHECKER supplies and compares;
+# it never reads the recorded conclusion and believes it.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/sumcheck-fs.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# A request names bindings by identifier, so it carries no computed digest that
+# can go stale — and so the same request runs against a second signature.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/sumcheck-fs-request.json -o=%t/witness.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=WITNESS %s < %t/witness.json
+
+# The bound a deployed verifier would be held to, and every qualitative
+# obligation the conclusion inherited on the way to it. Those obligations are
+# what a reader has to accept for the bound to mean anything, which is why they
+# travel with it rather than staying in the rules.
+# WITNESS-DAG: "judgment_digest": "sha256:76fde6da0060d1d64d350b4d89c6bdde109bd52de5fecdd55e50a523b8aa4fbe"
+# WITNESS-DAG: "zkc.side.field_order_match"
+# WITNESS-DAG: "zkc.assume.subset_sampling_root_bound"
+# WITNESS-DAG: "zkc.hyp.move_budget_is_query_budget"
+# WITNESS-DAG: "zkc.hyp.transcript_only_sr_extractor"
+# WITNESS-DAG: "zkc.hyp.injective_absorb_encoding"
+# WITNESS-DAG: "zkc.hyp.ideal_unsalted_sponge"
+# WITNESS-DAG: "zkc.assume.ideal_permutation"
+# WITNESS-DAG: "coefficient": "1/1152921504606846976"
+
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/witness.json %t/sealed.mlirbc | FileCheck --check-prefix=AGREES %s
+# AGREES: zkc-derive: witness re-derives
+
+# A request cannot name a binding the signature does not declare: that is a
+# question about a different analysis, and deriving something else instead
+# would be worse than refusing.
+# RUN: sed 's|zkc.rbr.sumcheck@reduction:sumcheck|zkc.rbr.absent@reduction:none|g' \
+# RUN:   %S/Inputs/sumcheck-fs-request.json > %t/absent.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/absent.json %t/sealed.mlirbc 2>&1 | FileCheck --check-prefix=ABSENT %s
+# ABSENT: which this signature does not declare
+
+# The compiler establishes the transition and the bound and nothing else, so a
+# property a transform claims to preserve is an obligation on the record rather
+# than a guarantee. The section is native and empty here: nobody transformed
+# this artifact, so nobody has claimed anything about it.
+# RUN: FileCheck --check-prefix=NONE %s < %t/witness.json
+# NONE: "preservation_obligations": []
+
+# A witness that does carry one round-trips, and the check repeats who claimed
+# it instead of pretending to establish it. The property is a fixture name:
+# which properties a family may claim belongs to the programs that take those
+# properties on, not to this format.
+# RUN: sed 's|"preservation_obligations": \[\]|"preservation_obligations": [{"property":"fixture.property","family":{"id":"compiler.transform.kzg-batch","source_revision":"compiler-v0"},"application_index":0}]|' \
+# RUN:   %t/witness.json > %t/preserving.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/preserving.json %t/sealed.mlirbc | FileCheck --check-prefix=CLAIMED %s
+# CLAIMED: preservation: fixture.property claimed by compiler.transform.kzg-batch at application 0, not checked here
+# CLAIMED: witness re-derives
+
+# The section is read fail-closed like everything else: a claim with no author
+# would be an obligation nobody is on the hook for.
+# RUN: sed 's|"preservation_obligations": \[\]|"preservation_obligations": [{"property":"fixture.property"}]|' \
+# RUN:   %t/witness.json > %t/authorless.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/authorless.json %t/sealed.mlirbc 2>&1 | FileCheck --check-prefix=AUTHORLESS %s
+# AUTHORLESS: preservation obligation
+
+# The protocol supplies the reduction contract; a request may not assert one.
+# RUN: sed 's|"sort": "string",|"sort": "reduction_contract",|' \
+# RUN:   %S/Inputs/sumcheck-fs-request.json > %t/asserted.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/asserted.json %t/sealed.mlirbc 2>&1 | FileCheck --check-prefix=ASSERTED %s
+# ASSERTED: which the sealed protocol supplies and a request may not

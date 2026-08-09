@@ -1,0 +1,25 @@
+// The conformance gate's own inputs get the fail-closed treatment: a
+// malformed vector file is a clean named refusal, never a null deref
+// or a silent pass.
+//
+// RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/schnorr.mlir > %t.mlir
+// RUN: not zkc-run %t.mlir --vectors %S/Inputs/bad-vectors-no-array.json 2>&1 | FileCheck --check-prefix=NOARRAY %s
+// NOARRAY: vectors: malformed file (no 'vectors' array)
+//
+// RUN: not zkc-run %t.mlir --vectors %S/Inputs/bad-vectors-missing-fields.json 2>&1 | FileCheck --check-prefix=FIELDS %s
+// FIELDS: vectors: malformed file (a vector needs statement, proof, expect, name, and challenges)
+//
+// RUN: not zkc-run %t.mlir --vectors %S/Inputs/bad-vectors-proof-hex.json 2>&1 | FileCheck --check-prefix=HEX %s
+// HEX: vectors: malformed file (proof is not hex)
+
+// A structurally valid vector document still has to cite this exact OIR
+// artifact; schema-first diagnostics do not weaken the identity gate.
+// RUN: not zkc-run %t.mlir --vectors %S/Inputs/bad-vectors-wrong-artifact.json 2>&1 | FileCheck --check-prefix=WRONG-ARTIFACT %s
+// WRONG-ARTIFACT: vectors do not cite this artifact
+
+// Equality between a vector citation and an authored id is not identity
+// authentication. Even when both carry the same forged value, the runner
+// recomputes OIR identity before execution.
+// RUN: %python %S/Inputs/rewrite-oir-id.py %t.mlir %t.wrong-id.mlir 0000000000000000000000000000000000000000000000000000000000000000
+// RUN: not zkc-run %t.wrong-id.mlir --vectors %S/Inputs/bad-vectors-wrong-artifact.json 2>&1 | FileCheck --check-prefix=WRONG-STORED-ID %s
+// WRONG-STORED-ID: [zkc-E170] stored OIR artifact id does not match its canonical identity

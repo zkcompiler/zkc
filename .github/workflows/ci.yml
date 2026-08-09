@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Nothing here writes to the repository or reads a secret.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded pull-request runs are noise; a run on main is the record of
+  # what that commit did, so it is left to finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    # bash with -e and -o pipefail, so a failure inside a pipeline is a
+    # failure of the step.
+    shell: bash
+
+env:
+  # zkc needs MLIR 23 or newer; see the floor check in CMakeLists.txt. The
+  # major is all this selects: any 23.x the archive serves is acceptable, and
+  # a later major becomes a deliberate edit here once the suite has run
+  # against it.
+  LLVM_MAJOR: "23"
+
+jobs:
+  reference:
+    name: Reference suites (conformance oracle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # No floating major tag is published for this action, so the exact
+      # release is named. The twin declares no dependencies, so there is
+      # nothing for the uv cache to hold.
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Sync the reference environment
+        working-directory: reference
+        run: uv sync --locked
+      - name: Run the oracle self-checks
+        working-directory: reference
+        run: uv run --locked python -m oracle.model
+
+  build:
+    name: Build and test (C++ / MLIR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install MLIR and the build tools
+        run: |
+          codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+          # Scoped to this one archive rather than added to the system-wide
+          # trusted set.
+          sudo install -d -m 0755 /usr/share/keyrings
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /usr/share/keyrings/apt.llvm.org.asc > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/apt.llvm.org.asc]" \
+               "http://apt.llvm.org/${codename}/" \
+               "llvm-toolchain-${codename}-${LLVM_MAJOR} main" \
+            | sudo tee /etc/apt/sources.list.d/apt.llvm.org.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            "libmlir-${LLVM_MAJOR}-dev" \
+            "mlir-${LLVM_MAJOR}-tools" \
+            "llvm-${LLVM_MAJOR}-dev" \
+            "llvm-${LLVM_MAJOR}-tools" \
+            ninja-build
+          echo "/usr/lib/llvm-${LLVM_MAJOR}/bin" >> "$GITHUB_PATH"
+
+      - name: Report the toolchain this run resolved
+        run: |
+          echo "LLVM/MLIR $(llvm-config --version)"
+          command -v mlir-tblgen FileCheck not count
+
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Sync the reference environment (differential harness)
+        working-directory: reference
+        run: uv sync --locked
+
+      - name: Provide lit
+        run: |
+          uv tool install lit
+          echo "LLVM_EXTERNAL_LIT=$(uv tool dir --bin)/lit" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: MLIR_DIR="/usr/lib/llvm-${LLVM_MAJOR}/lib/cmake/mlir" cmake --preset ci
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Lit suite (with cross-implementation differentials)
+        run: cmake --build --preset ci --target check-zkc

@@ -1,0 +1,27 @@
+{
+  "family": "fri",
+  "name": "frifs",
+  "k": 1,
+  "field": "340282366762482138490186164457219031041",
+  "query_log2": 10,
+  "ell": 2,
+  "analysis": "johnson",
+  "johnson": {
+    "m": 3,
+    "eta": "1/256",
+    "delta": "9/10"
+  },
+  "kappa": {
+    "sponge": "toy_duplex",
+    "iv": "artifact-id",
+    "codecs": {
+      "query_index": "fr_be32",
+      "rs": "ts_be8",
+      "ext_field": "fr_be32"
+    }
+  },
+  "anchors": {
+    "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "statement": "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"
+  }
+}

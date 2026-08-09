@@ -1,0 +1,600 @@
+//===- SoundnessKernel.h - Owned theorem/soundness core --------*- C++ -*-===//
+//
+// Declaration-side core for docs/spec/soundness.md.  These values are owned
+// semantic objects: no registry pointer, JSON node, MLIR handle, callback, or
+// certificate representation is retained here.
+//
+//===----------------------------------------------------------------------===//
+#ifndef ZKC_SOUNDNESS_SOUNDNESSKERNEL_H
+#define ZKC_SOUNDNESS_SOUNDNESSKERNEL_H
+
+#include "zkc/Registry/Rational.h"
+
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <set>
+#include <string>
+#include <variant>
+#include <vector>
+
+namespace zkc::soundness {
+
+struct ExactRef {
+  std::string id;
+  std::string sourceRevision;
+};
+
+bool operator==(const ExactRef &lhs, const ExactRef &rhs);
+bool operator!=(const ExactRef &lhs, const ExactRef &rhs);
+
+enum class ValueSort {
+  Integer,
+  Rational,
+  String,
+  Boolean,
+  Subject,
+  ReductionContract,
+  PathTransition,
+  RoundAdjacency,
+  AlgebraInstance,
+  SrsInstance,
+  FriDomainInstance,
+};
+
+struct TypedDeclaration {
+  std::string name;
+  ValueSort sort = ValueSort::String;
+};
+
+/// An exact algebraic carrier named by a theorem declaration.  This is a
+/// semantic value, not a registry digest or an artifact identity.
+struct AlgebraInstanceValue {
+  std::string group;
+  std::string fieldClass;
+  registry::Rational fieldOrder;
+};
+
+bool operator==(const AlgebraInstanceValue &lhs,
+                const AlgebraInstanceValue &rhs);
+
+enum class SecurityTrack { Soundness, Knowledge, Completeness };
+
+enum class SecurityNotion {
+  SpecialSoundness,
+  ComputationalSpecialSoundness,
+  RoundByRound,
+  StateRestoration,
+  FiatShamir,
+  Completeness,
+};
+
+struct SecurityIndex {
+  SecurityNotion notion = SecurityNotion::SpecialSoundness;
+  SecurityTrack track = SecurityTrack::Soundness;
+  std::string variant;
+  std::string model;
+};
+
+bool operator==(const SecurityIndex &lhs, const SecurityIndex &rhs);
+bool operator!=(const SecurityIndex &lhs, const SecurityIndex &rhs);
+
+enum class ResultSchema {
+  Extraction,
+  Round,
+  Scalar,
+};
+
+enum class SubjectSchemaKind {
+  ProtocolClaim,
+  ConsumedClaimVector,
+  ExternalInstance,
+};
+
+struct SubjectSchema {
+  std::string ref;
+  std::vector<ValueSort> argumentTypes;
+  SubjectSchemaKind kind = SubjectSchemaKind::ProtocolClaim;
+};
+
+enum class ContractRoundSelectorKind {
+  AllContractRounds,
+  RoundKind,
+  RoundPosition,
+};
+
+struct ContractRoundSelector {
+  ContractRoundSelectorKind kind = ContractRoundSelectorKind::AllContractRounds;
+  std::string roundKind;
+  uint64_t position = 0;
+};
+
+enum class ArtifactProjectionKind {
+  ConclusionReductionContract,
+  ContractRoundAdjacency,
+  ReductionInputCount,
+  ReductionParameter,
+  ContractRoundFamilyField,
+  PathBindingField,
+};
+
+enum class ProjectionAggregate { UniqueEqual, Count };
+
+struct ArtifactProjection {
+  ArtifactProjectionKind kind =
+      ArtifactProjectionKind::ConclusionReductionContract;
+  ValueSort resultSort = ValueSort::String;
+  std::string field;
+  uint64_t inputIndex = 0;
+  ContractRoundSelector roundSelector;
+  ProjectionAggregate aggregate = ProjectionAggregate::UniqueEqual;
+};
+
+enum class BindingValueKind {
+  Literal,
+  SealedArtifactProjection,
+  ConclusionSubject,
+  ApplicationPathTransition,
+  ConclusionResource,
+  ResolvedParameter,
+};
+
+struct BindingValue {
+  BindingValueKind kind = BindingValueKind::Literal;
+  ValueSort sort = ValueSort::String;
+  std::variant<registry::Rational, std::string, bool, AlgebraInstanceValue>
+      literal = std::string();
+  std::string reference;
+  std::string premisePort;
+  ArtifactProjection artifactProjection;
+};
+
+bool operator==(const ContractRoundSelector &lhs,
+                const ContractRoundSelector &rhs);
+bool operator==(const ArtifactProjection &lhs, const ArtifactProjection &rhs);
+
+/// Structural equality of two value sources.  Two equal sources read the same
+/// thing, so a condition argument equal to a parameter's own binding is that
+/// parameter rather than a second value that happens to agree today.
+bool operator==(const BindingValue &lhs, const BindingValue &rhs);
+
+enum class QuantityKind {
+  RationalLiteral,
+  Parameter,
+  ArtifactFact,
+  ContractRoundFact,
+  PremiseCoordinate,
+  ResourceVariable,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Pow,
+  Pow2,
+  Pow2Up,
+};
+
+enum class ContractRoundField {
+  ChallengeSpace,
+  ChallengeCount,
+  RoundDegree,
+  ChallengeSpaceLog2,
+};
+
+enum class PremiseCoordinateField {
+  Arity,
+  ChallengeSpace,
+};
+
+/// The only way to name a premise coordinate.
+///
+/// `SpecialSoundnessToRoundByRound` binds one coordinate index inside its
+/// per-coordinate bound, and section 5.1 of docs/spec/soundness.md admits no
+/// second selector: a free string naming a coordinate would be an iterator
+/// over the premise, not a projection of it.
+enum class PremiseCoordinateSelectorKind {
+  BoundCoordinate,
+};
+
+struct PremiseCoordinateSelector {
+  PremiseCoordinateSelectorKind kind =
+      PremiseCoordinateSelectorKind::BoundCoordinate;
+};
+
+struct QuantityTemplate {
+  QuantityKind kind = QuantityKind::RationalLiteral;
+  registry::Rational literal;
+  std::string name;
+  std::string port;
+  std::string caseName;
+  ContractRoundField contractRoundField = ContractRoundField::ChallengeSpace;
+  PremiseCoordinateField premiseCoordinateField = PremiseCoordinateField::Arity;
+  PremiseCoordinateSelector premiseCoordinateSelector;
+  std::vector<QuantityTemplate> operands;
+
+  static QuantityTemplate rational(registry::Rational value);
+  static QuantityTemplate named(QuantityKind kind, std::string name);
+  static QuantityTemplate node(QuantityKind kind,
+                               std::vector<QuantityTemplate> operands);
+};
+
+struct PrimitiveGameDefinition {
+  ExactRef ref;
+  std::vector<ValueSort> instanceArgumentTypes;
+  std::vector<TypedDeclaration> resources;
+};
+
+struct PrimitiveGameInstanceTemplate {
+  std::string gameRef;
+  std::vector<BindingValue> instanceArguments;
+};
+
+/// The constructors a rule body can form.
+///
+/// A projection of a premise result is admitted only for the schemas a body
+/// can actually place in a bound: the only bodies with a free bound slot take
+/// no premise, a special-soundness premise, a round-by-round premise, or a
+/// state-restoration premise, so `ScalarBound` is the one projection
+/// reachable — a round-by-round premise reaches none of them, because there is
+/// no round projection constructor.  Constructors for premise
+/// schemas no body admits are not kept against a future composition body:
+/// evaluator code that must be trusted but cannot be invoked is not free, and
+/// a constructor is reintroduced only alongside a body that reaches it, so its
+/// semantics and tests can be reviewed against a concrete use.
+enum class RuleBoundKind {
+  Quantity,
+  ScalarBound,
+  PrimitiveAdvantage,
+  Add,
+  Scale,
+  Max,
+};
+
+struct RuleBound {
+  RuleBoundKind kind = RuleBoundKind::Quantity;
+  QuantityTemplate quantity;
+  std::string premisePort;
+  PrimitiveGameInstanceTemplate game;
+  std::map<std::string, QuantityTemplate, std::less<>> gameResourceSubstitution;
+  std::vector<RuleBound> operands;
+};
+
+struct CoordinateTemplate {
+  std::string label;
+  QuantityTemplate arity;
+  std::optional<QuantityTemplate> challengeSpace;
+};
+
+enum class ContractLabelProjection {
+  RoundIndex,
+  RoundKindOccurrence,
+  CaseName,
+  /// A contract-local index repeats at every occurrence of that contract, so a
+  /// row that composes two occurrences of one contract cannot tell their
+  /// rounds apart.  This qualifies the index by the occurrence's canonical
+  /// transformer position, which is the occurrence's own identity.  Opt-in per
+  /// case, so a row that does not compose keeps contract-local labels and its
+  /// witness is unchanged (docs/spec/soundness.md §5.1).
+  SiteQualifiedRoundIndex,
+};
+
+struct ContractCoordinateCase {
+  std::string caseName;
+  ContractRoundSelector selector;
+  ContractLabelProjection labelProjection = ContractLabelProjection::RoundIndex;
+  QuantityTemplate arity;
+  std::optional<QuantityTemplate> challengeSpace;
+};
+
+struct CoordinateSequence {
+  enum class Kind { Explicit, Contract } kind = Kind::Explicit;
+  std::vector<CoordinateTemplate> coordinates;
+  std::string contractFactPort;
+  std::vector<ContractCoordinateCase> cases;
+};
+
+struct RoundTemplate {
+  std::string roundIndex;
+  QuantityTemplate challengeSpace;
+  RuleBound bound;
+};
+
+struct ContractRoundCase {
+  std::string caseName;
+  ContractRoundSelector selector;
+  ContractLabelProjection indexProjection = ContractLabelProjection::RoundIndex;
+  QuantityTemplate challengeSpace;
+  RuleBound bound;
+};
+
+struct RoundSequence {
+  enum class Kind { Explicit, Contract } kind = Kind::Explicit;
+  std::vector<RoundTemplate> rounds;
+  std::string contractFactPort;
+  std::vector<ContractRoundCase> cases;
+};
+
+enum class RoundSelectorKind {
+  ByRoundIndex,
+  AdjacentPredecessorRound,
+};
+
+struct RoundSelectorTemplate {
+  RoundSelectorKind kind = RoundSelectorKind::ByRoundIndex;
+  std::string exactRoundIndex;
+  std::string adjacencyFactPort;
+};
+
+enum class PremiseResultConstraint {
+  RequiresEmptyGameSupport,
+  RequiresNoBoundResourceSupport,
+};
+
+struct PremisePort {
+  std::string name;
+  std::string expectedSubjectSchema;
+  SecurityIndex expectedIndex;
+  ResultSchema expectedResult = ResultSchema::Extraction;
+  std::vector<TypedDeclaration> expectedResources;
+  std::set<PremiseResultConstraint> resultConstraints;
+  std::map<std::string, QuantityTemplate, std::less<>> resourceSubstitution;
+};
+
+struct MachineConditionTemplate {
+  std::string slot;
+  std::string predicateRef;
+  std::vector<ValueSort> argumentTypes;
+};
+
+struct ExternalHypothesisTemplate {
+  std::string slot;
+  std::string propositionRef;
+  std::vector<ValueSort> argumentTypes;
+};
+
+/// Pin one declared rule parameter to an exact literal at APPLY time. This is
+/// the only closed equality form needed by the v0 inventory; it deliberately
+/// does not expose a general binding-to-binding equality language.
+struct ExactParameterPin {
+  std::string parameter;
+  BindingValue expected;
+};
+
+struct SpecialSoundnessEntry {
+  CoordinateSequence coordinates;
+};
+
+struct NativeRoundByRoundEntry {
+  RoundSequence rounds;
+};
+
+struct ComputationalEntry {
+  CoordinateSequence coordinates;
+  RuleBound failureBound;
+};
+
+/// The honest-prover acceptance-failure bound, stated directly by the cited
+/// theorem (0 for perfect completeness).  A completeness judgment says
+/// nothing about any adversary, which is why its conclusion index carries the
+/// completeness notion and track rather than borrowing a soundness spelling
+/// (docs/spec/soundness.md §3.2).
+struct CompletenessEntry {
+  RuleBound bound;
+};
+
+struct SpecialSoundnessPreservation {
+  std::string sourcePort;
+  CoordinateSequence appendedCoordinates;
+  RuleBound conclusionFailureBound;
+};
+
+/// Compose a round-by-round premise with this reduction's own rounds by
+/// concatenating their round sequences.  The composed error is a reindexing of
+/// the components' error functions, not their sum and not their maximum, so
+/// nothing here combines two bounds numerically: every round keeps the bound
+/// its own component gave it.  Two fields, where the special-soundness
+/// preservation beside it has three, because a round result carries no
+/// conclusion-level failure bound to close (docs/spec/soundness.md §5.1).
+struct RoundByRoundPreservation {
+  std::string sourcePort;
+  RoundSequence appendedRounds;
+};
+
+struct RoundScaling {
+  std::string roundByRoundPort;
+  RoundSelectorTemplate selectedRound;
+  QuantityTemplate scale;
+};
+
+struct SpecialSoundnessToRoundByRound {
+  std::string specialSoundnessPort;
+  RuleBound perCoordinateBound;
+};
+
+struct RoundByRoundToStateRestoration {
+  std::string roundByRoundPort;
+  QuantityTemplate moveBudget;
+};
+
+struct StateRestorationToFiatShamirDuplex {
+  std::string stateRestorationPort;
+  RuleBound localDuplexBound;
+};
+
+using RuleBody =
+    std::variant<SpecialSoundnessEntry, NativeRoundByRoundEntry,
+                 ComputationalEntry, CompletenessEntry,
+                 SpecialSoundnessPreservation, RoundByRoundPreservation,
+                 RoundScaling, SpecialSoundnessToRoundByRound,
+                 RoundByRoundToStateRestoration,
+                 StateRestorationToFiatShamirDuplex>;
+
+/// Whether this signature offers the rule for execution.
+///
+/// A declared rule is well-formed and inspectable but unreachable: no binding
+/// may name it, so no derivation can apply it.  This is a signature-authoring
+/// decision recorded as declaration content, not a judgment about whether the
+/// cited theorem is true; the kernel forms no such judgment (docs/spec/
+/// soundness.md §5.1).  Reasons an author would choose it — a refuted source, a
+/// rule that only states what a provider supplies, a superseded revision — are
+/// annotations, which live outside the declaration entirely.
+enum class RuleStatus {
+  Admitted,
+  Declared,
+};
+
+struct SoundnessRule {
+  ExactRef ref;
+  RuleStatus status = RuleStatus::Admitted;
+  std::vector<TypedDeclaration> parameters;
+  std::vector<TypedDeclaration> resources;
+  std::vector<PremisePort> premises;
+  std::vector<TypedDeclaration> artifactFacts;
+  std::vector<MachineConditionTemplate> machineConditions;
+  std::vector<ExternalHypothesisTemplate> externalHypotheses;
+  std::vector<ExactParameterPin> exactParameterPins;
+  SecurityIndex conclusionIndex;
+  RuleBody body;
+};
+
+enum class ConsumedClaimSelectorKind {
+  ReductionInput,
+  AllReductionInputs,
+  ReductionInputs,
+};
+
+enum class SubjectRelationKind {
+  SameSubject,
+  ConsumedClaim,
+  ConsumedClaimVector,
+  ExactExternalSubject,
+};
+
+struct SubjectRelation {
+  SubjectRelationKind kind = SubjectRelationKind::SameSubject;
+  ConsumedClaimSelectorKind selector =
+      ConsumedClaimSelectorKind::ReductionInput;
+  std::vector<uint64_t> inputIndices;
+  std::string externalSubjectSchema;
+  std::vector<BindingValue> externalArguments;
+};
+
+enum class ProtocolAnchorKind { ReductionContract, PathTransition };
+
+struct ProtocolAnchor {
+  ProtocolAnchorKind kind = ProtocolAnchorKind::ReductionContract;
+  ExactRef ref;
+};
+
+struct RuleBinding {
+  ExactRef ref;
+  ExactRef ruleRef;
+  std::string subjectSchema;
+  ProtocolAnchor anchor;
+  std::map<std::string, SubjectRelation, std::less<>> premiseRelations;
+  std::map<std::string, BindingValue, std::less<>> parameterBindings;
+  std::map<std::string, BindingValue, std::less<>> factBindings;
+  std::map<std::string, std::vector<BindingValue>, std::less<>>
+      conditionArgumentBindings;
+  std::map<std::string, std::vector<BindingValue>, std::less<>>
+      hypothesisArgumentBindings;
+};
+
+enum class MachineDeciderKind {
+  OneMessageRole,
+  SpaceEmbeds,
+  BoundBites,
+  FieldClass,
+  SpaceCoversArity,
+  BatchArity,
+  SpaceCoversBatch,
+  SamePoint,
+  BatchAfterMaterial,
+  FriRateBelowOne,
+  JohnsonFoldParam,
+  JohnsonSlack,
+  JohnsonMultiplicity,
+  JohnsonDelta,
+  UdrDomainFloor,
+  UdrThetaWindow,
+  PowPinned,
+  PowAdjacent,
+  DuplexSpine,
+  CodecBiasDeclared,
+};
+
+struct MachineDeciderDefinition {
+  ExactRef ref;
+  std::vector<ValueSort> argumentTypes;
+  MachineDeciderKind kind = MachineDeciderKind::OneMessageRole;
+};
+
+struct PropositionSchema {
+  ExactRef ref;
+  std::vector<ValueSort> argumentTypes;
+};
+
+struct SchemaContext {
+  std::vector<SecurityIndex> securityIndices;
+  std::map<std::string, SubjectSchema, std::less<>> subjectSchemas;
+  std::map<std::string, PrimitiveGameDefinition, std::less<>> primitiveGames;
+  std::map<std::string, MachineDeciderDefinition, std::less<>> machineDeciders;
+  std::map<std::string, PropositionSchema, std::less<>> propositions;
+};
+
+enum class RuleWfRefusalCode {
+  InvalidReference,
+  DuplicateDeclaration,
+  UnknownSchema,
+  InvalidIndex,
+  InvalidBodySignature,
+  InvalidQuantity,
+  InvalidBound,
+  InvalidSequence,
+  InvalidPrimitiveGame,
+  InvalidCondition,
+  InvalidHypothesis,
+  InvalidResourceSubstitution,
+  MissingRbrToSrConstraint,
+  InvalidBinding,
+  InvalidSubjectRelation,
+  RuleNotBindable,
+};
+
+struct RuleWfRefusal {
+  RuleWfRefusalCode code = RuleWfRefusalCode::InvalidReference;
+  std::string location;
+  std::string detail;
+};
+
+struct RuleWfResult {
+  std::optional<RuleWfRefusal> refusal;
+
+  bool accepted() const { return !refusal.has_value(); }
+};
+
+RuleWfResult checkRuleWellFormed(const SchemaContext &context,
+                                 const SoundnessRule &rule);
+
+/// Check a complete binding against one well-formed rule.  This judgment owns
+/// exact slot coverage, subject-relation shape, and typed value-source shape.
+/// Artifact/site-dependent resolution remains an APPLY-time judgment.
+RuleWfResult checkRuleBindingWellFormed(const SchemaContext &context,
+                                        const SoundnessRule &rule,
+                                        const RuleBinding &binding);
+
+/// Check one value-source node against a rule declaration.  This is exposed for
+/// adapters that need an exact local refusal before constructing a full
+/// binding; complete bindings must use checkRuleBindingWellFormed.
+RuleWfResult checkBindingValueWellFormed(const SchemaContext &context,
+                                         const SoundnessRule &rule,
+                                         const BindingValue &value,
+                                         ValueSort expectedSort);
+
+const char *ruleWfRefusalCodeName(RuleWfRefusalCode code);
+const char *ruleBodyName(const RuleBody &body);
+const char *ruleStatusName(RuleStatus status);
+
+} // namespace zkc::soundness
+
+#endif // ZKC_SOUNDNESS_SOUNDNESSKERNEL_H

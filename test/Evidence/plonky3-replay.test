@@ -1,0 +1,40 @@
+# The backend replay slice: the pinned upstream verifier accepts the captured
+# fixture deterministically with its transcript reproduced exactly, and
+# refuses every mutation in the committed set — with the refusing layer
+# reported honestly (byte-level mutations die at postcard decoding, value
+# mutations reach the pinned verifier itself). A positive replay is scoped
+# evidence about this fixture at this pin, never universal implementation
+# conformance (evaluation/upstream/plonky3-replay/README.md).
+#
+# REQUIRES: cargo
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin replay -- %zkc-replay-fixture > %t.replay.out
+# RUN: FileCheck %s < %t.replay.out
+# CHECK: replay: accepted, deterministic, transcript reproduced
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin replay -- %zkc-replay-fixture flip-proof-byte | FileCheck %s --check-prefix=FLIP
+# FLIP: replay: mutation 'flip-proof-byte' refused at decode
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin replay -- %zkc-replay-fixture truncate-proof | FileCheck %s --check-prefix=TRUNCATE
+# TRUNCATE: replay: mutation 'truncate-proof' refused at decode
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin replay -- %zkc-replay-fixture wrong-public-value | FileCheck %s --check-prefix=PUBLIC
+# PUBLIC: replay: mutation 'wrong-public-value' refused by the verifier
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin replay -- %zkc-replay-fixture flip-opened-value | FileCheck %s --check-prefix=OPENED
+# OPENED: replay: mutation 'flip-opened-value' refused by the verifier
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin replay -- %zkc-replay-fixture swap-events | FileCheck %s --check-prefix=SWAP
+# SWAP: replay: mutation 'swap-events' diverges as required (transcript-level, not a verifier run)
+
+# The capture path re-establishes the fixture from nothing: byte-identical
+# proof under an instrumented prover, twice-identical verifier transcripts.
+# Emitting to a temporary and comparing with the checked-in fixture pins the
+# capture itself as deterministic.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin capture -- %t.fixture.json
+# RUN: diff %t.fixture.json %zkc-replay-fixture
+
+# The same crate also regenerates the upstream duplex observations from which
+# the native and reference profiles derive their pinned construction checks.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin trace > %t.duplex.json
+# RUN: diff %t.duplex.json %zkc-duplex-fixture

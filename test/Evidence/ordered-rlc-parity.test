@@ -1,0 +1,40 @@
+# REQUIRES: uv
+
+# The two patched source projections must seal, then agree byte-for-byte with
+# the independent Python reference twin. This covers both the whole PIR object
+# and its domain-separated identity.
+# RUN: zkc-opt %pir-seal-full %S/Inputs/sp1-rlc-patched.mlir -o %t.sp1.mlir
+# RUN: zkc-translate --canonical %t.sp1.mlir -o %t.sp1.cxx
+# RUN: %uv python -m oracle.parity encode opening-value-rlc > %t.sp1.oracle
+# RUN: diff %t.sp1.cxx %t.sp1.oracle
+# RUN: zkc-translate --id %t.sp1.mlir -o %t.sp1.cxx.id
+# RUN: %uv python -m oracle.parity id opening-value-rlc > %t.sp1.oracle.id
+# RUN: diff %t.sp1.cxx.id %t.sp1.oracle.id
+# RUN: zkc-opt %pir-seal-full %S/Inputs/linea-rlc-patched.mlir -o %t.linea.mlir
+# RUN: zkc-translate --canonical %t.linea.mlir -o %t.linea.cxx
+# RUN: %uv python -m oracle.parity encode kzg-equation-rlc > %t.linea.oracle
+# RUN: diff %t.linea.cxx %t.linea.oracle
+# RUN: zkc-translate --id %t.linea.mlir -o %t.linea.cxx.id
+# RUN: %uv python -m oracle.parity id kzg-equation-rlc > %t.linea.oracle.id
+# RUN: diff %t.linea.cxx.id %t.linea.oracle.id
+
+# Pricing is part of the evidence boundary, not an emitter-only annotation.
+# Both distinct semantic contracts use the same generic ordered-RLC theorem;
+# the certificate layer's independent core re-resolves the actual variadic claim
+# count before accepting the d/|F| figure.
+# RUN: rm -rf %t.sp1.artifacts
+# RUN: zkc-seal %S/Inputs/sp1-rlc-patched.mlir %zkc-seal-full -o %t.sp1.artifacts
+# RUN: rm -rf %t.linea.artifacts
+# RUN: zkc-seal %S/Inputs/linea-rlc-patched.mlir %zkc-seal-full -o %t.linea.artifacts
+
+# Moving the dynamically counted material vector after its coefficient must be
+# refused by both implementations under the same generic E213 judgment.
+# RUN: not zkc-opt %pir-seal-full %S/Inputs/sp1-rlc-vulnerable.mlir -o /dev/null 2>&1 | FileCheck %s --check-prefix=SP1-CXX
+# RUN: not %uv python -m oracle.parity validate opening-value-rlc-vulnerable 2>&1 | FileCheck %s --check-prefix=SP1-ORACLE
+# RUN: not zkc-opt %pir-seal-full %S/Inputs/linea-rlc-vulnerable.mlir -o /dev/null 2>&1 | FileCheck %s --check-prefix=LINEA-CXX
+# RUN: not %uv python -m oracle.parity validate kzg-equation-rlc-vulnerable 2>&1 | FileCheck %s --check-prefix=LINEA-ORACLE
+
+# SP1-CXX: [zkc-E213] message role 'values' is committed after its challenge
+# SP1-ORACLE: [zkc-E213] round message 'values' must precede challenge 'alpha'
+# LINEA-CXX: [zkc-E213] message role 'equations' is committed after its challenge
+# LINEA-ORACLE: [zkc-E213] round message 'equations' must precede challenge 'u'

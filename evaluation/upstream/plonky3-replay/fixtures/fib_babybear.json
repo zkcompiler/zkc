@@ -1,0 +1,473 @@
+{
+  "format": "zkc.replay.fixture",
+  "status": "prototype",
+  "backend": {
+    "repository": "https://github.com/Plonky3/Plonky3",
+    "revision": "3da346791c813433b201299afc3d10bf42f8a078",
+    "crates": [
+      "p3-air",
+      "p3-baby-bear",
+      "p3-challenger",
+      "p3-commit",
+      "p3-dft",
+      "p3-field",
+      "p3-fri",
+      "p3-matrix",
+      "p3-merkle-tree",
+      "p3-symmetric",
+      "p3-uni-stark"
+    ]
+  },
+  "config": {
+    "field": "baby_bear",
+    "extension_degree": 4,
+    "permutation": "default_babybear_poseidon2_16",
+    "permutation_behavior_digest": "95772b25fb20da56345607caaeca8b7f9d335d9f6e902be8fc337208d4d9a8a2",
+    "sponge_width": 16,
+    "sponge_rate": 8,
+    "digest_elems": 8,
+    "mmcs": "merkle_tree",
+    "dft": "radix2_dit_parallel",
+    "pcs": "two_adic_fri",
+    "challenger": "duplex",
+    "log_blowup": 1,
+    "log_final_poly_len": 0,
+    "max_log_arity": 1,
+    "num_queries": 4,
+    "commit_proof_of_work_bits": 0,
+    "query_proof_of_work_bits": 8
+  },
+  "air": {
+    "name": "zkc.replay.fib_air",
+    "content_digest": "c64d5f2230e9c2f6853e0bc596090058c681ed35069a28882569f05a6588e427",
+    "width": 2,
+    "num_public_values": 3
+  },
+  "instance": {
+    "public_values": [
+      0,
+      1,
+      21
+    ],
+    "degree_bits": 3
+  },
+  "proof": {
+    "encoding": "postcard-1",
+    "bytes_hex": "01f9fefc8104e998a177b1839de906b5d8aa9e05c4cc95ab02e3f9f5dd05908ee8359bc1e5950101d5e181de03c7f8bbc205f3d7b7cb01a8c68fc405abeefbad01ecb8eee002d0b0d9bb03e5d8db83030002c0ccc3d804d5dce8fd02c7f2f8ee05d8cddf38e2a2c98c07cec99fef02b580de7aa5bee587040102e7ecb7ae03d982948e02c6b1faa701c2e3c11e978896d101b4db9ac20296c0838302abfd8cdb010000010484888a8b05a4e0fd0fd9c0a6f406dafaa3f103ed8093ad05acd0ea8a04d3adb5ac06a58e88b804b3ec9fb6059bbf82ba06f98af6bd0795c5a35ba3ae8662e9c192f50590ecd28b01a7b887c50100030182c3b79807fffefba805bd89bf9f0684a3a3cd0684c9e6e502879dc69a07bcc6fdd403ddbfe1f502018f89f5a903aaf5fe8306bcd5b5e302e8fce6ed03dc8fd6b401e5a3b58102a7a2badc04e2e5acca0101cdc1abb40381b89ce30180b194ed02bb81ec9d05889f9bb60591d1cea4018ae8dca4079fd8d0f1030300000002040102da89878002c1dbafe605010288e7a2a9059bead980010102fab1d0ca0180f7c69a060102fab1d0ca0180f7c69a0606b7bee08006b884deed04b2e1bcdb05c49aae04affbdd9102d5e9bd9201ecdad18404e5c5f88f0687dbf2b80189a6ba8103dccefd23d4fcfab903cbb89a9602cdf8fd8205f5d39bbf02afaddae603e9bc8f7a80d7bb66aec88ba507d9f8bce001ccb2b8c5049d85c4c0059eb69ead0396cb97a10791aca6ad029589f21f9496ed8306e3f789f603ecabe39d07e483a7be06d887a5c7049fc0eefc01f2ea978e05af84a4c402f695dab503e3b8fcda04d7e1c8cd03a4f6df9d03d9ceb3e30487aec3f002dbd8fcff06829c99dc0291eba6c8059af9c79604c4e5f2bb039de8b9a603efa5e1b6058cf48db2020401048888e4df03958ccbf6058480c3c601d485e6db030104fce9a88503e8d6ebc802d6ac89b007ec86a7c90301048cbcf7c706b3f3da8e03fbb9dce705bebba7800101048cbcf7c706b3f3da8e03fbb9dce705bebba7800106ccdfa9a605afc5b3a807c5c2fd8b03a0cdafa202e086d7cf0398add69601caa8a9b107aa858c0af0d0c5860599d188b504998bbdd704b7e193ab0782a3f4d60696ebad6be0d5f2cb01fc81ebbc06a2edc7a705e596b82e87a594b20591aebfbb05c9f8829307b29be1bb02bbc5b1c802c9b0cda90393eccd900187e1df72eb9dc6f802d4aea1c9048ad3a2ad04e88da2b20584e0ddb204f793fc578f82fd2b8ccaf3d403a3e4ccbc018093caf501c88885de03bcd1e9fa02bbc787c804f89b99c004d6a88e56c49ce2e706c6c9bab5019b88edc101df88cbe404f09fecc105cc81c7e205feb8e78f0703010401fdfae2c604a2be93b701f7acaac905cbef99ce050186b3b09201f78aafc106aceae3a806c2b2821b01cac2f99701c0a9af4bd2fe95c202e280b28d0301cac2f99701c0a9af4bd2fe95c202e280b28d03039cb5e0ee03ca85fc2096e9a5e703cd92ad9207a391e0b105cff285fb04fe85f1b202f0d284a606acff9bb205db9091be0381f5ba5b90e48db407c180eebe04e981db9805afe29d8e04ab83b3e405c9ff849305829a95e602808ea3a305c5d683a9059d9fc4de01fa81de92028adaa7bd07d0fd9dd003010401fceda4bd0198f3b5a70382ecd28a05acb8d89f0301b0e1a1e406d2bfdbab06f0a7f519a8d9e4da0601d188bfbf02ad97c5e805b7d6f3bb06f4fffcc20601d188bfbf02ad97c5e805b7d6f3bb06f4fffcc20602dac8b5b804f2bbc1c605c59d9e8f04aab6c7e305edc8af78f58fa1b807e8d893aa05c1eff883049590ed89069193d28805bbe7f5df01f4d2d2c305abba8bed019df7f0b201d1e5ee71c4c7feb5060104019beae7fe01cdecc4ff01e7e0f4da02fc9aa89f0301d794959a05a5c2ffec04d2cc9424e0a782a807019beae7fe01cdecc4ff01e7e0f4da02fc9aa89f03019beae7fe01cdecc4ff01e7e0f4da02fc9aa89f030001e9bfc8fa06b884fac906fae5fda607a5e8e79006d8fcffff0303",
+    "sha256": "d40e2d6c5ebb439c587705e4d0a8873f417d56a73af8547d9104e83b26c3772e"
+  },
+  "transcript": [
+    {
+      "event": "ObserveVal",
+      "value": 3
+    },
+    {
+      "event": "ObserveVal",
+      "value": 3
+    },
+    {
+      "event": "ObserveVal",
+      "value": 0
+    },
+    {
+      "event": "ObserveCap",
+      "value": [
+        [
+          941775424,
+          323165231,
+          1091934518,
+          1039728456,
+          1467512849,
+          96415094,
+          953732273,
+          1173953208
+        ]
+      ]
+    },
+    {
+      "event": "ObserveVal",
+      "value": 0
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1
+    },
+    {
+      "event": "ObserveVal",
+      "value": 21
+    },
+    {
+      "event": "SampleVal",
+      "value": 406724709
+    },
+    {
+      "event": "SampleVal",
+      "value": 1756234673
+    },
+    {
+      "event": "SampleVal",
+      "value": 1205164201
+    },
+    {
+      "event": "SampleVal",
+      "value": 1211763620
+    },
+    {
+      "event": "ObserveCap",
+      "value": [
+        [
+          1228786461,
+          1885010368,
+          1624537447,
+          813837702,
+          143555620,
+          911412910,
+          570459803,
+          310919473
+        ]
+      ]
+    },
+    {
+      "event": "SampleVal",
+      "value": 1571761053
+    },
+    {
+      "event": "SampleVal",
+      "value": 719803751
+    },
+    {
+      "event": "SampleVal",
+      "value": 954525952
+    },
+    {
+      "event": "SampleVal",
+      "value": 4012298
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1422922771
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1323350601
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1841288488
+    },
+    {
+      "event": "ObserveVal",
+      "value": 447531979
+    },
+    {
+      "event": "ObserveVal",
+      "value": 994273755
+    },
+    {
+      "event": "ObserveVal",
+      "value": 771443904
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1578040296
+    },
+    {
+      "event": "ObserveVal",
+      "value": 181082983
+    },
+    {
+      "event": "ObserveVal",
+      "value": 143094912
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1181460319
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1470670948
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1857440430
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1367239190
+    },
+    {
+      "event": "ObserveVal",
+      "value": 438230676
+    },
+    {
+      "event": "ObserveVal",
+      "value": 374511350
+    },
+    {
+      "event": "ObserveVal",
+      "value": 99187360
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1121571359
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1745896304
+    },
+    {
+      "event": "ObserveVal",
+      "value": 577731799
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1901906239
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1528481230
+    },
+    {
+      "event": "ObserveVal",
+      "value": 744325420
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1025883982
+    },
+    {
+      "event": "ObserveVal",
+      "value": 133631143
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1142047897
+    },
+    {
+      "event": "ObserveVal",
+      "value": 509195568
+    },
+    {
+      "event": "ObserveVal",
+      "value": 505358704
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1608963531
+    },
+    {
+      "event": "ObserveVal",
+      "value": 721502504
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1709364372
+    },
+    {
+      "event": "ObserveVal",
+      "value": 869354153
+    },
+    {
+      "event": "ObserveVal",
+      "value": 372515022
+    },
+    {
+      "event": "SampleVal",
+      "value": 1034154284
+    },
+    {
+      "event": "SampleVal",
+      "value": 590296535
+    },
+    {
+      "event": "SampleVal",
+      "value": 1200790178
+    },
+    {
+      "event": "SampleVal",
+      "value": 441913387
+    },
+    {
+      "event": "ObserveCap",
+      "value": [
+        [
+          982613580,
+          400128061,
+          409443272,
+          930667979,
+          1409874659,
+          1672594738,
+          1803897213,
+          827953937
+        ]
+      ]
+    },
+    {
+      "event": "CheckWitness",
+      "value": {
+        "bits": 0,
+        "witness": 0,
+        "ok": true
+      }
+    },
+    {
+      "event": "SampleVal",
+      "value": 634593500
+    },
+    {
+      "event": "SampleVal",
+      "value": 1036626790
+    },
+    {
+      "event": "SampleVal",
+      "value": 463047288
+    },
+    {
+      "event": "SampleVal",
+      "value": 178495800
+    },
+    {
+      "event": "ObserveCap",
+      "value": [
+        [
+          1657489374,
+          625221761,
+          1915532793,
+          1024519872,
+          74049617,
+          439009693,
+          1985293303,
+          1688518695
+        ]
+      ]
+    },
+    {
+      "event": "CheckWitness",
+      "value": {
+        "bits": 0,
+        "witness": 0,
+        "ok": true
+      }
+    },
+    {
+      "event": "SampleVal",
+      "value": 1173480217
+    },
+    {
+      "event": "SampleVal",
+      "value": 1560774514
+    },
+    {
+      "event": "SampleVal",
+      "value": 808038350
+    },
+    {
+      "event": "SampleVal",
+      "value": 916377845
+    },
+    {
+      "event": "ObserveCap",
+      "value": [
+        [
+          1773069985,
+          720349920,
+          1654299781,
+          662722473,
+          827510457,
+          1788528893,
+          467214236,
+          580356946
+        ]
+      ]
+    },
+    {
+      "event": "CheckWitness",
+      "value": {
+        "bits": 0,
+        "witness": 0,
+        "ok": true
+      }
+    },
+    {
+      "event": "SampleVal",
+      "value": 1308291545
+    },
+    {
+      "event": "SampleVal",
+      "value": 255571696
+    },
+    {
+      "event": "SampleVal",
+      "value": 1445816583
+    },
+    {
+      "event": "SampleVal",
+      "value": 1243747855
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1578205452
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1688908535
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1471627804
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1933825424
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1
+    },
+    {
+      "event": "ObserveVal",
+      "value": 1
+    },
+    {
+      "event": "CheckWitness",
+      "value": {
+        "bits": 8,
+        "witness": 199,
+        "ok": true
+      }
+    },
+    {
+      "event": "SampleBits",
+      "value": {
+        "bits": 4,
+        "value": 6
+      }
+    },
+    {
+      "event": "SampleBits",
+      "value": {
+        "bits": 4,
+        "value": 8
+      }
+    },
+    {
+      "event": "SampleBits",
+      "value": {
+        "bits": 4,
+        "value": 4
+      }
+    },
+    {
+      "event": "SampleBits",
+      "value": {
+        "bits": 4,
+        "value": 4
+      }
+    }
+  ],
+  "acceptance": true
+}

@@ -1,0 +1,59 @@
+# The two implementations agree on the artifact, so they can agree on a
+# judgment about it. This diffs the part of that judgment structure alone
+# determines: the plan's shape, each node's site and binding, and every
+# conclusion's subject, index, resource variables, and inherited obligations.
+#
+# The bound is absent by design. A second implementation of the same arithmetic
+# shares a common-mode misreading with the first; the numbers are cross-checked
+# by re-derivation from the cited source instead.
+#
+# REQUIRES: uv
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/sumcheck-fs.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/sumcheck-fs-request.json --skeleton \
+# RUN:   -o=%t/zkc.json %t/sealed.mlirbc
+# RUN: %uv python -m oracle.parity derive-skeleton sumcheck-fs \
+# RUN:   %S/Inputs/sumcheck-fs-request.json > %t/oracle.json
+# RUN: diff %t/zkc.json %t/oracle.json
+
+# The obligation list travels with the conclusion and its order is part of it:
+# a reader has to accept every one of these for the bound to mean anything.
+# RUN: FileCheck %s < %t/zkc.json
+# CHECK: "zkc.side.field_order_match"
+# CHECK: "zkc.assume.subset_sampling_root_bound"
+# CHECK: "zkc.hyp.move_budget_is_query_budget"
+# CHECK: "zkc.hyp.transcript_only_sr_extractor"
+# CHECK: "zkc.hyp.injective_absorb_encoding"
+# CHECK: "zkc.hyp.ideal_unsalted_sponge"
+# CHECK: "zkc.assume.ideal_permutation"
+
+# A chain conclusion is checkable the same way a one-step conclusion is: the
+# skeleton of the three-layer GKR derivation — sites, bindings, premise edges,
+# subjects, indices, obligations — is byte-identical across the two
+# implementations, with the bounds absent for the same reason as above.
+# RUN: zkc-seal %S/../Evidence/Inputs/gkr-width2-depth3.mlir %zkc-seal-full -o %t/gkr-sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/gkr-sealed.artifacts %t/gkr-sealed.mlirbc
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/../Evidence/Inputs/gkr-width2-depth3-chain-request.json --skeleton \
+# RUN:   -o=%t/gkr-zkc.json %t/gkr-sealed.mlirbc
+# RUN: %uv python -m oracle.parity derive-skeleton gkr-width2-depth3 \
+# RUN:   %S/../Evidence/Inputs/gkr-width2-depth3-chain-request.json > %t/gkr-oracle.json
+# RUN: diff %t/gkr-zkc.json %t/gkr-oracle.json
+
+# And the coverage judgment refuses in both: an entry-bodied application at a
+# mid-chain occurrence selects no premise for a produced consumed claim.  The
+# verdict is the contract; the prose is not compared.
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/gkr-midchain-entry-request.json -o=/dev/null \
+# RUN:   %t/gkr-sealed.mlirbc 2>&1 | FileCheck --check-prefix=MIDCHAIN %s
+# MIDCHAIN: coverage_mismatch
+# RUN: not %uv python -m oracle.parity derive-skeleton gkr-width2-depth3 \
+# RUN:   %S/Inputs/gkr-midchain-entry-request.json > /dev/null 2>&1

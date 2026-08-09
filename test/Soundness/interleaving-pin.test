@@ -1,0 +1,16 @@
+# Interleaving is structurally valid Open PIR, so sealing keeps accepting this
+# carrier. Security pricing is a separate judgment: without one exact
+# composite rule, derivation must not price the two bodies independently
+# (kernel.md section 9.3).
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/Inputs/interleaved-open.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/interleaved-a-request.json -o=/dev/null %t/sealed.mlirbc \
+# RUN:   2>&1 | FileCheck %s
+# CHECK: interleaved reduction bodies
+# CHECK-SAME: require an exact composite soundness rule

@@ -1,0 +1,60 @@
+# The payoff of the model, demonstrated rather than argued.
+#
+# A protocol artifact denotes structure. Which theorem you apply to it is not
+# part of it, so a second analysis is a second derivation and not a second
+# artifact. When the cited capacity conjecture was refuted, a design that put
+# the citation inside the identity preimage could not replace it without moving
+# every artifact that cited it. Here the artifact does not move.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/sumcheck-fs.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# A second analysis of the same protocol: the state-restoration hop prices the
+# move budget at twice the query budget. Nothing about the artifact changes.
+# RUN: %python -c "import json,sys,collections; \
+# RUN:   d=json.load(open(sys.argv[1]),object_pairs_hook=collections.OrderedDict); \
+# RUN:   b=d['rules']['zkc.sr.from_rbr_knowledge']['body']; \
+# RUN:   b['move_budget']=collections.OrderedDict([('kind','mul'),('operands',[ \
+# RUN:     collections.OrderedDict([('kind','rational_literal'),('literal','2')]), \
+# RUN:     b['move_budget']])]); \
+# RUN:   json.dump(d,open(sys.argv[2],'w'),indent=1,sort_keys=False)" \
+# RUN:   %zkc-registry-dir/soundness-signature.json %t/alt-signature.json
+
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/sumcheck-fs-request.json -o=%t/x.json %t/sealed.mlirbc
+
+# The same request, unchanged, under the second signature — which is possible
+# only because a request names bindings by identifier.
+# RUN: zkc-derive --signature=%t/alt-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/sumcheck-fs-request.json -o=%t/y.json %t/sealed.mlirbc
+
+# RUN: %python -c "import json,sys; \
+# RUN:   a=json.load(open(sys.argv[1]))['identity']; b=json.load(open(sys.argv[2]))['identity']; \
+# RUN:   print('artifact moved:', a['artifact_id']!=b['artifact_id']); \
+# RUN:   print('signature differs:', a['signature_digest']!=b['signature_digest']); \
+# RUN:   print('judgment differs:', a['judgment_digest']!=b['judgment_digest'])" \
+# RUN:   %t/x.json %t/y.json | FileCheck --check-prefix=STABLE %s
+
+# STABLE: artifact moved: False
+# STABLE-NEXT: signature differs: True
+# STABLE-NEXT: judgment differs: True
+
+# Each witness re-derives under its own signature, and neither under the other:
+# they are two analyses, and the checker says which one it ran.
+# RUN: zkc-derive --signature=%t/alt-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/y.json %t/sealed.mlirbc | FileCheck --check-prefix=OWN %s
+# OWN: zkc-derive: witness re-derives
+
+# RUN: not zkc-derive --signature=%t/alt-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/x.json %t/sealed.mlirbc | FileCheck --check-prefix=OTHER %s
+# OTHER: signature: recorded {{.*}}, checking under
+# OTHER: zkc-derive: witness does not re-derive

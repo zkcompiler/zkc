@@ -1,0 +1,57 @@
+// RUN: split-file %s %t
+// RUN: zkc-translate --id %t/relabel-a.mlir -o %t/a.id
+// RUN: zkc-translate --id %t/relabel-b.mlir -o %t/b.id
+// RUN: diff %t/a.id %t/b.id
+// RUN: zkc-translate --canonical %t/content-order.mlir | FileCheck %s --check-prefix=ORDER
+
+// PIR treats the transformer tail as a graph. Author labels and the
+// authored order of independent reductions therefore do not change identity.
+
+//--- relabel-a.mlir
+pir.protocol "a" vocab {check_contracts = {}, claim_profiles = {}, construction_profiles = {}, reduction_contracts = {}, terminal_rules = {}} policy "analysis_only_artifact" {
+  %left = pir.instantiate "left" anchors {contract = "sha256:1111111111111111111111111111111111111111111111111111111111111111", statement = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"} : !pir.claim<"opaque_relation">
+  %right = pir.instantiate "right" anchors {contract = "sha256:2222222222222222222222222222222222222222222222222222222222222222", statement = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"} : !pir.claim<"opaque_relation">
+  %t0 = pir.begin
+  pir.end %t0
+  %a = pir.reduce "alpha" contract "a.contract" (%right : !pir.claim<"opaque_relation">) checks {} params {flavor = "a"} anchors [{}] -> !pir.claim<"schnorr_evaluation">
+  %z = pir.reduce "zeta" contract "z.contract" (%left : !pir.claim<"opaque_relation">) checks {} -> !pir.claim<"schnorr_evaluation">
+  pir.residual %a : !pir.claim<"schnorr_evaluation"> route "normalization.probe"
+  pir.residual %z : !pir.claim<"schnorr_evaluation"> route "normalization.probe"
+}
+
+//--- relabel-b.mlir
+pir.protocol "b" vocab {check_contracts = {}, claim_profiles = {}, construction_profiles = {}, reduction_contracts = {}, terminal_rules = {}} policy "analysis_only_artifact" {
+  %renamed_left = pir.instantiate "renamed-left" anchors {contract = "sha256:1111111111111111111111111111111111111111111111111111111111111111", statement = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"} : !pir.claim<"opaque_relation">
+  %renamed_right = pir.instantiate "renamed-right" anchors {contract = "sha256:2222222222222222222222222222222222222222222222222222222222222222", statement = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"} : !pir.claim<"opaque_relation">
+  %head = pir.begin
+  pir.end %head
+  %renamed_z = pir.reduce "renamed-zeta" contract "z.contract" (%renamed_left : !pir.claim<"opaque_relation">) checks {} -> !pir.claim<"schnorr_evaluation">
+  %renamed_a = pir.reduce "renamed-alpha" contract "a.contract" (%renamed_right : !pir.claim<"opaque_relation">) checks {} params {flavor = "a"} anchors [{}] -> !pir.claim<"schnorr_evaluation">
+  pir.residual %renamed_z : !pir.claim<"schnorr_evaluation"> route "normalization.probe"
+  pir.residual %renamed_a : !pir.claim<"schnorr_evaluation"> route "normalization.probe"
+}
+
+// The first source sorts to claim position 0 and feeds z.contract, while the
+// second feeds a.contract. The canonical transformer key starts with
+// contract/version/row, not the carrier-correlated claim position, so the
+// semantic a.contract row is emitted first. Its complete row also fixes
+// params, authored anchors, and role-sorted selected check event positions in
+// exactly that order.
+//
+// ORDER: "transformers":[
+// ORDER: ["reduce","a.contract",[1],[],["schnorr_evaluation"],{"flavor":"a","rounds":2},[{}],{{\[\[}}"a",1],["z",0]{{\]\]}}
+// ORDER-SAME: ,["reduce","z.contract",[0],[],["schnorr_evaluation"],{},[{}],[]]
+
+//--- content-order.mlir
+pir.protocol "content-order" vocab {check_contracts = {}, claim_profiles = {}, construction_profiles = {}, reduction_contracts = {}, terminal_rules = {}} policy "analysis_only_artifact" {
+  %first = pir.instantiate "first" anchors {contract = "sha256:1111111111111111111111111111111111111111111111111111111111111111", statement = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"} : !pir.claim<"opaque_relation">
+  %second = pir.instantiate "second" anchors {contract = "sha256:2222222222222222222222222222222222222222222222222222222222222222", statement = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"} : !pir.claim<"opaque_relation">
+  %t0 = pir.begin
+  pir.check "z-check" contract "opaque.check"
+  pir.check "a-check" contract "opaque.check"
+  pir.end %t0
+  %z = pir.reduce "zeta" contract "z.contract" (%first : !pir.claim<"opaque_relation">) checks {} -> !pir.claim<"schnorr_evaluation">
+  %a = pir.reduce "alpha" contract "a.contract" (%second : !pir.claim<"opaque_relation">) checks {z = "z-check", a = "a-check"} params {rounds = 2 : i64, flavor = "a"} anchors [{}] -> !pir.claim<"schnorr_evaluation">
+  pir.residual %z : !pir.claim<"schnorr_evaluation"> route "normalization.probe"
+  pir.residual %a : !pir.claim<"schnorr_evaluation"> route "normalization.probe"
+}

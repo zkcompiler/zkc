@@ -1,0 +1,82 @@
+{
+ "artifact_id": "7840222dde2925e6eba298d82923af2e4312dca7398a2e7e9daacad06e14dea2",
+ "source": "sha256:5337dec2241ef509cde1d670883918e0040f3cda434cbe407dfd249bcd9a3fda",
+ "vectors": [
+  {
+   "challenges": [
+    "1654834368763198252",
+    "960454384712253740"
+   ],
+   "expect": "accept",
+   "name": "honest",
+   "proof": "00000000000000000000000000000003000000000000000016f72717383cfb2c16f72717383cfb2c0000000000000000",
+   "statement": {
+    "s": "3"
+   }
+  },
+  {
+   "challenges": [],
+   "expect": "check_failure",
+   "name": "false_statement",
+   "proof": "00000000000000000000000000000003000000000000000016f72717383cfb2c16f72717383cfb2c0000000000000000",
+   "statement": {
+    "s": "4"
+   }
+  },
+  {
+   "challenges": [
+    "1654834368763198252"
+   ],
+   "expect": "check_failure",
+   "name": "tampered_message",
+   "proof": "00000000000000000000000000000003000000000000000016f72717383cfb2d16f72717383cfb2c0000000000000000",
+   "statement": {
+    "s": "3"
+   }
+  },
+  {
+   "challenges": [
+    "829048626563406359",
+    "2221636072341486221"
+   ],
+   "expect": "check_failure",
+   "name": "consistent_cheat",
+   "proof": "0000000000000001000000000000000300000000000000001b815f5557d660880b815f5557d65a170000000000000000",
+   "statement": {
+    "s": "5"
+   }
+  },
+  {
+   "challenges": [
+    "1654834368763198252",
+    "960454384712253740"
+   ],
+   "expect": "proof_trailing_data",
+   "name": "trailing_byte",
+   "proof": "00000000000000000000000000000003000000000000000016f72717383cfb2c16f72717383cfb2c000000000000000000",
+   "statement": {
+    "s": "3"
+   }
+  },
+  {
+   "challenges": [
+    "1654834368763198252"
+   ],
+   "expect": "abi_decode_failure",
+   "name": "truncated",
+   "proof": "000000000000000000000000000000030000000000000000",
+   "statement": {
+    "s": "3"
+   }
+  },
+  {
+   "challenges": [],
+   "expect": "abi_decode_failure",
+   "name": "noncanonical_value",
+   "proof": "2000000000000ce100000000000000030000000000000000000000000000000000000000000000000000000000000000",
+   "statement": {
+    "s": "3"
+   }
+  }
+ ]
+}

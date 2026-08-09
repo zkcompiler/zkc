@@ -1,0 +1,26 @@
+[package]
+name = "zkc-plonky3-replay"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+p3-air = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-challenger = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-commit = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-dft = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-field = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-fri = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-matrix = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-symmetric = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+postcard = { version = "1", features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+
+[workspace]

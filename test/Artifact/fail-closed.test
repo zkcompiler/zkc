@@ -1,0 +1,46 @@
+# The fail-closed loader battery (zkc-E801/E802/E803): anything
+# unexpected rejects, nothing is repaired.
+
+# Not bytecode at all.
+# RUN: not zkc-artifact %S/Inputs/not-bytecode.txt 2>&1 | FileCheck %s --check-prefix=NOTBC
+# NOTBC: [zkc-E803] malformed artifact: not MLIR bytecode
+
+# Bytecode written by a foreign producer (stock zkc-opt emits the
+# default MLIR producer string, not the zkc one).
+# RUN: zkc-opt --emit-bytecode %S/Inputs/wrong-id.mlir -o %t.foreign.mlirbc
+# RUN: not zkc-artifact %t.foreign.mlirbc 2>&1 | FileCheck %s --check-prefix=FOREIGN
+# FOREIGN: [zkc-E802] producer/version rejected
+
+# Seal is a minting boundary, not a generic `pir.sealed` bytecode writer.
+# Neither the pass nor its driver accepts a pre-existing sealed root, and the
+# driver leaves no artifact directory behind on refusal.
+# RUN: rm -rf %t.authored.dir
+# RUN: not zkc-opt %pir-seal-full %S/Inputs/wrong-id.mlir 2>&1 | FileCheck %s --check-prefix=AUTHORED
+# RUN: not zkc-seal %S/Inputs/wrong-id.mlir %zkc-seal-full -o %t.authored.dir 2>&1 | FileCheck %s --check-prefix=AUTHORED
+# RUN: not test -e %t.authored.dir
+# AUTHORED: [zkc-E202] pir-seal accepts open pir.protocol roots only; pre-existing pir.sealed is never seal input
+
+# Every runtime consumer crosses the same artifact gate.  Neither dispatch nor
+# certificate verification has an implicit predecessor decoder.
+
+# A different PIR carrier revision is not guessed at even when the producer is
+# a zkc release. Any blob other than the current 0.0 needs an explicit
+# implementation decision.
+# RUN: rm -rf %t.current.dir
+# RUN: zkc-seal %S/Inputs/good-protocol.mlir %zkc-seal-full -o %t.current.dir
+# RUN: cp %t.current.dir/*.mlirbc %t.current.mlirbc
+# RUN: %python %S/../Dialect/Pir/rewrite-pir-minor.py %t.current.mlirbc %t.future.mlirbc
+# RUN: not zkc-artifact %t.future.mlirbc 2>&1 | FileCheck %s --check-prefix=FUTURE
+# FUTURE: [zkc-E803] malformed artifact: {{.*}}unsupported pir dialect version 0.1
+
+# A tampered identity: the zkc producer, but the stored id is not the
+# id of the content.
+# RUN: %python %S/Inputs/rewrite-id.py %t.current.dir/*.mlirbc %t.tampered.mlirbc
+# RUN: not zkc-artifact %t.tampered.mlirbc 2>&1 | FileCheck %s --check-prefix=TAMPERED
+# TAMPERED: [zkc-E801] artifact id mismatch: stored aaaaaaaa
+
+# The wrong artifact for a caller that knows which id it wants.
+# RUN: rm -rf %t.dir
+# RUN: zkc-seal %S/Inputs/good-protocol.mlir %zkc-seal-full -o %t.dir
+# RUN: not zkc-artifact %t.dir/*.mlirbc --expect-id 0000000000000000000000000000000000000000000000000000000000000000 2>&1 | FileCheck %s --check-prefix=WRONGWANT
+# WRONGWANT: [zkc-E801] artifact id mismatch: requested 00000000

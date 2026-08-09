@@ -1,0 +1,48 @@
+# A premise a request asserts instead of deriving.
+#
+# The two bindings that price a batch opening take their premise at a
+# consumed-claim-vector subject, and no rule concludes at one, so the premise is
+# inhabitable only by an assumption. Until this test the whole path had no
+# coverage on either side: nothing in the tree spelled `"kind": "assume"`, and
+# the reference could not read one at all, so every fan-in derivation sat
+# outside the differential gate that `docs/spec/boundaries.md` calls the
+# definition of done.
+#
+# The assumption is not free. It leaves a marker on its own conclusion, the
+# marker travels with every conclusion that inherited it, and a reader of the
+# witness can therefore see exactly which part of the derivation was asserted
+# rather than reached.
+#
+# REQUIRES: uv
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/kzg-after.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/kzg-batch-assume-request.json --skeleton \
+# RUN:   -o=%t/zkc.json %t/sealed.mlirbc
+# RUN: %uv python -m oracle.parity derive-skeleton kzg-batch \
+# RUN:   %S/Inputs/kzg-batch-assume-request.json > %t/oracle.json
+# RUN: diff %t/zkc.json %t/oracle.json
+
+# The marker is the whole point: an asserted premise must not be spelled the
+# same way as a derived one.
+# RUN: FileCheck --check-prefix=MARKER %s < %t/zkc.json
+# MARKER: "kind":"assumed_judgment"
+# MARKER: "kind":"assumed"
+
+# A root assumption would assert the answer instead of reaching it, so the one
+# judgment a request may never supply is its own target.
+# RUN: %python %S/Inputs/hoist_plan_root.py \
+# RUN:   %S/Inputs/kzg-batch-assume-request.json source_ss > %t/root-assume.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/root-assume.json --skeleton -o=%t/never.json \
+# RUN:   %t/sealed.mlirbc 2>&1 | FileCheck --check-prefix=ROOT %s
+# ROOT: root must be Apply, not Assume
+# RUN: not %uv python -m oracle.parity derive-skeleton kzg-batch \
+# RUN:   %t/root-assume.json 2>&1 | FileCheck --check-prefix=ROOT-ORACLE %s
+# ROOT-ORACLE: root must be an application, not an assumption

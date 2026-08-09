@@ -1,0 +1,63 @@
+name: Lean reading
+
+# The formalization-receipt reading against the pinned ArkLib checkout.
+# Deliberately not part of the build workflow: a proof assistant never
+# enters the compiler build path, and a formal result is never a runtime
+# input. A disagreement here must be classified in the formalization evidence
+# record (docs/formalization.md), not treated as a
+# reason to revert unrelated work.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 3 * *" # monthly; the pin only moves deliberately
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  reading:
+    name: Receipts vs the pinned checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read the pin
+        id: pin
+        run: echo "rev=$(cat arklib-pin.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out ArkLib at the pin
+        uses: actions/checkout@v7
+        with:
+          repository: Verified-zkEVM/ArkLib
+          ref: ${{ steps.pin.outputs.rev }}
+          path: arklib
+          persist-credentials: false
+
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Cache the Lake build
+        uses: actions/cache@v6
+        with:
+          path: arklib/.lake
+          key: arklib-lake-${{ steps.pin.outputs.rev }}
+
+      - name: Fetch the Mathlib olean cache
+        working-directory: arklib
+        run: lake exe cache get
+
+      - name: Run the reading
+        run: |
+          python3 test/Soundness/Inputs/formalization_receipts.py \
+            registry/soundness-signature.json --checkout arklib

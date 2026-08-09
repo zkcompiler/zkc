@@ -1,0 +1,14 @@
+# The upstream-to-native agreement (docs/spec/endpoints.md §4): the
+# native pinned duplex — Poseidon2-16 self-checked against the pinned
+# known-answer test, with the pinned duplexing semantics (prefix-free
+# absorbs, length binding, LIFO output, output invalidation) — replays the
+# checked-in captured upstream verifier transcript and derives every sample the
+# upstream verifier derived: all six extension challenges coordinate
+# by coordinate, the grinding check, and the four query indices. With
+# primitives held fixed by the known-answer check, this validates the
+# orchestration-layer semantics — the layer where the weak-Fiat-Shamir
+# bug class lives. Scoped evidence about this fixture at this pin, never
+# universal conformance.
+
+# RUN: zkc-run --replay-duplex %zkc-replay-fixture | FileCheck %s
+# CHECK: duplex replay: 82 events, 29 derived samples, all agree with the captured upstream transcript

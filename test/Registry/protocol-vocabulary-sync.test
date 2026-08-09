@@ -1,0 +1,57 @@
+# Cross-impl vocabulary parity: the C++ loader's normalized content equals the
+# oracle's canonical document byte-for-byte, and both implementations refuse
+# the same admission mutations for the same reasons.
+# REQUIRES: uv
+
+# RUN: zkc-registry-lint %zkc-registry-dir/protocol-vocabulary.json > %t.zkc
+# RUN: %uv python -m oracle.parity protocol-vocabulary > %t.oracle
+# RUN: diff %t.zkc %t.oracle
+
+# A zero-round reduction contract refuses in both implementations.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py empty_rounds %zkc-registry-dir/protocol-vocabulary.json %t.empty-rounds.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.empty-rounds.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-EMPTY-ROUNDS
+# ORACLE-EMPTY-ROUNDS: reduction contract 'sumcheck' has no rounds
+
+# A repeated acceptance clause refuses in both implementations, even after the
+# spec and its citing descriptor are consistently rekeyed.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_acceptance %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-acceptance.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.duplicate-acceptance.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-DUPLICATE-ACCEPTANCE
+# ORACLE-DUPLICATE-ACCEPTANCE: acceptance contains duplicates
+
+# Registry strings outside the printable-ASCII encoding domain refuse in both
+# implementations (the oracle validates the same grammar independently).
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py non_ascii_title %zkc-registry-dir/protocol-vocabulary.json %t.non-ascii-title.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.non-ascii-title.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-NON-ASCII-TITLE
+# ORACLE-NON-ASCII-TITLE: has wrong format or title
+
+# A second produced claim refuses in both implementations; the reason is on the
+# judgment side, so both admission layers have to carry it.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py two_outputs %zkc-registry-dir/protocol-vocabulary.json %t.two-outputs.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.two-outputs.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-TWO-OUTPUTS
+# ORACLE-TWO-OUTPUTS: produces 2 claims; a reduction contract produces exactly one
+
+# The faithfulness gate refuses an anchorless produced profile in both
+# implementations, and both keep admitting a second producer of one anchored
+# profile.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py anchorless_output %zkc-registry-dir/protocol-vocabulary.json %t.anchorless-output.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.anchorless-output.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-ANCHORLESS
+# ORACLE-ANCHORLESS: produces anchorless profile 'bare_evaluation'
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py second_producer %zkc-registry-dir/protocol-vocabulary.json %t.second-producer.json
+# RUN: %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.second-producer.json')"
+
+# Source-level ambiguity and out-of-domain numbers are refused by the same
+# authority entry point as schema errors.
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py duplicate_json_key %zkc-registry-dir/protocol-vocabulary.json %t.duplicate-key.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.duplicate-key.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-DUPLICATE-KEY
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py float_json_number %zkc-registry-dir/protocol-vocabulary.json %t.float.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.float.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-NUMBER
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py nonfinite_json_number %zkc-registry-dir/protocol-vocabulary.json %t.nonfinite.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.nonfinite.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-NUMBER
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py overlapping_hole_parameter %zkc-registry-dir/protocol-vocabulary.json %t.overlapping-hole.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.overlapping-hole.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-HOLE-OVERLAP
+# RUN: %python %S/lib/protocol_vocabulary_fixture.py relation_contracts_section %zkc-registry-dir/protocol-vocabulary.json %t.relation-seam.json
+# RUN: not %uv python -c "from oracle import model; model.ProtocolVocabulary.load(r'%t.relation-seam.json')" 2>&1 | FileCheck %s --check-prefix=ORACLE-RELATION-SEAM
+# ORACLE-RELATION-SEAM: unknown=['relation_contracts']
+# ORACLE-DUPLICATE-KEY: duplicate JSON object key 'registry'
+# ORACLE-NUMBER: a numeric value leaves the encoding domain
+# ORACLE-HOLE-OVERLAP: parameter and semantic-parameter names must be disjoint

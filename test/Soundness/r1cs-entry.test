@@ -1,0 +1,79 @@
+# The first end-to-end story from a compiled circuit to a bound.  The relation
+# enters as digests -- constraint matrices and a public input -- and zkc never
+# reads inside them; the batching contract consumes the entry claim, samples
+# one challenge, and produces a claim whose statement is a tagged construction
+# over the entry anchors, so the sumcheck downstream is checked against
+# exactly the relation instance the entry named.  This fixture is also the
+# sharpest test of the descriptor-faithfulness gate: the entry profile and the
+# batched profile both authored under it without friction.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/Inputs/r1cs-entry.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# The chain conclusion prices both layers, attributably: round "0" is the
+# batching round at s/|C| with the declared constraint count s = 8, and the
+# site-qualified rounds "2:0"/"2:1" are the sumcheck's degree-two rounds.  The
+# constraint count cannot be checked against the matrices the anchors name --
+# that is the membrane -- so its declaredness travels as an explicit
+# obligation beside the bound, and the target claim's statement anchor is
+# reported grounded because the claimed-sum check pins it to the transcript.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/r1cs-entry-request.json -o=%t/witness.json %t/sealed.mlirbc
+# RUN: FileCheck %s < %t/witness.json
+# CHECK: "zkc.side.field_order_match"
+# CHECK: "zkc.assume.constraint_count_matches_relation"
+# CHECK: "zkc.assume.subset_sampling_root_bound"
+# CHECK: "constant": "1/288230376151711744"
+# CHECK: "round_index": "0"
+# CHECK: "constant": "1/1152921504606846976"
+# CHECK: "round_index": "2:0"
+# CHECK: "round_index": "2:1"
+# CHECK: "subject_anchor_grounding"
+# CHECK-NEXT: "statement": "grounded"
+
+# A conclusion about the chain re-derives like any other, and the recorded
+# anchor grounding is artifact-derived, so the checker recomputes rather than
+# repeats it.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/witness.json %t/sealed.mlirbc | FileCheck --check-prefix=AGREES %s
+# AGREES: zkc-derive: witness re-derives
+
+# The batching entry's own conclusion, derived alone, carries both of the
+# obligations the bound rests on: the declared constraint count, which no
+# decider can check against matrices the anchors only name, and the
+# subset-sampling hypothesis that makes s/|C| the right denominator when the
+# round samples from a strict subset of the field.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); \
+# RUN:   p=d['derivation']['plan']['premises']['source_rbr']; \
+# RUN:   d['derivation']['plan']=p; \
+# RUN:   d['derivation']['target']['subject']['claim']=p['site']['owner_claim']; \
+# RUN:   json.dump(d, open(sys.argv[2],'w'), indent=1)" \
+# RUN:   %S/Inputs/r1cs-entry-request.json %t/entry-only.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/entry-only.json -o=%t/entry-only.json.witness %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=ENTRY %s < %t/entry-only.json.witness
+# ENTRY: "zkc.assume.constraint_count_matches_relation"
+# ENTRY: "zkc.assume.subset_sampling_root_bound"
+# ENTRY: "constant": "1/288230376151711744"
+
+# The grounding projection is artifact-derived, so the checker recomputes it
+# rather than repeating what the witness recorded: flip one spelling and the
+# check refuses instead of agreeing.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); \
+# RUN:   g=d['subject_anchor_grounding']; \
+# RUN:   d['subject_anchor_grounding']={k: ('declared' if v=='grounded' else 'grounded') for k,v in g.items()}; \
+# RUN:   json.dump(d, open(sys.argv[2],'w'), indent=1)" \
+# RUN:   %t/witness.json %t/tampered-grounding.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/tampered-grounding.json %t/sealed.mlirbc 2>&1 \
+# RUN:   | FileCheck --check-prefix=TAMPERED %s
+# TAMPERED: witness disagrees with the artifact about anchor grounding

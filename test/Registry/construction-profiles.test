@@ -1,0 +1,24 @@
+// RUN: zkc-registry-lint %zkc-registry-dir/construction-profiles.json | FileCheck %s
+//
+// The construction-profile registry (`docs/spec/vocabularies.md` §7): pure
+// construction shape — sponge alphabet/capacity/rate and codec squeeze
+// declarations — that the sealed kappa's names resolve into when the FS hops
+// price. The squeeze-kind vocabulary is closed at admission; the bias FORMULA
+// for a squeeze shape lives with the pricing walk, never here.
+//
+// CHECK: {"codecs":{"bls_g1_be48":{},"fr_be32":{"squeeze":{"kind":"mod_reduce","symbols":32}},"plonky3_bb31_digest8":{},"plonky3_bb31_ext4_tuple":{"squeeze":{"kind":"tuple_bijection","symbols":4}},"plonky3_bb31_low_bits":{"squeeze":{"kind":"mod_reduce","symbols":1}},"tg_be8":{"squeeze":{"kind":"mod_reduce","symbols":8}},"ts_be8":{"squeeze":{"kind":"mod_reduce","symbols":8}}},"sponges":{"plonky3_bb31_poseidon2_w16_r8_lenpad":{"alphabet_order":"2013265921","capacity":8,"rate":8},"toy_duplex":{"alphabet_order":"256","capacity":32,"rate":32}}}
+
+// Fail-closed admission: an unknown squeeze derivation, a degenerate
+// alphabet, and an unknown entry field are refused where entries load.
+// RUN: not zkc-registry-lint %S/Inputs/bad-profile-squeeze.json 2>&1 | FileCheck --check-prefix=SQUEEZE %s
+// SQUEEZE: unknown squeeze kind 'truncate' (this loader admits: mod_reduce, tuple_bijection)
+// RUN: not zkc-registry-lint %S/Inputs/bad-profile-alphabet.json 2>&1 | FileCheck --check-prefix=ALPHABET %s
+// ALPHABET: 'alphabet_order' must be at least 2, without leading zeros
+// RUN: not zkc-registry-lint %S/Inputs/bad-profile-field.json 2>&1 | FileCheck --check-prefix=FIELD %s
+// FIELD: has unknown field 'bias'
+// An unbounded capacity is refused before anything exponentiates by
+// it: the duplex loss divides by alphabet_order^capacity, and the
+// checker re-admits embedded profiles through this loader — a crafted
+// capacity must not hang the verdict.
+// RUN: not zkc-registry-lint %S/Inputs/bad-profile-capacity.json 2>&1 | FileCheck --check-prefix=CAPACITY %s
+// CAPACITY: 'capacity' above 4096 is not a real sponge

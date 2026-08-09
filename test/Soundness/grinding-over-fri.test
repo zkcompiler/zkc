@@ -1,0 +1,71 @@
+# The first derivation of a grinding-scaled bound on a real artifact.  The
+# grinding row shipped with a round selector keyed on round kind "pow" while
+# no grinding round carried a kind, so the projection could never match and
+# the only exercise of the row hand-built its round on a synthetic view.  The
+# family now emits the kind, the registry contract declares it, and the row's
+# adjacent-predecessor selection resolves against sealed structure.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Family/Inputs/frigrind.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-seal %t/spine.mlir --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# The unscaled premise: the Johnson row prices the fold round and the query
+# round of the sealed FRI occurrence.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-johnson-request.json -o=%t/johnson.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=JOHNSON %s < %t/johnson.json
+# JOHNSON: "constant": "110534070370304/1020847100287446415470558493371657093123"
+# JOHNSON: "constant": "1/100"
+
+# The chain: grinding consumes the FRI claim, carries its descriptor through
+# by identity, and scales exactly the adjacent predecessor round by 2^-16,
+# with the exponent projected from the sealed pow round rather than asserted.
+# 1/6553600 is (1/100) * 2^-16 and the fold round is untouched -- a scaled
+# round, not a scaled sum.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/grinding-over-fri-request.json -o=%t/grind.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=GRIND %s < %t/grind.json
+# GRIND: "zkc.hyp.smooth_subgroup_fri_domain"
+# GRIND: "zkc.hyp.fiat_shamir_profile_required"
+# GRIND: "constant": "110534070370304/1020847100287446415470558493371657093123"
+# GRIND: "constant": "1/6553600"
+
+# What the factor is bought with: nothing the prover controls may enter the
+# transcript between the pow check and the protected challenge.  Inject one
+# absorbed message there and the same request refuses -- an adjacency the
+# adapter withholds rather than a bound it discounts -- because otherwise one
+# 16-bit grind resamples the query set without limit by varying the injected
+# message, and the emitted number would be understated by 2^z.  Checks sit
+# between the two in every shipped grinding spine and are non-absorbing, so
+# they must keep passing: the positive above is what pins that.
+# RUN: zkc-seal %S/Inputs/grinding-absorbed-between.mlir \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/absorbed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/absorbed.artifacts %t/absorbed.mlirbc
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); \
+# RUN:   old=d['derivation']['target']['subject']['artifact_id']; \
+# RUN:   open(sys.argv[3],'w').write(json.dumps(d).replace(old, sys.argv[2]))" \
+# RUN:   %S/Inputs/grinding-over-fri-request.json \
+# RUN:   4358faaa6c342436a3b483b7680d90450ab154c5112f645cf27b75550fda101e %t/absorbed-request.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/absorbed-request.json -o=/dev/null %t/absorbed.mlirbc 2>&1 \
+# RUN:   | FileCheck --check-prefix=ABSORBED %s
+# ABSORBED: no authenticated round adjacency
+
+# A conclusion about a chain re-derives the same way a one-step conclusion
+# does.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/grind.json %t/sealed.mlirbc | FileCheck --check-prefix=AGREES %s
+# AGREES: zkc-derive: witness re-derives

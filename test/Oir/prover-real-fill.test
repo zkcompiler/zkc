@@ -1,0 +1,57 @@
+# REQUIRES: cargo
+# The pinned real fill (evaluation/upstream/plonky3-replay/README.md;
+# docs/spec/endpoints.md §6.4): the
+# value-faithful FRI artifact's derived prover skeleton, filled in-process by
+# the pinned crates through the backend runner, is checked along two bounded
+# legs. The pinned PCS verifier accepts the runner's opening proof, and zkc's
+# executor under the real profile accepts the assembled spine wire with an
+# independently derived, entry-for-entry equal challenge stream. The runner
+# recomputes the artifact identity before reading semantics, checks
+# every recorded challenger event against the artifact's schedule under
+# the declared correspondence relation (zero-bit commit pows enumerated,
+# never silently matched), and a wrong fill is rejected by the pinned PCS
+# verifier — the corrupted final polynomial shifts the transcript and
+# the proof-of-work witness stops binding.
+#
+# Evidence boundaries of this record: the sealed source and its projections are
+# zkc's; the fills and upstream acceptance are the pinned crates'; the runner's
+# wire assembly is the named adapter; the witness codeword is the runner's own
+# fixed input; universal conformance is not claimed by any of it.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/spine.mlir -o %t/sealed.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-opt '-pir-project=endpoint-kind=prover_skeleton protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/prover.mlir
+# RUN: zkc-translate --oir-canonical %t/prover.mlir -o %t/prover.json
+# RUN: zkc-translate --oir-id %t/prover.mlir -o %t/prover.id
+# RUN: zkc-translate --oir-id %t/verifier.mlir -o %t/verifier.id
+
+# The runner: identity recomputed across languages, correspondence
+# checked, wire assembled, upstream acceptance.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/prover.json > %t/runner.out
+# RUN: FileCheck %s < %t/runner.out
+# CHECK: artifact id: [[ID:[0-9a-f]{64}]]
+# CHECK: correspondence: 19 artifact events matched 44 recorded challenger events (3 zero-bit commit pows enumerated as no-ops)
+# CHECK: upstream verify: accepted the runner's proof at the pinned revision
+
+# The recomputed identity equals the carrier's minted identity.
+# RUN: grep "artifact id:" %t/runner.out | sed 's/artifact id: //' > %t/runner.id
+# RUN: diff %t/runner.id %t/prover.id
+
+# Leg 3a: zkc's executor accepts the runner's wire under the real
+# profile and derives the same challenge stream.
+# RUN: %python %S/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/vectors.json accept
+# RUN: zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/vectors.json | FileCheck %s --check-prefix=EXEC
+# EXEC: runner-round-trip: accept
+
+# A corrupted wire dies at the executor's grinding check — a verdict,
+# never a refusal.
+# RUN: %python %S/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/corrupt.json corrupt-nonce
+# RUN: not zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/corrupt.json | FileCheck %s --check-prefix=CORRUPT
+# CORRUPT: corrupted-nonce: check_failure
+
+# A wrong fill is rejected by the pinned PCS verifier.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/prover.json corrupt-final-poly > %t/corrupt.out || true
+# RUN: FileCheck %s --check-prefix=WRONGFILL < %t/corrupt.out
+# WRONGFILL: upstream verify: rejected

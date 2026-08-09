@@ -1,0 +1,25 @@
+// REQUIRES: uv
+// RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/sumcheck.mlir > %t.mlir
+// RUN: zkc-run %t.mlir --vectors %S/Inputs/sumcheck-exec-vectors.json | FileCheck %s
+//
+// Execution parity for the first claim-DAG protocol: the projected
+// sumcheck verifier replays the oracle-generated golden vectors
+// bit-exactly. The vectors walk the reject surface round by round —
+// an honest proof against an inflated claim dies before any challenge
+// is squeezed; a tampered round-2 message dies between the challenges;
+// the round-consistent cheat survives every local check and dies at
+// the final evaluation with both challenges on the transcript. The
+// committed vector file is the cross-implementation execution
+// contract; the uv-gated lines below regenerate it from the oracle
+// and require byte identity.
+//
+// RUN: %uv python -m oracle.exec sumcheck > %t.vectors
+// RUN: diff %t.vectors %S/Inputs/sumcheck-exec-vectors.json
+//
+// CHECK: honest: accept [1654834368763198252,960454384712253740]
+// CHECK-NEXT: false_statement: check_failure []
+// CHECK-NEXT: tampered_message: check_failure [1654834368763198252]
+// CHECK-NEXT: consistent_cheat: check_failure [829048626563406359,2221636072341486221]
+// CHECK-NEXT: trailing_byte: proof_trailing_data [1654834368763198252,960454384712253740]
+// CHECK-NEXT: truncated: abi_decode_failure [1654834368763198252]
+// CHECK-NEXT: noncanonical_value: abi_decode_failure []

@@ -1,0 +1,34 @@
+# Production projection consumes one persisted artifact through semantic
+# admission. The same admitted protocol yields both endpoint artifacts, and the
+# resulting prover and verifier execute together.
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/routed-schnorr.mlir %zkc-seal-full -o %t/artifacts > /dev/null
+# RUN: cp %t/artifacts/*.mlirbc %t/protocol.mlirbc
+# RUN: zkc-project %t/protocol.mlirbc --endpoint-kind=verifier --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t/verifier.mlir
+# RUN: zkc-project %t/protocol.mlirbc --endpoint-kind=prover_skeleton --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t/prover.mlir
+# RUN: FileCheck --check-prefix=VERIFIER %s < %t/verifier.mlir
+# RUN: FileCheck --check-prefix=PROVER %s < %t/prover.mlir
+# RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" --verify-with %t/verifier.mlir | FileCheck --check-prefix=ROUNDTRIP %s
+
+# VERIFIER-NOT: module
+# VERIFIER: oir.artifact "schnorr" id "{{[0-9a-f]+}}" source "sha256:{{[0-9a-f]+}}" endpoint "verifier"
+# VERIFIER-NOT: oir.artifact
+# VERIFIER-NOT: pir.
+
+# PROVER-NOT: module
+# PROVER: oir.artifact "schnorr" id "{{[0-9a-f]+}}" source "sha256:{{[0-9a-f]+}}" endpoint "prover_skeleton"
+# PROVER: witness_labels = {{\[\[}}"w", "sigma-witness"]]
+# PROVER: oir.hole_call "commit" kind "commit"
+# PROVER: oir.hole_call "resp" kind "evaluate"
+# PROVER-NOT: oir.artifact
+# PROVER-NOT: pir.
+
+# ROUNDTRIP: prove: emitted 16 bytes
+# ROUNDTRIP: verifier verdict: accept
+# ROUNDTRIP: round trip: the derived prover's bytes are accepted by the derived verifier
+
+# A changed cited authority is refused by admission before projection begins.
+# RUN: %python %S/Inputs/rewrite-construction-profiles.py cited-change %zkc-registry-dir/construction-profiles.json %t/cited-change.json
+# RUN: not zkc-project %t/protocol.mlirbc --endpoint-kind=verifier --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%t/cited-change.json 2>&1 | FileCheck --check-prefix=ADMISSION %s
+# ADMISSION: [zkc-E248]
+# ADMISSION-NOT: artifact projection refused

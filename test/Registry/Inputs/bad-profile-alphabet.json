@@ -1,0 +1,11 @@
+{
+  "registry": "zkc.construction_profiles",
+  "sponges": {
+    "toy_duplex": {
+      "alphabet_order": "1",
+      "capacity": 32,
+      "rate": 32
+    }
+  },
+  "codecs": {}
+}

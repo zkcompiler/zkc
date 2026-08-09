@@ -1,0 +1,25 @@
+# Every formalization receipt must be well formed, must agree with itself about
+# whether a hole was admitted, and must be pinned at the revision arklib-pin.txt
+# names. Running the emitted commands needs a Lean toolchain and a checkout,
+# which is deliberately outside this build; what is checked here is that the
+# record is in a state a later reading can be compared against.
+#
+# The reading itself is run with --checkout against a built ArkLib; the
+# procedure and the current result are in docs/formalization.md.
+
+# RUN: %python %S/Inputs/formalization_receipts.py %zkc-registry-dir/soundness-signature.json | FileCheck %s
+
+# CHECK: formalization receipts: 6 checkable, 4 not
+# CHECK: to check against https://github.com/Verified-zkEVM/ArkLib at
+# CHECK: #check @RandomQuery.oracleReduction_completeness
+# CHECK-NEXT: #print axioms RandomQuery.oracleReduction_completeness
+# CHECK: #check @Sumcheck.Spec.reduction_perfectCompleteness
+# CHECK-NEXT: #print axioms Sumcheck.Spec.reduction_perfectCompleteness
+# CHECK: #check @RandomQuery.oracleVerifier_rbrKnowledgeSoundness
+# CHECK-NEXT: #print axioms RandomQuery.oracleVerifier_rbrKnowledgeSoundness
+# CHECK: #check @OracleVerifier.seqCompose_rbrSoundness
+# CHECK-NEXT: #print axioms OracleVerifier.seqCompose_rbrSoundness
+# CHECK: #check @OracleVerifier.seqCompose_rbrKnowledgeSoundness
+# CHECK-NEXT: #print axioms OracleVerifier.seqCompose_rbrKnowledgeSoundness
+# CHECK: #check @Sumcheck.Spec.oracleVerifier_rbrKnowledgeSoundness
+# CHECK-NEXT: #print axioms Sumcheck.Spec.oracleVerifier_rbrKnowledgeSoundness

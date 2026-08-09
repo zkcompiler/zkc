@@ -1,0 +1,25 @@
+# REQUIRES: uv
+
+# The C++ sealer and the independent Python reference twin must admit the same
+# fixed-width, depth-three GKR claim DAG.  Equality of both the complete PIR
+# bytes and the domain-separated id covers the three reduction producers,
+# nested oracle references, transparent predicates, material bindings, final
+# terminal discharge, and analysis-only policy.
+# RUN: zkc-opt %pir-seal-full %S/Inputs/gkr-width2-depth3.mlir -o %t.sealed.mlir
+# RUN: zkc-opt %pir-recheck-full %t.sealed.mlir -o /dev/null
+# RUN: %uv python -m oracle.parity validate gkr-width2-depth3 | FileCheck %s
+# RUN: zkc-translate --canonical %t.sealed.mlir -o %t.cxx
+# RUN: %uv python -m oracle.parity encode gkr-width2-depth3 > %t.oracle
+# RUN: diff %t.cxx %t.oracle
+# RUN: zkc-translate --id %t.sealed.mlir -o %t.cxx.id
+# RUN: %uv python -m oracle.parity id gkr-width2-depth3 > %t.oracle.id
+# RUN: diff %t.cxx.id %t.oracle.id
+
+# The same witness must survive the complete certificate boundary.  Dispatch
+# prices each exact layer contract locally; the independently implemented core
+# re-resolves dynamic message multiplicity and re-evaluates every d/|F| term.
+# No protocol-wide composition claim is minted by this local row.
+# RUN: rm -rf %t.artifacts
+# RUN: zkc-seal %S/Inputs/gkr-width2-depth3.mlir %zkc-seal-full -o %t.artifacts
+
+# CHECK: ok

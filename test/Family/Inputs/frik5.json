@@ -1,0 +1,18 @@
+{
+  "family": "fri",
+  "name": "frik5",
+  "k": 5,
+  "field": "340282366762482138490186164457219031041",
+  "query_log2": 10,
+  "ell": 2,
+  "analysis": "none",
+  "kappa": {
+    "sponge": "toy_duplex",
+    "iv": "artifact-id",
+    "codecs": {"query_index": "ts_be8", "rs": "ts_be8", "ext_field": "ts_be8"}
+  },
+  "anchors": {
+    "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "statement": "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"
+  }
+}

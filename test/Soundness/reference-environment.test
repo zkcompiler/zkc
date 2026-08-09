@@ -1,0 +1,7 @@
+# One explicit vocabulary environment owns protocol validation, exact
+# reduction citations, and artifact identity. No stage falls back to the
+# repository-global vocabulary.
+#
+# REQUIRES: uv
+# RUN: %uv python %S/Inputs/reference_environment.py | FileCheck %s
+# CHECK: reference environment: validation, citation, and identity exact

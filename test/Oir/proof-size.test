@@ -1,0 +1,19 @@
+// The first entry of the cost model (the cost-model workstream): proof size is
+// derivable from the sealed structure alone — the sum of codec widths
+// over the projected program's proof-stream reads. No execution, no
+// backend; the same fail-closed stance as everything else (an unknown
+// codec is a refusal, not a zero).
+//
+// RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/schnorr.mlir > %t.schnorr
+// RUN: zkc-translate --proof-size %t.schnorr | FileCheck --check-prefix=SCHNORR %s
+// SCHNORR: 16
+//
+// RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/sumcheck.mlir > %t.sumcheck
+// RUN: zkc-translate --proof-size %t.sumcheck | FileCheck --check-prefix=SUMCHECK %s
+// SUMCHECK: 48
+
+// A static cost view is still an attributable consumer: it authenticates the
+// OIR bytes instead of pricing a program under a forged authored id.
+// RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/f-add-large-operands.mlir %t.forged 0000000000000000000000000000000000000000000000000000000000000000
+// RUN: not zkc-translate --proof-size %t.forged 2>&1 | FileCheck --check-prefix=IDENTITY %s
+// IDENTITY: [zkc-E170] stored OIR artifact id does not match its canonical identity

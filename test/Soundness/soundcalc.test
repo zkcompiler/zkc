@@ -1,0 +1,14 @@
+# The one check in this repository that reads a source instead of a second
+# implementation. Every FRI and duplex bound the signature declares is
+# recomputed from the cited paper over exact fractions, by arithmetic this
+# file owns, and compared. Two implementations of the same reading can share a
+# misreading; a second reading of the source cannot be talked into one.
+#
+# Its history is the reason it exists: it is what caught a rate-convention
+# misreading that understated a bound by up to 2.8x. The concrete FRI formulas
+# it covers are where the repository's error record is concentrated and where
+# mechanization arrives last.
+
+# RUN: %python %S/Inputs/fri_soundcalc.py %zkc-registry-dir/soundness-signature.json | FileCheck %s
+
+# CHECK: soundcalc: every theorem-derived bound matches the declared bound

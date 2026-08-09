@@ -1,0 +1,63 @@
+# REQUIRES: uv
+# The in-tree prover-endpoint round trip
+# (docs/spec/endpoints.md §§6.3–6.4): a toy prover-skeleton run emits proof
+# bytes the derived toy verifier endpoint accepts — derived orchestration on
+# both sides, with both replica sponges deriving the same challenge stream. The
+# negative cases hold the refusal/defect/verdict boundaries apart: a cheating supplier
+# is refused by the verifier's checks (a verdict), a missing supplier is
+# a profile refusal (E407), a boundary-violating fill is a defect
+# (E408), a wrong endpoint kind is E409, missing inputs are E410.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/routed-schnorr.mlir -o %t/sealed.mlir
+# RUN: zkc-opt %pir-project-full %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-opt %pir-project-prover-full %t/sealed.mlir -o %t/prover.mlir
+
+# The round trip: witness x=5 (y = 4^5 = 1024), nonce k=7.
+# RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" --verify-with %t/verifier.mlir | FileCheck %s
+# CHECK: prove: emitted 16 bytes
+# CHECK: prover challenges: 1405996128736189831
+# CHECK: proof: 0000000000004000018f822624796d07
+# CHECK: verifier verdict: accept
+# CHECK: round trip: the derived prover's bytes are accepted by the derived verifier, and both replicas derived the same challenge stream
+
+# The cheating supplier: boundary-conformant, wrong algebra, run under
+# the honest derived orchestration — and rejected exactly where it must
+# be, at the verifier's equation. Transcript consistency is automatic
+# (the orchestration fed it the real challenge), so the reject class is
+# check_failure, not a decode failure.
+# RUN: not zkc-run %t/prover.mlir --profile toy-cheat --prove "w=00000000000000050000000000000007" --statement "y=1024" --verify-with %t/verifier.mlir | FileCheck --check-prefix=CHEAT %s
+# CHEAT: prove: emitted 16 bytes
+# CHEAT: verifier verdict: check_failure
+# CHEAT: round trip: FAILED
+
+# A hole contract with no supplier in the executing profile is a
+# refusal naming the digest, never a verdict (E407). The digest is
+# rewritten and the identity re-minted, so the refusal under test is
+# the supplier gate's, not the identity gate's.
+# RUN: sed 's/sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15/sha256:9999999999999999999999999999999999999999999999999999999999999999/' %t/prover.mlir > %t/unsupplied-raw.mlir
+# RUN: zkc-translate --oir-id %t/unsupplied-raw.mlir -o %t/unsupplied.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
+# RUN: not zkc-run %t/unsupplied.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E407 %s
+# E407: [zkc-E407] hole contract 'sha256:9999999999999999999999999999999999999999999999999999999999999999' (kind 'commit') has no supplier in profile 'toy'
+
+# A fill that reports a defect at its own boundary is E408 — here the
+# witness payload is eight bytes where the sigma convention needs
+# sixteen, and the supplier says so.
+# RUN: not zkc-run %t/prover.mlir --prove "w=0000000000000005" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E408 %s
+# E408: [zkc-E408] fill for hole contract 'sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15' reported a defect
+
+# The prove entry point executes prover skeletons only (E409).
+# RUN: not zkc-run %t/verifier.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E409 %s
+# E409: [zkc-E409] endpoint kind 'verifier' is not executable by the prove entry point
+
+# A missing witness payload is an input refusal (E410).
+# RUN: not zkc-run %t/prover.mlir --prove "unrelated=00" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E410 %s
+# E410: [zkc-E410] witness payload 'w' missing
+
+# Twin parity for the prover leg: the reference twin runs the same
+# derived document with its own toy fills and must reproduce the exact
+# challenge stream and proof bytes the carrier emitted.
+# RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" | grep -E "prover challenges|proof:" > %t/carrier.txt
+# RUN: %uv python -m oracle.exec derived-prove schnorr-routed "s:y=1024" "w:w=00000000000000050000000000000007" > %t/twin.txt
+# RUN: diff %t/carrier.txt %t/twin.txt

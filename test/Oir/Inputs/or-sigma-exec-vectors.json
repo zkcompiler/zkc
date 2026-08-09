@@ -1,0 +1,90 @@
+{
+ "artifact_id": "aa7299f291f74e42ae55f62f07ae3cb7ca410807f6b25dcf0308452324e35d23",
+ "source": "sha256:efbd0c4bdb7714e9545a7dc4e561713b9f984ef0af73baeeed78603a28617f39",
+ "vectors": [
+  {
+   "challenges": [
+    "1086666039797371743"
+   ],
+   "expect": "accept",
+   "name": "honest",
+   "proof": "2a50c5e6508819aa3c738d4191af05340137e30faec2efac0ddcb9f1ccd763b31ffa9fe02dfc19fa0626ff1c3d949696",
+   "statement": {
+    "y1": "648411343024235640",
+    "y2": "1233734774233496065"
+   }
+  },
+  {
+   "challenges": [
+    "1086666039797371743"
+   ],
+   "expect": "check_failure",
+   "name": "tampered_response",
+   "proof": "2a50c5e6508819aa3c738d4191af05340137e30faec2efac0ddcb9f1ccd763b31ffa9fe02dfc19fb0626ff1c3d949696",
+   "statement": {
+    "y1": "648411343024235640",
+    "y2": "1233734774233496065"
+   }
+  },
+  {
+   "challenges": [
+    "1086666039797371743"
+   ],
+   "expect": "check_failure",
+   "name": "shifted_shares",
+   "proof": "2a50c5e6508819aa3c738d4191af05340137e30faec2efad0ddcb9f1ccd763b21ffa9fe02dfc19fa0626ff1c3d949696",
+   "statement": {
+    "y1": "648411343024235640",
+    "y2": "1233734774233496065"
+   }
+  },
+  {
+   "challenges": [
+    "1407003054047796972"
+   ],
+   "expect": "check_failure",
+   "name": "ignored_challenge",
+   "proof": "0e88674652d50d6a254fe74945c8dc38018abef7846071c704a03ce68d21555503157def08c0e38e062afbde1181c71c",
+   "statement": {
+    "y1": "648411343024235640",
+    "y2": "1233734774233496065"
+   }
+  },
+  {
+   "challenges": [
+    "1086666039797371743"
+   ],
+   "expect": "proof_trailing_data",
+   "name": "trailing_byte",
+   "proof": "2a50c5e6508819aa3c738d4191af05340137e30faec2efac0ddcb9f1ccd763b31ffa9fe02dfc19fa0626ff1c3d94969600",
+   "statement": {
+    "y1": "648411343024235640",
+    "y2": "1233734774233496065"
+   }
+  },
+  {
+   "challenges": [
+    "1086666039797371743"
+   ],
+   "expect": "abi_decode_failure",
+   "name": "truncated",
+   "proof": "2a50c5e6508819aa3c738d4191af05340137e30faec2efac",
+   "statement": {
+    "y1": "648411343024235640",
+    "y2": "1233734774233496065"
+   }
+  },
+  {
+   "challenges": [
+    "1086666039797371743"
+   ],
+   "expect": "abi_decode_failure",
+   "name": "noncanonical_value",
+   "proof": "2a50c5e6508819aa3c738d4191af05342000000000000ce10ddcb9f1ccd763b31ffa9fe02dfc19fa0626ff1c3d949696",
+   "statement": {
+    "y1": "648411343024235640",
+    "y2": "1233734774233496065"
+   }
+  }
+ ]
+}

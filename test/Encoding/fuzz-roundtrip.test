@@ -1,0 +1,26 @@
+// Encoder-roundtrip fuzz (deterministic, seeded): the oracle's fuzz
+// harness generates twelve small valid-by-construction protocol
+// variants inside the sealed vocabulary. Auxiliary event counts and payload
+// classes, challenge spaces/dependency sets, domains, labels, and trailing
+// proof layout vary around one exactly closed Schnorr shape. It emits each
+// variant twice, as PIR text and as the protocol dict the oracle identifies.
+// The gates:
+//   1. every variant seals (valid-by-construction is real, not
+//      assumed);
+//   2. the sealed artifact is parse -> print -> parse stable
+//      (re-reading the printed module reproduces it byte-for-byte);
+//   3. the sealed identities equal the oracle's, in order — encode
+//      determinism across both implementations on inputs nobody
+//      hand-picked (the hand-written twins pin known points; this
+//      pins a seeded neighborhood around them).
+// The seed is fixed (oracle/fuzz.py SEED), so a failure is
+// reproducible and a nondeterministic map iteration on either side
+// breaks the byte diff first.
+// REQUIRES: uv
+// RUN: %uv python -m oracle.fuzz mlir > %t.gen.mlir
+// RUN: zkc-opt %pir-seal-full %t.gen.mlir -o %t.sealed
+// RUN: zkc-opt %t.sealed -o %t.reprint
+// RUN: diff %t.sealed %t.reprint
+// RUN: grep -o 'id "[0-9a-f]*"' %t.sealed > %t.got.ids
+// RUN: %uv python -m oracle.fuzz ids > %t.want.ids
+// RUN: diff %t.got.ids %t.want.ids

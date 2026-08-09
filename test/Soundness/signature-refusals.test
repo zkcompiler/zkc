@@ -1,0 +1,18 @@
+# Agreeing on a signature that loads proves little: the canonical document is
+# close to the file, so two readers can produce the same bytes while
+# understanding nothing. Agreeing on what to refuse is the evidence, because
+# refusing requires knowing what each field meant.
+#
+# Each case breaks exactly one thing that a typing defect would otherwise let
+# through into a wrong application. Diagnostic prose is not compared — the ids
+# are the contract and the reference has none to offer.
+#
+# REQUIRES: uv
+# RUN: %uv python %S/Inputs/signature_mutations.py \
+# RUN:   %zkc-registry-dir/soundness-signature.json zkc-registry-lint \
+# RUN:   | FileCheck %s
+# The control is asserted, not merely run: a non-zero exit is evidence of
+# refusal only while the tool is known to admit something, so deleting the
+# control has to break this test rather than quietly weaken it.
+# CHECK: control: the unmutated signature admits
+# CHECK: 79/79 refused by both

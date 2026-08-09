@@ -1,0 +1,11 @@
+// RUN: zkc-run %S/Inputs/statement-verdict-precedence.mlir --vectors %S/Inputs/statement-verdict-precedence-vectors.json | FileCheck %s
+//
+// A statement value that fails to bind is already the verdict
+// (endpoints.md §4); no later program step may overwrite it. The
+// hand-crafted artifact reads from the (empty) proof stream before
+// its transcript_init, so a masked verdict would surface as
+// abi_decode_failure here instead. Hand-authored vectors — the
+// artifact is adversarial, so there is no oracle prover to
+// regenerate them from.
+//
+// CHECK: out_of_range_statement: public_binding_failure []

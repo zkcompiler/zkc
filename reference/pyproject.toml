@@ -1,0 +1,15 @@
+[project]
+name = "zkc-reference"
+version = "0"
+description = "zkc reference twin: PIR judgments, canonical encodings, and OIR toy execution"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = []
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["oracle"]

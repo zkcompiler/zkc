@@ -1,0 +1,6 @@
+# The reference twin enforces the same theorem boundary as the native
+# soundness adapter. This is deliberately not a carrier/seal refusal.
+#
+# REQUIRES: uv
+# RUN: %uv python %S/Inputs/reference_interleaving.py | FileCheck %s
+# CHECK: interleaved reduction bodies require an exact composite soundness rule

@@ -1,0 +1,9 @@
+// RUN: zkc-run %S/Inputs/f-add-large-operands.mlir --vectors %S/Inputs/f-add-large-operands-vectors.json | FileCheck %s
+//
+// Field addition on operands near 2^64: (2^63 + 2^63) must be
+// 2*(2^63 mod q) mod q = 2305843009213670873, not a uint64 wrap to
+// zero. The expected value is what the oracle's exact-integer
+// arithmetic produces. Hand-authored vectors — the artifact is
+// adversarial, so there is no oracle prover to regenerate them from.
+//
+// CHECK: sum_reduces_before_wrap: accept []

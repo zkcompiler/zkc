@@ -1,0 +1,15 @@
+# The signature is content-addressed, so what a second implementation has to
+# reach is not a verdict but exact bytes: the canonical document of every
+# declaration, the revision taken over each one, and the digest that names the
+# whole analysis. This diff is what makes "the analysis under signature X" a
+# statement two implementations can both check.
+#
+# REQUIRES: uv
+# RUN: zkc-registry-lint %zkc-registry-dir/soundness-signature.json > %t.zkc
+# RUN: %uv python -m oracle.parity soundness-signature > %t.oracle
+# RUN: diff %t.zkc %t.oracle
+
+# The digest is spelled out here as well, because a diff of two implementations
+# that drifted together would still pass.
+# RUN: FileCheck %s < %t.zkc
+# CHECK: "digest":"sha256:4c00592e02b268365320906a76d36339a6346e0f8f51a1978aee5e815e6635f4"

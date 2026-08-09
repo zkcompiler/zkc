@@ -1,0 +1,17 @@
+# The original PLONK transcript schedule itself is representable, but an exact
+# final verifier proposition is not yet admitted.  This is a pressure witness,
+# not a PLONK support claim: the two residuals name the predicate-content and
+# ReductionContract authorities that still have to land.
+# RUN: zkc-opt %pir-seal-full %S/Inputs/plonk-kzg-boundary.mlir -o %t.sealed
+# RUN: zkc-translate --canonical %t.sealed -o %t.canonical.json
+# RUN: FileCheck --check-prefix=RESIDUAL %s < %t.sealed
+# RUN: FileCheck --check-prefix=CANONICAL %s < %t.canonical.json
+
+# RESIDUAL: pir.residual {{.*}} route "unsupported.digest-covered-check-predicate"
+# RESIDUAL: pir.residual {{.*}} route "unsupported.closed-plonk-verifier-contract"
+
+# The challenge capability is not erased when its semantic field class is
+# encoded.  Pin the first and final rounds so a regression cannot silently
+# turn the schedule back into an untyped `chal` payload.
+# CANONICAL: ["chal","fr","plonk.permutation.beta"
+# CANONICAL-SAME: ["chal","fr","plonk.opening.batch"

@@ -1,0 +1,16 @@
+# The production pass and the direct library adapter must emit byte-identical
+# MLIR artifacts for both route shapes. Both sides drive the one SealEngine,
+# so this is an adapter-drift guard, not a cross-implementation check —
+# engine defects are the independent reference twin's to catch. The routed
+# fixture also carries discardable author metadata, so the byte comparison
+# covers its preservation; identity inertness is asserted in seal-engine.mlir.
+#
+# RUN: zkc-opt --emit-bytecode %pir-seal-full %S/../Encoding/schnorr.mlir -o %t.unrouted.pass.mlirbc
+# RUN: zkc-test-opt --emit-bytecode -test-seal-engine-direct='protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/../Encoding/schnorr.mlir -o %t.unrouted.library.mlirbc
+# RUN: cmp %t.unrouted.pass.mlirbc %t.unrouted.library.mlirbc
+# RUN: zkc-opt --emit-bytecode %pir-seal-full %S/seal-engine.mlir -o %t.routed.pass.mlirbc
+# RUN: zkc-test-opt --emit-bytecode -test-seal-engine-direct='protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/seal-engine.mlir -o %t.routed.library.mlirbc
+# RUN: cmp %t.routed.pass.mlirbc %t.routed.library.mlirbc
+# RUN: zkc-test-opt -test-seal-engine-direct='protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/seal-engine.mlir | FileCheck %s --check-prefix=METADATA
+
+# METADATA: attributes {pir.test_note = "preserve-me"}

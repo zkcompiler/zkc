@@ -1,0 +1,25 @@
+# The provenance-independent semantic identity (carrier.md §6.1): both
+# implementations erase the PIR source citation and every row's src position
+# list independently and agree byte-for-byte, on a verifier endpoint and on a
+# prover endpoint. The semantic id differs from the stored OIR id (which keeps
+# provenance), and recomputation is deterministic.
+# REQUIRES: uv
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/schnorr.mlir > %t/sealed.mlir
+# RUN: zkc-opt %pir-project-full %t/sealed.mlir > %t/verifier.mlir
+# RUN: zkc-translate --oir-semantic-id %t/verifier.mlir -o %t/semantic.zkc
+# RUN: %uv python -m oracle.parity oir-semantic-id schnorr > %t/semantic.oracle
+# RUN: diff %t/semantic.zkc %t/semantic.oracle
+
+# RUN: zkc-translate --oir-semantic-id %t/verifier.mlir -o %t/semantic.again
+# RUN: diff %t/semantic.zkc %t/semantic.again
+
+# RUN: zkc-translate --oir-id %t/verifier.mlir -o %t/stored-id.zkc
+# RUN: not diff -q %t/semantic.zkc %t/stored-id.zkc
+
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/routed-schnorr.mlir > %t/routed.mlir
+# RUN: zkc-opt %pir-project-prover-full %t/routed.mlir > %t/prover.mlir
+# RUN: zkc-translate --oir-semantic-id %t/prover.mlir -o %t/prover-semantic.zkc
+# RUN: %uv python -m oracle.parity oir-prover-semantic-id schnorr-routed > %t/prover-semantic.oracle
+# RUN: diff %t/prover-semantic.zkc %t/prover-semantic.oracle

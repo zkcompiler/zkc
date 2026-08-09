@@ -1,0 +1,79 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.r1cs_batch@reduction:r1cs_batch",
+      "zkc.rbr.r1cs_sumcheck-chain@reduction:r1cs_sumcheck"
+    ],
+    "resolved_parameters": {
+      "zkc.rbr.r1cs_batch@reduction:r1cs_batch": {
+        "field_order": {
+          "sort": "integer",
+          "value": "2305843009213697249"
+        },
+        "s": {
+          "sort": "integer",
+          "value": "8"
+        }
+      },
+      "zkc.rbr.r1cs_sumcheck-chain@reduction:r1cs_sumcheck": {
+        "field_order": {
+          "sort": "integer",
+          "value": "2305843009213697249"
+        },
+        "field_class": {
+          "sort": "string",
+          "value": "scalar"
+        }
+      }
+    },
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "b1ef66909870afd3d5e3e55262ed1409305252cc636e15e8594eea19759e1032",
+        "claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:1936de1599d38a3eb1b1786785f779376b08c6712a2e024641423c3cb56ec4ea"
+        }
+      },
+      "index": {
+        "notion": "round_by_round",
+        "track": "knowledge",
+        "variant": "straightline",
+        "model": ""
+      },
+      "resource_variables": []
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "reduction",
+        "artifact_id": "b1ef66909870afd3d5e3e55262ed1409305252cc636e15e8594eea19759e1032",
+        "owner_claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:1936de1599d38a3eb1b1786785f779376b08c6712a2e024641423c3cb56ec4ea"
+        },
+        "transformer_position": 2,
+        "output_index": 0
+      },
+      "binding": "zkc.rbr.r1cs_sumcheck-chain@reduction:r1cs_sumcheck",
+      "premises": {
+        "source_rbr": {
+          "kind": "apply",
+          "site": {
+            "kind": "reduction",
+            "artifact_id": "b1ef66909870afd3d5e3e55262ed1409305252cc636e15e8594eea19759e1032",
+            "owner_claim": {
+              "claim_index": 1,
+              "descriptor_digest": "sha256:6a4a4ed33771553a88a9dcdfe86640ae27bdce98ae783b0273859b6fc67c2005"
+            },
+            "transformer_position": 1,
+            "output_index": 0
+          },
+          "binding": "zkc.rbr.r1cs_batch@reduction:r1cs_batch",
+          "premises": {}
+        }
+      }
+    }
+  }
+}

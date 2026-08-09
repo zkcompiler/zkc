@@ -1,0 +1,12 @@
+{
+ "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+ "vectors": [
+  {
+   "challenges": [],
+   "expect": "accept",
+   "name": "wrong_artifact",
+   "proof": "",
+   "statement": {}
+  }
+ ]
+}

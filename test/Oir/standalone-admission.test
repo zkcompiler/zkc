@@ -1,0 +1,53 @@
+# Standalone OIR admission (docs/spec/endpoints.md §3): given an
+# environment, zkc-run re-resolves every hole_call contract digest and
+# checks the declared ABI before proving. The mutations below restamp the
+# stored identity so the refusal exercised is admission's re-resolution,
+# never the identity gate's.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/routed-schnorr.mlir -o %t/sealed.mlir
+# RUN: zkc-opt %pir-project-prover-full %t/sealed.mlir -o %t/prover.mlir
+
+# Positive control: the projected artifact admits under the same
+# environment and proves as without it.
+# RUN: zkc-run %t/prover.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --prove "w=00000000000000050000000000000007" --statement "y=1024" | FileCheck %s --check-prefix=ADMITTED
+# ADMITTED: prove: emitted 16 bytes
+
+# The declared kind diverges from the cited contract's.
+# RUN: sed 's/kind "commit"/kind "extend"/' %t/prover.mlir > %t/kind.raw
+# RUN: zkc-translate --oir-id %t/kind.raw -o %t/kind.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t/kind.raw %t/kind.mlir %t/kind.id
+# RUN: not zkc-run %t/kind.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck %s --check-prefix=KIND
+# KIND: [zkc-E238] hole_call 'commit' declares kind 'extend', the cited contract is 'commit'
+
+# The cited digest resolves to no loaded HoleContract.
+# RUN: sed -E 's/(kind "commit" digest ")sha256:[0-9a-f]+/\1sha256:0000000000000000000000000000000000000000000000000000000000000000/' %t/prover.mlir > %t/digest.raw
+# RUN: zkc-translate --oir-id %t/digest.raw -o %t/digest.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t/digest.raw %t/digest.mlir %t/digest.id
+# RUN: not zkc-run %t/digest.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck %s --check-prefix=DIGEST
+# DIGEST: [zkc-E238] hole_call 'commit' cites a contract digest with no loaded HoleContract
+
+# The operands arrive in an order the cited contract does not declare. The op
+# verifier cannot see this — it has no registry — so the typed segment
+# agreement is admission's to re-establish, and the swap keeps the artifact
+# well-formed at every level below it.
+# RUN: sed -E 's/\(%2, %arg1 : !oir\.val<"tg", "pinned">, !oir\.handle<"sigma-witness">\)/(%arg1, %2 : !oir.handle<"sigma-witness">, !oir.val<"tg", "pinned">)/' %t/prover.mlir > %t/segments.raw
+# RUN: zkc-translate --oir-id %t/segments.raw -o %t/segments.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t/segments.raw %t/segments.mlir %t/segments.id
+# RUN: not zkc-run %t/segments.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck %s --check-prefix=SEGMENTS
+# SEGMENTS: [zkc-E238] hole_call 'commit' operand #0 does not match the cited contract's segment 'generator'
+
+# The check side of the same question. `kind` is the readable contract id and
+# `contract_digest` is what dispatch uses; projection copies both from one
+# sealed entry. Rewriting the id while the digest stays put used to be accepted
+# — the hole side refused the analogous mutation and the check side had no
+# equivalent. A `check_call` is how an opaque check reaches the endpoint, so
+# this runs on a protocol that has one.
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/relation-direct.mlir -o %t/rel.sealed
+# RUN: zkc-opt %pir-project-full %t/rel.sealed -o %t/rel.mlir
+# RUN: sed 's/kind "zkc.check.relation-predicate"/kind "zkc.check.rs-equality"/' %t/rel.mlir > %t/checkkind.raw
+# RUN: zkc-translate --oir-id %t/checkkind.raw -o %t/checkkind.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t/checkkind.raw %t/checkkind.mlir %t/checkkind.id
+# RUN: %python %S/Inputs/one-vector.py %t/checkkind.mlir 7 > %t/checkkind.json
+# RUN: not zkc-run %t/checkkind.mlir --vectors %t/checkkind.json --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json 2>&1 | FileCheck %s --check-prefix=CHECKKIND
+# CHECKKIND: [zkc-E238] check_call 'predicate' names kind 'zkc.check.rs-equality' whose loaded content is

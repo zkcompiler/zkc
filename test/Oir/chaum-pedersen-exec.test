@@ -1,0 +1,23 @@
+// REQUIRES: uv
+// RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/chaum-pedersen.mlir > %t.mlir
+// RUN: zkc-run %t.mlir --vectors %S/Inputs/chaum-pedersen-exec-vectors.json | FileCheck %s
+//
+// Execution parity for the Chaum-Pedersen (DLEQ) twin: two
+// commitments, one challenge, one response replayed bit-exactly
+// against the oracle-generated golden vectors. The
+// mismatched_statement vector is the protocol's point: the same
+// honest transcript against a second statement leg that is NOT h^x
+// dies at verify2 — the two checks bind one exponent across both
+// groups. The committed vector file is the cross-implementation
+// execution contract; the uv-gated lines below regenerate it from
+// the oracle and require byte identity.
+//
+// RUN: %uv python -m oracle.exec chaum-pedersen > %t.vectors
+// RUN: diff %t.vectors %S/Inputs/chaum-pedersen-exec-vectors.json
+//
+// CHECK: honest: accept [1956989731398489217]
+// CHECK-NEXT: tampered_response: check_failure [1956989731398489217]
+// CHECK-NEXT: mismatched_statement: check_failure [1061406300520161278]
+// CHECK-NEXT: trailing_byte: proof_trailing_data [1956989731398489217]
+// CHECK-NEXT: truncated: abi_decode_failure [1956989731398489217]
+// CHECK-NEXT: noncanonical_value: abi_decode_failure []

@@ -1,0 +1,18 @@
+// REQUIRES: uv
+// RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/schnorr.mlir > %t.mlir
+// RUN: zkc-run %t.mlir --vectors %S/Inputs/schnorr-exec-vectors.json | FileCheck %s
+//
+// Execution parity: the projected Schnorr verifier replays the
+// oracle-generated golden vectors bit-exactly — same challenge, same
+// verdicts, honest and adversarial. The committed vector file is the
+// cross-implementation execution contract; the uv-gated lines below
+// regenerate it from the oracle and require byte identity.
+//
+// RUN: %uv python -m oracle.exec schnorr > %t.vectors
+// RUN: diff %t.vectors %S/Inputs/schnorr-exec-vectors.json
+//
+// CHECK: honest: accept [1193094727132841256]
+// CHECK-NEXT: tampered_response: check_failure [1193094727132841256]
+// CHECK-NEXT: trailing_byte: proof_trailing_data [1193094727132841256]
+// CHECK-NEXT: truncated: abi_decode_failure [1193094727132841256]
+// CHECK-NEXT: noncanonical_value: abi_decode_failure []

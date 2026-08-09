@@ -1,0 +1,76 @@
+{
+ "artifact_id": "695ed7f2e20208d07c3a0070905ceceaac3da8088ea5d4d57204d941983d2fdc",
+ "source": "sha256:47bc208a2de98041dd05c13cd07a3140d82dc788d1a0a139edb9e57a78d15f09",
+ "vectors": [
+  {
+   "challenges": [
+    "1956989731398489217"
+   ],
+   "expect": "accept",
+   "name": "honest",
+   "proof": "2b321c3d2d19f3a80bf263eefd18ef670fd9d3383c98413f",
+   "statement": {
+    "y1": "2828594008823750022",
+    "y2": "4569116173835380362"
+   }
+  },
+  {
+   "challenges": [
+    "1956989731398489217"
+   ],
+   "expect": "check_failure",
+   "name": "tampered_response",
+   "proof": "2b321c3d2d19f3a80bf263eefd18ef670fd9d3383c984140",
+   "statement": {
+    "y1": "2828594008823750022",
+    "y2": "4569116173835380362"
+   }
+  },
+  {
+   "challenges": [
+    "1061406300520161278"
+   ],
+   "expect": "check_failure",
+   "name": "mismatched_statement",
+   "proof": "2b321c3d2d19f3a80bf263eefd18ef670fd9d3383c98413f",
+   "statement": {
+    "y1": "2828594008823750022",
+    "y2": "3926451084131484558"
+   }
+  },
+  {
+   "challenges": [
+    "1956989731398489217"
+   ],
+   "expect": "proof_trailing_data",
+   "name": "trailing_byte",
+   "proof": "2b321c3d2d19f3a80bf263eefd18ef670fd9d3383c98413f00",
+   "statement": {
+    "y1": "2828594008823750022",
+    "y2": "4569116173835380362"
+   }
+  },
+  {
+   "challenges": [
+    "1956989731398489217"
+   ],
+   "expect": "abi_decode_failure",
+   "name": "truncated",
+   "proof": "2b321c3d2d19f3a80bf263eefd18ef67",
+   "statement": {
+    "y1": "2828594008823750022",
+    "y2": "4569116173835380362"
+   }
+  },
+  {
+   "challenges": [],
+   "expect": "abi_decode_failure",
+   "name": "noncanonical_value",
+   "proof": "40000000000019c30bf263eefd18ef670fd9d3383c98413f",
+   "statement": {
+    "y1": "2828594008823750022",
+    "y2": "4569116173835380362"
+   }
+  }
+ ]
+}

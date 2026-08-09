@@ -1,0 +1,111 @@
+# The positive witness is a true three-layer claim chain: every reduction owns
+# both sum-check recurrences, the exact wiring endpoint, the two-child affine
+# fold, and an exact output descriptor.  Its tail terminates in the public
+# two-element MLE rather than an arbitrary child-oracle label.
+# RUN: zkc-opt %pir-seal-full %S/Inputs/gkr-width2-depth3.mlir -o %t.sealed
+# RUN: zkc-opt %pir-project-full %t.sealed -o /dev/null
+
+# Omitting the wiring endpoint must not degrade the fixture to a sequence of
+# otherwise well-shaped sum-check rounds.
+# RUN: sed '0,/endpoint = "l0_endpoint", /s///' %S/Inputs/gkr-width2-depth3.mlir > %t.no-endpoint.mlir
+# RUN: not zkc-opt %pir-seal-full %t.no-endpoint.mlir -o /dev/null 2>&1 | FileCheck %s --check-prefix=ENDPOINT
+# ENDPOINT: [zkc-E321] body-check roles do not exactly match reduction contract 'gkr_width2_addmul_layer'
+
+# The parent oracle is the exact symbolic layer construction over the selected
+# child oracle.  An arbitrary relabeling is a failed implication, not GKR.
+# RUN: sed '0,/sha256:51629dcbf4528ccf05cb3d5e3cfb1026f89b1898ab16af9c11412f0d9b72da8e/s//sha256:9999999999999999999999999999999999999999999999999999999999999999/' %S/Inputs/gkr-width2-depth3.mlir > %t.bad-oracle.mlir
+# RUN: not zkc-opt %pir-seal-full %t.bad-oracle.mlir -o /dev/null 2>&1 | FileCheck %s --check-prefix=ORACLE
+# ORACLE: [zkc-E325] an admitted material-identity constraint does not hold
+
+# Authored output descriptors remain explicit carrier data but must equal the
+# contract-derived descriptor byte-for-byte.
+# RUN: sed '0,/point = "sha256:a06b870b513764aa38f7c299ab407a16b9cb25de3d077746b52b2178c7235a06"/s//point = "sha256:9999999999999999999999999999999999999999999999999999999999999999"/' %S/Inputs/gkr-width2-depth3.mlir > %t.bad-output.mlir
+# RUN: not zkc-opt %pir-seal-full %t.bad-output.mlir -o /dev/null 2>&1 | FileCheck %s --check-prefix=OUTPUT
+# OUTPUT: [zkc-E326] output 0 descriptor does not equal the contract constructor
+
+# The deterministic terminal equality is also tied to the exact public-input
+# oracle identity; a check over the right values under another oracle cannot
+# discharge this claim.
+# RUN: sed '0,/semantic_args {oracle = "sha256:1fe543b3845ed3f7f475b6bf6cba1140d4444a5ab38d26d721889ab58fb41810"}/s//semantic_args {oracle = "sha256:9999999999999999999999999999999999999999999999999999999999999999"}/' %S/Inputs/gkr-width2-depth3.mlir > %t.bad-terminal.mlir
+# RUN: not zkc-opt %pir-seal-full %t.bad-terminal.mlir -o /dev/null 2>&1 | FileCheck %s --check-prefix=TERMINAL
+# TERMINAL: [zkc-E306] semantic parameter attachment does not match role 'oracle'
+
+# ---------------------------------------------------------------------------
+# The chain is priced as a chain.
+#
+# Every layer is one occurrence of one contract, so before the composition body
+# existed the only derivation available at the last layer was an entry: it
+# concluded about the chain's final claim while pricing that layer's three
+# rounds, with no premise and no recorded obligation. The under-count was
+# invisible in the witness, which is the artifact the kernel exists to produce.
+#
+# The chain rule ships in the registry since the coverage judgment landed, and
+# the reference mirrors its body kind, so the chain derives against the same
+# signature every other derivation uses.
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py reset %t.chain.artifacts
+# RUN: zkc-seal %S/Inputs/gkr-width2-depth3.mlir %zkc-seal-full -o %t.chain.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t.chain.artifacts %t.chain-sealed.mlirbc
+
+# Nine rounds, three per layer, each labelled by the occurrence it came from.
+# The first three are checked as well as the last: qualifying only the appending
+# rule would leave no duplicate to refuse while the seam carried two spellings.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/gkr-width2-depth3-chain-request.json \
+# RUN:   -o=%t.chain-witness.json %t.chain-sealed.mlirbc
+# RUN: FileCheck %s --check-prefix=CHAIN < %t.chain-witness.json
+# CHAIN: "round_index": "1:0"
+# CHAIN: "round_index": "1:1"
+# CHAIN: "round_index": "1:2"
+# CHAIN: "round_index": "2:0"
+# CHAIN: "round_index": "2:1"
+# CHAIN: "round_index": "2:2"
+# CHAIN: "round_index": "3:0"
+# CHAIN: "round_index": "3:1"
+# CHAIN: "round_index": "3:2"
+# CHAIN-NOT: "round_index"
+
+# Both grounding spellings, on one artifact.  The layer claim's point and
+# value anchors are tied through material bindings to transcript positions, so
+# two artifacts agreeing on them agree about a runtime value; its oracle is a
+# multilinear extension the prover holds and no transcript value can ground,
+# so it is its author's declaration.  Both are legitimate, and the witness
+# says which is which rather than leaving a reader to guess.
+# RUN: FileCheck %s --check-prefix=GROUNDING < %t.chain-witness.json
+# GROUNDING: "subject_anchor_grounding"
+# GROUNDING-NEXT: "oracle": "declared"
+# GROUNDING-NEXT: "point": "grounded"
+# GROUNDING-NEXT: "value": "grounded"
+
+# The witness re-derives: a conclusion about a chain is checkable the same way
+# a conclusion about one step is.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t.chain-witness.json %t.chain-sealed.mlirbc
+
+# Contract-local round indices repeat at every occurrence of one contract, so
+# composing two of them has nothing to tell their rounds apart.
+# RUN: %python %S/Inputs/gkr_chain_signature.py %zkc-registry-dir/soundness-signature.json %t.unqualified.json --unqualified
+# RUN: not zkc-derive --signature=%t.unqualified.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/gkr-width2-depth3-chain-request.json \
+# RUN:   -o=/dev/null %t.chain-sealed.mlirbc 2>&1 | FileCheck %s --check-prefix=DUPLICATE
+# DUPLICATE: duplicate round index
+
+# A squeeze inside the composed span that belongs to neither occurrence is one
+# the composed error function does not index. Leaving it uncounted would price
+# a protocol that is not the one composed, so the composition refuses instead.
+# RUN: zkc-opt %pir-seal-full %S/Inputs/gkr-width2-depth3-ambient-challenge.mlir -o %t.ambient-sealed.mlir
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py reset %t.ambient.artifacts
+# RUN: zkc-seal %S/Inputs/gkr-width2-depth3-ambient-challenge.mlir %zkc-seal-full -o %t.ambient.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t.ambient.artifacts %t.ambient-sealed.mlirbc
+# RUN: %python %S/Inputs/retarget_request.py %S/Inputs/gkr-width2-depth3-chain-request.json %t.ambient-sealed.mlir > %t.ambient-request.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t.ambient-request.json -o=/dev/null %t.ambient-sealed.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=AMBIENT
+# AMBIENT: belongs to neither occurrence

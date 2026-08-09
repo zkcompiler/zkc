@@ -1,0 +1,6 @@
+# The seed registry file and the reference model's profile tables are
+# the same data; this diff keeps them from drifting apart.
+# REQUIRES: uv
+# RUN: zkc-registry-lint %zkc-registry-dir/construction-profiles.json > %t.zkc
+# RUN: %uv python -m oracle.parity construction-profiles > %t.oracle
+# RUN: diff %t.zkc %t.oracle

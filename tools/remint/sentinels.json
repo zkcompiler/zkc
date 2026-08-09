@@ -1,0 +1,182 @@
+{
+  "purpose": "The anchors of the identity system. Each is a derived value spelled out on purpose, because the failure it catches is the one the parity suite is blind to: both implementations changing the same way. Cross-implementation diffing proves the two legs agree; it cannot notice that they now agree on something else. These values notice. The re-mint tool therefore refuses to move them with everything else \u2014 a human accepts each move once, having seen it.",
+  "assurance": {
+    "cross_checked_here": "The tool recomputes the anchor through both implementations and refuses to mint anything if they disagree.",
+    "cross_checked_by": "A named test in the suite already runs both legs against each other; this file adds only the tripwire and the protection from auto-minting.",
+    "single_leg": "No second implementation computes this value. The spelled-out pin is the whole guard, which is why it must never move silently."
+  },
+  "anchors": [
+    {
+      "name": "pir-identity",
+      "catches": "Any change to the PIR canonical preimage or its domain tag. Nothing in the suite spells this value out, so before it was listed here a coordinated change in both legs moved every protocol identity in the system with no test objecting.",
+      "value": "ecb02fdfc351e4df1a340f5c1ee5c90cf8cf96e1d1af7fa69368b5b49d32751c",
+      "assurance": "cross_checked_here",
+      "native": [
+        "{bin}/zkc-opt -pir-seal='protocol-vocabulary={repo}/registry/protocol-vocabulary.json construction-profile-registry={repo}/registry/construction-profiles.json' {repo}/test/Encoding/schnorr.mlir -o {tmp}/sealed.mlir",
+        "{bin}/zkc-translate --id {tmp}/sealed.mlir"
+      ],
+      "reference": [
+        "cd {repo}/reference && uv run python -m oracle.parity id schnorr"
+      ],
+      "asserted_in": []
+    },
+    {
+      "name": "oir-identity",
+      "catches": "Any change to the OIR canonical preimage, including the entry-ABI signature that joined it, or to the endpoint domain tag.",
+      "value": "0526b051649d5d7e81ba43d89b5366e2a34d66a6707b917553613fb652e7d826",
+      "assurance": "cross_checked_here",
+      "native": [
+        "{bin}/zkc-opt -pir-seal='protocol-vocabulary={repo}/registry/protocol-vocabulary.json construction-profile-registry={repo}/registry/construction-profiles.json' {repo}/test/Encoding/schnorr.mlir -o {tmp}/sealed.mlir",
+        "{bin}/zkc-opt -pir-project='protocol-vocabulary={repo}/registry/protocol-vocabulary.json construction-profile-registry={repo}/registry/construction-profiles.json' {tmp}/sealed.mlir -o {tmp}/projected.mlir",
+        "{bin}/zkc-translate --oir-id {tmp}/projected.mlir"
+      ],
+      "reference": [
+        "cd {repo}/reference && uv run python -m oracle.parity oir-id schnorr"
+      ],
+      "asserted_in": []
+    },
+    {
+      "name": "oir-semantic-identity",
+      "catches": "A change to the provenance erasure or its domain tag. This one is worth pinning separately: an erasure that silently stopped erasing would still agree across the two legs and would still look like a working semantic id.",
+      "value": "1f31f0739e03eda178e98a7cfc830bfdbd7b3f96810df0048eddf2af2140bae9",
+      "assurance": "cross_checked_here",
+      "native": [
+        "{bin}/zkc-opt -pir-seal='protocol-vocabulary={repo}/registry/protocol-vocabulary.json construction-profile-registry={repo}/registry/construction-profiles.json' {repo}/test/Encoding/schnorr.mlir -o {tmp}/sealed.mlir",
+        "{bin}/zkc-opt -pir-project='protocol-vocabulary={repo}/registry/protocol-vocabulary.json construction-profile-registry={repo}/registry/construction-profiles.json' {tmp}/sealed.mlir -o {tmp}/projected.mlir",
+        "{bin}/zkc-translate --oir-semantic-id {tmp}/projected.mlir"
+      ],
+      "reference": [
+        "cd {repo}/reference && uv run python -m oracle.parity oir-semantic-id schnorr"
+      ],
+      "asserted_in": []
+    },
+    {
+      "name": "oir-prover-identity",
+      "catches": "A change to the prover endpoint document, which the verifier anchors do not reach: hole calls and their static and semantic parameter bindings, witness labels, and counterparty rows. The schnorr witness the other endpoint anchors use has no construction routes at all, so adding the semantic-parameter binding to the hole_call row moved no anchor \u2014 this one exists because that change went by unremarked.",
+      "value": "b8f900a5a677602d5cf312e201642cc288cf17360d153f76aa496e23f63e2c0e",
+      "assurance": "cross_checked_here",
+      "native": [
+        "{bin}/zkc-opt -pir-seal='protocol-vocabulary={repo}/registry/protocol-vocabulary.json construction-profile-registry={repo}/registry/construction-profiles.json' {repo}/test/Encoding/routed-schnorr.mlir -o {tmp}/sealed.mlir",
+        "{bin}/zkc-opt -pir-project='endpoint-kind=prover_skeleton protocol-vocabulary={repo}/registry/protocol-vocabulary.json construction-profile-registry={repo}/registry/construction-profiles.json' {tmp}/sealed.mlir -o {tmp}/prover.mlir",
+        "{bin}/zkc-translate --oir-id {tmp}/prover.mlir"
+      ],
+      "reference": [
+        "cd {repo}/reference && uv run python -m oracle.parity oir-prover-id schnorr-routed"
+      ],
+      "asserted_in": []
+    },
+    {
+      "name": "protocol-vocabulary",
+      "catches": "Any edit to the admitted vocabulary, which is the sole artifact digest authority. The value is the digest of the normalized document, so an entry added, removed, or re-keyed moves it.",
+      "value": "d69b568ca96d3a32f32444bb6f19c2ed5d6a8506893a1f68292d6736bd06a96c",
+      "assurance": "cross_checked_here",
+      "native": [
+        "{bin}/zkc-registry-lint {repo}/registry/protocol-vocabulary.json | sha256sum | cut -d' ' -f1"
+      ],
+      "reference": [
+        "cd {repo}/reference && uv run python -m oracle.parity protocol-vocabulary | sha256sum | cut -d' ' -f1"
+      ],
+      "asserted_in": []
+    },
+    {
+      "name": "construction-profiles",
+      "catches": "Any edit to the sealed construction registry: sponge parameters, codec widths, or the pins an execution profile must supply.",
+      "value": "e7efb657a8985d7375a6c09178c5fd99d5812a14d8b931cec233e67387cbf10d",
+      "assurance": "cross_checked_here",
+      "native": [
+        "{bin}/zkc-registry-lint {repo}/registry/construction-profiles.json | sha256sum | cut -d' ' -f1"
+      ],
+      "reference": [
+        "cd {repo}/reference && uv run python -m oracle.parity construction-profiles | sha256sum | cut -d' ' -f1"
+      ],
+      "asserted_in": []
+    },
+    {
+      "name": "soundness-signature",
+      "catches": "Any edit to a rule, a binding, or the schemas. The digest is what names an analysis, so two derivations are comparable exactly when it matches.",
+      "value": "4c00592e02b268365320906a76d36339a6346e0f8f51a1978aee5e815e6635f4",
+      "assurance": "cross_checked_here",
+      "native": [
+        "{bin}/zkc-registry-lint {repo}/registry/soundness-signature.json | grep -oE '\"digest\":\"sha256:[0-9a-f]{64}\"' | head -1 | grep -oE '[0-9a-f]{64}'"
+      ],
+      "reference": [
+        "cd {repo}/reference && uv run python -m oracle.parity soundness-signature | grep -oE '\"digest\":\"sha256:[0-9a-f]{64}\"' | head -1 | grep -oE '[0-9a-f]{64}'"
+      ],
+      "asserted_in": [
+        "test/Soundness/signature-sync.test",
+        "test/Soundness/soundness-kernel.mlir"
+      ]
+    },
+    {
+      "name": "compiler-configuration-semantics",
+      "catches": "A change to what the compiler treats as its semantic configuration: the preimage a transform's authority is resolved against.",
+      "value": "045c33e860f7db0de5fadd390b125b1220ca93dc1a131c6acc03565a1b08f427",
+      "assurance": "cross_checked_by",
+      "cross_checked_by": "test/Compiler/compiler-config-parity.test",
+      "native": [
+        "cd {repo}/reference && uv run python -m oracle.parity compiler-config | grep 'semantics ref' | grep -oE '[0-9a-f]{64}'"
+      ],
+      "asserted_in": [
+        "test/Compiler/pir-compiler-provider.mlir"
+      ]
+    },
+    {
+      "name": "compiler-configuration-family",
+      "catches": "A change to the transform-family configuration the compiler resolves against.",
+      "value": "0d36d62332e9eb0a6ff6e296d111a1bc4633cbcbe71394b502452695d3c36b47",
+      "assurance": "cross_checked_by",
+      "cross_checked_by": "test/Compiler/compiler-config-parity.test",
+      "native": [
+        "cd {repo}/reference && uv run python -m oracle.parity compiler-config | grep 'family ref' | grep -oE '[0-9a-f]{64}'"
+      ],
+      "asserted_in": [
+        "test/Compiler/pir-compiler-provider.mlir"
+      ]
+    },
+    {
+      "name": "compiler-configuration-domain",
+      "catches": "A change to the transform-domain configuration the compiler resolves against.",
+      "value": "e8e7b46b5a0589a8cce877b99c10d8a13a3f5da33ea67449133c078745d66872",
+      "assurance": "cross_checked_by",
+      "cross_checked_by": "test/Compiler/compiler-config-parity.test",
+      "native": [
+        "cd {repo}/reference && uv run python -m oracle.parity compiler-config | grep 'domain ref' | grep -oE '[0-9a-f]{64}'"
+      ],
+      "asserted_in": [
+        "test/Compiler/pir-compiler-provider.mlir"
+      ]
+    },
+    {
+      "name": "judgment-sumcheck-fs",
+      "catches": "A change to what a derivation concludes, or to the judgment preimage. The reference twin derives the same skeleton (checked by derive-skeleton-sync.test) but does not compute the judgment digest, so this pin is the only thing standing between a changed conclusion and a quiet re-mint.",
+      "value": "76fde6da0060d1d64d350b4d89c6bdde109bd52de5fecdd55e50a523b8aa4fbe",
+      "assurance": "single_leg",
+      "single_leg_reason": "The reference computes the derivation skeleton, not the judgment digest; skeleton parity is checked by test/Soundness/derive-skeleton-sync.test.",
+      "native": [
+        "{bin}/zkc-seal {repo}/test/Encoding/sumcheck-fs.mlir --protocol-vocabulary {repo}/registry/protocol-vocabulary.json --construction-profile-registry {repo}/registry/construction-profiles.json -o {tmp}/sealed.artifacts > /dev/null",
+        "python3 {repo}/test/SemanticClosure/lib/artifact_handoff.py stage {tmp}/sealed.artifacts {tmp}/sealed.mlirbc",
+        "{bin}/zkc-derive --signature={repo}/registry/soundness-signature.json --protocol-vocabulary={repo}/registry/protocol-vocabulary.json --construction-profile-registry={repo}/registry/construction-profiles.json --request={repo}/test/Soundness/Inputs/sumcheck-fs-request.json -o={tmp}/witness.json {tmp}/sealed.mlirbc > /dev/null",
+        "grep -oE '\"judgment_digest\": \"sha256:[0-9a-f]{64}\"' {tmp}/witness.json | head -1 | grep -oE '[0-9a-f]{64}'"
+      ],
+      "asserted_in": [
+        "test/Soundness/derive-witness.test"
+      ]
+    },
+    {
+      "name": "judgment-schnorr-completeness",
+      "catches": "A change to the completeness judgment beside a run \u2014 the second analysis over one artifact, which must stay a different judgment digest over the same artifact identity.",
+      "value": "a36bd87517193fa222c455d4ed708a7a3df0df47d659ea745039fa5e5cf5e4ba",
+      "assurance": "single_leg",
+      "single_leg_reason": "The reference computes the derivation skeleton, not the judgment digest; skeleton parity is checked by test/Soundness/derive-skeleton-sync.test.",
+      "native": [
+        "{bin}/zkc-seal {repo}/test/Encoding/routed-schnorr.mlir --protocol-vocabulary {repo}/registry/protocol-vocabulary.json --construction-profile-registry {repo}/registry/construction-profiles.json -o {tmp}/sealed.artifacts > /dev/null",
+        "python3 {repo}/test/SemanticClosure/lib/artifact_handoff.py stage {tmp}/sealed.artifacts {tmp}/sealed.mlirbc",
+        "{bin}/zkc-derive --signature={repo}/registry/soundness-signature.json --protocol-vocabulary={repo}/registry/protocol-vocabulary.json --construction-profile-registry={repo}/registry/construction-profiles.json --request={repo}/test/Soundness/Inputs/schnorr-completeness-request.json -o={tmp}/witness.json {tmp}/sealed.mlirbc > /dev/null",
+        "grep -oE '\"judgment_digest\": \"sha256:[0-9a-f]{64}\"' {tmp}/witness.json | head -1 | grep -oE '[0-9a-f]{64}'"
+      ],
+      "asserted_in": [
+        "test/Soundness/completeness-beside-a-run.test"
+      ]
+    }
+  ]
+}

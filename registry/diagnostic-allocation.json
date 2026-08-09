@@ -1,0 +1,375 @@
+{
+  "schema": "zkc.diagnostic_allocation",
+  "ranges": [
+    {
+      "range": "E100-E119",
+      "component": "reserved (unallocated)",
+      "sources": [],
+      "live": [],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "unallocated"
+      }
+    },
+    {
+      "range": "E120-E129",
+      "component": "protocol-vocabulary consumption",
+      "sources": [
+        "include/zkc/Registry/",
+        "lib/Registry/"
+      ],
+      "live": [],
+      "reserved": [
+        "E121"
+      ],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "unallocated"
+      }
+    },
+    {
+      "range": "E130-E149",
+      "component": "container verifiers",
+      "sources": [
+        "lib/Dialect/",
+        "reference/oracle/"
+      ],
+      "live": [
+        "E131",
+        "E132",
+        "E133",
+        "E134",
+        "E135",
+        "E136",
+        "E137",
+        "E138",
+        "E139",
+        "E140",
+        "E141",
+        "E142",
+        "E143",
+        "E144",
+        "E145",
+        "E146",
+        "E147",
+        "E148",
+        "E149"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [
+          "E145"
+        ],
+        "excluded_reason": "the remaining ids are MLIR op/container grammar the twin's input representation cannot spell"
+      }
+    },
+    {
+      "range": "E150-E159",
+      "component": "container verifiers (continued)",
+      "sources": [
+        "lib/Dialect/"
+      ],
+      "live": [
+        "E151",
+        "E152",
+        "E153",
+        "E154",
+        "E155",
+        "E156",
+        "E157",
+        "E158",
+        "E159"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "MLIR op/container grammar the twin's input representation cannot spell"
+      }
+    },
+    {
+      "range": "E160-E169",
+      "component": "carrier semantic bindings",
+      "sources": [
+        "lib/Dialect/"
+      ],
+      "live": [
+        "E161",
+        "E162"
+      ],
+      "reserved": [
+        "E160"
+      ],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "carrier bindings judged by message-text parity in the differential suites, not by id"
+      }
+    },
+    {
+      "range": "E170-E179",
+      "component": "consumer identity authentication",
+      "sources": [
+        "lib/Encoding/"
+      ],
+      "live": [
+        "E170",
+        "E171"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "identity recheck is judged by byte parity on the encodings themselves"
+      }
+    },
+    {
+      "range": "E200-E209",
+      "component": "seal: routing/discharge",
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Semantics/",
+        "reference/oracle/"
+      ],
+      "live": [
+        "E201",
+        "E202"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "routing/discharge judged by message-text parity in the differential suites, not by id"
+      }
+    },
+    {
+      "range": "E210-E219",
+      "component": "seal: BIND battery",
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Semantics/",
+        "reference/oracle/"
+      ],
+      "live": [
+        "E211",
+        "E212",
+        "E213",
+        "E214",
+        "E215",
+        "E216"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [
+          "E213",
+          "E214",
+          "E215"
+        ],
+        "excluded_reason": "the remaining BIND ids are judged by message-text parity"
+      }
+    },
+    {
+      "range": "E220-E229",
+      "component": "seal: WF/encoding-domain/kappa",
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Encoding/",
+        "lib/Semantics/",
+        "reference/oracle/"
+      ],
+      "live": [
+        "E221",
+        "E222",
+        "E223",
+        "E224",
+        "E225",
+        "E226",
+        "E227",
+        "E228",
+        "E229"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [
+          "E228"
+        ],
+        "excluded_reason": "WF/encoding-domain judged by message-text parity in the differential suites, not by id"
+      }
+    },
+    {
+      "range": "E230-E239",
+      "component": "project",
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "reference/oracle/"
+      ],
+      "live": [
+        "E231",
+        "E232",
+        "E233",
+        "E234",
+        "E237",
+        "E238",
+        "E239"
+      ],
+      "reserved": [
+        "E235"
+      ],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "projection is judged by byte parity on the projected encodings; refusal ids are native-side"
+      }
+    },
+    {
+      "range": "E240-E249",
+      "component": "seal: LIN/protocol-vocab/anchors",
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Semantics/",
+        "reference/oracle/"
+      ],
+      "live": [
+        "E243",
+        "E244",
+        "E245",
+        "E247",
+        "E248"
+      ],
+      "reserved": [
+        "E241"
+      ],
+      "twin": {
+        "mirrored": [
+          "E243",
+          "E244",
+          "E245"
+        ],
+        "excluded_reason": "the remaining ids are judged by message-text parity"
+      }
+    },
+    {
+      "range": "E250-E299",
+      "component": "retired (theorem-in-artifact dispatch)",
+      "sources": [],
+      "live": [],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "retired"
+      }
+    },
+    {
+      "range": "E300-E319",
+      "component": "terminal closure",
+      "sources": [
+        "lib/Semantics/"
+      ],
+      "live": [
+        "E300",
+        "E301",
+        "E302",
+        "E303",
+        "E304",
+        "E305",
+        "E306",
+        "E307",
+        "E308"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "terminal closure judged by message-text parity in the differential suites, not by id"
+      }
+    },
+    {
+      "range": "E320-E339",
+      "component": "reduction closure and shared closure accounting",
+      "sources": [
+        "lib/Semantics/",
+        "lib/Dialect/Pir/Transforms/",
+        "reference/oracle/"
+      ],
+      "live": [
+        "E320",
+        "E321",
+        "E322",
+        "E323",
+        "E324",
+        "E325",
+        "E326",
+        "E327",
+        "E328"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "reduction closure judged by message-text parity in the differential suites, not by id"
+      }
+    },
+    {
+      "range": "E400-E419",
+      "component": "endpoint execution profile",
+      "sources": [
+        "lib/Interpreter/"
+      ],
+      "live": [
+        "E400",
+        "E401",
+        "E402",
+        "E403",
+        "E404",
+        "E405",
+        "E406",
+        "E407",
+        "E408",
+        "E409",
+        "E410",
+        "E411"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "execution-profile refusals are native runtime facts; the twin executor mirrors verdicts and challenge streams"
+      }
+    },
+    {
+      "range": "E700-E709",
+      "component": "link",
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Semantics/"
+      ],
+      "live": [
+        "E701",
+        "E702",
+        "E703",
+        "E704",
+        "E705",
+        "E706"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "the link boundary has no reference twin (boundaries.md)"
+      }
+    },
+    {
+      "range": "E800-E809",
+      "component": "loader/artifact store",
+      "sources": [
+        "lib/Artifact/"
+      ],
+      "live": [
+        "E801",
+        "E802",
+        "E803"
+      ],
+      "reserved": [],
+      "twin": {
+        "mirrored": [],
+        "excluded_reason": "bytecode transport is native-only"
+      }
+    }
+  ],
+  "coverage_exempt": {
+    "E233": "extension backstop: the current sealed-container verifier rejects every non-member at E131 before projection; this remains the fail-closed default for a future ProtocolMember extension",
+    "E237": "projection self-check over freshly emitted OIR: every public path admits PIR first, so an input cannot intentionally create phantom, unlicensed, or missing coverage without bypassing the production boundary"
+  }
+}
