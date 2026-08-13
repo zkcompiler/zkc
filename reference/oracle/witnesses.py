@@ -9,21 +9,16 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import json
 
 from .model import (
     REGISTRY,
-    Bind,
     Chal,
     Check,
     Discharge,
-    MaterialBinding,
     ProtocolVocabulary,
     Reduce,
-    Route,
     Slot,
     bind,
-    canon_json,
     chal,
     check,
     discharge,

@@ -1976,7 +1976,6 @@ def terminal_closure(
         if isinstance(event, Chal)
     )
     checks = {event.label: event for event in events if isinstance(event, Check)}
-    reductions = {reduce.label: reduce for reduce in reduces}
 
     claims: dict[str, ClaimView] = {}
 
@@ -2242,7 +2241,6 @@ def reduction_closure(
     _validate_contract_shape(protocol, vocabulary)
 
     events: list[Any] = protocol["events"]
-    event_by_label = {event.label: event for event in events}
     event_positions = {event.label: index for index, event in enumerate(events)}
     value_classes = {
         event.label: event.payload_class
