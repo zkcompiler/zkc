@@ -1,6 +1,6 @@
 # Current Status
 
-> **zkc v0 · research snapshot · last verified 2026-08-13**
+> **zkc v0 · research snapshot · last verified 2026-08-14**
 
 zkc can describe and identify proof protocols, derive executable endpoints,
 run selected prover and verifier paths, derive selected soundness and
@@ -44,7 +44,7 @@ read; this table says which, so a claim can be checked rather than taken.
 
 | Cell | The test that fills it |
 |---|---|
-| Schnorr, all columns | [`test/Encoding/schnorr.mlir`](../test/Encoding/schnorr.mlir), [`test/Encoding/routed-schnorr.mlir`](../test/Encoding/routed-schnorr.mlir), [`test/Oir/schnorr-exec.test`](../test/Oir/schnorr-exec.test), [`test/Oir/prover-round-trip.test`](../test/Oir/prover-round-trip.test), [`test/Soundness/soundness-rule-bodies.mlir`](../test/Soundness/soundness-rule-bodies.mlir), [`test/Soundness/completeness-beside-a-run.test`](../test/Soundness/completeness-beside-a-run.test), [`test/Emit/emit-schnorr.test`](../test/Emit/emit-schnorr.test) |
+| Schnorr, all columns | [`test/Encoding/schnorr.mlir`](../test/Encoding/schnorr.mlir), [`test/Encoding/routed-schnorr.mlir`](../test/Encoding/routed-schnorr.mlir), [`test/Oir/schnorr-exec.test`](../test/Oir/schnorr-exec.test), [`test/Oir/prover-round-trip.test`](../test/Oir/prover-round-trip.test), [`test/Soundness/soundness-rule-bodies.mlir`](../test/Soundness/soundness-rule-bodies.mlir), [`test/Soundness/completeness-beside-a-run.test`](../test/Soundness/completeness-beside-a-run.test), [`test/Emit/emit-schnorr.test`](../test/Emit/emit-schnorr.test), [`test/Emit/emit-schnorr-prover.test`](../test/Emit/emit-schnorr-prover.test) |
 | DLEQ / OR-Sigma | [`test/Encoding/chaum-pedersen.mlir`](../test/Encoding/chaum-pedersen.mlir), [`test/Encoding/or-sigma.mlir`](../test/Encoding/or-sigma.mlir), [`test/Oir/chaum-pedersen-exec.test`](../test/Oir/chaum-pedersen-exec.test), [`test/Oir/or-sigma-exec.test`](../test/Oir/or-sigma-exec.test), [`test/Emit/emit-sigma-family.test`](../test/Emit/emit-sigma-family.test) |
 | Sumcheck | [`test/Encoding/sumcheck-fs.mlir`](../test/Encoding/sumcheck-fs.mlir), [`test/Oir/sumcheck-exec.test`](../test/Oir/sumcheck-exec.test), [`test/Soundness/derive-witness.test`](../test/Soundness/derive-witness.test), [`test/Emit/emit-sigma-family.test`](../test/Emit/emit-sigma-family.test) |
 | GKR | [`test/Evidence/gkr-width2-depth3-parity.test`](../test/Evidence/gkr-width2-depth3-parity.test), [`test/Evidence/gkr-width2-stress.test`](../test/Evidence/gkr-width2-stress.test) |
@@ -77,7 +77,7 @@ specification intentionally include north-star contracts beyond this matrix.
 | Soundness analysis |  | ● |  | Selected conditional, notion-indexed derivations from admitted PIR. |
 | Completeness analysis |  | ● |  | Separate judgment track exercised by the included Schnorr path. |
 | Checked optimization and selection |  | ● |  | In-process checked-search library exercised by same-point KZG batching over admitted PIR. |
-| Verifier and prover generation |  | ● |  | Verifier OIR and derived prover-skeleton OIR; standalone Rust verifier-crate emission from the persisted artifact under an explicit supplier binding (`emit/`). |
+| Verifier and prover generation |  | ● |  | Verifier OIR and derived prover-skeleton OIR; standalone Rust crate emission for either endpoint from the persisted artifact under an explicit supplier binding (`emit/`), with the emitted pair exercised against each other. |
 | Endpoint execution |  | ● |  | Selected built-in verifier and prover profiles; a hole contract's static and semantic parameter bindings are re-admitted from the endpoint alone and handed to the supplier, which is given identities rather than the material they name. |
 | Witness interface |  | ● |  | Typed opaque scalar handles for selected prover operations. |
 | Formalization evidence |  | ● |  | Rule annotations and pinned declaration/axiom-profile drift checks. |

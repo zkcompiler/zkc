@@ -40,10 +40,12 @@ The current snapshot implements and exercises:
   decode/admission, endpoint projection, route-preserving linking, and
   fail-closed registry resolution;
 - OIR verifier execution and derived prover-skeleton execution;
-- a verifier emitter (`emit/`) that turns a persisted verifier artifact into
-  a standalone Rust crate under an explicit supplier binding, carrying its
-  identities and a generated conformance suite that replays the same golden
-  vectors as the reference executor;
+- an endpoint emitter (`emit/`) that turns a persisted verifier or
+  prover-skeleton artifact into a standalone Rust crate under an explicit
+  supplier binding, carrying its identities and a generated conformance suite
+  that replays the same golden vectors as the reference executor; the emitted
+  pair of one projection is exercised against itself, honest bytes accepted
+  and a boundary-conformant wrong fill rejected at the equation;
 - typed, opaque prover witness handles and selected native providers for
   bounded prover operations;
 - a C++ implementation and an independently written Python reference twin
@@ -118,7 +120,7 @@ On Debian or Ubuntu the toolchain comes from
 `llvm-23-tools`; [Getting Started](docs/getting-started.md) spells that out
 along with the normal development workflow. Cargo is not required to build
 zkc. When it is available, the lit suite also runs the optional Plonky3
-integration tests under `evaluation/` and the verifier-emitter tests under
+integration tests under `evaluation/` and the endpoint-emitter tests under
 `emit/`.
 
 The toolchain requirement is a floor rather than a revision, checked when the

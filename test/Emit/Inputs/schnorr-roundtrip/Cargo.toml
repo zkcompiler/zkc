@@ -1,0 +1,15 @@
+# The emitted-to-emitted round trip. Not generated: this crate exists to
+# hold three emitted crates in one process, so the prover's bytes reach the
+# verifier's decision without a file, a script, or a re-encoding step in
+# between. The path dependencies are the emitter's own output directories,
+# which the test writes beside this file.
+[package]
+name = "zkc-schnorr-roundtrip"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+zkc-prover-schnorr = { path = "../prover-crate" }
+zkc-prover-schnorr-cheat = { path = "../cheat-crate" }
+zkc-verifier-schnorr = { path = "../verifier-crate" }

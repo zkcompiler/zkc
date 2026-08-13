@@ -1,0 +1,83 @@
+# REQUIRES: cargo
+# The prover emitter's first subject (docs/spec/endpoints.md §6): the
+# projected prover skeleton becomes a standalone Rust crate whose `prove`
+# reproduces the reference executor's proof bytes and challenge log exactly.
+# One seal, one projection, two emitted endpoints — so the four rings below
+# test the emitter's translation rules rather than the protocol.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/routed-schnorr.mlir -o %t/sealed.mlir
+# RUN: zkc-opt %pir-project-full %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-opt %pir-project-prover-full %t/sealed.mlir -o %t/prover.mlir
+# RUN: zkc-translate --oir-canonical %t/prover.mlir -o %t/prover.json
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+# RUN: zkc-translate --oir-id %t/prover.mlir -o %t/artifact.id
+# RUN: zkc-translate --oir-semantic-id %t/prover.mlir -o %t/semantic.id
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %S/Inputs/schnorr-prove-vectors.json --out %t/prover-crate --crate-name zkc-prover-schnorr > %t/emit.out
+
+# The emitter's recomputed identities equal the carrier's own, on the
+# prover frame as on the verifier one.
+# RUN: grep "artifact id:" %t/emit.out | sed 's/artifact id: //' > %t/emit-artifact.id
+# RUN: diff %t/emit-artifact.id %t/artifact.id
+# RUN: grep "semantic id:" %t/emit.out | sed 's/semantic id: //' > %t/emit-semantic.id
+# RUN: diff %t/emit-semantic.id %t/semantic.id
+
+# Ring 1, the byte differential: the reference executor's own run of this
+# artifact, against the committed vectors the emitted crate replays. Proof
+# bytes and challenge log, not a verdict — a prover's whole output is under
+# test.
+# RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" | grep -E "prover challenges|proof:" > %t/reference.txt
+# RUN: %python %S/Inputs/prover-vector-lines.py %S/Inputs/schnorr-prove-vectors.json round_trip > %t/vectors.txt
+# RUN: diff %t/reference.txt %t/vectors.txt
+# RUN: cargo test --quiet --manifest-path %t/prover-crate/Cargo.toml
+
+# The refusal boundaries the corpus carries are the reference's, with the
+# same classification and the same supplier sentence: E405 for the prover's
+# own out-of-range statement, E408 for a fill that reports a defect at its
+# boundary.
+# RUN: not zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=4611686018427394499" 2>&1 | FileCheck --check-prefix=E405 %s
+# E405: [zkc-E405] statement value 'y' out of range for the prover's own inputs
+# RUN: not zkc-run %t/prover.mlir --prove "w=0000000000000005" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E408 %s
+# E408: [zkc-E408] fill for hole contract 'sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15' reported a defect
+# E408-NEXT: sigma witness payload must be sixteen bytes (x, k big-endian)
+
+# Rings 2 and 3, in one process: the emitted verifier of the same
+# projection, the emitted honest prover, and the emitted cheating prover.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/verifier-crate --crate-name zkc-verifier-schnorr > /dev/null
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/toy-cheat.json --rt-path %zkc-rt-dir --out %t/cheat-crate --crate-name zkc-prover-schnorr-cheat > /dev/null
+# RUN: mkdir -p %t/roundtrip/tests
+# RUN: cp %S/Inputs/schnorr-roundtrip/Cargo.toml %t/roundtrip/Cargo.toml
+# RUN: cp %S/Inputs/schnorr-roundtrip/tests/roundtrip.rs %t/roundtrip/tests/roundtrip.rs
+# RUN: cargo test --quiet --manifest-path %t/roundtrip/Cargo.toml
+
+# Ring 4, determinism: a second emission is the identical crate.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %S/Inputs/schnorr-prove-vectors.json --out %t/prover-crate2 --crate-name zkc-prover-schnorr > /dev/null
+# RUN: diff %t/prover-crate/Cargo.toml %t/prover-crate2/Cargo.toml
+# RUN: diff %t/prover-crate/src/lib.rs %t/prover-crate2/src/lib.rs
+# RUN: diff %t/prover-crate/tests/conformance.rs %t/prover-crate2/tests/conformance.rs
+# RUN: diff %t/prover-crate/README.md %t/prover-crate2/README.md
+
+# A hole with no fill in the binding refuses at emit time, naming the
+# contract — the E407 family's emit-time form, so the emitted prover never
+# carries a "no supplier" arm.
+# RUN: sed 's/sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15/sha256:9999999999999999999999999999999999999999999999999999999999999999/' %zkc-emit-bindings/toy.json > %t/unsupplied.json
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %t/unsupplied.json --rt-path %zkc-rt-dir --out %t/refused 2>&1 | FileCheck --check-prefix=E407 %s
+# E407: hole 'commit' (kind 'commit', contract sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15) has no fill in binding 'toy'
+
+# A second routed shape, emitted with no emitter change: `bind-routed`
+# feeds the statement value straight into the commit fill where
+# routed-schnorr feeds a pinned constant, so the operand marshalling is
+# exercised on both sources rather than on one.
+# RUN: zkc-opt %pir-seal-full %pir-project-prover-full %S/../Encoding/bind-routed.mlir -o %t/bind.mlir
+# RUN: zkc-translate --oir-canonical %t/bind.mlir -o %t/bind.json
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/bind.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/bind-crate --crate-name zkc-prover-bind > /dev/null
+# RUN: cargo build --quiet --manifest-path %t/bind-crate/Cargo.toml
+
+# A verifier corpus is not a prover corpus, and the emitter says so rather
+# than replaying one against the endpoint it does not describe. The corpus
+# under test binds this exact artifact, so what refuses is the endpoint
+# shape and not the identity gate.
+# RUN: sed 's/"prover_vectors"/"vectors"/' %S/Inputs/schnorr-prove-vectors.json > %t/miscast.json
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %t/miscast.json --out %t/refused2 2>&1 | FileCheck --check-prefix=CORPUS %s
+# CORPUS: the vectors file describes the other endpoint

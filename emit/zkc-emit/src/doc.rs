@@ -1,5 +1,5 @@
-//! The canonical OIR verifier document: identity recomputation, the row
-//! grammar, and the semantic-id erasure.
+//! The canonical OIR document — both endpoint frames: identity
+//! recomputation, the row grammar, and the semantic-id erasure.
 //!
 //! The grammar is docs/spec/carrier.md §6.2, which states that a second
 //! implementation must be derivable from that section alone — this is
@@ -20,10 +20,16 @@ pub enum Ref {
     Res(usize, usize),
 }
 
+/// A typed slot: an entry argument, or one hole-call result. `stream`
+/// appears only in an entry; `sponge` only on a hole that threads the
+/// transcript through its fill (the `pow_search` peek).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
     Val(String),
+    /// An opaque linear witness payload of the named handle class.
+    Handle(String),
     Stream,
+    Sponge,
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +84,6 @@ pub enum Row {
         rhs: Ref,
         label: String,
     },
-    /// Recognized so the refusal can name its digest; never emitted.
     CheckCall {
         inputs: Vec<Ref>,
         label: String,
@@ -92,10 +97,49 @@ pub enum Row {
     Decide {
         sponge: Ref,
     },
-    /// Prover-frame rows, recognized for the endpoint-kind refusal.
-    ProverOnly {
-        kind: String,
+
+    //== the prover frame ==//
+    /// The dual of `read`: a fill's value leaves on the wire.
+    Write {
+        stream: Ref,
+        value: Ref,
+        label: String,
+        class: String,
     },
+    /// A supplier call. Result indices run positionally across the mixed
+    /// value/handle list, in declaration order.
+    HoleCall {
+        inputs: Vec<Ref>,
+        results: Vec<Entry>,
+        label: String,
+        kind: String,
+        digest: String,
+        params: Vec<String>,
+        semantic_params: Vec<String>,
+    },
+    EndStream {
+        stream: Ref,
+    },
+    Finish {
+        sponge: Ref,
+    },
+}
+
+/// The two endpoint frames the grammar admits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Endpoint {
+    Verifier,
+    ProverSkeleton,
+}
+
+impl Endpoint {
+    fn from_name(name: &str) -> Option<Endpoint> {
+        match name {
+            "verifier" => Some(Endpoint::Verifier),
+            "prover_skeleton" => Some(Endpoint::ProverSkeleton),
+            _ => None,
+        }
+    }
 }
 
 pub struct Document {
@@ -103,7 +147,9 @@ pub struct Document {
     pub artifact_id: String,
     /// The provenance-independent view, lowercase hex.
     pub semantic_id: String,
-    pub endpoint: String,
+    pub endpoint: Endpoint,
+    /// The `endpoint` field verbatim, for diagnostics.
+    pub endpoint_name: String,
     /// `class → codec name`, in stored (canonical) order.
     pub codecs: Vec<(String, String)>,
     pub entry: Vec<Entry>,
@@ -112,6 +158,12 @@ pub struct Document {
     pub rows: Vec<Row>,
     pub source: String,
     pub statement_labels: Vec<String>,
+    /// Prover only: ordered `[label, handle class]` pairs. Empty on a
+    /// verifier document, where the key is absent.
+    pub witness_labels: Vec<(String, String)>,
+    /// Prover only: `[event position, discharge kind]` rows — the checks
+    /// this endpoint delegates to its counterparty.
+    pub counterparty: Vec<(u64, String)>,
 }
 
 fn sha256_hex(domain_tag: &str, bytes: &[u8]) -> String {
@@ -141,6 +193,36 @@ fn expect_string(value: &Json, what: &str) -> Result<String, String> {
         .as_str()
         .map(str::to_owned)
         .ok_or_else(|| format!("{what} is not a string"))
+}
+
+fn expect_strings(value: &Json, what: &str) -> Result<Vec<String>, String> {
+    let items = value
+        .as_array()
+        .ok_or_else(|| format!("{what} is not an array"))?;
+    items.iter().map(|item| expect_string(item, what)).collect()
+}
+
+fn parse_refs(value: &Json, what: &str) -> Result<Vec<Ref>, String> {
+    let items = value
+        .as_array()
+        .ok_or_else(|| format!("{what} is not an array"))?;
+    items.iter().map(parse_ref).collect()
+}
+
+/// One typed slot: `["val", class]`, `["handle", class]`, `["stream"]`,
+/// `["sponge"]`. Which of them a position admits is the caller's rule.
+fn parse_slot(value: &Json, what: &str) -> Result<Entry, String> {
+    match value.as_array() {
+        Some([Json::String(kind), Json::String(class)]) if kind == "val" => {
+            Ok(Entry::Val(class.clone()))
+        }
+        Some([Json::String(kind), Json::String(class)]) if kind == "handle" => {
+            Ok(Entry::Handle(class.clone()))
+        }
+        Some([Json::String(kind)]) if kind == "stream" => Ok(Entry::Stream),
+        Some([Json::String(kind)]) if kind == "sponge" => Ok(Entry::Sponge),
+        _ => Err(format!("malformed {what} {}", json::serialize(value))),
+    }
 }
 
 fn parse_row(index: usize, row: &Json) -> Result<Row, String> {
@@ -226,29 +308,13 @@ fn parse_row(index: usize, row: &Json) -> Result<Row, String> {
             _ => fail("expected [\"assert_eq\", lhs, rhs, label, src]"),
         },
         "check_call" => match items {
-            [_, inputs, label, check_kind, digest, params, _src] => {
-                let mut input_refs = Vec::new();
-                for input in inputs
-                    .as_array()
-                    .ok_or_else(|| format!("row {index}: check inputs are not an array"))?
-                {
-                    input_refs.push(parse_ref(input)?);
-                }
-                let mut param_values = Vec::new();
-                for param in params
-                    .as_array()
-                    .ok_or_else(|| format!("row {index}: check params are not an array"))?
-                {
-                    param_values.push(expect_string(param, "check parameter")?);
-                }
-                Ok(Row::CheckCall {
-                    inputs: input_refs,
-                    label: expect_string(label, "label")?,
-                    kind: expect_string(check_kind, "kind")?,
-                    digest: expect_string(digest, "contract digest")?,
-                    params: param_values,
-                })
-            }
+            [_, inputs, label, check_kind, digest, params, _src] => Ok(Row::CheckCall {
+                inputs: parse_refs(inputs, "check inputs")?,
+                label: expect_string(label, "label")?,
+                kind: expect_string(check_kind, "kind")?,
+                digest: expect_string(digest, "contract digest")?,
+                params: expect_strings(params, "check parameter")?,
+            }),
             _ => fail("expected [\"check_call\", inputs, label, kind, digest, params, src]"),
         },
         "expect_end" => match items {
@@ -263,9 +329,56 @@ fn parse_row(index: usize, row: &Json) -> Result<Row, String> {
             }),
             _ => fail("expected [\"decide\", sponge]"),
         },
-        "write" | "end_stream" | "finish" | "hole_call" => Ok(Row::ProverOnly {
-            kind: kind.to_owned(),
-        }),
+        "write" => match items {
+            [_, stream, value, label, class, _src] => Ok(Row::Write {
+                stream: parse_ref(stream)?,
+                value: parse_ref(value)?,
+                label: expect_string(label, "label")?,
+                class: expect_string(class, "class")?,
+            }),
+            _ => fail("expected [\"write\", stream, value, label, class, src]"),
+        },
+        "hole_call" => match items {
+            [_, inputs, results, label, hole_kind, digest, params, semantic_params] => {
+                let mut typed = Vec::new();
+                for result in results
+                    .as_array()
+                    .ok_or_else(|| format!("row {index}: hole results are not an array"))?
+                {
+                    match parse_slot(result, "hole result")? {
+                        Entry::Stream => {
+                            return fail("a hole result cannot be the proof stream");
+                        }
+                        slot => typed.push(slot),
+                    }
+                }
+                Ok(Row::HoleCall {
+                    inputs: parse_refs(inputs, "hole inputs")?,
+                    results: typed,
+                    label: expect_string(label, "label")?,
+                    kind: expect_string(hole_kind, "kind")?,
+                    digest: expect_string(digest, "contract digest")?,
+                    params: expect_strings(params, "hole parameter")?,
+                    semantic_params: expect_strings(semantic_params, "hole semantic parameter")?,
+                })
+            }
+            _ => fail(
+                "expected [\"hole_call\", inputs, results, label, kind, digest, params, \
+                 semantic_params]",
+            ),
+        },
+        "end_stream" => match items {
+            [_, stream] => Ok(Row::EndStream {
+                stream: parse_ref(stream)?,
+            }),
+            _ => fail("expected [\"end_stream\", stream]"),
+        },
+        "finish" => match items {
+            [_, sponge] => Ok(Row::Finish {
+                sponge: parse_ref(sponge)?,
+            }),
+            _ => fail("expected [\"finish\", sponge]"),
+        },
         other => Err(format!(
             "row {index}: '{other}' is outside the canonical row grammar"
         )),
@@ -325,10 +438,13 @@ impl Document {
             json::serialize(&semantic_view(&document)?).as_bytes(),
         );
 
-        let endpoint = expect_string(
+        let endpoint_name = expect_string(
             document.get("endpoint").ok_or("document has no endpoint")?,
             "endpoint",
         )?;
+        let endpoint = Endpoint::from_name(&endpoint_name).ok_or_else(|| {
+            format!("endpoint '{endpoint_name}' is outside the canonical grammar's two frames")
+        })?;
 
         let mut codecs = Vec::new();
         for (class, codec) in document
@@ -345,22 +461,7 @@ impl Document {
             .and_then(Json::as_array)
             .ok_or("document has no entry")?
         {
-            let items = element.as_array().ok_or("entry element is not an array")?;
-            match items {
-                [Json::String(kind), Json::String(class)] if kind == "val" => {
-                    entry.push(Entry::Val(class.clone()))
-                }
-                [Json::String(kind)] if kind == "stream" => entry.push(Entry::Stream),
-                [Json::String(kind), ..] if kind == "handle" => {
-                    return Err("handle entry argument: this is a prover document".into())
-                }
-                _ => {
-                    return Err(format!(
-                        "malformed entry element {}",
-                        json::serialize(element)
-                    ))
-                }
-            }
+            entry.push(parse_slot(element, "entry element")?);
         }
 
         let mut param_digests = Vec::new();
@@ -397,16 +498,83 @@ impl Document {
             statement_labels.push(expect_string(label, "statement label")?);
         }
 
+        // `witness_labels` and `counterparty` are present exactly on a
+        // prover document and absent exactly on a verifier one (§6.2);
+        // a document carrying the wrong set is not the frame it claims.
+        let prover = endpoint == Endpoint::ProverSkeleton;
+        let mut witness_labels = Vec::new();
+        let mut counterparty = Vec::new();
+        for key in ["witness_labels", "counterparty"] {
+            if document.get(key).is_some() != prover {
+                return Err(format!(
+                    "'{key}' is {} on a '{endpoint_name}' document",
+                    if prover { "required" } else { "not admitted" }
+                ));
+            }
+        }
+        if prover {
+            for pair in document
+                .get("witness_labels")
+                .and_then(Json::as_array)
+                .ok_or("witness_labels is not an array")?
+            {
+                match pair.as_array() {
+                    Some([Json::String(label), Json::String(class)]) => {
+                        witness_labels.push((label.clone(), class.clone()))
+                    }
+                    _ => return Err(format!("malformed witness label {}", json::serialize(pair))),
+                }
+            }
+            // Schema, uniqueness, and the closed discharge table are what
+            // a source-free consumer can establish; coverage against the
+            // source obligation set is authenticated only where the
+            // sealed PIR is also present (endpoints.md §6.1), and the
+            // emitted README repeats that nonclaim.
+            for row in document
+                .get("counterparty")
+                .and_then(Json::as_array)
+                .ok_or("counterparty is not an array")?
+            {
+                let (position, kind) = match row.as_array() {
+                    Some([Json::UInt(position), Json::String(kind)]) => (*position, kind.clone()),
+                    _ => {
+                        return Err(format!(
+                            "malformed counterparty row {}",
+                            json::serialize(row)
+                        ))
+                    }
+                };
+                if !matches!(kind.as_str(), "assert_eq" | "check_call") {
+                    return Err(format!(
+                        "counterparty row cites discharge kind '{kind}', which no verifier-local \
+                         check realizes"
+                    ));
+                }
+                if counterparty
+                    .iter()
+                    .any(|(seen, _): &(u64, String)| *seen == position)
+                {
+                    return Err(format!(
+                        "counterparty rows name event position {position} twice"
+                    ));
+                }
+                counterparty.push((position, kind));
+            }
+        }
+
         Ok(Document {
             artifact_id,
             semantic_id,
             endpoint,
+            endpoint_name,
             codecs,
             entry,
             param_digests,
             rows,
             source,
             statement_labels,
+            witness_labels,
+            counterparty,
         })
     }
 }

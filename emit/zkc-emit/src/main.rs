@@ -1,5 +1,6 @@
-//! zkc-emit: consume one canonical OIR verifier document plus one
-//! supplier binding, and write a standalone Rust verifier crate.
+//! zkc-emit: consume one canonical OIR document plus one supplier
+//! binding, and write a standalone Rust crate for the endpoint the
+//! document declares — a verifier, or a prover.
 //!
 //! Drivers own IO; the emitter owns nothing but the walk. Identity is
 //! recomputed from the document bytes before any semantics are read, and
@@ -68,6 +69,45 @@ fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))
 }
 
+/// A `label → text` object, in stored order.
+fn labelled(case: &json::Json, key: &str) -> Result<Vec<(String, String)>, String> {
+    let mut pairs = Vec::new();
+    for (label, value) in case
+        .get(key)
+        .and_then(json::Json::as_object)
+        .ok_or_else(|| format!("vector has no '{key}' object"))?
+    {
+        pairs.push((
+            label.clone(),
+            value
+                .as_str()
+                .ok_or_else(|| format!("'{key}' value is not a string"))?
+                .to_owned(),
+        ));
+    }
+    Ok(pairs)
+}
+
+fn strings(case: &json::Json, key: &str) -> Result<Vec<String>, String> {
+    let mut items = Vec::new();
+    for entry in case
+        .get(key)
+        .and_then(json::Json::as_array)
+        .ok_or_else(|| format!("vector has no '{key}' array"))?
+    {
+        items.push(
+            entry
+                .as_str()
+                .ok_or_else(|| format!("'{key}' entry is not a string"))?
+                .to_owned(),
+        );
+    }
+    Ok(items)
+}
+
+/// The corpus is endpoint-shaped and says so in its top-level key:
+/// `vectors` describes verifier replays, `prover_vectors` prover runs.
+/// Reading one as the other is the mismatch the emitter refuses.
 fn parse_vectors(bytes: &[u8]) -> Result<emit::Vectors, String> {
     let root = json::parse(bytes)?;
     let artifact_id = root
@@ -75,53 +115,66 @@ fn parse_vectors(bytes: &[u8]) -> Result<emit::Vectors, String> {
         .and_then(json::Json::as_str)
         .ok_or("vectors file has no artifact_id")?
         .to_owned();
-    let mut cases = Vec::new();
-    for case in root
-        .get("vectors")
-        .and_then(json::Json::as_array)
-        .ok_or("vectors file has no vectors array")?
-    {
-        let field = |key: &str| -> Result<String, String> {
-            case.get(key)
-                .and_then(json::Json::as_str)
-                .map(str::to_owned)
-                .ok_or_else(|| format!("vector has no string field '{key}'"))
-        };
-        let mut statement = Vec::new();
-        for (label, value) in case
-            .get("statement")
-            .and_then(json::Json::as_object)
-            .ok_or("vector has no statement object")?
-        {
-            statement.push((
-                label.clone(),
-                value
-                    .as_str()
-                    .ok_or("statement value is not a string")?
-                    .to_owned(),
-            ));
+    let field = |case: &json::Json, key: &str| -> Result<String, String> {
+        case.get(key)
+            .and_then(json::Json::as_str)
+            .map(str::to_owned)
+            .ok_or_else(|| format!("vector has no string field '{key}'"))
+    };
+
+    let cases = match (root.get("vectors"), root.get("prover_vectors")) {
+        (Some(list), None) => {
+            let mut cases = Vec::new();
+            for case in list
+                .as_array()
+                .ok_or("vectors file's 'vectors' is not an array")?
+            {
+                cases.push(emit::VectorCase {
+                    name: field(case, "name")?,
+                    statement: labelled(case, "statement")?,
+                    proof_hex: field(case, "proof")?,
+                    expect: field(case, "expect")?,
+                    challenges: strings(case, "challenges")?,
+                });
+            }
+            emit::Cases::Verifier(cases)
         }
-        let mut challenges = Vec::new();
-        for entry in case
-            .get("challenges")
-            .and_then(json::Json::as_array)
-            .ok_or("vector has no challenges array")?
-        {
-            challenges.push(
-                entry
-                    .as_str()
-                    .ok_or("challenge entry is not a string")?
-                    .to_owned(),
-            );
+        (None, Some(list)) => {
+            let mut cases = Vec::new();
+            for case in list
+                .as_array()
+                .ok_or("vectors file's 'prover_vectors' is not an array")?
+            {
+                let expect = field(case, "expect")?;
+                cases.push(emit::ProverCase {
+                    name: field(case, "name")?,
+                    statement: labelled(case, "statement")?,
+                    witness: labelled(case, "witness")?,
+                    label: if expect == "ok" {
+                        String::new()
+                    } else {
+                        field(case, "label")?
+                    },
+                    message: if expect == "ok" {
+                        String::new()
+                    } else {
+                        field(case, "message")?
+                    },
+                    expect,
+                    proof_hex: field(case, "proof")?,
+                    challenges: strings(case, "challenges")?,
+                });
+            }
+            emit::Cases::Prover(cases)
         }
-        cases.push(emit::VectorCase {
-            name: field("name")?,
-            statement,
-            proof_hex: field("proof")?,
-            expect: field("expect")?,
-            challenges,
-        });
-    }
+        _ => {
+            return Err(
+                "a vectors file carries exactly one of 'vectors' (verifier) and \
+                 'prover_vectors' (prover)"
+                    .into(),
+            )
+        }
+    };
     Ok(emit::Vectors { artifact_id, cases })
 }
 
