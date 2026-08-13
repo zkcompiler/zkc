@@ -1,0 +1,14 @@
+{
+ "name": "toy",
+ "sponge": {"construction": "toy_duplex", "iv": "artifact-id", "impl": "toy_duplex"},
+ "algebra": {"group": "4611686018427394499", "field": "2305843009213697249"},
+ "classes": {
+  "tg": {"codec": "tg_be8", "impl": "toy_be8", "modulus": "4611686018427394499"},
+  "scalar": {"codec": "ts_be8", "impl": "toy_be8", "modulus": "2305843009213697249"}
+ },
+ "digests": {
+  "codec:tg_be8": "sha256:3350aaa6e9a9a99ed351e5da7429dc552e32597eef3990c26e7d414b8683c8aa",
+  "codec:ts_be8": "sha256:3350aaa6e9a9a99ed351e5da7429dc552e32597eef3990c26e7d414b8683c8aa",
+  "sponge:toy_duplex": "sha256:35aefee5b893ded95c3a1397e67477204f5f53711c9e7dc60d17efb6b2e26407"
+ }
+}

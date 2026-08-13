@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["zkc-rt", "zkc-emit"]
+
+# Emitted crates are separate packages outside this workspace: each one
+# resolves its own dependency graph against the same pins, which is the
+# self-containment the emitter exists to produce.

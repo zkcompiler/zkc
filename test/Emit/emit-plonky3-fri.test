@@ -1,0 +1,35 @@
+# REQUIRES: cargo
+# The emitter's real-profile subject: the parameterized FRI-shaped family
+# at the Plonky3 witness's parameters, emitted against the plonky3
+# binding — the lenpad duplex over the pinned upstream Poseidon2-16
+# permutation (the borrowed kernel), the tuple-bijection extension codec,
+# low-bits sampling, and eight-word digests.
+#
+# The committed vector file extends the interpreter's own with one
+# accepting vector (a ground-out grinding nonce), and this test makes the
+# reference executor vouch for the whole file first: the same vectors
+# that gate the emitted crate are replayed by the C++ interpreter in the
+# same run, so the two implementations answer to one contract rather
+# than to each other.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-real.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/spine.mlir -o %t/sealed.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/verifier.mlir
+
+# The reference executor accepts the committed vectors, including the
+# accepting one.
+# RUN: zkc-run %t/verifier.mlir --vectors %S/Inputs/plonky3-fri-emit-vectors.json --profile=plonky3 | FileCheck --check-prefix=REF %s
+# REF: honest-ground: accept [133002514227445385074322667934467216245,127139884527345934839558783434612021669,157115104285124571000241449691925121408,0,8|7|11|8]
+# REF: empty-proof: abi_decode_failure
+# REF: non-canonical-root: abi_decode_failure
+
+# Emit and replay the same file through the emitted crate: the
+# differential gate, plus the pinned permutation known-answer test the
+# conformance suite runs first.
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+# RUN: zkc-translate --oir-semantic-id %t/verifier.mlir -o %t/semantic.id
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/plonky3.json --rt-path %zkc-rt-dir --vectors %S/Inputs/plonky3-fri-emit-vectors.json --out %t/crate > %t/emit.out
+# RUN: grep "semantic id:" %t/emit.out | sed 's/semantic id: //' > %t/emit-semantic.id
+# RUN: diff %t/emit-semantic.id %t/semantic.id
+# RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml

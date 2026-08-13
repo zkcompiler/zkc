@@ -1,0 +1,50 @@
+# REQUIRES: cargo
+# The KZG vertical, executable end to end: the same-point batching
+# transform's before and after protocols both emit standalone verifier
+# crates under the kzg-toy binding — the opaque `check_call` contracts
+# dispatch by content digest to the BLS12-381 pairing adapters, with
+# `tau_g2` supplied by the binding as named setup material (a known-tau
+# test point; a deployment binding pins a ceremony point). The checked
+# optimization's claim becomes observable: the before verifier runs two
+# pairing checks, the after verifier runs one gamma-folded check over
+# one witness, and both accept.
+#
+# The committed vector files are built by the in-tree generator from
+# scalar arithmetic over the known tau; the emitted verifiers check them
+# with pairings — two independent routes to the same equations. The
+# generator run here regenerates both files and requires byte identity,
+# which is the determinism contract. No in-process profile executes
+# these checks (the C++ executor refuses them, zkc-E403), so the
+# emitted crates are the executing evidence; their scope is these
+# vectors under this binding.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# The before protocol: seal, project, translate.
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/kzg-before.mlir -o %t/before.mlir
+# RUN: zkc-translate --oir-canonical %t/before.mlir -o %t/before.json
+
+# The after protocol: the checked batching transform, then the same path.
+# RUN: zkc-opt '-pir-batch-open=batch-space=52435875175126190479447740508185965837690552500527637822603658699938581184513' %S/../Encoding/kzg-before.mlir -o %t/after-open.mlir
+# RUN: zkc-opt %pir-seal-full %pir-project-full %t/after-open.mlir -o %t/after.mlir
+# RUN: zkc-translate --oir-canonical %t/after.mlir -o %t/after.json
+
+# The committed vectors are exactly what the generator derives from the
+# documents.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest --example kzg_vectors --features kzg,toy -- %t/before.json > %t/before-vectors.json
+# RUN: diff %t/before-vectors.json %S/Inputs/kzg-before-vectors.json
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest --example kzg_vectors --features kzg,toy -- %t/after.json > %t/after-vectors.json
+# RUN: diff %t/after-vectors.json %S/Inputs/kzg-batched-vectors.json
+
+# Both crates emit and replay their suites: the accepting control and
+# the corrupted witness that must die at the pairing equation, never at
+# decode.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/before.json --binding %zkc-emit-bindings/kzg-toy.json --rt-path %zkc-rt-dir --vectors %S/Inputs/kzg-before-vectors.json --out %t/before-crate
+# RUN: cargo test --quiet --manifest-path %t/before-crate/Cargo.toml
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/after.json --binding %zkc-emit-bindings/kzg-toy.json --rt-path %zkc-rt-dir --vectors %S/Inputs/kzg-batched-vectors.json --out %t/after-crate
+# RUN: cargo test --quiet --manifest-path %t/after-crate/Cargo.toml
+
+# An unbound opaque check still refuses at emit time, naming the digest
+# (zkc-E403's emit-time form): the toy binding carries no adapters.
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/before.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused 2>&1 | FileCheck %s
+# CHECK: has no implementation in binding 'toy'

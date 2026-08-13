@@ -1,0 +1,36 @@
+# REQUIRES: cargo
+# The emitted verifier against the pinned upstream prover's own fill
+# (the third verification ring): the value-faithful FRI artifact's
+# derived prover skeleton is filled in-process by the pinned Plonky3
+# crates through the backend runner — exactly prover-real-fill.test's
+# pipeline — and the wire the runner assembles is then replayed through
+# an *emitted standalone crate* instead of the in-process interpreter.
+# Acceptance here means an artifact that leaves the building verifies
+# bytes a real upstream prover produced, with the challenge stream
+# derived independently in a third implementation; the corrupted wire
+# dies at the emitted crate's grinding check in the same suite.
+#
+# Evidence boundaries are prover-real-fill.test's own: one fixture, one
+# revision, one named adapter; nothing universal.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/spine.mlir -o %t/sealed.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-opt '-pir-project=endpoint-kind=prover_skeleton protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/prover.mlir
+# RUN: zkc-translate --oir-canonical %t/prover.mlir -o %t/prover.json
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+# RUN: zkc-translate --oir-id %t/verifier.mlir -o %t/verifier.id
+
+# The pinned runner fills the skeleton and assembles the spine wire;
+# the accepting wire and its corrupted control become one vector file
+# (the positive control first, per the refusal-battery rule).
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/prover.json > %t/runner.out
+# RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/accept.json accept
+# RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/corrupt.json corrupt-nonce
+# RUN: %python -c "import json,sys; a=json.load(open(sys.argv[1])); c=json.load(open(sys.argv[2])); a['vectors'] += c['vectors']; json.dump(a, open(sys.argv[3], 'w'), indent=1)" %t/accept.json %t/corrupt.json %t/vectors.json
+
+# The emitted zero-iv crate accepts the runner's wire and rejects the
+# corrupted one through its generated conformance suite.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/vectors.json --out %t/crate
+# RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml

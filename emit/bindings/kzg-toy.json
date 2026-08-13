@@ -1,0 +1,26 @@
+{
+ "name": "kzg-toy",
+ "sponge": {"construction": "toy_duplex", "iv": "artifact-id", "impl": "toy_duplex"},
+ "classes": {
+  "fr": {"codec": "fr_be32", "impl": "bls_fr_be32"},
+  "g1": {"codec": "bls_g1_be48", "impl": "bls_g1_be48"}
+ },
+ "digests": {
+  "codec:bls_g1_be48": "sha256:a3425c10251b787fbef3da60b57a7eedc8e889ffb46219eb26c70109e6dacb2d",
+  "codec:fr_be32": "sha256:f2058894f68e110746ab28c7f2b372b78dc73282843464aa106fd9ffdfdf6657",
+  "sponge:toy_duplex": "sha256:35aefee5b893ded95c3a1397e67477204f5f53711c9e7dc60d17efb6b2e26407"
+ },
+ "checks": {
+  "sha256:0db5bce593c68779e8960858cb888b63c904bc5b3e3ff79b578798ea54a27e43": {
+   "impl": "kzg_bls12_381_opening",
+   "suite": "bls12-381",
+   "tau_g2": "8f7a7c7fc144069cb39fd504d1ed1ee75f4152d1fd250dd32ba35bd90b21bb2c68ffd2731a8424586660b136f5685dfb19a42b8233ddf54d35f1fe3d751d8e28ea3844fce2a92a13d7a6e73d8c32c9099e570961334048735074f435ed1b2738"
+  },
+  "sha256:fed6d7103b35d0dc8d72b5c38f7ea75d7a0116f8e8abeed0407100683fe72aa0": {
+   "impl": "kzg_bls12_381_batch_opening",
+   "suite": "bls12-381",
+   "tau_g2": "8f7a7c7fc144069cb39fd504d1ed1ee75f4152d1fd250dd32ba35bd90b21bb2c68ffd2731a8424586660b136f5685dfb19a42b8233ddf54d35f1fe3d751d8e28ea3844fce2a92a13d7a6e73d8c32c9099e570961334048735074f435ed1b2738"
+  }
+ },
+ "_note": "tau_g2 is a known-tau test point (tau = 20260813): test-grade setup material for exercising the emitted verifiers. A deployment binding pins a ceremony point instead."
+}
