@@ -1,6 +1,6 @@
 # Current Status
 
-> **zkc v0 · research snapshot · last verified 2026-08-09**
+> **zkc v0 · research snapshot · last verified 2026-08-13**
 
 zkc can describe and identify proof protocols, derive executable endpoints,
 run selected prover and verifier paths, derive selected soundness and
@@ -29,7 +29,7 @@ implementation of a protocol family.
 | DLEQ / OR-Sigma | ● | ● | ● | — | — | — | — |
 | Sumcheck | ● | ● | ● | — | ● | — | — |
 | GKR | ◐ | ◐ | — | — | ◐ | — | — |
-| KZG openings / same-point batching | ● | ● | — | — | ◐ | — | ● |
+| KZG openings / same-point batching | ● | ● | ● | — | ◐ | — | ● |
 | FRI | ◐ | ◐ | ◐ | ◐ | ◐ | — | — |
 | R1CS → Sumcheck | ◐ | ◐ | — | — | ◐ | — | — |
 
@@ -44,17 +44,20 @@ read; this table says which, so a claim can be checked rather than taken.
 
 | Cell | The test that fills it |
 |---|---|
-| Schnorr, all columns | [`test/Encoding/schnorr.mlir`](../test/Encoding/schnorr.mlir), [`test/Encoding/routed-schnorr.mlir`](../test/Encoding/routed-schnorr.mlir), [`test/Oir/schnorr-exec.test`](../test/Oir/schnorr-exec.test), [`test/Oir/prover-round-trip.test`](../test/Oir/prover-round-trip.test), [`test/Soundness/soundness-rule-bodies.mlir`](../test/Soundness/soundness-rule-bodies.mlir), [`test/Soundness/completeness-beside-a-run.test`](../test/Soundness/completeness-beside-a-run.test) |
-| DLEQ / OR-Sigma | [`test/Encoding/chaum-pedersen.mlir`](../test/Encoding/chaum-pedersen.mlir), [`test/Encoding/or-sigma.mlir`](../test/Encoding/or-sigma.mlir), [`test/Oir/chaum-pedersen-exec.test`](../test/Oir/chaum-pedersen-exec.test), [`test/Oir/or-sigma-exec.test`](../test/Oir/or-sigma-exec.test) |
-| Sumcheck | [`test/Encoding/sumcheck-fs.mlir`](../test/Encoding/sumcheck-fs.mlir), [`test/Oir/sumcheck-exec.test`](../test/Oir/sumcheck-exec.test), [`test/Soundness/derive-witness.test`](../test/Soundness/derive-witness.test) |
+| Schnorr, all columns | [`test/Encoding/schnorr.mlir`](../test/Encoding/schnorr.mlir), [`test/Encoding/routed-schnorr.mlir`](../test/Encoding/routed-schnorr.mlir), [`test/Oir/schnorr-exec.test`](../test/Oir/schnorr-exec.test), [`test/Oir/prover-round-trip.test`](../test/Oir/prover-round-trip.test), [`test/Soundness/soundness-rule-bodies.mlir`](../test/Soundness/soundness-rule-bodies.mlir), [`test/Soundness/completeness-beside-a-run.test`](../test/Soundness/completeness-beside-a-run.test), [`test/Emit/emit-schnorr.test`](../test/Emit/emit-schnorr.test) |
+| DLEQ / OR-Sigma | [`test/Encoding/chaum-pedersen.mlir`](../test/Encoding/chaum-pedersen.mlir), [`test/Encoding/or-sigma.mlir`](../test/Encoding/or-sigma.mlir), [`test/Oir/chaum-pedersen-exec.test`](../test/Oir/chaum-pedersen-exec.test), [`test/Oir/or-sigma-exec.test`](../test/Oir/or-sigma-exec.test), [`test/Emit/emit-sigma-family.test`](../test/Emit/emit-sigma-family.test) |
+| Sumcheck | [`test/Encoding/sumcheck-fs.mlir`](../test/Encoding/sumcheck-fs.mlir), [`test/Oir/sumcheck-exec.test`](../test/Oir/sumcheck-exec.test), [`test/Soundness/derive-witness.test`](../test/Soundness/derive-witness.test), [`test/Emit/emit-sigma-family.test`](../test/Emit/emit-sigma-family.test) |
 | GKR | [`test/Evidence/gkr-width2-depth3-parity.test`](../test/Evidence/gkr-width2-depth3-parity.test), [`test/Evidence/gkr-width2-stress.test`](../test/Evidence/gkr-width2-stress.test) |
-| KZG openings / batching | [`test/Encoding/kzg-before.mlir`](../test/Encoding/kzg-before.mlir), [`test/Transforms/pir-batch-open.mlir`](../test/Transforms/pir-batch-open.mlir), [`test/Compiler/kzg-batch-core.mlir`](../test/Compiler/kzg-batch-core.mlir), [`test/Soundness/soundness-kzg-preservation.mlir`](../test/Soundness/soundness-kzg-preservation.mlir) |
-| FRI | [`test/Family/fri-family.test`](../test/Family/fri-family.test), [`test/Oir/plonky3-fri-exec.test`](../test/Oir/plonky3-fri-exec.test), [`test/Evidence/plonky3-replay.test`](../test/Evidence/plonky3-replay.test), [`test/Soundness/grinding-over-fri.test`](../test/Soundness/grinding-over-fri.test) |
+| KZG openings / batching | [`test/Encoding/kzg-before.mlir`](../test/Encoding/kzg-before.mlir), [`test/Transforms/pir-batch-open.mlir`](../test/Transforms/pir-batch-open.mlir), [`test/Compiler/kzg-batch-core.mlir`](../test/Compiler/kzg-batch-core.mlir), [`test/Soundness/soundness-kzg-preservation.mlir`](../test/Soundness/soundness-kzg-preservation.mlir), [`test/Emit/emit-kzg-batching.test`](../test/Emit/emit-kzg-batching.test) |
+| FRI | [`test/Family/fri-family.test`](../test/Family/fri-family.test), [`test/Oir/plonky3-fri-exec.test`](../test/Oir/plonky3-fri-exec.test), [`test/Evidence/plonky3-replay.test`](../test/Evidence/plonky3-replay.test), [`test/Soundness/grinding-over-fri.test`](../test/Soundness/grinding-over-fri.test), [`test/Emit/emit-plonky3-fri.test`](../test/Emit/emit-plonky3-fri.test), [`test/Emit/emit-plonky3-real-fill.test`](../test/Emit/emit-plonky3-real-fill.test) |
 | R1CS → Sumcheck | [`test/Soundness/r1cs-entry.test`](../test/Soundness/r1cs-entry.test) |
 
 A dash means no test executes that half. It is not a statement that the path
-is impossible — GKR and R1CS project, and the KZG verifier is generated — only
-that nothing here runs the result, so the column is not filled.
+is impossible — GKR and R1CS project — only that nothing here runs the
+result, so the column is not filled. The KZG verifier cells are filled by
+emitted standalone crates: no in-process profile executes the pairing
+checks, and the emitted crates' scope is their committed vectors under the
+named test binding.
 
 ## Architecture progress
 
@@ -74,7 +77,7 @@ specification intentionally include north-star contracts beyond this matrix.
 | Soundness analysis |  | ● |  | Selected conditional, notion-indexed derivations from admitted PIR. |
 | Completeness analysis |  | ● |  | Separate judgment track exercised by the included Schnorr path. |
 | Checked optimization and selection |  | ● |  | In-process checked-search library exercised by same-point KZG batching over admitted PIR. |
-| Verifier and prover generation |  | ● |  | Verifier OIR and derived prover-skeleton OIR. |
+| Verifier and prover generation |  | ● |  | Verifier OIR and derived prover-skeleton OIR; standalone Rust verifier-crate emission from the persisted artifact under an explicit supplier binding (`emit/`). |
 | Endpoint execution |  | ● |  | Selected built-in verifier and prover profiles; a hole contract's static and semantic parameter bindings are re-admitted from the endpoint alone and handed to the supplier, which is given identities rather than the material they name. |
 | Witness interface |  | ● |  | Typed opaque scalar handles for selected prover operations. |
 | Formalization evidence |  | ● |  | Rule annotations and pinned declaration/axiom-profile drift checks. |

@@ -38,6 +38,18 @@ config.substitutions.append(
      os.path.join(config.zkc_src_root, "evaluation", "upstream",
                   "plonky3-replay", "Cargo.toml"))
 )
+# The verifier emitter and its runtime crate (emit/): a cargo workspace,
+# driven by the same optional-cargo gate as the replay harness.
+config.substitutions.append(
+    ("%zkc-emit-manifest",
+     os.path.join(config.zkc_src_root, "emit", "Cargo.toml"))
+)
+config.substitutions.append(
+    ("%zkc-emit-bindings", os.path.join(config.zkc_src_root, "emit", "bindings"))
+)
+config.substitutions.append(
+    ("%zkc-rt-dir", os.path.join(config.zkc_src_root, "emit", "zkc-rt"))
+)
 config.substitutions.append(
     ("%zkc-replay-fixture",
      os.path.join(config.zkc_src_root, "evaluation", "upstream",

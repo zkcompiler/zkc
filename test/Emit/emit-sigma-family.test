@@ -1,0 +1,27 @@
+# REQUIRES: cargo
+# The extensibility check: three protocols the emitter was not developed
+# against — Chaum-Pedersen (two group equations binding one exponent),
+# OR-Sigma (challenge split through f_add), and Fiat-Shamir sumcheck
+# (polynomial-evaluation chains of f_add/f_mul) — emit under the same toy
+# binding with no emitter change, and each crate replays its committed
+# golden vectors: the accepting run and every reject class, including the
+# semantically pointed ones (mismatched_statement, ignored_challenge,
+# consistent_cheat). The emitter is row-driven; a new arrangement of
+# admitted rows is supposed to be free, and this test holds it to that.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/chaum-pedersen.mlir -o %t/cp.mlir
+# RUN: zkc-translate --oir-canonical %t/cp.mlir -o %t/cp.json
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/cp.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %S/../Oir/Inputs/chaum-pedersen-exec-vectors.json --out %t/cp-crate
+# RUN: cargo test --quiet --manifest-path %t/cp-crate/Cargo.toml
+
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/or-sigma.mlir -o %t/or.mlir
+# RUN: zkc-translate --oir-canonical %t/or.mlir -o %t/or.json
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/or.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %S/../Oir/Inputs/or-sigma-exec-vectors.json --out %t/or-crate
+# RUN: cargo test --quiet --manifest-path %t/or-crate/Cargo.toml
+
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/sumcheck-fs.mlir -o %t/sc.mlir
+# RUN: zkc-translate --oir-canonical %t/sc.mlir -o %t/sc.json
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/sc.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %S/../Oir/Inputs/sumcheck-exec-vectors.json --out %t/sc-crate
+# RUN: cargo test --quiet --manifest-path %t/sc-crate/Cargo.toml

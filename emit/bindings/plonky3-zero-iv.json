@@ -1,0 +1,16 @@
+{
+ "name": "plonky3-zero-iv",
+ "sponge": {"construction": "plonky3_bb31_poseidon2_w16_r8_lenpad", "iv": "zero", "impl": "p3_lenpad_duplex"},
+ "classes": {
+  "rs": {"codec": "plonky3_bb31_digest8", "impl": "p3_digest8"},
+  "ext_field": {"codec": "plonky3_bb31_ext4_tuple", "impl": "p3_ext4"},
+  "pow_value": {"codec": "plonky3_bb31_low_bits", "impl": "p3_word"},
+  "query_index": {"codec": "plonky3_bb31_low_bits", "impl": "p3_word"}
+ },
+ "digests": {
+  "codec:plonky3_bb31_digest8": "sha256:a3425c10251b787fbef3da60b57a7eedc8e889ffb46219eb26c70109e6dacb2d",
+  "codec:plonky3_bb31_ext4_tuple": "sha256:cb6f0f7790e47814634648f59d467917e13cdb4fd7151d8640d8f2f4b6821a5b",
+  "codec:plonky3_bb31_low_bits": "sha256:dbe9226c119680601f413ad689abf1bd77784f72a44e16ef8a0b7cb714d8641f",
+  "sponge:plonky3_bb31_poseidon2_w16_r8_lenpad": "sha256:961fc67e87a582f6d38f0c82047af0480269d340e1c9714fced6163e62984efc"
+ }
+}
