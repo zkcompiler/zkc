@@ -140,7 +140,7 @@ Rust harness. Reproducibility limits are summarized in
 - [Roadmap](docs/roadmap.md) — planned relation, witness, realization,
   composition, formal-evidence, and system direction
 - [Specification overview](docs/spec/overview.md) — normative corpus map
-- [Contributing](CONTRIBUTING.md) and
+- [Contributing](.github/CONTRIBUTING.md) and
   [Third-party material](THIRD_PARTY.md)
 
 ## License

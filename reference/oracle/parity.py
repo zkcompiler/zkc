@@ -8,7 +8,6 @@ terminal rules or residual routes.
 
 from __future__ import annotations
 
-import json
 import sys
 
 from . import model, wellformed, witnesses

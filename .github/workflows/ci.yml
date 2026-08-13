@@ -47,15 +47,44 @@ jobs:
       - name: Run the oracle self-checks
         working-directory: reference
         run: uv run --locked python -m oracle.model
+      - name: Lint the reference twin (defect rules only)
+        run: uvx ruff check reference/oracle
 
   build:
     name: Build and test (C++ / MLIR)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      # Rust enables the cargo-gated suites: the emit workspace's unit
+      # tests and lints here, and — because lit detects cargo — the
+      # emitter and pinned-Plonky3 integration tests inside check-zkc.
+      # The runner image ships rustup; this pins nothing beyond stable,
+      # matching the documented toolchain floor policy.
+      - name: Provide Rust (cargo-gated suites)
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            emit/target
+            evaluation/upstream/plonky3-replay/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('emit/Cargo.lock', 'evaluation/upstream/plonky3-replay/Cargo.lock') }}
+
+      - name: Emit workspace suites (tests, lints, format)
+        run: |
+          cargo test --locked --manifest-path emit/Cargo.toml -p zkc-emit
+          cargo test --locked --manifest-path emit/Cargo.toml -p zkc-rt --features toy,plonky3
+          cargo clippy --locked --manifest-path emit/Cargo.toml --all-targets --all-features -- -D warnings
+          (cd emit && cargo fmt --check)
 
       - name: Install MLIR and the build tools
         run: |

@@ -1,0 +1,3 @@
+# The tree follows upstream LLVM style; this file codifies it for
+# editors and reviews. Formatting churn is kept out of semantic changes.
+BasedOnStyle: LLVM
