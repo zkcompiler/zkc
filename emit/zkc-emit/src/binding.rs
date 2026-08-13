@@ -115,6 +115,98 @@ pub struct CheckBinding {
     pub tau_g2_hex: String,
 }
 
+/// One typed slot of a fill's signature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operand {
+    /// A value of the given bound implementation.
+    Value(ImplKind),
+    /// An opaque payload of the given handle class.
+    Handle(&'static str),
+}
+
+/// One hole fill's shape, as the emitter checks it against the row.
+///
+/// The reference executor marshals operands by splitting the row's mixed
+/// list into a value vector and a handle vector; the emitted call is a
+/// plain Rust call, so what matters here is the *positional* order. The
+/// check is therefore positional and total: a fill bound to a hole whose
+/// operands it does not match is an emit-time refusal, never a type
+/// error in generated code.
+pub struct HoleSignature {
+    pub inputs: &'static [Operand],
+    pub results: &'static [Operand],
+}
+
+/// The executable fills for hole contracts, selected by the contract's
+/// content digest — the dispatch authority the reference executor names
+/// when it refuses (zkc-E407).
+// The shared prefix is the point: these are one supplier family, named
+// as the reference profile names them, and splitting them apart would
+// hide which vocabulary a binding is drawing from.
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoleImpl {
+    /// `commit`: a = g^k, witness threaded on.
+    ToySigmaCommit,
+    /// `evaluate`: z = k + c*x mod q.
+    ToySigmaResponse,
+    /// The same boundary, the wrong algebra: z+1. Negative evidence
+    /// only; it exists so the reject boundary can be observed.
+    ToySigmaResponseCheat,
+}
+
+impl HoleImpl {
+    pub fn from_name(name: &str) -> Option<HoleImpl> {
+        match name {
+            "toy_sigma_commit" => Some(HoleImpl::ToySigmaCommit),
+            "toy_sigma_response" => Some(HoleImpl::ToySigmaResponse),
+            "toy_sigma_response_cheat" => Some(HoleImpl::ToySigmaResponseCheat),
+            _ => None,
+        }
+    }
+
+    /// The zkc-rt path the emitted call names.
+    pub fn path(self) -> &'static str {
+        match self {
+            HoleImpl::ToySigmaCommit => "zkc_rt::toy::sigma_commit",
+            HoleImpl::ToySigmaResponse => "zkc_rt::toy::sigma_response",
+            HoleImpl::ToySigmaResponseCheat => "zkc_rt::toy::sigma_response_cheat",
+        }
+    }
+
+    pub fn feature(self) -> &'static str {
+        "toy"
+    }
+
+    pub fn signature(self) -> HoleSignature {
+        // fn(u64, Payload) -> (u64, Payload) and fn(u64, Payload) -> u64:
+        // the slots below are those signatures, position for position.
+        const TAKES: &[Operand] = &[
+            Operand::Value(ImplKind::ToyBe8),
+            Operand::Handle("sigma-witness"),
+        ];
+        match self {
+            HoleImpl::ToySigmaCommit => HoleSignature {
+                inputs: TAKES,
+                results: TAKES,
+            },
+            HoleImpl::ToySigmaResponse | HoleImpl::ToySigmaResponseCheat => HoleSignature {
+                inputs: TAKES,
+                results: &[Operand::Value(ImplKind::ToyBe8)],
+            },
+        }
+    }
+}
+
+/// One bound fill. Static and semantic parameters are declared by the
+/// contract and passed through by the reference executor as strings; no
+/// fill in this vocabulary takes any, so the emitter requires both lists
+/// empty rather than inventing an unused parameter ABI.
+#[derive(Debug, Clone)]
+pub struct HoleBinding {
+    pub implementation: HoleImpl,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpongeImpl {
     ToyDuplex,
@@ -165,6 +257,8 @@ pub struct Binding {
     pub classes: Vec<(String, ClassBinding)>,
     /// Contract digest → executable adapter for opaque checks.
     pub checks: Vec<(String, CheckBinding)>,
+    /// Contract digest → executable fill for prover-side holes.
+    pub holes: Vec<(String, HoleBinding)>,
     /// `tagged-name → sha256:<hex>`: the construction digests these
     /// suppliers claim to realize, compared against the artifact's pins.
     pub digests: Vec<(String, String)>,
@@ -285,6 +379,17 @@ impl Binding {
             }
         }
 
+        let mut holes = Vec::new();
+        if let Some(table) = root.get("holes") {
+            for (digest, entry) in table.as_object().ok_or("binding: holes is not an object")? {
+                let impl_name = string_field(entry, "impl", digest)?;
+                let implementation = HoleImpl::from_name(&impl_name).ok_or_else(|| {
+                    format!("binding: hole '{digest}' names unknown fill '{impl_name}'")
+                })?;
+                holes.push((digest.clone(), HoleBinding { implementation }));
+            }
+        }
+
         let mut digests = Vec::new();
         for (tagged, digest) in root
             .get("digests")
@@ -308,6 +413,7 @@ impl Binding {
             algebra,
             classes,
             checks,
+            holes,
             digests,
             digest_of_file,
         })
@@ -325,6 +431,13 @@ impl Binding {
             .iter()
             .find(|(name, _)| name == digest)
             .map(|(_, check)| check)
+    }
+
+    pub fn hole(&self, digest: &str) -> Option<&HoleBinding> {
+        self.holes
+            .iter()
+            .find(|(name, _)| name == digest)
+            .map(|(_, hole)| hole)
     }
 
     pub fn digest_for(&self, tagged: &str) -> Option<&str> {

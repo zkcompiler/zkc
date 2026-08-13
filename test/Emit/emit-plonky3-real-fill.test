@@ -34,3 +34,12 @@
 # corrupted one through its generated conformance suite.
 # RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/vectors.json --out %t/crate
 # RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml
+
+# The prover side of this same artifact is why the runner exists rather
+# than an emitted crate: its grinding hole threads the transcript through
+# its own fill, and no supplier vocabulary implements a peeking fill. The
+# emitter names that gap instead of emitting a prover that cannot be
+# correct, which is the in-process interpreter's refusal (E407) moved to
+# emit time.
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --out %t/prover-crate 2>&1 | FileCheck --check-prefix=PEEK %s
+# PEEK: hole 'grind' (kind 'pow_search') threads the transcript through its fill

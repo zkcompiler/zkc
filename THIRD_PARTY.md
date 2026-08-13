@@ -79,7 +79,7 @@ These dependencies are not vendored in this source repository:
 | LLVM, MLIR, and lit | Compiler infrastructure and test runner | MLIR 23 or newer, checked in [`CMakeLists.txt`](CMakeLists.txt) | Apache-2.0 WITH LLVM-exception |
 | Plonky3 crates | Optional replay/prover evaluation harness and the emitter runtime (`emit/zkc-rt`) | evaluation and emit `Cargo.toml` and `Cargo.lock` | MIT OR Apache-2.0 |
 | arkworks crates (`ark-bls12-381`, `ark-ec`, `ark-ff`, `ark-serialize`) | The emitter runtime's BLS12-381 kernel for the KZG check adapters | [`emit/Cargo.lock`](emit/Cargo.lock) | MIT OR Apache-2.0 |
-| `postcard`, `serde`, `serde_json`, `sha2`, `hex`, and their transitive crates | Optional Rust harness and emitter support | [`evaluation/upstream/plonky3-replay/Cargo.lock`](evaluation/upstream/plonky3-replay/Cargo.lock), [`emit/Cargo.lock`](emit/Cargo.lock) | Per-crate terms; not redistributed in this source tree |
+| `postcard`, `serde`, `serde_json`, `sha2`, `hex`, `zeroize`, and their transitive crates | Optional Rust harness and emitter support | [`evaluation/upstream/plonky3-replay/Cargo.lock`](evaluation/upstream/plonky3-replay/Cargo.lock), [`emit/Cargo.lock`](emit/Cargo.lock) | Per-crate terms; not redistributed in this source tree |
 | Rust | Builds the optional Rust harness | stable toolchain available on the host | Rust toolchain component licenses |
 | ArkLib, Lean, Lake, Mathlib, and elan | Separate formalization-drift reading | [`arklib-pin.txt`](arklib-pin.txt) and the pinned ArkLib dependency files | Per-project terms; not compiler dependencies |
 | uv and Hatchling | Python environment and packaging tools | workflow plus Python project files | Tool-specific terms; executables are not vendored |

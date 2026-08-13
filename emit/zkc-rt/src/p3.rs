@@ -111,6 +111,16 @@ pub fn decode_words<const N: usize>(bytes: &[u8]) -> [u32; N] {
     words
 }
 
+/// The write direction of the same codecs: each canonical word as four
+/// big-endian bytes, appended to the proof under construction. The
+/// caller gates canonicality first, exactly as the reference sequences
+/// it — an out-of-range word is the fill's defect, not a wire fact.
+pub fn encode_words(words: &[u32], out: &mut Vec<u8>) {
+    for &word in words {
+        out.extend_from_slice(&word.to_be_bytes());
+    }
+}
+
 /// The wire-canonicality rule shared by every BabyBear codec: each
 /// 32-bit word must be a canonical field element.
 pub fn words_canonical(words: &[u32]) -> bool {

@@ -33,12 +33,6 @@
 # RUN: diff %t/crate/tests/conformance.rs %t/crate2/tests/conformance.rs
 # RUN: diff %t/crate/README.md %t/crate2/README.md
 
-# The endpoint-kind gate, at emit time: a prover document refuses.
-# RUN: zkc-opt %pir-seal-full %pir-project-prover-full %S/../Encoding/routed-schnorr.mlir -o %t/prover.mlir
-# RUN: zkc-translate --oir-canonical %t/prover.mlir -o %t/prover.json
-# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused 2>&1 | FileCheck --check-prefix=PROVER %s
-# PROVER: this is a prover document
-
 # A supplier gap refuses at emit time, naming the class — the E400
 # family's emit-time form, so the emitted crate never carries a
 # "cannot judge" arm.

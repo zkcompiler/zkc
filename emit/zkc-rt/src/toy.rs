@@ -5,6 +5,7 @@
 //! `reference/oracle/exec.py`; the golden vectors those two agree on are
 //! the conformance contract this implementation replays.
 
+use crate::Payload;
 use sha2::{Digest, Sha256};
 
 /// The safe prime p = 2q + 1.
@@ -95,6 +96,104 @@ pub fn powmod(mut base: u64, mut exponent: u64, m: u64) -> u64 {
         exponent >>= 1;
     }
     result
+}
+
+//===-- hole fills ------------------------------------------------------===//
+//
+// The prover-side suppliers, ported from `ToyProfile.cpp`. Each is a
+// plain typed function: the emitter checks the hole row's operand and
+// result shapes against the signature at emit time and then calls it
+// monomorphically, so there is no dispatch table and no "no supplier"
+// arm at run time. Test-grade arithmetic — variable-time throughout, as
+// the emitted README states.
+
+/// The sigma witness payload convention shared with the reference twin
+/// and the C++ toy profile: sixteen bytes, x then k, each eight
+/// big-endian. Parsing is the supplier's, never the emitted crate's.
+fn parse_sigma_witness(witness: &Payload) -> Result<(u64, u64), String> {
+    let bytes = witness.as_bytes();
+    if bytes.len() != 16 {
+        return Err("sigma witness payload must be sixteen bytes (x, k big-endian)".to_owned());
+    }
+    Ok((decode_be8(&bytes[..8]), decode_be8(&bytes[8..])))
+}
+
+/// The honest fill for the sigma commit: a = g^k, with the witness
+/// threaded on to the response hole that consumes it.
+pub fn sigma_commit(generator: u64, witness: Payload) -> Result<(u64, Payload), String> {
+    let (_x, k) = parse_sigma_witness(&witness)?;
+    Ok((powmod(generator, k, P), witness))
+}
+
+/// The honest fill for the sigma response: z = k + c*x mod q. The
+/// witness is consumed here — the handle chain ends at the last hole
+/// that needs it, which is what makes the payload's move the linearity.
+pub fn sigma_response(challenge: u64, witness: Payload) -> Result<u64, String> {
+    let (x, k) = parse_sigma_witness(&witness)?;
+    let c = challenge % Q;
+    Ok((k % Q + mulmod(c, x % Q, Q)) % Q)
+}
+
+/// The wrong algebra behind the same boundary: z+1 is in range and
+/// canonical, so it survives every emission gate and dies exactly where
+/// it must — at the verifier's equation. This exists to make that
+/// boundary observable, and no honest binding names it.
+pub fn sigma_response_cheat(challenge: u64, witness: Payload) -> Result<u64, String> {
+    Ok((sigma_response(challenge, witness)? + 1) % Q)
+}
+
+#[cfg(test)]
+mod fills {
+    use super::*;
+
+    /// The round-trip fixture (`test/Oir/prover-round-trip.test`):
+    /// x = 5, k = 7 over the toy group, generator 4.
+    fn fixture() -> Payload {
+        Payload::new([5u64.to_be_bytes(), 7u64.to_be_bytes()].concat().to_vec())
+    }
+
+    #[test]
+    fn commit_is_the_generator_raised_to_the_nonce() {
+        let (commitment, witness) = sigma_commit(4, fixture()).expect("a sixteen-byte payload");
+        assert_eq!(commitment, powmod(4, 7, P));
+        // 4^7 = 16384 is below p, so the pinned proof's first eight
+        // bytes read as that integer.
+        assert_eq!(commitment, 16384);
+        assert_eq!(witness.len(), 16, "the witness threads through unchanged");
+    }
+
+    #[test]
+    fn response_satisfies_the_verification_equation() {
+        let challenge = 1405996128736189831u64;
+        let z = sigma_response(challenge, fixture()).expect("a sixteen-byte payload");
+        // g^z == a * y^c, the equation the derived verifier asserts.
+        let y = powmod(4, 5, P);
+        assert_eq!(
+            powmod(4, z, P),
+            mulmod(powmod(4, 7, P), powmod(y, challenge % Q, P), P)
+        );
+    }
+
+    #[test]
+    fn the_cheat_stays_inside_the_boundary_and_breaks_the_equation() {
+        let challenge = 1405996128736189831u64;
+        let honest = sigma_response(challenge, fixture()).expect("a sixteen-byte payload");
+        let cheat = sigma_response_cheat(challenge, fixture()).expect("a sixteen-byte payload");
+        assert_ne!(honest, cheat);
+        assert!(
+            cheat < Q,
+            "a cheat that failed the range gate would prove nothing"
+        );
+    }
+
+    #[test]
+    fn a_short_payload_is_the_supplier_s_own_defect() {
+        let short = Payload::new(vec![0; 8]);
+        assert_eq!(
+            sigma_commit(4, short).unwrap_err(),
+            "sigma witness payload must be sixteen bytes (x, k big-endian)"
+        );
+    }
 }
 
 #[cfg(test)]

@@ -22,7 +22,7 @@ require more review than ordinary implementation changes.
   | `soundness` | the soundness kernel and signature |
   | `compiler` | the checked-search core and transform passes |
   | `exec` | the interpreter and execution profiles |
-  | `emit` | the verifier emitter and its runtime |
+  | `emit` | the endpoint emitters and their runtime |
   | `oracle` | the Python reference twin |
   | `registry` | the registry JSON surfaces |
   | `spec` | the normative corpus under `docs/spec/` |
