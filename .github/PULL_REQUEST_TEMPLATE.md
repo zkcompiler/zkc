@@ -4,8 +4,8 @@
 
 ## Summary
 
-<!-- Intent, and the reasons behind non-obvious choices, in plain prose.
-     Do not restate the diff or the documentation. -->
+<!-- Why this change, and the reasoning behind anything a reader would
+     not guess, in plain prose. -->
 
 ## Verification
 
@@ -13,6 +13,6 @@
      tests refuse; what the evidence does not cover when a claim could
      be over-read. -->
 
-<!-- Add a "## Decisions" section when the change made choices the diff
-     does not explain — rejected alternatives, deviations, discovered
-     gotchas, one line each. -->
+<!-- Add a "## Decisions" section for choices worth recording: the
+     alternative rejected, the deviation taken, the gotcha found. One
+     line each. -->
