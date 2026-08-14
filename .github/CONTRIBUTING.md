@@ -30,7 +30,10 @@ require more review than ordinary implementation changes.
   | `ci` | workflows and repository process |
 
 - One pull request is one implementation unit; when it grows past that,
-  split it.
+  split it. Size is not the measure: a one-line process change is a unit,
+  and several unrelated small changes are not.
+- Review happens on the branch, and what it confirms is fixed in that same
+  pull request. A defect found after the merge has already split the unit.
 - CI must be green before a merge.
   [Getting Started](../docs/getting-started.md) describes the local
   build and checks.
