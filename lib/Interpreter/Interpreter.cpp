@@ -651,8 +651,9 @@ private:
                     "projection");
               handles.push_back(it->second);
             } else {
-              // The pow_search transcript peek has no supplier path in
-              // this phase: refusing is honest, and names the gap.
+              // A pow_search fill reads the transcript it is grinding
+              // against, and no supplier set implements that. Refusing
+              // names the gap rather than guessing at a fill.
               return fail("[zkc-E407] hole contract '" +
                           hole.getContractDigest() +
                           "' peeks the transcript; no profile supplies "

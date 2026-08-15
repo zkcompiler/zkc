@@ -13,10 +13,18 @@
 //! projections of one sealed spine, so their emitters share everything
 //! but the four rows where the wire reverses direction.
 
-use crate::binding::{Binding, CheckImpl, ImplKind, Operand, SpongeImpl};
+use crate::binding::{Binding, CheckImpl, ClassBinding, ImplKind, Operand, SpongeImpl};
 use crate::doc::{Document, Endpoint, Entry, Ref, Row};
+use crate::rust;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
+
+/// Stands where the sponge declaration's qualifier goes until the walk
+/// knows whether anything absorbs or squeezes. `init` is a row, so the
+/// declaration is written mid-body, before its own answer exists; every
+/// other local is declared in the preamble, after the walk has run. The
+/// byte is one no generated source can contain.
+const SPONGE_QUALIFIER: &str = "\u{1}";
 
 /// The value class of an SSA name during the walk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,7 +86,6 @@ pub struct ProverCase {
 struct Walk<'a> {
     document: &'a Document,
     binding: &'a Binding,
-    endpoint: Endpoint,
     /// Rust expression and class per value reference.
     values: HashMap<Ref, (String, VClass)>,
     /// Live handles: Rust expression and handle class. A handle is
@@ -91,34 +98,70 @@ struct Walk<'a> {
     current_sponge: Option<Ref>,
     current_stream: Option<Ref>,
     body: String,
-    uses_group: bool,
-    uses_field: bool,
+    /// What the emitted body actually touched. The preamble declares
+    /// these locals, and re-deriving that from the row list is how
+    /// `cursor`, `sponge`, and `statement` came to be declared for
+    /// bodies that never mention them: each guess was independently
+    /// fallible. The walk knows, so the walk records.
+    used: Used,
 }
+
+/// One emitted local: whether the body names it at all, and whether it
+/// needs to be mutable. `challenges` and `proof` are always read (the
+/// frame returns them), so only their mutability is in question.
+#[derive(Default, Clone, Copy)]
+struct Use {
+    named: bool,
+    mutated: bool,
+}
+
+impl Use {
+    /// `""`, `"mut "`, or the `_` prefix an unnamed local needs.
+    fn qualifier(self) -> &'static str {
+        if self.mutated {
+            "mut "
+        } else {
+            ""
+        }
+    }
+
+    fn prefix(self) -> &'static str {
+        if self.named {
+            ""
+        } else {
+            "_"
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+struct Used {
+    sponge: Use,
+    cursor: Use,
+    challenges: Use,
+    proof: Use,
+    statement: bool,
+    group_modulus: bool,
+    field_modulus: bool,
+}
+
+/// The normative reject classes (`docs/spec/endpoints.md` §4). The
+/// emitter writes these spellings into generated code and admits them in
+/// a vector corpus, so it holds the closed set; `zkc-rt` carries the same
+/// set as the type the generated code returns.
+const REJECT_CLASSES: &[&str] = &[
+    "abi_decode_failure",
+    "abi_validation_failure",
+    "proof_trailing_data",
+    "public_binding_failure",
+    "transcript_failure",
+    "check_failure",
+];
 
 /// The BLS12-381 scalar-field order: the only sample space the `fr`
 /// challenge derivation is defined over.
 const BLS12_381_R_DECIMAL: &str =
     "52435875175126190479447740508185965837690552500527637822603658699938581184513";
-
-fn rust_string(text: &str) -> String {
-    format!("{text:?}")
-}
-
-fn is_rust_ident(text: &str) -> bool {
-    // Statement labels become field names verbatim — the endpoint ABI is
-    // the naming authority, so both cases are admitted and the struct
-    // carries `allow(non_snake_case)`. Keywords cannot be fields.
-    const KEYWORDS: &[&str] = &[
-        "as", "async", "await", "box", "break", "const", "continue", "crate", "dyn", "else",
-        "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod",
-        "move", "mut", "pub", "ref", "return", "self", "static", "struct", "super", "trait",
-        "true", "type", "unsafe", "use", "where", "while",
-    ];
-    !text.is_empty()
-        && text.chars().next().unwrap().is_ascii_alphabetic()
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && !KEYWORDS.contains(&text)
-}
 
 /// Decimal text into little-endian 32-bit limbs, refusing overflow.
 fn decimal_to_limbs(text: &str, limb_count: usize) -> Result<Vec<u32>, String> {
@@ -149,24 +192,50 @@ impl<'a> Walk<'a> {
         self.body.push('\n');
     }
 
-    fn class_impl(&self, class: &str) -> Result<ImplKind, String> {
-        Ok(self
-            .binding
-            .class(class)
-            .ok_or_else(|| {
-                format!(
-                    "binding '{}' supplies no implementation for class '{class}'",
-                    self.binding.name
-                )
-            })?
-            .implementation)
+    /// The implementation a row's class resolves to.
+    ///
+    /// Two authorities have to agree, and both are asked here. The
+    /// document's codec map is what the artifact authorized — a class it
+    /// does not route is one the reference executor refuses to run at
+    /// all (zkc-E400, "artifact names no codec") — and the binding is
+    /// what realizes that route. Asking only the binding emitted crates
+    /// that used a codec the artifact never named.
+    fn class_binding(&self, class: &str) -> Result<&'a ClassBinding, String> {
+        if !self
+            .document
+            .codecs
+            .iter()
+            .any(|(routed, _)| routed == class)
+        {
+            return Err(format!(
+                "no codec route for class '{class}': the artifact names no codec for it \
+                 (zkc-E400's emit-time form)"
+            ));
+        }
+        self.binding.class(class).ok_or_else(|| {
+            format!(
+                "binding '{}' supplies no implementation for class '{class}'",
+                self.binding.name
+            )
+        })
     }
 
-    fn value(&self, reference: Ref, context: &str) -> Result<(String, VClass), String> {
-        self.values
+    fn class_impl(&self, class: &str) -> Result<ImplKind, String> {
+        Ok(self.class_binding(class)?.implementation)
+    }
+
+    /// Resolve a value reference, recording that the emitted text now
+    /// names whatever the expression names.
+    fn value(&mut self, reference: Ref, context: &str) -> Result<(String, VClass), String> {
+        let resolved = self
+            .values
             .get(&reference)
             .cloned()
-            .ok_or_else(|| format!("{context}: reference {reference:?} names no value"))
+            .ok_or_else(|| format!("{context}: reference {reference:?} names no value"))?;
+        if resolved.0.starts_with("statement.") {
+            self.used.statement = true;
+        }
+        Ok(resolved)
     }
 
     fn rust_type(&self, class: &VClass) -> Result<&'static str, String> {
@@ -230,8 +299,8 @@ impl<'a> Walk<'a> {
     fn refuse(variant: &str, label: &str, message: &str) -> String {
         format!(
             "return Err(ProveError::{variant} {{ label: {}.to_owned(), message: {}.to_owned() }});",
-            rust_string(label),
-            rust_string(message)
+            rust::literal(label),
+            rust::literal(message)
         )
     }
 
@@ -258,6 +327,10 @@ impl<'a> Walk<'a> {
                     }
                 };
                 self.line(1, &statement);
+                self.used.sponge = Use {
+                    named: true,
+                    mutated: true,
+                };
                 Ok(())
             }
         }
@@ -279,6 +352,11 @@ impl<'a> Walk<'a> {
         // the reference binds against.
         let statement_count = self.document.statement_labels.len();
         let witness_count = self.document.witness_labels.len();
+        // The two generated structs are two naming scopes, and each
+        // label is admitted once — a repeated one would be a repeated
+        // field rather than a refusal.
+        let mut statement_fields = rust::Scope::new("statement label");
+        let mut witness_fields = rust::Scope::new("witness label");
         for (index, element) in self.document.entry.iter().enumerate() {
             match element {
                 Entry::Val(class) => {
@@ -288,12 +366,7 @@ impl<'a> Walk<'a> {
                              {statement_count} statement labels"
                         ));
                     }
-                    let label = &self.document.statement_labels[index];
-                    if !is_rust_ident(label) {
-                        return Err(format!(
-                            "statement label '{label}' is not a usable identifier"
-                        ));
-                    }
+                    let label = statement_fields.ident(&self.document.statement_labels[index])?;
                     self.values.insert(
                         Ref::Arg(index),
                         (format!("statement.{label}"), VClass::Doc(class.clone())),
@@ -314,12 +387,8 @@ impl<'a> Walk<'a> {
                                 statement_count + witness_count
                             )
                         })?;
-                    let (label, declared) = &self.document.witness_labels[slot];
-                    if !is_rust_ident(label) {
-                        return Err(format!(
-                            "witness label '{label}' is not a usable identifier"
-                        ));
-                    }
+                    let (declared_label, declared) = &self.document.witness_labels[slot];
+                    let label = witness_fields.ident(declared_label)?;
                     if declared != class {
                         return Err(format!(
                             "witness label '{label}' declares handle class '{declared}', but \
@@ -359,19 +428,13 @@ impl<'a> Walk<'a> {
         // exactly the reference's bindStatement sequencing. The verifier
         // classifies a violation as a verdict; the prover, whose
         // statement is its own input, refuses (zkc-E405).
-        for (index, label) in self.document.statement_labels.iter().enumerate() {
-            let Entry::Val(class) = &self.document.entry[index] else {
-                return Err(format!(
-                    "statement label '{label}' has no value entry argument"
-                ));
-            };
-            let class_binding = self
-                .binding
-                .class(class)
-                .ok_or_else(|| format!("binding supplies no implementation for class '{class}'"))?;
-            if let Some(modulus) = class_binding.modulus {
+        for (label, class) in &self.document.statement {
+            if let Some(modulus) = self.class_binding(class)?.modulus {
+                // The gate names the statement without going through
+                // `value`, so it records the use itself.
+                self.used.statement = true;
                 self.line(1, &format!("if statement.{label} >= {modulus}u64 {{"));
-                let refusal = match self.endpoint {
+                let refusal = match self.document.endpoint {
                     Endpoint::Verifier => Self::reject("PublicBindingFailure"),
                     Endpoint::ProverSkeleton => Self::refuse(
                         "Statement",
@@ -390,7 +453,7 @@ impl<'a> Walk<'a> {
         for (index, row) in rows.iter().enumerate() {
             self.emit_row(index, row, index == last)?;
         }
-        match (self.endpoint, rows.last()) {
+        match (self.document.endpoint, rows.last()) {
             (Endpoint::Verifier, Some(Row::Decide { .. })) => {}
             (Endpoint::Verifier, _) => return Err("the verifier frame must end in decide".into()),
             (Endpoint::ProverSkeleton, Some(Row::Finish { .. })) => {}
@@ -424,7 +487,7 @@ impl<'a> Walk<'a> {
             _ => None,
         };
         if let Some((owner, name)) = frame {
-            if owner != self.endpoint {
+            if owner != self.document.endpoint {
                 return Err(format!(
                     "row {index}: '{}' is a {name}-frame row, and this document declares endpoint \
                      '{}' (zkc-E409's emit-time form)",
@@ -462,7 +525,10 @@ impl<'a> Walk<'a> {
                         ))
                     }
                 };
-                self.line(1, &format!("let mut sponge = {constructor};"));
+                // Declared here, qualified by what the rest of the walk
+                // will do to it — an init with nothing absorbing or
+                // squeezing after it leaves a local nobody reads.
+                self.line(1, &format!("let {SPONGE_QUALIFIER}sponge = {constructor};"));
                 self.current_sponge = Some(Ref::Res(index, 0));
                 Ok(())
             }
@@ -480,12 +546,20 @@ impl<'a> Walk<'a> {
                 class,
             } => {
                 self.consume_stream(*stream, index, Some(Ref::Res(index, 0)))?;
+                self.used.cursor = Use {
+                    named: true,
+                    mutated: true,
+                };
                 let implementation = self.class_impl(class)?;
                 let width = implementation.wire_width();
                 let used = self.referenced.contains(&(index, 1));
                 let name = format!("{}r{index}_1", if used { "" } else { "_" });
                 let ty = implementation.rust_type();
-                let comment = format!("// [\"read\", \"{label}\" : {class}]");
+                let comment = format!(
+                    "// [\"read\", \"{}\" : {}]",
+                    rust::comment(label),
+                    rust::comment(class)
+                );
                 self.line(1, &comment);
                 match implementation {
                     ImplKind::ToyBe8 => {
@@ -496,11 +570,7 @@ impl<'a> Walk<'a> {
                         self.line(2, "Some(wire) => zkc_rt::toy::decode_be8(wire),");
                         self.line(2, &Self::reject_arm("AbiDecodeFailure"));
                         self.line(1, "};");
-                        let modulus = self
-                            .binding
-                            .class(class)
-                            .and_then(|class_binding| class_binding.modulus);
-                        if let Some(modulus) = modulus {
+                        if let Some(modulus) = self.class_binding(class)?.modulus {
                             self.line(1, &format!("if {name} >= {modulus}u64 {{"));
                             self.line(2, &Self::reject("AbiDecodeFailure"));
                             self.line(1, "}");
@@ -574,6 +644,14 @@ impl<'a> Walk<'a> {
                 space,
             } => {
                 self.consume_sponge(*sponge, index, Ref::Res(index, 0))?;
+                self.used.sponge = Use {
+                    named: true,
+                    mutated: true,
+                };
+                self.used.challenges = Use {
+                    named: true,
+                    mutated: true,
+                };
                 let implementation = self.class_impl(class)?;
                 // The canonical rule/count pairing (endpoints.md §3):
                 // `uniform` exactly for one draw, `uniform_independent`
@@ -589,7 +667,10 @@ impl<'a> Walk<'a> {
                     }
                 }
                 let comment = format!(
-                    "// [\"squeeze\", \"{label}\" : {class}, count {count}, domain \"{domain}\"]"
+                    "// [\"squeeze\", \"{}\" : {}, count {count}, domain \"{}\"]",
+                    rust::comment(label),
+                    rust::comment(class),
+                    rust::comment(domain)
                 );
                 self.line(1, &comment);
                 if *count == 1 {
@@ -609,7 +690,7 @@ impl<'a> Walk<'a> {
                             self.line(1, &format!("let {name}: u64 = {{"));
                             self.line(
                                 2,
-                                &format!("let digest = sponge.squeeze({});", rust_string(domain)),
+                                &format!("let digest = sponge.squeeze({});", rust::literal(domain)),
                             );
                             self.line(
                                 2,
@@ -672,7 +753,7 @@ impl<'a> Walk<'a> {
                             self.line(1, &format!("let {name}: zkc_rt::kzg::Fr = {{"));
                             self.line(
                                 2,
-                                &format!("let digest = sponge.squeeze({});", rust_string(domain)),
+                                &format!("let digest = sponge.squeeze({});", rust::literal(domain)),
                             );
                             self.line(2, "let value = zkc_rt::kzg::fr_from_digest(&digest);");
                             self.line(2, "challenges.push(zkc_rt::kzg::fr_decimal(&value));");
@@ -781,7 +862,10 @@ impl<'a> Walk<'a> {
                         "row {index}: assert_eq '{label}' compares {left_type} with {right_type}"
                     ));
                 }
-                self.line(1, &format!("// [\"assert_eq\", \"{label}\"]"));
+                self.line(
+                    1,
+                    &format!("// [\"assert_eq\", \"{}\"]", rust::comment(label)),
+                );
                 self.line(1, &format!("if {left} != {right} {{"));
                 self.line(2, &Self::reject("CheckFailure"));
                 self.line(1, "}");
@@ -831,12 +915,19 @@ impl<'a> Walk<'a> {
                         )),
                     }
                 };
-                self.line(1, &format!("// [\"check_call\", \"{label}\" : {kind}]"));
+                self.line(
+                    1,
+                    &format!(
+                        "// [\"check_call\", \"{}\" : {}]",
+                        rust::comment(label),
+                        rust::comment(kind)
+                    ),
+                );
                 self.line(
                     1,
                     &format!(
                         "let tau_g2_{index} = zkc_rt::kzg::g2_from_hex({})",
-                        rust_string(&check.tau_g2_hex)
+                        rust::literal(&check.tau_g2_hex)
                     ),
                 );
                 self.line(
@@ -920,6 +1011,7 @@ impl<'a> Walk<'a> {
 
             Row::ExpectEnd { stream } => {
                 self.consume_stream(*stream, index, None)?;
+                self.used.cursor.named = true;
                 self.line(1, "if !cursor.at_end() {");
                 self.line(2, &Self::reject("ProofTrailingData"));
                 self.line(1, "}");
@@ -929,6 +1021,12 @@ impl<'a> Walk<'a> {
             Row::Decide { sponge } => {
                 if !is_last {
                     return Err(format!("row {index}: decide before the end of the program"));
+                }
+                if self.current_stream.is_some() {
+                    return Err(format!(
+                        "row {index}: decide with the proof stream still open; without \
+                         expect_end the emitted verifier would accept trailing bytes"
+                    ));
                 }
                 self.consume_sponge(*sponge, index, Ref::Res(index, 0))?;
                 self.line(1, "Outcome::accept(challenges)");
@@ -942,6 +1040,10 @@ impl<'a> Walk<'a> {
                 class,
             } => {
                 self.consume_stream(*stream, index, Some(Ref::Res(index, 0)))?;
+                self.used.proof = Use {
+                    named: true,
+                    mutated: true,
+                };
                 let (expr, value_class) = self.value(*value, &format!("row {index} (write)"))?;
                 let implementation = self.class_impl(class)?;
                 match &value_class {
@@ -956,7 +1058,14 @@ impl<'a> Walk<'a> {
                         ))
                     }
                 }
-                self.line(1, &format!("// [\"write\", \"{label}\" : {class}]"));
+                self.line(
+                    1,
+                    &format!(
+                        "// [\"write\", \"{}\" : {}]",
+                        rust::comment(label),
+                        rust::comment(class)
+                    ),
+                );
                 // Emitted proofs are canonical by construction: the gate
                 // runs before any byte reaches the wire, so a refused run
                 // leaves no partial proof. Where the bound type cannot
@@ -964,11 +1073,7 @@ impl<'a> Walk<'a> {
                 // self-check has nothing left to test and is dropped.
                 match implementation {
                     ImplKind::ToyBe8 => {
-                        if let Some(modulus) = self
-                            .binding
-                            .class(class)
-                            .and_then(|class_binding| class_binding.modulus)
-                        {
+                        if let Some(modulus) = self.class_binding(class)?.modulus {
                             self.line(1, &format!("if {expr} >= {modulus}u64 {{"));
                             self.line(
                                 2,
@@ -1059,9 +1164,10 @@ impl<'a> Walk<'a> {
         else {
             unreachable!("emit_hole_call is reached from the hole_call arm alone")
         };
-        // A peeking hole is refused before the walk starts; reaching one
-        // here would mean the sponge is threaded in without being
-        // threaded back out, which linearity already forbids.
+        // The pre-walk pass sees a peek by its sponge result. A hole that
+        // takes the sponge and does not hand it back has no such result,
+        // so it arrives here — and naming the peek is more use than the
+        // "names no value" the generic operand path would report.
         if inputs
             .iter()
             .any(|input| Some(*input) == self.current_sponge)
@@ -1163,7 +1269,14 @@ impl<'a> Walk<'a> {
             names.push(name);
         }
 
-        self.line(1, &format!("// [\"hole_call\", \"{label}\" : {kind}]"));
+        self.line(
+            1,
+            &format!(
+                "// [\"hole_call\", \"{}\" : {}]",
+                rust::comment(label),
+                rust::comment(kind)
+            ),
+        );
         let (pattern, destructure) = match names.as_slice() {
             [] => {
                 return Err(format!(
@@ -1187,14 +1300,19 @@ impl<'a> Walk<'a> {
             2,
             &format!(
                 "Err(message) => return Err(ProveError::Fill {{ label: {}.to_owned(), message }}),",
-                rust_string(label)
+                rust::literal(label)
             ),
         );
         self.line(1, "};");
         Ok(())
     }
 
-    fn algebra_operand(&self, reference: &Ref, index: usize, op: &str) -> Result<String, String> {
+    fn algebra_operand(
+        &mut self,
+        reference: &Ref,
+        index: usize,
+        op: &str,
+    ) -> Result<String, String> {
         let (expr, class) = self.value(*reference, &format!("row {index} ({op})"))?;
         match &class {
             VClass::Algebra => Ok(expr),
@@ -1215,8 +1333,8 @@ impl<'a> Walk<'a> {
             ));
         }
         match op {
-            "f_neg" | "f_add" | "f_mul" => self.uses_field = true,
-            _ => self.uses_group = true,
+            "f_neg" | "f_add" | "f_mul" => self.used.field_modulus = true,
+            _ => self.used.group_modulus = true,
         }
         Ok(())
     }
@@ -1249,12 +1367,13 @@ impl<'a> Walk<'a> {
         let right = self.algebra_operand(rhs, index, op)?;
         let used = self.referenced.contains(&(index, 0));
         let name = format!("{}r{index}_0", if used { "" } else { "_" });
-        // The exact reference expressions (Interpreter.cpp): f_add
-        // reduces operands before the sum; the modular helpers own the
-        // rest.
+        // The field and group operations of docs/spec/endpoints.md §4,
+        // in the sequencing the reference executor also uses: f_add
+        // reduces each operand before the sum; the modular helpers own
+        // the rest.
         let expr = match op {
             "f_add" => {
-                format!("(({left}) % FIELD_MODULUS + ({right}) % FIELD_MODULUS) % FIELD_MODULUS")
+                format!("zkc_rt::toy::addmod({left}, {right}, FIELD_MODULUS)")
             }
             "f_mul" => format!("zkc_rt::toy::mulmod({left}, {right}, FIELD_MODULUS)"),
             "g_exp" => format!("zkc_rt::toy::powmod({left}, {right}, GROUP_MODULUS)"),
@@ -1325,8 +1444,9 @@ fn peeking_fill_refusal(index: usize, label: &str, kind: &str) -> String {
     )
 }
 
-/// Emit-time supplier gates: every codec route, construction pin, and
-/// the sponge must be realized by the binding before any code exists.
+/// Emit-time supplier gates: every codec route and construction pin must
+/// be realized by the binding before any code exists. The sponge is
+/// checked where it is opened, in the `init` arm.
 fn gate_suppliers(document: &Document, binding: &Binding) -> Result<(), String> {
     // Ahead of the per-row supplier gates, because a peeking fill is not
     // a gap a binding can close: it names the phase this emitter does
@@ -1393,31 +1513,32 @@ pub fn emit(
     gate_suppliers(document, binding)?;
 
     let prover = document.endpoint == Endpoint::ProverSkeleton;
-    let crate_name = crate_name.map(str::to_owned).unwrap_or_else(|| {
-        format!(
-            "zkc-{}-{}",
-            if prover { "prover" } else { "verifier" },
-            &document.artifact_id[..12]
-        )
-    });
-    let crate_ident = crate_name.replace('-', "_");
+    let (crate_name, crate_ident) =
+        rust::crate_name(&crate_name.map(str::to_owned).unwrap_or_else(|| {
+            format!(
+                "zkc-{}-{}",
+                if prover { "prover" } else { "verifier" },
+                &document.artifact_id[..12]
+            )
+        }))?;
 
     let mut walk = Walk {
         document,
         binding,
-        endpoint: document.endpoint,
         values: Default::default(),
         handles: Default::default(),
         referenced: Default::default(),
         current_sponge: None,
         current_stream: None,
         body: String::new(),
-        uses_group: false,
-        uses_field: false,
+        used: Used::default(),
     };
     walk.walk()?;
-    let body = std::mem::take(&mut walk.body);
-    let (uses_group, uses_field) = (walk.uses_group, walk.uses_field);
+    let used = walk.used;
+    let body = std::mem::take(&mut walk.body).replace(
+        SPONGE_QUALIFIER,
+        &format!("{}{}", used.sponge.prefix(), used.sponge.qualifier()),
+    );
 
     // Features: the union over the implementations actually bound.
     let mut features: Vec<&str> = Vec::new();
@@ -1485,11 +1606,15 @@ pub fn emit(
     let _ = writeln!(lib, "/// The sealed protocol this endpoint projects.");
     let _ = writeln!(
         lib,
-        "pub const SOURCE_PIR_ID: &str = \"{}\";",
-        document.source
+        "pub const SOURCE_PIR_ID: &str = {};",
+        rust::literal(&document.source)
     );
     let _ = writeln!(lib, "/// The supplier binding and its file digest.");
-    let _ = writeln!(lib, "pub const BINDING: &str = \"{}\";", binding.name);
+    let _ = writeln!(
+        lib,
+        "pub const BINDING: &str = {};",
+        rust::literal(&binding.name)
+    );
     let _ = writeln!(
         lib,
         "pub const BINDING_DIGEST: &str = \"{}\";",
@@ -1509,18 +1634,18 @@ pub fn emit(
         let rows = document
             .counterparty
             .iter()
-            .map(|(position, kind)| format!("({position}, \"{kind}\")"))
+            .map(|(position, kind)| format!("({position}, {})", rust::literal(kind)))
             .collect::<Vec<_>>()
             .join(", ");
         let _ = writeln!(lib, "pub const COUNTERPARTY: &[(u64, &str)] = &[{rows}];");
     }
     lib.push('\n');
-    if uses_group || uses_field {
+    if used.group_modulus || used.field_modulus {
         let algebra = binding.algebra.as_ref().unwrap();
-        if uses_group {
+        if used.group_modulus {
             let _ = writeln!(lib, "const GROUP_MODULUS: u64 = {};", algebra.group);
         }
-        if uses_field {
+        if used.field_modulus {
             let _ = writeln!(lib, "const FIELD_MODULUS: u64 = {};", algebra.field);
         }
         lib.push('\n');
@@ -1530,22 +1655,22 @@ pub fn emit(
     lib.push_str("/// declares it; field names are the ABI labels, verbatim.\n");
     lib.push_str("/// Multi-limb values are little-endian 32-bit limbs.\n");
     lib.push_str("#[allow(non_snake_case)]\npub struct Statement {\n");
-    for (index, label) in document.statement_labels.iter().enumerate() {
-        let Entry::Val(class) = &document.entry[index] else {
-            unreachable!()
-        };
+    for (label, class) in &document.statement {
         let ty = binding.class(class).unwrap().implementation.rust_type();
         let _ = writeln!(lib, "    pub {label}: {ty},");
     }
     lib.push_str("}\n\n");
 
-    // Linear resources take `mut` exactly when a row writes them, so the
-    // emitted crate stays warning-free on shapes that never squeeze,
-    // never read, or never write.
-    let squeezes = document
-        .rows
-        .iter()
-        .any(|row| matches!(row, Row::Squeeze { .. }));
+    // Every local below is declared from what the walk recorded
+    // emitting, never from a second reading of the rows: a body that
+    // never squeezes, reads, writes, or names its statement gets a
+    // local it can leave alone, and the emitted crate stays
+    // warning-free without anyone predicting which rows do what.
+    let statement_parameter = if used.statement {
+        "statement"
+    } else {
+        "_statement"
+    };
     if prover {
         lib.push_str("/// The opaque witness payloads, by their endpoint ABI labels.\n");
         lib.push_str("/// Every payload is named, so the reference executor's\n");
@@ -1553,7 +1678,7 @@ pub fn emit(
         lib.push_str("/// payload moves, so a handle cannot be spent twice.\n");
         lib.push_str("#[allow(non_snake_case)]\npub struct Witness {\n");
         for (label, class) in &document.witness_labels {
-            let _ = writeln!(lib, "    /// Handle class `{class}`.");
+            let _ = writeln!(lib, "    /// Handle class `{}`.", rust::comment(class));
             let _ = writeln!(lib, "    pub {label}: Payload,");
         }
         lib.push_str("}\n\n");
@@ -1564,7 +1689,7 @@ pub fn emit(
         lib.push_str("/// naming the input or the fill responsible.\n");
         let _ = writeln!(
             lib,
-            "pub fn prove(statement: &Statement, {}: Witness) -> Result<Prove, ProveError> {{",
+            "pub fn prove({statement_parameter}: &Statement, {}: Witness) -> Result<Prove, ProveError> {{",
             if document.witness_labels.is_empty() {
                 "_witness"
             } else {
@@ -1574,36 +1699,32 @@ pub fn emit(
         let _ = writeln!(
             lib,
             "    let {}challenges: Vec<String> = Vec::new();",
-            if squeezes { "mut " } else { "" }
+            used.challenges.qualifier()
         );
-        let writes = document
-            .rows
-            .iter()
-            .any(|row| matches!(row, Row::Write { .. }));
         let _ = writeln!(
             lib,
             "    let {}proof: Vec<u8> = Vec::new();",
-            if writes { "mut " } else { "" }
+            used.proof.qualifier()
         );
     } else {
         lib.push_str("/// One verifier execution over untrusted proof bytes: a verdict\n");
         lib.push_str("/// and the ordered challenge log. Statement range violations are\n");
         lib.push_str("/// `public_binding_failure`, exactly as the reference executor\n");
         lib.push_str("/// classifies them.\n");
-        lib.push_str("pub fn verify(statement: &Statement, proof: &[u8]) -> Outcome {\n");
-        let reads = document
-            .rows
-            .iter()
-            .any(|row| matches!(row, Row::Read { .. }));
         let _ = writeln!(
             lib,
-            "    let {}challenges: Vec<String> = Vec::new();",
-            if squeezes { "mut " } else { "" }
+            "pub fn verify({statement_parameter}: &Statement, proof: &[u8]) -> Outcome {{"
         );
         let _ = writeln!(
             lib,
-            "    let {}cursor = ProofCursor::new(proof);",
-            if reads { "mut " } else { "" }
+            "    let {}challenges: Vec<String> = Vec::new();",
+            used.challenges.qualifier()
+        );
+        let _ = writeln!(
+            lib,
+            "    let {}{}cursor = ProofCursor::new(proof);",
+            used.cursor.prefix(),
+            used.cursor.qualifier()
         );
     }
     lib.push_str(&body);
@@ -1724,14 +1845,12 @@ so no run-time outcome means `cannot judge`.
 fn statement_literal(
     document: &Document,
     binding: &Binding,
+    alias: &str,
     name: &str,
     statement: &[(String, String)],
 ) -> Result<String, String> {
     let mut fields = Vec::new();
-    for (index, label) in document.statement_labels.iter().enumerate() {
-        let Entry::Val(class) = &document.entry[index] else {
-            unreachable!()
-        };
+    for (label, class) in &document.statement {
         let implementation = binding.class(class).unwrap().implementation;
         let text = statement
             .iter()
@@ -1772,13 +1891,41 @@ fn statement_literal(
                     "g1_from_wire"
                 };
                 format!(
-                    "verifier::zkc_rt::kzg::{constructor}(&[{list}])\n            .expect(\"a canonical statement wire value\")"
+                    "{alias}::zkc_rt::kzg::{constructor}(&[{list}])\n            .expect(\"a canonical statement wire value\")"
                 )
             }
         };
         fields.push(format!("{label}: {literal}"));
     }
-    Ok(format!("Statement {{ {} }}", fields.join(", ")))
+    Ok(format!("{alias}::Statement {{ {} }}", fields.join(", ")))
+}
+
+/// The borrowed kernels a generated suite pins before replaying a single
+/// vector. A kernel that drifts derives different challenges or accepts
+/// different proofs, and the vectors alone would not say which.
+fn kernel_self_checks(document: &Document, binding: &Binding, alias: &str) -> String {
+    let mut out = String::new();
+    if binding.sponge_impl == SpongeImpl::P3LenpadDuplex {
+        let _ = writeln!(
+            out,
+            "#[test]\nfn permutation_known_answer() {{\n    \
+             {alias}::zkc_rt::p3::permutation_self_check();\n}}\n"
+        );
+    }
+    let pairing = document.codecs.iter().any(|(class, _)| {
+        matches!(
+            binding.class(class).map(|bound| bound.implementation),
+            Some(ImplKind::BlsFrBe32 | ImplKind::BlsG1Be48)
+        )
+    });
+    if pairing {
+        let _ = writeln!(
+            out,
+            "#[test]\nfn pairing_is_nondegenerate() {{\n    \
+             {alias}::zkc_rt::kzg::pairing_self_check();\n}}\n"
+        );
+    }
+    out
 }
 
 /// Lowercase-hex payload text to a Rust byte-slice literal.
@@ -1829,10 +1976,21 @@ fn emit_conformance(
             ))
         }
     };
+    for case in cases {
+        let admitted = case.expect == "accept" || REJECT_CLASSES.contains(&case.expect.as_str());
+        if !admitted {
+            return Err(format!(
+                "vector '{}' expects '{}', which is not a verdict: the reject classes are {}",
+                case.name,
+                case.expect,
+                REJECT_CLASSES.join(", ")
+            ));
+        }
+    }
     if !cases.iter().any(|case| case.expect == "accept") {
         return Err(
             "the vectors file carries no accepting vector; a refusal battery without a \
-             positive control asserts nothing (the wave-4 lesson)"
+             positive control asserts nothing"
                 .into(),
         );
     }
@@ -1859,10 +2017,7 @@ fn emit_conformance(
     out.push_str("    }\n");
     out.push_str("}\n\n");
 
-    if binding.sponge_impl == SpongeImpl::P3LenpadDuplex {
-        out.push_str("#[test]\nfn permutation_known_answer() {\n");
-        out.push_str("    verifier::zkc_rt::p3::permutation_self_check();\n}\n\n");
-    }
+    out.push_str(&kernel_self_checks(document, binding, "verifier"));
 
     let _ = writeln!(
         out,
@@ -1872,7 +2027,8 @@ fn emit_conformance(
 
     out.push_str("#[test]\nfn golden_vectors() {\n");
     for case in cases {
-        let statement = statement_literal(document, binding, &case.name, &case.statement)?;
+        let statement =
+            statement_literal(document, binding, "verifier", &case.name, &case.statement)?;
         let bytes = hex_literal(&case.name, "proof", &case.proof_hex)?;
         let challenges = if case.challenges.is_empty() && case.expect != "accept" {
             "None".to_owned()
@@ -1887,7 +2043,7 @@ fn emit_conformance(
         };
         let _ = writeln!(
             out,
-            "    run(\n        {:?},\n        verifier::{statement},\n        &[{bytes}],\n        {:?},\n        {challenges},\n    );",
+            "    run(\n        {:?},\n        {statement},\n        &[{bytes}],\n        {:?},\n        {challenges},\n    );",
             case.name, case.expect
         );
     }
@@ -1905,7 +2061,7 @@ fn emit_prover_conformance(
     if !cases.iter().any(|case| case.expect == "ok") {
         return Err(
             "the vectors file carries no producing vector; a refusal battery without a \
-             positive control asserts nothing (the wave-4 lesson)"
+             positive control asserts nothing"
                 .into(),
         );
     }
@@ -1919,41 +2075,42 @@ fn emit_prover_conformance(
     out.push_str("// output is under test.\n\n");
     let _ = writeln!(out, "use {crate_ident} as prover;\n");
 
-    out.push_str("fn produce(name: &str, statement: prover::Statement, witness: prover::Witness, proof: &[u8], challenges: &[&str]) {\n");
-    out.push_str("    let produced = match prover::prove(&statement, witness) {\n");
-    out.push_str("        Ok(produced) => produced,\n");
-    out.push_str("        Err(error) => panic!(\"vector '{name}': {error}\"),\n");
-    out.push_str("    };\n");
-    out.push_str("    assert_eq!(produced.proof, proof, \"vector '{name}' proof bytes\");\n");
-    out.push_str(
-        "    let logged: Vec<&str> = produced.challenges.iter().map(String::as_str).collect();\n",
-    );
-    out.push_str("    assert_eq!(logged, challenges, \"vector '{name}' challenge log\");\n");
-    out.push_str("}\n\n");
-
-    out.push_str("// A refused run emits nothing: the gates that classify a refusal all\n");
-    out.push_str("// run before the value they judge reaches the wire.\n");
-    out.push_str("fn refuse(name: &str, statement: prover::Statement, witness: prover::Witness, kind: &str, label: &str, message: &str) {\n");
-    out.push_str("    match prover::prove(&statement, witness) {\n");
-    out.push_str(
-        "        Ok(_) => panic!(\"vector '{name}': expected a refusal, got a proof\"),\n",
-    );
-    out.push_str("        Err(error) => {\n");
-    out.push_str("            assert_eq!(error.kind(), kind, \"vector '{name}' refusal kind\");\n");
-    out.push_str(
-        "            assert_eq!(error.label(), label, \"vector '{name}' refusal label\");\n",
-    );
-    out.push_str(
-        "            assert_eq!(error.message(), message, \"vector '{name}' refusal message\");\n",
-    );
-    out.push_str("        }\n");
-    out.push_str("    }\n");
-    out.push_str("}\n\n");
-
-    if binding.sponge_impl == SpongeImpl::P3LenpadDuplex {
-        out.push_str("#[test]\nfn permutation_known_answer() {\n");
-        out.push_str("    prover::zkc_rt::p3::permutation_self_check();\n}\n\n");
+    // Each harness is written only when the corpus has a case for it;
+    // an unused one would warn, and the emitted crates are warning-free.
+    if cases.iter().any(|case| case.expect == "ok") {
+        out.push_str("fn produce(name: &str, statement: prover::Statement, witness: prover::Witness, proof: &[u8], challenges: &[&str]) {\n");
+        out.push_str("    let produced = match prover::prove(&statement, witness) {\n");
+        out.push_str("        Ok(produced) => produced,\n");
+        out.push_str("        Err(error) => panic!(\"vector '{name}': {error}\"),\n");
+        out.push_str("    };\n");
+        out.push_str("    assert_eq!(produced.proof, proof, \"vector '{name}' proof bytes\");\n");
+        out.push_str("    let logged: Vec<&str> = produced.challenges.iter().map(String::as_str).collect();\n");
+        out.push_str("    assert_eq!(logged, challenges, \"vector '{name}' challenge log\");\n");
+        out.push_str("}\n\n");
     }
+
+    if cases.iter().any(|case| case.expect != "ok") {
+        out.push_str("// A refused run emits nothing: the gates that classify a refusal all\n");
+        out.push_str("// run before the value they judge reaches the wire.\n");
+        out.push_str("fn refuse(name: &str, statement: prover::Statement, witness: prover::Witness, kind: &str, label: &str, message: &str) {\n");
+        out.push_str("    match prover::prove(&statement, witness) {\n");
+        out.push_str(
+            "        Ok(_) => panic!(\"vector '{name}': expected a refusal, got a proof\"),\n",
+        );
+        out.push_str("        Err(error) => {\n");
+        out.push_str(
+            "            assert_eq!(error.kind(), kind, \"vector '{name}' refusal kind\");\n",
+        );
+        out.push_str(
+            "            assert_eq!(error.label(), label, \"vector '{name}' refusal label\");\n",
+        );
+        out.push_str("            assert_eq!(error.message(), message, \"vector '{name}' refusal message\");\n");
+        out.push_str("        }\n");
+        out.push_str("    }\n");
+        out.push_str("}\n\n");
+    }
+
+    out.push_str(&kernel_self_checks(document, binding, "prover"));
 
     let _ = writeln!(
         out,
@@ -1962,7 +2119,8 @@ fn emit_prover_conformance(
 
     out.push_str("#[test]\nfn golden_vectors() {\n");
     for case in cases {
-        let statement = statement_literal(document, binding, &case.name, &case.statement)?;
+        let statement =
+            statement_literal(document, binding, "prover", &case.name, &case.statement)?;
         let mut payloads = Vec::new();
         for (label, _) in &document.witness_labels {
             let hex = case
@@ -1993,7 +2151,7 @@ fn emit_prover_conformance(
                     .join(", ");
                 let _ = writeln!(
                     out,
-                    "    produce(\n        {:?},\n        prover::{statement},\n        {witness},\n        &[{bytes}],\n        &[{challenges}],\n    );",
+                    "    produce(\n        {:?},\n        {statement},\n        {witness},\n        &[{bytes}],\n        &[{challenges}],\n    );",
                     case.name
                 );
             }
@@ -2014,7 +2172,7 @@ fn emit_prover_conformance(
                 }
                 let _ = writeln!(
                     out,
-                    "    refuse(\n        {:?},\n        prover::{statement},\n        {witness},\n        {kind:?},\n        {:?},\n        {:?},\n    );",
+                    "    refuse(\n        {:?},\n        {statement},\n        {witness},\n        {kind:?},\n        {:?},\n        {:?},\n    );",
                     case.name, case.label, case.message
                 );
             }

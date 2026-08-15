@@ -175,7 +175,11 @@ impl HoleImpl {
     }
 
     pub fn feature(self) -> &'static str {
-        "toy"
+        match self {
+            HoleImpl::ToySigmaCommit
+            | HoleImpl::ToySigmaResponse
+            | HoleImpl::ToySigmaResponseCheat => "toy",
+        }
     }
 
     pub fn signature(self) -> HoleSignature {

@@ -1,0 +1,51 @@
+# REQUIRES: cargo
+# Document and binding strings crossing into generated Rust. Labels,
+# class names, domains, and the source identity are protocol content, not
+# emitter constants, so each one is untrusted input entering a language.
+# There are three positions it can land in — an identifier, a string
+# literal, a line comment — and this suite holds each of them.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/schnorr.mlir -o %t/verifier.mlir
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+
+# A quotation mark in the source identity, which would otherwise close the
+# literal that carries it and open whatever follows. The payload is a
+# `compile_error!`, so building the emitted crate is the whole assertion:
+# it fires if and only if the text leaves its literal.
+# RUN: %python %S/Inputs/untrusted-text.py %t/verifier.json %t/source-quote.json source-quote
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/source-quote.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/source-crate --crate-name zkc-untrusted-source > /dev/null
+# RUN: cargo build --quiet --manifest-path %t/source-crate/Cargo.toml
+
+# A line break in a label, which would otherwise end the comment that
+# quotes it and put the rest of the label on a line of its own. Same
+# payload, same assertion.
+# RUN: %python %S/Inputs/untrusted-text.py %t/verifier.json %t/comment-break.json comment-break
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/comment-break.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/comment-crate --crate-name zkc-untrusted-comment > /dev/null
+# RUN: cargo build --quiet --manifest-path %t/comment-crate/Cargo.toml
+
+# In identifier position the answer is a refusal rather than an escape:
+# a field name has no encoding that makes a keyword usable.
+# RUN: %python %S/Inputs/untrusted-text.py %t/verifier.json %t/keyword.json keyword-label
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/keyword.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused1 2>&1 | FileCheck --check-prefix=KEYWORD %s
+# KEYWORD: statement label 'yield' is not usable as a field name
+
+# Uniqueness is a property of the label set, so it is checked where the
+# set is: two labels naming one field is a refusal, not a struct with a
+# repeated field.
+# RUN: %python %S/Inputs/untrusted-text.py %t/verifier.json %t/duplicate.json duplicate-label
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/duplicate.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused2 2>&1 | FileCheck --check-prefix=DUPLICATE %s
+# DUPLICATE: statement label 'y' appears twice
+
+# The crate name reaches Cargo.toml and the conformance suite's `use`,
+# so it is checked here rather than by cargo and rustc downstream.
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused3 --crate-name "1bad name" 2>&1 | FileCheck --check-prefix=CRATE %s
+# CRATE: is not a usable package name
+
+# A malformed row must be refused by name. The semantic-id erasure runs
+# before the grammar is checked — it has to, since the identity is
+# computed before any semantics are read — so it cannot assume a row has
+# a shape.
+# RUN: echo -n '{"endpoint":"verifier","program":[[]],"source":"x"}' > %t/empty-row.json
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/empty-row.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused4 2>&1 | FileCheck --check-prefix=EMPTYROW %s
+# EMPTYROW: empty-row.json: document has no codecs object

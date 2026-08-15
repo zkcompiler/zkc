@@ -44,7 +44,10 @@
 # RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/after.json --binding %zkc-emit-bindings/kzg-toy.json --rt-path %zkc-rt-dir --vectors %S/Inputs/kzg-batched-vectors.json --out %t/after-crate
 # RUN: cargo test --quiet --manifest-path %t/after-crate/Cargo.toml
 
-# An unbound opaque check still refuses at emit time, naming the digest
-# (zkc-E403's emit-time form): the toy binding carries no adapters.
+# The toy binding cannot emit this artifact at all: it routes no `fr`
+# class, so the refusal is the codec gate's, before any row is walked.
+# The check-adapter refusal is a different arm and is gated separately
+# in emit-document-gates.test, where a binding that does route the
+# classes but carries no adapters is what reaches it.
 # RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/before.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused 2>&1 | FileCheck %s
 # CHECK: has no implementation in binding 'toy'

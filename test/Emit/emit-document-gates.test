@@ -1,0 +1,39 @@
+# REQUIRES: cargo
+# What the emitter must establish about a document before its walk
+# trusts it. The emitter is a source-free consumer — it never sees the
+# sealed protocol — so every one of these has to be reachable from the
+# artifact alone, and each is a document the reference executor already
+# refuses.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/schnorr.mlir -o %t/verifier.mlir
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+
+# A class a row uses but the document does not route. Resolving it out of
+# the binding alone would emit a crate using a codec the artifact never
+# authorized; the reference refuses to execute such a document at all.
+# RUN: %python %S/Inputs/document-gates.py %t/verifier.json %t/unrouted.json unrouted-class
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/unrouted.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused1 2>&1 | FileCheck --check-prefix=ROUTE %s
+# ROUTE: no codec route for class 'scalar': the artifact names no codec for it
+
+# A verifier frame that decides with its proof stream still open. Such a
+# verifier never asks whether the proof was exhausted, so it accepts
+# trailing bytes; the prover frame carries the mirror check at finish.
+# RUN: %python %S/Inputs/document-gates.py %t/verifier.json %t/open-stream.json open-stream
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/open-stream.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused2 2>&1 | FileCheck --check-prefix=STREAM %s
+# STREAM: decide with the proof stream still open
+
+# Nesting is bounded, so a hostile file is a refusal rather than a stack
+# overflow — an abort reports nothing and leaves no diagnosis.
+# RUN: %python -c "import sys; sys.stdout.write('['*200000 + ']'*200000)" > %t/deep.json
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/deep.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused3 2>&1 | FileCheck --check-prefix=DEPTH %s
+# DEPTH: nesting deeper than 64
+
+# An opaque check with no bound adapter. Reaching this arm takes a binding
+# that routes the classes and carries no adapters — a binding missing the
+# classes refuses earlier, at the codec gate, without ever walking a row.
+# RUN: zkc-opt %pir-seal-full %pir-project-full %S/../Encoding/kzg-before.mlir -o %t/kzg.mlir
+# RUN: zkc-translate --oir-canonical %t/kzg.mlir -o %t/kzg.json
+# RUN: %python -c "import json,sys; b=json.load(open(sys.argv[1])); del b['checks']; json.dump(b, open(sys.argv[2],'w'))" %zkc-emit-bindings/kzg-toy.json %t/no-checks.json
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/kzg.json --binding %t/no-checks.json --rt-path %zkc-rt-dir --out %t/refused4 2>&1 | FileCheck --check-prefix=ADAPTER %s
+# ADAPTER: has no executable adapter in binding

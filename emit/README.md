@@ -78,6 +78,16 @@ is consumed exactly once (`zkc-E149`) is checked during the walk and
 then enforced again by the borrow checker in the emitted crate, which is
 why the generated prover needs no run-time linearity bookkeeping.
 
+Two rules keep the generated text honest. Labels, class names, domains,
+and identities are protocol content, so a string reaching generated Rust
+is untrusted input entering a language: `zkc-emit`'s `rust` module is the
+only path it may take, and it has one constructor per position — an
+identifier (checked, and unique within its struct), a string literal
+(escaped), a line comment (unable to end early). And the crate's
+preamble is written from what the walk recorded emitting, not from a
+second reading of the rows, so a body that never squeezes, reads,
+writes, or names its statement declares nothing it then leaves alone.
+
 ## Verification
 
 Rings exercised by `test/Emit/`:

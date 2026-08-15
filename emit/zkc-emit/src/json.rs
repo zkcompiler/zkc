@@ -47,7 +47,11 @@ impl Json {
 }
 
 pub fn parse(bytes: &[u8]) -> Result<Json, String> {
-    let mut parser = Parser { bytes, position: 0 };
+    let mut parser = Parser {
+        bytes,
+        position: 0,
+        depth: 0,
+    };
     parser.skip_whitespace();
     let value = parser.value()?;
     parser.skip_whitespace();
@@ -57,9 +61,16 @@ pub fn parse(bytes: &[u8]) -> Result<Json, String> {
     Ok(value)
 }
 
+/// Nesting a canonical document can reach. The grammar's deepest shape
+/// is a program row's reference list, so the bound is far above anything
+/// legitimate; without one, descent on a hostile file overflows the
+/// stack, which is an abort rather than a refusal.
+const MAX_DEPTH: usize = 64;
+
 struct Parser<'a> {
     bytes: &'a [u8],
     position: usize,
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -94,8 +105,8 @@ impl<'a> Parser<'a> {
 
     fn value(&mut self) -> Result<Json, String> {
         match self.peek().ok_or("unexpected end of input")? {
-            b'{' => self.object(),
-            b'[' => self.array(),
+            b'{' => self.nested(Self::object),
+            b'[' => self.nested(Self::array),
             b'"' => Ok(Json::String(self.string()?)),
             b'0'..=b'9' => self.number(),
             other => Err(format!(
@@ -103,6 +114,20 @@ impl<'a> Parser<'a> {
                 self.position, other as char
             )),
         }
+    }
+
+    /// Descend one level, refusing rather than exhausting the stack.
+    fn nested(&mut self, parse: fn(&mut Self) -> Result<Json, String>) -> Result<Json, String> {
+        if self.depth == MAX_DEPTH {
+            return Err(format!(
+                "nesting deeper than {MAX_DEPTH} at offset {}",
+                self.position
+            ));
+        }
+        self.depth += 1;
+        let value = parse(self);
+        self.depth -= 1;
+        value
     }
 
     fn object(&mut self) -> Result<Json, String> {
@@ -174,7 +199,11 @@ impl<'a> Parser<'a> {
                     }
                 },
                 byte if byte < 0x20 => return Err("control byte inside string".into()),
-                byte => text.push(byte as char),
+                byte if byte < 0x80 => text.push(byte as char),
+                // The canonical grammar is ASCII, and the reader says so
+                // rather than letting the byte through to be reported
+                // later as a re-serialization mismatch.
+                _ => return Err("non-ASCII byte inside string".into()),
             }
         }
     }

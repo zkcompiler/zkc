@@ -3,7 +3,7 @@ name = "zkc-rt"
 version = "0.0.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Runtime support for zkc-emitted verifier endpoints: verdict vocabulary, proof cursor, and the profile supplier sets as concrete Rust types."
+description = "Runtime support for zkc-emitted endpoints: verdict vocabulary, proof cursor, prover observables, and the profile supplier sets as concrete Rust types."
 
 [features]
 default = []
