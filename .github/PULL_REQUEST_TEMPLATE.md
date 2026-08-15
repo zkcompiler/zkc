@@ -1,11 +1,6 @@
-<!-- Thank you for contributing. Please read CONTRIBUTING first: a
-     Conventional Commits title (type(scope): …) — the squash commit is
-     that title alone — and one implementation unit per pull request. -->
-
 ## Summary
 
-<!-- Why this change, and the reasoning behind anything a reader would
-     not guess, in plain prose. -->
+<!-- Why this change, and the reasoning behind its choices, in plain prose. -->
 
 ## Verification
 

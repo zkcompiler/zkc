@@ -158,6 +158,11 @@ pub struct Document {
     pub rows: Vec<Row>,
     pub source: String,
     pub statement_labels: Vec<String>,
+    /// The statement, paired with the payload class of the entry
+    /// argument that carries it, in ABI order. The grammar puts the
+    /// statement values first, so this is established once at parse
+    /// rather than re-derived wherever the pair is needed.
+    pub statement: Vec<(String, String)>,
     /// Prover only: ordered `[label, handle class]` pairs. Empty on a
     /// verifier document, where the key is absent.
     pub witness_labels: Vec<(String, String)>,
@@ -409,7 +414,9 @@ fn semantic_view(document: &Json) -> Result<Json, String> {
                 "init" | "expect_end" | "decide" | "end_stream" | "finish" | "hole_call"
             );
             let mut copied = items.to_vec();
-            if carries_src {
+            // The erasure runs before the grammar is checked, so it
+            // cannot assume a row has a kind tag and a trailing src.
+            if carries_src && copied.len() > 1 {
                 let last = copied.len() - 1;
                 copied[last] = Json::Array(Vec::new());
             }
@@ -562,6 +569,19 @@ impl Document {
             }
         }
 
+        let mut statement = Vec::new();
+        for (index, label) in statement_labels.iter().enumerate() {
+            match entry.get(index) {
+                Some(Entry::Val(class)) => statement.push((label.clone(), class.clone())),
+                _ => {
+                    return Err(format!(
+                        "statement label '{label}' is argument {index}, which is not a value \
+                         entry; the statement occupies the first arguments"
+                    ))
+                }
+            }
+        }
+
         Ok(Document {
             artifact_id,
             semantic_id,
@@ -573,6 +593,7 @@ impl Document {
             rows,
             source,
             statement_labels,
+            statement,
             witness_labels,
             counterparty,
         })

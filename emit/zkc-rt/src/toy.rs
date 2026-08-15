@@ -79,6 +79,14 @@ pub fn derive_be8(digest: &[u8; 32], space: u64) -> u64 {
     value % space
 }
 
+/// Modular addition in a 64-bit modulus, with each operand reduced
+/// first — the reference's own sequencing (`Interpreter.cpp`'s `f_add`).
+/// The sum is taken at double width because two reduced operands can
+/// still exceed `u64` when the modulus does not fit in 63 bits.
+pub fn addmod(a: u64, b: u64, m: u64) -> u64 {
+    ((a as u128 % m as u128 + b as u128 % m as u128) % m as u128) as u64
+}
+
 /// Modular multiplication in a 64-bit modulus via u128 widening.
 pub fn mulmod(a: u64, b: u64, m: u64) -> u64 {
     ((a as u128 * b as u128) % m as u128) as u64

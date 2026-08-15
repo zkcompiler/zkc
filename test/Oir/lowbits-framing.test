@@ -1,0 +1,11 @@
+// RUN: not zkc-run %S/Inputs/lowbits-framing.mlir --profile plonky3 --vectors %S/Inputs/lowbits-framing-vectors.json 2>&1 | FileCheck %s
+//
+// The framing-width gate on the BabyBear low-bits codec
+// (docs/spec/endpoints.md §4). That codec writes one 32-bit word, and
+// framing cannot refuse — it returns void — so the interpreter asks the
+// codec its width first. Inheriting the 64-bit default meant a wider
+// value absorbed as its low half instead: this artifact's constant is
+// 2^32, which used to absorb as zero and accept, so two distinct pinned
+// constants entered one transcript identically.
+//
+// CHECK: [zkc-E411] value needs 33 bits; the codec for class 'pow_value' frames at most 32

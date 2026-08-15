@@ -306,9 +306,10 @@ public:
 
 /// The value-faithful iv policy (evaluation/upstream/plonky3-replay/README.md):
 /// a fresh zero-state duplex, exactly the counterpart verifier's own start. The
-/// identity binding zkc's artifact-id policy adds is deliberately absent here —
-/// matching the counterpart is the point, and the trade is named in the
-/// artifact's iv axis, never silent.
+/// identity binding zkc's artifact-id policy adds is deliberately absent,
+/// because matching the counterpart exactly is what this policy is for. The
+/// artifact records which policy it uses, so the weaker binding is a stated
+/// property of the artifact rather than an implicit one.
 class ZeroIvLenpadSupplier : public SpongeSupplier {
 public:
   StringRef construction() const override {
@@ -403,6 +404,12 @@ public:
 class LowBitsCodec : public Bb31WordCodec {
 public:
   StringRef name() const override { return "plonky3_bb31_low_bits"; }
+  /// One 32-bit word travels as one value, so the framing carries 32
+  /// bits and says so. Inheriting the 64-bit default let a wider value
+  /// absorb as its low half — two distinct constants entering the
+  /// transcript identically, which is the collision the width gate
+  /// exists to refuse.
+  unsigned framingBits() const override { return 32; }
   unsigned wireWidth() const override { return 4; }
   unsigned squeezeSymbols() const override { return 1; }
 

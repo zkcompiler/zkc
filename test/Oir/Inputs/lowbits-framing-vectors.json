@@ -1,0 +1,12 @@
+{
+  "artifact_id": "d6aef4784af6e70b6a8110d0d042056c0e18e5a10158034858c5df4969926571",
+  "vectors": [
+    {
+      "name": "wide_constant",
+      "statement": {},
+      "proof": "",
+      "expect": "accept",
+      "challenges": []
+    }
+  ]
+}

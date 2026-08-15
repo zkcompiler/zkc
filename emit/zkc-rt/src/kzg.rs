@@ -152,8 +152,9 @@ pub fn kzg_batch_opening_accepts(
 }
 
 /// The pairing must be nondegenerate for either predicate to mean
-/// anything; emitted conformance suites can pin that with the group
-/// generators.
+/// anything. Emitted conformance suites call this before replaying a
+/// vector, so a borrowed curve implementation that drifts is caught
+/// where it would otherwise make every acceptance meaningless.
 pub fn pairing_self_check() {
     let paired = Bls12_381::pairing(G1Affine::generator(), G2Affine::generator());
     assert_ne!(paired.0, Fq12::ONE, "degenerate pairing on the generators");

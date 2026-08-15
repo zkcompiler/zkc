@@ -11,6 +11,7 @@ mod binding;
 mod doc;
 mod emit;
 mod json;
+mod rust;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -189,11 +190,16 @@ fn write(path: &Path, contents: &str) -> Result<(), String> {
 
 fn run() -> Result<(), String> {
     let args = parse_args()?;
-    let document = doc::Document::parse(&read(&args.doc)?)?;
-    let binding = binding::Binding::parse(&read(&args.binding)?)?;
+    // Three JSON files reach three parsers; a message such as
+    // "duplicate key" is only actionable with the file that carried it.
+    let named = |path: &Path, error: String| format!("{}: {error}", path.display());
+    let document =
+        doc::Document::parse(&read(&args.doc)?).map_err(|error| named(&args.doc, error))?;
+    let binding = binding::Binding::parse(&read(&args.binding)?)
+        .map_err(|error| named(&args.binding, error))?;
     let vectors = match &args.vectors {
         None => None,
-        Some(path) => Some(parse_vectors(&read(path)?)?),
+        Some(path) => Some(parse_vectors(&read(path)?).map_err(|error| named(path, error))?),
     };
 
     let emitted = emit::emit(

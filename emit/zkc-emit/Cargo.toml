@@ -3,7 +3,7 @@ name = "zkc-emit"
 version = "0.0.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Emit a standalone Rust verifier crate from a canonical zkc OIR document."
+description = "Emit a standalone Rust crate for either endpoint from a canonical zkc OIR document."
 
 [dependencies]
 sha2 = "=0.10.9"
