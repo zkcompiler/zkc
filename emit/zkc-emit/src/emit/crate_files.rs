@@ -207,7 +207,7 @@ pub(crate) fn assemble(
             used.cursor.qualifier()
         );
     }
-    lib.push_str(&body);
+    lib.push_str(body);
     lib.push_str("}\n");
 
     // ---- Cargo.toml ----

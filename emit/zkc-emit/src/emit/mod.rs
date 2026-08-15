@@ -140,9 +140,12 @@ pub fn emit(
     // ---- tests/conformance.rs ----
     let conformance = match vectors {
         None => None,
-        Some(vectors) => {
-            Some(conformance::emit_conformance(document, binding, vectors, &crate_ident)?)
-        }
+        Some(vectors) => Some(conformance::emit_conformance(
+            document,
+            binding,
+            vectors,
+            &crate_ident,
+        )?),
     };
 
     Ok(EmittedCrate {

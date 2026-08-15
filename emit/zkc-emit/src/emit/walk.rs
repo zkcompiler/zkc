@@ -417,41 +417,7 @@ impl<'a> Walk<'a> {
             }
         }
         match row {
-            Row::Init { sponge, iv } => {
-                if index != 0 || self.current_sponge.is_some() {
-                    return Err(format!("row {index}: init must be the single first row"));
-                }
-                if *sponge != self.binding.sponge_construction || *iv != self.binding.sponge_iv {
-                    return Err(format!(
-                        "row {index}: sponge '{sponge}' with iv '{iv}' has no supplier in \
-                         binding '{}' (it supplies '{}' with iv '{}')",
-                        self.binding.name, self.binding.sponge_construction, self.binding.sponge_iv
-                    ));
-                }
-                let constructor = match (self.binding.sponge_impl, iv.as_str()) {
-                    (SpongeImpl::ToyDuplex, "artifact-id") => {
-                        "zkc_rt::toy::ToyDuplex::new(SOURCE_PIR_ID)".to_owned()
-                    }
-                    (SpongeImpl::P3LenpadDuplex, "artifact-id") => {
-                        "zkc_rt::p3::P3Duplex::new(SOURCE_PIR_ID)".to_owned()
-                    }
-                    (SpongeImpl::P3LenpadDuplex, "zero") => {
-                        "zkc_rt::p3::P3Duplex::new(\"\")".to_owned()
-                    }
-                    (implementation, policy) => {
-                        return Err(format!(
-                            "row {index}: iv policy '{policy}' has no constructor for \
-                             {implementation:?}"
-                        ))
-                    }
-                };
-                // Declared here, qualified by what the rest of the walk
-                // will do to it — an init with nothing absorbing or
-                // squeezing after it leaves a local nobody reads.
-                self.line(1, &format!("let {SPONGE_QUALIFIER}sponge = {constructor};"));
-                self.current_sponge = Some(Ref::Res(index, 0));
-                Ok(())
-            }
+            Row::Init { sponge, iv } => self.emit_init(index, sponge, iv),
 
             Row::Absorb { sponge, value } => {
                 self.consume_sponge(*sponge, index, Ref::Res(index, 0))?;
@@ -464,95 +430,7 @@ impl<'a> Walk<'a> {
                 stream,
                 label,
                 class,
-            } => {
-                self.consume_stream(*stream, index, Some(Ref::Res(index, 0)))?;
-                self.used.cursor = Use {
-                    named: true,
-                    mutated: true,
-                };
-                let implementation = self.class_impl(class)?;
-                let width = implementation.wire_width();
-                let used = self.referenced.contains(&(index, 1));
-                let name = format!("{}r{index}_1", if used { "" } else { "_" });
-                let ty = implementation.rust_type();
-                let comment = format!(
-                    "// [\"read\", \"{}\" : {}]",
-                    rust::comment(label),
-                    rust::comment(class)
-                );
-                self.line(1, &comment);
-                match implementation {
-                    ImplKind::ToyBe8 => {
-                        self.line(
-                            1,
-                            &format!("let {name}: {ty} = match cursor.take({width}) {{"),
-                        );
-                        self.line(2, "Some(wire) => zkc_rt::toy::decode_be8(wire),");
-                        self.line(2, &Self::reject_arm("AbiDecodeFailure"));
-                        self.line(1, "};");
-                        if let Some(modulus) = self.class_binding(class)?.modulus {
-                            self.line(1, &format!("if {name} >= {modulus}u64 {{"));
-                            self.line(2, &Self::reject("AbiDecodeFailure"));
-                            self.line(1, "}");
-                        }
-                    }
-                    ImplKind::P3Word => {
-                        self.line(
-                            1,
-                            &format!("let {name}: {ty} = match cursor.take({width}) {{"),
-                        );
-                        self.line(2, "Some(wire) => zkc_rt::p3::decode_words::<1>(wire)[0],");
-                        self.line(2, &Self::reject_arm("AbiDecodeFailure"));
-                        self.line(1, "};");
-                        self.line(1, &format!("if {name} >= zkc_rt::p3::BB {{"));
-                        self.line(2, &Self::reject("AbiDecodeFailure"));
-                        self.line(1, "}");
-                    }
-                    ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
-                        let limbs = implementation.limbs();
-                        self.line(
-                            1,
-                            &format!("let {name}: {ty} = match cursor.take({width}) {{"),
-                        );
-                        self.line(
-                            2,
-                            &format!("Some(wire) => zkc_rt::p3::decode_words::<{limbs}>(wire),"),
-                        );
-                        self.line(2, &Self::reject_arm("AbiDecodeFailure"));
-                        self.line(1, "};");
-                        self.line(1, &format!("if !zkc_rt::p3::words_canonical(&{name}) {{"));
-                        self.line(2, &Self::reject("AbiDecodeFailure"));
-                        self.line(1, "}");
-                    }
-                    ImplKind::BlsFrBe32 | ImplKind::BlsG1Be48 => {
-                        // The decoder owns canonicality whole: field
-                        // range for fr; compressed form, curve, and
-                        // subgroup for g1.
-                        let decoder = if implementation == ImplKind::BlsFrBe32 {
-                            "fr_from_wire"
-                        } else {
-                            "g1_from_wire"
-                        };
-                        self.line(
-                            1,
-                            &format!("let {name}: {ty} = match cursor.take({width}) {{"),
-                        );
-                        self.line(
-                            2,
-                            &format!("Some(wire) => match zkc_rt::kzg::{decoder}(wire) {{"),
-                        );
-                        self.line(3, "Some(value) => value,");
-                        self.line(3, &Self::reject_arm("AbiDecodeFailure"));
-                        self.line(2, "},");
-                        self.line(2, &Self::reject_arm("AbiDecodeFailure"));
-                        self.line(1, "};");
-                    }
-                }
-                let bare = format!("r{index}_1");
-                self.values
-                    .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.clone())));
-                Ok(())
-            }
+            } => self.emit_read(index, *stream, label, class),
 
             Row::Squeeze {
                 sponge,
@@ -562,209 +440,9 @@ impl<'a> Walk<'a> {
                 domain,
                 rule,
                 space,
-            } => {
-                self.consume_sponge(*sponge, index, Ref::Res(index, 0))?;
-                self.used.sponge = Use {
-                    named: true,
-                    mutated: true,
-                };
-                self.used.challenges = Use {
-                    named: true,
-                    mutated: true,
-                };
-                let implementation = self.class_impl(class)?;
-                // The canonical rule/count pairing (endpoints.md §3):
-                // `uniform` exactly for one draw, `uniform_independent`
-                // exactly for a counted vector.
-                match (rule.as_str(), *count) {
-                    ("uniform", 1) => {}
-                    ("uniform_independent", 2..=1048576) => {}
-                    _ => {
-                        return Err(format!(
-                            "row {index}: sampling shape at '{label}' (rule '{rule}', count \
-                             {count}) is outside the canonical pairing"
-                        ))
-                    }
-                }
-                let comment = format!(
-                    "// [\"squeeze\", \"{}\" : {}, count {count}, domain \"{}\"]",
-                    rust::comment(label),
-                    rust::comment(class),
-                    rust::comment(domain)
-                );
-                self.line(1, &comment);
-                if *count == 1 {
-                    let used = self.referenced.contains(&(index, 1));
-                    let name = format!("{}r{index}_1", if used { "" } else { "_" });
-                    match implementation {
-                        ImplKind::ToyBe8 => {
-                            let space: u64 = space.parse().map_err(|_| {
-                                format!(
-                                    "row {index}: sample space '{space}' does not fit the toy \
-                                         derivation's u64 domain"
-                                )
-                            })?;
-                            if space < 2 {
-                                return Err(format!("row {index}: sample space {space} below 2"));
-                            }
-                            self.line(1, &format!("let {name}: u64 = {{"));
-                            self.line(
-                                2,
-                                &format!("let digest = sponge.squeeze({});", rust::literal(domain)),
-                            );
-                            self.line(
-                                2,
-                                &format!(
-                                    "let value = zkc_rt::toy::derive_be8(&digest, {space}u64);"
-                                ),
-                            );
-                            self.line(2, "challenges.push(value.to_string());");
-                            self.line(2, "value");
-                            self.line(1, "};");
-                        }
-                        ImplKind::P3Ext4 => {
-                            // The tuple bijection ignores the space value, but the
-                            // declared string must still be a sane cardinality —
-                            // the reference profile validates it too.
-                            if space.is_empty()
-                                || !space.chars().all(|c| c.is_ascii_digit())
-                                || space == "0"
-                                || space == "1"
-                            {
-                                return Err(format!(
-                                    "row {index}: sample space '{space}' is not a cardinality"
-                                ));
-                            }
-                            self.line(1, &format!("let {name}: [u32; 4] = {{"));
-                            self.line(2, "let coords = zkc_rt::p3::squeeze_ext4(&mut sponge);");
-                            self.line(2, "challenges.push(zkc_rt::p3::ext4_decimal(&coords));");
-                            self.line(2, "coords");
-                            self.line(1, "};");
-                        }
-                        ImplKind::P3Word => {
-                            let space: u64 = space.parse().map_err(|_| {
-                                format!("row {index}: sample space '{space}' does not fit u64")
-                            })?;
-                            if space < 2 {
-                                return Err(format!("row {index}: sample space {space} below 2"));
-                            }
-                            self.line(1, &format!("let {name}: u32 = {{"));
-                            self.line(2, &format!("let value = zkc_rt::p3::squeeze_low_bits(&mut sponge, {space}u64);"));
-                            self.line(2, "challenges.push(value.to_string());");
-                            self.line(2, "value");
-                            self.line(1, "};");
-                        }
-                        ImplKind::BlsFrBe32 => {
-                            if self.binding.sponge_impl != SpongeImpl::ToyDuplex {
-                                return Err(format!(
-                                    "row {index}: the fr challenge derivation is defined over a \
-                                     32-byte digest sponge; binding '{}' supplies {:?}",
-                                    self.binding.name, self.binding.sponge_impl
-                                ));
-                            }
-                            // The declared space must be exactly the scalar-field
-                            // order the derivation reduces into.
-                            if space != BLS12_381_R_DECIMAL {
-                                return Err(format!(
-                                    "row {index}: sample space '{space}' is not the BLS12-381 \
-                                     scalar-field order the fr derivation is defined over"
-                                ));
-                            }
-                            self.line(1, &format!("let {name}: zkc_rt::kzg::Fr = {{"));
-                            self.line(
-                                2,
-                                &format!("let digest = sponge.squeeze({});", rust::literal(domain)),
-                            );
-                            self.line(2, "let value = zkc_rt::kzg::fr_from_digest(&digest);");
-                            self.line(2, "challenges.push(zkc_rt::kzg::fr_decimal(&value));");
-                            self.line(2, "value");
-                            self.line(1, "};");
-                        }
-                        ImplKind::P3Digest8 | ImplKind::BlsG1Be48 => {
-                            return Err(format!(
-                                "row {index}: class '{class}' has no squeeze derivation; \
-                                 nothing squeezes a digest or a group element"
-                            ))
-                        }
-                    }
-                    let bare = format!("r{index}_1");
-                    self.values
-                        .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.clone())));
-                } else {
-                    // A counted vector is one event producing one log
-                    // entry; its SSA value stays deliberately unbound
-                    // (the reference does the same), so any reference to
-                    // it must have failed the pre-pass.
-                    if self.referenced.contains(&(index, 1)) {
-                        return Err(format!(
-                            "row {index}: a later row references the vector squeeze '{label}', \
-                             but a vector event's value is unbindable"
-                        ));
-                    }
-                    if implementation != ImplKind::P3Word {
-                        return Err(format!(
-                            "row {index}: counted squeezes are implemented for the word \
-                             derivation only (class '{class}' has {implementation:?})"
-                        ));
-                    }
-                    let space: u64 = space.parse().map_err(|_| {
-                        format!("row {index}: sample space '{space}' does not fit u64")
-                    })?;
-                    if space < 2 {
-                        return Err(format!("row {index}: sample space {space} below 2"));
-                    }
-                    self.line(1, "{");
-                    self.line(2, "let mut entry = String::new();");
-                    self.line(2, &format!("for draw in 0..{count} {{"));
-                    self.line(
-                        3,
-                        &format!(
-                            "let value = zkc_rt::p3::squeeze_low_bits(&mut sponge, {space}u64);"
-                        ),
-                    );
-                    self.line(3, "if draw > 0 { entry.push('|'); }");
-                    self.line(3, "entry.push_str(&value.to_string());");
-                    self.line(2, "}");
-                    self.line(2, "challenges.push(entry);");
-                    self.line(1, "}");
-                }
-                Ok(())
-            }
+            } => self.emit_squeeze(index, *sponge, label, class, *count, domain, rule, space),
 
-            Row::Const { value, class } => {
-                let implementation = self.class_impl(class)?;
-                let used = self.referenced.contains(&(index, 0));
-                let name = format!("{}r{index}_0", if used { "" } else { "_" });
-                let literal = match implementation {
-                    ImplKind::ToyBe8 => {
-                        let parsed: u64 = value.parse().map_err(|_| {
-                            format!("row {index}: constant '{value}' is not a decimal u64")
-                        })?;
-                        format!("{parsed}u64")
-                    }
-                    ImplKind::P3Word => {
-                        let parsed: u32 = value.parse().map_err(|_| {
-                            format!("row {index}: constant '{value}' is not a decimal u32")
-                        })?;
-                        format!("{parsed}u32")
-                    }
-                    other => {
-                        return Err(format!(
-                            "row {index}: constants of class '{class}' ({other:?}) have no \
-                             literal form; no admitted artifact carries one"
-                        ))
-                    }
-                };
-                self.line(
-                    1,
-                    &format!("let {name}: {} = {literal};", implementation.rust_type()),
-                );
-                self.values.insert(
-                    Ref::Res(index, 0),
-                    (format!("r{index}_0"), VClass::Doc(class.clone())),
-                );
-                Ok(())
-            }
+            Row::Const { value, class } => self.emit_const(index, value, class),
 
             Row::FNeg { operand } => self.algebra_unary(index, operand, "f_neg"),
             Row::FAdd { lhs, rhs } => self.algebra_binary(index, lhs, rhs, "f_add"),
@@ -772,25 +450,7 @@ impl<'a> Walk<'a> {
             Row::GExp { lhs, rhs } => self.algebra_binary(index, lhs, rhs, "g_exp"),
             Row::GMul { lhs, rhs } => self.algebra_binary(index, lhs, rhs, "g_mul"),
 
-            Row::AssertEq { lhs, rhs, label } => {
-                let (left, left_class) = self.value(*lhs, &format!("row {index} (assert_eq)"))?;
-                let (right, right_class) = self.value(*rhs, &format!("row {index} (assert_eq)"))?;
-                let left_type = self.rust_type(&left_class)?;
-                let right_type = self.rust_type(&right_class)?;
-                if left_type != right_type {
-                    return Err(format!(
-                        "row {index}: assert_eq '{label}' compares {left_type} with {right_type}"
-                    ));
-                }
-                self.line(
-                    1,
-                    &format!("// [\"assert_eq\", \"{}\"]", rust::comment(label)),
-                );
-                self.line(1, &format!("if {left} != {right} {{"));
-                self.line(2, &Self::reject("CheckFailure"));
-                self.line(1, "}");
-                Ok(())
-            }
+            Row::AssertEq { lhs, rhs, label } => self.emit_assert_eq(index, *lhs, *rhs, label),
 
             Row::CheckCall {
                 inputs,
@@ -798,136 +458,7 @@ impl<'a> Walk<'a> {
                 kind,
                 digest,
                 params,
-            } => {
-                let Some(check) = self.binding.check(digest).cloned() else {
-                    return Err(format!(
-                        "row {index}: opaque check '{label}' (kind '{kind}', contract {digest}) \
-                         has no executable adapter in binding '{}'; the reference profiles \
-                         refuse this at run time (zkc-E403) and the emitter refuses it here",
-                        self.binding.name
-                    ));
-                };
-                // The contract's one static parameter is the suite; the
-                // adapter must implement exactly the suite the row cites.
-                if params.len() != 1 || params[0] != check.suite {
-                    return Err(format!(
-                        "row {index}: check '{label}' cites parameters {params:?}; the bound \
-                         adapter implements suite '{}'",
-                        check.suite
-                    ));
-                }
-                let mut arguments = Vec::new();
-                for input in inputs {
-                    arguments.push(self.value(*input, &format!("row {index} (check_call)"))?);
-                }
-                let expect_kind = |walk: &Self,
-                                   argument: &(String, VClass),
-                                   want: ImplKind,
-                                   role: &str|
-                 -> Result<String, String> {
-                    match &argument.1 {
-                        VClass::Doc(name) if walk.class_impl(name)? == want => {
-                            Ok(argument.0.clone())
-                        }
-                        other => Err(format!(
-                            "row {index}: check '{label}' {role} operand has class {other:?}, \
-                             which is not the contract's {want:?}"
-                        )),
-                    }
-                };
-                self.line(
-                    1,
-                    &format!(
-                        "// [\"check_call\", \"{}\" : {}]",
-                        rust::comment(label),
-                        rust::comment(kind)
-                    ),
-                );
-                self.line(
-                    1,
-                    &format!(
-                        "let tau_g2_{index} = zkc_rt::kzg::g2_from_hex({})",
-                        rust::literal(&check.tau_g2_hex)
-                    ),
-                );
-                self.line(
-                    1,
-                    "    .expect(\"the binding-pinned tau_g2 point parses\");",
-                );
-                match check.implementation {
-                    CheckImpl::KzgOpening => {
-                        // Role order: commitment, point, value, proof.
-                        if arguments.len() != 4 {
-                            return Err(format!(
-                                "row {index}: check '{label}' has {} operands; the opening \
-                                 contract takes 4",
-                                arguments.len()
-                            ));
-                        }
-                        let commitment =
-                            expect_kind(self, &arguments[0], ImplKind::BlsG1Be48, "commitment")?;
-                        let point = expect_kind(self, &arguments[1], ImplKind::BlsFrBe32, "point")?;
-                        let value = expect_kind(self, &arguments[2], ImplKind::BlsFrBe32, "value")?;
-                        let proof = expect_kind(self, &arguments[3], ImplKind::BlsG1Be48, "proof")?;
-                        self.line(
-                            1,
-                            &format!(
-                                "if !zkc_rt::kzg::kzg_opening_accepts(&tau_g2_{index}, \
-                                 &{commitment}, &{point}, &{value}, &{proof}) {{"
-                            ),
-                        );
-                        self.line(2, &Self::reject("CheckFailure"));
-                        self.line(1, "}");
-                    }
-                    CheckImpl::KzgBatchOpening => {
-                        // Role order: commitment*n, point, value*n,
-                        // batch_challenge, proof — positions paired by
-                        // index, exactly the predicate specification.
-                        if arguments.len() < 7 || (arguments.len() - 3) % 2 != 0 {
-                            return Err(format!(
-                                "row {index}: check '{label}' has {} operands; the batch \
-                                 contract takes 2n+3 with n >= 2",
-                                arguments.len()
-                            ));
-                        }
-                        let n = (arguments.len() - 3) / 2;
-                        let mut commitments = Vec::new();
-                        for argument in &arguments[..n] {
-                            commitments.push(expect_kind(
-                                self,
-                                argument,
-                                ImplKind::BlsG1Be48,
-                                "commitment",
-                            )?);
-                        }
-                        let point = expect_kind(self, &arguments[n], ImplKind::BlsFrBe32, "point")?;
-                        let mut values = Vec::new();
-                        for argument in &arguments[n + 1..2 * n + 1] {
-                            values.push(expect_kind(self, argument, ImplKind::BlsFrBe32, "value")?);
-                        }
-                        let gamma = expect_kind(
-                            self,
-                            &arguments[2 * n + 1],
-                            ImplKind::BlsFrBe32,
-                            "batch_challenge",
-                        )?;
-                        let proof =
-                            expect_kind(self, &arguments[2 * n + 2], ImplKind::BlsG1Be48, "proof")?;
-                        self.line(
-                            1,
-                            &format!(
-                                "if !zkc_rt::kzg::kzg_batch_opening_accepts(&tau_g2_{index}, \
-                                 &[{}], &{point}, &[{}], &{gamma}, &{proof}) {{",
-                                commitments.join(", "),
-                                values.join(", ")
-                            ),
-                        );
-                        self.line(2, &Self::reject("CheckFailure"));
-                        self.line(1, "}");
-                    }
-                }
-                Ok(())
-            }
+            } => self.emit_check_call(index, inputs, label, kind, digest, params),
 
             Row::ExpectEnd { stream } => {
                 self.consume_stream(*stream, index, None)?;
@@ -958,90 +489,7 @@ impl<'a> Walk<'a> {
                 value,
                 label,
                 class,
-            } => {
-                self.consume_stream(*stream, index, Some(Ref::Res(index, 0)))?;
-                self.used.proof = Use {
-                    named: true,
-                    mutated: true,
-                };
-                let (expr, value_class) = self.value(*value, &format!("row {index} (write)"))?;
-                let implementation = self.class_impl(class)?;
-                match &value_class {
-                    VClass::Doc(name) if self.class_impl(name)? == implementation => {}
-                    // A toy algebra result is a plain u64 residue, which
-                    // is exactly the toy codec's own value domain.
-                    VClass::Algebra if implementation == ImplKind::ToyBe8 => {}
-                    other => {
-                        return Err(format!(
-                            "row {index}: write '{label}' emits a {other:?} value on a \
-                             '{class}' slot"
-                        ))
-                    }
-                }
-                self.line(
-                    1,
-                    &format!(
-                        "// [\"write\", \"{}\" : {}]",
-                        rust::comment(label),
-                        rust::comment(class)
-                    ),
-                );
-                // Emitted proofs are canonical by construction: the gate
-                // runs before any byte reaches the wire, so a refused run
-                // leaves no partial proof. Where the bound type cannot
-                // hold a non-canonical value, the reference's post-encode
-                // self-check has nothing left to test and is dropped.
-                match implementation {
-                    ImplKind::ToyBe8 => {
-                        if let Some(modulus) = self.class_binding(class)?.modulus {
-                            self.line(1, &format!("if {expr} >= {modulus}u64 {{"));
-                            self.line(
-                                2,
-                                &Self::refuse(
-                                    "Fill",
-                                    label,
-                                    "fill produced a value outside its class's range",
-                                ),
-                            );
-                            self.line(1, "}");
-                        }
-                        self.line(
-                            1,
-                            &format!("proof.extend_from_slice(&zkc_rt::toy::frame_be8({expr}));"),
-                        );
-                    }
-                    ImplKind::P3Word | ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
-                        let words = if implementation == ImplKind::P3Word {
-                            format!("[{expr}]")
-                        } else {
-                            expr.clone()
-                        };
-                        self.line(1, &format!("if !zkc_rt::p3::words_canonical(&{words}) {{"));
-                        self.line(
-                            2,
-                            &Self::refuse(
-                                "Fill",
-                                label,
-                                "fill produced a word outside the canonical field range",
-                            ),
-                        );
-                        self.line(1, "}");
-                        self.line(
-                            1,
-                            &format!("zkc_rt::p3::encode_words(&{words}, &mut proof);"),
-                        );
-                    }
-                    ImplKind::BlsFrBe32 => self.line(
-                        1,
-                        &format!("proof.extend_from_slice(&zkc_rt::kzg::fr_to_wire(&{expr}));"),
-                    ),
-                    ImplKind::BlsG1Be48 => self.line(
-                        1,
-                        &format!("proof.extend_from_slice(&zkc_rt::kzg::g1_to_wire(&{expr}));"),
-                    ),
-                }
-                Ok(())
-            }
+            } => self.emit_write(index, *stream, *value, label, class),
 
             Row::HoleCall { .. } => self.emit_hole_call(index, row),
 
@@ -1064,6 +512,606 @@ impl<'a> Walk<'a> {
                 Ok(())
             }
         }
+    }
+
+    fn emit_init(&mut self, index: usize, sponge: &str, iv: &str) -> Result<(), String> {
+        if index != 0 || self.current_sponge.is_some() {
+            return Err(format!("row {index}: init must be the single first row"));
+        }
+        if sponge != self.binding.sponge_construction || *iv != self.binding.sponge_iv {
+            return Err(format!(
+                "row {index}: sponge '{sponge}' with iv '{iv}' has no supplier in \
+                 binding '{}' (it supplies '{}' with iv '{}')",
+                self.binding.name, self.binding.sponge_construction, self.binding.sponge_iv
+            ));
+        }
+        let constructor = match (self.binding.sponge_impl, iv) {
+            (SpongeImpl::ToyDuplex, "artifact-id") => {
+                "zkc_rt::toy::ToyDuplex::new(SOURCE_PIR_ID)".to_owned()
+            }
+            (SpongeImpl::P3LenpadDuplex, "artifact-id") => {
+                "zkc_rt::p3::P3Duplex::new(SOURCE_PIR_ID)".to_owned()
+            }
+            (SpongeImpl::P3LenpadDuplex, "zero") => "zkc_rt::p3::P3Duplex::new(\"\")".to_owned(),
+            (implementation, policy) => {
+                return Err(format!(
+                    "row {index}: iv policy '{policy}' has no constructor for \
+                     {implementation:?}"
+                ))
+            }
+        };
+        // Declared here, qualified by what the rest of the walk
+        // will do to it — an init with nothing absorbing or
+        // squeezing after it leaves a local nobody reads.
+        self.line(1, &format!("let {SPONGE_QUALIFIER}sponge = {constructor};"));
+        self.current_sponge = Some(Ref::Res(index, 0));
+        Ok(())
+    }
+
+    fn emit_read(
+        &mut self,
+        index: usize,
+        stream: Ref,
+        label: &str,
+        class: &str,
+    ) -> Result<(), String> {
+        self.consume_stream(stream, index, Some(Ref::Res(index, 0)))?;
+        self.used.cursor = Use {
+            named: true,
+            mutated: true,
+        };
+        let implementation = self.class_impl(class)?;
+        let width = implementation.wire_width();
+        let used = self.referenced.contains(&(index, 1));
+        let name = format!("{}r{index}_1", if used { "" } else { "_" });
+        let ty = implementation.rust_type();
+        let comment = format!(
+            "// [\"read\", \"{}\" : {}]",
+            rust::comment(label),
+            rust::comment(class)
+        );
+        self.line(1, &comment);
+        match implementation {
+            ImplKind::ToyBe8 => {
+                self.line(
+                    1,
+                    &format!("let {name}: {ty} = match cursor.take({width}) {{"),
+                );
+                self.line(2, "Some(wire) => zkc_rt::toy::decode_be8(wire),");
+                self.line(2, &Self::reject_arm("AbiDecodeFailure"));
+                self.line(1, "};");
+                if let Some(modulus) = self.class_binding(class)?.modulus {
+                    self.line(1, &format!("if {name} >= {modulus}u64 {{"));
+                    self.line(2, &Self::reject("AbiDecodeFailure"));
+                    self.line(1, "}");
+                }
+            }
+            ImplKind::P3Word => {
+                self.line(
+                    1,
+                    &format!("let {name}: {ty} = match cursor.take({width}) {{"),
+                );
+                self.line(2, "Some(wire) => zkc_rt::p3::decode_words::<1>(wire)[0],");
+                self.line(2, &Self::reject_arm("AbiDecodeFailure"));
+                self.line(1, "};");
+                self.line(1, &format!("if {name} >= zkc_rt::p3::BB {{"));
+                self.line(2, &Self::reject("AbiDecodeFailure"));
+                self.line(1, "}");
+            }
+            ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
+                let limbs = implementation.limbs();
+                self.line(
+                    1,
+                    &format!("let {name}: {ty} = match cursor.take({width}) {{"),
+                );
+                self.line(
+                    2,
+                    &format!("Some(wire) => zkc_rt::p3::decode_words::<{limbs}>(wire),"),
+                );
+                self.line(2, &Self::reject_arm("AbiDecodeFailure"));
+                self.line(1, "};");
+                self.line(1, &format!("if !zkc_rt::p3::words_canonical(&{name}) {{"));
+                self.line(2, &Self::reject("AbiDecodeFailure"));
+                self.line(1, "}");
+            }
+            ImplKind::BlsFrBe32 | ImplKind::BlsG1Be48 => {
+                // The decoder owns canonicality whole: field
+                // range for fr; compressed form, curve, and
+                // subgroup for g1.
+                let decoder = if implementation == ImplKind::BlsFrBe32 {
+                    "fr_from_wire"
+                } else {
+                    "g1_from_wire"
+                };
+                self.line(
+                    1,
+                    &format!("let {name}: {ty} = match cursor.take({width}) {{"),
+                );
+                self.line(
+                    2,
+                    &format!("Some(wire) => match zkc_rt::kzg::{decoder}(wire) {{"),
+                );
+                self.line(3, "Some(value) => value,");
+                self.line(3, &Self::reject_arm("AbiDecodeFailure"));
+                self.line(2, "},");
+                self.line(2, &Self::reject_arm("AbiDecodeFailure"));
+                self.line(1, "};");
+            }
+        }
+        let bare = format!("r{index}_1");
+        self.values
+            .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn emit_squeeze(
+        &mut self,
+        index: usize,
+        sponge: Ref,
+        label: &str,
+        class: &str,
+        count: u64,
+        domain: &str,
+        rule: &str,
+        space: &str,
+    ) -> Result<(), String> {
+        self.consume_sponge(sponge, index, Ref::Res(index, 0))?;
+        self.used.sponge = Use {
+            named: true,
+            mutated: true,
+        };
+        self.used.challenges = Use {
+            named: true,
+            mutated: true,
+        };
+        let implementation = self.class_impl(class)?;
+        // The canonical rule/count pairing (endpoints.md §3):
+        // `uniform` exactly for one draw, `uniform_independent`
+        // exactly for a counted vector.
+        match (rule, count) {
+            ("uniform", 1) => {}
+            ("uniform_independent", 2..=1048576) => {}
+            _ => {
+                return Err(format!(
+                    "row {index}: sampling shape at '{label}' (rule '{rule}', count \
+                     {count}) is outside the canonical pairing"
+                ))
+            }
+        }
+        let comment = format!(
+            "// [\"squeeze\", \"{}\" : {}, count {count}, domain \"{}\"]",
+            rust::comment(label),
+            rust::comment(class),
+            rust::comment(domain)
+        );
+        self.line(1, &comment);
+        if count == 1 {
+            let used = self.referenced.contains(&(index, 1));
+            let name = format!("{}r{index}_1", if used { "" } else { "_" });
+            match implementation {
+                ImplKind::ToyBe8 => {
+                    let space: u64 = space.parse().map_err(|_| {
+                        format!(
+                            "row {index}: sample space '{space}' does not fit the toy \
+                                 derivation's u64 domain"
+                        )
+                    })?;
+                    if space < 2 {
+                        return Err(format!("row {index}: sample space {space} below 2"));
+                    }
+                    self.line(1, &format!("let {name}: u64 = {{"));
+                    self.line(
+                        2,
+                        &format!("let digest = sponge.squeeze({});", rust::literal(domain)),
+                    );
+                    self.line(
+                        2,
+                        &format!("let value = zkc_rt::toy::derive_be8(&digest, {space}u64);"),
+                    );
+                    self.line(2, "challenges.push(value.to_string());");
+                    self.line(2, "value");
+                    self.line(1, "};");
+                }
+                ImplKind::P3Ext4 => {
+                    // The tuple bijection ignores the space value, but the
+                    // declared string must still be a sane cardinality —
+                    // the reference profile validates it too.
+                    if space.is_empty()
+                        || !space.chars().all(|c| c.is_ascii_digit())
+                        || space == "0"
+                        || space == "1"
+                    {
+                        return Err(format!(
+                            "row {index}: sample space '{space}' is not a cardinality"
+                        ));
+                    }
+                    self.line(1, &format!("let {name}: [u32; 4] = {{"));
+                    self.line(2, "let coords = zkc_rt::p3::squeeze_ext4(&mut sponge);");
+                    self.line(2, "challenges.push(zkc_rt::p3::ext4_decimal(&coords));");
+                    self.line(2, "coords");
+                    self.line(1, "};");
+                }
+                ImplKind::P3Word => {
+                    let space: u64 = space.parse().map_err(|_| {
+                        format!("row {index}: sample space '{space}' does not fit u64")
+                    })?;
+                    if space < 2 {
+                        return Err(format!("row {index}: sample space {space} below 2"));
+                    }
+                    self.line(1, &format!("let {name}: u32 = {{"));
+                    self.line(
+                        2,
+                        &format!(
+                            "let value = zkc_rt::p3::squeeze_low_bits(&mut sponge, {space}u64);"
+                        ),
+                    );
+                    self.line(2, "challenges.push(value.to_string());");
+                    self.line(2, "value");
+                    self.line(1, "};");
+                }
+                ImplKind::BlsFrBe32 => {
+                    if self.binding.sponge_impl != SpongeImpl::ToyDuplex {
+                        return Err(format!(
+                            "row {index}: the fr challenge derivation is defined over a \
+                             32-byte digest sponge; binding '{}' supplies {:?}",
+                            self.binding.name, self.binding.sponge_impl
+                        ));
+                    }
+                    // The declared space must be exactly the scalar-field
+                    // order the derivation reduces into.
+                    if space != BLS12_381_R_DECIMAL {
+                        return Err(format!(
+                            "row {index}: sample space '{space}' is not the BLS12-381 \
+                             scalar-field order the fr derivation is defined over"
+                        ));
+                    }
+                    self.line(1, &format!("let {name}: zkc_rt::kzg::Fr = {{"));
+                    self.line(
+                        2,
+                        &format!("let digest = sponge.squeeze({});", rust::literal(domain)),
+                    );
+                    self.line(2, "let value = zkc_rt::kzg::fr_from_digest(&digest);");
+                    self.line(2, "challenges.push(zkc_rt::kzg::fr_decimal(&value));");
+                    self.line(2, "value");
+                    self.line(1, "};");
+                }
+                ImplKind::P3Digest8 | ImplKind::BlsG1Be48 => {
+                    return Err(format!(
+                        "row {index}: class '{class}' has no squeeze derivation; \
+                         nothing squeezes a digest or a group element"
+                    ))
+                }
+            }
+            let bare = format!("r{index}_1");
+            self.values
+                .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
+        } else {
+            // A counted vector is one event producing one log
+            // entry; its SSA value stays deliberately unbound
+            // (the reference does the same), so any reference to
+            // it must have failed the pre-pass.
+            if self.referenced.contains(&(index, 1)) {
+                return Err(format!(
+                    "row {index}: a later row references the vector squeeze '{label}', \
+                     but a vector event's value is unbindable"
+                ));
+            }
+            if implementation != ImplKind::P3Word {
+                return Err(format!(
+                    "row {index}: counted squeezes are implemented for the word \
+                     derivation only (class '{class}' has {implementation:?})"
+                ));
+            }
+            let space: u64 = space
+                .parse()
+                .map_err(|_| format!("row {index}: sample space '{space}' does not fit u64"))?;
+            if space < 2 {
+                return Err(format!("row {index}: sample space {space} below 2"));
+            }
+            self.line(1, "{");
+            self.line(2, "let mut entry = String::new();");
+            self.line(2, &format!("for draw in 0..{count} {{"));
+            self.line(
+                3,
+                &format!("let value = zkc_rt::p3::squeeze_low_bits(&mut sponge, {space}u64);"),
+            );
+            self.line(3, "if draw > 0 { entry.push('|'); }");
+            self.line(3, "entry.push_str(&value.to_string());");
+            self.line(2, "}");
+            self.line(2, "challenges.push(entry);");
+            self.line(1, "}");
+        }
+        Ok(())
+    }
+
+    fn emit_const(&mut self, index: usize, value: &str, class: &str) -> Result<(), String> {
+        let implementation = self.class_impl(class)?;
+        let used = self.referenced.contains(&(index, 0));
+        let name = format!("{}r{index}_0", if used { "" } else { "_" });
+        let literal = match implementation {
+            ImplKind::ToyBe8 => {
+                let parsed: u64 = value
+                    .parse()
+                    .map_err(|_| format!("row {index}: constant '{value}' is not a decimal u64"))?;
+                format!("{parsed}u64")
+            }
+            ImplKind::P3Word => {
+                let parsed: u32 = value
+                    .parse()
+                    .map_err(|_| format!("row {index}: constant '{value}' is not a decimal u32"))?;
+                format!("{parsed}u32")
+            }
+            other => {
+                return Err(format!(
+                    "row {index}: constants of class '{class}' ({other:?}) have no \
+                     literal form; no admitted artifact carries one"
+                ))
+            }
+        };
+        self.line(
+            1,
+            &format!("let {name}: {} = {literal};", implementation.rust_type()),
+        );
+        self.values.insert(
+            Ref::Res(index, 0),
+            (format!("r{index}_0"), VClass::Doc(class.to_owned())),
+        );
+        Ok(())
+    }
+
+    fn emit_assert_eq(
+        &mut self,
+        index: usize,
+        lhs: Ref,
+        rhs: Ref,
+        label: &str,
+    ) -> Result<(), String> {
+        let (left, left_class) = self.value(lhs, &format!("row {index} (assert_eq)"))?;
+        let (right, right_class) = self.value(rhs, &format!("row {index} (assert_eq)"))?;
+        let left_type = self.rust_type(&left_class)?;
+        let right_type = self.rust_type(&right_class)?;
+        if left_type != right_type {
+            return Err(format!(
+                "row {index}: assert_eq '{label}' compares {left_type} with {right_type}"
+            ));
+        }
+        self.line(
+            1,
+            &format!("// [\"assert_eq\", \"{}\"]", rust::comment(label)),
+        );
+        self.line(1, &format!("if {left} != {right} {{"));
+        self.line(2, &Self::reject("CheckFailure"));
+        self.line(1, "}");
+        Ok(())
+    }
+
+    fn emit_check_call(
+        &mut self,
+        index: usize,
+        inputs: &[Ref],
+        label: &str,
+        kind: &str,
+        digest: &str,
+        params: &[String],
+    ) -> Result<(), String> {
+        let Some(check) = self.binding.check(digest).cloned() else {
+            return Err(format!(
+                "row {index}: opaque check '{label}' (kind '{kind}', contract {digest}) \
+                 has no executable adapter in binding '{}'; the reference profiles \
+                 refuse this at run time (zkc-E403) and the emitter refuses it here",
+                self.binding.name
+            ));
+        };
+        // The contract's one static parameter is the suite; the
+        // adapter must implement exactly the suite the row cites.
+        if params.len() != 1 || params[0] != check.suite {
+            return Err(format!(
+                "row {index}: check '{label}' cites parameters {params:?}; the bound \
+                 adapter implements suite '{}'",
+                check.suite
+            ));
+        }
+        let mut arguments = Vec::new();
+        for input in inputs {
+            arguments.push(self.value(*input, &format!("row {index} (check_call)"))?);
+        }
+        let expect_kind = |walk: &Self,
+                           argument: &(String, VClass),
+                           want: ImplKind,
+                           role: &str|
+         -> Result<String, String> {
+            match &argument.1 {
+                VClass::Doc(name) if walk.class_impl(name)? == want => Ok(argument.0.clone()),
+                other => Err(format!(
+                    "row {index}: check '{label}' {role} operand has class {other:?}, \
+                     which is not the contract's {want:?}"
+                )),
+            }
+        };
+        self.line(
+            1,
+            &format!(
+                "// [\"check_call\", \"{}\" : {}]",
+                rust::comment(label),
+                rust::comment(kind)
+            ),
+        );
+        self.line(
+            1,
+            &format!(
+                "let tau_g2_{index} = zkc_rt::kzg::g2_from_hex({})",
+                rust::literal(&check.tau_g2_hex)
+            ),
+        );
+        self.line(
+            1,
+            "    .expect(\"the binding-pinned tau_g2 point parses\");",
+        );
+        match check.implementation {
+            CheckImpl::KzgOpening => {
+                // Role order: commitment, point, value, proof.
+                if arguments.len() != 4 {
+                    return Err(format!(
+                        "row {index}: check '{label}' has {} operands; the opening \
+                         contract takes 4",
+                        arguments.len()
+                    ));
+                }
+                let commitment =
+                    expect_kind(self, &arguments[0], ImplKind::BlsG1Be48, "commitment")?;
+                let point = expect_kind(self, &arguments[1], ImplKind::BlsFrBe32, "point")?;
+                let value = expect_kind(self, &arguments[2], ImplKind::BlsFrBe32, "value")?;
+                let proof = expect_kind(self, &arguments[3], ImplKind::BlsG1Be48, "proof")?;
+                self.line(
+                    1,
+                    &format!(
+                        "if !zkc_rt::kzg::kzg_opening_accepts(&tau_g2_{index}, \
+                         &{commitment}, &{point}, &{value}, &{proof}) {{"
+                    ),
+                );
+                self.line(2, &Self::reject("CheckFailure"));
+                self.line(1, "}");
+            }
+            CheckImpl::KzgBatchOpening => {
+                // Role order: commitment*n, point, value*n,
+                // batch_challenge, proof — positions paired by
+                // index, exactly the predicate specification.
+                if arguments.len() < 7 || (arguments.len() - 3) % 2 != 0 {
+                    return Err(format!(
+                        "row {index}: check '{label}' has {} operands; the batch \
+                         contract takes 2n+3 with n >= 2",
+                        arguments.len()
+                    ));
+                }
+                let n = (arguments.len() - 3) / 2;
+                let mut commitments = Vec::new();
+                for argument in &arguments[..n] {
+                    commitments.push(expect_kind(
+                        self,
+                        argument,
+                        ImplKind::BlsG1Be48,
+                        "commitment",
+                    )?);
+                }
+                let point = expect_kind(self, &arguments[n], ImplKind::BlsFrBe32, "point")?;
+                let mut values = Vec::new();
+                for argument in &arguments[n + 1..2 * n + 1] {
+                    values.push(expect_kind(self, argument, ImplKind::BlsFrBe32, "value")?);
+                }
+                let gamma = expect_kind(
+                    self,
+                    &arguments[2 * n + 1],
+                    ImplKind::BlsFrBe32,
+                    "batch_challenge",
+                )?;
+                let proof = expect_kind(self, &arguments[2 * n + 2], ImplKind::BlsG1Be48, "proof")?;
+                self.line(
+                    1,
+                    &format!(
+                        "if !zkc_rt::kzg::kzg_batch_opening_accepts(&tau_g2_{index}, \
+                         &[{}], &{point}, &[{}], &{gamma}, &{proof}) {{",
+                        commitments.join(", "),
+                        values.join(", ")
+                    ),
+                );
+                self.line(2, &Self::reject("CheckFailure"));
+                self.line(1, "}");
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_write(
+        &mut self,
+        index: usize,
+        stream: Ref,
+        value: Ref,
+        label: &str,
+        class: &str,
+    ) -> Result<(), String> {
+        self.consume_stream(stream, index, Some(Ref::Res(index, 0)))?;
+        self.used.proof = Use {
+            named: true,
+            mutated: true,
+        };
+        let (expr, value_class) = self.value(value, &format!("row {index} (write)"))?;
+        let implementation = self.class_impl(class)?;
+        match &value_class {
+            VClass::Doc(name) if self.class_impl(name)? == implementation => {}
+            // A toy algebra result is a plain u64 residue, which
+            // is exactly the toy codec's own value domain.
+            VClass::Algebra if implementation == ImplKind::ToyBe8 => {}
+            other => {
+                return Err(format!(
+                    "row {index}: write '{label}' emits a {other:?} value on a \
+                     '{class}' slot"
+                ))
+            }
+        }
+        self.line(
+            1,
+            &format!(
+                "// [\"write\", \"{}\" : {}]",
+                rust::comment(label),
+                rust::comment(class)
+            ),
+        );
+        // Emitted proofs are canonical by construction: the gate
+        // runs before any byte reaches the wire, so a refused run
+        // leaves no partial proof. Where the bound type cannot
+        // hold a non-canonical value, the reference's post-encode
+        // self-check has nothing left to test and is dropped.
+        match implementation {
+            ImplKind::ToyBe8 => {
+                if let Some(modulus) = self.class_binding(class)?.modulus {
+                    self.line(1, &format!("if {expr} >= {modulus}u64 {{"));
+                    self.line(
+                        2,
+                        &Self::refuse(
+                            "Fill",
+                            label,
+                            "fill produced a value outside its class's range",
+                        ),
+                    );
+                    self.line(1, "}");
+                }
+                self.line(
+                    1,
+                    &format!("proof.extend_from_slice(&zkc_rt::toy::frame_be8({expr}));"),
+                );
+            }
+            ImplKind::P3Word | ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
+                let words = if implementation == ImplKind::P3Word {
+                    format!("[{expr}]")
+                } else {
+                    expr.clone()
+                };
+                self.line(1, &format!("if !zkc_rt::p3::words_canonical(&{words}) {{"));
+                self.line(
+                    2,
+                    &Self::refuse(
+                        "Fill",
+                        label,
+                        "fill produced a word outside the canonical field range",
+                    ),
+                );
+                self.line(1, "}");
+                self.line(
+                    1,
+                    &format!("zkc_rt::p3::encode_words(&{words}, &mut proof);"),
+                );
+            }
+            ImplKind::BlsFrBe32 => self.line(
+                1,
+                &format!("proof.extend_from_slice(&zkc_rt::kzg::fr_to_wire(&{expr}));"),
+            ),
+            ImplKind::BlsG1Be48 => self.line(
+                1,
+                &format!("proof.extend_from_slice(&zkc_rt::kzg::g1_to_wire(&{expr}));"),
+            ),
+        }
+        Ok(())
     }
 
     /// One supplier call. The reference marshals operands by splitting
@@ -1376,4 +1424,3 @@ impl<'a> Walk<'a> {
         (body, used)
     }
 }
-

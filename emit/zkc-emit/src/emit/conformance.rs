@@ -9,24 +9,33 @@ use std::fmt::Write as _;
 use super::vectors::{Cases, ProverCase, Vectors};
 use super::REJECT_CLASSES;
 
-/// Decimal text into little-endian 32-bit limbs, refusing overflow.
-fn decimal_to_limbs(text: &str, limb_count: usize) -> Result<Vec<u32>, String> {
-    if text.is_empty() || !text.chars().all(|c| c.is_ascii_digit()) {
-        return Err(format!("'{text}' is not a decimal number"));
+/// The generated test pinning the corpus to this artifact.
+fn artifact_pin_test(alias: &str, artifact_id: &str) -> String {
+    format!(
+        "#[test]\nfn vectors_bind_this_artifact() {{\n    assert_eq!({alias}::ARTIFACT_ID, \"{artifact_id}\");\n}}\n\n"
+    )
+}
+
+/// The expected-challenge list, one quoted entry per log line.
+fn challenge_list(challenges: &[String]) -> String {
+    challenges
+        .iter()
+        .map(|entry| format!("{entry:?}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// A refusal battery without a positive control asserts nothing, so a
+/// corpus must carry one; `what` names the endpoint's positive kind.
+fn require_positive_control(present: bool, what: &str) -> Result<(), String> {
+    if present {
+        Ok(())
+    } else {
+        Err(format!(
+            "the vectors file carries no {what} vector; a refusal battery without a \
+             positive control asserts nothing"
+        ))
     }
-    let mut limbs = vec![0u32; limb_count];
-    for digit in text.chars() {
-        let mut carry = digit.to_digit(10).unwrap() as u64;
-        for limb in limbs.iter_mut() {
-            let wide = *limb as u64 * 10 + carry;
-            *limb = wide as u32;
-            carry = wide >> 32;
-        }
-        if carry != 0 {
-            return Err(format!("'{text}' does not fit {limb_count} 32-bit limbs"));
-        }
-    }
-    Ok(limbs)
 }
 
 fn statement_literal(
@@ -44,44 +53,7 @@ fn statement_literal(
             .find(|(bound, _)| bound == label)
             .map(|(_, value)| value.as_str())
             .ok_or_else(|| format!("vector '{name}' has no statement value for '{label}'"))?;
-        let literal = match implementation {
-            ImplKind::ToyBe8 => {
-                let limbs = decimal_to_limbs(text, 2)?;
-                format!("{}u64", (limbs[1] as u64) << 32 | limbs[0] as u64)
-            }
-            ImplKind::P3Word => format!("{}u32", decimal_to_limbs(text, 1)?[0]),
-            ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
-                let limbs = decimal_to_limbs(text, implementation.limbs())?;
-                let words = limbs
-                    .iter()
-                    .map(|limb| format!("{limb}u32"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("[{words}]")
-            }
-            ImplKind::BlsFrBe32 | ImplKind::BlsG1Be48 => {
-                // The decimal statement value is the wire integer; the
-                // typed constructor re-establishes canonicality.
-                let limbs = decimal_to_limbs(text, implementation.limbs())?;
-                let mut bytes = Vec::new();
-                for limb in limbs.iter().rev() {
-                    bytes.extend_from_slice(&limb.to_be_bytes());
-                }
-                let list = bytes
-                    .iter()
-                    .map(|byte| format!("0x{byte:02x}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let constructor = if implementation == ImplKind::BlsFrBe32 {
-                    "fr_from_wire"
-                } else {
-                    "g1_from_wire"
-                };
-                format!(
-                    "{alias}::zkc_rt::kzg::{constructor}(&[{list}])\n            .expect(\"a canonical statement wire value\")"
-                )
-            }
-        };
+        let literal = implementation.statement_literal(alias, text)?;
         fields.push(format!("{label}: {literal}"));
     }
     Ok(format!("{alias}::Statement {{ {} }}", fields.join(", ")))
@@ -174,13 +146,10 @@ pub(crate) fn emit_conformance(
             ));
         }
     }
-    if !cases.iter().any(|case| case.expect == "accept") {
-        return Err(
-            "the vectors file carries no accepting vector; a refusal battery without a \
-             positive control asserts nothing"
-                .into(),
-        );
-    }
+    require_positive_control(
+        cases.iter().any(|case| case.expect == "accept"),
+        "accepting",
+    )?;
 
     let mut out = String::new();
     out.push_str("// Generated conformance suite: the committed golden vectors, replayed\n");
@@ -206,11 +175,7 @@ pub(crate) fn emit_conformance(
 
     out.push_str(&kernel_self_checks(document, binding, "verifier"));
 
-    let _ = writeln!(
-        out,
-        "#[test]\nfn vectors_bind_this_artifact() {{\n    assert_eq!(verifier::ARTIFACT_ID, \"{}\");\n}}\n",
-        vectors.artifact_id
-    );
+    out.push_str(&artifact_pin_test("verifier", &vectors.artifact_id));
 
     out.push_str("#[test]\nfn golden_vectors() {\n");
     for case in cases {
@@ -220,13 +185,7 @@ pub(crate) fn emit_conformance(
         let challenges = if case.challenges.is_empty() && case.expect != "accept" {
             "None".to_owned()
         } else {
-            let entries = case
-                .challenges
-                .iter()
-                .map(|entry| format!("{entry:?}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("Some(&[{entries}])")
+            format!("Some(&[{}])", challenge_list(&case.challenges))
         };
         let _ = writeln!(
             out,
@@ -245,13 +204,7 @@ fn emit_prover_conformance(
     cases: &[ProverCase],
     crate_ident: &str,
 ) -> Result<String, String> {
-    if !cases.iter().any(|case| case.expect == "ok") {
-        return Err(
-            "the vectors file carries no producing vector; a refusal battery without a \
-             positive control asserts nothing"
-                .into(),
-        );
-    }
+    require_positive_control(cases.iter().any(|case| case.expect == "ok"), "producing")?;
 
     let mut out = String::new();
     out.push_str("// Generated conformance suite: the committed golden vectors, replayed\n");
@@ -299,10 +252,7 @@ fn emit_prover_conformance(
 
     out.push_str(&kernel_self_checks(document, binding, "prover"));
 
-    let _ = writeln!(
-        out,
-        "#[test]\nfn vectors_bind_this_artifact() {{\n    assert_eq!(prover::ARTIFACT_ID, \"{artifact_id}\");\n}}\n"
-    );
+    out.push_str(&artifact_pin_test("prover", artifact_id));
 
     out.push_str("#[test]\nfn golden_vectors() {\n");
     for case in cases {
@@ -330,12 +280,7 @@ fn emit_prover_conformance(
         match case.expect.as_str() {
             "ok" => {
                 let bytes = hex_literal(&case.name, "proof", &case.proof_hex)?;
-                let challenges = case
-                    .challenges
-                    .iter()
-                    .map(|entry| format!("{entry:?}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let challenges = challenge_list(&case.challenges);
                 let _ = writeln!(
                     out,
                     "    produce(\n        {:?},\n        {statement},\n        {witness},\n        &[{bytes}],\n        &[{challenges}],\n    );",
