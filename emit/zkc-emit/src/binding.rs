@@ -27,6 +27,26 @@ pub enum ImplKind {
     BlsG1Be48,
 }
 
+/// Decimal text into little-endian 32-bit limbs, refusing overflow.
+fn decimal_to_limbs(text: &str, limb_count: usize) -> Result<Vec<u32>, String> {
+    if text.is_empty() || !text.chars().all(|c| c.is_ascii_digit()) {
+        return Err(format!("'{text}' is not a decimal number"));
+    }
+    let mut limbs = vec![0u32; limb_count];
+    for digit in text.chars() {
+        let mut carry = digit.to_digit(10).unwrap() as u64;
+        for limb in limbs.iter_mut() {
+            let wide = *limb as u64 * 10 + carry;
+            *limb = wide as u32;
+            carry = wide >> 32;
+        }
+        if carry != 0 {
+            return Err(format!("'{text}' does not fit {limb_count} 32-bit limbs"));
+        }
+    }
+    Ok(limbs)
+}
+
 impl ImplKind {
     pub fn from_name(name: &str) -> Option<ImplKind> {
         match name {
@@ -81,6 +101,50 @@ impl ImplKind {
             ImplKind::BlsFrBe32 => 8,
             ImplKind::BlsG1Be48 => 12,
         }
+    }
+
+    /// The Rust literal a conformance suite writes for a statement
+    /// value of this class; `alias` is the name the generated test
+    /// imports the endpoint crate under.
+    pub(crate) fn statement_literal(self, alias: &str, text: &str) -> Result<String, String> {
+        Ok(match self {
+            ImplKind::ToyBe8 => {
+                let limbs = decimal_to_limbs(text, 2)?;
+                format!("{}u64", (limbs[1] as u64) << 32 | limbs[0] as u64)
+            }
+            ImplKind::P3Word => format!("{}u32", decimal_to_limbs(text, 1)?[0]),
+            ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
+                let limbs = decimal_to_limbs(text, self.limbs())?;
+                let words = limbs
+                    .iter()
+                    .map(|limb| format!("{limb}u32"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("[{words}]")
+            }
+            ImplKind::BlsFrBe32 | ImplKind::BlsG1Be48 => {
+                // The decimal statement value is the wire integer; the
+                // typed constructor re-establishes canonicality.
+                let limbs = decimal_to_limbs(text, self.limbs())?;
+                let mut bytes = Vec::new();
+                for limb in limbs.iter().rev() {
+                    bytes.extend_from_slice(&limb.to_be_bytes());
+                }
+                let list = bytes
+                    .iter()
+                    .map(|byte| format!("0x{byte:02x}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let constructor = if self == ImplKind::BlsFrBe32 {
+                    "fr_from_wire"
+                } else {
+                    "g1_from_wire"
+                };
+                format!(
+                    "{alias}::zkc_rt::kzg::{constructor}(&[{list}])\n            .expect(\"a canonical statement wire value\")"
+                )
+            }
+        })
     }
 }
 
