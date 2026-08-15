@@ -83,7 +83,7 @@ specification intentionally include north-star contracts beyond this matrix.
 | Formalization evidence |  | ● |  | Rule annotations and pinned declaration/axiom-profile drift checks. |
 | Execution and conformance evidence |  | ● |  | C++/Python parity boundaries and a pinned Plonky3 replay. |
 | Evidence admission policy |  |  | ● | — |
-| Realization Compiler and deployment |  |  | ● | — |
+| Wider emission targets and deployment |  |  | ● | — |
 | Recursion and zkVM composition |  |  | ● | — |
 | Zero-knowledge analysis |  |  | ● | — |
 

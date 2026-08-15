@@ -593,8 +593,10 @@ that reaches canonical encoding is held to the encoding domain.
 
 Realization boundaries:
 **variable-length codec framing** — every committed codec has a fixed wire
-width; a future variable-length class needs explicit length framing whose
-injectivity joins the Binding Lemma's a-leg;
+width. A future variable-length class that is absorbed needs explicit length
+framing whose injectivity joins the Binding Lemma's a-leg; one that is only
+read — an unabsorbed slot under `kernel.md` §5.3's default — owes unambiguous
+decoding and no transcript obligation;
 **profile-scoped value models** — an execution profile defines the value
 operations it supplies, and an operation outside that declared model MUST
 refuse explicitly; **registry-keyed `check_call`

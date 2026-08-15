@@ -23,8 +23,8 @@ relation source and witness toolchain
   -> zkc relation adapter and protocol binding
   -> sealed protocol and typed judgments
   -> endpoint Operator IR (OIR)
-  -> zkc realization adapter
-  -> proving library, device, service, or zkVM runtime
+  -> zkc endpoint emission under an explicit supplier binding
+  -> supplied kernels from a proving library, device, service, or zkVM runtime
 
 formal or analysis system
   -> exact theorem, estimate, receipt, or observation
@@ -283,13 +283,13 @@ couples choices that span protocol semantics and implementation.
 
 zkc currently carries one pinned, fixture-scoped
 [replay and prover evidence path](../evaluation/upstream/plonky3-replay/README.md).
-It is deliberately outside the compiler and is not a general Realization
-Compiler or generic Plonky3 adapter.
+It is deliberately outside the compiler and is not a general realization
+layer or generic Plonky3 adapter.
 
 The north-star relationship has two granularities:
 
-- exact Plonky3 primitives can satisfy individual realization capability
-  requirements; or
+- exact Plonky3 primitives can serve as named suppliers in an endpoint's
+  explicit binding; or
 - a pinned `prove` or `verify` path can serve as a checked whole-endpoint fast
   path whose evidence exhaustively covers one OIR region.
 

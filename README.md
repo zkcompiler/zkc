@@ -80,7 +80,7 @@ The protocol-coverage and architecture-progress matrices are in
 ## Scope
 
 This snapshot focuses on protocol-semantic compilation. Relation compilation
-remains upstream; generalized realization, composition, broader judgment
+remains upstream; wider emission targets, composition, broader judgment
 tracks, and deployment are target layers described in the Architecture and
 Roadmap.
 
