@@ -42,6 +42,13 @@ class Duplex:
     def __init__(self, source_id: str):
         self.state = hashlib.sha256(source_id.encode("ascii")).digest()
 
+    def clone(self) -> "Duplex":
+        """The transcript peek's mechanism (endpoints.md §6.2): a
+        pow_search trial runs on a copy, never on the live state."""
+        twin = Duplex.__new__(Duplex)
+        twin.state = self.state
+        return twin
+
     def absorb(self, value: int) -> None:
         self.state = hashlib.sha256(self.state + b"\x00" + be8(value)).digest()
 
@@ -652,6 +659,57 @@ def prove_derived(
             value = duplex.squeeze(row[5], space)
             values[("r", row_index, 1)] = value
             challenges.append(str(value))
+        elif tag == "hole_call" and ["sponge"] in row[2]:
+            # The transcript peek (endpoints.md §6.2): the fill never
+            # holds the sponge — each trial runs on a clone — and the
+            # trial is re-derived from the three rows after the hole
+            # (the nonce write, its absorb, the pow squeeze), so a
+            # neighborhood that is not the verifier's own check refuses.
+            # The search is canonical ascending, least witness first.
+            program = document["program"]
+            (value_index,) = [
+                index
+                for index, descriptor in enumerate(row[2])
+                if descriptor[0] == "val"
+            ]
+            (sponge_index,) = [
+                index
+                for index, descriptor in enumerate(row[2])
+                if descriptor == ["sponge"]
+            ]
+            nonce_ref = ["r", row_index, value_index]
+            write_row = program[row_index + 1]
+            absorb_row = program[row_index + 2]
+            squeeze_row = program[row_index + 3]
+            bits = int(row[6][0])
+            if not (
+                write_row[0] == "write"
+                and write_row[2] == nonce_ref
+                and absorb_row[0] == "absorb"
+                and absorb_row[1] == ["r", row_index, sponge_index]
+                and absorb_row[2] == nonce_ref
+                and squeeze_row[0] == "squeeze"
+                and squeeze_row[1] == ["r", row_index + 2, 0]
+                and squeeze_row[4] == "1"
+                and squeeze_row[6] == "uniform"
+                and squeeze_row[7] == str(1 << bits)
+            ):
+                raise model.Refusal(
+                    "pow_search hole: the trial the fill would run is not "
+                    "the check the verifier performs"
+                )
+            domain, space = squeeze_row[5], int(squeeze_row[7])
+            for nonce in range(P):
+                probe = duplex.clone()
+                probe.absorb(nonce)
+                if probe.squeeze(domain, space) == 0:
+                    values[("r", row_index, value_index)] = nonce
+                    break
+            else:
+                raise model.Refusal(
+                    f"no nonce below {P} satisfies the proof-of-work "
+                    "condition"
+                )
         elif tag == "hole_call":
             fill = fills[row[5]]
             operand_values = []

@@ -1,0 +1,45 @@
+# REQUIRES: uv
+# The transcript-peek supplier path (docs/spec/endpoints.md §6.2), end
+# to end on the smallest subject that has one: routed Schnorr with a
+# grinding round. The pow_search fill receives only a trial the
+# executor builds over a cloned sponge — canonical ascending order,
+# least valid witness — so the C++ executor, the reference twin, and
+# the emitted crate (test/Emit/emit-grind-prover.test) must all find
+# the same nonce; byte equality below is what "deterministic endpoint"
+# means operationally.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/grind-schnorr.mlir -o %t/sealed.mlir
+# RUN: zkc-opt %pir-project-full %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-opt %pir-project-prover-full %t/sealed.mlir -o %t/prover.mlir
+
+# The native round trip: grind, emit, verify, one challenge stream.
+# The second challenge entry is the proof of work deriving to zero.
+# RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" --verify-with %t/verifier.mlir | FileCheck %s
+# CHECK: prover challenges: 1998557536199175941,0
+# CHECK-NEXT: proof: 00000000000040000aad8373a9a8779c00000000000001d4
+# CHECK: verifier verdict: accept
+# CHECK: round trip:
+
+# The twin's independent search returns the same least witness: the
+# whole prover output, byte for byte.
+# RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" | grep -E "prover challenges|proof:" > %t/native.txt
+# RUN: %uv python -m oracle.exec derived-prove schnorr-grind "s:y=1024" "w:w=00000000000000050000000000000007" > %t/twin.txt
+# RUN: diff %t/native.txt %t/twin.txt
+
+# A peek digest without a supplier is the ordinary named gap. The
+# mutant's identity is re-minted so the refusal under test is the
+# supplier gate's, not the identity gate's.
+# RUN: sed 's/sha256:d45f029644f09ac28a8284a5048c0a773e03509d810daecf0ea8ec65576962b6/sha256:9999999999999999999999999999999999999999999999999999999999999999/g' %t/prover.mlir > %t/unsupplied-raw.mlir
+# RUN: zkc-translate --oir-id %t/unsupplied-raw.mlir -o %t/unsupplied.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
+# RUN: not zkc-run %t/unsupplied.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E407 %s
+# E407: [zkc-E407] hole contract 'sha256:9999999999999999999999999999999999999999999999999999999999999999' (kind 'pow_search') has no supplier in profile 'toy'
+
+# A neighborhood that is not the verifier's check refuses by name: the
+# proof-of-work squeeze must draw from a space of exactly 2^bits.
+# RUN: sed 's/space "256"/space "512"/g' %t/prover.mlir > %t/wrong-space-raw.mlir
+# RUN: zkc-translate --oir-id %t/wrong-space-raw.mlir -o %t/wrong-space.id
+# RUN: %python %S/Inputs/rewrite-oir-id.py %t/wrong-space-raw.mlir %t/wrong-space.mlir %t/wrong-space.id
+# RUN: not zkc-run %t/wrong-space.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E412 %s
+# E412: [zkc-E412] pow_search hole 'grind': the proof-of-work squeeze must draw one uniform value from a space of exactly 2^bits; the trial the fill would run is not the check the verifier performs

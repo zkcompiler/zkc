@@ -591,6 +591,104 @@ private:
     return llvm::Error::success();
   }
 
+  /// The transcript peek (docs/spec/endpoints.md §6.2). The fill never
+  /// holds the sponge: each trial runs on a clone, and the hole's
+  /// sponge result is the unchanged live state. The peek's meaning is
+  /// the three rows after the hole — the nonce write, its absorb, and
+  /// the proof-of-work squeeze — so the trial is re-derived from
+  /// exactly those rows and any other neighborhood refuses: a trial
+  /// that is not the verifier's own check would search for the wrong
+  /// witness.
+  llvm::Error stepPowSearch(oir::HoleCallOp hole) {
+    const PowSearchSupplier *supplier =
+        profile.powSearch(hole.getContractDigest());
+    if (!supplier)
+      return fail("[zkc-E407] hole contract '" + hole.getContractDigest() +
+                  "' (kind '" + hole.getKind() +
+                  "') has no supplier in profile '" + profile.name() + "'");
+    auto mismatch = [&](const llvm::Twine &what) {
+      return fail("[zkc-E412] pow_search hole '" + hole.getLabel() + "': " +
+                  what +
+                  "; the trial the fill would run is not the check the "
+                  "verifier performs");
+    };
+    Value nonce, spongeOut;
+    for (Value output : hole.getOutputs()) {
+      if (isa<oir::ValType>(output.getType()))
+        nonce = output;
+      else if (isa<oir::SpongeType>(output.getType()))
+        spongeOut = output;
+    }
+    if (hole.getOutputs().size() != 2 || !nonce || !spongeOut)
+      return mismatch("the contract must yield exactly one nonce value and "
+                      "the state-identical sponge");
+    ArrayAttr params = hole.getParams();
+    uint64_t bits = 0;
+    if (params.size() != 1 ||
+        cast<StringAttr>(params[0]).getValue().getAsInteger(10, bits) ||
+        bits == 0 || bits >= kValueBits)
+      return mismatch(
+          "the contract's one static parameter must be a positive bit count");
+    auto write = dyn_cast_or_null<oir::WriteOp>(hole->getNextNode());
+    if (!write || write.getValue() != nonce)
+      return mismatch("the next row must write the nonce to the wire");
+    auto absorbOp = dyn_cast_or_null<oir::AbsorbOp>(write->getNextNode());
+    if (!absorbOp || absorbOp.getValue() != nonce ||
+        absorbOp.getSponge() != spongeOut)
+      return mismatch("the row after the write must absorb the nonce "
+                      "through the hole's sponge result");
+    auto squeezeOp = dyn_cast_or_null<oir::SqueezeOp>(absorbOp->getNextNode());
+    if (!squeezeOp || squeezeOp.getSponge() != absorbOp.getOut())
+      return mismatch("the row after the absorb must squeeze from it");
+    llvm::APInt space = llvm::APInt::getZero(kValueBits);
+    space.setBit(bits);
+    if (squeezeOp.getCount() != "1" || squeezeOp.getRule() != "uniform" ||
+        squeezeOp.getSpace() != decimal(space))
+      return mismatch("the proof-of-work squeeze must draw one uniform "
+                      "value from a space of exactly 2^bits");
+    auto nonceClass = cast<oir::ValType>(nonce.getType()).getValueClass();
+    llvm::Expected<const CodecSupplier *> nonceCodec = requireCodec(nonceClass);
+    if (!nonceCodec)
+      return nonceCodec.takeError();
+    llvm::Expected<const CodecSupplier *> powCodec =
+        requireCodec(squeezeOp.getPayloadClass());
+    if (!powCodec)
+      return powCodec.takeError();
+    std::optional<SamplingPlan> plan = profile.admitSampling(
+        squeezeOp.getRule(), squeezeOp.getCount(), squeezeOp.getSpace());
+    if (!plan)
+      return fail("[zkc-E402] sampling shape at '" + squeezeOp.getLabel() +
+                  "' (rule '" + squeezeOp.getRule() + "', count " +
+                  squeezeOp.getCount() + ", space " + squeezeOp.getSpace() +
+                  ") has no supplier in profile '" + profile.name() + "'");
+    // The search enumerates the nonce class's canonical values: the
+    // class modulus where the profile knows one, the codec's whole
+    // framing domain otherwise. The bound only matters at exhaustion —
+    // the least witness is the same under either.
+    llvm::APInt domainEnd =
+        profile.canonicalModulus(nonceClass)
+            .value_or(llvm::APInt::getOneBitSet(
+                kValueBits, (*nonceCodec)->framingBits()));
+    auto trial =
+        [&](const llvm::APInt &candidate) -> llvm::Expected<llvm::APInt> {
+      std::unique_ptr<SpongeState> probe = sponge->clone();
+      SmallVector<uint8_t> framed;
+      (*nonceCodec)->absorbFraming(candidate, framed);
+      probe->absorb(framed);
+      SmallVector<uint8_t, 32> symbols =
+          probe->squeeze(squeezeOp.getDomain(), (*powCodec)->squeezeSymbols());
+      return (*powCodec)->squeezeDerive(symbols, plan->space);
+    };
+    llvm::Expected<llvm::APInt> found = supplier->search(domainEnd, trial);
+    if (!found)
+      return llvm::joinErrors(fail("[zkc-E408] fill for hole contract '" +
+                                   hole.getContractDigest() +
+                                   "' reported a defect"),
+                              found.takeError());
+    env.try_emplace(nonce, *found);
+    return llvm::Error::success();
+  }
+
   llvm::Error step(Operation *op) {
     return llvm::TypeSwitch<Operation *, llvm::Error>(op)
         .Case<oir::TranscriptInitOp>([&](oir::TranscriptInitOp init) {
@@ -629,6 +727,9 @@ private:
         .Case<oir::ConstantOp>(
             [&](oir::ConstantOp constant) { return stepConstant(constant); })
         .Case<oir::HoleCallOp>([&](oir::HoleCallOp hole) -> llvm::Error {
+          if (llvm::any_of(hole.getInputs().getTypes(),
+                           llvm::IsaPred<oir::SpongeType>))
+            return stepPowSearch(hole);
           const HoleSupplier *supplier = profile.hole(hole.getContractDigest());
           if (!supplier)
             return fail("[zkc-E407] hole contract '" +
@@ -651,13 +752,12 @@ private:
                     "projection");
               handles.push_back(it->second);
             } else {
-              // A pow_search fill reads the transcript it is grinding
-              // against, and no supplier set implements that. Refusing
-              // names the gap rather than guessing at a fill.
-              return fail("[zkc-E407] hole contract '" +
-                          hole.getContractDigest() +
-                          "' peeks the transcript; no profile supplies "
-                          "transcript-peeking fills yet");
+              // Sponge operands were routed to the peek path above, and
+              // zkc-E149 admits them on pow_search holes alone: reaching
+              // here takes a hand-crafted artifact.
+              return llvm::createStringError(
+                  "sponge operand outside the peek path: not the output "
+                  "of a verified projection");
             }
           }
           SmallVector<StringRef> params;

@@ -85,6 +85,10 @@ public:
 class SpongeState {
 public:
   virtual ~SpongeState() = default;
+  /// An independent copy of the current state. This is the transcript
+  /// peek's mechanism (docs/spec/endpoints.md §6.2): a pow_search trial
+  /// runs on a clone, so the live transcript never moves.
+  virtual std::unique_ptr<SpongeState> clone() const = 0;
   virtual void absorb(llvm::ArrayRef<uint8_t> framed) = 0;
   /// Yield the symbols one squeeze event provides for `nSymbols`-symbol
   /// derivation. Constructions that hash a domain use it; constructions
@@ -139,6 +143,28 @@ public:
       const = 0;
 };
 
+/// The transcript-peek fill (docs/spec/endpoints.md §6.2): the one
+/// supplier whose operand is not a value but a trial oracle the
+/// interpreter builds over a cloned sponge, so the fill can read the
+/// state it grinds against without ever holding it. The supplier owns
+/// the enumeration but the specification binds it: canonical ascending
+/// order, least valid witness, so every conforming implementation
+/// returns the same nonce. Keyed by hole-contract content digest like
+/// every other fill.
+class PowSearchSupplier {
+public:
+  virtual ~PowSearchSupplier() = default;
+  /// The hole-contract content digest this supplier implements.
+  virtual llvm::StringRef contractDigest() const = 0;
+  /// The least candidate in [0, domainEnd) whose trial derivation is
+  /// zero, or an error when the domain is exhausted — a defect of the
+  /// fill, never a verdict.
+  virtual llvm::Expected<llvm::APInt>
+  search(const llvm::APInt &domainEnd,
+         llvm::function_ref<llvm::Expected<llvm::APInt>(const llvm::APInt &)>
+             trial) const = 0;
+};
+
 /// A closed supplier set. Lookups return null/nullopt for "not supplied",
 /// and the interpreter turns that into the named refusal — the profile
 /// never formats diagnostics itself.
@@ -181,6 +207,15 @@ public:
   /// null — a profile refusal naming the digest, never a verdict. The
   /// base returns null: verifier-only profiles supply no fills.
   virtual const HoleSupplier *hole(llvm::StringRef contractDigest) const {
+    (void)contractDigest;
+    return nullptr;
+  }
+
+  /// The transcript-peek supplier for a hole-contract content digest, or
+  /// null — the same refusal shape as `hole`. The base returns null:
+  /// verifier-only profiles supply no fills.
+  virtual const PowSearchSupplier *
+  powSearch(llvm::StringRef contractDigest) const {
     (void)contractDigest;
     return nullptr;
   }

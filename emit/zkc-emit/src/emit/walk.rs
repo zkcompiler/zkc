@@ -18,8 +18,6 @@ use crate::doc::{Document, Endpoint, Entry, Ref, Row};
 use crate::rust;
 use std::collections::{HashMap, HashSet};
 
-use super::peeking_fill_refusal;
-
 /// Stands where the sponge declaration's qualifier goes until the walk
 /// knows whether anything absorbs or squeezes. `init` is a row, so the
 /// declaration is written mid-body, before its own answer exists; every
@@ -225,34 +223,46 @@ impl<'a> Walk<'a> {
     }
 
     fn emit_absorb_of(&mut self, expr: &str, class: &VClass, row: usize) -> Result<(), String> {
+        let statement = self.absorb_statement("sponge", expr, class, row)?;
+        self.line(1, &statement);
+        self.used.sponge = Use {
+            named: true,
+            mutated: true,
+        };
+        Ok(())
+    }
+
+    /// The absorb statement for `target`, one framing per implementation
+    /// — the single source the live spine and a pow_search trial clone
+    /// both write their absorbs from, so the trial's framing cannot
+    /// drift from the check the verifier performs.
+    fn absorb_statement(
+        &self,
+        target: &str,
+        expr: &str,
+        class: &VClass,
+        row: usize,
+    ) -> Result<String, String> {
         match class {
             VClass::Algebra => Err(format!(
                 "row {row}: absorbing an algebra result has no framing codec; \
                  no admitted artifact does this"
             )),
-            VClass::Doc(name) => {
-                let statement = match self.class_impl(name)? {
-                    ImplKind::ToyBe8 => {
-                        format!("sponge.absorb(&zkc_rt::toy::frame_be8({expr}));")
-                    }
-                    ImplKind::P3Word => format!("sponge.absorb(&[{expr}]);"),
-                    ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
-                        format!("sponge.absorb(&{expr});")
-                    }
-                    ImplKind::BlsFrBe32 => {
-                        format!("sponge.absorb(&zkc_rt::kzg::fr_to_wire(&{expr}));")
-                    }
-                    ImplKind::BlsG1Be48 => {
-                        format!("sponge.absorb(&zkc_rt::kzg::g1_to_wire(&{expr}));")
-                    }
-                };
-                self.line(1, &statement);
-                self.used.sponge = Use {
-                    named: true,
-                    mutated: true,
-                };
-                Ok(())
-            }
+            VClass::Doc(name) => Ok(match self.class_impl(name)? {
+                ImplKind::ToyBe8 => {
+                    format!("{target}.absorb(&zkc_rt::toy::frame_be8({expr}));")
+                }
+                ImplKind::P3Word => format!("{target}.absorb(&[{expr}]);"),
+                ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
+                    format!("{target}.absorb(&{expr});")
+                }
+                ImplKind::BlsFrBe32 => {
+                    format!("{target}.absorb(&zkc_rt::kzg::fr_to_wire(&{expr}));")
+                }
+                ImplKind::BlsG1Be48 => {
+                    format!("{target}.absorb(&zkc_rt::kzg::g1_to_wire(&{expr}));")
+                }
+            }),
         }
     }
 
@@ -1132,15 +1142,15 @@ impl<'a> Walk<'a> {
         else {
             unreachable!("emit_hole_call is reached from the hole_call arm alone")
         };
-        // The pre-walk pass sees a peek by its sponge result. A hole that
-        // takes the sponge and does not hand it back has no such result,
-        // so it arrives here — and naming the peek is more use than the
-        // "names no value" the generic operand path would report.
-        if inputs
-            .iter()
-            .any(|input| Some(*input) == self.current_sponge)
+        // A hole that touches the sponge — as operand or result — is the
+        // transcript peek, judged by its own rules rather than by
+        // positional value marshaling.
+        if results.contains(&Entry::Sponge)
+            || inputs
+                .iter()
+                .any(|input| Some(*input) == self.current_sponge)
         {
-            return Err(peeking_fill_refusal(index, label, kind));
+            return self.emit_pow_search(index, row);
         }
         let Some(hole) = self.binding.hole(digest).cloned() else {
             return Err(format!(
@@ -1196,6 +1206,12 @@ impl<'a> Walk<'a> {
                         }
                     }
                     arguments.push(expression);
+                }
+                Operand::Sponge => {
+                    return Err(format!(
+                        "row {index}: hole '{label}' reached value marshaling with a sponge \
+                         operand; the peek path owns that shape"
+                    ))
                 }
             }
         }
@@ -1272,6 +1288,218 @@ impl<'a> Walk<'a> {
             ),
         );
         self.line(1, "};");
+        Ok(())
+    }
+
+    /// The transcript peek (`docs/spec/endpoints.md` §6.2). The fill
+    /// never receives the sponge: the emitted call passes a trial
+    /// closure that clones it, replays the nonce absorb and the
+    /// proof-of-work squeeze — the same forms the spine emits for the
+    /// three rows that follow — and returns the derivation. Any other
+    /// neighborhood refuses, because the trial the fill would run would
+    /// not be the check the verifier performs. The hole's sponge result
+    /// is the unchanged live state, so nothing is emitted for it.
+    fn emit_pow_search(&mut self, index: usize, row: &Row) -> Result<(), String> {
+        let Row::HoleCall {
+            inputs,
+            results,
+            label,
+            kind,
+            digest,
+            params,
+            semantic_params,
+        } = row
+        else {
+            unreachable!("emit_pow_search is reached from emit_hole_call alone")
+        };
+        let Some(hole) = self.binding.hole(digest).cloned() else {
+            return Err(format!(
+                "row {index}: hole '{label}' (kind '{kind}', contract {digest}) has no fill in \
+                 binding '{}'; the reference profiles refuse this at run time (zkc-E407) and the \
+                 emitter refuses it here",
+                self.binding.name
+            ));
+        };
+        let mismatch = |what: &str| {
+            format!(
+                "row {index}: pow_search hole '{label}': {what}; the trial the fill would run \
+                 is not the check the verifier performs (zkc-E412's emit-time form)"
+            )
+        };
+        let signature = hole.implementation.signature();
+        let [Operand::Sponge] = signature.inputs else {
+            return Err(mismatch("the bound fill does not take the transcript peek"));
+        };
+        let [Operand::Value(nonce_kind), Operand::Sponge] = signature.results else {
+            return Err(mismatch(
+                "the bound fill does not return a nonce and the sponge",
+            ));
+        };
+        let nonce_kind = *nonce_kind;
+        if !semantic_params.is_empty() {
+            return Err(mismatch(
+                "no fill in this vocabulary takes semantic parameters",
+            ));
+        }
+        let [bits_text] = params.as_slice() else {
+            return Err(mismatch(
+                "the contract's one static parameter must be the bit count",
+            ));
+        };
+        let bits: u32 = match bits_text.parse() {
+            Ok(bits) if (1..64).contains(&bits) => bits,
+            _ => {
+                return Err(mismatch(
+                    "the bit count must be a positive integer below 64",
+                ))
+            }
+        };
+        if inputs.len() != 1 || Some(inputs[0]) != self.current_sponge {
+            return Err(mismatch(
+                "the hole must take the live sponge as its only operand",
+            ));
+        }
+        let (mut nonce_slot, mut sponge_slot, mut nonce_class) = (None, None, None);
+        for (slot, result) in results.iter().enumerate() {
+            match result {
+                Entry::Val(class) => {
+                    nonce_slot = Some(slot);
+                    nonce_class = Some(class.clone());
+                }
+                Entry::Sponge => sponge_slot = Some(slot),
+                _ => {}
+            }
+        }
+        let (Some(nonce_slot), Some(sponge_slot), Some(nonce_class), 2) =
+            (nonce_slot, sponge_slot, nonce_class, results.len())
+        else {
+            return Err(mismatch(
+                "the contract must yield exactly one nonce value and the state-identical sponge",
+            ));
+        };
+        if self.class_impl(&nonce_class)? != nonce_kind {
+            return Err(mismatch("the nonce class is not the bound fill's"));
+        }
+        let nonce_ref = Ref::Res(index, nonce_slot);
+        let sponge_res = Ref::Res(index, sponge_slot);
+        let neighborhood =
+            "the three rows after the hole must write the nonce, absorb it, and squeeze \
+             the proof of work";
+        let Some([write, absorb, squeeze]) = self.document.rows.get(index + 1..index + 4) else {
+            return Err(mismatch(neighborhood));
+        };
+        let Row::Write { value: written, .. } = write else {
+            return Err(mismatch(neighborhood));
+        };
+        if *written != nonce_ref {
+            return Err(mismatch(
+                "the row after the hole must write the hole's nonce result",
+            ));
+        }
+        let Row::Absorb {
+            sponge: absorb_sponge,
+            value: absorbed,
+        } = absorb
+        else {
+            return Err(mismatch(neighborhood));
+        };
+        if *absorbed != nonce_ref || *absorb_sponge != sponge_res {
+            return Err(mismatch(
+                "the row after the write must absorb the nonce through the hole's sponge result",
+            ));
+        }
+        let Row::Squeeze {
+            sponge: squeeze_sponge,
+            class: pow_class,
+            count,
+            domain,
+            rule,
+            space,
+            ..
+        } = squeeze
+        else {
+            return Err(mismatch(neighborhood));
+        };
+        if *squeeze_sponge != Ref::Res(index + 2, 0) {
+            return Err(mismatch("the row after the absorb must squeeze from it"));
+        }
+        if *count != 1 || rule != "uniform" || *space != (1u64 << bits).to_string() {
+            return Err(mismatch(
+                "the proof-of-work squeeze must draw one uniform value from a space of \
+                 exactly 2^bits",
+            ));
+        }
+        // The search enumerates the nonce class's canonical values; its
+        // domain is the class's own.
+        let domain_argument = match nonce_kind {
+            ImplKind::ToyBe8 => {
+                let Some(modulus) = self.class_binding(&nonce_class)?.modulus else {
+                    return Err(format!(
+                        "row {index}: pow_search hole '{label}': binding '{}' pins no modulus \
+                         for nonce class '{nonce_class}', so the search has no canonical domain",
+                        self.binding.name
+                    ));
+                };
+                format!("{modulus}u64")
+            }
+            ImplKind::P3Word => "zkc_rt::p3::BB".to_owned(),
+            other => {
+                return Err(mismatch(&format!(
+                    "nonce implementation {other:?} has no search domain"
+                )))
+            }
+        };
+        let absorb_line =
+            self.absorb_statement("trial", "nonce", &VClass::Doc(nonce_class.clone()), index)?;
+        let derive_expr = match self.class_impl(pow_class)? {
+            ImplKind::ToyBe8 => format!(
+                "zkc_rt::toy::derive_be8(&trial.squeeze({}), {space}u64)",
+                rust::literal(domain)
+            ),
+            ImplKind::P3Word => format!("zkc_rt::p3::squeeze_low_bits(&mut trial, {space}u64)"),
+            other => {
+                return Err(mismatch(&format!(
+                    "proof-of-work class implementation {other:?} has no trial derivation"
+                )))
+            }
+        };
+        self.consume_sponge(inputs[0], index, sponge_res)?;
+        self.used.sponge.named = true;
+        let referenced = self.referenced.contains(&(index, nonce_slot));
+        let name = format!("{}r{index}_{nonce_slot}", if referenced { "" } else { "_" });
+        self.line(
+            1,
+            &format!(
+                "// [\"hole_call\", \"{}\" : {}]",
+                rust::comment(label),
+                rust::comment(kind)
+            ),
+        );
+        self.line(
+            1,
+            &format!(
+                "let {name}: {} = match {}({domain_argument}, |nonce| {{",
+                nonce_kind.rust_type(),
+                hole.implementation.path()
+            ),
+        );
+        self.line(2, "let mut trial = sponge.clone();");
+        self.line(2, &absorb_line);
+        self.line(2, &derive_expr);
+        self.line(1, "}) {");
+        self.line(2, "Ok(value) => value,");
+        self.line(
+            2,
+            &format!(
+                "Err(message) => return Err(ProveError::Fill {{ label: {}.to_owned(), message }}),",
+                rust::literal(label)
+            ),
+        );
+        self.line(1, "};");
+        self.values.insert(
+            nonce_ref,
+            (format!("r{index}_{nonce_slot}"), VClass::Doc(nonce_class)),
+        );
         Ok(())
     }
 

@@ -1,0 +1,27 @@
+{
+  "artifact_id": "da58aeae42bf73a907e451c0858ccace272baf4cbb6f72fa69f5ab1f445fefcf",
+  "source": "sha256:adb3762b56d7a42dcbdadefb651caef495b69097a40ad0900805b0f8bb89a547",
+  "vectors": [
+    {
+      "name": "honest",
+      "statement": {"y": "1024"},
+      "proof": "00000000000040000aad8373a9a8779c00000000000001d4",
+      "expect": "accept",
+      "challenges": ["1998557536199175941", "0"]
+    },
+    {
+      "name": "corrupt_nonce",
+      "statement": {"y": "1024"},
+      "proof": "00000000000040000aad8373a9a8779c00000000000001d5",
+      "expect": "check_failure",
+      "challenges": []
+    },
+    {
+      "name": "trailing_byte",
+      "statement": {"y": "1024"},
+      "proof": "00000000000040000aad8373a9a8779c00000000000001d400",
+      "expect": "proof_trailing_data",
+      "challenges": []
+    }
+  ]
+}

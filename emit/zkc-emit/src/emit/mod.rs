@@ -12,7 +12,7 @@ mod walk;
 pub use vectors::{Cases, ProverCase, VectorCase, Vectors};
 
 use crate::binding::Binding;
-use crate::doc::{Document, Endpoint, Entry, Row};
+use crate::doc::{Document, Endpoint};
 use crate::rust;
 
 use walk::Walk;
@@ -38,42 +38,10 @@ const REJECT_CLASSES: &[&str] = &[
     "check_failure",
 ];
 
-/// The transcript peek (`docs/spec/endpoints.md` §6.2): `pow_search`
-/// threads the live sponge through its fill so the grind can read the
-/// state it is grinding against. No supplier vocabulary implements a
-/// peeking fill — not here, and not in the reference executor, which
-/// refuses the same shape as zkc-E407.
-pub(crate) fn peeking_fill_refusal(index: usize, label: &str, kind: &str) -> String {
-    format!(
-        "row {index}: hole '{label}' (kind '{kind}') threads the transcript through its fill — \
-         the read-only peek of the specification's §6.2. No supplier vocabulary implements \
-         transcript-peeking fills yet, so this artifact's prover is not emittable; the reference \
-         executor refuses the same shape (zkc-E407)"
-    )
-}
-
 /// Emit-time supplier gates: every codec route and construction pin must
 /// be realized by the binding before any code exists. The sponge is
 /// checked where it is opened, in the `init` arm.
 fn gate_suppliers(document: &Document, binding: &Binding) -> Result<(), String> {
-    // Ahead of the per-row supplier gates, because a peeking fill is not
-    // a gap a binding can close: it names the phase this emitter does
-    // not implement, where a missing fill names one someone can write.
-    // The sponge is consumed exactly once, so a hole that peeks must
-    // hand it back — the result list is where that shows.
-    for (index, row) in document.rows.iter().enumerate() {
-        if let Row::HoleCall {
-            results,
-            label,
-            kind,
-            ..
-        } = row
-        {
-            if results.contains(&Entry::Sponge) {
-                return Err(peeking_fill_refusal(index, label, kind));
-            }
-        }
-    }
     for (class, codec) in &document.codecs {
         let class_binding = binding.class(class).ok_or_else(|| {
             format!(

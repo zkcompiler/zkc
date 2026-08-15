@@ -85,6 +85,10 @@ public:
         sha256({(const uint8_t *)sourceIdentity.data(), sourceIdentity.size()});
   }
 
+  std::unique_ptr<SpongeState> clone() const override {
+    return std::make_unique<ToyDuplexState>(*this);
+  }
+
   void absorb(ArrayRef<uint8_t> framed) override {
     SmallVector<uint8_t> input(state.begin(), state.end());
     input.push_back(0x00);
@@ -153,6 +157,37 @@ static llvm::Error parseSigmaWitness(ArrayRef<SmallVector<uint8_t, 32>> handles,
     k = (k << 8) | handles[0][i];
   return llvm::Error::success();
 }
+
+/// The toy proof-of-work search: canonical ascending order, least valid
+/// witness — the normative enumeration (docs/spec/endpoints.md §6.2),
+/// so every conforming implementation returns the same nonce. The
+/// supplier owns the loop; the trial it is handed is the verifier's own
+/// derivation over a cloned sponge.
+class ToyPowSearch : public PowSearchSupplier {
+public:
+  StringRef contractDigest() const override {
+    return "sha256:d45f029644f09ac28a8284a5048c0a773e03509d810daecf0ea8ec65"
+           "576962b6";
+  }
+  llvm::Expected<APInt>
+  search(const APInt &domainEnd,
+         llvm::function_ref<llvm::Expected<APInt>(const APInt &)> trial)
+      const override {
+    for (APInt candidate = APInt::getZero(domainEnd.getBitWidth());
+         candidate.ult(domainEnd); ++candidate) {
+      llvm::Expected<APInt> derived = trial(candidate);
+      if (!derived)
+        return derived.takeError();
+      if (derived->isZero())
+        return candidate;
+    }
+    SmallVector<char> end;
+    domainEnd.toStringUnsigned(end);
+    return llvm::createStringError(
+        "no nonce below " + StringRef(end.data(), end.size()) +
+        " satisfies the proof-of-work condition");
+  }
+};
 
 /// The honest toy fill for the sigma commit: a = g^k, witness threaded.
 class ToySigmaCommit : public HoleSupplier {
@@ -278,12 +313,19 @@ public:
     return nullptr;
   }
 
+  const PowSearchSupplier *powSearch(StringRef contractDigest) const override {
+    if (contractDigest == pow.contractDigest())
+      return &pow;
+    return nullptr;
+  }
+
 private:
   ToyCodec tg{"tg_be8", 8};
   ToyCodec ts{"ts_be8", 8};
   ToyDuplexSupplier duplex;
   ToySigmaCommit sigmaCommit;
   ToySigmaResponse sigmaResponse;
+  ToyPowSearch pow;
 };
 
 /// The wrong algebra behind the same boundary: z+1 survives every

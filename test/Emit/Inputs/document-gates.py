@@ -30,6 +30,18 @@ def mutate(document: dict, where: str) -> dict:
         ]
         # decide's operand is the sponge, so the remaining rows still
         # reference valid results; only the stream is left open.
+    elif where == "pow-wrong-space":
+        # Widen the proof-of-work squeeze's space so it is no longer
+        # 2^bits for the hole's declared bit count. The trial the fill
+        # would run is then not the check the verifier performs, and
+        # the emitter must refuse (zkc-E412's emit-time form), exactly
+        # as the reference executor does at run time.
+        for row in document["program"]:
+            if row[0] == "squeeze" and row[2] == "pow":
+                row[7] = str(int(row[7]) * 2)
+                break
+        else:
+            raise SystemExit("no pow squeeze to widen")
     else:
         raise SystemExit(f"unknown mutation {where!r}")
     return document
