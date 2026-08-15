@@ -1415,9 +1415,9 @@ impl<'a> Walk<'a> {
 
     /// The walk's output: the emitted body with the sponge declaration's
     /// qualifier resolved, and the use record the preamble declares from.
-    pub(crate) fn finish(mut self) -> (String, Used) {
+    pub(crate) fn finish(self) -> (String, Used) {
         let used = self.used;
-        let body = std::mem::take(&mut self.body).replace(
+        let body = self.body.replace(
             SPONGE_QUALIFIER,
             &format!("{}{}", used.sponge.prefix(), used.sponge.qualifier()),
         );
