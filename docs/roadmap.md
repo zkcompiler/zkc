@@ -2,7 +2,8 @@
 
 zkc is growing from a checked protocol representation into a compiler that can
 bind protocols to external relations and witnesses, compose protocol
-components, and realize prover and verifier endpoints on concrete backends.
+components, realize prover and verifier endpoints through generated
+implementations, and move protocol parameters under judgment.
 [Current Status](status.md) describes what works today, while
 [Architecture](architecture.md) describes the intended system.
 
@@ -44,21 +45,48 @@ several protocol components. Its VM relation will still come from an external
 relation compiler; the purpose is to exercise protocol composition rather than
 to build a zkVM frontend.
 
-## Realize endpoints on concrete backends
+## Realize endpoints through emission
 
-OIR describes prover and verifier behavior, but zkc does not yet compile it to
-general-purpose backend implementations. The realization layer will:
+OIR describes prover and verifier behavior; emission turns one endpoint into
+a standalone implementation under an explicit supplier binding that names one
+implementation for every codec class, construction pin, and hole contract the
+endpoint requires. The next steps deepen that path rather than adding a
+layer. They will:
 
-- match endpoint requirements to named backend capabilities;
-- lower memory layouts, encodings, and call boundaries without changing
-  protocol semantics;
-- record which implementation supplies each required operation; and
-- preserve a checkable correspondence between the endpoint and the generated
-  artifact.
+- widen supplier bindings and targets behind the same binding discipline —
+  embedded libraries, devices, and services beside generated code;
+- make correspondence measurable, with generated endpoints graded against the
+  independent implementations they borrow kernels from and benchmark gates
+  that expose assembly overhead as a number;
+- extend handle contracts so data residency and layout stay explicit wherever
+  a silent copy would falsify the performance claim; and
+- carry deployment surfaces — setup material, embedding, invocation plans —
+  without letting them authorize semantics.
 
-The first version should support one backend end to end. Additional libraries,
-services, accelerators, and deployment targets can then use the same
-requirement and correspondence model.
+A capability-matching or general lowering layer is not planned. Performance
+authority stays at named points: reference-passing handle contracts with
+explicit layout, orchestration loops owned by the generated code, benchmark
+evidence against the borrowed implementations, and explicit supplier
+designation. Generating fused kernels that no supplier provides is the one
+concern that would justify new machinery, and it waits for a concrete need.
+
+## Move protocol parameters under judgment
+
+zkc already applies checked structure-changing transformations whose
+judgments survive the rewrite. The same machinery extends to a choice every
+deployment makes by hand today: picking protocol parameters. It will:
+
+- let a protocol family describe its parameter space, so each candidate seals
+  and prices as a first-class subject;
+- keep distinct security-accounting regimes distinct objects, so a proven
+  bound and a conjectured bound never blur into one number;
+- use measured endpoint cost profiles as the search objective, connecting the
+  benchmark evidence above to the selection; and
+- keep selection deterministic and re-checkable, in the same discipline as
+  the existing checked transformations.
+
+This area depends on emission's measurements: a search without a cost profile
+can optimize nothing but proof size.
 
 ## Connect formal evidence
 
@@ -76,7 +104,10 @@ theorem name to a rule. It must:
 Lean and ArkLib are natural initial integrations, but the interface should not
 depend on one proof assistant. Formal correspondence can be added
 component-by-component and does not need to block the first composition or
-backend work.
+backend work. The same admission discipline is what will eventually let
+identity, judgments, receipts, and measurements assemble into one
+independently checkable report; that schema stays unfixed until the analyses
+it would carry exist.
 
 ## Extend system-level security and scale
 

@@ -128,9 +128,9 @@ to what their evidence establishes.
 
 The target lifecycle separates protocol compilation, target realization,
 deployment, and invocation. The **Protocol Compiler** fixes accepted behavior,
-and the **Realization Compiler** implements that behavior for a target.
-Deployment resolves target resources; invocation binds per-run inputs to one
-deployed realization.
+and **endpoint emission** implements that behavior for a target under an
+explicit supplier binding. Deployment resolves target resources; invocation
+binds per-run inputs to one deployed realization.
 
 ```mermaid
 flowchart LR
@@ -157,10 +157,11 @@ or acceptance-affecting parameters belongs in this layer and creates a new
 identified semantic subject.
 
 Projection derives one prover or verifier **Operator IR (OIR)** artifact from
-Sealed PIR. The Realization Compiler maps that fixed endpoint contract to a
-target implementation. This behavioral boundary is the semantic firewall:
-layout, scheduling, transport, and supplier choices may vary within the
-contract, while changes to accepted behavior return to protocol compilation.
+Sealed PIR. Emission maps that fixed endpoint contract to a generated target
+implementation. This behavioral boundary is the semantic firewall:
+layout, kernel-internal scheduling, transport, and supplier choices may vary
+within the contract, while changes to accepted behavior return to protocol
+compilation.
 Section 6 describes endpoint and realization semantics in detail.
 
 Invocation binds the public statement, a prover witness capability or verifier
@@ -279,11 +280,13 @@ consumes the statement and invocation-local private handles and either emits
 proof bytes or fails. Shared source provenance makes pair correspondence
 checkable.
 
-The Realization Compiler extracts the semantic and operational capabilities
-required by OIR. A target offer identifies its supplier and matches those
-requirements. A conforming realization can then schedule, lower, package, and
-emit deployment requirements for the endpoint. Deployment then binds concrete
-resources. Missing or incompatible capabilities cause realization to fail.
+Emission consumes the persisted OIR artifact together with an explicit
+supplier binding that names one implementation for every codec class,
+construction pin, and hole contract the endpoint requires. Nothing is matched
+or inferred from capability descriptions: a missing or mismatched entry is an
+emit-time refusal that names the gap, and what emerges otherwise is a
+standalone implementation carrying its conformance suite. Deployment then
+binds concrete resources.
 
 A target can be generated code, an embedded cryptographic library, a generated
 CPU or accelerator kernel, a local process, a device program, an on-chain

@@ -31,7 +31,7 @@ flowchart LR
   Adapter["Relation adapters and interface providers"]
   Issuer["Theorem and evidence issuers"]
   PC["zkc Protocol Compiler"]
-  RC["zkc Realization Compiler"]
+  Emit["zkc endpoint emission"]
   Implementation["Implementation providers"]
   Witness["Witness providers"]
   Runtime["Operators and runtime"]
@@ -41,9 +41,9 @@ flowchart LR
   Adapter -->|"adapter-attributed interface facts and bindings"| PC
   Author -->|"protocol proposals, requests, and policies"| PC
   Issuer -.->|"typed evidence about exact subjects"| PC
-  PC -->|"sealed protocols, judgments, endpoint semantics"| RC
-  Implementation -->|"capability offers and supplier identities"| RC
-  RC -->|"realization bundles and deployment requirements"| Runtime
+  PC -->|"sealed protocols, judgments, endpoint semantics"| Emit
+  Implementation -->|"named supplier implementations behind explicit bindings"| Emit
+  Emit -->|"standalone endpoint artifacts and conformance suites"| Runtime
   Witness -->|"runtime resources and scoped capabilities"| Runtime
   Runtime -->|"run records and observations"| Consumer
   Issuer -.->|"evidence"| Consumer
@@ -61,7 +61,7 @@ provider behind that boundary.
 | Protocol client | Open material, requests, policies | Closure, protocol identity, decisions, projection | Undeclared author intent |
 | Formal authority | Rules, receipts, assumptions | Subject binding, typed use, conditions, residuals | Truth from citation or digest; the consumer owns reliance policy |
 | Witness provider | Generators, traces, streams, sessions | Ports, capability scope, invocation routing | Confidentiality or satisfaction from delivery |
-| Implementation provider | Kernels, libraries, devices, services | Resolution, supplier identity, correspondence obligations | Conformance from self-description |
+| Implementation provider | Kernels, libraries, devices, services | Explicit binding, supplier identity, emit-time refusal, correspondence obligations | Conformance from self-description |
 | Operator | Resources, inputs, authorized prover-local randomness, run policy | Bound invocation, typed result, run record | Universal correctness from one run |
 | Admission consumer | Trust policy | Objects, judgments, evidence, refusals | Consumer risk tolerance |
 
@@ -75,9 +75,10 @@ correspondence remain separate judgments.
 
 The primary flow has four lanes. External producers establish inputs at
 declared trust boundaries. The Protocol Compiler fixes accepted protocol
-behavior. The Realization Compiler chooses implementations for already-fixed
-endpoint semantics. Deployment binding bridges realization and runtime;
-runtime then binds invocation-local values and resources.
+behavior. Emission binds named supplier implementations to already-fixed
+endpoint semantics and generates standalone artifacts. Deployment binding
+bridges the emitted artifact and runtime; runtime then binds invocation-local
+values and resources.
 
 ```mermaid
 flowchart TB
@@ -95,9 +96,9 @@ flowchart TB
     Judge --> Project
   end
 
-  subgraph Realization["Realization Compiler"]
-    Require["Extract requirements"] --> Resolve["Resolve offers and suppliers"]
-    Resolve --> Lower["Schedule, lower, package, and\nemit deployment requirements"]
+  subgraph Emission["Endpoint emission"]
+    Gate["Gate the explicit supplier binding\nagainst every endpoint requirement"]
+    Gate --> Generate["Generate the standalone artifact\nand its conformance suite"]
   end
 
   Deploy["Deployment binding"]
@@ -109,23 +110,23 @@ flowchart TB
 
   RA --> Ingress
   EV -.-> Judge
-  Project --> Require
-  Lower --> Deploy
+  Project --> Gate
+  Generate --> Deploy
   Deploy --> Bind
   Inputs["Statement, witness capability or proof,\nauthorized prover-local randomness"] --> Bind
   Cross["Vocabulary, artifacts, evidence, admission, diagnostics"] -.-> Seal
   Cross -.-> Judge
-  Cross -.-> Resolve
+  Cross -.-> Gate
   Cross -.-> Record
 ```
 
 The central firewall is semantic: a choice that can change the statement,
 transcript, proof ABI, claim graph, checks, terminal decision, assumptions,
 child policy, or acceptance-affecting material belongs in the Protocol
-Compiler. Target selection, scheduling, layout, transport, caching, and
-supplier choice belong in realization only when they preserve that fixed
-endpoint contract. Invocation can select only options that were already
-authorized by protocol and realization artifacts.
+Compiler. Supplier choice, data layout, kernel-internal scheduling,
+transport, and caching belong to emission and deployment only while they
+preserve that fixed endpoint contract. Invocation can select only options
+that were already authorized by protocol and emission artifacts.
 
 Vocabulary and artifact resolution, typed judgment services, evidence
 issuers, consumer admission, diagnostics, and observability are cross-cutting
@@ -145,7 +146,7 @@ single command or process hosts several of them.
 | Post-seal judgment services | Produce typed derivations with explicit conditions and residuals | Truth or faithful encoding of external rules and premises |
 | Checked Compiler Core | Reconstruct the finite comparison scope, lineage, legality, requested judgments, objectives, and deterministic selection | Correctness of admitted domain-provider and transform-family semantics; unrequested properties |
 | Endpoint projector | Derive prover or verifier OIR with structural endpoint coverage | Target or semantic correspondence |
-| Realization Compiler | Resolve OIR requirements against provider offers and produce target plans with explicit preservation obligations | Supplier conformance |
+| Endpoint emitter | Generate a standalone implementation of one endpoint from its persisted artifact under an explicit supplier binding, refusing every unbound or mismatched supplier at emit time | Supplier conformance |
 | Runtime services | Bind authorized resources and execute a typed endpoint | Security or universal conformance |
 | Shared infrastructure | Provide fail-closed identity, evidence, registry, and admission services | Unadmitted protocol semantics |
 
@@ -171,7 +172,8 @@ Packaging several roles together does not merge their identities.
 | Sealed PIR | Immutable | Canonical protocol subject | No invocation secret |
 | Typed derivation result | Immutable | Proposition, subject, context, and conditions | No raw witness material |
 | OIR | Immutable | Encoded endpoint program and embedded source positions; exact coverage is specification-defined | Handle classes, not secret values |
-| Realization bundle | Immutable package | OIR, target, suppliers, configuration, and coverage | Protected target artifacts possible |
+| Supplier binding | Immutable configuration | One named implementation for every codec class, construction pin, and hole contract an endpoint requires | No invocation secret |
+| Emitted endpoint artifact | Immutable package | Generated implementation, its source artifact identity, binding, and conformance coverage | Protected target artifacts possible |
 | Setup artifact | Ceremony-governed | Keys, SRS, indexes, fixed data, and target copies | Secret proving material possible |
 | Deployment binding | Controlled state | Authorized roles resolved to physical resources | Secret locations possible |
 | Witness-generation contract | Immutable declaration | Private inputs, ports, partiality, randomness, provenance, and failure | No concrete witness |
@@ -208,8 +210,8 @@ remaining entries describe target roles.
 | Derive | Subject, context, rules, explicit plan | Typed conditional judgment | Rule application to the exact subject | Refuse unresolved or invalid steps |
 | Checked compile | Source, request, context, providers | Selection, no selection, or refusal | Domain, validity, constraints, deterministic choice | Distinguish no admissible candidate from invalid input |
 | Project | Sealed PIR and endpoint kind | OIR | Structural coverage for one admitted endpoint and embedded source positions | Refuse an endpoint whose required behavior cannot be represented |
-| OIR realization | OIR, context, target policy, offers | Bundle, plan, obligations, or refusal | Total resolution and a lowering plan constrained to preserve OIR semantics, with explicit residual correspondence obligations | Refuse missing, ambiguous, incompatible, or hidden-effect offers |
-| Deployment | Bundle, resources, topology, policy | Deployment binding | Physical resolution of authorized roles | Refuse substitution or trust-zone mismatch |
+| Emission | OIR, supplier binding, runtime support | Standalone endpoint artifact with its conformance suite, or refusal | Every requirement bound to a named supplier before any code exists; generated behavior preserves OIR semantics, with explicit residual correspondence obligations | Refuse a missing, mismatched, or superfluous binding entry by name |
+| Deployment | Emitted artifact, resources, topology, policy | Deployment binding | Physical resolution of authorized roles | Refuse substitution or trust-zone mismatch |
 | Invocation | Endpoint, deployment, statement, witness or proof, and authorized prover-local randomness | Bound run and typed result | Exact runtime join; transcript challenges remain endpoint-derived | Separate refusal, malformed input, failure, and reject |
 | Admission | Object, judgment, evidence, policy | Scoped admission or refusal | Policy acceptance for a named use | Unmet policy cannot degrade to acceptance |
 
@@ -266,12 +268,12 @@ predicate equivalence. Instance correspondence, witness transport, soundness,
 completeness, and knowledge transport are separate claims. Any compilation
 request that changes both relation and protocol must identify both changes.
 
-### Realization and deployment flow
+### Emission and deployment flow
 
-After projection, the Realization Compiler derives exhaustive requirements
-from OIR and its source bindings, resolves them against specified offers,
-chooses a legal schedule and lowering, packages target products, and emits
-remaining coverage or correspondence obligations. Deployment then resolves
+After projection, emission gates the explicit supplier binding against
+everything the endpoint requires — every codec class, construction pin, and
+hole contract the persisted artifact cites — and then generates a standalone
+artifact that carries its conformance suite. Deployment then resolves
 authorized roles to concrete keys, modules, devices, processes, or services.
 Both stages preserve transcript events, proof encoding, relation choice,
 checks, and the endpoint decision.
@@ -319,12 +321,13 @@ Proof bytes are invocation-local I/O. Generator success, checker acceptance,
 relation satisfaction, proof emission, verifier acceptance, and security
 judgments remain distinct.
 
-## 8. Binding-time, realization, and deployment model
+## 8. Binding-time, emission, and deployment model
 
-Here **target realization** means implementing fixed OIR semantics. It is
-distinct from the Protocol Compiler's transformation judgments. Requirements,
-offers, bundles, deployment bindings, and invocation plans below are target
-roles rather than claims of stable public schemas.
+Here **target realization** means implementing fixed OIR semantics; its
+mechanism is emission under an explicit supplier binding. It is distinct from
+the Protocol Compiler's transformation judgments. Binding, artifact,
+deployment, and invocation-plan schemas below are target roles rather than
+claims of stable public surfaces.
 
 Semantic authorization, physical materialization, and runtime resolution are
 independent dimensions. Creation time alone does not determine when an object
@@ -335,36 +338,58 @@ may affect accepted behavior.
 | Transcript, claims, checks, decision | Before seal | PIR and OIR | None |
 | Relation/interface family | Seal, or a sealed family policy | External artifact and interface | Allowed member before dependent use |
 | Endpoint behavior | Projection | OIR | Authorized parameters only |
-| Backend, supplier, schedule, layout | Realization policy | Bundle, code, plan, or service configuration | Exact selected deployment |
+| Supplier, target, layout | Explicit supplier binding | Emitted artifact and its build configuration | Exact selected deployment |
 | Setup, keys, SRS, indexes | Seal or an authorized late-binding policy | Setup or ceremony | Exact authorized resource |
 | Public statement | Protocol ABI and late-binding policy | Caller or statement artifact | Before dependent transcript use |
 | Witness or session | Port and provider policy | Client, generator, stream, or service | Prover invocation |
 | Proof bytes | Verifier proof ABI | Prover output or untrusted input | Verifier invocation |
 | Evidence | Independent claim and admission policy | Issuer output | Admission or audit |
 
-Realization joins exhaustive OIR-derived requirements, fully specified supplier
-offers, and a total resolution. Offers identify contracts, domains, types,
-codecs, modes, limits, state behavior, target properties, and supplier
-precisely; a family or primitive name alone is insufficient.
+Emission joins the endpoint's complete requirement set — every codec class,
+construction pin, and hole contract the persisted artifact cites — with an
+explicit binding that names one supplier implementation for each. The binding
+is configuration, not negotiation: nothing is matched, ranked, or inferred
+from capability descriptions, and a missing, mismatched, or superfluous entry
+is an emit-time refusal that names the gap. A binding entry identifies its
+contract, types, codecs, limits, and supplier precisely; a family or
+primitive name alone is insufficient.
+
+Performance authority concentrates at four concrete points rather than in a
+general lowering layer. Handle contracts pass data by reference and name its
+layout, so residency and adjacency are explicit in the type rather than
+assumed. Orchestration loops that no supplier packages are assembled from
+supplier primitives and owned by the generated code. Generated endpoints are
+measured against the implementations they borrow kernels from, so the
+difference is assembly overhead by construction. Supplier selection is
+explicit designation in the binding. Generating fused kernels that no
+supplier provides would require kernel-level code generation; that layer is
+deliberately absent until a concrete need exists.
+
+The sealed protocol already fixes the schedule: transcript order is the
+synchronization structure and the claim graph is the dependency structure, so
+emission introduces no scheduling representation of its own. Parallelism
+lives inside supplied kernels, and any cross-instance schedule is read from
+sealed composition structure. A schedule's legality — that a parallel
+execution respects transcript order — is thereby a checkable claim about the
+protocol rather than a property of tooling.
 
 An invocation binds selected resources already authorized by protocol,
-realization, and deployment artifacts. Runtime values select among those
+emission, and deployment artifacts. Runtime values select among those
 authorized resources while endpoint behavior remains fixed. Fiat-Shamir
 challenges are derived by endpoint transcript execution.
 
 ```mermaid
 flowchart LR
-  OIR["OIR plus authenticated source and projection context"] --> Req["Requirements"]
-  Offers["Libraries, generated kernels, devices, contracts, processes, services"] --> Res["Capability and supplier resolution"]
-  Req --> Res
-  Res --> Sched["Schedule, layout, transport, and lowering"]
-  Sched --> Pack["Artifacts, manifest, setup roles, invocation plan"]
-  Pack --> Deploy["Deployment binding"]
+  OIR["OIR plus authenticated source and projection context"] --> Gate["Emit-time supplier gates"]
+  Binding["Explicit supplier binding"] --> Gate
+  Gate --> Artifact["Standalone endpoint artifact\nwith its conformance suite"]
+  Artifact --> Deploy["Deployment binding"]
   Deploy --> Modes["Embedded, process, device, remote service, on-chain verifier"]
 ```
 
-Scheduling and lowering may vary only while protected OIR effects remain
-intact; a whole-endpoint call must cover those same effects. Prover/verifier
+A coarse supplier remains expressible: an entire endpoint may be delegated to
+one whole-endpoint implementation only when its correspondence obligations
+cover every protected OIR effect. Prover/verifier
 interoperability remains a separate
 judgment over common ancestry, statement ABI, proof codec, transcript and
 challenge behavior, relation and key policy, and deployed variants; separate
@@ -433,7 +458,7 @@ status report.
 | Judgment evaluator | Already-authenticated sealed view, subject and site, context, rules, plan, premises | Checked derivation under declared rules and hypotheses | Truth and faithful encoding of external rules and premises |
 | Checked Compiler Core | Request, exact comparison scope, provider logic, candidate lineage, constraints, objectives | Deterministically checked semantic decision | Correctness of admitted domain-provider and transform-family semantics; properties not requested |
 | Projector | Sealed source, endpoint obligations, protected effects | Structural coverage and embedded source positions for one endpoint | Semantic correspondence, target implementation, and facets outside carrier identity |
-| Realization Compiler | OIR, offers, resolution, lowering, coverage | Target implementation plan and explicit obligations | Supplier correctness and undischarged correspondence claims |
+| Endpoint emitter | OIR, supplier binding, vector corpus | Standalone artifact whose supplier gaps were refused at emit time, with its conformance suite | Supplier correctness behind each contract and undischarged correspondence claims |
 | Witness provider | Relation/statement scope, port contract, capability policy | Scoped delivery or explicit refusal | Secret correctness, confidentiality enforcement, relation satisfaction |
 | Executor | Invocation join, deployment, endpoint ABI, runtime resources | One typed result and an observation attributed to the executor | Host/device/service correctness and unobserved executions |
 | Admission policy | Evidence types, issuers, subjects, conditions, intended use | Scoped permission to rely on supplied material | Consumer-chosen trust anchors and accepted residual risk |
@@ -456,7 +481,7 @@ authority.
 | Extension boundary | Required input | Admission boundary | Identity impact | Prohibited effect |
 |---|---|---|---|---|
 | Semantic contract | Versioned protocol vocabulary or relation/interface contract | Named semantic consumer validates admitted content and dependencies | May create bindings or enable new protocol identities | Encoding implementation or evidence claims as protocol meaning; treating adapter output as predicate truth |
-| Implementation/capability | Offer, supplier identity, target properties, ABI, and failure contract | Realization resolution and correspondence policy | Creates implementation, bundle, deployment, or invocation identities | Changing fixed protocol or endpoint semantics |
+| Implementation/supplier | Named implementation, its binding entry, target properties, ABI, and failure contract | Emit-time binding gates and correspondence policy | Creates implementation, artifact, deployment, or invocation identities | Changing fixed protocol or endpoint semantics |
 | Evidence-issuer extension | Claim type, subject-binding rule, issuer identity, assumptions, verification procedure | Consumer evidence and admission policy | Creates evidence identity only | Redefining the subject or implying unrelated judgments |
 
 These categories define integration points for neighboring tools while
@@ -497,7 +522,7 @@ intended role and boundary but does not claim a ratified wire surface.
 | `ProtocolVocabulary` and current vocabulary admission | [Vocabularies](spec/vocabularies.md) | Normative registry model |
 | Format evolution and diagnostic allocation | [Versioning](spec/versioning.md) | Normative lifecycle rules |
 | General relation, setup, witness, deployment, and invocation bindings, including adapters, providers, and sessions | This architecture, pending dedicated specification surfaces | Architecture-only target roles |
-| Target Realization Compiler, deployment, and generalized correspondence | This architecture plus reserved boundary concepts | Architecture-only role |
+| Endpoint emission, supplier bindings, deployment, and generalized correspondence | This architecture; the implemented emission scope is reported in Current Status | Architecture role with an operational core |
 | General child, recursion, dynamic-family, and zkVM composition | This architecture, with any admitted subset governed by the specification | Architecture-only system patterns |
 | Implemented capability and reproduced evidence | [Current Status](status.md) | Operational reporting |
 | Dependency order and future work | [Roadmap](roadmap.md) | Planning authority |
