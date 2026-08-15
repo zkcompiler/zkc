@@ -17,7 +17,8 @@ use crate::binding::{Binding, CheckImpl, ClassBinding, ImplKind, Operand, Sponge
 use crate::doc::{Document, Endpoint, Entry, Ref, Row};
 use crate::rust;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write as _;
+
+use super::peeking_fill_refusal;
 
 /// Stands where the sponge declaration's qualifier goes until the walk
 /// knows whether anything absorbs or squeezes. `init` is a row, so the
@@ -35,55 +36,7 @@ enum VClass {
     Algebra,
 }
 
-pub struct EmittedCrate {
-    pub crate_name: String,
-    pub lib_rs: String,
-    pub cargo_toml: String,
-    pub readme: String,
-    pub conformance: Option<String>,
-}
-
-pub struct Vectors {
-    pub artifact_id: String,
-    pub cases: Cases,
-}
-
-/// Vector corpora are endpoint-shaped: a verifier replays untrusted
-/// bytes to a verdict, a prover replays inputs to bytes. Keeping them
-/// distinct at the type means a corpus can never be silently replayed
-/// against the endpoint it does not describe.
-pub enum Cases {
-    Verifier(Vec<VectorCase>),
-    Prover(Vec<ProverCase>),
-}
-
-pub struct VectorCase {
-    pub name: String,
-    pub statement: Vec<(String, String)>,
-    pub proof_hex: String,
-    pub expect: String,
-    pub challenges: Vec<String>,
-}
-
-pub struct ProverCase {
-    pub name: String,
-    pub statement: Vec<(String, String)>,
-    /// Witness label → lowercase-hex payload.
-    pub witness: Vec<(String, String)>,
-    /// `"ok"`, or the refusal kind (`"statement"`, `"fill"`).
-    pub expect: String,
-    /// The endpoint ABI label a refusal names; unused when `expect` is
-    /// `"ok"`.
-    pub label: String,
-    /// The refusal's own sentence. Where a fill wrote it, this is the
-    /// same text the reference supplier reports, so the corpus compares
-    /// the diagnostic and not only the classification.
-    pub message: String,
-    pub proof_hex: String,
-    pub challenges: Vec<String>,
-}
-
-struct Walk<'a> {
+pub(crate) struct Walk<'a> {
     document: &'a Document,
     binding: &'a Binding,
     /// Rust expression and class per value reference.
@@ -110,14 +63,14 @@ struct Walk<'a> {
 /// needs to be mutable. `challenges` and `proof` are always read (the
 /// frame returns them), so only their mutability is in question.
 #[derive(Default, Clone, Copy)]
-struct Use {
+pub(crate) struct Use {
     named: bool,
     mutated: bool,
 }
 
 impl Use {
     /// `""`, `"mut "`, or the `_` prefix an unnamed local needs.
-    fn qualifier(self) -> &'static str {
+    pub(crate) fn qualifier(self) -> &'static str {
         if self.mutated {
             "mut "
         } else {
@@ -125,7 +78,7 @@ impl Use {
         }
     }
 
-    fn prefix(self) -> &'static str {
+    pub(crate) fn prefix(self) -> &'static str {
         if self.named {
             ""
         } else {
@@ -135,53 +88,20 @@ impl Use {
 }
 
 #[derive(Default, Clone, Copy)]
-struct Used {
-    sponge: Use,
-    cursor: Use,
-    challenges: Use,
-    proof: Use,
-    statement: bool,
-    group_modulus: bool,
-    field_modulus: bool,
+pub(crate) struct Used {
+    pub(crate) sponge: Use,
+    pub(crate) cursor: Use,
+    pub(crate) challenges: Use,
+    pub(crate) proof: Use,
+    pub(crate) statement: bool,
+    pub(crate) group_modulus: bool,
+    pub(crate) field_modulus: bool,
 }
-
-/// The normative reject classes (`docs/spec/endpoints.md` §4). The
-/// emitter writes these spellings into generated code and admits them in
-/// a vector corpus, so it holds the closed set; `zkc-rt` carries the same
-/// set as the type the generated code returns.
-const REJECT_CLASSES: &[&str] = &[
-    "abi_decode_failure",
-    "abi_validation_failure",
-    "proof_trailing_data",
-    "public_binding_failure",
-    "transcript_failure",
-    "check_failure",
-];
 
 /// The BLS12-381 scalar-field order: the only sample space the `fr`
 /// challenge derivation is defined over.
 const BLS12_381_R_DECIMAL: &str =
     "52435875175126190479447740508185965837690552500527637822603658699938581184513";
-
-/// Decimal text into little-endian 32-bit limbs, refusing overflow.
-fn decimal_to_limbs(text: &str, limb_count: usize) -> Result<Vec<u32>, String> {
-    if text.is_empty() || !text.chars().all(|c| c.is_ascii_digit()) {
-        return Err(format!("'{text}' is not a decimal number"));
-    }
-    let mut limbs = vec![0u32; limb_count];
-    for digit in text.chars() {
-        let mut carry = digit.to_digit(10).unwrap() as u64;
-        for limb in limbs.iter_mut() {
-            let wide = *limb as u64 * 10 + carry;
-            *limb = wide as u32;
-            carry = wide >> 32;
-        }
-        if carry != 0 {
-            return Err(format!("'{text}' does not fit {limb_count} 32-bit limbs"));
-        }
-    }
-    Ok(limbs)
-}
 
 impl<'a> Walk<'a> {
     fn line(&mut self, indent: usize, text: &str) {
@@ -336,7 +256,7 @@ impl<'a> Walk<'a> {
         }
     }
 
-    fn walk(&mut self) -> Result<(), String> {
+    pub(crate) fn walk(&mut self) -> Result<(), String> {
         // Pre-pass: which results are referenced, so unused locals can be
         // named `_…` and the emitted crate compiles warning-free.
         for row in &self.document.rows {
@@ -1430,760 +1350,30 @@ fn row_kind(row: &Row) -> &'static str {
     }
 }
 
-/// The transcript peek (`docs/spec/endpoints.md` §6.2): `pow_search`
-/// threads the live sponge through its fill so the grind can read the
-/// state it is grinding against. No supplier vocabulary implements a
-/// peeking fill — not here, and not in the reference executor, which
-/// refuses the same shape as zkc-E407.
-fn peeking_fill_refusal(index: usize, label: &str, kind: &str) -> String {
-    format!(
-        "row {index}: hole '{label}' (kind '{kind}') threads the transcript through its fill — \
-         the read-only peek of the specification's §6.2. No supplier vocabulary implements \
-         transcript-peeking fills yet, so this artifact's prover is not emittable; the reference \
-         executor refuses the same shape (zkc-E407)"
-    )
+impl<'a> Walk<'a> {
+    pub(crate) fn new(document: &'a Document, binding: &'a Binding) -> Self {
+        Walk {
+            document,
+            binding,
+            values: Default::default(),
+            handles: Default::default(),
+            referenced: Default::default(),
+            current_sponge: None,
+            current_stream: None,
+            body: String::new(),
+            used: Used::default(),
+        }
+    }
+
+    /// The walk's output: the emitted body with the sponge declaration's
+    /// qualifier resolved, and the use record the preamble declares from.
+    pub(crate) fn finish(mut self) -> (String, Used) {
+        let used = self.used;
+        let body = std::mem::take(&mut self.body).replace(
+            SPONGE_QUALIFIER,
+            &format!("{}{}", used.sponge.prefix(), used.sponge.qualifier()),
+        );
+        (body, used)
+    }
 }
 
-/// Emit-time supplier gates: every codec route and construction pin must
-/// be realized by the binding before any code exists. The sponge is
-/// checked where it is opened, in the `init` arm.
-fn gate_suppliers(document: &Document, binding: &Binding) -> Result<(), String> {
-    // Ahead of the per-row supplier gates, because a peeking fill is not
-    // a gap a binding can close: it names the phase this emitter does
-    // not implement, where a missing fill names one someone can write.
-    // The sponge is consumed exactly once, so a hole that peeks must
-    // hand it back — the result list is where that shows.
-    for (index, row) in document.rows.iter().enumerate() {
-        if let Row::HoleCall {
-            results,
-            label,
-            kind,
-            ..
-        } = row
-        {
-            if results.contains(&Entry::Sponge) {
-                return Err(peeking_fill_refusal(index, label, kind));
-            }
-        }
-    }
-    for (class, codec) in &document.codecs {
-        let class_binding = binding.class(class).ok_or_else(|| {
-            format!(
-                "codec class '{class}' has no implementation in binding '{}' (zkc-E400's \
-                 emit-time form)",
-                binding.name
-            )
-        })?;
-        if class_binding.codec != *codec {
-            return Err(format!(
-                "class '{class}' routes to codec '{codec}', but binding '{}' implements \
-                 '{}' for it",
-                binding.name, class_binding.codec
-            ));
-        }
-    }
-    for pin in &document.param_digests {
-        let (tagged, digest) = pin
-            .split_once('=')
-            .ok_or_else(|| format!("malformed param digest '{pin}'"))?;
-        let supplied = binding.digest_for(tagged).ok_or_else(|| {
-            format!(
-                "pinned construction '{tagged}' has no supplier digest in binding '{}'",
-                binding.name
-            )
-        })?;
-        if supplied != digest {
-            return Err(format!(
-                "param digest mismatch at '{tagged}': the artifact pins {digest}, binding \
-                 '{}' implements {supplied} (zkc-E408's emit-time form)",
-                binding.name
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub fn emit(
-    document: &Document,
-    binding: &Binding,
-    rt_path: &str,
-    crate_name: Option<&str>,
-    vectors: Option<&Vectors>,
-) -> Result<EmittedCrate, String> {
-    gate_suppliers(document, binding)?;
-
-    let prover = document.endpoint == Endpoint::ProverSkeleton;
-    let (crate_name, crate_ident) =
-        rust::crate_name(&crate_name.map(str::to_owned).unwrap_or_else(|| {
-            format!(
-                "zkc-{}-{}",
-                if prover { "prover" } else { "verifier" },
-                &document.artifact_id[..12]
-            )
-        }))?;
-
-    let mut walk = Walk {
-        document,
-        binding,
-        values: Default::default(),
-        handles: Default::default(),
-        referenced: Default::default(),
-        current_sponge: None,
-        current_stream: None,
-        body: String::new(),
-        used: Used::default(),
-    };
-    walk.walk()?;
-    let used = walk.used;
-    let body = std::mem::take(&mut walk.body).replace(
-        SPONGE_QUALIFIER,
-        &format!("{}{}", used.sponge.prefix(), used.sponge.qualifier()),
-    );
-
-    // Features: the union over the implementations actually bound.
-    let mut features: Vec<&str> = Vec::new();
-    let add_feature = |feature: &'static str, features: &mut Vec<&str>| {
-        if !features.contains(&feature) {
-            features.push(feature);
-        }
-    };
-    add_feature(binding.sponge_impl.feature(), &mut features);
-    for (class, _) in &document.codecs {
-        add_feature(
-            binding.class(class).unwrap().implementation.feature(),
-            &mut features,
-        );
-    }
-    for row in &document.rows {
-        if let Row::HoleCall { digest, .. } = row {
-            add_feature(
-                binding.hole(digest).unwrap().implementation.feature(),
-                &mut features,
-            );
-        }
-    }
-    features.sort_unstable();
-
-    // ---- src/lib.rs ----
-    let mut lib = String::new();
-    let _ = writeln!(
-        lib,
-        "//! A zkc-emitted {} endpoint.\n//!\n\
-         //! Generated from the canonical OIR document whose identity is\n\
-         //! baked below; the emitter recomputed that identity from the\n\
-         //! document bytes before reading a single row. This crate is the\n\
-         //! projection's residual program: the transcript order, proof\n\
-         //! ABI, {}, and {} of one sealed protocol, specialized\n\
-         //! against one supplier binding. Do not edit; re-emit.\n",
-        if prover { "prover" } else { "verifier" },
-        if prover { "fills" } else { "checks" },
-        if prover { "emission" } else { "decision" },
-    );
-    if prover {
-        lib.push_str("pub use zkc_rt::{self, Payload, Prove, ProveError};\n\n");
-    } else {
-        lib.push_str("pub use zkc_rt::{self, Outcome, RejectClass, Verdict};\n");
-        lib.push_str("use zkc_rt::ProofCursor;\n\n");
-    }
-    let _ = writeln!(
-        lib,
-        "/// `SHA256(\"zkc/oir\\n\" ‖ document)` — the endpoint artifact."
-    );
-    let _ = writeln!(
-        lib,
-        "pub const ARTIFACT_ID: &str = \"{}\";",
-        document.artifact_id
-    );
-    let _ = writeln!(
-        lib,
-        "/// The provenance-independent view (`zkc/oir-semantic`)."
-    );
-    let _ = writeln!(
-        lib,
-        "pub const SEMANTIC_ID: &str = \"{}\";",
-        document.semantic_id
-    );
-    let _ = writeln!(lib, "/// The sealed protocol this endpoint projects.");
-    let _ = writeln!(
-        lib,
-        "pub const SOURCE_PIR_ID: &str = {};",
-        rust::literal(&document.source)
-    );
-    let _ = writeln!(lib, "/// The supplier binding and its file digest.");
-    let _ = writeln!(
-        lib,
-        "pub const BINDING: &str = {};",
-        rust::literal(&binding.name)
-    );
-    let _ = writeln!(
-        lib,
-        "pub const BINDING_DIGEST: &str = \"{}\";",
-        binding.digest_of_file
-    );
-    let _ = writeln!(
-        lib,
-        "pub const EMITTER: &str = \"zkc-emit {}\";",
-        env!("CARGO_PKG_VERSION")
-    );
-    if prover {
-        lib.push_str("/// The verifier-local checks this endpoint delegates, as\n");
-        lib.push_str("/// `[event position, discharge kind]`. Their schema, uniqueness,\n");
-        lib.push_str("/// and discharge kinds were checked at emit time; that they\n");
-        lib.push_str("/// exhaust the source obligations is authenticated only where the\n");
-        lib.push_str("/// sealed protocol is also present, and is not claimed here.\n");
-        let rows = document
-            .counterparty
-            .iter()
-            .map(|(position, kind)| format!("({position}, {})", rust::literal(kind)))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let _ = writeln!(lib, "pub const COUNTERPARTY: &[(u64, &str)] = &[{rows}];");
-    }
-    lib.push('\n');
-    if used.group_modulus || used.field_modulus {
-        let algebra = binding.algebra.as_ref().unwrap();
-        if used.group_modulus {
-            let _ = writeln!(lib, "const GROUP_MODULUS: u64 = {};", algebra.group);
-        }
-        if used.field_modulus {
-            let _ = writeln!(lib, "const FIELD_MODULUS: u64 = {};", algebra.field);
-        }
-        lib.push('\n');
-    }
-
-    lib.push_str("/// The public statement, typed and ordered as the endpoint ABI\n");
-    lib.push_str("/// declares it; field names are the ABI labels, verbatim.\n");
-    lib.push_str("/// Multi-limb values are little-endian 32-bit limbs.\n");
-    lib.push_str("#[allow(non_snake_case)]\npub struct Statement {\n");
-    for (label, class) in &document.statement {
-        let ty = binding.class(class).unwrap().implementation.rust_type();
-        let _ = writeln!(lib, "    pub {label}: {ty},");
-    }
-    lib.push_str("}\n\n");
-
-    // Every local below is declared from what the walk recorded
-    // emitting, never from a second reading of the rows: a body that
-    // never squeezes, reads, writes, or names its statement gets a
-    // local it can leave alone, and the emitted crate stays
-    // warning-free without anyone predicting which rows do what.
-    let statement_parameter = if used.statement {
-        "statement"
-    } else {
-        "_statement"
-    };
-    if prover {
-        lib.push_str("/// The opaque witness payloads, by their endpoint ABI labels.\n");
-        lib.push_str("/// Every payload is named, so the reference executor's\n");
-        lib.push_str("/// missing-payload refusal has no run-time form here; and every\n");
-        lib.push_str("/// payload moves, so a handle cannot be spent twice.\n");
-        lib.push_str("#[allow(non_snake_case)]\npub struct Witness {\n");
-        for (label, class) in &document.witness_labels {
-            let _ = writeln!(lib, "    /// Handle class `{}`.", rust::comment(class));
-            let _ = writeln!(lib, "    pub {label}: Payload,");
-        }
-        lib.push_str("}\n\n");
-
-        lib.push_str("/// One prover run: the emitted proof bytes and the ordered\n");
-        lib.push_str("/// challenge log of the replica sponge. There is no verdict —\n");
-        lib.push_str("/// acceptance belongs to verifiers — so a failure is a refusal\n");
-        lib.push_str("/// naming the input or the fill responsible.\n");
-        let _ = writeln!(
-            lib,
-            "pub fn prove({statement_parameter}: &Statement, {}: Witness) -> Result<Prove, ProveError> {{",
-            if document.witness_labels.is_empty() {
-                "_witness"
-            } else {
-                "witness"
-            }
-        );
-        let _ = writeln!(
-            lib,
-            "    let {}challenges: Vec<String> = Vec::new();",
-            used.challenges.qualifier()
-        );
-        let _ = writeln!(
-            lib,
-            "    let {}proof: Vec<u8> = Vec::new();",
-            used.proof.qualifier()
-        );
-    } else {
-        lib.push_str("/// One verifier execution over untrusted proof bytes: a verdict\n");
-        lib.push_str("/// and the ordered challenge log. Statement range violations are\n");
-        lib.push_str("/// `public_binding_failure`, exactly as the reference executor\n");
-        lib.push_str("/// classifies them.\n");
-        let _ = writeln!(
-            lib,
-            "pub fn verify({statement_parameter}: &Statement, proof: &[u8]) -> Outcome {{"
-        );
-        let _ = writeln!(
-            lib,
-            "    let {}challenges: Vec<String> = Vec::new();",
-            used.challenges.qualifier()
-        );
-        let _ = writeln!(
-            lib,
-            "    let {}{}cursor = ProofCursor::new(proof);",
-            used.cursor.prefix(),
-            used.cursor.qualifier()
-        );
-    }
-    lib.push_str(&body);
-    lib.push_str("}\n");
-
-    // ---- Cargo.toml ----
-    let feature_list = features
-        .iter()
-        .map(|feature| format!("\"{feature}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    // Witness payloads exist only on the prover side, so only a prover
-    // crate offers the memory-hygiene switch — and it offers it as a
-    // feature rather than expecting anyone to edit generated code.
-    let optional_features = if prover {
-        "\n[features]\n\
-         # Zero witness payloads on drop; see this crate's README for what\n\
-         # that does and does not claim.\n\
-         zeroize = [\"zkc-rt/zeroize\"]\n"
-    } else {
-        ""
-    };
-    let cargo_toml = format!(
-        "# Generated by zkc-emit; do not edit — re-emit.\n\
-         [package]\n\
-         name = \"{crate_name}\"\n\
-         version = \"0.0.0\"\n\
-         edition = \"2021\"\n\
-         \n\
-         [dependencies]\n\
-         zkc-rt = {{ path = \"{rt_path}\", default-features = false, features = [{feature_list}] }}\n\
-         {optional_features}"
-    );
-
-    // ---- README.md ----
-    // Written as literal markdown rather than assembled, because this
-    // text is the emitted crate's only statement of what it does not
-    // claim, and it should read the same in the source as on the page.
-    let entry_point = if prover {
-        r"`prove(statement, witness)` returns the emitted proof bytes and the
-ordered challenge log, or a refusal naming the statement value or fill
-responsible. There is no verdict channel: acceptance belongs to
-verifiers. Supplier resolution happened at emit time, so no run-time
-outcome means `no supplier`.
-
-## What this endpoint does not do
-
-- **Secrets.** Witness payloads pass through as opaque bytes. The
-  specification places confidentiality with the provider, runtime, and
-  target (`docs/spec/endpoints.md` §6.4); the bound fills are test-grade
-  and variable-time, and a deployment supplier owns its own
-  constant-time discipline. Building this crate with the `zeroize`
-  feature makes `Payload` zero on drop; without it, nothing is claimed
-  either way, because memory hygiene is a property of a whole call
-  chain, not of one type.
-- **Nonces.** Nonce material arrives inside the witness payload.
-  Deriving it, and never reusing it, is the caller's — for a
-  Schnorr-shaped protocol, nonce reuse across two statements discloses
-  the witness. Deterministic derivation in the style of RFC 6979 or
-  EdDSA is the deployment-grade pattern; this crate neither generates
-  nor checks nonces.
-- **Witness computation.** Nothing here computes a witness from a
-  relation. That layer is upstream, and the payload boundary is exactly
-  where it stops.
-- **Counterparty coverage.** The `COUNTERPARTY` rows say which checks
-  the verifier performs. Their schema, uniqueness, and discharge kinds
-  were checked at emit time; that they exhaust the source obligations is
-  authenticated only where the sealed protocol is also present (§6.1).
-"
-    } else {
-        r"`verify(statement, proof)` returns the verdict and the ordered
-challenge log. Reject classes are the normative set of
-`docs/spec/endpoints.md` §4; supplier resolution happened at emit time,
-so no run-time outcome means `cannot judge`.
-"
-    };
-    let readme = format!(
-        "# {crate_name}\n\n\
-         A zkc-emitted {kind} endpoint. Generated — do not edit; re-emit.\n\n\
-         ## Identity chain\n\n\
-         | Fact | Value |\n|---|---|\n\
-         | OIR artifact id | `{artifact}` |\n\
-         | OIR semantic id | `{semantic}` |\n\
-         | Sealed source protocol | `{source}` |\n\
-         | Supplier binding | `{binding_name}` (file sha256 `{binding_digest}`) |\n\
-         | Emitter | zkc-emit {version} |\n\n\
-         {entry_point}\n\
-         ## Scope\n\n\
-         Behavior under this binding, at these pins, established by the\n\
-         enclosed conformance vectors. This crate makes no claim of\n\
-         protocol soundness, zero knowledge, or conformance beyond those\n\
-         vectors; those judgments live with the sealed protocol artifact,\n\
-         under the identities above.\n",
-        kind = if prover { "prover" } else { "verifier" },
-        artifact = document.artifact_id,
-        semantic = document.semantic_id,
-        source = document.source,
-        binding_name = binding.name,
-        binding_digest = binding.digest_of_file,
-        version = env!("CARGO_PKG_VERSION"),
-    );
-
-    // ---- tests/conformance.rs ----
-    let conformance = match vectors {
-        None => None,
-        Some(vectors) => Some(emit_conformance(document, binding, vectors, &crate_ident)?),
-    };
-
-    Ok(EmittedCrate {
-        crate_name,
-        lib_rs: lib,
-        cargo_toml,
-        readme,
-        conformance,
-    })
-}
-
-fn statement_literal(
-    document: &Document,
-    binding: &Binding,
-    alias: &str,
-    name: &str,
-    statement: &[(String, String)],
-) -> Result<String, String> {
-    let mut fields = Vec::new();
-    for (label, class) in &document.statement {
-        let implementation = binding.class(class).unwrap().implementation;
-        let text = statement
-            .iter()
-            .find(|(bound, _)| bound == label)
-            .map(|(_, value)| value.as_str())
-            .ok_or_else(|| format!("vector '{name}' has no statement value for '{label}'"))?;
-        let literal = match implementation {
-            ImplKind::ToyBe8 => {
-                let limbs = decimal_to_limbs(text, 2)?;
-                format!("{}u64", (limbs[1] as u64) << 32 | limbs[0] as u64)
-            }
-            ImplKind::P3Word => format!("{}u32", decimal_to_limbs(text, 1)?[0]),
-            ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
-                let limbs = decimal_to_limbs(text, implementation.limbs())?;
-                let words = limbs
-                    .iter()
-                    .map(|limb| format!("{limb}u32"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("[{words}]")
-            }
-            ImplKind::BlsFrBe32 | ImplKind::BlsG1Be48 => {
-                // The decimal statement value is the wire integer; the
-                // typed constructor re-establishes canonicality.
-                let limbs = decimal_to_limbs(text, implementation.limbs())?;
-                let mut bytes = Vec::new();
-                for limb in limbs.iter().rev() {
-                    bytes.extend_from_slice(&limb.to_be_bytes());
-                }
-                let list = bytes
-                    .iter()
-                    .map(|byte| format!("0x{byte:02x}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let constructor = if implementation == ImplKind::BlsFrBe32 {
-                    "fr_from_wire"
-                } else {
-                    "g1_from_wire"
-                };
-                format!(
-                    "{alias}::zkc_rt::kzg::{constructor}(&[{list}])\n            .expect(\"a canonical statement wire value\")"
-                )
-            }
-        };
-        fields.push(format!("{label}: {literal}"));
-    }
-    Ok(format!("{alias}::Statement {{ {} }}", fields.join(", ")))
-}
-
-/// The borrowed kernels a generated suite pins before replaying a single
-/// vector. A kernel that drifts derives different challenges or accepts
-/// different proofs, and the vectors alone would not say which.
-fn kernel_self_checks(document: &Document, binding: &Binding, alias: &str) -> String {
-    let mut out = String::new();
-    if binding.sponge_impl == SpongeImpl::P3LenpadDuplex {
-        let _ = writeln!(
-            out,
-            "#[test]\nfn permutation_known_answer() {{\n    \
-             {alias}::zkc_rt::p3::permutation_self_check();\n}}\n"
-        );
-    }
-    let pairing = document.codecs.iter().any(|(class, _)| {
-        matches!(
-            binding.class(class).map(|bound| bound.implementation),
-            Some(ImplKind::BlsFrBe32 | ImplKind::BlsG1Be48)
-        )
-    });
-    if pairing {
-        let _ = writeln!(
-            out,
-            "#[test]\nfn pairing_is_nondegenerate() {{\n    \
-             {alias}::zkc_rt::kzg::pairing_self_check();\n}}\n"
-        );
-    }
-    out
-}
-
-/// Lowercase-hex payload text to a Rust byte-slice literal.
-fn hex_literal(name: &str, what: &str, hex: &str) -> Result<String, String> {
-    if !hex.len().is_multiple_of(2)
-        || !hex
-            .chars()
-            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
-    {
-        return Err(format!("vector '{name}' {what} is not lowercase hex"));
-    }
-    Ok((0..hex.len())
-        .step_by(2)
-        .map(|at| format!("0x{}", &hex[at..at + 2]))
-        .collect::<Vec<_>>()
-        .join(", "))
-}
-
-fn emit_conformance(
-    document: &Document,
-    binding: &Binding,
-    vectors: &Vectors,
-    crate_ident: &str,
-) -> Result<String, String> {
-    if vectors.artifact_id != document.artifact_id {
-        return Err(format!(
-            "the vectors file binds artifact {}, the document is {}; matching a sidecar to \
-             the wrong artifact is exactly what the identity check refuses",
-            vectors.artifact_id, document.artifact_id
-        ));
-    }
-    let cases = match (&vectors.cases, document.endpoint) {
-        (Cases::Verifier(cases), Endpoint::Verifier) => cases,
-        (Cases::Prover(cases), Endpoint::ProverSkeleton) => {
-            return emit_prover_conformance(
-                document,
-                binding,
-                vectors.artifact_id.as_str(),
-                cases,
-                crate_ident,
-            )
-        }
-        _ => {
-            return Err(format!(
-                "the vectors file describes the other endpoint; this document is \
-                 '{}'",
-                document.endpoint_name
-            ))
-        }
-    };
-    for case in cases {
-        let admitted = case.expect == "accept" || REJECT_CLASSES.contains(&case.expect.as_str());
-        if !admitted {
-            return Err(format!(
-                "vector '{}' expects '{}', which is not a verdict: the reject classes are {}",
-                case.name,
-                case.expect,
-                REJECT_CLASSES.join(", ")
-            ));
-        }
-    }
-    if !cases.iter().any(|case| case.expect == "accept") {
-        return Err(
-            "the vectors file carries no accepting vector; a refusal battery without a \
-             positive control asserts nothing"
-                .into(),
-        );
-    }
-
-    let mut out = String::new();
-    out.push_str("// Generated conformance suite: the committed golden vectors, replayed\n");
-    out.push_str("// against the emitted endpoint. The same vectors drive the reference\n");
-    out.push_str("// executor (zkc-run --vectors), so equality here is the differential\n");
-    out.push_str("// gate between the emitted program and the reference semantics.\n\n");
-    let _ = writeln!(out, "use {crate_ident} as verifier;\n");
-
-    out.push_str("// An empty challenge list on a non-accepting vector means the log is\n");
-    out.push_str("// unchecked for that vector (the corpus convention for corrupted-wire\n");
-    out.push_str("// cases, where the verdict is the claim); an accepting vector always\n");
-    out.push_str("// carries its full log.\n");
-    out.push_str("fn run(name: &str, statement: verifier::Statement, proof: &[u8], expect: &str, challenges: Option<&[&str]>) {\n");
-    out.push_str("    let outcome = verifier::verify(&statement, proof);\n");
-    out.push_str(
-        "    assert_eq!(outcome.verdict.as_str(), expect, \"vector '{name}' verdict\");\n",
-    );
-    out.push_str("    if let Some(challenges) = challenges {\n");
-    out.push_str("        let logged: Vec<&str> = outcome.challenges.iter().map(String::as_str).collect();\n");
-    out.push_str("        assert_eq!(logged, challenges, \"vector '{name}' challenge log\");\n");
-    out.push_str("    }\n");
-    out.push_str("}\n\n");
-
-    out.push_str(&kernel_self_checks(document, binding, "verifier"));
-
-    let _ = writeln!(
-        out,
-        "#[test]\nfn vectors_bind_this_artifact() {{\n    assert_eq!(verifier::ARTIFACT_ID, \"{}\");\n}}\n",
-        vectors.artifact_id
-    );
-
-    out.push_str("#[test]\nfn golden_vectors() {\n");
-    for case in cases {
-        let statement =
-            statement_literal(document, binding, "verifier", &case.name, &case.statement)?;
-        let bytes = hex_literal(&case.name, "proof", &case.proof_hex)?;
-        let challenges = if case.challenges.is_empty() && case.expect != "accept" {
-            "None".to_owned()
-        } else {
-            let entries = case
-                .challenges
-                .iter()
-                .map(|entry| format!("{entry:?}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("Some(&[{entries}])")
-        };
-        let _ = writeln!(
-            out,
-            "    run(\n        {:?},\n        {statement},\n        &[{bytes}],\n        {:?},\n        {challenges},\n    );",
-            case.name, case.expect
-        );
-    }
-    out.push_str("}\n");
-    Ok(out)
-}
-
-fn emit_prover_conformance(
-    document: &Document,
-    binding: &Binding,
-    artifact_id: &str,
-    cases: &[ProverCase],
-    crate_ident: &str,
-) -> Result<String, String> {
-    if !cases.iter().any(|case| case.expect == "ok") {
-        return Err(
-            "the vectors file carries no producing vector; a refusal battery without a \
-             positive control asserts nothing"
-                .into(),
-        );
-    }
-
-    let mut out = String::new();
-    out.push_str("// Generated conformance suite: the committed golden vectors, replayed\n");
-    out.push_str("// against the emitted endpoint. The same inputs drive the reference\n");
-    out.push_str("// executor (zkc-run --prove), so byte equality here is the differential\n");
-    out.push_str("// gate between the emitted program and the reference semantics — a\n");
-    out.push_str("// stronger gate than any verdict comparison, since a prover's whole\n");
-    out.push_str("// output is under test.\n\n");
-    let _ = writeln!(out, "use {crate_ident} as prover;\n");
-
-    // Each harness is written only when the corpus has a case for it;
-    // an unused one would warn, and the emitted crates are warning-free.
-    if cases.iter().any(|case| case.expect == "ok") {
-        out.push_str("fn produce(name: &str, statement: prover::Statement, witness: prover::Witness, proof: &[u8], challenges: &[&str]) {\n");
-        out.push_str("    let produced = match prover::prove(&statement, witness) {\n");
-        out.push_str("        Ok(produced) => produced,\n");
-        out.push_str("        Err(error) => panic!(\"vector '{name}': {error}\"),\n");
-        out.push_str("    };\n");
-        out.push_str("    assert_eq!(produced.proof, proof, \"vector '{name}' proof bytes\");\n");
-        out.push_str("    let logged: Vec<&str> = produced.challenges.iter().map(String::as_str).collect();\n");
-        out.push_str("    assert_eq!(logged, challenges, \"vector '{name}' challenge log\");\n");
-        out.push_str("}\n\n");
-    }
-
-    if cases.iter().any(|case| case.expect != "ok") {
-        out.push_str("// A refused run emits nothing: the gates that classify a refusal all\n");
-        out.push_str("// run before the value they judge reaches the wire.\n");
-        out.push_str("fn refuse(name: &str, statement: prover::Statement, witness: prover::Witness, kind: &str, label: &str, message: &str) {\n");
-        out.push_str("    match prover::prove(&statement, witness) {\n");
-        out.push_str(
-            "        Ok(_) => panic!(\"vector '{name}': expected a refusal, got a proof\"),\n",
-        );
-        out.push_str("        Err(error) => {\n");
-        out.push_str(
-            "            assert_eq!(error.kind(), kind, \"vector '{name}' refusal kind\");\n",
-        );
-        out.push_str(
-            "            assert_eq!(error.label(), label, \"vector '{name}' refusal label\");\n",
-        );
-        out.push_str("            assert_eq!(error.message(), message, \"vector '{name}' refusal message\");\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        out.push_str("}\n\n");
-    }
-
-    out.push_str(&kernel_self_checks(document, binding, "prover"));
-
-    let _ = writeln!(
-        out,
-        "#[test]\nfn vectors_bind_this_artifact() {{\n    assert_eq!(prover::ARTIFACT_ID, \"{artifact_id}\");\n}}\n"
-    );
-
-    out.push_str("#[test]\nfn golden_vectors() {\n");
-    for case in cases {
-        let statement =
-            statement_literal(document, binding, "prover", &case.name, &case.statement)?;
-        let mut payloads = Vec::new();
-        for (label, _) in &document.witness_labels {
-            let hex = case
-                .witness
-                .iter()
-                .find(|(bound, _)| bound == label)
-                .map(|(_, hex)| hex.as_str())
-                .ok_or_else(|| {
-                    format!(
-                        "vector '{}' has no witness payload for '{label}'",
-                        case.name
-                    )
-                })?;
-            // The hex boundary is the caller's, exactly as it is on the
-            // reference executor's command line.
-            let bytes = hex_literal(&case.name, "witness payload", hex)?;
-            payloads.push(format!("{label}: prover::Payload::new(vec![{bytes}])"));
-        }
-        let witness = format!("prover::Witness {{ {} }}", payloads.join(", "));
-        match case.expect.as_str() {
-            "ok" => {
-                let bytes = hex_literal(&case.name, "proof", &case.proof_hex)?;
-                let challenges = case
-                    .challenges
-                    .iter()
-                    .map(|entry| format!("{entry:?}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let _ = writeln!(
-                    out,
-                    "    produce(\n        {:?},\n        {statement},\n        {witness},\n        &[{bytes}],\n        &[{challenges}],\n    );",
-                    case.name
-                );
-            }
-            kind @ ("statement" | "fill") => {
-                if !case.proof_hex.is_empty() || !case.challenges.is_empty() {
-                    return Err(format!(
-                        "vector '{}' expects a refusal but carries proof or challenge \
-                         expectations; a refused run produces neither",
-                        case.name
-                    ));
-                }
-                if case.label.is_empty() || case.message.is_empty() {
-                    return Err(format!(
-                        "vector '{}' expects a refusal but does not say which ABI label it \
-                         names or what it reports",
-                        case.name
-                    ));
-                }
-                let _ = writeln!(
-                    out,
-                    "    refuse(\n        {:?},\n        {statement},\n        {witness},\n        {kind:?},\n        {:?},\n        {:?},\n    );",
-                    case.name, case.label, case.message
-                );
-            }
-            other => {
-                return Err(format!(
-                    "vector '{}' expects '{other}', which is neither 'ok' nor a refusal kind",
-                    case.name
-                ))
-            }
-        }
-    }
-    out.push_str("}\n");
-    Ok(out)
-}
