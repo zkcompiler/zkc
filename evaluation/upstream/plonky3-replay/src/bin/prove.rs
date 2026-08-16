@@ -351,6 +351,13 @@ challenger events ({noop_pows} zero-bit commit pows enumerated as no-ops)",
             (reference == "[\"a\",0]" && words.len() == 8).then(|| words.clone())
         })
         .unwrap_or_else(|| fail("no statement cap absorbed"));
+    // The trace is the witness the emitted prover is handed; printing
+    // it keeps the corpus builder reading this run rather than
+    // carrying its own copy of the fixture.
+    let trace_hex: String = (1..=1u32 << log_size)
+        .map(|value| format!("{value:08x}"))
+        .collect();
+    println!("trace: {trace_hex}");
     println!("statement f_root: {}", packed_decimal(&statement_words));
     println!("prover challenges: {}", challenges.join(","));
     println!("wire: {}", hex::encode(&wire));

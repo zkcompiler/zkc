@@ -12,10 +12,11 @@ toy = ["dep:sha2"]
 # The plonky3 supplier set: the lenpad duplex over the pinned upstream
 # Poseidon2-16 BabyBear permutation, and the FRI leaf fills — commit,
 # fold, interpolation, and reduction assembled from the pinned public
-# kernels. Default features only: nothing here may enable
-# p3-maybe-rayon's `parallel`, because the deterministic least-witness
-# grind agreement with the replay runner depends on both dependency
-# graphs staying serial.
+# kernels. Every borrowed kernel here writes positionally and this
+# crate's own proof-of-work search is a serial ascending scan, so these
+# features carry no ordering obligation. The graph that does is the
+# replay runner's, whose grind is upstream's own; its manifest states
+# the rule.
 plonky3 = [
   "dep:p3-baby-bear",
   "dep:p3-field",

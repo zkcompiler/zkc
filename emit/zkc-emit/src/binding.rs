@@ -201,6 +201,11 @@ pub enum Operand {
 /// operands it does not match is an emit-time refusal, never a type
 /// error in generated code.
 pub struct HoleSignature {
+    /// The static parameters the fill takes ahead of its operands, in
+    /// the cited contract's own name order, each named by the Rust
+    /// integer type its decimal binding is emitted as. A fill that
+    /// takes none declares none, and a row that cites any is refused.
+    pub params: &'static [&'static str],
     pub inputs: &'static [Operand],
     pub results: &'static [Operand],
 }
@@ -296,25 +301,34 @@ impl HoleImpl {
         ];
         match self {
             HoleImpl::ToySigmaCommit => HoleSignature {
+                params: &[],
                 inputs: TAKES,
                 results: TAKES,
             },
             HoleImpl::ToySigmaResponse | HoleImpl::ToySigmaResponseCheat => HoleSignature {
+                params: &[],
                 inputs: TAKES,
                 results: &[Operand::Value(ImplKind::ToyBe8)],
             },
             HoleImpl::ToyPowSearch => HoleSignature {
+                params: &[],
                 inputs: &[Operand::Sponge],
                 results: &[Operand::Value(ImplKind::ToyBe8), Operand::Sponge],
             },
             HoleImpl::P3PowSearch => HoleSignature {
+                params: &[],
                 inputs: &[Operand::Sponge],
                 results: &[Operand::Value(ImplKind::P3Word), Operand::Sponge],
             },
             HoleImpl::P3FriOpenval => HoleSignature {
+                // The family shape: the rate expansion and the final
+                // polynomial's length, both as logs. The opening fill
+                // builds the extension from them and threads them on
+                // through the handle, so no later fill repeats them.
+                params: &["usize", "usize"],
                 inputs: &[
                     Operand::Value(ImplKind::P3Ext4),
-                    Operand::Handle("fri-codeword"),
+                    Operand::Handle("fri-trace"),
                 ],
                 results: &[
                     Operand::Value(ImplKind::P3Ext4),
@@ -322,6 +336,7 @@ impl HoleImpl {
                 ],
             },
             HoleImpl::P3FriReduce => HoleSignature {
+                params: &[],
                 inputs: &[
                     Operand::Value(ImplKind::P3Ext4),
                     Operand::Handle("fri-codeword"),
@@ -329,6 +344,7 @@ impl HoleImpl {
                 results: &[Operand::Handle("fri-codeword")],
             },
             HoleImpl::P3FriCommit => HoleSignature {
+                params: &[],
                 inputs: &[Operand::Handle("fri-codeword")],
                 results: &[
                     Operand::Value(ImplKind::P3Digest8),
@@ -336,6 +352,7 @@ impl HoleImpl {
                 ],
             },
             HoleImpl::P3FriFold => HoleSignature {
+                params: &[],
                 inputs: &[
                     Operand::Value(ImplKind::P3Ext4),
                     Operand::Handle("fri-codeword"),
@@ -343,6 +360,7 @@ impl HoleImpl {
                 results: &[Operand::Handle("fri-codeword")],
             },
             HoleImpl::P3FriFinal => HoleSignature {
+                params: &[],
                 inputs: &[Operand::Handle("fri-codeword")],
                 results: &[Operand::Value(ImplKind::P3Ext4)],
             },

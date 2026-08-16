@@ -19,17 +19,15 @@ import json
 import re
 import sys
 
-# The runner's deterministic witness trace (its own fixed polynomial):
-# values 1..8, one big-endian word each.
-TRACE_HEX = "".join(format(value, "08x") for value in range(1, 9))
-
-
 def main() -> None:
     runner_out, verifier_id_path, out_path, mode = sys.argv[1:5]
     text = open(runner_out).read()
     statement = re.search(r"statement f_root: (\d+)", text).group(1)
     challenges = re.search(r"prover challenges: (.+)", text).group(1).split(",")
     wire = re.search(r"wire: ([0-9a-f]+)", text).group(1)
+    # The trace comes from the run record like every other field, so the
+    # corpus cannot drift from the fixture it describes.
+    trace = re.search(r"trace: ([0-9a-f]+)", text).group(1)
     verifier_id = open(verifier_id_path).read().strip()
     if mode == "prover":
         json.dump(
@@ -39,7 +37,7 @@ def main() -> None:
                     {
                         "name": "runner_wire",
                         "statement": {"f_root": statement},
-                        "witness": {"codeword": TRACE_HEX},
+                        "witness": {"codeword": trace},
                         "expect": "ok",
                         "proof": wire,
                         "challenges": challenges,
@@ -63,6 +61,8 @@ def main() -> None:
             indent=1,
         )
         return
+    if mode not in {"accept", "corrupt-nonce"}:
+        raise SystemExit(f"unknown mode {mode!r}")
     if mode == "accept":
         vector = {
             "name": "runner-round-trip",

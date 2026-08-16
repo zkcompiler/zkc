@@ -42,6 +42,16 @@ def mutate(document: dict, where: str) -> dict:
                 break
         else:
             raise SystemExit("no pow squeeze to widen")
+    elif where == "hole-param-count":
+        # Drop one static parameter from the opening hole. The fill
+        # reads the family shape from them, so a route that cites the
+        # wrong number of them cannot be emitted against it.
+        for row in document["program"]:
+            if row[0] == "hole_call" and row[3] == "openval":
+                row[6] = row[6][:1]
+                break
+        else:
+            raise SystemExit("no opening hole to strip a parameter from")
     else:
         raise SystemExit(f"unknown mutation {where!r}")
     return document

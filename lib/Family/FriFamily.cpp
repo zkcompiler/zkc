@@ -397,7 +397,11 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
     // The prover's compute holes (docs/spec/vocabularies.md §5.1;
     // docs/spec/endpoints.md §6.2):
     // backend-neutral decomposition contracts the routes cite; the
-    // pow-search hole alone peeks the transcript.
+    // pow-search hole alone peeks the transcript. The witness
+    // payload and the derived codeword are separate handle classes:
+    // they are different objects, and naming them apart is what
+    // lets a supplier binding refuse a route that feeds one where
+    // the other belongs.
     os << "  \"hole_contracts\": {\n"
        << "    \"zkc.hole.fri-commit\": {\"kind\": \"commit\", "
           "\"operands\": [{\"sort\": \"handle\", \"role\": "
@@ -417,11 +421,12 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
           "\"operands\": [{\"sort\": \"value\", \"role\": \"zeta\", "
           "\"class\": \"ext_field\", \"count\": \"1\"}, {\"sort\": "
           "\"handle\", \"role\": \"codeword\", \"class\": "
-          "\"fri-codeword\"}], \"results\": [{\"sort\": \"value\", "
+          "\"fri-trace\"}], \"results\": [{\"sort\": \"value\", "
           "\"role\": \"opened\", \"class\": \"ext_field\", "
           "\"count\": \"1\"}, {\"sort\": \"handle\", \"role\": "
           "\"codeword\", \"class\": \"fri-codeword\"}], "
-          "\"parameters\": [], \"semantic_parameters\": []},\n"
+          "\"parameters\": [\"log_blowup\", \"log_final_poly_len\"], "
+          "\"semantic_parameters\": []},\n"
        << "    \"zkc.hole.fri-reduce\": {\"kind\": \"extend\", "
           "\"operands\": [{\"sort\": \"value\", \"role\": \"alpha\", "
           "\"class\": \"ext_field\", \"count\": \"1\"}, {\"sort\": "
@@ -596,8 +601,13 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
         "\"0\"}}, iv = \""
      << desc.iv << "\", sponge = \"" << desc.sponge << "\"}";
 
+  // The pinned harness's rate expansion and final-polynomial length.
+  // They are the shape the opening fill builds the extension from, so
+  // the artifact declares them rather than leaving a supplier to assume
+  // them.
   os << " routes {instances = {openval = {contract = "
-        "\"zkc.hole.fri-openval\", inputs = [\"chal:zeta\", "
+        "\"zkc.hole.fri-openval\", params = {log_blowup = \"1\", "
+        "log_final_poly_len = \"0\"}, inputs = [\"chal:zeta\", "
         "\"witness:codeword\"]}, reduce = {contract = "
         "\"zkc.hole.fri-reduce\", inputs = [\"chal:alpha\", "
         "\"openval.1\"]}, ";
@@ -614,7 +624,7 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
      << ".0\"]}, grind = {contract = \"zkc.hole.fri-pow\", "
      << "params = {bits = \"" << *desc.grindingBits
      << "\"}, inputs = []}}, witnesses = [[\"codeword\", "
-        "\"fri-codeword\"]]}";
+        "\"fri-trace\"]]}";
   // Arity binds live past the sampling rounds: a second declared phase
   // (kernel.md §5.3), so the per-segment statement-binding default is
   // met rather than bypassed.

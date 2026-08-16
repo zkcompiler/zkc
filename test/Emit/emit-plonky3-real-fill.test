@@ -34,7 +34,3 @@
 # corrupted one through its generated conformance suite.
 # RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/vectors.json --out %t/crate
 # RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml
-
-# The prover side of this same artifact emits under the leaf fills the
-# binding now carries; emit-fri-prover.test holds it to byte equality
-# against this runner's own wire.
