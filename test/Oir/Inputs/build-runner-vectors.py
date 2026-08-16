@@ -65,8 +65,15 @@ def main() -> None:
             indent=1,
         )
         return
-    if mode not in {"accept", "corrupt-nonce", "corrupt-path", "corrupt-sibling"}:
-        raise SystemExit(f"unknown mode {mode!r}")
+    # The wire layout the corrupt offsets index into, named so the
+    # arithmetic is checkable: the absorbed prefix, then the openings.
+    OPENED_VALUE = 16
+    ROOTS = 3 * 32
+    FINAL_POLY = 16
+    NONCE_END = OPENED_VALUE + ROOTS + FINAL_POLY + 4
+    OPENINGS = NONCE_END
+    LEAVES = 4 * 4
+    INPUT_PATHS = 4 * 4 * 32
 
     def flip(at: int) -> str:
         return (
@@ -75,6 +82,15 @@ def main() -> None:
             + wire[2 * at + 2 :]
         )
 
+    # Each corrupt mode flips one byte inside the named region, and the
+    # named check must refuse: the nonce's low byte at the grinding
+    # check, an input path digest at the Merkle multi-opening, a
+    # first-round sibling at the fold consistency.
+    corrupt_modes = {
+        "corrupt-nonce": ("corrupted-nonce", NONCE_END - 1),
+        "corrupt-path": ("corrupted-path", OPENINGS + LEAVES),
+        "corrupt-sibling": ("corrupted-sibling", OPENINGS + LEAVES + INPUT_PATHS),
+    }
     if mode == "accept":
         vector = {
             "name": "runner-round-trip",
@@ -83,40 +99,17 @@ def main() -> None:
             "expect": "accept",
             "challenges": challenges,
         }
-    elif mode == "corrupt-nonce":
-        # The nonce's own low byte: after the opened value (16), three
-        # round roots (96), and the final coefficient (16), the nonce is
-        # bytes 128..132 — the grinding check must refuse.
+    elif mode in corrupt_modes:
+        name, offset = corrupt_modes[mode]
         vector = {
-            "name": "corrupted-nonce",
+            "name": name,
             "statement": {"f_root": statement},
-            "proof": flip(131),
-            "expect": "check_failure",
-            "challenges": [],
-        }
-    elif mode == "corrupt-path":
-        # One byte inside the first input authentication path (the
-        # openings start at 132: four query leaves, then the paths) —
-        # the Merkle multi-opening check must refuse.
-        vector = {
-            "name": "corrupted-path",
-            "statement": {"f_root": statement},
-            "proof": flip(148),
+            "proof": flip(offset),
             "expect": "check_failure",
             "challenges": [],
         }
     else:
-        # One byte inside the first round's sibling values (after the
-        # input openings: 132 + 16 leaves + 512 paths) — the fold
-        # consistency check must refuse: the tampered sibling breaks
-        # its own row's authentication.
-        vector = {
-            "name": "corrupted-sibling",
-            "statement": {"f_root": statement},
-            "proof": flip(660),
-            "expect": "check_failure",
-            "challenges": [],
-        }
+        raise SystemExit(f"unknown mode {mode!r}")
     json.dump(
         {"artifact_id": verifier_id, "vectors": [vector]},
         open(out_path, "w"),

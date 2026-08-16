@@ -222,19 +222,26 @@ fn parse_refs(value: &Json, what: &str) -> Result<Vec<Ref>, String> {
     items.iter().map(parse_ref).collect()
 }
 
-/// A counted row family's element count: a canonical decimal of at
-/// least 2 — the scalar family spells 1 through its own row kind.
-fn parse_count(value: &Json, index: usize) -> Result<u64, String> {
+/// A counted element count, under the carrier's own grammar: a
+/// canonical decimal (no leading zeros) from 2 through 2^20 — the
+/// scalar form spells 1 through its own row or slot shape
+/// (docs/spec/carrier.md §6.2).
+fn parse_count(value: &Json, context: &str) -> Result<u64, String> {
     let text = value
         .as_str()
-        .ok_or_else(|| format!("row {index}: count is not a string"))?;
+        .ok_or_else(|| format!("{context}: count is not a string"))?;
+    if text.is_empty() || !text.chars().all(|c| c.is_ascii_digit()) || text.starts_with('0') {
+        return Err(format!(
+            "{context}: count '{text}' is not a canonical decimal"
+        ));
+    }
     let count = text
         .parse::<u64>()
-        .map_err(|_| format!("row {index}: count is not decimal"))?;
-    if count < 2 {
+        .map_err(|_| format!("{context}: count '{text}' is not a canonical decimal"))?;
+    if !(2..=1 << 20).contains(&count) {
         return Err(format!(
-            "row {index}: a counted row declares at least 2 elements; the scalar \
-             family spells 1"
+            "{context}: a counted shape declares 2 through 2^20 elements; the \
+             scalar form spells 1 through its own shape"
         ));
     }
     Ok(count)
@@ -248,13 +255,8 @@ fn parse_slot(value: &Json, what: &str) -> Result<Entry, String> {
         Some([Json::String(kind), Json::String(class)]) if kind == "val" => {
             Ok(Entry::Val(class.clone()))
         }
-        Some([Json::String(kind), Json::String(class), Json::String(count)]) if kind == "val" => {
-            Ok(Entry::ValVec(
-                class.clone(),
-                count
-                    .parse::<u64>()
-                    .map_err(|_| format!("{what}: count '{count}' is not decimal"))?,
-            ))
+        Some([Json::String(kind), Json::String(class), count]) if kind == "val" => {
+            Ok(Entry::ValVec(class.clone(), parse_count(count, what)?))
         }
         Some([Json::String(kind), Json::String(class)]) if kind == "handle" => {
             Ok(Entry::Handle(class.clone()))
@@ -319,7 +321,7 @@ fn parse_row(index: usize, row: &Json) -> Result<Row, String> {
                 stream: parse_ref(stream)?,
                 label: expect_string(label, "label")?,
                 class: expect_string(class, "class")?,
-                count: parse_count(count, index)?,
+                count: parse_count(count, &format!("row {index}"))?,
             }),
             _ => fail("expected [\"read_vec\", stream, label, class, count, src]"),
         },
@@ -395,7 +397,7 @@ fn parse_row(index: usize, row: &Json) -> Result<Row, String> {
                 value: parse_ref(value)?,
                 label: expect_string(label, "label")?,
                 class: expect_string(class, "class")?,
-                count: parse_count(count, index)?,
+                count: parse_count(count, &format!("row {index}"))?,
             }),
             _ => fail("expected [\"write_vec\", stream, value, label, class, count, src]"),
         },

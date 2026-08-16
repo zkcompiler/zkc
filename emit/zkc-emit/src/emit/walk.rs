@@ -42,7 +42,8 @@ pub(crate) struct Walk<'a> {
     /// Counted bindings and their declared element counts: a vector
     /// value and a scalar of the same class are different shapes, and
     /// mis-wiring one into the other is a refusal here, never a type
-    /// error in generated code.
+    /// error in generated code. Populated only through `bind_value`,
+    /// so a producer cannot record a class and forget the shape.
     vector_counts: HashMap<Ref, u64>,
     /// Live handles: Rust expression and handle class. A handle is
     /// removed when consumed, so the carrier's exactly-once rule
@@ -107,6 +108,15 @@ const BLS12_381_R_DECIMAL: &str =
     "52435875175126190479447740508185965837690552500527637822603658699938581184513";
 
 impl<'a> Walk<'a> {
+    /// The one producer of value bindings: name, class, and — for a
+    /// counted binding — the element count land together.
+    fn bind_value(&mut self, at: Ref, name: String, class: VClass, count: Option<u64>) {
+        self.values.insert(at, (name, class));
+        if let Some(count) = count {
+            self.vector_counts.insert(at, count);
+        }
+    }
+
     fn line(&mut self, indent: usize, text: &str) {
         for _ in 0..indent {
             self.body.push_str("    ");
@@ -644,9 +654,12 @@ impl<'a> Walk<'a> {
             self.line(2, "elements");
             self.line(1, "};");
             let bare = format!("r{index}_1");
-            self.values
-                .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
-            self.vector_counts.insert(Ref::Res(index, 1), count);
+            self.bind_value(
+                Ref::Res(index, 1),
+                bare,
+                VClass::Doc(class.to_owned()),
+                Some(count),
+            );
             return Ok(());
         }
         let comment = format!(
@@ -904,9 +917,12 @@ impl<'a> Walk<'a> {
             self.line(2, "draws");
             self.line(1, "};");
             let bare = format!("r{index}_1");
-            self.values
-                .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
-            self.vector_counts.insert(Ref::Res(index, 1), count);
+            self.bind_value(
+                Ref::Res(index, 1),
+                bare,
+                VClass::Doc(class.to_owned()),
+                Some(count),
+            );
         }
         Ok(())
     }
@@ -1184,9 +1200,9 @@ impl<'a> Walk<'a> {
                          consistency adapter reads two decimal logs"
                     ));
                 }
-                // Segment order: zeta, opened, alpha, betas x k, final,
-                // indices, leaves, roots x k, sibling vectors x k, path
-                // vectors x k — so the operand count is 6 + 4k.
+                // One declarative segment table drives the shape gate,
+                // the kind checks, and the slicing — the operand count
+                // is 6 + 4k, so the fold depth falls out first.
                 if arguments.len() < 10 || (arguments.len() - 6) % 4 != 0 {
                     return Err(format!(
                         "row {index}: check '{label}' has {} operands; the consistency \
@@ -1195,67 +1211,65 @@ impl<'a> Walk<'a> {
                     ));
                 }
                 let rounds = (arguments.len() - 6) / 4;
-                let mut shapes: Vec<(usize, bool)> = Vec::new();
-                for position in 0..arguments.len() {
-                    // Scalars: zeta, opened, alpha, the k betas, the
-                    // final coefficient, and the k roots; vectors:
-                    // indices, leaves, and the per-round sibling and
-                    // path segments.
-                    let wants_vector = position == 4 + rounds
-                        || position == 5 + rounds
-                        || position >= 6 + 2 * rounds;
-                    shapes.push((position, wants_vector));
+                let segments: Vec<(&str, usize, ImplKind, bool)> = vec![
+                    ("zeta", 1, ImplKind::P3Ext4, false),
+                    ("opened", 1, ImplKind::P3Ext4, false),
+                    ("alpha", 1, ImplKind::P3Ext4, false),
+                    ("betas", rounds, ImplKind::P3Ext4, false),
+                    ("final", 1, ImplKind::P3Ext4, false),
+                    ("indices", 1, ImplKind::P3Word, true),
+                    ("leaves", 1, ImplKind::P3Word, true),
+                    ("roots", rounds, ImplKind::P3Digest8, false),
+                    ("siblings", rounds, ImplKind::P3Ext4, true),
+                    ("round_paths", rounds, ImplKind::P3Digest8, true),
+                ];
+                let mut names: Vec<Vec<String>> = Vec::new();
+                let mut position = 0usize;
+                for &(role, len, kind, wants_vector) in &segments {
+                    let mut group = Vec::new();
+                    for _ in 0..len {
+                        expect_shape(&[(position, wants_vector)])?;
+                        group.push(expect_kind(self, &arguments[position], kind, role)?);
+                        position += 1;
+                    }
+                    names.push(group);
                 }
-                expect_shape(&shapes)?;
-                let zeta = expect_kind(self, &arguments[0], ImplKind::P3Ext4, "zeta")?;
-                let opened = expect_kind(self, &arguments[1], ImplKind::P3Ext4, "opened")?;
-                let alpha = expect_kind(self, &arguments[2], ImplKind::P3Ext4, "alpha")?;
-                let mut betas = Vec::new();
-                for argument in &arguments[3..3 + rounds] {
-                    betas.push(expect_kind(self, argument, ImplKind::P3Ext4, "betas")?);
-                }
-                let finals = expect_kind(self, &arguments[3 + rounds], ImplKind::P3Ext4, "final")?;
-                let indices =
-                    expect_kind(self, &arguments[4 + rounds], ImplKind::P3Word, "indices")?;
-                let leaves = expect_kind(self, &arguments[5 + rounds], ImplKind::P3Word, "leaves")?;
-                let mut roots = Vec::new();
-                for argument in &arguments[6 + rounds..6 + 2 * rounds] {
-                    roots.push(expect_kind(self, argument, ImplKind::P3Digest8, "roots")?);
-                }
-                let mut siblings = Vec::new();
-                for argument in &arguments[6 + 2 * rounds..6 + 3 * rounds] {
-                    siblings.push(format!(
-                        "{}.as_slice()",
-                        expect_kind(self, argument, ImplKind::P3Ext4, "siblings")?
-                    ));
-                }
-                let mut paths = Vec::new();
-                for argument in &arguments[6 + 3 * rounds..6 + 4 * rounds] {
-                    paths.push(format!(
-                        "{}.as_slice()",
-                        expect_kind(self, argument, ImplKind::P3Digest8, "round_paths")?
-                    ));
-                }
+                let flatten = |group: &[String]| -> String {
+                    group
+                        .iter()
+                        .map(|name| format!("{name}.as_slice()"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
                 // The per-round vectors flatten round-major, exactly
                 // the wire's own order.
                 self.line(
                     1,
-                    &format!("let siblings_{index} = [{}].concat();", siblings.join(", ")),
+                    &format!("let siblings_{index} = [{}].concat();", flatten(&names[8])),
                 );
                 self.line(
                     1,
-                    &format!("let round_paths_{index} = [{}].concat();", paths.join(", ")),
+                    &format!(
+                        "let round_paths_{index} = [{}].concat();",
+                        flatten(&names[9])
+                    ),
                 );
                 self.line(
                     1,
                     &format!(
                         "if !zkc_rt::p3::fri_query_consistency_accepts({}usize, {}usize, \
-                         {zeta}, {opened}, {alpha}, &[{}], &[{finals}], &{indices}, \
-                         &{leaves}, &[{}], &siblings_{index}, &round_paths_{index}) {{",
+                         {}, {}, {}, &[{}], &[{}], &{}, &{}, &[{}], &siblings_{index}, \
+                         &round_paths_{index}) {{",
                         params[0],
                         params[1],
-                        betas.join(", "),
-                        roots.join(", ")
+                        names[0][0],
+                        names[1][0],
+                        names[2][0],
+                        names[3].join(", "),
+                        names[4][0],
+                        names[5][0],
+                        names[6][0],
+                        names[7].join(", ")
                     ),
                 );
                 self.line(2, &Self::reject("CheckFailure"));
@@ -1594,9 +1608,12 @@ impl<'a> Walk<'a> {
                     if !self.referenced.contains(&(index, slot)) {
                         name = format!("_{bare}");
                     }
-                    self.values
-                        .insert(Ref::Res(index, slot), (bare, VClass::Doc(class.clone())));
-                    self.vector_counts.insert(Ref::Res(index, slot), *count);
+                    self.bind_value(
+                        Ref::Res(index, slot),
+                        bare,
+                        VClass::Doc(class.clone()),
+                        Some(*count),
+                    );
                 }
                 (Entry::Handle(class), Operand::Handle(want)) if class == want => {
                     self.handles

@@ -44,8 +44,7 @@ LogicalResult SqueezeOp::verify() {
   std::optional<uint64_t> parsedCount = zkc::challenge::parseCount(count);
   if (!parsedCount)
     return emitOpError()
-           << "[zkc-E146] count must be a canonical decimal from 1 through "
-              "2^20 (1 for scalar, 2..2^20 for vector), got \""
+           << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
            << count << "\"";
   if (getPayloadClass().empty())
     return emitOpError() << "[zkc-E146] payload class must be non-empty";
@@ -86,8 +85,7 @@ LogicalResult CheckCallOp::verify() {
 LogicalResult ReadOp::verify() {
   if (!zkc::challenge::parseCount(getCount()))
     return emitOpError()
-           << "[zkc-E146] count must be a canonical decimal from 1 through "
-              "2^20 (1 for scalar, 2..2^20 for vector), got \""
+           << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
            << getCount() << "\"";
   return success();
 }
@@ -105,8 +103,7 @@ LogicalResult WriteOp::verify() {
            << origin << "'";
   if (!zkc::challenge::parseCount(getCount()))
     return emitOpError()
-           << "[zkc-E146] count must be a canonical decimal from 1 through "
-              "2^20 (1 for scalar, 2..2^20 for vector), got \""
+           << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
            << getCount() << "\"";
   return success();
 }
@@ -156,8 +153,7 @@ LogicalResult HoleCallOp::verify() {
       StringRef count = cast<StringAttr>(entry).getValue();
       if (!zkc::challenge::parseCount(count))
         return emitOpError()
-               << "[zkc-E146] count must be a canonical decimal from 1 "
-                  "through 2^20 (1 for scalar, 2..2^20 for vector), got \""
+               << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
                << count << "\"";
       if (count != "1" &&
           !isa<ValType>(getOutputs()[index].getType()))

@@ -57,8 +57,7 @@ LogicalResult SlotOp::verify() {
   std::optional<uint64_t> parsed = zkc::challenge::parseCount(getCount());
   if (!parsed)
     return emitOpError()
-           << "[zkc-E146] count must be a canonical decimal from 1 through "
-              "2^20 (1 for scalar, 2..2^20 for vector), got \""
+           << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
            << getCount() << "\"";
   // A counted slot is read-only material: absorption of a vector has no
   // framing rule in the transcript-hash input, so admitting one would

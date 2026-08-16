@@ -620,13 +620,29 @@ Ext4 extOf(const APInt &value) {
   return out;
 }
 
-/// The one instance the in-tree family fixture seals (ell = 4, k = 3,
-/// query_log2 = 4). The contract content digest pins these counts, so
-/// the constants are the digest's own meaning; another instance is
-/// another digest and another registration line.
-struct FriQueryShape {
-  uint64_t ell = 4, k = 3, logHeight = 4;
+/// Per-class element totals over the flattened operand views: the
+/// counts every shape below derives from. The contract digest already
+/// pinned the exact segmentation, so derivation here is arithmetic,
+/// not trust — and the general logic stays free of any one instance;
+/// another instance is only another digest registration line.
+struct ClassTotals {
+  uint64_t rs = 0, queryIndex = 0, word = 0, ext = 0;
 };
+static ClassTotals classTotals(ArrayRef<CheckOperandView> operands) {
+  ClassTotals totals;
+  for (const CheckOperandView &view : operands) {
+    uint64_t count = view.values.size();
+    if (view.valueClass == "rs")
+      totals.rs += count;
+    else if (view.valueClass == "query_index")
+      totals.queryIndex += count;
+    else if (view.valueClass == "word")
+      totals.word += count;
+    else if (view.valueClass == "ext_field")
+      totals.ext += count;
+  }
+  return totals;
+}
 
 class MerkleMultiOpeningSupplier : public CheckSupplier {
 public:
@@ -638,28 +654,36 @@ public:
   llvm::Expected<std::optional<std::string>>
   decide(ArrayRef<StringRef> params,
          ArrayRef<CheckOperandView> operands) const override {
-    FriQueryShape shape;
     if (!params.empty())
       return createStringError("the merkle multi-opening takes no parameters");
-    // Flatten by contract segment order: root(1) indices(ell)
-    // leaves(ell) paths(ell·logHeight).
+    // The shape, from the operands themselves: segment order is
+    // root(1) indices(ell) leaves(ell) paths(ell·height), so the
+    // query-index total is ell and the rs total past the root divides
+    // into per-query path heights.
+    ClassTotals totals = classTotals(operands);
+    uint64_t ell = totals.queryIndex;
+    if (ell == 0 || totals.word != ell || totals.rs < 1 ||
+        (totals.rs - 1) % ell != 0)
+      return createStringError(
+          "check operand counts do not shape a merkle multi-opening");
+    uint64_t logHeight = (totals.rs - 1) / ell;
     SmallVector<APInt> root, indices, leaves, paths;
     if (llvm::Error error = flattenOperands(
             operands, {{"rs", 1, &root},
-                       {"query_index", shape.ell, &indices},
-                       {"word", shape.ell, &leaves},
-                       {"rs", shape.ell * shape.logHeight, &paths}}))
+                       {"query_index", ell, &indices},
+                       {"word", ell, &leaves},
+                       {"rs", ell * logHeight, &paths}}))
       return std::move(error);
     Digest expected = digestOf(root.front());
-    for (uint64_t q = 0; q < shape.ell; ++q) {
+    for (uint64_t q = 0; q < ell; ++q) {
       uint64_t index = indices[q].getZExtValue();
-      if (index >= (uint64_t(1) << shape.logHeight))
-        return createStringError("query index is outside the tree");
+      if (index >= (uint64_t(1) << logHeight))
+        return std::optional<std::string>(
+            "a query index is outside the evaluation domain");
       uint64_t leaf = leaves[q].getZExtValue();
       SmallVector<Digest> siblings;
-      for (uint64_t level = 0; level < shape.logHeight; ++level)
-        siblings.push_back(
-            digestOf(paths[q * shape.logHeight + level]));
+      for (uint64_t level = 0; level < logHeight; ++level)
+        siblings.push_back(digestOf(paths[q * logHeight + level]));
       Digest derived = walkPath(leafHash({leaf}), index, siblings);
       if (derived != expected)
         return std::optional<std::string>(
@@ -714,7 +738,6 @@ public:
   llvm::Expected<std::optional<std::string>>
   decide(ArrayRef<StringRef> params,
          ArrayRef<CheckOperandView> operands) const override {
-    FriQueryShape shape;
     // Contract parameter order is lexical: log_blowup, then
     // log_final_poly_len.
     uint64_t logBlowup = 0, logFinalPolyLen = 0;
@@ -723,9 +746,23 @@ public:
         params[1].getAsInteger(10, logFinalPolyLen))
       return createStringError(
           "the consistency check takes log_blowup and log_final_poly_len");
-    if (logBlowup + logFinalPolyLen + shape.k != shape.logHeight)
+    // The shape, from the operands and the declared logs: segment
+    // order fixes the extension total at 3 + k + 2^lfpl + ell·k, so
+    // the fold depth and the domain height fall out; the rs and path
+    // totals must then agree exactly.
+    ClassTotals totals = classTotals(operands);
+    uint64_t ell = totals.queryIndex;
+    uint64_t finalLen = uint64_t(1) << logFinalPolyLen;
+    if (ell == 0 || totals.word != ell || totals.ext < 3 + finalLen ||
+        (totals.ext - 3 - finalLen) % (1 + ell) != 0)
       return createStringError(
-          "the declared shape does not fold the domain to the final length");
+          "check operand counts do not shape a fold consistency");
+    uint64_t k = (totals.ext - 3 - finalLen) / (1 + ell);
+    uint64_t logHeight = logBlowup + logFinalPolyLen + k;
+    if (k == 0 || logHeight >= 28 ||
+        totals.rs != k + ell * (k * logHeight - k * (k + 1) / 2))
+      return createStringError(
+          "check operand counts do not shape a fold consistency");
     SmallVector<APInt> zeta, opened, alpha, betas, finals, indices, leaves,
         roots, siblings, roundPaths;
     if (llvm::Error error = MerkleMultiOpeningSupplier::flattenOperands(
@@ -733,14 +770,14 @@ public:
             {{"ext_field", 1, &zeta},
              {"ext_field", 1, &opened},
              {"ext_field", 1, &alpha},
-             {"ext_field", shape.k, &betas},
-             {"ext_field", uint64_t(1) << logFinalPolyLen, &finals},
-             {"query_index", shape.ell, &indices},
-             {"word", shape.ell, &leaves},
-             {"rs", shape.k, &roots},
-             {"ext_field", shape.ell * shape.k, &siblings},
-             {"rs", shape.ell * (shape.k * shape.logHeight -
-                                 shape.k * (shape.k + 1) / 2),
+             {"ext_field", k, &betas},
+             {"ext_field", finalLen, &finals},
+             {"query_index", ell, &indices},
+             {"word", ell, &leaves},
+             {"rs", k, &roots},
+             {"ext_field", ell * k, &siblings},
+             {"rs", ell * (k * logHeight -
+                                 k * (k + 1) / 2),
               &roundPaths}}))
       return std::move(error);
     Ext4 zetaValue = extOf(zeta.front());
@@ -749,18 +786,19 @@ public:
                  // the single term (the general batching sum's shape).
     // Per-round path segments are laid out query-major within a round.
     SmallVector<uint64_t> pathOffsets = {0};
-    for (uint64_t r = 1; r <= shape.k; ++r)
+    for (uint64_t r = 1; r <= k; ++r)
       pathOffsets.push_back(pathOffsets.back() +
-                            shape.ell * (shape.logHeight - r));
-    for (uint64_t q = 0; q < shape.ell; ++q) {
+                            ell * (logHeight - r));
+    for (uint64_t q = 0; q < ell; ++q) {
       uint64_t index = indices[q].getZExtValue();
-      if (index >= (uint64_t(1) << shape.logHeight))
-        return createStringError("query index is outside the domain");
+      if (index >= (uint64_t(1) << logHeight))
+        return std::optional<std::string>(
+            "a query index is outside the evaluation domain");
       // The input layer: x = shift · g^{bitrev(index)}, the reduced
       // opening (opened − leaf) / (zeta − x).
       uint64_t x = bbMul(kCosetShift,
-                         bbPow(kTwoAdicGenerators[shape.logHeight],
-                               bitrev(index, shape.logHeight)));
+                         bbPow(kTwoAdicGenerators[logHeight],
+                               bitrev(index, logHeight)));
       Ext4 denominator = zetaValue;
       denominator.c[0] = bbSub(denominator.c[0], x);
       if (extIsZero(denominator))
@@ -769,9 +807,9 @@ public:
       Ext4 folded = openedValue;
       folded.c[0] = bbSub(folded.c[0], leaves[q].getZExtValue());
       folded = extMul(folded, extInv(denominator));
-      for (uint64_t r = 1; r <= shape.k; ++r) {
+      for (uint64_t r = 1; r <= k; ++r) {
         Ext4 own = folded;
-        Ext4 sibling = extOf(siblings[(r - 1) * shape.ell + q]);
+        Ext4 sibling = extOf(siblings[(r - 1) * ell + q]);
         Ext4 pair[2];
         pair[index & 1] = own;
         pair[(index & 1) ^ 1] = sibling;
@@ -782,7 +820,7 @@ public:
           for (unsigned coord = 0; coord < 4; ++coord)
             row.push_back(element.c[coord]);
         index >>= 1;
-        uint64_t logFolded = shape.logHeight - r;
+        uint64_t logFolded = logHeight - r;
         SmallVector<Digest> pathDigests;
         for (uint64_t level = 0; level < logFolded; ++level)
           pathDigests.push_back(digestOf(
@@ -803,8 +841,8 @@ public:
       // The final polynomial, low degree first, at the surviving
       // index's domain point (bit-reversed at full width, the pinned
       // verifier's own spelling).
-      uint64_t xFinal = bbPow(kTwoAdicGenerators[shape.logHeight],
-                              bitrev(index, shape.logHeight));
+      uint64_t xFinal = bbPow(kTwoAdicGenerators[logHeight],
+                              bitrev(index, logHeight));
       Ext4 evaluation;
       for (size_t coefficient = finals.size(); coefficient-- > 0;) {
         Ext4 scaled = evaluation;
