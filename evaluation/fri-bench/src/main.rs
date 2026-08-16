@@ -32,6 +32,10 @@ fn snapshot() -> (u64, u64) {
     )
 }
 
+// The instance shape, written by gen.py from the instance JSON — one
+// source for both legs and the bench.
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generated/shape.rs"));
+
 fn main() {
     use p3_baby_bear::default_babybear_poseidon2_16;
     use p3_challenger::{CanObserve, FieldChallenger};
@@ -44,7 +48,6 @@ fn main() {
         ValMmcs,
     };
     type Challenge = BinomialExtensionField<Val, 4>;
-    const LOG_SIZE: usize = 20;
 
     let perm = default_babybear_poseidon2_16();
     let hash = FieldHash::new(perm.clone());
@@ -54,7 +57,13 @@ fn main() {
     let pcs = Pcs::new(
         Dft::default(),
         val_mmcs,
-        fri_parameters_for(challenge_mmcs, 100, 16, 1, 0),
+        fri_parameters_for(
+            challenge_mmcs,
+            QUERIES,
+            GRIND_BITS,
+            LOG_BLOWUP,
+            LOG_FINAL_POLY_LEN,
+        ),
     );
     let domain =
         <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(&pcs, 1 << LOG_SIZE);

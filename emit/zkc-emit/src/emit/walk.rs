@@ -1395,11 +1395,11 @@ impl<'a> Walk<'a> {
             self.line(1, "}");
             self.line(1, &format!("for element in &{expr} {{"));
             let words = if implementation == ImplKind::P3Word {
-                "[*element]".to_owned()
+                "&[*element]".to_owned()
             } else {
-                "*element".to_owned()
+                "element".to_owned()
             };
-            self.line(2, &format!("if !zkc_rt::p3::words_canonical(&{words}) {{"));
+            self.line(2, &format!("if !zkc_rt::p3::words_canonical({words}) {{"));
             self.line(
                 3,
                 &Self::refuse(
@@ -1411,7 +1411,7 @@ impl<'a> Walk<'a> {
             self.line(2, "}");
             self.line(
                 2,
-                &format!("zkc_rt::p3::encode_words(&{words}, &mut proof);"),
+                &format!("zkc_rt::p3::encode_words({words}, &mut proof);"),
             );
             self.line(1, "}");
             return Ok(());
