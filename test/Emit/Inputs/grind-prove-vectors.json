@@ -1,0 +1,34 @@
+{
+  "artifact_id": "98cd67cb122ed2763834f6dd3138ab972214df796b32a61331566dcf6fb01e74",
+  "source": "sha256:adb3762b56d7a42dcbdadefb651caef495b69097a40ad0900805b0f8bb89a547",
+  "prover_vectors": [
+    {
+      "name": "round_trip",
+      "statement": {"y": "1024"},
+      "witness": {"w": "00000000000000050000000000000007"},
+      "expect": "ok",
+      "proof": "00000000000040000aad8373a9a8779c00000000000001d4",
+      "challenges": ["1998557536199175941", "0"]
+    },
+    {
+      "name": "statement_out_of_range",
+      "statement": {"y": "4611686018427394499"},
+      "witness": {"w": "00000000000000050000000000000007"},
+      "expect": "statement",
+      "label": "y",
+      "message": "value is outside the range its class admits",
+      "proof": "",
+      "challenges": []
+    },
+    {
+      "name": "short_witness_payload",
+      "statement": {"y": "1024"},
+      "witness": {"w": "0000000000000005"},
+      "expect": "fill",
+      "label": "commit",
+      "message": "sigma witness payload must be sixteen bytes (x, k big-endian)",
+      "proof": "",
+      "challenges": []
+    }
+  ]
+}

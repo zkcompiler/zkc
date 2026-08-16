@@ -16,7 +16,9 @@ pub const Q: u64 = 2305843009213697249;
 /// The toy duplex: SHA-256 chaining with framing tags. Byte 0x00 prefixes
 /// an absorbed value and 0x01 prefixes a squeeze domain, so no absorb
 /// input can collide with a squeeze input (the a-injectivity framing rule,
-/// kernel.md §13(e)).
+/// kernel.md §13(e)). `Clone` is the transcript peek's mechanism: a
+/// `pow_search` trial runs on a copy, never on the live state.
+#[derive(Clone)]
 pub struct ToyDuplex {
     state: [u8; 32],
 }
@@ -115,6 +117,26 @@ pub fn powmod(mut base: u64, mut exponent: u64, m: u64) -> u64 {
 // arm at run time. Test-grade arithmetic — variable-time throughout, as
 // the emitted README states.
 
+/// The proof-of-work search (`docs/spec/endpoints.md` §6.2): enumerate
+/// the nonce class's canonical values ascending from zero and return the
+/// least one whose trial derivation is zero — the normative order, so
+/// every conforming implementation emits the same nonce. The trial is an
+/// oracle built by the caller over a cloned sponge; this function never
+/// sees the transcript. An exhausted domain is the fill's own defect,
+/// reported rather than panicked (the upstream kernel vendor panics
+/// here, and over a 31-bit field with a deep target the no-witness
+/// probability is real).
+pub fn pow_search(domain_end: u64, mut trial: impl FnMut(u64) -> u64) -> Result<u64, String> {
+    for nonce in 0..domain_end {
+        if trial(nonce) == 0 {
+            return Ok(nonce);
+        }
+    }
+    Err(format!(
+        "no nonce below {domain_end} satisfies the proof-of-work condition"
+    ))
+}
+
 /// The sigma witness payload convention shared with the reference twin
 /// and the C++ toy profile: sixteen bytes, x then k, each eight
 /// big-endian. Parsing is the supplier's, never the emitted crate's.
@@ -191,6 +213,38 @@ mod fills {
         assert!(
             cheat < Q,
             "a cheat that failed the range gate would prove nothing"
+        );
+    }
+
+    /// The peek discipline end to end: the trial clones, the live
+    /// duplex is untouched, and the returned nonce is the least one —
+    /// checked against a direct sequential scan of the same predicate.
+    #[test]
+    fn pow_search_returns_the_least_witness_and_leaves_the_state() {
+        let sponge = ToyDuplex::new("sha256:test");
+        let before = sponge.clone();
+        let trial = |nonce: u64| {
+            let mut trial_sponge = sponge.clone();
+            trial_sponge.absorb(&frame_be8(nonce));
+            derive_be8(&trial_sponge.squeeze("grind.pow"), 16)
+        };
+        let found = pow_search(1 << 20, trial).expect("a 4-bit target in 2^20 draws");
+        let mut check = ToyDuplex::new("sha256:test");
+        check.absorb(&frame_be8(found));
+        assert_eq!(derive_be8(&check.squeeze("grind.pow"), 16), 0);
+        for earlier in 0..found {
+            let mut sponge = ToyDuplex::new("sha256:test");
+            sponge.absorb(&frame_be8(earlier));
+            assert_ne!(derive_be8(&sponge.squeeze("grind.pow"), 16), 0);
+        }
+        assert_eq!(sponge.state, before.state, "the live state never moves");
+    }
+
+    #[test]
+    fn an_exhausted_domain_is_an_error_not_a_panic() {
+        assert_eq!(
+            pow_search(8, |_| 1).unwrap_err(),
+            "no nonce below 8 satisfies the proof-of-work condition"
         );
     }
 

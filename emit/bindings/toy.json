@@ -4,11 +4,14 @@
  "algebra": {"group": "4611686018427394499", "field": "2305843009213697249"},
  "classes": {
   "tg": {"codec": "tg_be8", "impl": "toy_be8", "modulus": "4611686018427394499"},
-  "scalar": {"codec": "ts_be8", "impl": "toy_be8", "modulus": "2305843009213697249"}
+  "scalar": {"codec": "ts_be8", "impl": "toy_be8", "modulus": "2305843009213697249"},
+  "rs": {"codec": "ts_be8", "impl": "toy_be8", "modulus": "4611686018427394499"},
+  "pow_value": {"codec": "ts_be8", "impl": "toy_be8", "modulus": "4611686018427394499"}
  },
  "holes": {
   "sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15": {"impl": "toy_sigma_commit"},
-  "sha256:8ebf84fc8ed71a4c19d7af0dade5db63eda92c84888e903e2eadae4d444692d9": {"impl": "toy_sigma_response"}
+  "sha256:8ebf84fc8ed71a4c19d7af0dade5db63eda92c84888e903e2eadae4d444692d9": {"impl": "toy_sigma_response"},
+  "sha256:d45f029644f09ac28a8284a5048c0a773e03509d810daecf0ea8ec65576962b6": {"impl": "toy_pow_search"}
  },
  "digests": {
   "codec:tg_be8": "sha256:3350aaa6e9a9a99ed351e5da7429dc552e32597eef3990c26e7d414b8683c8aa",

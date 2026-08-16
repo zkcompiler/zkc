@@ -16,7 +16,10 @@ use p3_symmetric::Permutation;
 /// The BabyBear prime, 2^31 - 2^27 + 1.
 pub const BB: u32 = 2013265921;
 
-/// The lenpad duplex over the pinned upstream permutation.
+/// The lenpad duplex over the pinned upstream permutation. `Clone` is
+/// the transcript peek's mechanism: a `pow_search` trial runs on a
+/// copy, never on the live state.
+#[derive(Clone)]
 pub struct P3Duplex {
     permutation: Poseidon2BabyBear<16>,
     state: [u32; 16],
@@ -156,6 +159,26 @@ pub fn squeeze_low_bits(duplex: &mut P3Duplex, space: u64) -> u32 {
     (duplex.squeeze_element() as u64 % space) as u32
 }
 
+/// The proof-of-work search (`docs/spec/endpoints.md` §6.2): enumerate
+/// canonical field values ascending from zero and return the least one
+/// whose trial derivation is zero — the normative order, so every
+/// conforming implementation emits the same nonce. The trial is an
+/// oracle built by the caller over a cloned duplex; this function never
+/// sees the transcript. An exhausted domain is the fill's own defect,
+/// reported rather than panicked (the upstream kernel vendor panics
+/// here, and over a 31-bit field with a deep target the no-witness
+/// probability is real).
+pub fn pow_search(domain_end: u32, mut trial: impl FnMut(u32) -> u32) -> Result<u32, String> {
+    for nonce in 0..domain_end {
+        if trial(nonce) == 0 {
+            return Ok(nonce);
+        }
+    }
+    Err(format!(
+        "no nonce below {domain_end} satisfies the proof-of-work condition"
+    ))
+}
+
 /// The pinned known-answer test (upstream
 /// `test_default_babybear_poseidon2_width_16`): a build whose permutation
 /// cannot reproduce it must not derive challenges. Emitted conformance
@@ -189,6 +212,39 @@ mod tests {
     #[test]
     fn known_answer_test() {
         permutation_self_check();
+    }
+
+    /// The peek discipline end to end: the trial clones, the live
+    /// duplex is untouched, and the returned nonce is the least one —
+    /// checked by rescanning every earlier candidate.
+    #[test]
+    fn pow_search_returns_the_least_witness_and_leaves_the_state() {
+        let mut sponge = P3Duplex::new("sha256:test");
+        sponge.absorb(&[7, 11]);
+        let before = sponge.clone();
+        let found = pow_search(1 << 20, |nonce| {
+            let mut trial = sponge.clone();
+            trial.absorb(&[nonce]);
+            squeeze_low_bits(&mut trial, 16)
+        })
+        .expect("a 4-bit target in 2^20 draws");
+        for earlier in 0..found {
+            let mut trial = before.clone();
+            trial.absorb(&[earlier]);
+            assert_ne!(squeeze_low_bits(&mut trial, 16), 0);
+        }
+        let mut check = before.clone();
+        check.absorb(&[found]);
+        assert_eq!(squeeze_low_bits(&mut check, 16), 0);
+        assert_eq!(sponge.state, before.state, "the live state never moves");
+    }
+
+    #[test]
+    fn an_exhausted_domain_is_an_error_not_a_panic() {
+        assert_eq!(
+            pow_search(8, |_| 1).unwrap_err(),
+            "no nonce below 8 satisfies the proof-of-work condition"
+        );
     }
 
     /// The upstream `empty_squeeze` observation

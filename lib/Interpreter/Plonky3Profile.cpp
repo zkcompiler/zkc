@@ -224,6 +224,10 @@ public:
     absorb(framed);
   }
 
+  std::unique_ptr<SpongeState> clone() const override {
+    return std::make_unique<DuplexState>(*this);
+  }
+
   void absorb(ArrayRef<uint8_t> framed) override {
     assert(framed.size() % 4 == 0 && "symbols are 4-byte field elements");
     for (unsigned i = 0; i < framed.size(); i += 4) {

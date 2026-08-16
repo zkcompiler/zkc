@@ -874,6 +874,31 @@
       ],
       "parameters": [],
       "semantic_parameters": []
+    },
+    "zkc.hole.toy-pow": {
+      "kind": "pow_search",
+      "operands": [
+        {
+          "sort": "sponge",
+          "role": "transcript"
+        }
+      ],
+      "results": [
+        {
+          "sort": "value",
+          "role": "nonce",
+          "class": "rs",
+          "count": "1"
+        },
+        {
+          "sort": "sponge",
+          "role": "transcript"
+        }
+      ],
+      "parameters": [
+        "bits"
+      ],
+      "semantic_parameters": []
     }
   },
   "reduction_contracts": {
@@ -2948,6 +2973,84 @@
         }
       ]
     },
+    "grinding_sigma": {
+      "consumes": [
+        "schnorr_evaluation"
+      ],
+      "dep_slots": [
+        {
+          "role": "pow",
+          "source": "challenge_capability",
+          "class": "pow_value"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "pow"
+          },
+          "messages": [
+            {
+              "role": "nonce",
+              "count": {
+                "exact": 1
+              }
+            }
+          ],
+          "kind": "pow"
+        }
+      ],
+      "parameters": {},
+      "checks": {
+        "pow_pin": {
+          "contract": "zkc.check.pow-zero",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "role",
+              "challenge"
+            ],
+            [
+              "const",
+              "zero"
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "nonce",
+                "occurrence": 0
+              },
+              "target_role": "nonce"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "pow"
+              },
+              "target_role": "challenge"
+            }
+          ]
+        }
+      },
+      "constraints": [],
+      "outputs": [
+        {
+          "profile": "schnorr_evaluation",
+          "anchors": {
+            "statement": {
+              "kind": "input_anchor",
+              "input": 0,
+              "anchor": "statement"
+            }
+          }
+        }
+      ]
+    },
     "r1cs_batch": {
       "consumes": [
         "r1cs"
@@ -3519,6 +3622,50 @@
             "role": "c"
           },
           "check": "equation",
+          "role": "challenge"
+        }
+      ]
+    },
+    "zkc.terminal.schnorr-grinding": {
+      "claim_profile": "schnorr_evaluation",
+      "producer": {
+        "contract": "grinding_sigma",
+        "output": 0
+      },
+      "checks": {
+        "pow_pin": "zkc.check.pow-zero"
+      },
+      "transparent_predicates": {
+        "pow_pin": [
+          "eq",
+          [
+            "role",
+            "challenge"
+          ],
+          [
+            "const",
+            "zero"
+          ]
+        ]
+      },
+      "attachments": [
+        {
+          "kind": "value_identity",
+          "source": {
+            "kind": "producer_message",
+            "role": "nonce",
+            "index": 0
+          },
+          "check": "pow_pin",
+          "role": "nonce"
+        },
+        {
+          "kind": "value_identity",
+          "source": {
+            "kind": "producer_dependency",
+            "role": "pow"
+          },
+          "check": "pow_pin",
           "role": "challenge"
         }
       ]

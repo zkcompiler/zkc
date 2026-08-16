@@ -186,6 +186,10 @@ pub enum Operand {
     Value(ImplKind),
     /// An opaque payload of the given handle class.
     Handle(&'static str),
+    /// The transcript, as a state-identical read-only peek
+    /// (`docs/spec/endpoints.md` §6.2): the emitted call receives a
+    /// trial closure built over a cloned sponge, never the sponge.
+    Sponge,
 }
 
 /// One hole fill's shape, as the emitter checks it against the row.
@@ -217,6 +221,9 @@ pub enum HoleImpl {
     /// The same boundary, the wrong algebra: z+1. Negative evidence
     /// only; it exists so the reject boundary can be observed.
     ToySigmaResponseCheat,
+    /// `pow_search`: the least nonce whose trial derivation is zero,
+    /// searched in canonical ascending order over a cloned sponge.
+    ToyPowSearch,
 }
 
 impl HoleImpl {
@@ -225,6 +232,7 @@ impl HoleImpl {
             "toy_sigma_commit" => Some(HoleImpl::ToySigmaCommit),
             "toy_sigma_response" => Some(HoleImpl::ToySigmaResponse),
             "toy_sigma_response_cheat" => Some(HoleImpl::ToySigmaResponseCheat),
+            "toy_pow_search" => Some(HoleImpl::ToyPowSearch),
             _ => None,
         }
     }
@@ -235,6 +243,7 @@ impl HoleImpl {
             HoleImpl::ToySigmaCommit => "zkc_rt::toy::sigma_commit",
             HoleImpl::ToySigmaResponse => "zkc_rt::toy::sigma_response",
             HoleImpl::ToySigmaResponseCheat => "zkc_rt::toy::sigma_response_cheat",
+            HoleImpl::ToyPowSearch => "zkc_rt::toy::pow_search",
         }
     }
 
@@ -242,7 +251,8 @@ impl HoleImpl {
         match self {
             HoleImpl::ToySigmaCommit
             | HoleImpl::ToySigmaResponse
-            | HoleImpl::ToySigmaResponseCheat => "toy",
+            | HoleImpl::ToySigmaResponseCheat
+            | HoleImpl::ToyPowSearch => "toy",
         }
     }
 
@@ -261,6 +271,10 @@ impl HoleImpl {
             HoleImpl::ToySigmaResponse | HoleImpl::ToySigmaResponseCheat => HoleSignature {
                 inputs: TAKES,
                 results: &[Operand::Value(ImplKind::ToyBe8)],
+            },
+            HoleImpl::ToyPowSearch => HoleSignature {
+                inputs: &[Operand::Sponge],
+                results: &[Operand::Value(ImplKind::ToyBe8), Operand::Sponge],
             },
         }
     }

@@ -1,0 +1,29 @@
+# REQUIRES: cargo
+# The transcript peek in the emitted endpoint: the pow_search fill is
+# called with a trial closure over a cloned sponge — never the sponge
+# itself — replaying the same nonce absorb and proof-of-work squeeze
+# the spine emits for the three rows after the hole. The committed
+# vectors pin the least-witness nonce all three implementations agree
+# on (test/Oir/grind-round-trip.test is the executor pair).
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/grind-schnorr.mlir -o %t/sealed.mlir
+# RUN: zkc-opt %pir-project-prover-full %t/sealed.mlir -o %t/prover.mlir
+# RUN: zkc-translate --oir-canonical %t/prover.mlir -o %t/prover.json
+# RUN: zkc-opt %pir-project-full %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+
+# Both crates emit and replay their suites: the producing control, the
+# refusals, and on the verifier side the corrupted nonce that must die
+# at the proof-of-work equation.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %S/Inputs/grind-prove-vectors.json --out %t/prover-crate --crate-name zkc-prover-grind
+# RUN: cargo test --quiet --manifest-path %t/prover-crate/Cargo.toml
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %S/Inputs/grind-exec-vectors.json --out %t/verifier-crate --crate-name zkc-verifier-grind
+# RUN: cargo test --quiet --manifest-path %t/verifier-crate/Cargo.toml
+
+# The emitter's mirror of the neighborhood judgment: a document whose
+# proof-of-work squeeze space is not 2^bits for the hole's declared
+# bit count refuses before any code exists.
+# RUN: %python %S/Inputs/document-gates.py %t/prover.json %t/wrong-space.json pow-wrong-space
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/wrong-space.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --out %t/refused 2>&1 | FileCheck %s
+# CHECK: pow_search hole 'grind': the proof-of-work squeeze must draw one uniform value from a space of exactly 2^bits; the trial the fill would run is not the check the verifier performs (zkc-E412's emit-time form)

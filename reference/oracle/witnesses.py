@@ -1464,6 +1464,106 @@ PLONKY3_FRI_REAL = {
 BIND_ROUTED = copy.deepcopy(SCHNORR_ROUTED)
 BIND_ROUTED["routes"]["instances"]["commit"]["inputs"] = ["bind:y", "witness:w"]
 
+
+# Routed Schnorr with a grinding round: the nonce slot is supplied by a
+# `pow_search` hole — the transcript peek (docs/spec/endpoints.md §6.2)
+# — and the following proof-of-work challenge must derive to zero. The
+# `rs`/`pow_value` class names are pinned by the shared pow-zero check
+# contract; here they route to the toy codec.
+# `test/Encoding/grind-schnorr.mlir` is the carrier side.
+SCHNORR_GRIND = {
+    **SCHNORR_ROUTED,
+    "kappa": {
+        "codecs": {
+            "pow_value": "ts_be8",
+            "rs": "ts_be8",
+            "scalar": "ts_be8",
+            "tg": "tg_be8",
+        },
+        "constants": {
+            "g": {"class": "tg", "value": "4"},
+            "zero": {"class": "pow_value", "value": "0"},
+        },
+        "iv": "artifact-id",
+        "sponge": "toy_duplex",
+    },
+    "events": [
+        bind("y", "tg", "instance"),
+        slot("commit_A", "tg", True, ("sig", "a", 0), binding="commit.0"),
+        chal(
+            "c",
+            "scalar",
+            "schnorr.c",
+            "2305843009213693952",
+            ["y", "commit_A"],
+        ),
+        slot("resp_z", "scalar", True, binding="resp.0"),
+        slot("nonce", "rs", True, ("grind", "nonce", 0), binding="grind.0"),
+        chal("pow", "pow_value", "grind.pow", "256", ["nonce"]),
+        check(
+            "verify",
+            "zkc.check.schnorr-equation",
+            ["y", "commit_A", "c", "resp_z"],
+            expr=[
+                "eq",
+                ["g_exp", ["const", "g"], ["in", 3]],
+                ["g_mul", ["in", 1], ["g_exp", ["in", 0], ["in", 2]]],
+            ],
+        ),
+        check(
+            "pow_pin",
+            "zkc.check.pow-zero",
+            ["nonce", "pow"],
+            expr=["eq", ["in", 1], ["const", "zero"]],
+        ),
+    ],
+    "routes": {
+        "witnesses": [("w", "sigma-witness")],
+        "instances": {
+            "commit": {
+                "contract": "zkc.hole.sigma-commit",
+                "inputs": ["const:g", "witness:w"],
+            },
+            "grind": {
+                "contract": "zkc.hole.toy-pow",
+                "params": {"bits": "8"},
+                "inputs": [],
+            },
+            "resp": {
+                "contract": "zkc.hole.sigma-response",
+                "inputs": ["chal:c", "commit.1"],
+            },
+        },
+    },
+    "reduces": [
+        reduce_row(
+            "sig",
+            "sigma",
+            ["dlog"],
+            ["c"],
+            [("evaluation", "schnorr_evaluation")],
+            checks={"equation": "verify"},
+            anchors=[{"statement": SCHNORR_STATEMENT}],
+        ),
+        reduce_row(
+            "grind",
+            "grinding_sigma",
+            ["evaluation"],
+            ["pow"],
+            [("ground", "schnorr_evaluation")],
+            checks={"pow_pin": "pow_pin"},
+            anchors=[{"statement": SCHNORR_STATEMENT}],
+        ),
+    ],
+    "sinks": [
+        discharge(
+            "ground",
+            "zkc.terminal.schnorr-grinding",
+            {"pow_pin": "pow_pin"},
+        )
+    ],
+}
+
 PIR_WITNESSES = {
     "relation-direct": RELATION_DIRECT,
     "relation-residual": RELATION_RESIDUAL,
@@ -1482,6 +1582,7 @@ PIR_WITNESSES = {
     "linked": LINKED,
     "two-ready-reduces": TWO_READY_REDUCES,
     "bind-routed": BIND_ROUTED,
+    "schnorr-grind": SCHNORR_GRIND,
 }
 
 PIR_REFUSAL_WITNESSES = {
@@ -1493,6 +1594,7 @@ OIR_WITNESSES = {
     "relation-direct": RELATION_DIRECT,
     "schnorr": SCHNORR,
     "schnorr-routed": SCHNORR_ROUTED,
+    "schnorr-grind": SCHNORR_GRIND,
     "sumcheck": SUMCHECK,
     "sumcheck-fs": SUMCHECK_FS,
     "chaum-pedersen": CHAUM_PEDERSEN,
