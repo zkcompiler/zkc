@@ -224,6 +224,19 @@ pub enum HoleImpl {
     /// `pow_search`: the least nonce whose trial derivation is zero,
     /// searched in canonical ascending order over a cloned sponge.
     ToyPowSearch,
+    /// The same search over the BabyBear duplex.
+    P3PowSearch,
+    /// `evaluate`: the witness trace's opened value at zeta, with the
+    /// bit-reversed LDE prepared into the handle.
+    P3FriOpenval,
+    /// `extend`: the alpha-batched reduced opening that seeds FRI.
+    P3FriReduce,
+    /// `commit`: one Merkle cap over the adjacent-conjugate reshape.
+    P3FriCommit,
+    /// `fold`: the arity-two fold, beta on the odd part.
+    P3FriFold,
+    /// `evaluate`: the final polynomial's constant coefficient.
+    P3FriFinal,
 }
 
 impl HoleImpl {
@@ -233,6 +246,12 @@ impl HoleImpl {
             "toy_sigma_response" => Some(HoleImpl::ToySigmaResponse),
             "toy_sigma_response_cheat" => Some(HoleImpl::ToySigmaResponseCheat),
             "toy_pow_search" => Some(HoleImpl::ToyPowSearch),
+            "p3_pow_search" => Some(HoleImpl::P3PowSearch),
+            "p3_fri_openval" => Some(HoleImpl::P3FriOpenval),
+            "p3_fri_reduce" => Some(HoleImpl::P3FriReduce),
+            "p3_fri_commit" => Some(HoleImpl::P3FriCommit),
+            "p3_fri_fold" => Some(HoleImpl::P3FriFold),
+            "p3_fri_final" => Some(HoleImpl::P3FriFinal),
             _ => None,
         }
     }
@@ -244,6 +263,12 @@ impl HoleImpl {
             HoleImpl::ToySigmaResponse => "zkc_rt::toy::sigma_response",
             HoleImpl::ToySigmaResponseCheat => "zkc_rt::toy::sigma_response_cheat",
             HoleImpl::ToyPowSearch => "zkc_rt::toy::pow_search",
+            HoleImpl::P3PowSearch => "zkc_rt::p3::pow_search",
+            HoleImpl::P3FriOpenval => "zkc_rt::p3::fri_openval",
+            HoleImpl::P3FriReduce => "zkc_rt::p3::fri_reduce",
+            HoleImpl::P3FriCommit => "zkc_rt::p3::fri_commit",
+            HoleImpl::P3FriFold => "zkc_rt::p3::fri_fold",
+            HoleImpl::P3FriFinal => "zkc_rt::p3::fri_final",
         }
     }
 
@@ -253,6 +278,12 @@ impl HoleImpl {
             | HoleImpl::ToySigmaResponse
             | HoleImpl::ToySigmaResponseCheat
             | HoleImpl::ToyPowSearch => "toy",
+            HoleImpl::P3PowSearch
+            | HoleImpl::P3FriOpenval
+            | HoleImpl::P3FriReduce
+            | HoleImpl::P3FriCommit
+            | HoleImpl::P3FriFold
+            | HoleImpl::P3FriFinal => "plonky3",
         }
     }
 
@@ -275,6 +306,45 @@ impl HoleImpl {
             HoleImpl::ToyPowSearch => HoleSignature {
                 inputs: &[Operand::Sponge],
                 results: &[Operand::Value(ImplKind::ToyBe8), Operand::Sponge],
+            },
+            HoleImpl::P3PowSearch => HoleSignature {
+                inputs: &[Operand::Sponge],
+                results: &[Operand::Value(ImplKind::P3Word), Operand::Sponge],
+            },
+            HoleImpl::P3FriOpenval => HoleSignature {
+                inputs: &[
+                    Operand::Value(ImplKind::P3Ext4),
+                    Operand::Handle("fri-codeword"),
+                ],
+                results: &[
+                    Operand::Value(ImplKind::P3Ext4),
+                    Operand::Handle("fri-codeword"),
+                ],
+            },
+            HoleImpl::P3FriReduce => HoleSignature {
+                inputs: &[
+                    Operand::Value(ImplKind::P3Ext4),
+                    Operand::Handle("fri-codeword"),
+                ],
+                results: &[Operand::Handle("fri-codeword")],
+            },
+            HoleImpl::P3FriCommit => HoleSignature {
+                inputs: &[Operand::Handle("fri-codeword")],
+                results: &[
+                    Operand::Value(ImplKind::P3Digest8),
+                    Operand::Handle("fri-codeword"),
+                ],
+            },
+            HoleImpl::P3FriFold => HoleSignature {
+                inputs: &[
+                    Operand::Value(ImplKind::P3Ext4),
+                    Operand::Handle("fri-codeword"),
+                ],
+                results: &[Operand::Handle("fri-codeword")],
+            },
+            HoleImpl::P3FriFinal => HoleSignature {
+                inputs: &[Operand::Handle("fri-codeword")],
+                results: &[Operand::Value(ImplKind::P3Ext4)],
             },
         }
     }

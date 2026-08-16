@@ -179,6 +179,255 @@ pub fn pow_search(domain_end: u32, mut trial: impl FnMut(u32) -> u32) -> Result<
     ))
 }
 
+//===-- FRI leaf fills --------------------------------------------------===//
+//
+// The prover-side fills for the value-faithful FRI family, assembled
+// from the pinned upstream kernels. The reference semantics are the
+// replay runner (`evaluation/upstream/plonky3-replay`), whose
+// whole-pipeline wire the emitted crate's conformance suite reproduces
+// byte for byte. Fills are pure: every challenge arrives as a spine-squeezed
+// value, and results reach the transcript only through spine rows.
+// The `Codeword` handle is supplier state moved fill to fill — the
+// carrier's exactly-once handle rule as Rust ownership.
+
+use core::marker::PhantomData;
+
+use p3_commit::{ExtensionMmcs, Mmcs};
+use p3_dft::{Radix2DitParallel, TwoAdicSubgroupDft};
+use p3_field::coset::TwoAdicMultiplicativeCoset;
+use p3_field::extension::BinomialExtensionField;
+use p3_field::{batch_multiplicative_inverse, dot_product, BasedVectorSpace, Field};
+use p3_fri::{FriFoldingStrategy, TwoAdicFriFolding};
+use p3_matrix::bitrev::BitReversibleMatrix;
+use p3_matrix::dense::RowMajorMatrix;
+use p3_matrix::interpolation::{compute_adjusted_weights, Interpolate};
+use p3_matrix::Matrix;
+use p3_merkle_tree::MerkleTreeMmcs;
+use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
+use p3_util::reverse_slice_index_bits;
+
+use crate::Payload;
+
+type Val = p3_baby_bear::BabyBear;
+type Challenge = BinomialExtensionField<Val, 4>;
+type Perm = Poseidon2BabyBear<16>;
+type FieldHash = PaddingFreeSponge<Perm, 16, 8, 8>;
+type Compress = TruncatedPermutation<Perm, 2, 8, 16>;
+type ValMmcs =
+    MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, FieldHash, Compress, 2, 8>;
+type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+type ChallengeProverData =
+    <ChallengeMmcs as Mmcs<Challenge>>::ProverData<RowMajorMatrix<Challenge>>;
+
+/// The extension element for four spine-squeezed words, coefficient
+/// order 0..3 — the same monomial order the upstream challenger
+/// observes and samples.
+fn ext_from_words(words: [u32; 4]) -> Challenge {
+    Challenge::from_basis_coefficients_fn(|i| Val::from_u32(words[i]))
+}
+
+fn words_from_ext(value: Challenge) -> [u32; 4] {
+    let coefficients: &[Val] = value.as_basis_coefficients_slice();
+    let mut words = [0u32; 4];
+    for (word, coefficient) in words.iter_mut().zip(coefficients) {
+        *word = coefficient.as_canonical_u32();
+    }
+    words
+}
+
+fn challenge_mmcs() -> ChallengeMmcs {
+    let permutation = default_babybear_poseidon2_16();
+    ExtensionMmcs::new(MerkleTreeMmcs::new(
+        FieldHash::new(permutation.clone()),
+        Compress::new(permutation),
+        0,
+    ))
+}
+
+/// The codeword handle: supplier state, staged by which fill produced
+/// it. Its content is exactly what the next fill needs and the spine's
+/// operands do not carry.
+pub enum Codeword {
+    /// After the opening fill: the bit-reversed low-degree extension,
+    /// the inverse denominators at zeta over its full height, and the
+    /// opened value.
+    Opened {
+        lde: RowMajorMatrix<Val>,
+        inv_denoms: Vec<Challenge>,
+        opened: Challenge,
+    },
+    /// Between reduce or fold and the next commit: the current
+    /// bit-reversed extension codeword.
+    Ext(Vec<Challenge>),
+    /// Between a commit and its fold: the Merkle prover data owns the
+    /// reshaped codeword, and the fold reads the leaves as a view —
+    /// the upstream commit phase's own no-copy dataflow.
+    Committed(Box<ChallengeProverData>),
+}
+
+impl core::fmt::Debug for Codeword {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Codeword::Opened { lde, .. } => {
+                write!(f, "Codeword::Opened(height {})", lde.height())
+            }
+            Codeword::Ext(evals) => write!(f, "Codeword::Ext(len {})", evals.len()),
+            Codeword::Committed(_) => f.write_str("Codeword::Committed"),
+        }
+    }
+}
+
+/// The opening fill: parse the witness trace, rebuild the committed
+/// bit-reversed LDE exactly as the upstream commit does, and evaluate
+/// it at zeta by barycentric interpolation over the low coset. The
+/// inverse denominators are computed once over the full height and
+/// ride the handle: the reduce fill shares them, upstream's own
+/// point-level reuse.
+pub fn fri_openval(zeta: [u32; 4], witness: Payload) -> Result<([u32; 4], Codeword), String> {
+    let bytes = witness.as_bytes();
+    if bytes.is_empty() || !bytes.len().is_multiple_of(4) {
+        return Err("fri witness payload must be big-endian 4-byte base-field words".to_owned());
+    }
+    let mut trace = Vec::with_capacity(bytes.len() / 4);
+    for chunk in bytes.chunks(4) {
+        let word = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        if word >= BB {
+            return Err("fri witness payload word is outside the canonical field range".to_owned());
+        }
+        trace.push(Val::from_u32(word));
+    }
+    let height = trace.len();
+    if !height.is_power_of_two() || height < 2 {
+        return Err(
+            "fri witness payload must hold a power-of-two number of rows, at least two".to_owned(),
+        );
+    }
+    let log_height = height.trailing_zeros() as usize;
+    // The committed input: coset LDE at the family's blowup over
+    // GENERATOR·K, bit-reversed — byte for byte the upstream commit's
+    // own construction.
+    let dft = Radix2DitParallel::<Val>::default();
+    let lde = dft
+        .coset_lde_batch(RowMajorMatrix::new(trace, 1), 1, Val::GENERATOR)
+        .bit_reverse_rows()
+        .to_row_major_matrix();
+    let zeta = ext_from_words(zeta);
+    let coset = TwoAdicMultiplicativeCoset::new(Val::GENERATOR, log_height + 1)
+        .expect("the trace height fits the field's two-adicity");
+    let mut points: Vec<Val> = coset.iter().collect();
+    reverse_slice_index_bits(&mut points);
+    let differences: Vec<Challenge> = points.iter().map(|&x| zeta - x).collect();
+    let inv_denoms = batch_multiplicative_inverse(&differences);
+    let weights = compute_adjusted_weights(zeta, &inv_denoms[..height]);
+    let (low_coset, _) = lde.split_rows(height);
+    let opened = low_coset.interpolate_coset_with_precomputation(Val::GENERATOR, zeta, &weights)[0];
+    Ok((
+        words_from_ext(opened),
+        Codeword::Opened {
+            lde,
+            inv_denoms,
+            opened,
+        },
+    ))
+}
+
+/// The reduce fill: the alpha-batched reduced opening that seeds FRI.
+/// For the current family's shape — one width-one matrix opened at one
+/// point — the loop is `(opened − p(x)) / (zeta − x)` over the
+/// bit-reversed LDE; the width gate keeps that scope honest rather
+/// than pretending generality the subject does not exercise.
+pub fn fri_reduce(alpha: [u32; 4], codeword: Codeword) -> Result<Codeword, String> {
+    let Codeword::Opened {
+        lde,
+        inv_denoms,
+        opened,
+    } = codeword
+    else {
+        return Err("the reduce fill consumes the opening fill's handle".to_owned());
+    };
+    if lde.width() != 1 {
+        return Err(
+            "the reduce fill covers width-one inputs; wider batches arrive with their subject"
+                .to_owned(),
+        );
+    }
+    let alpha = ext_from_words(alpha);
+    // Upstream's alpha combination, at this width: the row compression
+    // and the opening combination are both single-term dot products.
+    let combined_opening: Challenge = dot_product(alpha.powers(), core::iter::once(opened));
+    let reduced: Vec<Challenge> = lde
+        .values
+        .iter()
+        .zip(&inv_denoms)
+        .map(|(&value, &inv_denom)| (combined_opening - Challenge::from(value)) * inv_denom)
+        .collect();
+    Ok(Codeword::Ext(reduced))
+}
+
+/// The commit fill: reshape the bit-reversed codeword as adjacent
+/// conjugate pairs and commit through the extension Merkle scheme —
+/// one root at cap height zero. The prover data keeps ownership of the
+/// leaves so the following fold reads them as a view, copy-free.
+pub fn fri_commit(codeword: Codeword) -> Result<([u32; 8], Codeword), String> {
+    let Codeword::Ext(folded) = codeword else {
+        return Err("the commit fill consumes an extension codeword".to_owned());
+    };
+    if folded.len() < 4 || !folded.len().is_power_of_two() {
+        return Err(
+            "the commit fill expects a power-of-two codeword with at least four evaluations"
+                .to_owned(),
+        );
+    }
+    let leaves = RowMajorMatrix::new(folded, 2);
+    let (cap, prover_data) = challenge_mmcs().commit_matrix(leaves);
+    let root = cap.roots()[0];
+    let mut words = [0u32; 8];
+    for (word, element) in words.iter_mut().zip(root) {
+        *word = element.as_canonical_u32();
+    }
+    Ok((words, Codeword::Committed(Box::new(prover_data))))
+}
+
+/// The fold fill: the upstream arity-two fold over the committed
+/// leaves, beta on the odd part.
+pub fn fri_fold(beta: [u32; 4], codeword: Codeword) -> Result<Codeword, String> {
+    let Codeword::Committed(prover_data) = codeword else {
+        return Err("the fold fill consumes the commit fill's handle".to_owned());
+    };
+    let mmcs = challenge_mmcs();
+    let leaves = *mmcs
+        .get_matrices(&prover_data)
+        .first()
+        .expect("the commit fill stored exactly one matrix");
+    let folding = TwoAdicFriFolding::<(), ()>(PhantomData);
+    let folded = <TwoAdicFriFolding<(), ()> as FriFoldingStrategy<Val, Challenge>>::fold_matrix(
+        &folding,
+        ext_from_words(beta),
+        1,
+        leaves.as_view(),
+    );
+    Ok(Codeword::Ext(folded))
+}
+
+/// The final fill: with the family's final polynomial length of one,
+/// the fully folded codeword holds one evaluation per blowup copy;
+/// truncation to length one, the bit reversal, and the length-one
+/// inverse DFT are all identities, so the coefficient is the first
+/// entry.
+pub fn fri_final(codeword: Codeword) -> Result<[u32; 4], String> {
+    let Codeword::Ext(folded) = codeword else {
+        return Err("the final fill consumes the folded codeword".to_owned());
+    };
+    if folded.len() != 2 {
+        return Err(format!(
+            "the final fill expects the fully folded codeword (two evaluations at blowup one); \
+             got {}",
+            folded.len()
+        ));
+    }
+    Ok(words_from_ext(folded[0]))
+}
+
 /// The pinned known-answer test (upstream
 /// `test_default_babybear_poseidon2_width_16`): a build whose permutation
 /// cannot reproduce it must not derive challenges. Emitted conformance
@@ -244,6 +493,46 @@ mod tests {
         assert_eq!(
             pow_search(8, |_| 1).unwrap_err(),
             "no nonce below 8 satisfies the proof-of-work condition"
+        );
+    }
+
+    /// The fill chain over the runner's fixture trace: stage gates
+    /// refuse the wrong handle by name, and the honest chain halves the
+    /// codeword 16 → 8 → 4 → 2 down to the final coefficient.
+    #[test]
+    fn fri_fill_stages_gate_and_halve() {
+        let trace: Vec<u8> = (1u32..=8).flat_map(|w| w.to_be_bytes()).collect();
+        let zeta = [7, 11, 13, 17];
+        let (opened, cw) =
+            fri_openval(zeta, Payload::new(trace.clone())).expect("the fixture trace opens");
+        assert!(words_canonical(&opened));
+        assert_eq!(
+            fri_fold([1, 0, 0, 0], cw).unwrap_err(),
+            "the fold fill consumes the commit fill's handle"
+        );
+        let (_, cw) = fri_openval(zeta, Payload::new(trace)).unwrap();
+        let mut cw = fri_reduce([3, 1, 4, 1], cw).unwrap();
+        for expected_len in [8usize, 4, 2] {
+            let (root, committed) = fri_commit(cw).unwrap();
+            assert!(words_canonical(&root));
+            cw = fri_fold([2, 7, 1, 8], committed).unwrap();
+            let Codeword::Ext(evals) = &cw else {
+                panic!("a fold yields an extension codeword");
+            };
+            assert_eq!(evals.len(), expected_len);
+        }
+        assert!(words_canonical(&fri_final(cw).unwrap()));
+    }
+
+    #[test]
+    fn fri_payload_defects_are_named() {
+        assert_eq!(
+            fri_openval([0; 4], Payload::new(vec![1, 2, 3])).unwrap_err(),
+            "fri witness payload must be big-endian 4-byte base-field words"
+        );
+        assert_eq!(
+            fri_openval([0; 4], Payload::new(vec![0, 0, 0, 1])).unwrap_err(),
+            "fri witness payload must hold a power-of-two number of rows, at least two"
         );
     }
 

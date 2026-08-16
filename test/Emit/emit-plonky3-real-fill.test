@@ -35,9 +35,6 @@
 # RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/vectors.json --out %t/crate
 # RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml
 
-# The prover side of this same artifact is why the runner exists rather
-# than an emitted crate: this binding carries no leaf fills, so emission
-# refuses at the first unbound hole — an ordinary named supplier gap
-# (zkc-E407's emit-time form), one a binding can close fill by fill.
-# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --out %t/prover-crate 2>&1 | FileCheck --check-prefix=UNFILLED %s
-# UNFILLED: hole 'openval' (kind 'evaluate', contract sha256:{{.*}}) has no fill in binding 'plonky3-zero-iv'
+# The prover side of this same artifact emits under the leaf fills the
+# binding now carries; emit-fri-prover.test holds it to byte equality
+# against this runner's own wire.
