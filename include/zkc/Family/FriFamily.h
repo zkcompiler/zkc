@@ -67,6 +67,7 @@ struct FriDescription {
   bool valueFaithful = false;
   std::string sponge, iv;              // construction profile axes
   std::string extFieldCodec, queryIndexCodec, powValueCodec, rsCodec;
+  std::string wordCodec; // value-faithful only: queried trace rows
   std::string anchorContract, anchorStatement;
 
   bool johnson() const { return analysis == "johnson"; }

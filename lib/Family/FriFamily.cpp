@@ -15,6 +15,7 @@
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Encoding/EncodingDomain.h"
 #include "zkc/Registry/Rational.h"
+#include "zkc/Registry/RegistryFile.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
@@ -45,7 +46,7 @@ static const ParamSpec kFriParams[] = {
      "emit a proof-of-work round; the pow space is 2^bits"},
     {"kappa", true,
      "construction profile: {sponge, iv, codecs: {ext_field, query_index, "
-     "rs[, pow_value]}}"},
+     "rs[, pow_value][, word]}}"},
     {"anchors", true,
      "claim anchors: {contract, statement}, each sha256:<64 hex>"},
     {"value_faithful", false,
@@ -261,14 +262,19 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
   for (const auto &entry : *codecs) {
     StringRef key = entry.first;
     bool admitted = key == "ext_field" || key == "query_index" || key == "rs" ||
-                    (desc.grindingBits && key == "pow_value");
+                    (desc.grindingBits && key == "pow_value") ||
+                    (desc.valueFaithful && key == "word");
     if (!admitted)
       return err("unknown field 'kappa.codecs." + key +
                  "' (the fri template routes semantic payload classes)");
   }
-  SmallVector<StringRef, 4> required{"ext_field", "query_index", "rs"};
+  SmallVector<StringRef, 5> required{"ext_field", "query_index", "rs"};
   if (desc.grindingBits)
     required.push_back("pow_value");
+  // The value-faithful spine reads the queried trace rows in the clear;
+  // `word` is their payload class — one base-field word per row.
+  if (desc.valueFaithful)
+    required.push_back("word");
   for (StringRef key : required) {
     auto value = stringField(*codecs, key, "kappa.codecs.");
     if (!value)
@@ -283,6 +289,8 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
       desc.queryIndexCodec = std::move(*value);
     else if (key == "pow_value")
       desc.powValueCodec = std::move(*value);
+    else if (key == "word")
+      desc.wordCodec = std::move(*value);
     else
       desc.rsCodec = std::move(*value);
   }
@@ -354,10 +362,102 @@ static std::string reduceLabel(const FriDescription &desc) {
   return desc.udr() ? "friu" : "fri";
 }
 
+/// One exact operand segment for the query-phase check contracts —
+/// shared between each contract and its predicate-spec ABI, so the two
+/// can never disagree.
+static llvm::json::Object checkSegment(StringRef role, StringRef valueClass,
+                                       int64_t exact) {
+  return llvm::json::Object{
+      {"class", valueClass},
+      {"multiplicity", llvm::json::Object{{"exact", exact}}},
+      {"role", role}};
+}
+
+/// The query-phase counts, all constants of the family instance: the
+/// input tree has height 2^query_log2, round i's tree height
+/// 2^(query_log2 - i), and every path runs leaf to a capless root.
+struct QueryShape {
+  int64_t ell, k, queryLog2;
+  int64_t inputPaths() const { return ell * queryLog2; }
+  int64_t siblings() const { return ell * k; }
+  int64_t roundPaths() const {
+    return ell * (k * queryLog2 - k * (k + 1) / 2);
+  }
+};
+
+/// Mint one opaque predicate spec: the canonical content digest is
+/// derived here from the same JSON the vocabulary emits, so the
+/// fail-closed key check at load can never see a mismatch.
+struct MintedSpec {
+  std::string digest;
+  llvm::json::Object body;
+};
+static MintedSpec mintSpec(StringRef title,
+                           std::initializer_list<StringRef> references,
+                           std::initializer_list<StringRef> acceptance,
+                           std::initializer_list<StringRef> parameters,
+                           llvm::json::Array operands) {
+  llvm::json::Array acceptanceJson;
+  for (StringRef line : acceptance)
+    acceptanceJson.push_back(line);
+  llvm::json::Array parameterJson;
+  for (StringRef name : parameters)
+    parameterJson.push_back(name);
+  llvm::json::Object entry{{"acceptance", std::move(acceptanceJson)},
+                           {"operands", std::move(operands)},
+                           {"parameters", std::move(parameterJson)},
+                           {"semantic_parameters", llvm::json::Array{}}};
+  llvm::json::Object spec{
+      {"entrypoints", llvm::json::Object{{"accept", std::move(entry)}}},
+      {"format", "zkc-check-predicate-spec"},
+      {"title", title}};
+  llvm::json::Array referenceJson;
+  for (StringRef reference : references)
+    referenceJson.push_back(reference);
+  if (!referenceJson.empty())
+    spec["references"] = std::move(referenceJson);
+  auto digest = zkc::registry::RegistryFile::digestEntry(
+      "zkc/check-predicate-spec\n", llvm::json::Value(llvm::json::Object(spec)));
+  if (!digest)
+    llvm::report_fatal_error("family predicate spec did not canonicalize");
+  return {std::move(*digest), std::move(spec)};
+}
+
+/// The two query-phase predicate specs and contracts, instance-baked
+/// (the pow-zero precedent: family-emitted vocabulary, exact counts).
+/// The Merkle contract authenticates the input layer over wire and
+/// statement values alone; round-tree authentication lives inside the
+/// consistency contract because round leaves contain the verifier's own
+/// folded values, and index-dependent fold arithmetic is deliberately
+/// not expressible as carrier rows.
+static llvm::json::Array merkleOperands(const QueryShape &shape) {
+  llvm::json::Array operands;
+  operands.push_back(checkSegment("root", "rs", 1));
+  operands.push_back(checkSegment("indices", "query_index", shape.ell));
+  operands.push_back(checkSegment("leaves", "word", shape.ell));
+  operands.push_back(checkSegment("paths", "rs", shape.inputPaths()));
+  return operands;
+}
+static llvm::json::Array consistencyOperands(const QueryShape &shape) {
+  llvm::json::Array operands;
+  operands.push_back(checkSegment("zeta", "ext_field", 1));
+  operands.push_back(checkSegment("opened", "ext_field", 1));
+  operands.push_back(checkSegment("alpha", "ext_field", 1));
+  operands.push_back(checkSegment("betas", "ext_field", shape.k));
+  operands.push_back(checkSegment("final_coefficients", "ext_field", 1));
+  operands.push_back(checkSegment("indices", "query_index", shape.ell));
+  operands.push_back(checkSegment("leaves", "word", shape.ell));
+  operands.push_back(checkSegment("roots", "rs", shape.k));
+  operands.push_back(checkSegment("siblings", "ext_field", shape.siblings()));
+  operands.push_back(checkSegment("round_paths", "rs", shape.roundPaths()));
+  return operands;
+}
+
 std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
   std::string out;
   raw_string_ostream os(out);
   StringRef nonceClass = desc.valueFaithful ? "pow_value" : "rs";
+  QueryShape shape{desc.ell, desc.k, desc.queryLog2};
   os << "{\n"
      << "  \"registry\": \"zkc.protocol_vocabulary\",\n"
      << "  \"claim_profiles\": {\n"
@@ -365,10 +465,78 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
         "\"anchors\": [\"contract\", \"statement\"]},\n"
      << "    \"fri_query_consistent\": {\"kind\": \"evaluation\", "
         "\"anchors\": [\"statement\"]}\n"
-     << "  },\n"
-     << "  \"predicate_specs\": {},\n"
-     << "  \"check_contracts\": {";
-  bool firstCheck = true;
+     << "  },\n";
+  if (desc.valueFaithful) {
+    MintedSpec merkle = mintSpec(
+        "FRI input-layer Merkle multi-opening predicate",
+        {"Ben-Sasson-Chiesa-Spooner, TCC 2016, ePrint 2016/116 (vector "
+         "commitments in the BCS transformation)"},
+        {"Interpret the paths operand as, per query index in order, one "
+         "authentication path of tree-height sibling digests, leaf to "
+         "capless root, over the codec's digest words.",
+         "For each query index, hash the paired leaf row and compress "
+         "along the path selected by the index bits; accept exactly when "
+         "every derived root equals the root operand.",
+         "The tree height is the per-query path length, which is the "
+         "paths element count divided by the indices element count; an "
+         "index outside the tree rejects.",
+         "The predicate performs no transcript, proof-stream, sponge, "
+         "route, or ambient protocol effects."},
+        {}, merkleOperands(shape));
+    MintedSpec consistency = mintSpec(
+        "FRI query fold-consistency predicate",
+        {"ethSTARK documentation v1.2, ePrint 2021/582 (query-phase "
+         "consistency)"},
+        {"Reconstruct, per query index, the reduced opening "
+         "(opened - leaf(x)) / (zeta - x) over the bit-reversed shifted "
+         "coset, batch-weighted by powers of alpha; a query point equal "
+         "to an opening point rejects.",
+         "Fold arity-2 rounds in order: each round interpolates the "
+         "index pair at its beta, authenticates the pair row against "
+         "that round's root operand with its segment of round_paths, "
+         "and halves the index.",
+         "Accept exactly when every query's folded value equals the "
+         "final polynomial (final_coefficients, low degree first) "
+         "evaluated at the query's domain point, under the declared "
+         "log_blowup and log_final_poly_len.",
+         "Element counts bind the shape: betas and roots carry one "
+         "element per round, siblings one per query per round, and "
+         "round_paths the per-round tree heights; any other count "
+         "rejects.",
+         "The predicate performs no transcript, proof-stream, sponge, "
+         "route, or ambient protocol effects."},
+        {"log_blowup", "log_final_poly_len"}, consistencyOperands(shape));
+    os << "  \"predicate_specs\": {\n    \"" << merkle.digest << "\": "
+       << llvm::json::Value(llvm::json::Object(merkle.body)) << ",\n    \""
+       << consistency.digest << "\": "
+       << llvm::json::Value(llvm::json::Object(consistency.body)) << "\n  },\n"
+       << "  \"check_contracts\": {\n    \"zkc.check.merkle-multi-opening\": "
+       << llvm::json::Value(llvm::json::Object{
+              {"mode", "opaque"},
+              {"predicate",
+               llvm::json::Object{{"format", "zkc-opaque-predicate-spec"},
+                                  {"content_digest", merkle.digest},
+                                  {"entrypoint", "accept"}}},
+              {"parameters", llvm::json::Array{}},
+              {"semantic_parameters", llvm::json::Array{}},
+              {"operands", merkleOperands(shape)}})
+       << ",\n    \"zkc.check.fri-query-consistency\": "
+       << llvm::json::Value(llvm::json::Object{
+              {"mode", "opaque"},
+              {"predicate",
+               llvm::json::Object{{"format", "zkc-opaque-predicate-spec"},
+                                  {"content_digest", consistency.digest},
+                                  {"entrypoint", "accept"}}},
+              {"parameters",
+               llvm::json::Array{"log_blowup", "log_final_poly_len"}},
+              {"semantic_parameters", llvm::json::Array{}},
+              {"operands", consistencyOperands(shape)}})
+       << "";
+  } else {
+    os << "  \"predicate_specs\": {},\n"
+       << "  \"check_contracts\": {";
+  }
+  bool firstCheck = !desc.valueFaithful;
   if (!desc.valueFaithful) {
     os << "\n    \"zkc.check.rs-equality\": {\"mode\": \"transparent\", "
           "\"predicate\": {\"format\": "
@@ -416,7 +584,9 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
           "\"codeword\", \"class\": \"fri-codeword\"}], "
           "\"results\": [{\"sort\": \"value\", \"role\": "
           "\"coefficient\", \"class\": \"ext_field\", \"count\": "
-          "\"1\"}], \"parameters\": [], \"semantic_parameters\": []},\n"
+          "\"1\"}, {\"sort\": \"handle\", \"role\": \"codeword\", "
+          "\"class\": \"fri-codeword\"}], \"parameters\": [], "
+          "\"semantic_parameters\": []},\n"
        << "    \"zkc.hole.fri-openval\": {\"kind\": \"evaluate\", "
           "\"operands\": [{\"sort\": \"value\", \"role\": \"zeta\", "
           "\"class\": \"ext_field\", \"count\": \"1\"}, {\"sort\": "
@@ -447,7 +617,32 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
           "\"role\": \"nonce\", \"class\": \"pow_value\", "
           "\"count\": \"1\"}, {\"sort\": \"sponge\", \"role\": "
           "\"transcript\"}], \"parameters\": [\"bits\"], "
-          "\"semantic_parameters\": []}\n"
+          "\"semantic_parameters\": []},\n";
+    // The query-answering hole: the reserved `open` kind's first use.
+    // It consumes the codeword handle (the retained trees), the sampled
+    // indices, and the statement root — so a witness that does not
+    // commit to the statement is refused by the fill, by name, before
+    // any opening reaches the wire. Results ride in wire order.
+    os << "    \"zkc.hole.fri-answer\": {\"kind\": \"open\", "
+          "\"operands\": [{\"sort\": \"value\", \"role\": \"indices\", "
+          "\"class\": \"query_index\", \"count\": \""
+       << desc.ell
+       << "\"}, {\"sort\": \"value\", \"role\": \"root\", \"class\": "
+          "\"rs\", \"count\": \"1\"}, {\"sort\": \"handle\", \"role\": "
+          "\"codeword\", \"class\": \"fri-codeword\"}], \"results\": "
+          "[{\"sort\": \"value\", \"role\": \"leaves\", \"class\": "
+          "\"word\", \"count\": \""
+       << desc.ell
+       << "\"}, {\"sort\": \"value\", \"role\": \"input_paths\", "
+          "\"class\": \"rs\", \"count\": \""
+       << shape.inputPaths() << "\"}";
+    for (int64_t i = 1; i <= desc.k; ++i)
+      os << ", {\"sort\": \"value\", \"role\": \"sib" << i
+         << "\", \"class\": \"ext_field\", \"count\": \"" << desc.ell
+         << "\"}, {\"sort\": \"value\", \"role\": \"path" << i
+         << "\", \"class\": \"rs\", \"count\": \""
+         << desc.ell * (desc.queryLog2 - i) << "\"}";
+    os << "], \"parameters\": [], \"semantic_parameters\": []}\n"
        << "  },\n";
   } else {
     os << "  \"hole_contracts\": {},\n";
@@ -512,7 +707,38 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
     os << "\"udr_theta\": \"atom\"";
   os << "},\n";
   if (desc.valueFaithful) {
-    os << "      \"checks\": {},\n";
+    // The query phase's two obligations, bound to this contract. The
+    // openings themselves are response material, not round messages —
+    // they follow the query challenge unabsorbed — so the attachments
+    // pin what the round structure already carries: the sampled
+    // dependencies and the absorbed pre-challenge messages.
+    os << "      \"checks\": {\n"
+       << "        \"merkle\": {\n"
+       << "          \"contract\": \"zkc.check.merkle-multi-opening\",\n"
+       << "          \"parameters\": {},\n"
+       << "          \"attachments\": []\n"
+       << "        },\n"
+       << "        \"consistency\": {\n"
+       << "          \"contract\": \"zkc.check.fri-query-consistency\",\n"
+       << "          \"parameters\": {\"log_blowup\": \"1\", "
+          "\"log_final_poly_len\": \"0\"},\n"
+       << "          \"attachments\": [\n"
+       << "            {\"kind\": \"value_identity\", \"source\": "
+          "{\"kind\": \"dependency\", \"role\": \"zeta\"}, "
+          "\"target_role\": \"zeta\"},\n"
+       << "            {\"kind\": \"value_identity\", \"source\": "
+          "{\"kind\": \"message\", \"role\": \"opened\", "
+          "\"occurrence\": 0}, \"target_role\": \"opened\"},\n"
+       << "            {\"kind\": \"value_identity\", \"source\": "
+          "{\"kind\": \"dependency\", \"role\": \"alpha\"}, "
+          "\"target_role\": \"alpha\"},\n"
+       << "            {\"kind\": \"value_identity\", \"source\": "
+          "{\"kind\": \"message\", \"role\": \"final\", "
+          "\"occurrence\": 0}, \"target_role\": "
+          "\"final_coefficients\"}\n"
+       << "          ]\n"
+       << "        }\n"
+       << "      },\n";
   } else {
     os << "      \"checks\": {\n"
        << "        \"consistency\": {\n"
@@ -596,7 +822,7 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   os << "pir.protocol \"" << desc.name << "\" kappa {codecs = {query_index = \""
      << desc.queryIndexCodec << "\", rs = \"" << desc.rsCodec
      << "\", ext_field = \"" << desc.extFieldCodec << "\", pow_value = \""
-     << desc.powValueCodec
+     << desc.powValueCodec << "\", word = \"" << desc.wordCodec
      << "\"}, constants = {zero = {class = \"pow_value\", value = "
         "\"0\"}}, iv = \""
      << desc.iv << "\", sponge = \"" << desc.sponge << "\"}";
@@ -623,8 +849,9 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   os << "final = {contract = \"zkc.hole.fri-final\", inputs = [\"fold" << k
      << ".0\"]}, grind = {contract = \"zkc.hole.fri-pow\", "
      << "params = {bits = \"" << *desc.grindingBits
-     << "\"}, inputs = []}}, witnesses = [[\"codeword\", "
-        "\"fri-trace\"]]}";
+     << "\"}, inputs = []}, answer = {contract = \"zkc.hole.fri-answer\", "
+        "inputs = [\"chal:query\", \"bind:f_root\", \"final.1\"]}}, "
+        "witnesses = [[\"codeword\", \"fri-trace\"]]}";
   // Arity binds live past the sampling rounds: a second declared phase
   // (kernel.md §5.3), so the per-segment statement-binding default is
   // met rather than bypassed.
@@ -698,7 +925,56 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
         "\"query_index\" domain \"fri.query\" space \""
      << pow2Decimal(desc.queryLog2) << "\" mode [\"vector\", \"" << desc.ell
      << "\", \"uniform_independent\"]\n";
-  os << "  pir.end " << queryToken << "\n";
+  // The query openings: response material, read after the last
+  // challenge without absorption (the Frozen-Heart default is met, not
+  // relaxed — nothing samples after these), one counted slot per wire
+  // field in the pinned proof's own order.
+  prevToken = queryToken;
+  auto countedSlot = [&](StringRef name, StringRef ssa, StringRef cls,
+                         int64_t count, int64_t resultIndex) {
+    std::string slotToken = nextToken();
+    os << "  " << slotToken << ", %" << ssa << " = pir.slot " << prevToken
+       << " \"" << name << "\" : \"" << cls << "\" count \"" << count
+       << "\" unabsorbed binding \"answer." << resultIndex << "\"\n";
+    prevToken = slotToken;
+  };
+  countedSlot("query_leaves", "leaves", "word", desc.ell, 0);
+  countedSlot("input_paths", "ipaths", "rs", desc.ell * desc.queryLog2, 1);
+  for (int64_t i = 1; i <= k; ++i) {
+    countedSlot(("sib" + std::to_string(i)), ("sib" + std::to_string(i)),
+                "ext_field", desc.ell, 2 * i);
+    countedSlot(("path" + std::to_string(i)), ("path" + std::to_string(i)),
+                "rs", desc.ell * (desc.queryLog2 - i), 2 * i + 1);
+  }
+  os << "  pir.check \"merkle_open\" contract "
+        "\"zkc.check.merkle-multi-opening\" (%f, %query, %leaves, "
+        "%ipaths : !pir.val<\"rs\">, !pir.val<\"query_index\">, "
+        "!pir.val<\"word\">, !pir.val<\"rs\">)\n";
+  os << "  pir.check \"query_consistency\" contract "
+        "\"zkc.check.fri-query-consistency\" params {log_blowup = \"1\", "
+        "log_final_poly_len = \"0\"} (%zeta, %openval, %alpha, ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "%fold" << i << ", ";
+  os << "%final, %query, %leaves, ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "%g" << i << ", ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "%sib" << i << ", ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "%path" << i << (i == k ? " : " : ", ");
+  os << "!pir.val<\"ext_field\">, !pir.val<\"ext_field\">, "
+        "!pir.val<\"ext_field\">, ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "!pir.val<\"ext_field\">, ";
+  os << "!pir.val<\"ext_field\">, !pir.val<\"query_index\">, "
+        "!pir.val<\"word\">, ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "!pir.val<\"rs\">, ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "!pir.val<\"ext_field\">, ";
+  for (int64_t i = 1; i <= k; ++i)
+    os << "!pir.val<\"rs\">" << (i == k ? ")\n" : ", ");
+  os << "  pir.end " << prevToken << "\n";
 
   os << "  %e = pir.reduce \"" << label
      << "\" contract \"fri\" "
@@ -709,7 +985,8 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   os << "%query : !pir.val<\"ext_field\">, !pir.val<\"ext_field\">, ";
   for (int64_t i = 1; i <= k; ++i)
     os << "!pir.val<\"ext_field\">, ";
-  os << "!pir.val<\"query_index\">) checks {}";
+  os << "!pir.val<\"query_index\">) checks {merkle = \"merkle_open\", "
+        "consistency = \"query_consistency\"}";
   if (desc.johnson())
     os << " params {johnson_m = \"" << desc.johnsonM << "\", johnson_eta = \""
        << desc.johnsonEta << "\", johnson_delta = \"" << desc.johnsonDelta

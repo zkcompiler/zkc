@@ -461,12 +461,16 @@ private:
       auto shape = resolveReference(*reference, where);
       if (failed(shape))
         return failure();
+      // The route supplies exactly what the slot writes: same payload
+      // class, same element count — a counted slot binds a counted
+      // result, a scalar slot a scalar one.
       if (shape->sort != registry::HoleSegmentSort::Value ||
-          shape->typeClass != slot.getPayloadClass() || shape->count != "1") {
+          shape->typeClass != slot.getPayloadClass() ||
+          shape->count != slot.getCount()) {
         if (reference->kind == RouteReferenceKind::InstanceResult)
           return reject(where +
                         " must name a value result of the slot's payload "
-                        "class");
+                        "class and count");
         return reject(where +
                       " must name one value of the slot's payload class");
       }

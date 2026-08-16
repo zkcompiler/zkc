@@ -496,10 +496,23 @@ public:
           break;
         }
       }
+      // A counted result carries its declared count onto the call, so
+      // the executor can split the fill's flat output positionally;
+      // all-scalar holes keep the empty attribute and their exact
+      // historical encoding.
+      SmallVector<Attribute> resultCounts;
+      bool anyCounted = false;
+      for (const zkc::registry::HoleSegment &segment : contract->results) {
+        StringRef count = segment.count.empty() ? "1" : StringRef(segment.count);
+        anyCounted |= count != "1";
+        resultCounts.push_back(builder.getStringAttr(count));
+      }
       auto hole = zkc::oir::HoleCallOp::create(
           builder, loc, resultTypes, operands, name, contract->kind,
           contract->contentDigest(), builder.getArrayAttr(params),
-          builder.getArrayAttr(semanticParams));
+          builder.getArrayAttr(semanticParams),
+          anyCounted ? builder.getArrayAttr(resultCounts)
+                     : builder.getArrayAttr({}));
       SmallVector<Value> results(hole.getOutputs());
       for (auto [index, segment] : llvm::enumerate(contract->results))
         if (segment.sort == zkc::registry::HoleSegmentSort::Sponge)
