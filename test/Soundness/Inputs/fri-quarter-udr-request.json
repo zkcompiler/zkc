@@ -1,0 +1,51 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.fri.udr@reduction:fri:quarter"
+    ],
+    "resolved_parameters": {
+      "zkc.rbr.fri.udr@reduction:fri:quarter": {
+        "fri_domain": {
+          "sort": "fri_domain_instance",
+          "value": {
+            "id": "toy.fri.domain.rs1024",
+            "source_revision": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      }
+    },
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "0e31786410580876a94666069c7cd3fdf416b3601e0efc4a75c68a8eea358072",
+        "claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+        }
+      },
+      "index": {
+        "notion": "round_by_round",
+        "track": "soundness",
+        "variant": "standard",
+        "model": ""
+      },
+      "resource_variables": []
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "reduction",
+        "artifact_id": "0e31786410580876a94666069c7cd3fdf416b3601e0efc4a75c68a8eea358072",
+        "owner_claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+        },
+        "transformer_position": 1,
+        "output_index": 0
+      },
+      "binding": "zkc.rbr.fri.udr@reduction:fri:quarter",
+      "premises": {}
+    }
+  }
+}

@@ -4,7 +4,7 @@
 
 // CHECK: soundness kernel declaration slice: PASS
 // CHECK-NEXT: rules: 27 declared, 23 admitted
-// CHECK-NEXT: reduction bindings: 20
+// CHECK-NEXT: reduction bindings: 25
 // CHECK-NEXT: path bindings: 5
 // CHECK-NEXT: zero-binding rules: 5
 // CHECK-NEXT: heterogeneous FRI cases: fold, query
@@ -23,6 +23,6 @@
 // The analysis is named by this digest: it covers the schemas, the rules and
 // the bindings, and nothing else. Correcting a citation must not make an
 // artifact's analysis a different analysis.
-// CHECK-NEXT: signature digest: sha256:d52aaf6cca34490995383dec695c9e9f991ee607518a8e64c4fa1e7aa8d37d51
+// CHECK-NEXT: signature digest: sha256:6e00c854c788303b3e610453fa26ffa2b8e1237d2ab9ffd2b0b4a434480a1677
 
 module {}
