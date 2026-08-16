@@ -29,6 +29,20 @@ env:
   LLVM_MAJOR: "23"
 
 jobs:
+  # Cheap and first: the public tree does not carry development-repository
+  # material, and a pull request that adds some should say so before any
+  # build time is spent on it.
+  public-tree:
+    name: Public tree boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Refuse development-repository paths
+        run: tools/public-tree-guard.sh
+
   reference:
     name: Reference suites (conformance oracle)
     runs-on: ubuntu-latest
