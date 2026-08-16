@@ -432,3 +432,17 @@ check(
 if failures:
     raise SystemExit("soundcalc mismatches:\n  " + "\n  ".join(failures))
 print("soundcalc: every theorem-derived bound matches the declared bound")
+
+# The rate-1/4 points (log_blowup 2 over the same 2^10 domain): the
+# declared-rate convention evaluated where n - k no longer equals the
+# rate exponent's old reading.
+q_rw = {"field_order": BIG_FIELD, "n": 10, "k": 8, "ell": 2,
+        "log_blowup": 2, "log_final_poly_len": 0, "eta_bar": F(1, 128)}
+assert declared_round("zkc.rbr.fri.random_words", "query", q_rw) == \
+    (F(1, 4) + F(1, 128)) ** 2 == F(1089, 16384)
+q_th = {"field_order": BIG_FIELD, "n": 10, "k": 8, "ell": 2,
+        "log_blowup": 2, "log_final_poly_len": 0, "delta": F(5, 8)}
+assert declared_round("zkc.rbr.fri.threshold_halving", "query", q_th) == \
+    (1 - F(5, 16)) ** 2 == F(121, 256)
+assert declared_round("zkc.rbr.fri.threshold_halving", "fold", q_th) == \
+    F(2 ** 8, BIG_FIELD)

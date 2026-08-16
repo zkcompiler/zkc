@@ -46,7 +46,13 @@ recorded generation-versus-upstream benchmark evidence
 counted and positional attachments, and soundness prices both a conjectured
 mode (the corrected random-words row) and a proven above-Johnson mode (the
 threshold-halving row, its unvetted standing carried by the obligations
-ledger); R1CS → Sumcheck treats the relation artifact as opaque.
+ledger). The family's rate and stopping shape are instance parameters —
+log_blowup and log_final_poly_len under the shape equation query_log2 = k +
+log_blowup + log_final_poly_len — executed end to end at rate 1/4 and at a
+two-coefficient final polynomial (both graded by the pinned upstream
+verifier) and priced at rate 1/4 through every proximity row, with the
+value-faithful instance's pricing refusal pinning the ALI/DEEP composition
+boundary; R1CS → Sumcheck treats the relation artifact as opaque.
 Soundness cells denote conditional judgments under declared assumptions. They
 are distinct from execution evidence and formal proof.
 
@@ -60,7 +66,7 @@ read; this table says which, so a claim can be checked rather than taken.
 | Sumcheck | [`test/Encoding/sumcheck-fs.mlir`](../test/Encoding/sumcheck-fs.mlir), [`test/Oir/sumcheck-exec.test`](../test/Oir/sumcheck-exec.test), [`test/Soundness/derive-witness.test`](../test/Soundness/derive-witness.test), [`test/Emit/emit-sigma-family.test`](../test/Emit/emit-sigma-family.test) |
 | GKR | [`test/Evidence/gkr-width2-depth3-parity.test`](../test/Evidence/gkr-width2-depth3-parity.test), [`test/Evidence/gkr-width2-stress.test`](../test/Evidence/gkr-width2-stress.test) |
 | KZG openings / batching | [`test/Encoding/kzg-before.mlir`](../test/Encoding/kzg-before.mlir), [`test/Transforms/pir-batch-open.mlir`](../test/Transforms/pir-batch-open.mlir), [`test/Compiler/kzg-batch-core.mlir`](../test/Compiler/kzg-batch-core.mlir), [`test/Soundness/soundness-kzg-preservation.mlir`](../test/Soundness/soundness-kzg-preservation.mlir), [`test/Emit/emit-kzg-batching.test`](../test/Emit/emit-kzg-batching.test) |
-| FRI | [`test/Family/fri-family.test`](../test/Family/fri-family.test), [`test/Oir/plonky3-fri-exec.test`](../test/Oir/plonky3-fri-exec.test), [`test/Evidence/plonky3-replay.test`](../test/Evidence/plonky3-replay.test), [`test/Soundness/grinding-over-fri.test`](../test/Soundness/grinding-over-fri.test), [`test/Soundness/fri-pricing-modes.test`](../test/Soundness/fri-pricing-modes.test), [`test/Emit/emit-plonky3-fri.test`](../test/Emit/emit-plonky3-fri.test), [`test/Emit/emit-plonky3-real-fill.test`](../test/Emit/emit-plonky3-real-fill.test), [`test/Emit/emit-fri-prover.test`](../test/Emit/emit-fri-prover.test), [`test/Emit/emit-fri-scale.test`](../test/Emit/emit-fri-scale.test), [`test/Registry/family-vocabulary-parity.test`](../test/Registry/family-vocabulary-parity.test), [`test/Registry/check-attachment-vector.test`](../test/Registry/check-attachment-vector.test), [`test/SemanticClosure/check-attachment-binding.test`](../test/SemanticClosure/check-attachment-binding.test) |
+| FRI | [`test/Family/fri-family.test`](../test/Family/fri-family.test), [`test/Oir/plonky3-fri-exec.test`](../test/Oir/plonky3-fri-exec.test), [`test/Evidence/plonky3-replay.test`](../test/Evidence/plonky3-replay.test), [`test/Soundness/grinding-over-fri.test`](../test/Soundness/grinding-over-fri.test), [`test/Soundness/fri-pricing-modes.test`](../test/Soundness/fri-pricing-modes.test), [`test/Emit/emit-plonky3-fri.test`](../test/Emit/emit-plonky3-fri.test), [`test/Emit/emit-plonky3-real-fill.test`](../test/Emit/emit-plonky3-real-fill.test), [`test/Emit/emit-fri-prover.test`](../test/Emit/emit-fri-prover.test), [`test/Emit/emit-fri-scale.test`](../test/Emit/emit-fri-scale.test), [`test/Emit/emit-fri-shapes.test`](../test/Emit/emit-fri-shapes.test), [`test/Soundness/fri-quarter-pricing.test`](../test/Soundness/fri-quarter-pricing.test), [`test/Registry/family-vocabulary-parity.test`](../test/Registry/family-vocabulary-parity.test), [`test/Registry/check-attachment-vector.test`](../test/Registry/check-attachment-vector.test), [`test/SemanticClosure/check-attachment-binding.test`](../test/SemanticClosure/check-attachment-binding.test) |
 | R1CS → Sumcheck | [`test/Soundness/r1cs-entry.test`](../test/Soundness/r1cs-entry.test) |
 
 A dash means no test executes that half. It is not a statement that the path
