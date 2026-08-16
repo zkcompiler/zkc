@@ -1161,11 +1161,32 @@ impl<'a> Walk<'a> {
             ));
         };
         let signature = hole.implementation.signature();
-        if !params.is_empty() || !semantic_params.is_empty() {
+        if !semantic_params.is_empty() {
             return Err(format!(
-                "row {index}: hole '{label}' cites parameters {params:?} / {semantic_params:?}; \
-                 no fill in this vocabulary takes any"
+                "row {index}: hole '{label}' cites semantic parameters {semantic_params:?}; no \
+                 fill in this vocabulary takes any"
             ));
+        }
+        // Static parameters lead the call, in the cited contract's own
+        // name order — the order the row already carries them in, so
+        // the emitted call is positional here exactly as it is for
+        // operands.
+        if params.len() != signature.params.len() {
+            return Err(format!(
+                "row {index}: hole '{label}' cites {} static parameters; the bound fill takes {}",
+                params.len(),
+                signature.params.len()
+            ));
+        }
+        let mut arguments = Vec::new();
+        for (position, (binding, rust_type)) in params.iter().zip(signature.params).enumerate() {
+            if binding.is_empty() || !binding.chars().all(|c| c.is_ascii_digit()) {
+                return Err(format!(
+                    "row {index}: hole '{label}' parameter {position} is '{binding}', which is \
+                     not the decimal the bound fill reads"
+                ));
+            }
+            arguments.push(format!("{binding}{rust_type}"));
         }
 
         // Operands, position by position against the fill's own
@@ -1179,7 +1200,6 @@ impl<'a> Walk<'a> {
                 signature.inputs.len()
             ));
         }
-        let mut arguments = Vec::new();
         for (position, (input, want)) in inputs.iter().zip(signature.inputs).enumerate() {
             let context = format!("row {index} (hole_call)");
             match want {

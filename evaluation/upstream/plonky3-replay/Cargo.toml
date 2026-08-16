@@ -5,6 +5,14 @@ edition = "2024"
 license = "Apache-2.0"
 publish = false
 
+# Default features only, and in particular never p3-maybe-rayon's
+# `parallel`: upstream's grind is a `find_map_any` whose contract is any
+# valid witness, and only the serial fallback makes it the least one.
+# Emitted provers search in the specification's canonical ascending
+# order (docs/spec/endpoints.md §6.2), so the byte equality that
+# test/Emit/emit-fri-prover.test asserts against this runner's wire
+# holds exactly while this graph stays serial, and becomes an
+# intermittent nonce mismatch if it does not.
 [dependencies]
 p3-air = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
 p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }

@@ -1,0 +1,55 @@
+# REQUIRES: cargo
+# The FRI prover, emitted: the value-faithful family's prover skeleton
+# becomes a standalone crate whose ten hole calls are filled by kernels
+# borrowed from the pinned upstream crates — commitment, fold,
+# interpolation, and the reduced opening assembled from public
+# primitives, with the transcript peek grinding the nonce. The differential gate is byte equality against the replay
+# runner, which drives the whole upstream pcs over the same fixture:
+# the emitted crate must reproduce the runner's 132-byte wire and its
+# challenge log exactly. That equality is exact rather than modulo the
+# grind because both searches return the deterministic least witness —
+# the emitted fill by the specification's canonical order, the upstream
+# grind because nothing in either dependency graph enables
+# p3-maybe-rayon's `parallel` feature, so its find-any is a serial
+# ascending scan.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/spine.mlir -o %t/sealed.mlir
+# RUN: zkc-opt '-pir-project=endpoint-kind=prover_skeleton protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/prover.mlir
+# RUN: zkc-translate --oir-canonical %t/prover.mlir -o %t/prover.json
+# RUN: zkc-translate --oir-id %t/prover.mlir -o %t/prover.id
+
+# The reference wire: the pinned upstream pipeline, end to end.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/prover.json > %t/runner.out
+# RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/runner.out %t/prover.id %t/prover-vectors.json prover
+
+# The emitted crate replays the corpus: the producing control must
+# match the runner byte for byte, and the short-payload refusal names
+# the opening fill's own convention.
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/prover-vectors.json --out %t/prover-crate --crate-name zkc-prover-fri
+# RUN: cargo test --quiet --manifest-path %t/prover-crate/Cargo.toml
+
+# A payload word outside the canonical field range is the opening
+# fill's own defect, named before any commitment exists.
+# RUN: %python %S/Inputs/fri-prover-negatives.py %t/prover-vectors.json %t/noncanonical.json noncanonical-word
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/noncanonical.json --out %t/noncanonical-crate --crate-name zkc-prover-fri
+# RUN: cargo test --quiet --manifest-path %t/noncanonical-crate/Cargo.toml
+
+# A payload too short for the family's fold chain exhausts it early, so
+# the last commit refuses; one too long leaves the chain above the final
+# length, so the final fill refuses. Between them every length gate in
+# the chain fires, each naming the length it expected.
+# RUN: %python %S/Inputs/fri-prover-negatives.py %t/prover-vectors.json %t/short-trace.json short-trace
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/short-trace.json --out %t/short-crate --crate-name zkc-prover-fri
+# RUN: cargo test --quiet --manifest-path %t/short-crate/Cargo.toml
+# RUN: %python %S/Inputs/fri-prover-negatives.py %t/prover-vectors.json %t/long-trace.json long-trace
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/long-trace.json --out %t/long-crate --crate-name zkc-prover-fri
+# RUN: cargo test --quiet --manifest-path %t/long-crate/Cargo.toml
+
+# The shape the artifact declares is what the fill builds from: a route
+# citing a parameter count the bound fill does not take refuses at emit
+# time, before any code exists.
+# RUN: %python %S/Inputs/document-gates.py %t/prover.json %t/bad-params.json hole-param-count
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/bad-params.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --out %t/refused 2>&1 | FileCheck %s
+# CHECK: hole 'openval' cites 1 static parameters; the bound fill takes 2

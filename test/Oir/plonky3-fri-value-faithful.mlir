@@ -41,7 +41,7 @@
 // VERIFIER: oir.squeeze {{.*}} "query" : "query_index" count "4"
 
 // PROVER: endpoint "prover_skeleton"
-// PROVER: witness_labels = {{\[\[}}"codeword", "fri-codeword"]]
+// PROVER: witness_labels = {{\[\[}}"codeword", "fri-trace"]]
 // PROVER: oir.squeeze {{.*}} "zeta" : "ext_field"
 // PROVER: oir.hole_call "openval" kind "evaluate"
 // PROVER: oir.write {{.*}} as "opened_value" class "ext_field"

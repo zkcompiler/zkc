@@ -7,6 +7,14 @@
   "pow_value": {"codec": "plonky3_bb31_low_bits", "impl": "p3_word"},
   "query_index": {"codec": "plonky3_bb31_low_bits", "impl": "p3_word"}
  },
+ "holes": {
+  "sha256:cc0dc2d0881a6969b30807376559ee7c383040f39e6164d80bd40d6a76ba8aa6": {"impl": "p3_fri_openval"},
+  "sha256:f6c65f6f85593582bd4d75d6cec365497d01d99deb011684c175ed7e0de95f8b": {"impl": "p3_fri_reduce"},
+  "sha256:48866b4cbbb3ab0c0df635fc2bf9d35cea9dca07832fe9277142d5087043982a": {"impl": "p3_fri_commit"},
+  "sha256:c1d1f9bbfea1bc14d6e599a2eca57c445fcf3110def63eadfef282c33d678679": {"impl": "p3_fri_fold"},
+  "sha256:8b50034e2465aa50dd78c8e38ae585ddf813bfbed0b59c2b24e48802272bc044": {"impl": "p3_fri_final"},
+  "sha256:2c7e1b4fb9c2fed09233aa7e927829b1cb5733c4bd5d12cbe384484d30a71985": {"impl": "p3_pow_search"}
+ },
  "digests": {
   "codec:plonky3_bb31_digest8": "sha256:a3425c10251b787fbef3da60b57a7eedc8e889ffb46219eb26c70109e6dacb2d",
   "codec:plonky3_bb31_ext4_tuple": "sha256:cb6f0f7790e47814634648f59d467917e13cdb4fd7151d8640d8f2f4b6821a5b",

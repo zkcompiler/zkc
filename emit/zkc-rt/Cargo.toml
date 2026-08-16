@@ -10,9 +10,24 @@ default = []
 # The toy supplier set: SHA-256 chaining duplex, big-endian 8-byte codecs.
 toy = ["dep:sha2"]
 # The plonky3 supplier set: the lenpad duplex over the pinned upstream
-# Poseidon2-16 BabyBear permutation. The permutation is the borrowed kernel;
-# the duplex framing (zkc's spec-anchored lenpad contract) lives here.
-plonky3 = ["dep:p3-baby-bear", "dep:p3-field", "dep:p3-symmetric"]
+# Poseidon2-16 BabyBear permutation, and the FRI leaf fills — commit,
+# fold, interpolation, and reduction assembled from the pinned public
+# kernels. Every borrowed kernel here writes positionally and this
+# crate's own proof-of-work search is a serial ascending scan, so these
+# features carry no ordering obligation. The graph that does is the
+# replay runner's, whose grind is upstream's own; its manifest states
+# the rule.
+plonky3 = [
+  "dep:p3-baby-bear",
+  "dep:p3-field",
+  "dep:p3-symmetric",
+  "dep:p3-matrix",
+  "dep:p3-dft",
+  "dep:p3-commit",
+  "dep:p3-merkle-tree",
+  "dep:p3-fri",
+  "dep:p3-util",
+]
 # The BLS12-381 KZG supplier set: fr/g1 codecs and the two opaque check
 # predicates, over the arkworks curve implementation (the borrowed kernel;
 # its compressed point form is the standard big-endian one the codec names).
@@ -29,6 +44,12 @@ sha2 = { version = "=0.10.9", optional = true }
 p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
 p3-field = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
 p3-symmetric = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
+p3-matrix = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
+p3-dft = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
+p3-commit = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
+p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
+p3-fri = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
+p3-util = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
 ark-bls12-381 = { version = "=0.6.0", optional = true, default-features = false, features = ["curve"] }
 ark-ec = { version = "=0.6.0", optional = true, default-features = false }
 ark-ff = { version = "=0.6.0", optional = true, default-features = false }
