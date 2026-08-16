@@ -207,8 +207,10 @@ use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::interpolation::{compute_adjusted_weights, Interpolate};
 use p3_matrix::Matrix;
 use p3_merkle_tree::MerkleTreeMmcs;
-use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
-use p3_util::reverse_slice_index_bits;
+use p3_symmetric::{
+    CryptographicHasher, PaddingFreeSponge, PseudoCompressionFunction, TruncatedPermutation,
+};
+use p3_util::{reverse_bits_len, reverse_slice_index_bits};
 
 use crate::Payload;
 
@@ -252,13 +254,20 @@ fn words_from_ext(value: Challenge) -> [u32; 4] {
 /// `&self`.
 fn challenge_mmcs() -> &'static ChallengeMmcs {
     static MMCS: OnceLock<ChallengeMmcs> = OnceLock::new();
+    MMCS.get_or_init(|| ExtensionMmcs::new(val_mmcs().clone()))
+}
+
+/// The base-field commitment scheme — the input tree's own, and the
+/// inner half of the extension scheme above.
+fn val_mmcs() -> &'static ValMmcs {
+    static MMCS: OnceLock<ValMmcs> = OnceLock::new();
     MMCS.get_or_init(|| {
         let permutation = default_babybear_poseidon2_16();
-        ExtensionMmcs::new(MerkleTreeMmcs::new(
+        MerkleTreeMmcs::new(
             FieldHash::new(permutation.clone()),
             Compress::new(permutation),
             0,
-        ))
+        )
     })
 }
 
@@ -286,11 +295,12 @@ impl Shape {
 /// Which fill produced a codeword, and what that fill left for the
 /// next one — exactly what the spine's operands do not carry.
 enum Stage {
-    /// After the opening fill: the bit-reversed low-degree extension,
-    /// the inverse denominators at zeta over its full height, and the
-    /// opened value.
+    /// After the opening fill: the inverse denominators at zeta over
+    /// the extension's full height and the opened value. The
+    /// bit-reversed extension itself lives inside the input tree the
+    /// handle carries — the commitment scheme's prover data owns its
+    /// leaves, and the reduce fill reads them as a view.
     Opened {
-        lde: RowMajorMatrix<Val>,
         inv_denoms: Vec<Challenge>,
         opened: Challenge,
     },
@@ -301,10 +311,15 @@ enum Stage {
     /// reshaped codeword, and the fold reads the leaves as a view —
     /// the commit phase's own copy-free dataflow.
     Committed(Box<ChallengeProverData>),
+    /// After the final fill: only the retained trees remain, riding to
+    /// the answer fill.
+    Final,
 }
 
 /// The codeword handle: supplier state moved fill to fill, carrying the
-/// family shape every stage needs.
+/// family shape every stage needs and the trees query answering opens
+/// (`docs/spec/endpoints.md` §6.2 — the handle is prover-private state,
+/// never wire-encoded).
 ///
 /// The stage is private for the same reason `Payload`'s bytes are:
 /// everything here is derived from the witness — the low-degree
@@ -314,11 +329,25 @@ enum Stage {
 pub struct Codeword {
     shape: Shape,
     stage: Stage,
+    /// The bit-reversed low-degree extension, owned so the zeroize
+    /// feature scrubs it on drop exactly as it scrubbed the opening
+    /// stage's copy before the trees existed. The answer fill rebuilds
+    /// the input tree from it transiently; its root is the statement
+    /// the witness is checked against.
+    trace_extension: Vec<Val>,
+    /// One tree per commit round, retained as each fold consumes its
+    /// leaf view — exactly what query answering opens.
+    round_trees: Vec<ChallengeProverData>,
 }
 
 impl Codeword {
     fn new(shape: Shape, stage: Stage) -> Self {
-        Codeword { shape, stage }
+        Codeword {
+            shape,
+            stage,
+            trace_extension: Vec::new(),
+            round_trees: Vec::new(),
+        }
     }
 }
 
@@ -337,17 +366,15 @@ fn scrub<T: PrimeCharacteristicRing>(values: &mut [T]) {
 #[cfg(feature = "zeroize")]
 impl Drop for Codeword {
     fn drop(&mut self) {
+        scrub(&mut self.trace_extension);
         match &mut self.stage {
-            Stage::Opened {
-                lde, inv_denoms, ..
-            } => {
-                scrub(&mut lde.values);
-                scrub(inv_denoms);
-            }
+            Stage::Opened { inv_denoms, .. } => scrub(inv_denoms),
             Stage::Ext(evaluations) => scrub(evaluations),
-            // The committed leaves live inside the commitment scheme's
-            // own prover data, which owns its buffers.
-            Stage::Committed(_) => {}
+            // Committed leaves and the retained round trees live inside
+            // the commitment scheme's own prover data, which owns its
+            // buffers — the same boundary the committed stage always
+            // had; the scrub chain claims nothing past it.
+            Stage::Committed(_) | Stage::Final => {}
         }
     }
 }
@@ -355,21 +382,22 @@ impl Drop for Codeword {
 impl core::fmt::Debug for Codeword {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match &self.stage {
-            Stage::Opened { lde, .. } => {
-                write!(f, "Codeword::Opened(height {})", lde.height())
+            Stage::Opened { inv_denoms, .. } => {
+                write!(f, "Codeword::Opened(height {})", inv_denoms.len())
             }
             Stage::Ext(evaluations) => {
                 write!(f, "Codeword::Ext(len {})", evaluations.len())
             }
             Stage::Committed(_) => f.write_str("Codeword::Committed"),
+            Stage::Final => f.write_str("Codeword::Final"),
         }
     }
 }
 
-/// Move the stage out of a handle. The emptied handle drops at once;
-/// the material it carried belongs to the caller, which threads it into
-/// the next handle.
-fn take_stage(mut codeword: Codeword) -> Stage {
+/// Move the stage out of a handle. The handle itself moves on to the
+/// next fill with its retained material untouched; only the stage is
+/// replaced.
+fn take_stage(codeword: &mut Codeword) -> Stage {
     core::mem::replace(&mut codeword.stage, Stage::Ext(Vec::new()))
 }
 
@@ -451,17 +479,13 @@ pub fn fri_openval(
     let weights = compute_adjusted_weights(zeta, &inv_denoms[..height]);
     let (low_coset, _) = lde.split_rows(height);
     let opened = low_coset.interpolate_coset_with_precomputation(Val::GENERATOR, zeta, &weights)[0];
-    Ok((
-        words_from_ext(opened),
-        Codeword::new(
-            shape,
-            Stage::Opened {
-                lde,
-                inv_denoms,
-                opened,
-            },
-        ),
-    ))
+    // The extension stays owned on the handle — the zeroize chain's
+    // subject — and rides to the answer fill, which rebuilds the input
+    // tree from it transiently and refuses a witness whose root is not
+    // the statement's.
+    let mut codeword = Codeword::new(shape, Stage::Opened { inv_denoms, opened });
+    codeword.trace_extension = lde.values;
+    Ok((words_from_ext(opened), codeword))
 }
 
 /// The reduce fill: the alpha-batched reduced opening that seeds the
@@ -470,22 +494,19 @@ pub fn fri_openval(
 /// point makes both batching sums single-term, so alpha's powers reduce
 /// to its zeroth here; the sums are written in their general form, and a
 /// wider subject extends them without moving the surrounding stages.
-pub fn fri_reduce(alpha: [u32; 4], codeword: Codeword) -> Result<Codeword, String> {
-    let shape = codeword.shape;
-    let Stage::Opened {
-        lde,
-        inv_denoms,
-        opened,
-    } = take_stage(codeword)
-    else {
+pub fn fri_reduce(alpha: [u32; 4], mut codeword: Codeword) -> Result<Codeword, String> {
+    let Stage::Opened { inv_denoms, opened } = take_stage(&mut codeword) else {
         return Err("the reduce fill consumes the opening fill's handle".to_owned());
     };
+    if codeword.trace_extension.is_empty() {
+        return Err("the opening fill's handle carries no extension".to_owned());
+    }
     let alpha = ext_from_words(alpha)?;
     // Both batching sums have the same shape — powers of alpha against
     // the values they weigh — and at this width both are single-term.
     let combined_opening: Challenge = dot_product(alpha.powers(), core::iter::once(opened));
-    let evaluations: Vec<Challenge> = lde
-        .values
+    let evaluations: Vec<Challenge> = codeword
+        .trace_extension
         .iter()
         .zip(&inv_denoms)
         .map(|(&value, &inv_denom)| {
@@ -494,16 +515,17 @@ pub fn fri_reduce(alpha: [u32; 4], codeword: Codeword) -> Result<Codeword, Strin
             (combined_opening - compressed_row) * inv_denom
         })
         .collect();
-    Ok(Codeword::new(shape, Stage::Ext(evaluations)))
+    codeword.stage = Stage::Ext(evaluations);
+    Ok(codeword)
 }
 
 /// The commit fill: reshape the bit-reversed codeword as adjacent
 /// conjugate pairs and commit through the extension Merkle scheme — one
 /// root at cap height zero. The prover data keeps ownership of the
 /// leaves so the following fold reads them as a view, copy-free.
-pub fn fri_commit(codeword: Codeword) -> Result<([u32; 8], Codeword), String> {
+pub fn fri_commit(mut codeword: Codeword) -> Result<([u32; 8], Codeword), String> {
     let shape = codeword.shape;
-    let Stage::Ext(evaluations) = take_stage(codeword) else {
+    let Stage::Ext(evaluations) = take_stage(&mut codeword) else {
         return Err("the commit fill consumes an extension codeword".to_owned());
     };
     // A codeword already at the final length has nothing left to fold,
@@ -519,21 +541,15 @@ pub fn fri_commit(codeword: Codeword) -> Result<([u32; 8], Codeword), String> {
     let Some(root) = cap.roots().first() else {
         return Err("the commitment produced no root at cap height zero".to_owned());
     };
-    let mut words = [0u32; 8];
-    for (word, element) in words.iter_mut().zip(root) {
-        *word = element.as_canonical_u32();
-    }
-    Ok((
-        words,
-        Codeword::new(shape, Stage::Committed(Box::new(data))),
-    ))
+    let words = words_from_digest(root);
+    codeword.stage = Stage::Committed(Box::new(data));
+    Ok((words, codeword))
 }
 
 /// The fold fill: the arity-two fold over the committed leaves, the
 /// folding challenge on the odd part.
-pub fn fri_fold(beta: [u32; 4], codeword: Codeword) -> Result<Codeword, String> {
-    let shape = codeword.shape;
-    let Stage::Committed(data) = take_stage(codeword) else {
+pub fn fri_fold(beta: [u32; 4], mut codeword: Codeword) -> Result<Codeword, String> {
+    let Stage::Committed(data) = take_stage(&mut codeword) else {
         return Err("the fold fill consumes the commit fill's handle".to_owned());
     };
     // Reading the committed leaves needs no scheme state: the accessor
@@ -550,16 +566,21 @@ pub fn fri_fold(beta: [u32; 4], codeword: Codeword) -> Result<Codeword, String> 
             1,
             leaves.as_view(),
         );
-    Ok(Codeword::new(shape, Stage::Ext(evaluations)))
+    // The tree this fold consumed stays with the handle: its rows are
+    // exactly what query answering opens (`docs/spec/carrier.md` §7's
+    // read-only response material).
+    codeword.stage = Stage::Ext(evaluations);
+    codeword.round_trees.push(*data);
+    Ok(codeword)
 }
 
 /// The final fill: the fully folded codeword carries one blowup copy of
 /// the final polynomial's evaluations, in bit-reversed order; the
 /// coefficients are its inverse transform, and the family's declared
 /// final length says how many there are.
-pub fn fri_final(codeword: Codeword) -> Result<[u32; 4], String> {
+pub fn fri_final(mut codeword: Codeword) -> Result<([u32; 4], Codeword), String> {
     let shape = codeword.shape;
-    let Stage::Ext(mut evaluations) = take_stage(codeword) else {
+    let Stage::Ext(mut evaluations) = take_stage(&mut codeword) else {
         return Err("the final fill consumes the folded codeword".to_owned());
     };
     if evaluations.len() != shape.final_codeword_len() {
@@ -582,7 +603,298 @@ pub fn fri_final(codeword: Codeword) -> Result<[u32; 4], String> {
             coefficients.len()
         ));
     }
-    Ok(words_from_ext(constant))
+    codeword.stage = Stage::Final;
+    Ok((words_from_ext(constant), codeword))
+}
+
+/// The query-answering fill (hole kind `open`,
+/// `docs/spec/endpoints.md` §6.2): open the retained trees at the
+/// sampled indices. Results ride in wire order — the input leaves, the
+/// input paths, then per round one sibling vector and one path vector —
+/// and a witness whose input-tree root is not the statement's f_root is
+/// refused by name, before any opening reaches the wire. This fill
+/// realizes the three-round contract the in-tree family seals; its
+/// digest pins that shape.
+#[allow(clippy::type_complexity)]
+pub fn fri_answer(
+    indices: Vec<u32>,
+    f_root: [u32; 8],
+    mut codeword: Codeword,
+) -> Result<
+    (
+        Vec<u32>,
+        Vec<[u32; 8]>,
+        Vec<[u32; 4]>,
+        Vec<[u32; 8]>,
+        Vec<[u32; 4]>,
+        Vec<[u32; 8]>,
+        Vec<[u32; 4]>,
+        Vec<[u32; 8]>,
+    ),
+    String,
+> {
+    if !matches!(take_stage(&mut codeword), Stage::Final) {
+        return Err("the answer fill consumes the final fill's handle".to_owned());
+    }
+    if codeword.trace_extension.is_empty() {
+        return Err("the answer fill's handle carries no extension".to_owned());
+    }
+    if codeword.round_trees.len() != 3 {
+        return Err(format!(
+            "this answer fill realizes the three-round contract; the handle holds {} round \
+             tree(s)",
+            codeword.round_trees.len()
+        ));
+    }
+    // The input tree, rebuilt transiently from the owned extension —
+    // determinism makes it the committed tree exactly when the witness
+    // is the statement's, which the root equality decides by name.
+    let extension = core::mem::take(&mut codeword.trace_extension);
+    let log_height = extension.len().trailing_zeros() as usize;
+    let (_, input_tree) = val_mmcs().commit_matrix(RowMajorMatrix::new(extension, 1));
+    let input_tree = &input_tree;
+    let derived_root: [Val; 8] = input_tree.root().into();
+    if words_from_digest(&derived_root) != f_root {
+        return Err("the witness does not commit to the statement".to_owned());
+    }
+    let mut leaves = Vec::with_capacity(indices.len());
+    let mut input_paths = Vec::new();
+    let mut siblings: [Vec<[u32; 4]>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    let mut round_paths: [Vec<[u32; 8]>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    for &index in &indices {
+        let index = index as usize;
+        if index >= (1 << log_height) {
+            return Err("a sampled query index is outside the evaluation domain".to_owned());
+        }
+        let opening = val_mmcs().open_batch(index, input_tree);
+        let row = opening
+            .opened_values
+            .first()
+            .and_then(|row| row.first())
+            .copied()
+            .ok_or("the input tree opened an empty row")?;
+        leaves.push(row.as_canonical_u32());
+        for digest in &opening.opening_proof {
+            input_paths.push(words_from_digest(digest));
+        }
+        let mut current = index;
+        for (round, tree) in codeword.round_trees.iter().enumerate() {
+            let group = current >> 1;
+            let opening = challenge_mmcs().open_batch(group, tree);
+            let row = opening
+                .opened_values
+                .first()
+                .cloned()
+                .ok_or("a round tree opened an empty row")?;
+            if row.len() != 2 {
+                return Err("a round tree row is not an adjacent conjugate pair".to_owned());
+            }
+            siblings[round].push(words_from_ext(row[(current & 1) ^ 1]));
+            for digest in &opening.opening_proof {
+                round_paths[round].push(words_from_digest(digest));
+            }
+            current = group;
+        }
+    }
+    let [sib1, sib2, sib3] = siblings;
+    let [path1, path2, path3] = round_paths;
+    Ok((leaves, input_paths, sib1, path1, sib2, path2, sib3, path3))
+}
+
+/// The emitted verifier's input-layer Merkle multi-opening
+/// (`zkc.check.merkle-multi-opening`): every opened trace row must
+/// authenticate against the absorbed input commitment, along its own
+/// path, at its own sampled index. Assembled from the pinned hash
+/// primitives the fills commit with; a malformed shape is a false
+/// proposition — the check owns its shape refusals
+/// (`docs/spec/carrier.md` §7).
+pub fn merkle_multi_opening_accepts(
+    root: &[u32; 8],
+    indices: &[u32],
+    leaves: &[u32],
+    paths: &[[u32; 8]],
+) -> bool {
+    let queries = indices.len();
+    if queries == 0 || leaves.len() != queries || !paths.len().is_multiple_of(queries) {
+        return false;
+    }
+    let height = paths.len() / queries;
+    let expected = digest_of_words(root);
+    for (query, (&index, &leaf)) in indices.iter().zip(leaves).enumerate() {
+        if (index as usize) >= (1usize << height) {
+            return false;
+        }
+        let node = leaf_hash(&[Val::from_u32(leaf)]);
+        let path = &paths[query * height..(query + 1) * height];
+        if walk_path(node, index as usize, path) != expected {
+            return false;
+        }
+    }
+    true
+}
+
+/// The emitted verifier's fold consistency
+/// (`zkc.check.fri-query-consistency`; a check has no protocol effects,
+/// `docs/spec/endpoints.md` §3): recompute each query's reduced
+/// opening, fold it through the rounds with the pinned kernel's own
+/// `fold_row`, authenticate each round's pair row, and meet the final
+/// polynomial. Round-tree authentication lives here rather than in the
+/// Merkle check because the pair rows contain the verifier's own folded
+/// values.
+#[allow(clippy::too_many_arguments)]
+pub fn fri_query_consistency_accepts(
+    log_blowup: usize,
+    log_final_poly_len: usize,
+    zeta: [u32; 4],
+    opened: [u32; 4],
+    alpha: [u32; 4],
+    betas: &[[u32; 4]],
+    final_coefficients: &[[u32; 4]],
+    indices: &[u32],
+    leaves: &[u32],
+    roots: &[[u32; 8]],
+    siblings: &[[u32; 4]],
+    round_paths: &[[u32; 8]],
+) -> bool {
+    let rounds = betas.len();
+    let queries = indices.len();
+    let log_height = rounds + log_blowup + log_final_poly_len;
+    let path_total: usize = (1..=rounds).map(|round| log_height - round).sum();
+    if queries == 0
+        || leaves.len() != queries
+        || roots.len() != rounds
+        || siblings.len() != rounds * queries
+        || round_paths.len() != queries * path_total
+        || final_coefficients.len() != 1 << log_final_poly_len
+        || log_height > 27
+    {
+        return false;
+    }
+    let (Ok(zeta), Ok(alpha)) = (ext_from_words(zeta), ext_from_words(alpha)) else {
+        return false;
+    };
+    let (Ok(opened), Ok(betas), Ok(finals), Ok(siblings)) = (
+        ext_from_words(opened),
+        betas
+            .iter()
+            .map(|&b| ext_from_words(b))
+            .collect::<Result<Vec<_>, _>>(),
+        final_coefficients
+            .iter()
+            .map(|&c| ext_from_words(c))
+            .collect::<Result<Vec<_>, _>>(),
+        siblings
+            .iter()
+            .map(|&e| ext_from_words(e))
+            .collect::<Result<Vec<_>, _>>(),
+    ) else {
+        return false;
+    };
+    // One matrix opened at one point: alpha's zeroth power weighs the
+    // single term, exactly the reduce fill's own sum.
+    let combined_opening: Challenge = dot_product(alpha.powers(), core::iter::once(opened));
+    let folding = TwoAdicFriFolding::<(), ()>(PhantomData);
+    // Per-round path segments are laid out round-major, query-major
+    // within a round — the wire's own order.
+    let mut offsets = vec![0usize];
+    for round in 1..=rounds {
+        offsets.push(offsets[round - 1] + queries * (log_height - round));
+    }
+    for (query, &index) in indices.iter().enumerate() {
+        let mut index = index as usize;
+        if index >= 1 << log_height {
+            return false;
+        }
+        let x = Val::GENERATOR
+            * Val::two_adic_generator(log_height)
+                .exp_u64(reverse_bits_len(index, log_height) as u64);
+        let denominator = zeta - x;
+        let Some(inverse) = denominator.try_inverse() else {
+            // The opening point lies on the evaluation domain.
+            return false;
+        };
+        let mut folded =
+            (combined_opening - Challenge::from(Val::from_u32(leaves[query]))) * inverse;
+        for round in 0..rounds {
+            let sibling = siblings[round * queries + query];
+            let mut pair = [Challenge::ZERO; 2];
+            pair[index & 1] = folded;
+            pair[(index & 1) ^ 1] = sibling;
+            let mut row = Vec::with_capacity(8);
+            for element in &pair {
+                let coefficients: &[Val] = element.as_basis_coefficients_slice();
+                row.extend_from_slice(coefficients);
+            }
+            index >>= 1;
+            let log_folded = log_height - round - 1;
+            let segment = &round_paths
+                [offsets[round] + query * log_folded..offsets[round] + (query + 1) * log_folded];
+            if walk_path(leaf_hash(&row), index, segment) != digest_of_words(&roots[round]) {
+                return false;
+            }
+            folded = <TwoAdicFriFolding<(), ()> as FriFoldingStrategy<Val, Challenge>>::fold_row(
+                &folding,
+                index,
+                log_folded,
+                1,
+                betas[round],
+                pair.iter().copied(),
+            );
+        }
+        let x_final =
+            Val::two_adic_generator(log_height).exp_u64(reverse_bits_len(index, log_height) as u64);
+        let mut evaluation = Challenge::ZERO;
+        for &coefficient in finals.iter().rev() {
+            evaluation = evaluation * Challenge::from(x_final) + coefficient;
+        }
+        if evaluation != folded {
+            return false;
+        }
+    }
+    true
+}
+
+/// The digest packing's other direction — `words_from_ext`'s sibling
+/// for the eight-word digest classes.
+fn words_from_digest(digest: &[Val; 8]) -> [u32; 8] {
+    let mut words = [0u32; 8];
+    for (word, element) in words.iter_mut().zip(digest) {
+        *word = element.as_canonical_u32();
+    }
+    words
+}
+
+fn digest_of_words(words: &[u32; 8]) -> [Val; 8] {
+    let mut digest = [Val::ZERO; 8];
+    for (element, &word) in digest.iter_mut().zip(words) {
+        *element = Val::from_u32(word);
+    }
+    digest
+}
+
+/// The pinned leaf hash: `PaddingFreeSponge<Perm, 16, 8, 8>` over one
+/// row of at most eight base elements.
+fn leaf_hash(row: &[Val]) -> [Val; 8] {
+    static HASH: OnceLock<FieldHash> = OnceLock::new();
+    let hash = HASH.get_or_init(|| FieldHash::new(default_babybear_poseidon2_16()));
+    hash.hash_iter(row.iter().copied())
+}
+
+/// The pinned inner-node compression, walked with index bits low-first
+/// to a capless root.
+fn walk_path(mut node: [Val; 8], mut index: usize, siblings: &[[u32; 8]]) -> [Val; 8] {
+    static COMPRESS: OnceLock<Compress> = OnceLock::new();
+    let compress = COMPRESS.get_or_init(|| Compress::new(default_babybear_poseidon2_16()));
+    for sibling in siblings {
+        let sibling = digest_of_words(sibling);
+        node = if index & 1 == 1 {
+            compress.compress([sibling, node])
+        } else {
+            compress.compress([node, sibling])
+        };
+        index >>= 1;
+    }
+    node
 }
 
 /// The pinned known-answer test (upstream
@@ -706,7 +1018,85 @@ mod tests {
                 format!("Codeword::Ext(len {expected_len})")
             );
         }
-        assert!(words_canonical(&fri_final(cw).unwrap()));
+        let (constant, answered) = fri_final(cw).unwrap();
+        assert!(words_canonical(&constant));
+        // The answer fill opens the retained trees at the sampled
+        // indices; a root that is not the witness's own is refused by
+        // name — the wrong-statement defect, caught before the wire.
+        assert_eq!(
+            fri_answer(vec![0, 5, 9, 15], [1; 8], answered).unwrap_err(),
+            "the witness does not commit to the statement"
+        );
+    }
+
+    /// The answer fill against its own trees: every opened leaf and
+    /// sibling authenticates through the returned paths, which is the
+    /// same proposition the emitted verifier's checks decide — so the
+    /// prover and verifier halves of the query phase meet in one test.
+    #[test]
+    fn fri_answer_authenticates_against_its_own_roots() {
+        let trace: Vec<u8> = (1u32..=8).flat_map(|w| w.to_be_bytes()).collect();
+        let zeta = [7, 11, 13, 17];
+        let (opened, cw) = fri_openval(1, 0, zeta, Payload::new(trace)).unwrap();
+        let f_root = {
+            let (_, tree) =
+                val_mmcs().commit_matrix(RowMajorMatrix::new(cw.trace_extension.clone(), 1));
+            let digest: [Val; 8] = tree.root().into();
+            words_from_digest(&digest)
+        };
+        let mut cw = fri_reduce([3, 1, 4, 1], cw).unwrap();
+        let mut roots = Vec::new();
+        let betas = [[2, 7, 1, 8], [2, 8, 1, 8], [3, 1, 4, 1]];
+        for beta in betas {
+            let (root, committed) = fri_commit(cw).unwrap();
+            roots.push(root);
+            cw = fri_fold(beta, committed).unwrap();
+        }
+        let (constant, answered) = fri_final(cw).unwrap();
+        let indices = vec![0u32, 5, 9, 15];
+        // The check below takes a different alpha than the chain
+        // reduced with — deliberately: one matrix at one point weighs
+        // its single term by alpha's zeroth power, so alpha is inert
+        // here, and passing a different one pins that fact.
+        let (leaves, ipaths, sib1, path1, sib2, path2, sib3, path3) =
+            fri_answer(indices.clone(), f_root, answered).unwrap();
+        assert!(merkle_multi_opening_accepts(
+            &f_root, &indices, &leaves, &ipaths
+        ));
+        let siblings: Vec<[u32; 4]> = [sib1, sib2, sib3].concat();
+        let round_paths: Vec<[u32; 8]> = [path1, path2, path3].concat();
+        assert!(fri_query_consistency_accepts(
+            1,
+            0,
+            zeta,
+            opened,
+            [9, 9, 9, 9],
+            &betas,
+            &[constant],
+            &indices,
+            &leaves,
+            &roots,
+            &siblings,
+            &round_paths,
+        ));
+        // One flipped sibling digest must break authentication, not
+        // slip through as a different accepted proof.
+        let mut broken = round_paths.clone();
+        broken[0][0] ^= 1;
+        assert!(!fri_query_consistency_accepts(
+            1,
+            0,
+            zeta,
+            opened,
+            [9, 9, 9, 9],
+            &betas,
+            &[constant],
+            &indices,
+            &leaves,
+            &roots,
+            &siblings,
+            &broken,
+        ));
     }
 
     /// Every payload and stage refusal names its own cause. The

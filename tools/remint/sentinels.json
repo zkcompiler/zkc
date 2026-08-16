@@ -81,7 +81,7 @@
     {
       "name": "construction-profiles",
       "catches": "Any edit to the sealed construction registry: sponge parameters, codec widths, or the pins an execution profile must supply.",
-      "value": "e7efb657a8985d7375a6c09178c5fd99d5812a14d8b931cec233e67387cbf10d",
+      "value": "edcd4d8597e100891610f2428bb5c309c65d82fc79d320b6d70ee9b12c282208",
       "assurance": "cross_checked_here",
       "native": [
         "{bin}/zkc-registry-lint {repo}/registry/construction-profiles.json | sha256sum | cut -d' ' -f1"
@@ -110,7 +110,7 @@
     {
       "name": "compiler-configuration-semantics",
       "catches": "A change to what the compiler treats as its semantic configuration: the preimage a transform's authority is resolved against.",
-      "value": "646122a1a079f8360538a607a06a60bf7989f2fff189bfd0281920de894651d7",
+      "value": "02074641cfa1344a14acac7872e751a816ce09e62e446e56bd0e1441c1a40ea0",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [
@@ -123,7 +123,7 @@
     {
       "name": "compiler-configuration-family",
       "catches": "A change to the transform-family configuration the compiler resolves against.",
-      "value": "19ef34fa94dfc971072d7c2ef4d66da6a804bed518994766d7c025b99d0b708d",
+      "value": "f4ec54603a924195e661cb4d7ce88ba25a0db23c34a3b28fc295a471b71e7372",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [
@@ -136,7 +136,7 @@
     {
       "name": "compiler-configuration-domain",
       "catches": "A change to the transform-domain configuration the compiler resolves against.",
-      "value": "ab87a345a13124729a98212fe125dca66c59458d0a59003735eb4531a0da6207",
+      "value": "8ccb40f9b901767307175a9115f312a0254a100d3056a1b1092a9f391636c63f",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [

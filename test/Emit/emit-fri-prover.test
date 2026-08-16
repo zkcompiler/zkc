@@ -1,11 +1,11 @@
 # REQUIRES: cargo
 # The FRI prover, emitted: the value-faithful family's prover skeleton
-# becomes a standalone crate whose ten hole calls are filled by kernels
+# becomes a standalone crate whose eleven hole calls are filled by kernels
 # borrowed from the pinned upstream crates — commitment, fold,
 # interpolation, and the reduced opening assembled from public
 # primitives, with the transcript peek grinding the nonce. The differential gate is byte equality against the replay
 # runner, which drives the whole upstream pcs over the same fixture:
-# the emitted crate must reproduce the runner's 132-byte wire and its
+# the emitted crate must reproduce the runner's 1620-byte wire and its
 # challenge log exactly. That equality is exact rather than modulo the
 # grind because both searches return the deterministic least witness —
 # the emitted fill by the specification's canonical order, the upstream

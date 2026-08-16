@@ -26,6 +26,9 @@ pub enum Ref {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
     Val(String),
+    /// A counted vector value of the named class: the whole vector is
+    /// one slot, exactly as a vector squeeze's.
+    ValVec(String, u64),
     /// An opaque linear witness payload of the named handle class.
     Handle(String),
     Stream,
@@ -55,6 +58,9 @@ pub enum Row {
         stream: Ref,
         label: String,
         class: String,
+        /// 1 for the scalar row family; the read_vec family's declared
+        /// element count otherwise (docs/spec/carrier.md §7).
+        count: u64,
     },
     Const {
         value: String,
@@ -105,6 +111,8 @@ pub enum Row {
         value: Ref,
         label: String,
         class: String,
+        /// 1 for the scalar row family; write_vec's count otherwise.
+        count: u64,
     },
     /// A supplier call. Result indices run positionally across the mixed
     /// value/handle list, in declaration order.
@@ -214,12 +222,41 @@ fn parse_refs(value: &Json, what: &str) -> Result<Vec<Ref>, String> {
     items.iter().map(parse_ref).collect()
 }
 
-/// One typed slot: `["val", class]`, `["handle", class]`, `["stream"]`,
-/// `["sponge"]`. Which of them a position admits is the caller's rule.
+/// A counted element count, under the carrier's own grammar: a
+/// canonical decimal (no leading zeros) from 2 through 2^20 — the
+/// scalar form spells 1 through its own row or slot shape
+/// (docs/spec/carrier.md §6.2).
+fn parse_count(value: &Json, context: &str) -> Result<u64, String> {
+    let text = value
+        .as_str()
+        .ok_or_else(|| format!("{context}: count is not a string"))?;
+    if text.is_empty() || !text.chars().all(|c| c.is_ascii_digit()) || text.starts_with('0') {
+        return Err(format!(
+            "{context}: count '{text}' is not a canonical decimal"
+        ));
+    }
+    let count = text
+        .parse::<u64>()
+        .map_err(|_| format!("{context}: count '{text}' is not a canonical decimal"))?;
+    if !(2..=1 << 20).contains(&count) {
+        return Err(format!(
+            "{context}: a counted shape declares 2 through 2^20 elements; the \
+             scalar form spells 1 through its own shape"
+        ));
+    }
+    Ok(count)
+}
+
+/// One typed slot: `["val", class]`, `["val", class, count]`,
+/// `["handle", class]`, `["stream"]`, `["sponge"]`. Which of them a
+/// position admits is the caller's rule.
 fn parse_slot(value: &Json, what: &str) -> Result<Entry, String> {
     match value.as_array() {
         Some([Json::String(kind), Json::String(class)]) if kind == "val" => {
             Ok(Entry::Val(class.clone()))
+        }
+        Some([Json::String(kind), Json::String(class), count]) if kind == "val" => {
+            Ok(Entry::ValVec(class.clone(), parse_count(count, what)?))
         }
         Some([Json::String(kind), Json::String(class)]) if kind == "handle" => {
             Ok(Entry::Handle(class.clone()))
@@ -275,8 +312,18 @@ fn parse_row(index: usize, row: &Json) -> Result<Row, String> {
                 stream: parse_ref(stream)?,
                 label: expect_string(label, "label")?,
                 class: expect_string(class, "class")?,
+                count: 1,
             }),
             _ => fail("expected [\"read\", stream, label, class, src]"),
+        },
+        "read_vec" => match items {
+            [_, stream, label, class, count, _src] => Ok(Row::Read {
+                stream: parse_ref(stream)?,
+                label: expect_string(label, "label")?,
+                class: expect_string(class, "class")?,
+                count: parse_count(count, &format!("row {index}"))?,
+            }),
+            _ => fail("expected [\"read_vec\", stream, label, class, count, src]"),
         },
         "const" => match items {
             [_, value, class, _src] => Ok(Row::Const {
@@ -340,8 +387,19 @@ fn parse_row(index: usize, row: &Json) -> Result<Row, String> {
                 value: parse_ref(value)?,
                 label: expect_string(label, "label")?,
                 class: expect_string(class, "class")?,
+                count: 1,
             }),
             _ => fail("expected [\"write\", stream, value, label, class, src]"),
+        },
+        "write_vec" => match items {
+            [_, stream, value, label, class, count, _src] => Ok(Row::Write {
+                stream: parse_ref(stream)?,
+                value: parse_ref(value)?,
+                label: expect_string(label, "label")?,
+                class: expect_string(class, "class")?,
+                count: parse_count(count, &format!("row {index}"))?,
+            }),
+            _ => fail("expected [\"write_vec\", stream, value, label, class, count, src]"),
         },
         "hole_call" => match items {
             [_, inputs, results, label, hole_kind, digest, params, semantic_params] => {

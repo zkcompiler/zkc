@@ -35,7 +35,12 @@ implementation of a protocol family.
 
 Profile scope: Schnorr refers to the included native profile; GKR to the
 width-two, depth-three fixture; FRI to the parameterized generator and pinned
-Plonky3 fixture; and R1CS → Sumcheck treats the relation artifact as opaque.
+Plonky3 fixture — commit phase, grinding, and the query phase: sampled
+indices, opened rows and authentication paths on the wire unabsorbed, the
+input-layer Merkle multi-opening and the fold-consistency checks executed
+natively and in emitted crates, and query answering derived on the prover
+from the retained trees; R1CS → Sumcheck treats the relation artifact as
+opaque.
 Soundness cells denote conditional judgments under declared assumptions. They
 are distinct from execution evidence and formal proof.
 

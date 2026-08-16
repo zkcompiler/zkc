@@ -12,6 +12,7 @@
 
 #include "zkc/Interpreter/Interpreter.h"
 
+#include "zkc/ChallengeShape.h"
 #include "zkc/Encoding/CanonicalEncoder.h"
 #include "zkc/Interpreter/ExecutionProfile.h"
 
@@ -185,6 +186,19 @@ protected:
     return it->second;
   }
 
+  /// A value's elements: one for a scalar binding, `count` for a vector
+  /// one. The two environments are disjoint by construction — a value
+  /// binds into exactly one, decided by its defining row's count.
+  llvm::Expected<ArrayRef<llvm::APInt>> getElements(Value value) {
+    if (auto it = env.find(value); it != env.end())
+      return ArrayRef<llvm::APInt>(it->second);
+    if (auto it = vecEnv.find(value); it != vecEnv.end())
+      return ArrayRef<llvm::APInt>(it->second);
+    return llvm::createStringError(
+        "value has no binding: not the output of a verified "
+        "projection");
+  }
+
   llvm::Error stepTranscriptInit(oir::TranscriptInitOp init) {
     const SpongeSupplier *supplier =
         profile.sponge(init.getSponge(), init.getIv());
@@ -238,14 +252,20 @@ protected:
     // Whether the drawn value binds to the SSA result is the
     // endpoint's policy.
     std::string entry;
-    llvm::APInt lastValue(kValueBits, 0);
+    SmallVector<llvm::APInt> draws;
     for (uint64_t draw = 0; draw < plan->count; ++draw) {
       SmallVector<uint8_t, 32> symbols =
           sponge->squeeze(squeeze.getDomain(), (*codec)->squeezeSymbols());
-      lastValue = (*codec)->squeezeDerive(symbols, plan->space);
-      entry += (draw ? "|" : "") + decimal(lastValue);
+      draws.push_back((*codec)->squeezeDerive(symbols, plan->space));
+      entry += (draw ? "|" : "") + decimal(draws.back());
     }
-    endpoint().bindSqueeze(squeeze.getVal(), lastValue, plan->count);
+    // The whole sample is one SSA handle: a scalar binds into the
+    // scalar environment, a vector into the vector one — the counted
+    // check contracts consume it whole (docs/spec/carrier.md §7).
+    if (draws.size() == 1)
+      env.try_emplace(squeeze.getVal(), draws.front());
+    else
+      vecEnv.try_emplace(squeeze.getVal(), std::move(draws));
     challenges.push_back(entry);
     return llvm::Error::success();
   }
@@ -273,6 +293,7 @@ protected:
   const llvm::StringMap<std::string> &statement;
   DictionaryAttr codecs;
   llvm::DenseMap<Value, llvm::APInt> env;
+  llvm::DenseMap<Value, SmallVector<llvm::APInt>> vecEnv;
   std::unique_ptr<SpongeState> sponge;
   std::vector<std::string> challenges;
 };
@@ -324,15 +345,6 @@ private:
     return llvm::Error::success();
   }
 
-  /// A vector event's SSA value stays unbound: no minted contract
-  /// consumes one yet, and a crafted artifact reading it hits the
-  /// unbound-value refusal instead of a silently invented
-  /// representation.
-  void bindSqueeze(Value val, const llvm::APInt &value, uint64_t count) {
-    if (count == 1)
-      env.try_emplace(val, value);
-  }
-
   //===-- one operation ---------------------------------------------===//
 
   /// The algebra moduli, resolved once. Absent means every algebra op
@@ -380,30 +392,48 @@ private:
               requireCodec(read.getPayloadClass());
           if (!codec)
             return codec.takeError();
+          // A counted read decodes `count` elements at the class's
+          // fixed width, in order — the schedule is the only width
+          // authority; the wire carries no length framing
+          // (docs/spec/carrier.md §7).
+          uint64_t count =
+              zkc::challenge::parseCount(read.getCount()).value_or(0);
+          if (!count)
+            return fail("count outside the verified grammar: not the "
+                        "output of a verified projection");
           unsigned width = (*codec)->wireWidth();
-          if (cursor + width > proof.size()) {
-            reject("abi_decode_failure",
-                   "proof stream underrun at '" + read.getLabel() + "'");
-            return llvm::Error::success();
-          }
-          // Canonical-or-reject: a non-canonical wire value is a bad
-          // proof, never an implementation choice. Packed layouts check
-          // per word in the codec; scalar classes check against the
-          // profile's modulus.
-          if (!(*codec)->wireCanonical(proof.slice(cursor, width))) {
-            reject("abi_decode_failure",
-                   "non-canonical value at '" + read.getLabel() + "'");
-            return llvm::Error::success();
-          }
-          llvm::APInt value = (*codec)->decodeWire(proof.slice(cursor, width));
-          cursor += width;
-          if (auto modulus = profile.canonicalModulus(read.getPayloadClass()))
-            if (value.uge(*modulus)) {
+          SmallVector<llvm::APInt> elements;
+          for (uint64_t index = 0; index < count; ++index) {
+            if (cursor + width > proof.size()) {
+              reject("abi_decode_failure",
+                     "proof stream underrun at '" + read.getLabel() + "'");
+              return llvm::Error::success();
+            }
+            // Canonical-or-reject: a non-canonical wire value is a bad
+            // proof, never an implementation choice. Packed layouts
+            // check per word in the codec; scalar classes check against
+            // the profile's modulus.
+            if (!(*codec)->wireCanonical(proof.slice(cursor, width))) {
               reject("abi_decode_failure",
                      "non-canonical value at '" + read.getLabel() + "'");
               return llvm::Error::success();
             }
-          env.try_emplace(read.getVal(), value);
+            llvm::APInt value =
+                (*codec)->decodeWire(proof.slice(cursor, width));
+            cursor += width;
+            if (auto modulus =
+                    profile.canonicalModulus(read.getPayloadClass()))
+              if (value.uge(*modulus)) {
+                reject("abi_decode_failure",
+                       "non-canonical value at '" + read.getLabel() + "'");
+                return llvm::Error::success();
+              }
+            elements.push_back(std::move(value));
+          }
+          if (count == 1)
+            env.try_emplace(read.getVal(), elements.front());
+          else
+            vecEnv.try_emplace(read.getVal(), std::move(elements));
           return llvm::Error::success();
         })
         .Case<oir::SqueezeOp>(
@@ -477,9 +507,40 @@ private:
           return llvm::Error::success();
         })
         .Case<oir::CheckCallOp>([&](oir::CheckCallOp call) -> llvm::Error {
-          return fail("[zkc-E403] opaque check kind '" + call.getKind() +
-                      "' has no executable contract in profile '" +
-                      profile.name() + "'");
+          // Digest-keyed dispatch, exactly as holes: an unsupplied
+          // check keeps the fail-closed refusal — "I cannot judge
+          // this" is never "this proof is false"
+          // (docs/spec/endpoints.md §4).
+          const CheckSupplier *supplier =
+              profile.check(call.getContractDigest());
+          if (!supplier)
+            return fail("[zkc-E403] opaque check kind '" + call.getKind() +
+                        "' has no executable contract in profile '" +
+                        profile.name() + "'");
+          SmallVector<CheckOperandView> operands;
+          for (Value input : call.getInputs()) {
+            llvm::Expected<ArrayRef<llvm::APInt>> elements =
+                getElements(input);
+            if (!elements)
+              return elements.takeError();
+            operands.push_back(
+                {cast<oir::ValType>(input.getType()).getValueClass(),
+                 *elements});
+          }
+          SmallVector<StringRef> params;
+          for (Attribute entry : call.getParams())
+            params.push_back(cast<StringAttr>(entry).getValue());
+          llvm::Expected<std::optional<std::string>> outcome =
+              supplier->decide(params, operands);
+          if (!outcome)
+            return llvm::joinErrors(
+                fail("[zkc-E403] check supplier for contract '" +
+                     call.getContractDigest() + "' reported a defect"),
+                outcome.takeError());
+          if (*outcome)
+            reject("check_failure",
+                   "check '" + call.getLabel() + "' failed: " + **outcome);
+          return llvm::Error::success();
         })
         .Case<oir::ExpectEndOp>([&](oir::ExpectEndOp) -> llvm::Error {
           if (cursor != proof.size())
@@ -551,13 +612,6 @@ private:
   llvm::Error statementOutOfRange(StringRef name) {
     return fail("[zkc-E405] statement value '" + name +
                 "' out of range for the prover's own inputs");
-  }
-
-  /// The challenge log records every draw, but the current scalar SSA
-  /// runtime binds only the final draw; a vector-valued hole ABI is
-  /// not implemented (docs/spec/endpoints.md §6.3).
-  void bindSqueeze(Value val, const llvm::APInt &value, uint64_t) {
-    env.try_emplace(val, value);
   }
 
   //===-- one operation ---------------------------------------------===//
@@ -701,25 +755,42 @@ private:
               requireCodec(write.getPayloadClass());
           if (!codec)
             return codec.takeError();
-          llvm::Expected<llvm::APInt> value = get(write.getValue());
-          if (!value)
-            return value.takeError();
-          // Emitted proofs are canonical by construction: an
-          // out-of-range or non-canonical emission is a defect of the
-          // fill that produced the value, reported before any byte
-          // reaches the wire.
-          if (auto modulus = profile.canonicalModulus(write.getPayloadClass()))
-            if (value->uge(*modulus))
-              return fail("[zkc-E408] fill produced an out-of-range value "
-                          "at '" +
-                          write.getLabel() + "'");
-          SmallVector<uint8_t> encoded;
-          (*codec)->encodeWire(*value, encoded);
-          if (encoded.size() != (*codec)->wireWidth() ||
-              !(*codec)->wireCanonical(encoded))
-            return fail("[zkc-E408] emission at '" + write.getLabel() +
-                        "' is not the canonical wire form");
-          proof.insert(proof.end(), encoded.begin(), encoded.end());
+          uint64_t count =
+              zkc::challenge::parseCount(write.getCount()).value_or(0);
+          if (!count)
+            return fail("count outside the verified grammar: not the "
+                        "output of a verified projection");
+          llvm::Expected<ArrayRef<llvm::APInt>> elements =
+              getElements(write.getValue());
+          if (!elements)
+            return elements.takeError();
+          // The row's count is the schedule's; a value whose element
+          // count disagrees is a mis-wired route, refused before any
+          // byte reaches the wire.
+          if (elements->size() != count)
+            return fail("[zkc-E408] write at '" + write.getLabel() +
+                        "' declares count " + write.getCount() +
+                        " but its value holds " +
+                        std::to_string(elements->size()) + " element(s)");
+          for (const llvm::APInt &value : *elements) {
+            // Emitted proofs are canonical by construction: an
+            // out-of-range or non-canonical emission is a defect of the
+            // fill that produced the value, reported before any byte
+            // reaches the wire.
+            if (auto modulus =
+                    profile.canonicalModulus(write.getPayloadClass()))
+              if (value.uge(*modulus))
+                return fail("[zkc-E408] fill produced an out-of-range value "
+                            "at '" +
+                            write.getLabel() + "'");
+            SmallVector<uint8_t> encoded;
+            (*codec)->encodeWire(value, encoded);
+            if (encoded.size() != (*codec)->wireWidth() ||
+                !(*codec)->wireCanonical(encoded))
+              return fail("[zkc-E408] emission at '" + write.getLabel() +
+                          "' is not the canonical wire form");
+            proof.insert(proof.end(), encoded.begin(), encoded.end());
+          }
           return llvm::Error::success();
         })
         .Case<oir::SqueezeOp>(
@@ -740,10 +811,14 @@ private:
           SmallVector<SmallVector<uint8_t, 32>> handles;
           for (Value input : hole.getInputs()) {
             if (isa<oir::ValType>(input.getType())) {
-              llvm::Expected<llvm::APInt> value = get(input);
-              if (!value)
-                return value.takeError();
-              values.push_back(*value);
+              // Counted operands flatten into the value list, exactly
+              // as counted results flatten out of it — the contract
+              // fixes both orders.
+              llvm::Expected<ArrayRef<llvm::APInt>> elements =
+                  getElements(input);
+              if (!elements)
+                return elements.takeError();
+              values.append(elements->begin(), elements->end());
             } else if (isa<oir::HandleType>(input.getType())) {
               auto it = handleEnv.find(input);
               if (it == handleEnv.end())
@@ -775,14 +850,33 @@ private:
                                          hole.getContractDigest() +
                                          "' reported a defect"),
                                     std::move(error));
-          unsigned valueIdx = 0, handleIdx = 0;
+          unsigned valueIdx = 0, handleIdx = 0, resultIdx = 0;
+          ArrayAttr resultCounts = hole.getResultCounts();
           for (Value output : hole.getOutputs()) {
+            // A counted result takes its declared number of elements
+            // from the flat fill output — the contract fixes the
+            // order, so the split is positional.
+            uint64_t count = 1;
+            if (resultIdx < resultCounts.size())
+              count = zkc::challenge::parseCount(
+                          cast<StringAttr>(resultCounts[resultIdx])
+                              .getValue())
+                          .value_or(1);
+            ++resultIdx;
             if (isa<oir::ValType>(output.getType())) {
-              if (valueIdx >= valueResults.size())
+              if (valueIdx + count > valueResults.size())
                 return fail("[zkc-E408] fill for hole contract '" +
                             hole.getContractDigest() +
                             "' returned too few value results");
-              env.try_emplace(output, valueResults[valueIdx++]);
+              if (count == 1) {
+                env.try_emplace(output, valueResults[valueIdx++]);
+              } else {
+                SmallVector<llvm::APInt> elements(
+                    valueResults.begin() + valueIdx,
+                    valueResults.begin() + valueIdx + count);
+                vecEnv.try_emplace(output, std::move(elements));
+                valueIdx += count;
+              }
             } else if (isa<oir::HandleType>(output.getType())) {
               if (handleIdx >= handleResults.size())
                 return fail("[zkc-E408] fill for hole contract '" +
@@ -860,7 +954,12 @@ llvm::Expected<uint64_t> proofSizeBytes(oir::ArtifactOp artifact,
         routeCodec(codecs, read.getPayloadClass(), profile);
     if (!codec)
       return codec.takeError();
-    bytes += (*codec)->wireWidth();
+    uint64_t count = zkc::challenge::parseCount(read.getCount()).value_or(0);
+    if (!count)
+      return llvm::createStringError(
+          "count outside the verified grammar: not the output of a "
+          "verified projection");
+    bytes += count * (*codec)->wireWidth();
   }
   return bytes;
 }

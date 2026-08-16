@@ -16,7 +16,8 @@
 // RUN: FileCheck %s --check-prefix=PROVER < %t/prover.mlir
 
 // SEALED: pir.sealed "plonky3-fri-value-faithful"
-// SEALED-SAME: hole_contracts = {"zkc.hole.fri-commit" = "sha256:
+// SEALED-SAME: hole_contracts = {"zkc.hole.fri-answer" = "sha256:
+// SEALED-SAME: "zkc.hole.fri-commit" = "sha256:
 // SEALED-SAME: "zkc.hole.fri-reduce" = "sha256:
 // SEALED-SAME: segments [12]
 // SEALED: pir.bind {{.*}} "log_size" : "pow_value" stage seal = "3"
@@ -27,6 +28,13 @@
 // SEALED: pir.slot {{.*}} "final_poly" : "ext_field" in "frij" as "final" binding "final.0"
 // SEALED: pir.bind {{.*}} "arity1" : "pow_value" stage seal = "1"
 // SEALED: pir.slot {{.*}} "nonce" : "pow_value" in "grind" as "nonce" binding "grind.0"
+// SEALED: pir.slot {{.*}} "query_leaves" : "word" count "4" unabsorbed binding "answer.0"
+// SEALED: pir.slot {{.*}} "input_paths" : "rs" count "16" unabsorbed binding "answer.1"
+// SEALED: pir.slot {{.*}} "sib1" : "ext_field" count "4" unabsorbed binding "answer.2"
+// SEALED: pir.slot {{.*}} "path1" : "rs" count "12" unabsorbed binding "answer.3"
+// SEALED: pir.slot {{.*}} "path3" : "rs" count "4" unabsorbed binding "answer.7"
+// SEALED: pir.check "merkle_open" contract "zkc.check.merkle-multi-opening"
+// SEALED: pir.check "query_consistency" contract "zkc.check.fri-query-consistency"
 
 // VERIFIER: endpoint "verifier"
 // VERIFIER: oir.transcript_init sponge "plonky3_bb31_poseidon2_w16_r8_lenpad" iv "zero"
@@ -39,6 +47,14 @@
 // VERIFIER: oir.squeeze {{.*}} "pow" : "pow_value" count "1" domain "grind.pow" rule "uniform" space "256"
 // VERIFIER: oir.assert_eq {{.*}} as "pow_pin"
 // VERIFIER: oir.squeeze {{.*}} "query" : "query_index" count "4"
+// VERIFIER: oir.read {{.*}} "query_leaves" : "word" count "4"
+// VERIFIER: oir.read {{.*}} "input_paths" : "rs" count "16"
+// VERIFIER: oir.read {{.*}} "sib1" : "ext_field" count "4"
+// VERIFIER: oir.read {{.*}} "path1" : "rs" count "12"
+// VERIFIER: oir.read {{.*}} "path3" : "rs" count "4"
+// VERIFIER: oir.check_call "merkle_open" kind "zkc.check.merkle-multi-opening" digest "sha256:
+// VERIFIER: oir.check_call "query_consistency" kind "zkc.check.fri-query-consistency" digest "sha256:
+// VERIFIER-SAME: params ["1", "0"]
 
 // PROVER: endpoint "prover_skeleton"
 // PROVER: witness_labels = {{\[\[}}"codeword", "fri-trace"]]
@@ -56,5 +72,10 @@
 // PROVER-SAME: !oir.sponge
 // PROVER: oir.write {{.*}} as "nonce" class "pow_value"
 // PROVER: oir.squeeze {{.*}} "query" : "query_index" count "4"
+// PROVER: oir.hole_call "answer" kind "open"
+// PROVER-SAME: result_counts ["4", "16", "4", "12", "4", "8", "4", "4"]
+// PROVER: oir.write {{.*}} as "query_leaves" class "word" count "4"
+// PROVER: oir.write {{.*}} as "input_paths" class "rs" count "16"
+// PROVER: oir.write {{.*}} as "path3" class "rs" count "4"
 // PROVER: oir.end_stream
 // PROVER: oir.finish

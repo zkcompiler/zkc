@@ -36,6 +36,14 @@ inline bool isCanonicalPositiveDecimal(llvm::StringRef text) {
 /// Parse the one canonical carrier spelling of a challenge count. The result
 /// is in [1, 2^20]; zero, leading zeros, non-decimal text, and overflow are
 /// rejected rather than normalized.
+/// The one spelling of the count-grammar refusal, shared by every op
+/// that carries a count (squeeze, read, write, slot, hole results) so
+/// the prose cannot drift between them; each site prefixes its own
+/// diagnostic id.
+inline constexpr const char kCountGrammarMessage[] =
+    "count must be a canonical decimal from 1 through 2^20 (1 for scalar, "
+    "2..2^20 for vector), got \"";
+
 inline std::optional<uint64_t> parseCount(llvm::StringRef text) {
   if (!isCanonicalPositiveDecimal(text))
     return std::nullopt;

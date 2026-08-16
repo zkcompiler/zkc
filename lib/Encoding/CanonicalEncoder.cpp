@@ -681,8 +681,16 @@ private:
         membership = Array{reduceTransformer.lookup(owner.getOperation()),
                            m->role, m->idx};
       }
-      Array slotRow{"slot", slot.getPayloadClass(),
-                    slot.getUnabsorbed() ? 0 : 1, std::move(membership)};
+      // A counted slot is its own event family: the scalar family's
+      // rows keep their exact historical encoding, so no identity
+      // outside the counted-row protocols moves (docs/spec/carrier.md
+      // §6's additive discipline).
+      Array slotRow =
+          slot.getCount() == "1"
+              ? Array{"slot", slot.getPayloadClass(),
+                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)}
+              : Array{"slot_vec", slot.getPayloadClass(), slot.getCount(),
+                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)};
       // The construction-route binding is identity content, emitted
       // additively with its references normalized to positions, so an
       // unbound slot encodes exactly as before and renaming stays
@@ -1043,9 +1051,16 @@ public:
                                     op.getSpace(), srcOf(op)});
                   })
               .Case<zkc::oir::ReadOp>([&](auto op) -> llvm::Expected<JValue> {
-                if (llvm::Error err =
-                        checkStrings({op.getLabel(), op.getPayloadClass()}))
+                if (llvm::Error err = checkStrings(
+                        {op.getLabel(), op.getPayloadClass(), op.getCount()}))
                   return std::move(err);
+                // Counted reads are their own row family so the scalar
+                // family keeps its exact historical encoding
+                // (docs/spec/carrier.md §6.2).
+                if (op.getCount() != "1")
+                  return ok(Array{"read_vec", ref(op.getStream()),
+                                  op.getLabel(), op.getPayloadClass(),
+                                  op.getCount(), srcOf(op)});
                 return ok(Array{"read", ref(op.getStream()), op.getLabel(),
                                 op.getPayloadClass(), srcOf(op)});
               })
@@ -1102,9 +1117,15 @@ public:
               // container verifier before encoding is attempted.
               .Case<zkc::oir::WriteOp>(
                   [&](zkc::oir::WriteOp op) -> llvm::Expected<JValue> {
-                    if (llvm::Error err =
-                            checkStrings({op.getLabel(), op.getPayloadClass()}))
+                    if (llvm::Error err = checkStrings({op.getLabel(),
+                                                        op.getPayloadClass(),
+                                                        op.getCount()}))
                       return std::move(err);
+                    if (op.getCount() != "1")
+                      return ok(Array{"write_vec", ref(op.getStream()),
+                                      ref(op.getValue()), op.getLabel(),
+                                      op.getPayloadClass(), op.getCount(),
+                                      srcOf(op)});
                     return ok(Array{"write", ref(op.getStream()),
                                     ref(op.getValue()), op.getLabel(),
                                     op.getPayloadClass(), srcOf(op)});
@@ -1118,12 +1139,24 @@ public:
                 for (Value input : op.getInputs())
                   operands.push_back(ref(input));
                 Array results;
-                for (Value output : op.getOutputs()) {
+                ArrayAttr resultCounts = op.getResultCounts();
+                for (auto [index, output] : llvm::enumerate(op.getOutputs())) {
                   Type type = output.getType();
+                  StringRef count =
+                      index < resultCounts.size()
+                          ? cast<StringAttr>(resultCounts[index]).getValue()
+                          : StringRef("1");
                   if (auto val = dyn_cast<zkc::oir::ValType>(type)) {
                     if (llvm::Error err = checkStrings({val.getValueClass()}))
                       return std::move(err);
-                    results.push_back(Array{"val", val.getValueClass()});
+                    // A counted result carries its count additively;
+                    // scalar results keep their exact historical
+                    // encoding (docs/spec/carrier.md §6.2).
+                    if (count != "1")
+                      results.push_back(
+                          Array{"val", val.getValueClass(), count});
+                    else
+                      results.push_back(Array{"val", val.getValueClass()});
                   } else if (auto handle =
                                  dyn_cast<zkc::oir::HandleType>(type)) {
                     if (llvm::Error err =

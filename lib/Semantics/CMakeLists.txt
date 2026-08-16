@@ -2,6 +2,7 @@ add_mlir_library(ZkcSemantics
   ConstructionGraph.cpp
   LinkEngine.cpp
   ProtocolFacts.cpp
+  CheckLayout.cpp
   ReductionClosure.cpp
   SealBattery.cpp
   SealEngine.cpp

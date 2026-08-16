@@ -496,10 +496,23 @@ public:
           break;
         }
       }
+      // A counted result carries its declared count onto the call, so
+      // the executor can split the fill's flat output positionally;
+      // all-scalar holes keep the empty attribute and their exact
+      // historical encoding.
+      SmallVector<Attribute> resultCounts;
+      bool anyCounted = false;
+      for (const zkc::registry::HoleSegment &segment : contract->results) {
+        StringRef count = segment.count.empty() ? "1" : StringRef(segment.count);
+        anyCounted |= count != "1";
+        resultCounts.push_back(builder.getStringAttr(count));
+      }
       auto hole = zkc::oir::HoleCallOp::create(
           builder, loc, resultTypes, operands, name, contract->kind,
           contract->contentDigest(), builder.getArrayAttr(params),
-          builder.getArrayAttr(semanticParams));
+          builder.getArrayAttr(semanticParams),
+          anyCounted ? builder.getArrayAttr(resultCounts)
+                     : builder.getArrayAttr({}));
       SmallVector<Value> results(hole.getOutputs());
       for (auto [index, segment] : llvm::enumerate(contract->results))
         if (segment.sort == zkc::registry::HoleSegmentSort::Sponge)
@@ -562,7 +575,7 @@ public:
               }
               auto write = zkc::oir::WriteOp::create(
                   builder, loc, stream, v, op.getLabel(), op.getPayloadClass(),
-                  src(op));
+                  op.getCount(), src(op));
               stream = write.getOut();
               slotValueByLabel[op.getLabel()] = v;
               vals[op.getVal()] = v;
@@ -573,9 +586,10 @@ public:
               cover(op);
               return;
             }
-            auto read =
-                zkc::oir::ReadOp::create(builder, loc, stream, op.getLabel(),
-                                         op.getPayloadClass(), src(op));
+            auto read = zkc::oir::ReadOp::create(builder, loc, stream,
+                                                 op.getLabel(),
+                                                 op.getPayloadClass(),
+                                                 op.getCount(), src(op));
             stream = read.getOut();
             vals[op.getVal()] = read.getVal();
             if (!op.getUnabsorbed())

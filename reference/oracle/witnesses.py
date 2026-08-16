@@ -517,17 +517,24 @@ VECCHAL = {
             ["y", "commit_A"],
             mode=["vector", "16", "uniform_independent"],
         ),
+        # A count-16 value fills sixteen units of a check operand
+        # segment, never a scalar one, so the schnorr equation consumes
+        # its own scalar challenge. The counted unabsorbed slot is the
+        # read_vec/slot_vec families' parity gate: response material
+        # read after the last challenge.
+        chal("c", "scalar", "vec.c", "1099511627776", ["y", "commit_A"]),
         slot("resp_z", "scalar", True),
         check(
             "verify",
             "zkc.check.schnorr-equation",
-            ["y", "commit_A", "q", "resp_z"],
+            ["y", "commit_A", "c", "resp_z"],
             expr=[
                 "eq",
                 ["g_exp", ["const", "g"], ["in", 3]],
                 ["g_mul", ["in", 1], ["g_exp", ["in", 0], ["in", 2]]],
             ],
         ),
+        slot("resp_vec", "scalar", False, count="16"),
     ],
     "reduces": [],
     "material_bindings": [],
@@ -1599,6 +1606,7 @@ OIR_WITNESSES = {
     "sumcheck-fs": SUMCHECK_FS,
     "chaum-pedersen": CHAUM_PEDERSEN,
     "or-sigma": OR_SIGMA,
+    "vecchal": VECCHAL,
 }
 
 

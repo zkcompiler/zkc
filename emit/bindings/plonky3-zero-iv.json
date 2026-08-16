@@ -1,24 +1,68 @@
 {
  "name": "plonky3-zero-iv",
- "sponge": {"construction": "plonky3_bb31_poseidon2_w16_r8_lenpad", "iv": "zero", "impl": "p3_lenpad_duplex"},
+ "sponge": {
+  "construction": "plonky3_bb31_poseidon2_w16_r8_lenpad",
+  "iv": "zero",
+  "impl": "p3_lenpad_duplex"
+ },
  "classes": {
-  "rs": {"codec": "plonky3_bb31_digest8", "impl": "p3_digest8"},
-  "ext_field": {"codec": "plonky3_bb31_ext4_tuple", "impl": "p3_ext4"},
-  "pow_value": {"codec": "plonky3_bb31_low_bits", "impl": "p3_word"},
-  "query_index": {"codec": "plonky3_bb31_low_bits", "impl": "p3_word"}
+  "rs": {
+   "codec": "plonky3_bb31_digest8",
+   "impl": "p3_digest8"
+  },
+  "ext_field": {
+   "codec": "plonky3_bb31_ext4_tuple",
+   "impl": "p3_ext4"
+  },
+  "pow_value": {
+   "codec": "plonky3_bb31_low_bits",
+   "impl": "p3_word"
+  },
+  "query_index": {
+   "codec": "plonky3_bb31_low_bits",
+   "impl": "p3_word"
+  },
+  "word": {
+   "codec": "plonky3_bb31_word",
+   "impl": "p3_word"
+  }
  },
  "holes": {
-  "sha256:cc0dc2d0881a6969b30807376559ee7c383040f39e6164d80bd40d6a76ba8aa6": {"impl": "p3_fri_openval"},
-  "sha256:f6c65f6f85593582bd4d75d6cec365497d01d99deb011684c175ed7e0de95f8b": {"impl": "p3_fri_reduce"},
-  "sha256:48866b4cbbb3ab0c0df635fc2bf9d35cea9dca07832fe9277142d5087043982a": {"impl": "p3_fri_commit"},
-  "sha256:c1d1f9bbfea1bc14d6e599a2eca57c445fcf3110def63eadfef282c33d678679": {"impl": "p3_fri_fold"},
-  "sha256:8b50034e2465aa50dd78c8e38ae585ddf813bfbed0b59c2b24e48802272bc044": {"impl": "p3_fri_final"},
-  "sha256:2c7e1b4fb9c2fed09233aa7e927829b1cb5733c4bd5d12cbe384484d30a71985": {"impl": "p3_pow_search"}
+  "sha256:cc0dc2d0881a6969b30807376559ee7c383040f39e6164d80bd40d6a76ba8aa6": {
+   "impl": "p3_fri_openval"
+  },
+  "sha256:f6c65f6f85593582bd4d75d6cec365497d01d99deb011684c175ed7e0de95f8b": {
+   "impl": "p3_fri_reduce"
+  },
+  "sha256:48866b4cbbb3ab0c0df635fc2bf9d35cea9dca07832fe9277142d5087043982a": {
+   "impl": "p3_fri_commit"
+  },
+  "sha256:c1d1f9bbfea1bc14d6e599a2eca57c445fcf3110def63eadfef282c33d678679": {
+   "impl": "p3_fri_fold"
+  },
+  "sha256:2c7e1b4fb9c2fed09233aa7e927829b1cb5733c4bd5d12cbe384484d30a71985": {
+   "impl": "p3_pow_search"
+  },
+  "sha256:e0f9a178e07c044099f65547bc3823b480864a0990e2c2401cc9000213a32427": {
+   "impl": "p3_fri_final"
+  },
+  "sha256:5a52a364ef195c917b8d008a88826933df580c4555aebe945bb3566928029a1e": {
+   "impl": "p3_fri_answer"
+  }
  },
  "digests": {
   "codec:plonky3_bb31_digest8": "sha256:a3425c10251b787fbef3da60b57a7eedc8e889ffb46219eb26c70109e6dacb2d",
   "codec:plonky3_bb31_ext4_tuple": "sha256:cb6f0f7790e47814634648f59d467917e13cdb4fd7151d8640d8f2f4b6821a5b",
   "codec:plonky3_bb31_low_bits": "sha256:dbe9226c119680601f413ad689abf1bd77784f72a44e16ef8a0b7cb714d8641f",
-  "sponge:plonky3_bb31_poseidon2_w16_r8_lenpad": "sha256:961fc67e87a582f6d38f0c82047af0480269d340e1c9714fced6163e62984efc"
+  "sponge:plonky3_bb31_poseidon2_w16_r8_lenpad": "sha256:961fc67e87a582f6d38f0c82047af0480269d340e1c9714fced6163e62984efc",
+  "codec:plonky3_bb31_word": "sha256:a3425c10251b787fbef3da60b57a7eedc8e889ffb46219eb26c70109e6dacb2d"
+ },
+ "checks": {
+  "sha256:764d1d92c7473fbdf9ecbd3bf8981274e5d012c2ac1b07ad2bb54fd2e00947a1": {
+   "impl": "p3_merkle_multi_opening"
+  },
+  "sha256:1f2e6480d08a8fe079baf380f2532d2127770b4c17d6bf526f4eeb365b25474c": {
+   "impl": "p3_fri_query_consistency"
+  }
  }
 }

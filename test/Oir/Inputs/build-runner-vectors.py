@@ -1,10 +1,14 @@
 """Build a zkc-run vectors file from the backend runner's run record.
 
 The positive vector carries the runner's statement, wire, and challenge
-stream verbatim, expecting acceptance; the corrupt-nonce vector flips
-the wire's final byte so the executor's grinding check must refuse with
-a verdict (expected challenges are deliberately empty there — the
-corrupted stream is not predicted, only its reject class is).
+stream verbatim, expecting acceptance. The corrupt-nonce vector flips
+the nonce word's low byte so the grinding check must refuse; the
+corrupt-path vector flips a byte inside an input authentication path so
+the Merkle multi-opening check must refuse; the corrupt-sibling vector
+flips a byte inside a round's sibling values so the fold-consistency
+check must refuse (expected challenges are
+deliberately empty there — the corrupted stream is not predicted, only
+its reject class is).
 
 The `prover` mode builds the prover-endpoint corpus instead: the same
 statement and stream, the runner's fixed witness trace as the payload
@@ -61,8 +65,32 @@ def main() -> None:
             indent=1,
         )
         return
-    if mode not in {"accept", "corrupt-nonce"}:
-        raise SystemExit(f"unknown mode {mode!r}")
+    # The wire layout the corrupt offsets index into, named so the
+    # arithmetic is checkable: the absorbed prefix, then the openings.
+    OPENED_VALUE = 16
+    ROOTS = 3 * 32
+    FINAL_POLY = 16
+    NONCE_END = OPENED_VALUE + ROOTS + FINAL_POLY + 4
+    OPENINGS = NONCE_END
+    LEAVES = 4 * 4
+    INPUT_PATHS = 4 * 4 * 32
+
+    def flip(at: int) -> str:
+        return (
+            wire[: 2 * at]
+            + format(int(wire[2 * at : 2 * at + 2], 16) ^ 0x01, "02x")
+            + wire[2 * at + 2 :]
+        )
+
+    # Each corrupt mode flips one byte inside the named region, and the
+    # named check must refuse: the nonce's low byte at the grinding
+    # check, an input path digest at the Merkle multi-opening, a
+    # first-round sibling at the fold consistency.
+    corrupt_modes = {
+        "corrupt-nonce": ("corrupted-nonce", NONCE_END - 1),
+        "corrupt-path": ("corrupted-path", OPENINGS + LEAVES),
+        "corrupt-sibling": ("corrupted-sibling", OPENINGS + LEAVES + INPUT_PATHS),
+    }
     if mode == "accept":
         vector = {
             "name": "runner-round-trip",
@@ -71,15 +99,17 @@ def main() -> None:
             "expect": "accept",
             "challenges": challenges,
         }
-    else:
-        flipped = wire[:-2] + format(int(wire[-2:], 16) ^ 0x01, "02x")
+    elif mode in corrupt_modes:
+        name, offset = corrupt_modes[mode]
         vector = {
-            "name": "corrupted-nonce",
+            "name": name,
             "statement": {"f_root": statement},
-            "proof": flipped,
+            "proof": flip(offset),
             "expect": "check_failure",
             "challenges": [],
         }
+    else:
+        raise SystemExit(f"unknown mode {mode!r}")
     json.dump(
         {"artifact_id": verifier_id, "vectors": [vector]},
         open(out_path, "w"),

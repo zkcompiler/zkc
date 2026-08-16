@@ -44,8 +44,7 @@ LogicalResult SqueezeOp::verify() {
   std::optional<uint64_t> parsedCount = zkc::challenge::parseCount(count);
   if (!parsedCount)
     return emitOpError()
-           << "[zkc-E146] count must be a canonical decimal from 1 through "
-              "2^20 (1 for scalar, 2..2^20 for vector), got \""
+           << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
            << count << "\"";
   if (getPayloadClass().empty())
     return emitOpError() << "[zkc-E146] payload class must be non-empty";
@@ -83,6 +82,14 @@ LogicalResult CheckCallOp::verify() {
   return success();
 }
 
+LogicalResult ReadOp::verify() {
+  if (!zkc::challenge::parseCount(getCount()))
+    return emitOpError()
+           << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
+           << getCount() << "\"";
+  return success();
+}
+
 LogicalResult WriteOp::verify() {
   // The erasure lint (docs/spec/endpoints.md §2): a sampled
   // value is never a write operand directly — challenge-derived wire
@@ -94,6 +101,10 @@ LogicalResult WriteOp::verify() {
            << "[zkc-E149] a write operand's origin must be hole, derived, "
               "public, or pinned; got '"
            << origin << "'";
+  if (!zkc::challenge::parseCount(getCount()))
+    return emitOpError()
+           << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
+           << getCount() << "\"";
   return success();
 }
 
@@ -126,6 +137,30 @@ LogicalResult HoleCallOp::verify() {
     return emitOpError()
            << "[zkc-E149] only a pow_search hole may take the sponge; kind '"
            << kind << "' has no transcript access";
+  }
+  // Result counts, when declared, cover every result positionally;
+  // only value results may be counted — a handle or sponge is one
+  // state, never a vector of them. Shape precedes linearity: a
+  // mis-declared count is named before any use accounting.
+  ArrayAttr resultCounts = getResultCounts();
+  if (!resultCounts.empty()) {
+    if (resultCounts.size() != getOutputs().size())
+      return emitOpError() << "[zkc-E149] result_counts covers every result "
+                              "positionally: "
+                           << resultCounts.size() << " count(s) for "
+                           << getOutputs().size() << " result(s)";
+    for (auto [index, entry] : llvm::enumerate(resultCounts)) {
+      StringRef count = cast<StringAttr>(entry).getValue();
+      if (!zkc::challenge::parseCount(count))
+        return emitOpError()
+               << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
+               << count << "\"";
+      if (count != "1" &&
+          !isa<ValType>(getOutputs()[index].getType()))
+        return emitOpError() << "[zkc-E149] only a value result may be "
+                                "counted; result "
+                             << index << " is not a value";
+    }
   }
   for (Value output : getOutputs()) {
     if (auto val = dyn_cast<ValType>(output.getType()))

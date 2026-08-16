@@ -51,6 +51,19 @@
 # RUN: not zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/corrupt.json | FileCheck %s --check-prefix=CORRUPT
 # CORRUPT: corrupted-nonce: check_failure
 
+# A flipped byte inside an input authentication path dies at the
+# native Merkle multi-opening check — the same verdict class, the
+# query phase's own gate.
+# RUN: %python %S/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/corrupt-path.json corrupt-path
+# RUN: not zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/corrupt-path.json | FileCheck %s --check-prefix=CORRUPTPATH
+# CORRUPTPATH: corrupted-path: check_failure
+
+# A flipped byte inside a round's sibling values dies at the native
+# fold-consistency check.
+# RUN: %python %S/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/corrupt-sibling.json corrupt-sibling
+# RUN: not zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/corrupt-sibling.json | FileCheck %s --check-prefix=CORRUPTSIB
+# CORRUPTSIB: corrupted-sibling: check_failure
+
 # A wrong fill is rejected by the pinned PCS verifier.
 # RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/prover.json corrupt-final-poly > %t/corrupt.out || true
 # RUN: FileCheck %s --check-prefix=WRONGFILL < %t/corrupt.out

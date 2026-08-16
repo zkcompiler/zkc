@@ -400,7 +400,8 @@ realizeGroup(zkc::pir::ProtocolOp protocol, BatchGroup &group,
                                gammaLabel, "fr", challengeDomain, batchSpace);
   auto proof = zkc::pir::SlotOp::create(
       builder, loc, gamma.getOut(), proofLabel,
-      members.front().proof.getPayloadClass(), /*unabsorbed=*/false,
+      members.front().proof.getPayloadClass(), /*count=*/"1",
+      /*unabsorbed=*/false,
       /*instance=*/std::nullopt, /*role=*/std::nullopt, /*idx=*/0,
       /*binding=*/StringAttr());
   SmallVector<Value> checkInputs(deps);

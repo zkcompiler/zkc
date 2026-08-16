@@ -3,6 +3,7 @@
 #include "zkc/Semantics/TerminalClosure.h"
 
 #include "zkc/Dialect/Pir/PirOps.h"
+#include "zkc/Semantics/CheckLayout.h"
 #include "zkc/Encoding/CanonicalEncoder.h"
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Encoding/EncodingDomain.h"
@@ -29,10 +30,7 @@ struct ClaimView {
   std::string descriptorBytes;
 };
 
-struct OperandView {
-  std::map<std::string, SmallVector<Value>, std::less<>> roles;
-  SmallVector<std::pair<std::string, uint64_t>> positions;
-};
+using zkc::semantics::OperandView;
 
 struct CheckView {
   CheckOp op;
@@ -160,73 +158,6 @@ private:
     }
   }
 
-  static bool classMatches(Value value, StringRef expected) {
-    return expected == "*" ||
-           cast<ValType>(value.getType()).getValueClass() == expected;
-  }
-
-  void solveLayout(const CheckContract &contract, ValueRange inputs,
-                   size_t segmentIndex, size_t inputIndex,
-                   std::map<std::string, uint64_t, std::less<>> captures,
-                   OperandView current, SmallVectorImpl<OperandView> &answers) {
-    if (answers.size() > 1)
-      return;
-    if (segmentIndex == contract.operands.size()) {
-      if (inputIndex == inputs.size())
-        answers.push_back(std::move(current));
-      return;
-    }
-
-    const CheckOperandSegment &segment = contract.operands[segmentIndex];
-    SmallVector<uint64_t> candidates;
-    switch (segment.multiplicity.kind) {
-    case OperandMultiplicityKind::Exact:
-      candidates.push_back(segment.multiplicity.value);
-      break;
-    case OperandMultiplicityKind::SameAs: {
-      auto found = captures.find(segment.multiplicity.name);
-      if (found == captures.end())
-        return;
-      candidates.push_back(found->second);
-      break;
-    }
-    case OperandMultiplicityKind::Capture: {
-      auto found = captures.find(segment.multiplicity.name);
-      if (found != captures.end()) {
-        candidates.push_back(found->second);
-        break;
-      }
-      for (uint64_t count = segment.multiplicity.value;
-           count <= inputs.size() - inputIndex; ++count)
-        candidates.push_back(count);
-      break;
-    }
-    }
-
-    for (uint64_t count : candidates) {
-      if (count > inputs.size() - inputIndex)
-        continue;
-      bool classesMatch = true;
-      for (uint64_t index = 0; index < count; ++index)
-        classesMatch &=
-            classMatches(inputs[inputIndex + index], segment.valueClass);
-      if (!classesMatch)
-        continue;
-
-      auto nextCaptures = captures;
-      if (segment.multiplicity.kind == OperandMultiplicityKind::Capture)
-        nextCaptures[segment.multiplicity.name] = count;
-      OperandView next = current;
-      auto &roleValues = next.roles[segment.role];
-      for (uint64_t index = 0; index < count; ++index) {
-        roleValues.push_back(inputs[inputIndex + index]);
-        next.positions.push_back({segment.role, index});
-      }
-      solveLayout(contract, inputs, segmentIndex + 1, inputIndex + count,
-                  std::move(nextCaptures), std::move(next), answers);
-    }
-  }
-
   llvm::Expected<llvm::json::Value> normalizeExpr(Attribute attribute,
                                                   const OperandView &operands,
                                                   unsigned depth = 0) {
@@ -309,7 +240,7 @@ private:
         continue;
       }
       SmallVector<OperandView> layouts;
-      solveLayout(*contract, check.getInputs(), 0, 0, {}, {}, layouts);
+      zkc::semantics::solveCheckLayout(*contract, check.getInputs(), layouts);
       if (layouts.size() != 1) {
         error(check, "zkc-E302")
             << "operand sequence has " << layouts.size()

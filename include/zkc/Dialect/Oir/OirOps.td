@@ -165,13 +165,24 @@ def Oir_SqueezeOp : Oir_Op<"squeeze", [Oir_EndpointEffect, InferTypeOpAdaptor,
 
 def Oir_ReadOp : Oir_Op<"read", [Oir_EndpointEffect, InferTypeOpAdaptor,
                                  HasParent<"ProgramOp">]> {
-  let summary = "decode one value from the proof stream";
+  let summary = "decode one counted value from the proof stream";
+  let description = [{
+    `count` mirrors the squeeze op's multiplicity: `1` is a scalar and
+    a canonical decimal from 2 through 2^20 is a vector of that many
+    values of the payload class, decoded in order at the class's fixed
+    width — the wire carries no length framing, so the schedule is the
+    only width authority (docs/spec/carrier.md §7). The whole vector is
+    one SSA handle, exactly as a vector squeeze's.
+  }];
   let arguments = (ins Oir_StreamType:$stream, StringProp:$label,
-      StringProp:$payload_class, Oir_SrcAttr:$src);
+      StringProp:$payload_class,
+      DefaultValuedProp<StringProp, "\"1\"">:$count, Oir_SrcAttr:$src);
   let results = (outs Oir_StreamType:$out, Oir_ValType:$val);
   let assemblyFormat = [{
-    $stream $label `:` $payload_class (`src` $src^)? attr-dict
+    $stream $label `:` $payload_class (`count` $count^)?
+    (`src` $src^)? attr-dict
   }];
+  let hasVerifier = 1;
 }
 
 def Oir_ExpectEndOp
@@ -327,11 +338,12 @@ def Oir_WriteOp
     the dependence explicit in the route table.
   }];
   let arguments = (ins Oir_StreamType:$stream, Oir_ValType:$value,
-      StringProp:$label, StringProp:$payload_class, Oir_SrcAttr:$src);
+      StringProp:$label, StringProp:$payload_class,
+      DefaultValuedProp<StringProp, "\"1\"">:$count, Oir_SrcAttr:$src);
   let results = (outs Oir_StreamType:$out);
   let assemblyFormat = [{
     $stream `,` $value `:` type($value) `as` $label `class` $payload_class
-    (`src` $src^)? attr-dict
+    (`count` $count^)? (`src` $src^)? attr-dict
   }];
   let hasVerifier = 1;
 }
@@ -367,7 +379,8 @@ def Oir_HoleCallOp : Oir_Op<"hole_call", [HasParent<"ProgramOp">]> {
            AnyTypeOf<[Oir_ValType, Oir_HandleType, Oir_SpongeType]>>:$inputs,
           StringProp:$label, StringProp:$kind, StringProp:$contract_digest,
           DefaultValuedAttr<StrArrayAttr, "{}">:$params,
-          DefaultValuedAttr<StrArrayAttr, "{}">:$semantic_params);
+          DefaultValuedAttr<StrArrayAttr, "{}">:$semantic_params,
+          DefaultValuedAttr<StrArrayAttr, "{}">:$result_counts);
   let results = (outs Variadic<
       AnyTypeOf<[Oir_ValType, Oir_HandleType, Oir_SpongeType]>>:$outputs);
   let assemblyFormat = [{
@@ -375,7 +388,8 @@ def Oir_HoleCallOp : Oir_Op<"hole_call", [HasParent<"ProgramOp">]> {
     (`(` $inputs^ `:` type($inputs) `)`)?
     (`->` type($outputs)^)?
     (`params` $params^)?
-    (`semantic` $semantic_params^)? attr-dict
+    (`semantic` $semantic_params^)?
+    (`result_counts` $result_counts^)? attr-dict
   }];
   let hasVerifier = 1;
 }

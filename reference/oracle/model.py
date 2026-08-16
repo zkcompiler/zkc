@@ -1684,6 +1684,7 @@ class Slot(NamedTuple):
     absorbed: bool
     membership: tuple[str, str, int] | None
     binding: str | None = None
+    count: str = "1"
 
 
 class Chal(NamedTuple):
@@ -1749,10 +1750,18 @@ def slot(
     absorbed: bool,
     membership: tuple[str, str, int] | tuple[str, str] | None = None,
     binding: str | None = None,
+    count: str = "1",
 ) -> Slot:
     if membership is not None and len(membership) == 2:
         membership = (membership[0], membership[1], 0)
-    return Slot("slot", label, payload_class, absorbed, membership, binding)
+    if count != "1" and absorbed:
+        raise AssertionError(
+            "a counted slot must be unabsorbed: absorbed material has no "
+            "vector framing rule"
+        )
+    return Slot(
+        "slot", label, payload_class, absorbed, membership, binding, count
+    )
 
 
 def chal(
@@ -3068,12 +3077,23 @@ def canonical_document(
             if event.membership is not None:
                 instance, role, index = event.membership
                 membership = [transformer_pos[instance], role, index]
-            row = [
-                "slot",
-                event.payload_class,
-                1 if event.absorbed else 0,
-                membership,
-            ]
+            # A counted slot is its own event family: the scalar family
+            # keeps its exact historical encoding.
+            if event.count == "1":
+                row = [
+                    "slot",
+                    event.payload_class,
+                    1 if event.absorbed else 0,
+                    membership,
+                ]
+            else:
+                row = [
+                    "slot_vec",
+                    event.payload_class,
+                    event.count,
+                    1 if event.absorbed else 0,
+                    membership,
+                ]
             if event.binding is not None:
                 row.append(normalize_route_ref(event.binding))
             event_rows.append(row)
@@ -3180,6 +3200,10 @@ _LICENSES = {
     "check_call": {"check_call"},
 }
 
+# Counted row families realize exactly what their scalar families do;
+# licensing and coverage judge the op family, as the carrier does.
+_SCALAR_FAMILY = {"read_vec": "read", "write_vec": "write"}
+
 _REALIZES = {
     "const+absorb": {"const", "absorb"},
     "arg+absorb": {"absorb"},
@@ -3255,7 +3279,21 @@ def project(
             sponge = ["r", emit(["absorb", sponge, value, src]), 0]
             value_ref[event.label] = value
         elif isinstance(event, Slot):
-            row = emit(["read", stream, event.label, event.payload_class, src])
+            if event.count == "1":
+                row = emit(
+                    ["read", stream, event.label, event.payload_class, src]
+                )
+            else:
+                row = emit(
+                    [
+                        "read_vec",
+                        stream,
+                        event.label,
+                        event.payload_class,
+                        event.count,
+                        src,
+                    ]
+                )
             stream, value = ["r", row, 0], ["r", row, 1]
             value_ref[event.label] = value
             if event.absorbed:
@@ -3332,13 +3370,14 @@ def project(
     for row in rows:
         if row[0] in {"init", "expect_end", "decide"}:
             continue
+        family = _SCALAR_FAMILY.get(row[0], row[0])
         for position in row[-1]:
             if position not in realized:
                 raise Refusal("OIR src references a non-event position")
             discharge_kind = table[position][2]
-            if row[0] not in _LICENSES[discharge_kind]:
+            if family not in _LICENSES[discharge_kind]:
                 raise Refusal("OIR family is not licensed for its event")
-            realized[position].add(row[0])
+            realized[position].add(family)
     missing = [
         (position, discharge_kind)
         for position, _, discharge_kind in table
@@ -3470,7 +3509,14 @@ def _project_prover(
         results = []
         for segment in contract["results"]:
             if segment["sort"] == "value":
-                results.append(["val", segment["class"]])
+                # A counted result carries its count as a third element;
+                # the scalar form is unchanged (docs/spec/carrier.md
+                # §6.2's additive discipline).
+                count = segment.get("count", "1")
+                if count != "1":
+                    results.append(["val", segment["class"], count])
+                else:
+                    results.append(["val", segment["class"]])
             elif segment["sort"] == "handle":
                 results.append(["handle", segment["class"]])
             else:
@@ -3513,16 +3559,29 @@ def _project_prover(
             value_ref[event.label] = value
         elif isinstance(event, Slot):
             value = resolve_ref(event.binding)
-            row = emit(
-                [
-                    "write",
-                    stream,
-                    value,
-                    event.label,
-                    event.payload_class,
-                    src,
-                ]
-            )
+            if event.count == "1":
+                row = emit(
+                    [
+                        "write",
+                        stream,
+                        value,
+                        event.label,
+                        event.payload_class,
+                        src,
+                    ]
+                )
+            else:
+                row = emit(
+                    [
+                        "write_vec",
+                        stream,
+                        value,
+                        event.label,
+                        event.payload_class,
+                        event.count,
+                        src,
+                    ]
+                )
             stream = ["r", row, 0]
             value_ref[event.label] = value
             if event.absorbed:
@@ -3553,16 +3612,17 @@ def _project_prover(
     for row in rows:
         if row[0] in {"init", "end_stream", "finish", "hole_call"}:
             continue
+        family = _SCALAR_FAMILY.get(row[0], row[0])
         for position in row[-1]:
             if position not in realized:
                 raise Refusal("OIR src references a non-event position")
             discharge_kind = table[position][2]
-            if row[0] not in _PROVER_LICENSES.get(discharge_kind, set()):
+            if family not in _PROVER_LICENSES.get(discharge_kind, set()):
                 raise Refusal(
                     "OIR family is not licensed for its event on the "
                     "prover endpoint"
                 )
-            realized[position].add(row[0])
+            realized[position].add(family)
     counterparty_positions = {position for position, _ in counterparty}
     for position, _, discharge_kind in table:
         if position in counterparty_positions:

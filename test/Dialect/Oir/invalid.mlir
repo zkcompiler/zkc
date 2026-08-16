@@ -628,3 +628,52 @@ oir.artifact "a" id "00000000000000000000000000000000000000000000000000000000000
     oir.decide %sp1
   }
 }
+
+// -----
+
+// Counted stream rows carry the shared count grammar.
+oir.artifact "bad-read-count" id "0000000000000000000000000000000000000000000000000000000000000000" source "sha256:0000000000000000000000000000000000000000000000000000000000000000" endpoint "verifier" {
+  oir.program {
+  ^bb0(%proof: !oir.stream):
+    %sp = oir.transcript_init sponge "toy_duplex" iv "artifact-id"
+    // expected-error @below {{[zkc-E146] count must be a canonical decimal from 1 through 2^20}}
+    %s1, %v = oir.read %proof "vec" : "rs" count "x"
+    oir.expect_end %s1
+    oir.decide %sp
+  }
+}
+
+// -----
+
+// result_counts covers every result positionally, and only a value
+// result may be counted.
+oir.artifact "bad-result-counts" id "0000000000000000000000000000000000000000000000000000000000000000" source "sha256:0000000000000000000000000000000000000000000000000000000000000000" endpoint "prover_skeleton" {
+  oir.program attributes {witness_labels = [["w", "sigma-witness"]], counterparty = []} {
+  ^bb0(%w: !oir.handle<"sigma-witness">, %proof: !oir.stream):
+    %sp = oir.transcript_init sponge "toy_duplex" iv "artifact-id"
+    // expected-error @below {{[zkc-E149] result_counts covers every result positionally: 1 count(s) for 2 result(s)}}
+    %r:2 = oir.hole_call "open" kind "open" digest "sha256:0000000000000000000000000000000000000000000000000000000000000000"(%w : !oir.handle<"sigma-witness">) -> !oir.val<"rs", "hole">, !oir.val<"rs", "hole"> result_counts ["4"]
+    %s1 = oir.write %proof, %r#0 : <"rs", "hole"> as "a" class "rs" count "4"
+    %s2 = oir.write %s1, %r#1 : <"rs", "hole"> as "b" class "rs"
+    oir.end_stream %s2
+    oir.finish %sp
+  }
+}
+
+// -----
+
+// A handle is one state, never a vector of them.
+oir.artifact "counted-handle-result" id "0000000000000000000000000000000000000000000000000000000000000000" source "sha256:0000000000000000000000000000000000000000000000000000000000000000" endpoint "prover_skeleton" {
+  oir.program attributes {witness_labels = [["w", "sigma-witness"]], counterparty = []} {
+  ^bb0(%w: !oir.handle<"sigma-witness">, %proof: !oir.stream):
+    %sp = oir.transcript_init sponge "toy_duplex" iv "artifact-id"
+    // expected-error @below {{[zkc-E149] only a value result may be counted; result 1 is not a value}}
+    %r:2 = oir.hole_call "open" kind "open" digest "sha256:0000000000000000000000000000000000000000000000000000000000000000"(%w : !oir.handle<"sigma-witness">) -> !oir.val<"rs", "hole">, !oir.handle<"sigma-witness"> result_counts ["4", "2"]
+    %spent = oir.hole_call "spend" kind "evaluate" digest "sha256:0000000000000000000000000000000000000000000000000000000000000000"(%r#1 : !oir.handle<"sigma-witness">) -> !oir.val<"rs", "hole">
+    %s1 = oir.write %proof, %r#0 : <"rs", "hole"> as "a" class "rs" count "4"
+    %s2 = oir.write %s1, %spent : <"rs", "hole"> as "b" class "rs"
+    oir.end_stream %s2
+    oir.finish %sp
+  }
+}
+
