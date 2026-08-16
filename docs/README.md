@@ -35,6 +35,7 @@ The current specification corpus is:
 - [Soundness Kernel](spec/soundness.md)
 - [Compiler Core](spec/compiler.md)
 - [Vocabularies](spec/vocabularies.md)
+- [Relations](spec/relations.md)
 - [Boundaries](spec/boundaries.md)
 - [Endpoints](spec/endpoints.md)
 - [Carrier](spec/carrier.md)
