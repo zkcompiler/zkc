@@ -48,6 +48,12 @@
   },
   "sha256:5a52a364ef195c917b8d008a88826933df580c4555aebe945bb3566928029a1e": {
    "impl": "p3_fri_answer"
+  },
+  "sha256:ccf615f59a96a687b8209a2c3f38ddb59378a4f1abd6323c4546a721d61e4de0": {
+   "impl": "p3_fri_answer"
+  },
+  "sha256:ea063c3e758773bc94d5917528eae4c50826851d0d0c210a58172fae4a68514e": {
+   "impl": "p3_fri_answer"
   }
  },
  "digests": {
@@ -62,6 +68,12 @@
    "impl": "p3_merkle_multi_opening"
   },
   "sha256:1f2e6480d08a8fe079baf380f2532d2127770b4c17d6bf526f4eeb365b25474c": {
+   "impl": "p3_fri_query_consistency"
+  },
+  "sha256:46f67c9b6e37f6f5c1547ff5901f9533cf6615b0a3fa7a07f60f6f5788512d09": {
+   "impl": "p3_merkle_multi_opening"
+  },
+  "sha256:effdae9dd4172bc428d788932e22a297b0b77671cffc45e57b5c51c5e5a610ba": {
    "impl": "p3_fri_query_consistency"
   }
  }

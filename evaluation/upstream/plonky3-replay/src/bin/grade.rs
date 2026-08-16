@@ -25,7 +25,7 @@ use p3_symmetric::{Hash, MerkleCap};
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use zkc_plonky3_replay::{
-    fri_parameters, ChallengeMmcs, Compress, Dft, FieldHash, Pcs, PlainChallenger, Val, ValMmcs,
+    fri_parameters_for, ChallengeMmcs, Compress, Dft, FieldHash, Pcs, PlainChallenger, Val, ValMmcs,
 };
 
 type Challenge = BinomialExtensionField<Val, 4>;
@@ -278,7 +278,11 @@ fn main() {
     let compress = Compress::new(perm.clone());
     let val_mmcs = ValMmcs::new(hash, compress, 0);
     let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let pcs = Pcs::new(Dft::default(), val_mmcs, fri_parameters(challenge_mmcs));
+    let pcs = Pcs::new(
+        Dft::default(),
+        val_mmcs,
+        fri_parameters_for(challenge_mmcs, queries, grind_bits),
+    );
     let domain =
         <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(&pcs, 1 << log_size);
     let mut verifier_challenger = PlainChallenger::new(perm);

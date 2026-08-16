@@ -224,6 +224,13 @@ pub struct HoleSignature {
     pub params: &'static [&'static str],
     pub inputs: &'static [Operand],
     pub results: &'static [Operand],
+    /// A repeating result tail: the row's results must be `results`
+    /// followed by one or more repetitions of this group, and the fill
+    /// returns the repetitions as one `Vec` of tuples — how a fill
+    /// whose result arity is the instance's (one group per fold round)
+    /// keeps a single Rust signature. Empty for every fixed-arity
+    /// fill.
+    pub results_repeat: &'static [Operand],
 }
 
 /// The executable fills for hole contracts, selected by the contract's
@@ -327,21 +334,25 @@ impl HoleImpl {
                 params: &[],
                 inputs: TAKES,
                 results: TAKES,
+                results_repeat: &[],
             },
             HoleImpl::ToySigmaResponse | HoleImpl::ToySigmaResponseCheat => HoleSignature {
                 params: &[],
                 inputs: TAKES,
                 results: &[Operand::Value(ImplKind::ToyBe8)],
+                results_repeat: &[],
             },
             HoleImpl::ToyPowSearch => HoleSignature {
                 params: &[],
                 inputs: &[Operand::Sponge],
                 results: &[Operand::Value(ImplKind::ToyBe8), Operand::Sponge],
+                results_repeat: &[],
             },
             HoleImpl::P3PowSearch => HoleSignature {
                 params: &[],
                 inputs: &[Operand::Sponge],
                 results: &[Operand::Value(ImplKind::P3Word), Operand::Sponge],
+                results_repeat: &[],
             },
             HoleImpl::P3FriOpenval => HoleSignature {
                 // The family shape: the rate expansion and the final
@@ -357,6 +368,7 @@ impl HoleImpl {
                     Operand::Value(ImplKind::P3Ext4),
                     Operand::Handle("fri-codeword"),
                 ],
+                results_repeat: &[],
             },
             HoleImpl::P3FriReduce => HoleSignature {
                 params: &[],
@@ -365,6 +377,7 @@ impl HoleImpl {
                     Operand::Handle("fri-codeword"),
                 ],
                 results: &[Operand::Handle("fri-codeword")],
+                results_repeat: &[],
             },
             HoleImpl::P3FriCommit => HoleSignature {
                 params: &[],
@@ -373,6 +386,7 @@ impl HoleImpl {
                     Operand::Value(ImplKind::P3Digest8),
                     Operand::Handle("fri-codeword"),
                 ],
+                results_repeat: &[],
             },
             HoleImpl::P3FriFold => HoleSignature {
                 params: &[],
@@ -381,6 +395,7 @@ impl HoleImpl {
                     Operand::Handle("fri-codeword"),
                 ],
                 results: &[Operand::Handle("fri-codeword")],
+                results_repeat: &[],
             },
             HoleImpl::P3FriFinal => HoleSignature {
                 params: &[],
@@ -389,12 +404,14 @@ impl HoleImpl {
                     Operand::Value(ImplKind::P3Ext4),
                     Operand::Handle("fri-codeword"),
                 ],
+                results_repeat: &[],
             },
             HoleImpl::P3FriAnswer => HoleSignature {
-                // The k = 3 instance the in-tree family seals: leaves,
-                // input paths, then per round one sibling vector and
-                // one path vector, in wire order. The counts live in
-                // the contract digest; the fill validates them.
+                // Leaves and input paths, then one (siblings, paths)
+                // group per fold round, in wire order — the repeating
+                // tail is how one fill serves every fold depth; the
+                // counts live in the contract digest and the fill
+                // validates them.
                 params: &[],
                 inputs: &[
                     Operand::VectorValue(ImplKind::P3Word),
@@ -404,10 +421,8 @@ impl HoleImpl {
                 results: &[
                     Operand::VectorValue(ImplKind::P3Word),
                     Operand::VectorValue(ImplKind::P3Digest8),
-                    Operand::VectorValue(ImplKind::P3Ext4),
-                    Operand::VectorValue(ImplKind::P3Digest8),
-                    Operand::VectorValue(ImplKind::P3Ext4),
-                    Operand::VectorValue(ImplKind::P3Digest8),
+                ],
+                results_repeat: &[
                     Operand::VectorValue(ImplKind::P3Ext4),
                     Operand::VectorValue(ImplKind::P3Digest8),
                 ],

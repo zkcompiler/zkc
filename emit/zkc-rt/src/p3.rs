@@ -612,9 +612,10 @@ pub fn fri_final(mut codeword: Codeword) -> Result<([u32; 4], Codeword), String>
 /// sampled indices. Results ride in wire order — the input leaves, the
 /// input paths, then per round one sibling vector and one path vector —
 /// and a witness whose input-tree root is not the statement's f_root is
-/// refused by name, before any opening reaches the wire. This fill
-/// realizes the three-round contract the in-tree family seals; its
-/// digest pins that shape.
+/// refused by name, before any opening reaches the wire. The fold
+/// depth is the handle's own (one round tree per fold), so one fill
+/// serves every instance of the family; the contract digest pins the
+/// counts the schedule writes.
 #[allow(clippy::type_complexity)]
 pub fn fri_answer(
     indices: Vec<u32>,
@@ -624,12 +625,7 @@ pub fn fri_answer(
     (
         Vec<u32>,
         Vec<[u32; 8]>,
-        Vec<[u32; 4]>,
-        Vec<[u32; 8]>,
-        Vec<[u32; 4]>,
-        Vec<[u32; 8]>,
-        Vec<[u32; 4]>,
-        Vec<[u32; 8]>,
+        Vec<(Vec<[u32; 4]>, Vec<[u32; 8]>)>,
     ),
     String,
 > {
@@ -639,12 +635,8 @@ pub fn fri_answer(
     if codeword.trace_extension.is_empty() {
         return Err("the answer fill's handle carries no extension".to_owned());
     }
-    if codeword.round_trees.len() != 3 {
-        return Err(format!(
-            "this answer fill realizes the three-round contract; the handle holds {} round \
-             tree(s)",
-            codeword.round_trees.len()
-        ));
+    if codeword.round_trees.is_empty() {
+        return Err("the answer fill's handle carries no round trees".to_owned());
     }
     // The input tree, rebuilt transiently from the owned extension —
     // determinism makes it the committed tree exactly when the witness
@@ -659,8 +651,8 @@ pub fn fri_answer(
     }
     let mut leaves = Vec::with_capacity(indices.len());
     let mut input_paths = Vec::new();
-    let mut siblings: [Vec<[u32; 4]>; 3] = [Vec::new(), Vec::new(), Vec::new()];
-    let mut round_paths: [Vec<[u32; 8]>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    let mut rounds: Vec<(Vec<[u32; 4]>, Vec<[u32; 8]>)> =
+        vec![(Vec::new(), Vec::new()); codeword.round_trees.len()];
     for &index in &indices {
         let index = index as usize;
         if index >= (1 << log_height) {
@@ -689,16 +681,14 @@ pub fn fri_answer(
             if row.len() != 2 {
                 return Err("a round tree row is not an adjacent conjugate pair".to_owned());
             }
-            siblings[round].push(words_from_ext(row[(current & 1) ^ 1]));
+            rounds[round].0.push(words_from_ext(row[(current & 1) ^ 1]));
             for digest in &opening.opening_proof {
-                round_paths[round].push(words_from_digest(digest));
+                rounds[round].1.push(words_from_digest(digest));
             }
             current = group;
         }
     }
-    let [sib1, sib2, sib3] = siblings;
-    let [path1, path2, path3] = round_paths;
-    Ok((leaves, input_paths, sib1, path1, sib2, path2, sib3, path3))
+    Ok((leaves, input_paths, rounds))
 }
 
 /// The emitted verifier's input-layer Merkle multi-opening
@@ -1058,13 +1048,19 @@ mod tests {
         // reduced with — deliberately: one matrix at one point weighs
         // its single term by alpha's zeroth power, so alpha is inert
         // here, and passing a different one pins that fact.
-        let (leaves, ipaths, sib1, path1, sib2, path2, sib3, path3) =
-            fri_answer(indices.clone(), f_root, answered).unwrap();
+        let (leaves, ipaths, rounds) = fri_answer(indices.clone(), f_root, answered).unwrap();
         assert!(merkle_multi_opening_accepts(
             &f_root, &indices, &leaves, &ipaths
         ));
-        let siblings: Vec<[u32; 4]> = [sib1, sib2, sib3].concat();
-        let round_paths: Vec<[u32; 8]> = [path1, path2, path3].concat();
+        assert_eq!(rounds.len(), 3);
+        let siblings: Vec<[u32; 4]> = rounds
+            .iter()
+            .flat_map(|(siblings, _)| siblings.clone())
+            .collect();
+        let round_paths: Vec<[u32; 8]> = rounds
+            .iter()
+            .flat_map(|(_, paths)| paths.clone())
+            .collect();
         assert!(fri_query_consistency_accepts(
             1,
             0,

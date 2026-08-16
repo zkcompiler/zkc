@@ -32,6 +32,7 @@ use p3_util::reverse_slice_index_bits;
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use zkc_plonky3_replay::{
+    fri_parameters_for,
     ChallengeMmcs, Compress, Dft, Event, FieldHash, Pcs, PlainChallenger, RecordingChallenger, Val,
     ValMmcs, fri_parameters,
 };
@@ -149,7 +150,28 @@ fn main() {
     // commit-phase trees with the same schemes and opens them.
     let opener_val_mmcs = val_mmcs.clone();
     let opener_challenge_mmcs = challenge_mmcs.clone();
-    let pcs = Pcs::new(Dft::default(), val_mmcs, fri_parameters(challenge_mmcs));
+    let queries: usize = rows
+        .iter()
+        .find(|row| row[0] == "squeeze" && row[2] == "query")
+        .and_then(|row| row[4].as_str())
+        .and_then(|text| text.parse().ok())
+        .unwrap_or_else(|| fail("no counted query squeeze"));
+    let doc_grind_bits = {
+        let row = rows
+            .iter()
+            .find(|row| row[0] == "squeeze" && row[2] == "pow")
+            .unwrap_or_else(|| fail("no pow squeeze"));
+        let space: u128 = row[7]
+            .as_str()
+            .and_then(|text| text.parse().ok())
+            .unwrap_or_else(|| fail("pow space is not decimal"));
+        space.trailing_zeros() as usize
+    };
+    let pcs = Pcs::new(
+        Dft::default(),
+        val_mmcs,
+        fri_parameters_for(challenge_mmcs, queries, doc_grind_bits),
+    );
 
     // The instance shape, read from the document's own rows — the
     // runner grades whatever the family sealed, not one fixture: the
