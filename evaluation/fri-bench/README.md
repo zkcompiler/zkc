@@ -8,8 +8,10 @@ the deterministic half of the gate is test/Emit/emit-fri-scale.test,
 which runs the whole pipeline at the ci-mid instance and holds the
 emitted wire to byte equality before the upstream judge grades it.
 
-Usage: python3 gen.py (emits the instance-A prover crate under
-generated/), then cargo bench (wall clock) and cargo run --release
-(allocation totals). p3-maybe-rayon's parallel feature stays off in
+Usage: python3 gen.py [instance.json] (defaults to instance-a.json;
+emits the instance's prover crate, its golden wire, and generated/
+shape.rs — the one statement of the shape both Rust legs include),
+then cargo bench (wall clock) and cargo run --release (allocation
+totals). p3-maybe-rayon's parallel feature stays off in
 this graph so both grinds are serial ascending scans; enabling it on
 either side would measure different work and break wire determinism.
