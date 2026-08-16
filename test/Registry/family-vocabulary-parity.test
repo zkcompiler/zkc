@@ -1,0 +1,13 @@
+# REQUIRES: uv
+# The family-emitted vocabulary crosses the cross-implementation gate:
+# both parsers load the value-faithful family's own vocabulary — the
+# minted predicate specs with their fail-closed digest keys, the
+# instance-baked check contracts, the counted attachment kinds — and
+# re-emit it canonically, byte for byte. Until this gate, the generated
+# vocabulary's refusal surface sealed on the C++ leg alone.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-registry-lint %t/vocab.json > %t/vocab.zkc
+# RUN: %uv python -m oracle.parity vocabulary-file %t/vocab.json > %t/vocab.oracle
+# RUN: diff %t/vocab.zkc %t/vocab.oracle

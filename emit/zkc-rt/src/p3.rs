@@ -621,14 +621,7 @@ pub fn fri_answer(
     indices: Vec<u32>,
     f_root: [u32; 8],
     mut codeword: Codeword,
-) -> Result<
-    (
-        Vec<u32>,
-        Vec<[u32; 8]>,
-        Vec<(Vec<[u32; 4]>, Vec<[u32; 8]>)>,
-    ),
-    String,
-> {
+) -> Result<(Vec<u32>, Vec<[u32; 8]>, Vec<(Vec<[u32; 4]>, Vec<[u32; 8]>)>), String> {
     if !matches!(take_stage(&mut codeword), Stage::Final) {
         return Err("the answer fill consumes the final fill's handle".to_owned());
     }
@@ -1057,10 +1050,8 @@ mod tests {
             .iter()
             .flat_map(|(siblings, _)| siblings.clone())
             .collect();
-        let round_paths: Vec<[u32; 8]> = rounds
-            .iter()
-            .flat_map(|(_, paths)| paths.clone())
-            .collect();
+        let round_paths: Vec<[u32; 8]> =
+            rounds.iter().flat_map(|(_, paths)| paths.clone()).collect();
         assert!(fri_query_consistency_accepts(
             1,
             0,

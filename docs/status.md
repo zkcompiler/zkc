@@ -38,9 +38,15 @@ width-two, depth-three fixture; FRI to the parameterized generator and pinned
 Plonky3 fixture — commit phase, grinding, and the query phase: sampled
 indices, opened rows and authentication paths on the wire unabsorbed, the
 input-layer Merkle multi-opening and the fold-consistency checks executed
-natively and in emitted crates, and query answering derived on the prover
-from the retained trees; R1CS → Sumcheck treats the relation artifact as
-opaque.
+natively and in emitted crates, query answering derived on the prover from
+the retained trees, the emitted wire graded by the pinned upstream verifier
+through the decoding judge, a deterministic scale gate at fold depth 13, and
+recorded generation-versus-upstream benchmark evidence
+(evaluation/fri-bench); the sealed judgment states the query binding through
+counted and positional attachments, and soundness prices both a conjectured
+mode (the corrected random-words row) and a proven above-Johnson mode (the
+threshold-halving row, its unvetted standing carried by the obligations
+ledger); R1CS → Sumcheck treats the relation artifact as opaque.
 Soundness cells denote conditional judgments under declared assumptions. They
 are distinct from execution evidence and formal proof.
 
@@ -54,7 +60,7 @@ read; this table says which, so a claim can be checked rather than taken.
 | Sumcheck | [`test/Encoding/sumcheck-fs.mlir`](../test/Encoding/sumcheck-fs.mlir), [`test/Oir/sumcheck-exec.test`](../test/Oir/sumcheck-exec.test), [`test/Soundness/derive-witness.test`](../test/Soundness/derive-witness.test), [`test/Emit/emit-sigma-family.test`](../test/Emit/emit-sigma-family.test) |
 | GKR | [`test/Evidence/gkr-width2-depth3-parity.test`](../test/Evidence/gkr-width2-depth3-parity.test), [`test/Evidence/gkr-width2-stress.test`](../test/Evidence/gkr-width2-stress.test) |
 | KZG openings / batching | [`test/Encoding/kzg-before.mlir`](../test/Encoding/kzg-before.mlir), [`test/Transforms/pir-batch-open.mlir`](../test/Transforms/pir-batch-open.mlir), [`test/Compiler/kzg-batch-core.mlir`](../test/Compiler/kzg-batch-core.mlir), [`test/Soundness/soundness-kzg-preservation.mlir`](../test/Soundness/soundness-kzg-preservation.mlir), [`test/Emit/emit-kzg-batching.test`](../test/Emit/emit-kzg-batching.test) |
-| FRI | [`test/Family/fri-family.test`](../test/Family/fri-family.test), [`test/Oir/plonky3-fri-exec.test`](../test/Oir/plonky3-fri-exec.test), [`test/Evidence/plonky3-replay.test`](../test/Evidence/plonky3-replay.test), [`test/Soundness/grinding-over-fri.test`](../test/Soundness/grinding-over-fri.test), [`test/Emit/emit-plonky3-fri.test`](../test/Emit/emit-plonky3-fri.test), [`test/Emit/emit-plonky3-real-fill.test`](../test/Emit/emit-plonky3-real-fill.test), [`test/Emit/emit-fri-prover.test`](../test/Emit/emit-fri-prover.test) |
+| FRI | [`test/Family/fri-family.test`](../test/Family/fri-family.test), [`test/Oir/plonky3-fri-exec.test`](../test/Oir/plonky3-fri-exec.test), [`test/Evidence/plonky3-replay.test`](../test/Evidence/plonky3-replay.test), [`test/Soundness/grinding-over-fri.test`](../test/Soundness/grinding-over-fri.test), [`test/Soundness/fri-pricing-modes.test`](../test/Soundness/fri-pricing-modes.test), [`test/Emit/emit-plonky3-fri.test`](../test/Emit/emit-plonky3-fri.test), [`test/Emit/emit-plonky3-real-fill.test`](../test/Emit/emit-plonky3-real-fill.test), [`test/Emit/emit-fri-prover.test`](../test/Emit/emit-fri-prover.test), [`test/Emit/emit-fri-scale.test`](../test/Emit/emit-fri-scale.test), [`test/Registry/family-vocabulary-parity.test`](../test/Registry/family-vocabulary-parity.test) |
 | R1CS → Sumcheck | [`test/Soundness/r1cs-entry.test`](../test/Soundness/r1cs-entry.test) |
 
 A dash means no test executes that half. It is not a statement that the path

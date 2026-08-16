@@ -1687,10 +1687,7 @@ impl<'a> Walk<'a> {
                 ),
             );
             self.line(1, "};");
-            self.line(
-                1,
-                &format!("if {groups_name}.len() != {repetitions} {{"),
-            );
+            self.line(1, &format!("if {groups_name}.len() != {repetitions} {{"));
             self.line(
                 2,
                 &Self::refuse(
