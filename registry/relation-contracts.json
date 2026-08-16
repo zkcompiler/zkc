@@ -1,0 +1,74 @@
+{
+  "contracts": {
+    "plonky3.fri.value-faithful": {
+      "claim_profile": "opaque_relation",
+      "format": "opaque",
+      "identity": {
+        "attested_id": "plonky3.fri.value-faithful",
+        "attestor": "zkc.family-generator"
+      },
+      "instance_anchors": [
+        "statement"
+      ],
+      "instance_encoding": {
+        "arity": 1,
+        "field_order": "2013265921",
+        "kind": "field_vector"
+      },
+      "relation_anchors": {
+        "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "statement_correspondence": [
+        {
+          "label": "f_root",
+          "slot": 0
+        }
+      ],
+      "witness_ports": {
+        "kind": "opaque",
+        "port": "codeword"
+      }
+    },
+    "toy.r1cs.entry": {
+      "claim_profile": "r1cs",
+      "format": "r1cs-bin-v1",
+      "identity": {
+        "attested_id": "toy.r1cs.entry",
+        "attestor": "zkc.test-fixture"
+      },
+      "instance_anchors": [
+        "public"
+      ],
+      "instance_encoding": {
+        "arity": 2,
+        "field_order": "2305843009213693951",
+        "kind": "field_vector"
+      },
+      "relation_anchors": {
+        "a": "sha256:6f7a1f3cbca32bf858d859646653a2d98e391f519150223e3222da84dec07e8b",
+        "b": "sha256:abb35bd25c2c9ce6fd7fcc4fe346743fbdbf56b5c35bdd3284f385fd99a04107",
+        "c": "sha256:e8497146da914e320456166bd1f69a74ec8b59fd91e2d63e3a8d480fd004bc14"
+      },
+      "statement_correspondence": [
+        {
+          "label": "x",
+          "slot": 0
+        },
+        {
+          "label": "cs",
+          "slot": 1
+        }
+      ],
+      "witness_ports": {
+        "kind": "enumerated",
+        "ports": [
+          {
+            "count": 8,
+            "name": "assignment"
+          }
+        ]
+      }
+    }
+  },
+  "registry": "zkc.relation_contract"
+}
