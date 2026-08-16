@@ -1,10 +1,12 @@
 """Build a zkc-run vectors file from the backend runner's run record.
 
 The positive vector carries the runner's statement, wire, and challenge
-stream verbatim, expecting acceptance; the corrupt-nonce vector flips
-the wire's final byte so the executor's grinding check must refuse with
-a verdict (expected challenges are deliberately empty there — the
-corrupted stream is not predicted, only its reject class is).
+stream verbatim, expecting acceptance. The corrupt-nonce vector flips
+the nonce word's low byte so the grinding check must refuse; the
+corrupt-path vector flips a byte inside an input authentication path so
+the Merkle multi-opening check must refuse (expected challenges are
+deliberately empty there — the corrupted stream is not predicted, only
+its reject class is).
 
 The `prover` mode builds the prover-endpoint corpus instead: the same
 statement and stream, the runner's fixed witness trace as the payload
@@ -61,8 +63,16 @@ def main() -> None:
             indent=1,
         )
         return
-    if mode not in {"accept", "corrupt-nonce"}:
+    if mode not in {"accept", "corrupt-nonce", "corrupt-path"}:
         raise SystemExit(f"unknown mode {mode!r}")
+
+    def flip(at: int) -> str:
+        return (
+            wire[: 2 * at]
+            + format(int(wire[2 * at : 2 * at + 2], 16) ^ 0x01, "02x")
+            + wire[2 * at + 2 :]
+        )
+
     if mode == "accept":
         vector = {
             "name": "runner-round-trip",
@@ -71,12 +81,25 @@ def main() -> None:
             "expect": "accept",
             "challenges": challenges,
         }
-    else:
-        flipped = wire[:-2] + format(int(wire[-2:], 16) ^ 0x01, "02x")
+    elif mode == "corrupt-nonce":
+        # The nonce's own low byte: after the opened value (16), three
+        # round roots (96), and the final coefficient (16), the nonce is
+        # bytes 128..132 — the grinding check must refuse.
         vector = {
             "name": "corrupted-nonce",
             "statement": {"f_root": statement},
-            "proof": flipped,
+            "proof": flip(131),
+            "expect": "check_failure",
+            "challenges": [],
+        }
+    else:
+        # One byte inside the first input authentication path (the
+        # openings start at 132: four query leaves, then the paths) —
+        # the Merkle multi-opening check must refuse.
+        vector = {
+            "name": "corrupted-path",
+            "statement": {"f_root": statement},
+            "proof": flip(148),
             "expect": "check_failure",
             "challenges": [],
         }

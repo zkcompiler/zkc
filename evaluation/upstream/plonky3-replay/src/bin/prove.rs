@@ -17,10 +17,18 @@ use std::fs;
 
 use p3_baby_bear::default_babybear_poseidon2_16;
 use p3_challenger::{CanObserve, FieldChallenger};
-use p3_commit::Pcs as PcsTrait;
-use p3_field::PrimeCharacteristicRing;
+use p3_commit::{Mmcs, Pcs as PcsTrait};
+use p3_dft::TwoAdicSubgroupDft;
+use p3_field::coset::TwoAdicMultiplicativeCoset;
 use p3_field::extension::BinomialExtensionField;
+use p3_field::{
+    batch_multiplicative_inverse, BasedVectorSpace, Field, PrimeCharacteristicRing, PrimeField32,
+};
+use p3_fri::{FriFoldingStrategy, TwoAdicFriFolding};
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::RowMajorMatrix;
+use p3_matrix::Matrix;
+use p3_util::reverse_slice_index_bits;
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use zkc_plonky3_replay::{
@@ -137,6 +145,10 @@ fn main() {
     let compress = Compress::new(perm.clone());
     let val_mmcs = ValMmcs::new(hash, compress, 0);
     let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
+    // The opener's own copies: query answering below rebuilds the
+    // commit-phase trees with the same schemes and opens them.
+    let opener_val_mmcs = val_mmcs.clone();
+    let opener_challenge_mmcs = challenge_mmcs.clone();
     let pcs = Pcs::new(Dft::default(), val_mmcs, fri_parameters(challenge_mmcs));
 
     // One deterministic polynomial: the witness channel is the caller's,
@@ -194,11 +206,16 @@ fn main() {
     let mut absorbed: std::collections::HashMap<String, Vec<u32>> =
         std::collections::HashMap::new();
     let mut challenges: Vec<String> = Vec::new();
+    // The typed samples, in schedule order: the query answering below
+    // refolds with exactly the challenges the transcript produced.
+    let mut ext_samples: Vec<Challenge> = Vec::new();
+    let mut query_indices: Vec<u32> = Vec::new();
     let mut correspondence = 0usize;
     for (index, row) in rows.iter().enumerate() {
         let tag = row[0].as_str().unwrap();
         match tag {
-            "init" | "const" | "hole_call" | "end_stream" | "finish" | "write" => {}
+            "init" | "const" | "hole_call" | "end_stream" | "finish" | "write"
+            | "write_vec" => {}
             "absorb" => {
                 let value_ref = row[2].to_string();
                 let class = class_of(&row[2], rows, statement_labels.len(), witness_labels);
@@ -283,6 +300,9 @@ fn main() {
                                 "row {index}: expected an extension sample, saw {other:?}"
                             )),
                         }
+                        ext_samples.push(Challenge::from_basis_coefficients_fn(|i| {
+                            Val::from_u32(words[i])
+                        }));
                         challenges.push(packed_decimal(&words));
                     }
                     ("pow_value", "1") => {
@@ -302,6 +322,7 @@ fn main() {
                                     if draw > 0 {
                                         entry.push('|');
                                     }
+                                    query_indices.push(*value as u32);
                                     entry.push_str(&value.to_string());
                                 }
                                 other => fail(&format!(
@@ -330,16 +351,129 @@ challenger events ({noop_pows} zero-bit commit pows enumerated as no-ops)",
         events.len()
     );
 
+    // ----- The query openings: upstream's proof carries pruned
+    // multiproofs, whose digest counts depend on which subtrees the
+    // sampled indices share; zkc's canonical wire carries per-query
+    // independent paths instead (statically counted rows). The runner
+    // therefore rebuilds the commit-phase trees with the same schemes
+    // and challenges, requires every rebuilt root to equal the proof's
+    // own commitment — Merkle binding makes the trees upstream's — and
+    // opens full paths from them. -----
+    if ext_samples.len() < 5 {
+        fail("the schedule sampled fewer extension values than the chain uses");
+    }
+    let opener_dft = Dft::default();
+    let lde = opener_dft
+        .coset_lde_batch(
+            RowMajorMatrix::<Val>::new((1..=1u32 << log_size).map(Val::from_u32).collect(), 1),
+            1,
+            Val::GENERATOR,
+        )
+        .bit_reverse_rows()
+        .to_row_major_matrix();
+    let (rebuilt_commit, input_tree) = opener_val_mmcs.commit_matrix(lde.clone());
+    if rebuilt_commit != commitment {
+        fail("the rebuilt input tree does not carry the committed root");
+    }
+    let log_lde_height = log_size + 1;
+    let coset = TwoAdicMultiplicativeCoset::new(Val::GENERATOR, log_lde_height)
+        .unwrap_or_else(|| fail("the evaluation domain is not two-adic"));
+    let mut points: Vec<Val> = coset.iter().collect();
+    reverse_slice_index_bits(&mut points);
+    let zeta_value = ext_samples[0];
+    let opened_at_zeta = opened_values[0][0][0][0];
+    let inv_denoms = batch_multiplicative_inverse(
+        &points
+            .iter()
+            .map(|&x| zeta_value - x)
+            .collect::<Vec<Challenge>>(),
+    );
+    let mut current: Vec<Challenge> = lde
+        .values
+        .iter()
+        .zip(&inv_denoms)
+        .map(|(&value, &inv)| (opened_at_zeta - Challenge::from(value)) * inv)
+        .collect();
+    let folding = TwoAdicFriFolding::<(), ()>(std::marker::PhantomData);
+    let mut round_trees = Vec::new();
+    for (round, &beta) in ext_samples[2..5].iter().enumerate() {
+        let (cap, tree) = opener_challenge_mmcs.commit_matrix(RowMajorMatrix::new(current, 2));
+        if cap != opening_proof.commit_phase_commits[round] {
+            fail("a rebuilt round tree does not carry the committed root");
+        }
+        let leaves = *opener_challenge_mmcs
+            .get_matrices(&tree)
+            .first()
+            .unwrap_or_else(|| fail("a rebuilt round tree holds no matrix"));
+        current = <TwoAdicFriFolding<(), ()> as FriFoldingStrategy<Val, Challenge>>::fold_matrix(
+            &folding,
+            beta,
+            1,
+            leaves.as_view(),
+        );
+        round_trees.push(tree);
+    }
+    let digest_words = |digest: &[Val; 8]| -> Vec<u32> {
+        digest.iter().map(|element| element.as_canonical_u32()).collect()
+    };
+    let mut leaves_words: Vec<u32> = Vec::new();
+    let mut input_path_words: Vec<Vec<u32>> = Vec::new();
+    let mut sibling_words: Vec<Vec<u32>> = vec![Vec::new(); round_trees.len()];
+    let mut round_path_words: Vec<Vec<u32>> = vec![Vec::new(); round_trees.len()];
+    for &index in &query_indices {
+        let index = index as usize;
+        let opening = opener_val_mmcs.open_batch(index, &input_tree);
+        leaves_words.push(opening.opened_values[0][0].as_canonical_u32());
+        for digest in &opening.opening_proof {
+            input_path_words.push(digest_words(digest));
+        }
+        let mut current_index = index;
+        for (round, tree) in round_trees.iter().enumerate() {
+            let group = current_index >> 1;
+            let opening = opener_challenge_mmcs.open_batch(group, tree);
+            let row = &opening.opened_values[0];
+            let sibling = row[(current_index & 1) ^ 1];
+            let coordinates: &[Val] = sibling.as_basis_coefficients_slice();
+            sibling_words[round]
+                .extend(coordinates.iter().map(|element| element.as_canonical_u32()));
+            for digest in &opening.opening_proof {
+                round_path_words[round].extend(digest_words(digest));
+            }
+            current_index = group;
+        }
+    }
+    // Keyed by the answer hole's result references, exactly as absorbed
+    // values are keyed by theirs.
+    let answer_row = rows
+        .iter()
+        .position(|row| row[0] == "hole_call" && row[4] == "open")
+        .unwrap_or_else(|| fail("the prover schedule has no answer hole"));
+    let mut openings: std::collections::HashMap<String, Vec<u32>> =
+        std::collections::HashMap::new();
+    let mut answer_results: Vec<Vec<u32>> = Vec::new();
+    answer_results.push(leaves_words);
+    answer_results.push(input_path_words.concat());
+    for round in 0..round_trees.len() {
+        answer_results.push(sibling_words[round].clone());
+        answer_results.push(round_path_words[round].clone());
+    }
+    for (slot, words) in answer_results.into_iter().enumerate() {
+        openings.insert(format!("[\"r\",{answer_row},{slot}]"), words);
+    }
+
     // ----- The spine wire: the write rows, in order, each value the
-    // one its reference absorbed, canonical by codec width. -----
+    // one its reference absorbed or the openings above, canonical by
+    // codec width. -----
     let mut wire = Vec::new();
     for row in rows {
-        if row[0] != "write" {
+        if row[0] != "write" && row[0] != "write_vec" {
             continue;
         }
+        let reference = row[2].to_string();
         let words = absorbed
-            .get(&row[2].to_string())
-            .unwrap_or_else(|| fail("a written value was never absorbed"));
+            .get(&reference)
+            .or_else(|| openings.get(&reference))
+            .unwrap_or_else(|| fail("a written value was never absorbed nor opened"));
         for &word in words {
             push_word_be(&mut wire, word);
         }

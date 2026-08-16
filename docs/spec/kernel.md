@@ -617,9 +617,12 @@ derivation under §9's boundary, never a structural default:
   (e ∉ A): the verifier reads it without binding it into the
   transcript. Default: an unabsorbed slot MUST NOT precede any
   challenge event in ≤ (the generalized Frozen-Heart condition; v0's
-  E212). Canonical relaxation instance: FRI Merkle authentication
-  paths, bound through the absorbed root — the rule admitting the
-  relaxation cites the binding argument (`soundness.md`).
+  E212). In the canonical transcript order the default already covers
+  FRI's query openings — authentication paths follow every challenge,
+  bound through the absorbed roots, so no relaxation is spent on them.
+  The relaxation instance exists for a protocol that streams openings
+  earlier: the rule admitting it cites the binding argument
+  (`soundness.md`).
 - **Statement binding.** A spine carries a **segment
   decomposition** — contiguous runs of E in ≤ order; a standalone
   protocol is one segment, and link concatenates its operands'

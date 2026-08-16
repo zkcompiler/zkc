@@ -467,7 +467,9 @@ covers no obligation.
 ["absorb",      sponge, value, src]
 ["squeeze",     sponge, label, payload_class, count, domain, rule, space, src]
 ["read",        stream, label, payload_class, src]
+["read_vec",    stream, label, payload_class, count, src]
 ["write",       stream, value, label, payload_class, src]
+["write_vec",   stream, value, label, payload_class, count, src]
 ["const",       value, payload_class, src]
 ["f_neg",       operand, src]
 ["f_add",       lhs, rhs, src]
@@ -485,10 +487,19 @@ covers no obligation.
 ```
 
 `count` and `space` are canonical decimal strings; `count` is `"1"` for a
-scalar and `2..2^20` for a vector. A `hole_call`'s `results` are typed the
-way `entry` elements are, `operands` are references, and `params` /
-`semantic_params` are the cited contract's static and semantic bindings in
-that contract's own name order. `check_call`'s `semantic_args` is the
+scalar and `2..2^20` for a vector. The counted stream families carry
+`count` of at least 2 — a scalar keeps its own family, so the scalar
+encodings never move — and decode or encode that many elements of the
+payload class at its fixed width, in order: the schedule is the only
+width authority, and the wire carries no length framing. The whole
+vector is one value, exactly as a vector squeeze's whole sample is; a
+count-n value fills n units of a check contract's operand segmentation
+and never splits across two segments. A `hole_call`'s `results` are
+typed the way `entry` elements are, with a counted result carrying its
+count as a third element (`["val", class, count]` — the scalar form is
+unchanged); `operands` are references, and `params` / `semantic_params`
+are the cited contract's static and semantic bindings in that
+contract's own name order. `check_call`'s `semantic_args` is the
 role-sorted list of semantic argument references.
 
 The verifier frame ends `expect_end` then `decide`; the prover frame ends
@@ -593,10 +604,15 @@ that reaches canonical encoding is held to the encoding domain.
 
 Realization boundaries:
 **variable-length codec framing** — every committed codec has a fixed wire
-width. A future variable-length class that is absorbed needs explicit length
-framing whose injectivity joins the Binding Lemma's a-leg; one that is only
-read — an unabsorbed slot under `kernel.md` §5.3's default — owes unambiguous
-decoding and no transcript obligation;
+width, and counted rows carry statically declared multiplicity over it, so
+every minted wire layout is a constant of its protocol instance. A width not
+statically declared must be computable from transcript state strictly before
+the read — no surveyed opening shape needs more, and none is minted. A future
+variable-length class that is absorbed needs explicit length framing whose
+injectivity joins the Binding Lemma's a-leg; one that is only read — an
+unabsorbed slot under `kernel.md` §5.3's default — owes unambiguous decoding
+and no transcript obligation, which counted unabsorbed rows discharge by
+construction;
 **profile-scoped value models** — an execution profile defines the value
 operations it supplies, and an operation outside that declared model MUST
 refuse explicitly; **registry-keyed `check_call`

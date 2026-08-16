@@ -461,6 +461,365 @@ public:
   }
 };
 
+/// The queried trace rows in the clear: one canonical word each — the
+/// low-bits shape under its own registry name (and therefore its own
+/// pinned construction digest).
+class WordCodec : public LowBitsCodec {
+public:
+  StringRef name() const override { return "plonky3_bb31_word"; }
+};
+
+//===-- The query-phase checks --------------------------------------------===//
+//
+// Native execution of the two family-emitted check contracts
+// (docs/spec/endpoints.md §3): the input-layer Merkle multi-opening and
+// the FRI fold consistency, over the same pinned Poseidon2 the duplex
+// uses. The hash shapes are the pinned MMCS's own: a leaf is the
+// padding-free sponge of its row (rate 8, one permutation here), an
+// inner node is the truncated permutation of its two children, and the
+// walk consumes index bits low-first to a capless root.
+
+/// BabyBear's two-adic subgroup generators, transliterated from the
+/// pinned source (baby-bear/src/baby_bear.rs TWO_ADIC_GENERATORS);
+/// index k generates the order-2^k subgroup. The multiplicative-group
+/// generator (the coset shift) is 31.
+constexpr uint64_t kTwoAdicGenerators[] = {
+    0x1,        0x78000000, 0x67055c21, 0x5ee99486, 0x0bb4c4e4, 0x2d4cc4da,
+    0x669d6090, 0x17b56c64, 0x67456167, 0x688442f9, 0x145e952d, 0x4fe61226,
+    0x4c734715, 0x11c33e2a, 0x62c3d2b1, 0x77cad399, 0x54c131f4, 0x4cabd6a6,
+    0x5cf5713f, 0x3e9430e8, 0x0ba067a3, 0x18adc27d, 0x21fd55bc, 0x4b859b3d,
+    0x3bd57996, 0x4483d85a, 0x3a26eef8, 0x1a427a41};
+constexpr uint64_t kCosetShift = 31;
+
+uint64_t bitrev(uint64_t value, unsigned bits) {
+  uint64_t out = 0;
+  for (unsigned i = 0; i < bits; ++i)
+    out |= ((value >> i) & 1) << (bits - 1 - i);
+  return out;
+}
+
+uint64_t bbInv(uint64_t a) { return bbPow(a, kBB - 2); }
+
+/// BabyBear^4 as x^4 = 11 (the pinned quartic W), coordinates
+/// least-significant first — the ext4 codec's own packing.
+struct Ext4 {
+  uint64_t c[4] = {0, 0, 0, 0};
+};
+
+Ext4 extAdd(const Ext4 &a, const Ext4 &b) {
+  Ext4 r;
+  for (unsigned i = 0; i < 4; ++i)
+    r.c[i] = bbAdd(a.c[i], b.c[i]);
+  return r;
+}
+Ext4 extSub(const Ext4 &a, const Ext4 &b) {
+  Ext4 r;
+  for (unsigned i = 0; i < 4; ++i)
+    r.c[i] = bbSub(a.c[i], b.c[i]);
+  return r;
+}
+Ext4 extMul(const Ext4 &a, const Ext4 &b) {
+  constexpr uint64_t kW = 11;
+  Ext4 r;
+  for (unsigned i = 0; i < 4; ++i)
+    for (unsigned j = 0; j < 4; ++j) {
+      unsigned k = i + j;
+      uint64_t term = bbMul(a.c[i], b.c[j]);
+      if (k < 4)
+        r.c[k] = bbAdd(r.c[k], term);
+      else
+        r.c[k - 4] = bbAdd(r.c[k - 4], bbMul(term, kW));
+    }
+  return r;
+}
+Ext4 extScale(const Ext4 &a, uint64_t s) {
+  Ext4 r;
+  for (unsigned i = 0; i < 4; ++i)
+    r.c[i] = bbMul(a.c[i], s);
+  return r;
+}
+bool extIsZero(const Ext4 &a) {
+  return !a.c[0] && !a.c[1] && !a.c[2] && !a.c[3];
+}
+bool extEq(const Ext4 &a, const Ext4 &b) {
+  return a.c[0] == b.c[0] && a.c[1] == b.c[1] && a.c[2] == b.c[2] &&
+         a.c[3] == b.c[3];
+}
+
+/// Inverse via the norm: with p ≡ 1 (mod 4), Frobenius maps x to
+/// W^((p-1)/4)·x, so φʲ scales coordinate i by that root's ij-th
+/// power; b = φ(a)·φ²(a)·φ³(a) makes a·b the base-field norm.
+Ext4 extFrobenius(const Ext4 &a, unsigned j) {
+  uint64_t w4 = bbPow(11, (kBB - 1) / 4 * j);
+  Ext4 r;
+  uint64_t scale = 1;
+  for (unsigned i = 0; i < 4; ++i) {
+    r.c[i] = bbMul(a.c[i], scale);
+    scale = bbMul(scale, w4);
+  }
+  return r;
+}
+Ext4 extInv(const Ext4 &a) {
+  Ext4 b = extMul(extMul(extFrobenius(a, 1), extFrobenius(a, 2)),
+                  extFrobenius(a, 3));
+  uint64_t norm = extMul(a, b).c[0];
+  return extScale(b, bbInv(norm));
+}
+
+using Digest = std::array<uint64_t, 8>;
+
+/// TruncatedPermutation<Perm, 2, 8, 16>: permute the concatenation,
+/// keep the first eight.
+Digest compress(const Digest &left, const Digest &right) {
+  uint64_t state[16];
+  for (unsigned i = 0; i < 8; ++i) {
+    state[i] = left[i];
+    state[8 + i] = right[i];
+  }
+  poseidon2Permute(state);
+  Digest out;
+  for (unsigned i = 0; i < 8; ++i)
+    out[i] = state[i];
+  return out;
+}
+
+/// PaddingFreeSponge<Perm, 16, 8, 8> over one row of at most eight
+/// base elements: overwrite the rate slots, permute once, keep the
+/// first eight.
+Digest leafHash(ArrayRef<uint64_t> row) {
+  assert(row.size() <= 8 && "one row is one duplex block here");
+  uint64_t state[16] = {};
+  for (unsigned i = 0; i < row.size(); ++i)
+    state[i] = row[i];
+  poseidon2Permute(state);
+  Digest out;
+  for (unsigned i = 0; i < 8; ++i)
+    out[i] = state[i];
+  return out;
+}
+
+/// Walk one authentication path (index bits low-first, capless root).
+Digest walkPath(Digest node, uint64_t index, ArrayRef<Digest> siblings) {
+  for (const Digest &sibling : siblings) {
+    node = (index & 1) ? compress(sibling, node) : compress(node, sibling);
+    index >>= 1;
+  }
+  return node;
+}
+
+Digest digestOf(const APInt &value) {
+  Digest out;
+  for (unsigned limb = 0; limb < 8; ++limb)
+    out[limb] = value.extractBitsAsZExtValue(32, limb * 32);
+  return out;
+}
+Ext4 extOf(const APInt &value) {
+  Ext4 out;
+  for (unsigned coord = 0; coord < 4; ++coord)
+    out.c[coord] = value.extractBitsAsZExtValue(32, coord * 32);
+  return out;
+}
+
+/// The one instance the in-tree family fixture seals (ell = 4, k = 3,
+/// query_log2 = 4). The contract content digest pins these counts, so
+/// the constants are the digest's own meaning; another instance is
+/// another digest and another registration line.
+struct FriQueryShape {
+  uint64_t ell = 4, k = 3, logHeight = 4;
+};
+
+class MerkleMultiOpeningSupplier : public CheckSupplier {
+public:
+  StringRef contractDigest() const override {
+    return "sha256:764d1d92c7473fbdf9ecbd3bf8981274e5d012c2ac1b07ad2bb54fd2e0"
+           "0947a1";
+  }
+
+  llvm::Expected<std::optional<std::string>>
+  decide(ArrayRef<StringRef> params,
+         ArrayRef<CheckOperandView> operands) const override {
+    FriQueryShape shape;
+    if (!params.empty())
+      return createStringError("the merkle multi-opening takes no parameters");
+    // Flatten by contract segment order: root(1) indices(ell)
+    // leaves(ell) paths(ell·logHeight).
+    SmallVector<APInt> root, indices, leaves, paths;
+    if (llvm::Error error = flattenOperands(
+            operands, {{"rs", 1, &root},
+                       {"query_index", shape.ell, &indices},
+                       {"word", shape.ell, &leaves},
+                       {"rs", shape.ell * shape.logHeight, &paths}}))
+      return std::move(error);
+    Digest expected = digestOf(root.front());
+    for (uint64_t q = 0; q < shape.ell; ++q) {
+      uint64_t index = indices[q].getZExtValue();
+      if (index >= (uint64_t(1) << shape.logHeight))
+        return createStringError("query index is outside the tree");
+      uint64_t leaf = leaves[q].getZExtValue();
+      SmallVector<Digest> siblings;
+      for (uint64_t level = 0; level < shape.logHeight; ++level)
+        siblings.push_back(
+            digestOf(paths[q * shape.logHeight + level]));
+      Digest derived = walkPath(leafHash({leaf}), index, siblings);
+      if (derived != expected)
+        return std::optional<std::string>(
+            "an opened trace row does not authenticate against the "
+            "input commitment");
+    }
+    return std::optional<std::string>();
+  }
+
+private:
+  struct Segment {
+    StringRef valueClass;
+    uint64_t count;
+    SmallVector<APInt> *into;
+  };
+  static llvm::Error flattenOperands(ArrayRef<CheckOperandView> operands,
+                                     std::initializer_list<Segment> segments) {
+    // Operands arrive one view per SSA reference; segments consume
+    // whole views in order, exactly as the seal's layout solver did.
+    size_t view = 0;
+    for (const Segment &segment : segments) {
+      uint64_t taken = 0;
+      while (taken < segment.count) {
+        if (view == operands.size())
+          return createStringError("check operands end inside a segment");
+        if (operands[view].valueClass != segment.valueClass)
+          return createStringError(
+              "check operand class does not match its segment");
+        for (const APInt &value : operands[view].values)
+          segment.into->push_back(value);
+        taken += operands[view].values.size();
+        ++view;
+      }
+      if (taken != segment.count)
+        return createStringError(
+            "check operand elements do not fill their segment exactly");
+    }
+    if (view != operands.size())
+      return createStringError("check operands extend past the contract");
+    return llvm::Error::success();
+  }
+  friend class FriQueryConsistencySupplier;
+};
+
+class FriQueryConsistencySupplier : public CheckSupplier {
+public:
+  StringRef contractDigest() const override {
+    return "sha256:1f2e6480d08a8fe079baf380f2532d2127770b4c17d6bf526f4eeb365b"
+           "25474c";
+  }
+
+  llvm::Expected<std::optional<std::string>>
+  decide(ArrayRef<StringRef> params,
+         ArrayRef<CheckOperandView> operands) const override {
+    FriQueryShape shape;
+    // Contract parameter order is lexical: log_blowup, then
+    // log_final_poly_len.
+    uint64_t logBlowup = 0, logFinalPolyLen = 0;
+    if (params.size() != 2 ||
+        params[0].getAsInteger(10, logBlowup) ||
+        params[1].getAsInteger(10, logFinalPolyLen))
+      return createStringError(
+          "the consistency check takes log_blowup and log_final_poly_len");
+    if (logBlowup + logFinalPolyLen + shape.k != shape.logHeight)
+      return createStringError(
+          "the declared shape does not fold the domain to the final length");
+    SmallVector<APInt> zeta, opened, alpha, betas, finals, indices, leaves,
+        roots, siblings, roundPaths;
+    if (llvm::Error error = MerkleMultiOpeningSupplier::flattenOperands(
+            operands,
+            {{"ext_field", 1, &zeta},
+             {"ext_field", 1, &opened},
+             {"ext_field", 1, &alpha},
+             {"ext_field", shape.k, &betas},
+             {"ext_field", uint64_t(1) << logFinalPolyLen, &finals},
+             {"query_index", shape.ell, &indices},
+             {"word", shape.ell, &leaves},
+             {"rs", shape.k, &roots},
+             {"ext_field", shape.ell * shape.k, &siblings},
+             {"rs", shape.ell * (shape.k * shape.logHeight -
+                                 shape.k * (shape.k + 1) / 2),
+              &roundPaths}}))
+      return std::move(error);
+    Ext4 zetaValue = extOf(zeta.front());
+    Ext4 openedValue = extOf(opened.front());
+    (void)alpha; // One matrix, one point: alpha's zeroth power weighs
+                 // the single term (the general batching sum's shape).
+    // Per-round path segments are laid out query-major within a round.
+    SmallVector<uint64_t> pathOffsets = {0};
+    for (uint64_t r = 1; r <= shape.k; ++r)
+      pathOffsets.push_back(pathOffsets.back() +
+                            shape.ell * (shape.logHeight - r));
+    for (uint64_t q = 0; q < shape.ell; ++q) {
+      uint64_t index = indices[q].getZExtValue();
+      if (index >= (uint64_t(1) << shape.logHeight))
+        return createStringError("query index is outside the domain");
+      // The input layer: x = shift · g^{bitrev(index)}, the reduced
+      // opening (opened − leaf) / (zeta − x).
+      uint64_t x = bbMul(kCosetShift,
+                         bbPow(kTwoAdicGenerators[shape.logHeight],
+                               bitrev(index, shape.logHeight)));
+      Ext4 denominator = zetaValue;
+      denominator.c[0] = bbSub(denominator.c[0], x);
+      if (extIsZero(denominator))
+        return std::optional<std::string>(
+            "the opening point lies on the evaluation domain");
+      Ext4 folded = openedValue;
+      folded.c[0] = bbSub(folded.c[0], leaves[q].getZExtValue());
+      folded = extMul(folded, extInv(denominator));
+      for (uint64_t r = 1; r <= shape.k; ++r) {
+        Ext4 own = folded;
+        Ext4 sibling = extOf(siblings[(r - 1) * shape.ell + q]);
+        Ext4 pair[2];
+        pair[index & 1] = own;
+        pair[(index & 1) ^ 1] = sibling;
+        // Authenticate the committed pair row (two extension values
+        // flattened to eight base words) against this round's root.
+        SmallVector<uint64_t, 8> row;
+        for (const Ext4 &element : pair)
+          for (unsigned coord = 0; coord < 4; ++coord)
+            row.push_back(element.c[coord]);
+        index >>= 1;
+        uint64_t logFolded = shape.logHeight - r;
+        SmallVector<Digest> pathDigests;
+        for (uint64_t level = 0; level < logFolded; ++level)
+          pathDigests.push_back(digestOf(
+              roundPaths[pathOffsets[r - 1] + q * logFolded + level]));
+        if (walkPath(leafHash(row), index, pathDigests) !=
+            digestOf(roots[r - 1]))
+          return std::optional<std::string>(
+              "a folded row does not authenticate against its round "
+              "commitment");
+        // Two-point interpolation at beta over [s, -s]:
+        // (e0+e1)/2 + beta·(e0−e1)/(2s).
+        uint64_t s = bbPow(kTwoAdicGenerators[logFolded + 1],
+                           bitrev(index, logFolded));
+        Ext4 half = extScale(extAdd(pair[0], pair[1]), bbInv(2));
+        Ext4 slope = extScale(extSub(pair[0], pair[1]), bbInv(bbMul(2, s)));
+        folded = extAdd(half, extMul(extOf(betas[r - 1]), slope));
+      }
+      // The final polynomial, low degree first, at the surviving
+      // index's domain point (bit-reversed at full width, the pinned
+      // verifier's own spelling).
+      uint64_t xFinal = bbPow(kTwoAdicGenerators[shape.logHeight],
+                              bitrev(index, shape.logHeight));
+      Ext4 evaluation;
+      for (size_t coefficient = finals.size(); coefficient-- > 0;) {
+        Ext4 scaled = evaluation;
+        for (unsigned coord = 0; coord < 4; ++coord)
+          scaled.c[coord] = bbMul(scaled.c[coord], xFinal);
+        evaluation = extAdd(scaled, extOf(finals[coefficient]));
+      }
+      if (!extEq(evaluation, folded))
+        return std::optional<std::string>(
+            "a query's folded value does not meet the final polynomial");
+    }
+    return std::optional<std::string>();
+  }
+};
+
 //===-- The profile
 //--------------------------------------------------------===//
 
@@ -475,6 +834,16 @@ public:
       return &lowBits;
     if (codecName == digest8.name())
       return &digest8;
+    if (codecName == word.name())
+      return &word;
+    return nullptr;
+  }
+
+  const CheckSupplier *check(StringRef contractDigest) const override {
+    if (contractDigest == merkleOpening.contractDigest())
+      return &merkleOpening;
+    if (contractDigest == queryConsistency.contractDigest())
+      return &queryConsistency;
     return nullptr;
   }
 
@@ -531,6 +900,11 @@ public:
     if (taggedName == "codec:plonky3_bb31_digest8")
       return StringRef("sha256:a3425c10251b787fbef3da60b57a7eedc8e889ff"
                        "b46219eb26c70109e6dacb2d");
+    // Same digest as digest8: both registry entries pin the empty
+    // structural object, and the digest is content, not name.
+    if (taggedName == "codec:plonky3_bb31_word")
+      return StringRef("sha256:a3425c10251b787fbef3da60b57a7eedc8e889ff"
+                       "b46219eb26c70109e6dacb2d");
     return std::nullopt;
   }
 
@@ -538,8 +912,11 @@ private:
   Ext4TupleCodec ext4;
   LowBitsCodec lowBits;
   Digest8Codec digest8;
+  WordCodec word;
   LenpadSupplier lenpad;
   ZeroIvLenpadSupplier zeroIv;
+  MerkleMultiOpeningSupplier merkleOpening;
+  FriQueryConsistencySupplier queryConsistency;
 };
 
 } // namespace

@@ -289,6 +289,13 @@ impl<'a> Walk<'a> {
         let mut witness_fields = rust::Scope::new("witness label");
         for (index, element) in self.document.entry.iter().enumerate() {
             match element {
+                // The statement ABI stays scalar: no minted artifact
+                // binds a counted statement value.
+                Entry::ValVec(class, _) => {
+                    return Err(format!(
+                        "entry argument {index} is a counted vector of class                          '{class}', but the statement ABI is scalar"
+                    ))
+                }
                 Entry::Val(class) => {
                     if index >= statement_count {
                         return Err(format!(
@@ -440,7 +447,8 @@ impl<'a> Walk<'a> {
                 stream,
                 label,
                 class,
-            } => self.emit_read(index, *stream, label, class),
+                count,
+            } => self.emit_read(index, *stream, label, class, *count),
 
             Row::Squeeze {
                 sponge,
@@ -499,7 +507,8 @@ impl<'a> Walk<'a> {
                 value,
                 label,
                 class,
-            } => self.emit_write(index, *stream, *value, label, class),
+                count,
+            } => self.emit_write(index, *stream, *value, label, class, *count),
 
             Row::HoleCall { .. } => self.emit_hole_call(index, row),
 
@@ -564,6 +573,7 @@ impl<'a> Walk<'a> {
         stream: Ref,
         label: &str,
         class: &str,
+        count: u64,
     ) -> Result<(), String> {
         self.consume_stream(stream, index, Some(Ref::Res(index, 0)))?;
         self.used.cursor = Use {
@@ -575,6 +585,59 @@ impl<'a> Walk<'a> {
         let used = self.referenced.contains(&(index, 1));
         let name = format!("{}r{index}_1", if used { "" } else { "_" });
         let ty = implementation.rust_type();
+        if count > 1 {
+            // A counted read decodes `count` elements at the class's
+            // fixed width, in order — the schedule is the only width
+            // authority (docs/spec/carrier.md §7). The whole vector is
+            // one binding, exactly as a vector squeeze's.
+            let decode = match implementation {
+                ImplKind::P3Word => "zkc_rt::p3::decode_words::<1>(wire)[0]".to_owned(),
+                ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
+                    format!("zkc_rt::p3::decode_words::<{}>(wire)", implementation.limbs())
+                }
+                other => {
+                    return Err(format!(
+                        "row {index}: counted reads are implemented for the BabyBear                          classes only (class '{class}' has {other:?})"
+                    ))
+                }
+            };
+            let canonical = match implementation {
+                ImplKind::P3Word => "element >= zkc_rt::p3::BB".to_owned(),
+                _ => "!zkc_rt::p3::words_canonical(&element)".to_owned(),
+            };
+            self.line(
+                1,
+                &format!(
+                    "// [\"read_vec\", \"{}\" : {} x {count}]",
+                    rust::comment(label),
+                    rust::comment(class)
+                ),
+            );
+            self.line(1, &format!("let {name}: Vec<{ty}> = {{"));
+            self.line(
+                2,
+                &format!("let mut elements = Vec::with_capacity({count});"),
+            );
+            self.line(2, &format!("for _ in 0..{count} {{"));
+            self.line(
+                3,
+                &format!("let element: {ty} = match cursor.take({width}) {{"),
+            );
+            self.line(4, &format!("Some(wire) => {decode},"));
+            self.line(4, &Self::reject_arm("AbiDecodeFailure"));
+            self.line(3, "};");
+            self.line(3, &format!("if {canonical} {{"));
+            self.line(4, &Self::reject("AbiDecodeFailure"));
+            self.line(3, "}");
+            self.line(3, "elements.push(element);");
+            self.line(2, "}");
+            self.line(2, "elements");
+            self.line(1, "};");
+            let bare = format!("r{index}_1");
+            self.values
+                .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
+            return Ok(());
+        }
         let comment = format!(
             "// [\"read\", \"{}\" : {}]",
             rust::comment(label),
@@ -797,16 +860,9 @@ impl<'a> Walk<'a> {
             self.values
                 .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
         } else {
-            // A counted vector is one event producing one log
-            // entry; its SSA value stays deliberately unbound
-            // (the reference does the same), so any reference to
-            // it must have failed the pre-pass.
-            if self.referenced.contains(&(index, 1)) {
-                return Err(format!(
-                    "row {index}: a later row references the vector squeeze '{label}', \
-                     but a vector event's value is unbindable"
-                ));
-            }
+            // A counted vector is one event producing one log entry and
+            // one SSA binding: the whole draw list is the value the
+            // counted check contracts consume (docs/spec/carrier.md §7).
             if implementation != ImplKind::P3Word {
                 return Err(format!(
                     "row {index}: counted squeezes are implemented for the word \
@@ -819,8 +875,11 @@ impl<'a> Walk<'a> {
             if space < 2 {
                 return Err(format!("row {index}: sample space {space} below 2"));
             }
-            self.line(1, "{");
+            let used = self.referenced.contains(&(index, 1));
+            let name = format!("{}r{index}_1", if used { "" } else { "_" });
+            self.line(1, &format!("let {name}: Vec<u32> = {{"));
             self.line(2, "let mut entry = String::new();");
+            self.line(2, &format!("let mut draws = Vec::with_capacity({count});"));
             self.line(2, &format!("for draw in 0..{count} {{"));
             self.line(
                 3,
@@ -828,9 +887,14 @@ impl<'a> Walk<'a> {
             );
             self.line(3, "if draw > 0 { entry.push('|'); }");
             self.line(3, "entry.push_str(&value.to_string());");
+            self.line(3, "draws.push(value);");
             self.line(2, "}");
             self.line(2, "challenges.push(entry);");
-            self.line(1, "}");
+            self.line(2, "draws");
+            self.line(1, "};");
+            let bare = format!("r{index}_1");
+            self.values
+                .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
         }
         Ok(())
     }
@@ -913,14 +977,17 @@ impl<'a> Walk<'a> {
                 self.binding.name
             ));
         };
-        // The contract's one static parameter is the suite; the
-        // adapter must implement exactly the suite the row cites.
-        if params.len() != 1 || params[0] != check.suite {
-            return Err(format!(
-                "row {index}: check '{label}' cites parameters {params:?}; the bound \
-                 adapter implements suite '{}'",
-                check.suite
-            ));
+        // The KZG contracts' one static parameter is the suite; the
+        // adapter must implement exactly the suite the row cites. The
+        // BabyBear contracts' parameters travel into the call as
+        // decimal literals below.
+        if let Some(suite) = &check.suite {
+            if params.len() != 1 || &params[0] != suite {
+                return Err(format!(
+                    "row {index}: check '{label}' cites parameters {params:?}; the bound \
+                     adapter implements suite '{suite}'"
+                ));
+            }
         }
         let mut arguments = Vec::new();
         for input in inputs {
@@ -947,17 +1014,19 @@ impl<'a> Walk<'a> {
                 rust::comment(kind)
             ),
         );
-        self.line(
-            1,
-            &format!(
-                "let tau_g2_{index} = zkc_rt::kzg::g2_from_hex({})",
-                rust::literal(&check.tau_g2_hex)
-            ),
-        );
-        self.line(
-            1,
-            "    .expect(\"the binding-pinned tau_g2 point parses\");",
-        );
+        if let Some(tau) = &check.tau_g2_hex {
+            self.line(
+                1,
+                &format!(
+                    "let tau_g2_{index} = zkc_rt::kzg::g2_from_hex({})",
+                    rust::literal(tau)
+                ),
+            );
+            self.line(
+                1,
+                "    .expect(\"the binding-pinned tau_g2 point parses\");",
+            );
+        }
         match check.implementation {
             CheckImpl::KzgOpening => {
                 // Role order: commitment, point, value, proof.
@@ -1028,6 +1097,108 @@ impl<'a> Walk<'a> {
                 self.line(2, &Self::reject("CheckFailure"));
                 self.line(1, "}");
             }
+            CheckImpl::P3MerkleMultiOpening => {
+                // Segment order: root, indices, leaves, paths — one
+                // vector binding per counted segment.
+                if arguments.len() != 4 {
+                    return Err(format!(
+                        "row {index}: check '{label}' has {} operands; the multi-opening \
+                         contract takes 4",
+                        arguments.len()
+                    ));
+                }
+                let root = expect_kind(self, &arguments[0], ImplKind::P3Digest8, "root")?;
+                let indices = expect_kind(self, &arguments[1], ImplKind::P3Word, "indices")?;
+                let leaves = expect_kind(self, &arguments[2], ImplKind::P3Word, "leaves")?;
+                let paths = expect_kind(self, &arguments[3], ImplKind::P3Digest8, "paths")?;
+                self.line(
+                    1,
+                    &format!(
+                        "if !zkc_rt::p3::merkle_multi_opening_accepts(&{root}, &{indices}, \
+                         &{leaves}, &{paths}) {{"
+                    ),
+                );
+                self.line(2, &Self::reject("CheckFailure"));
+                self.line(1, "}");
+            }
+            CheckImpl::P3FriQueryConsistency => {
+                // Parameter order is the contract's lexical order:
+                // log_blowup, log_final_poly_len.
+                if params.len() != 2
+                    || params.iter().any(|parameter| {
+                        parameter.is_empty() || !parameter.chars().all(|c| c.is_ascii_digit())
+                    })
+                {
+                    return Err(format!(
+                        "row {index}: check '{label}' cites parameters {params:?}; the \
+                         consistency adapter reads two decimal logs"
+                    ));
+                }
+                // Segment order: zeta, opened, alpha, betas x k, final,
+                // indices, leaves, roots x k, sibling vectors x k, path
+                // vectors x k — so the operand count is 6 + 4k.
+                if arguments.len() < 10 || (arguments.len() - 6) % 4 != 0 {
+                    return Err(format!(
+                        "row {index}: check '{label}' has {} operands; the consistency \
+                         contract takes 6 + 4k",
+                        arguments.len()
+                    ));
+                }
+                let rounds = (arguments.len() - 6) / 4;
+                let zeta = expect_kind(self, &arguments[0], ImplKind::P3Ext4, "zeta")?;
+                let opened = expect_kind(self, &arguments[1], ImplKind::P3Ext4, "opened")?;
+                let alpha = expect_kind(self, &arguments[2], ImplKind::P3Ext4, "alpha")?;
+                let mut betas = Vec::new();
+                for argument in &arguments[3..3 + rounds] {
+                    betas.push(expect_kind(self, argument, ImplKind::P3Ext4, "betas")?);
+                }
+                let finals = expect_kind(self, &arguments[3 + rounds], ImplKind::P3Ext4, "final")?;
+                let indices =
+                    expect_kind(self, &arguments[4 + rounds], ImplKind::P3Word, "indices")?;
+                let leaves = expect_kind(self, &arguments[5 + rounds], ImplKind::P3Word, "leaves")?;
+                let mut roots = Vec::new();
+                for argument in &arguments[6 + rounds..6 + 2 * rounds] {
+                    roots.push(expect_kind(self, argument, ImplKind::P3Digest8, "roots")?);
+                }
+                let mut siblings = Vec::new();
+                for argument in &arguments[6 + 2 * rounds..6 + 3 * rounds] {
+                    siblings.push(format!(
+                        "{}.as_slice()",
+                        expect_kind(self, argument, ImplKind::P3Ext4, "siblings")?
+                    ));
+                }
+                let mut paths = Vec::new();
+                for argument in &arguments[6 + 3 * rounds..6 + 4 * rounds] {
+                    paths.push(format!(
+                        "{}.as_slice()",
+                        expect_kind(self, argument, ImplKind::P3Digest8, "round_paths")?
+                    ));
+                }
+                // The per-round vectors flatten round-major, exactly
+                // the wire's own order.
+                self.line(
+                    1,
+                    &format!("let siblings_{index} = [{}].concat();", siblings.join(", ")),
+                );
+                self.line(
+                    1,
+                    &format!("let round_paths_{index} = [{}].concat();", paths.join(", ")),
+                );
+                self.line(
+                    1,
+                    &format!(
+                        "if !zkc_rt::p3::fri_query_consistency_accepts({}usize, {}usize, \
+                         {zeta}, {opened}, {alpha}, &[{}], &[{finals}], &{indices}, \
+                         &{leaves}, &[{}], &siblings_{index}, &round_paths_{index}) {{",
+                        params[0],
+                        params[1],
+                        betas.join(", "),
+                        roots.join(", ")
+                    ),
+                );
+                self.line(2, &Self::reject("CheckFailure"));
+                self.line(1, "}");
+            }
         }
         Ok(())
     }
@@ -1039,6 +1210,7 @@ impl<'a> Walk<'a> {
         value: Ref,
         label: &str,
         class: &str,
+        count: u64,
     ) -> Result<(), String> {
         self.consume_stream(stream, index, Some(Ref::Res(index, 0)))?;
         self.used.proof = Use {
@@ -1058,6 +1230,61 @@ impl<'a> Walk<'a> {
                      '{class}' slot"
                 ))
             }
+        }
+        if count > 1 {
+            // A counted write encodes its vector element by element in
+            // order, each behind the same canonicality gate; the row's
+            // count is the schedule's, so a fill whose vector disagrees
+            // is refused before any byte reaches the wire.
+            if !matches!(
+                implementation,
+                ImplKind::P3Word | ImplKind::P3Ext4 | ImplKind::P3Digest8
+            ) {
+                return Err(format!(
+                    "row {index}: counted writes are implemented for the BabyBear \
+                     classes only (class '{class}' has {implementation:?})"
+                ));
+            }
+            self.line(
+                1,
+                &format!(
+                    "// [\"write_vec\", \"{}\" : {} x {count}]",
+                    rust::comment(label),
+                    rust::comment(class)
+                ),
+            );
+            self.line(1, &format!("if {expr}.len() != {count} {{"));
+            self.line(
+                2,
+                &Self::refuse(
+                    "Fill",
+                    label,
+                    "fill returned a vector whose length is not the schedule's count",
+                ),
+            );
+            self.line(1, "}");
+            self.line(1, &format!("for element in &{expr} {{"));
+            let words = if implementation == ImplKind::P3Word {
+                "[*element]".to_owned()
+            } else {
+                "*element".to_owned()
+            };
+            self.line(2, &format!("if !zkc_rt::p3::words_canonical(&{words}) {{"));
+            self.line(
+                3,
+                &Self::refuse(
+                    "Fill",
+                    label,
+                    "fill produced a word outside the canonical field range",
+                ),
+            );
+            self.line(2, "}");
+            self.line(
+                2,
+                &format!("zkc_rt::p3::encode_words(&{words}, &mut proof);"),
+            );
+            self.line(1, "}");
+            return Ok(());
         }
         self.line(
             1,
@@ -1213,7 +1440,7 @@ impl<'a> Walk<'a> {
                     }
                     arguments.push(expression);
                 }
-                Operand::Value(want) => {
+                Operand::Value(want) | Operand::VectorValue(want) => {
                     let (expression, value_class) = self.value(*input, &context)?;
                     match &value_class {
                         VClass::Doc(name) if self.class_impl(name)? == *want => {}
@@ -1253,6 +1480,15 @@ impl<'a> Walk<'a> {
             let mut name = bare.clone();
             match (result, want) {
                 (Entry::Val(class), Operand::Value(want)) if self.class_impl(class)? == *want => {
+                    if !self.referenced.contains(&(index, slot)) {
+                        name = format!("_{bare}");
+                    }
+                    self.values
+                        .insert(Ref::Res(index, slot), (bare, VClass::Doc(class.clone())));
+                }
+                (Entry::ValVec(class, _), Operand::VectorValue(want))
+                    if self.class_impl(class)? == *want =>
+                {
                     if !self.referenced.contains(&(index, slot)) {
                         name = format!("_{bare}");
                     }

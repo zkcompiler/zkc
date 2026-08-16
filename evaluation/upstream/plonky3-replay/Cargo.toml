@@ -25,6 +25,7 @@ p3-matrix = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c8
 p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
 p3-symmetric = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
 p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-util = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

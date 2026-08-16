@@ -3193,18 +3193,22 @@ _LICENSES = {
     "const+absorb": {"const", "absorb"},
     "arg+absorb": {"absorb"},
     "read+absorb": {"read", "absorb"},
-    "read": {"read", "read_vec"},
+    "read": {"read"},
     "squeeze.scalar": {"squeeze"},
     "squeeze.vector": {"squeeze"},
     "assert_eq": {"assert_eq", "const", "f_neg", "f_add", "f_mul", "g_exp", "g_mul"},
     "check_call": {"check_call"},
 }
 
+# Counted row families realize exactly what their scalar families do;
+# licensing and coverage judge the op family, as the carrier does.
+_SCALAR_FAMILY = {"read_vec": "read", "write_vec": "write"}
+
 _REALIZES = {
     "const+absorb": {"const", "absorb"},
     "arg+absorb": {"absorb"},
     "read+absorb": {"read", "absorb"},
-    "read": {"read", "read_vec"},
+    "read": {"read"},
     "squeeze.scalar": {"squeeze"},
     "squeeze.vector": {"squeeze"},
     "assert_eq": {"assert_eq"},
@@ -3366,13 +3370,14 @@ def project(
     for row in rows:
         if row[0] in {"init", "expect_end", "decide"}:
             continue
+        family = _SCALAR_FAMILY.get(row[0], row[0])
         for position in row[-1]:
             if position not in realized:
                 raise Refusal("OIR src references a non-event position")
             discharge_kind = table[position][2]
-            if row[0] not in _LICENSES[discharge_kind]:
+            if family not in _LICENSES[discharge_kind]:
                 raise Refusal("OIR family is not licensed for its event")
-            realized[position].add(row[0])
+            realized[position].add(family)
     missing = [
         (position, discharge_kind)
         for position, _, discharge_kind in table
@@ -3409,7 +3414,7 @@ _PROVER_LICENSES = {
     "const+absorb": {"const", "absorb"},
     "arg+absorb": {"absorb"},
     "read+absorb": {"write", "absorb"},
-    "read": {"write", "write_vec"},
+    "read": {"write"},
     "squeeze.scalar": {"squeeze"},
     "squeeze.vector": {"squeeze"},
 }
@@ -3600,16 +3605,17 @@ def _project_prover(
     for row in rows:
         if row[0] in {"init", "end_stream", "finish", "hole_call"}:
             continue
+        family = _SCALAR_FAMILY.get(row[0], row[0])
         for position in row[-1]:
             if position not in realized:
                 raise Refusal("OIR src references a non-event position")
             discharge_kind = table[position][2]
-            if row[0] not in _PROVER_LICENSES.get(discharge_kind, set()):
+            if family not in _PROVER_LICENSES.get(discharge_kind, set()):
                 raise Refusal(
                     "OIR family is not licensed for its event on the "
                     "prover endpoint"
                 )
-            realized[position].add(row[0])
+            realized[position].add(family)
     counterparty_positions = {position for position, _ in counterparty}
     for position, _, discharge_kind in table:
         if position in counterparty_positions:

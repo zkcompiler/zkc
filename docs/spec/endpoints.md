@@ -263,7 +263,8 @@ and structurally validated, but that validation does not establish projector
 origin, source-obligation exhaustiveness, or `COV_realized`. Projection
 consumes the unchanged `COV_obl` set and proves its own `COV_realized`:
 
-- verifier `read` corresponds to prover `write` with the same class and source
+- verifier `read` corresponds to prover `write`, and counted `read_vec` to
+  counted `write_vec`, with the same class, count, and source
   position;
 - both endpoints absorb the same material and perform the same typed, counted
   squeezes;

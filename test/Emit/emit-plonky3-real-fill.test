@@ -28,9 +28,12 @@
 # RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/prover.json > %t/runner.out
 # RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/accept.json accept
 # RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/corrupt.json corrupt-nonce
-# RUN: %python -c "import json,sys; a=json.load(open(sys.argv[1])); c=json.load(open(sys.argv[2])); a['vectors'] += c['vectors']; json.dump(a, open(sys.argv[3], 'w'), indent=1)" %t/accept.json %t/corrupt.json %t/vectors.json
+# RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/runner.out %t/verifier.id %t/corrupt-path.json corrupt-path
+# RUN: %python -c "import json,sys; a=json.load(open(sys.argv[1])); c=json.load(open(sys.argv[2])); p=json.load(open(sys.argv[3])); a['vectors'] += c['vectors'] + p['vectors']; json.dump(a, open(sys.argv[4], 'w'), indent=1)" %t/accept.json %t/corrupt.json %t/corrupt-path.json %t/vectors.json
 
-# The emitted zero-iv crate accepts the runner's wire and rejects the
-# corrupted one through its generated conformance suite.
+# The emitted zero-iv crate accepts the runner's wire and rejects both
+# corruptions through its generated conformance suite: the flipped
+# nonce at the grinding check, the flipped path digest at the Merkle
+# multi-opening.
 # RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/vectors.json --out %t/crate
 # RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml

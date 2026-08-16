@@ -157,6 +157,12 @@ pub enum CheckImpl {
     KzgOpening,
     /// `zkc.check.kzg-batch-opening`: the gamma-folded same-point form.
     KzgBatchOpening,
+    /// `zkc.check.merkle-multi-opening`: the FRI input layer's opened
+    /// rows against the absorbed commitment.
+    P3MerkleMultiOpening,
+    /// `zkc.check.fri-query-consistency`: the fold chain from the
+    /// openings to the final polynomial, round rows authenticated.
+    P3FriQueryConsistency,
 }
 
 impl CheckImpl {
@@ -164,6 +170,8 @@ impl CheckImpl {
         match name {
             "kzg_bls12_381_opening" => Some(CheckImpl::KzgOpening),
             "kzg_bls12_381_batch_opening" => Some(CheckImpl::KzgBatchOpening),
+            "p3_merkle_multi_opening" => Some(CheckImpl::P3MerkleMultiOpening),
+            "p3_fri_query_consistency" => Some(CheckImpl::P3FriQueryConsistency),
             _ => None,
         }
     }
@@ -175,8 +183,11 @@ impl CheckImpl {
 #[derive(Debug, Clone)]
 pub struct CheckBinding {
     pub implementation: CheckImpl,
-    pub suite: String,
-    pub tau_g2_hex: String,
+    /// KZG only: the suite name and the pinned SRS point. The BabyBear
+    /// checks carry no setup material — everything they need rides the
+    /// transcript and the wire.
+    pub suite: Option<String>,
+    pub tau_g2_hex: Option<String>,
 }
 
 /// One typed slot of a fill's signature.
@@ -184,6 +195,11 @@ pub struct CheckBinding {
 pub enum Operand {
     /// A value of the given bound implementation.
     Value(ImplKind),
+    /// A counted vector of values: one SSA slot, `Vec<T>` at the fill
+    /// boundary. The element count is the contract instance's (pinned
+    /// by the digest); the fill and the write gates hold it at run
+    /// time.
+    VectorValue(ImplKind),
     /// An opaque payload of the given handle class.
     Handle(&'static str),
     /// The transcript, as a state-identical read-only peek
@@ -240,8 +256,12 @@ pub enum HoleImpl {
     P3FriCommit,
     /// `fold`: the arity-two fold, beta on the odd part.
     P3FriFold,
-    /// `evaluate`: the final polynomial's constant coefficient.
+    /// `evaluate`: the final polynomial's constant coefficient; the
+    /// handle rides on, carrying the retained trees to the answer fill.
     P3FriFinal,
+    /// `open`: the query answering — leaves, siblings, and paths out of
+    /// the retained trees at the sampled indices.
+    P3FriAnswer,
 }
 
 impl HoleImpl {
@@ -257,6 +277,7 @@ impl HoleImpl {
             "p3_fri_commit" => Some(HoleImpl::P3FriCommit),
             "p3_fri_fold" => Some(HoleImpl::P3FriFold),
             "p3_fri_final" => Some(HoleImpl::P3FriFinal),
+            "p3_fri_answer" => Some(HoleImpl::P3FriAnswer),
             _ => None,
         }
     }
@@ -274,6 +295,7 @@ impl HoleImpl {
             HoleImpl::P3FriCommit => "zkc_rt::p3::fri_commit",
             HoleImpl::P3FriFold => "zkc_rt::p3::fri_fold",
             HoleImpl::P3FriFinal => "zkc_rt::p3::fri_final",
+            HoleImpl::P3FriAnswer => "zkc_rt::p3::fri_answer",
         }
     }
 
@@ -288,7 +310,8 @@ impl HoleImpl {
             | HoleImpl::P3FriReduce
             | HoleImpl::P3FriCommit
             | HoleImpl::P3FriFold
-            | HoleImpl::P3FriFinal => "plonky3",
+            | HoleImpl::P3FriFinal
+            | HoleImpl::P3FriAnswer => "plonky3",
         }
     }
 
@@ -362,7 +385,32 @@ impl HoleImpl {
             HoleImpl::P3FriFinal => HoleSignature {
                 params: &[],
                 inputs: &[Operand::Handle("fri-codeword")],
-                results: &[Operand::Value(ImplKind::P3Ext4)],
+                results: &[
+                    Operand::Value(ImplKind::P3Ext4),
+                    Operand::Handle("fri-codeword"),
+                ],
+            },
+            HoleImpl::P3FriAnswer => HoleSignature {
+                // The k = 3 instance the in-tree family seals: leaves,
+                // input paths, then per round one sibling vector and
+                // one path vector, in wire order. The counts live in
+                // the contract digest; the fill validates them.
+                params: &[],
+                inputs: &[
+                    Operand::VectorValue(ImplKind::P3Word),
+                    Operand::Value(ImplKind::P3Digest8),
+                    Operand::Handle("fri-codeword"),
+                ],
+                results: &[
+                    Operand::VectorValue(ImplKind::P3Word),
+                    Operand::VectorValue(ImplKind::P3Digest8),
+                    Operand::VectorValue(ImplKind::P3Ext4),
+                    Operand::VectorValue(ImplKind::P3Digest8),
+                    Operand::VectorValue(ImplKind::P3Ext4),
+                    Operand::VectorValue(ImplKind::P3Digest8),
+                    Operand::VectorValue(ImplKind::P3Ext4),
+                    Operand::VectorValue(ImplKind::P3Digest8),
+                ],
             },
         }
     }
@@ -526,18 +574,33 @@ impl Binding {
                 let implementation = CheckImpl::from_name(&impl_name).ok_or_else(|| {
                     format!("binding: check '{digest}' names unknown adapter '{impl_name}'")
                 })?;
-                let suite = string_field(entry, "suite", digest)?;
-                let tau_g2_hex = string_field(entry, "tau_g2", digest)?;
-                if tau_g2_hex.len() != 192
-                    || !tau_g2_hex
-                        .bytes()
-                        .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
-                {
-                    return Err(format!(
-                        "binding: check '{digest}' tau_g2 is not 96 compressed bytes as \
-                         lowercase hex"
-                    ));
-                }
+                let kzg = matches!(
+                    implementation,
+                    CheckImpl::KzgOpening | CheckImpl::KzgBatchOpening
+                );
+                let (suite, tau_g2_hex) = if kzg {
+                    let suite = string_field(entry, "suite", digest)?;
+                    let tau_g2_hex = string_field(entry, "tau_g2", digest)?;
+                    if tau_g2_hex.len() != 192
+                        || !tau_g2_hex
+                            .bytes()
+                            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+                    {
+                        return Err(format!(
+                            "binding: check '{digest}' tau_g2 is not 96 compressed bytes as \
+                             lowercase hex"
+                        ));
+                    }
+                    (Some(suite), Some(tau_g2_hex))
+                } else {
+                    if entry.get("suite").is_some() || entry.get("tau_g2").is_some() {
+                        return Err(format!(
+                            "binding: check '{digest}' carries setup material its adapter \
+                             does not take"
+                        ));
+                    }
+                    (None, None)
+                };
                 checks.push((
                     digest.clone(),
                     CheckBinding {
