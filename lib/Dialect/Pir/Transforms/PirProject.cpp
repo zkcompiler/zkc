@@ -562,7 +562,7 @@ public:
               }
               auto write = zkc::oir::WriteOp::create(
                   builder, loc, stream, v, op.getLabel(), op.getPayloadClass(),
-                  src(op));
+                  op.getCount(), src(op));
               stream = write.getOut();
               slotValueByLabel[op.getLabel()] = v;
               vals[op.getVal()] = v;
@@ -573,9 +573,10 @@ public:
               cover(op);
               return;
             }
-            auto read =
-                zkc::oir::ReadOp::create(builder, loc, stream, op.getLabel(),
-                                         op.getPayloadClass(), src(op));
+            auto read = zkc::oir::ReadOp::create(builder, loc, stream,
+                                                 op.getLabel(),
+                                                 op.getPayloadClass(),
+                                                 op.getCount(), src(op));
             stream = read.getOut();
             vals[op.getVal()] = read.getVal();
             if (!op.getUnabsorbed())

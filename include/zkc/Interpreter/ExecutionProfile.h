@@ -143,6 +143,35 @@ public:
       const = 0;
 };
 
+/// One typed check operand as the supplier sees it: the payload class
+/// and the operand's elements — one for a scalar reference, `count` for
+/// a counted one. Flattening is the executor's; the supplier validates
+/// the element counts against its own contract shape (the atomic check
+/// owns its shape refusals, docs/spec/carrier.md §7).
+struct CheckOperandView {
+  llvm::StringRef valueClass;
+  llvm::ArrayRef<llvm::APInt> values;
+};
+
+/// One opaque-check executor (docs/spec/endpoints.md §3): the
+/// executable half of a CheckContract, keyed by contract content
+/// digest exactly as hole suppliers are. The supplier decides the
+/// proposition; the executor owns the verdict channel.
+class CheckSupplier {
+public:
+  virtual ~CheckSupplier() = default;
+  /// The check-contract content digest this supplier implements.
+  virtual llvm::StringRef contractDigest() const = 0;
+  /// Decide the proposition over the cited static parameters and typed
+  /// operands. Returns nullopt when it holds, and a message naming the
+  /// failing fact when it does not — that message becomes a
+  /// check_failure verdict. An error is a defect (malformed operand
+  /// shape, missing internal material), a refusal and never a verdict.
+  virtual llvm::Expected<std::optional<std::string>>
+  decide(llvm::ArrayRef<llvm::StringRef> params,
+         llvm::ArrayRef<CheckOperandView> operands) const = 0;
+};
+
 /// The transcript-peek fill (docs/spec/endpoints.md §6.2): the one
 /// supplier whose operand is not a value but a trial oracle the
 /// interpreter builds over a cloned sponge, so the fill can read the
@@ -216,6 +245,14 @@ public:
   /// verifier-only profiles supply no fills.
   virtual const PowSearchSupplier *
   powSearch(llvm::StringRef contractDigest) const {
+    (void)contractDigest;
+    return nullptr;
+  }
+
+  /// The check supplier implementing a check-contract content digest,
+  /// or null — the executor turns null into zkc-E403, the fail-closed
+  /// default every unsupplied check keeps.
+  virtual const CheckSupplier *check(llvm::StringRef contractDigest) const {
     (void)contractDigest;
     return nullptr;
   }

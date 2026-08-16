@@ -175,15 +175,18 @@ def Pir_SlotOp
     a route instance or a kappa constant does change the id.
   }];
   let arguments = (ins Token:$thread, StringProp:$label,
-      StringProp:$payload_class, UnitProp:$unabsorbed,
+      StringProp:$payload_class,
+      DefaultValuedProp<StringProp, "\"1\"">:$count, UnitProp:$unabsorbed,
       OptionalProp<StringProp>:$instance, OptionalProp<StringProp>:$role,
       DefaultValuedProp<I64Prop, "0">:$idx, OptionalAttr<StrAttr>:$binding);
   let results = (outs Token:$out, Pir_ValType:$val);
   let assemblyFormat = [{
-    $thread $label `:` $payload_class (`unabsorbed` $unabsorbed^)?
+    $thread $label `:` $payload_class (`count` $count^)?
+    (`unabsorbed` $unabsorbed^)?
     (`in` $instance^)? (`as` $role^)? (`idx` $idx^)?
     (`binding` $binding^)? attr-dict
   }];
+  let hasVerifier = 1;
 }
 
 def Pir_ChalOp

@@ -1684,6 +1684,7 @@ class Slot(NamedTuple):
     absorbed: bool
     membership: tuple[str, str, int] | None
     binding: str | None = None
+    count: str = "1"
 
 
 class Chal(NamedTuple):
@@ -1749,10 +1750,18 @@ def slot(
     absorbed: bool,
     membership: tuple[str, str, int] | tuple[str, str] | None = None,
     binding: str | None = None,
+    count: str = "1",
 ) -> Slot:
     if membership is not None and len(membership) == 2:
         membership = (membership[0], membership[1], 0)
-    return Slot("slot", label, payload_class, absorbed, membership, binding)
+    if count != "1" and absorbed:
+        raise AssertionError(
+            "a counted slot must be unabsorbed: absorbed material has no "
+            "vector framing rule"
+        )
+    return Slot(
+        "slot", label, payload_class, absorbed, membership, binding, count
+    )
 
 
 def chal(
@@ -3068,12 +3077,23 @@ def canonical_document(
             if event.membership is not None:
                 instance, role, index = event.membership
                 membership = [transformer_pos[instance], role, index]
-            row = [
-                "slot",
-                event.payload_class,
-                1 if event.absorbed else 0,
-                membership,
-            ]
+            # A counted slot is its own event family: the scalar family
+            # keeps its exact historical encoding.
+            if event.count == "1":
+                row = [
+                    "slot",
+                    event.payload_class,
+                    1 if event.absorbed else 0,
+                    membership,
+                ]
+            else:
+                row = [
+                    "slot_vec",
+                    event.payload_class,
+                    event.count,
+                    1 if event.absorbed else 0,
+                    membership,
+                ]
             if event.binding is not None:
                 row.append(normalize_route_ref(event.binding))
             event_rows.append(row)
@@ -3173,7 +3193,7 @@ _LICENSES = {
     "const+absorb": {"const", "absorb"},
     "arg+absorb": {"absorb"},
     "read+absorb": {"read", "absorb"},
-    "read": {"read"},
+    "read": {"read", "read_vec"},
     "squeeze.scalar": {"squeeze"},
     "squeeze.vector": {"squeeze"},
     "assert_eq": {"assert_eq", "const", "f_neg", "f_add", "f_mul", "g_exp", "g_mul"},
@@ -3184,7 +3204,7 @@ _REALIZES = {
     "const+absorb": {"const", "absorb"},
     "arg+absorb": {"absorb"},
     "read+absorb": {"read", "absorb"},
-    "read": {"read"},
+    "read": {"read", "read_vec"},
     "squeeze.scalar": {"squeeze"},
     "squeeze.vector": {"squeeze"},
     "assert_eq": {"assert_eq"},
@@ -3255,7 +3275,21 @@ def project(
             sponge = ["r", emit(["absorb", sponge, value, src]), 0]
             value_ref[event.label] = value
         elif isinstance(event, Slot):
-            row = emit(["read", stream, event.label, event.payload_class, src])
+            if event.count == "1":
+                row = emit(
+                    ["read", stream, event.label, event.payload_class, src]
+                )
+            else:
+                row = emit(
+                    [
+                        "read_vec",
+                        stream,
+                        event.label,
+                        event.payload_class,
+                        event.count,
+                        src,
+                    ]
+                )
             stream, value = ["r", row, 0], ["r", row, 1]
             value_ref[event.label] = value
             if event.absorbed:
@@ -3375,7 +3409,7 @@ _PROVER_LICENSES = {
     "const+absorb": {"const", "absorb"},
     "arg+absorb": {"absorb"},
     "read+absorb": {"write", "absorb"},
-    "read": {"write"},
+    "read": {"write", "write_vec"},
     "squeeze.scalar": {"squeeze"},
     "squeeze.vector": {"squeeze"},
 }
@@ -3513,16 +3547,29 @@ def _project_prover(
             value_ref[event.label] = value
         elif isinstance(event, Slot):
             value = resolve_ref(event.binding)
-            row = emit(
-                [
-                    "write",
-                    stream,
-                    value,
-                    event.label,
-                    event.payload_class,
-                    src,
-                ]
-            )
+            if event.count == "1":
+                row = emit(
+                    [
+                        "write",
+                        stream,
+                        value,
+                        event.label,
+                        event.payload_class,
+                        src,
+                    ]
+                )
+            else:
+                row = emit(
+                    [
+                        "write_vec",
+                        stream,
+                        value,
+                        event.label,
+                        event.payload_class,
+                        event.count,
+                        src,
+                    ]
+                )
             stream = ["r", row, 0]
             value_ref[event.label] = value
             if event.absorbed:

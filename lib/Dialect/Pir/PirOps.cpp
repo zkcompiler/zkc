@@ -53,6 +53,24 @@ SlotOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
   return success();
 }
 
+LogicalResult SlotOp::verify() {
+  std::optional<uint64_t> parsed = zkc::challenge::parseCount(getCount());
+  if (!parsed)
+    return emitOpError()
+           << "[zkc-E146] count must be a canonical decimal from 1 through "
+              "2^20 (1 for scalar, 2..2^20 for vector), got \""
+           << getCount() << "\"";
+  // A counted slot is read-only material: absorption of a vector has no
+  // framing rule in the transcript-hash input, so admitting one would
+  // void the Binding Lemma's a-injectivity silently
+  // (docs/spec/carrier.md §7). Fail closed until a rule exists.
+  if (*parsed > 1 && !getUnabsorbed())
+    return emitOpError()
+           << "[zkc-E146] a counted slot must be unabsorbed: absorbed "
+              "material has no vector framing rule";
+  return success();
+}
+
 LogicalResult
 ChalOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          ChalOp::Adaptor adaptor,
