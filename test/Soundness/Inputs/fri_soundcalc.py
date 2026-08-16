@@ -373,9 +373,54 @@ for rule_id in (
     "zkc.rbr.fri.johnson",
     "zkc.rbr.fri.udr",
     "zkc.rbr.fri.johnson_linear",
+    "zkc.rbr.fri.random_words",
+    "zkc.rbr.fri.threshold_halving",
 ):
     if "fri_domain" not in declared_parameters(rule_id):
         failures.append(f"{rule_id}: no typed FRI-domain parameter")
+
+
+# --- the corrected conjecture (Diamond-Gruen 2025/2010 §1.5): the query loss
+# is (rho + eta)^ell with eta at or above (log2(e/rho) * rho) / log2 |F|; the
+# fold term follows the conjectured accounting at list size one, n/|F|. The
+# fixture prices eta_bar = 1/4096 at n = 10, k = 1: rho = 1/512, and the
+# declared floor uses log2 e <= 1443/1000 and log2 |F| >= 127.
+n, k, ell = 10, 1, 2
+rho = F(1, 2 ** (n - k))
+eta_bar = F(1, 4096)
+floor = (F(1443, 1000) + (n - k)) * rho / 127
+if not eta_bar >= floor:
+    failures.append("random-words: the fixture eta_bar is below the correction floor")
+rw_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell, "eta_bar": eta_bar}
+check(
+    "random-words fold term",
+    F(n, 1) / BIG_FIELD,
+    declared_round("zkc.rbr.fri.random_words", "fold", rw_point),
+)
+check(
+    "random-words query term",
+    (rho + eta_bar) ** ell,
+    declared_round("zkc.rbr.fri.random_words", "query", rw_point),
+)
+
+# --- threshold halving (2026/858): eps <= nR/|F| + (1 - delta/2)^q over
+# delta in (1 - sqrt(rho), 1 - rho). Under this row family's rate convention
+# nR = 2^k; the fixture prices delta = 63/64, strictly above the dyadic
+# Johnson gate 1 - 2^-ceil((n-k)/2) = 31/32 and below 1 - rho = 511/512.
+delta_th = F(63, 64)
+if not (1 - F(1, 2 ** -(-(n - k) // 2)) < delta_th < 1 - rho):
+    failures.append("threshold: the fixture delta is outside the cited window")
+th_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell, "delta": delta_th}
+check(
+    "threshold fold term",
+    F(2**k, 1) / BIG_FIELD,
+    declared_round("zkc.rbr.fri.threshold_halving", "fold", th_point),
+)
+check(
+    "threshold query term",
+    (1 - delta_th / 2) ** ell,
+    declared_round("zkc.rbr.fri.threshold_halving", "query", th_point),
+)
 
 if failures:
     raise SystemExit("soundcalc mismatches:\n  " + "\n  ".join(failures))

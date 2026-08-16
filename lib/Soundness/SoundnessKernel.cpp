@@ -191,6 +191,13 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
     return {"zkc.side.pow_pinned", {ValueSort::RoundAdjacency}};
   case MachineDeciderKind::PowAdjacent:
     return {"zkc.side.pow_adjacent", {ValueSort::RoundAdjacency}};
+  case MachineDeciderKind::RandomWordsEtaFloor:
+    return {"zkc.side.random_words_eta_floor",
+            {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer,
+             ValueSort::Integer}};
+  case MachineDeciderKind::ThresholdDeltaWindow:
+    return {"zkc.side.threshold_delta_window",
+            {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer}};
   case MachineDeciderKind::DuplexSpine:
     return {"zkc.side.duplex_spine", {ValueSort::PathTransition}};
   case MachineDeciderKind::CodecBiasDeclared:

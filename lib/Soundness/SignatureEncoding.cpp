@@ -259,6 +259,10 @@ const char *machineDeciderKindName(MachineDeciderKind kind) {
     return "udr_domain_floor";
   case MachineDeciderKind::UdrThetaWindow:
     return "udr_theta_window";
+  case MachineDeciderKind::RandomWordsEtaFloor:
+    return "random_words_eta_floor";
+  case MachineDeciderKind::ThresholdDeltaWindow:
+    return "threshold_delta_window";
   case MachineDeciderKind::PowPinned:
     return "pow_pinned";
   case MachineDeciderKind::PowAdjacent:
