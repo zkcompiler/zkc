@@ -1363,8 +1363,10 @@ Expected<ReductionContract> parseReductionContract(
             sourceCount = round.challengeUse.count ? round.challengeUse.count : 1;
         const CheckOperandSegment *operand =
             findOperand(*checkContract, attachment.targetRole);
-        if (!operand ||
-            operand->multiplicity.kind != OperandMultiplicityKind::Exact ||
+        if (!operand)
+          return file.error(attachmentContext +
+                            " references an unknown check operand role");
+        if (operand->multiplicity.kind != OperandMultiplicityKind::Exact ||
             sourceCount < 2 ||
             operand->multiplicity.value != sourceCount)
           return file.error(attachmentContext +
@@ -1388,8 +1390,10 @@ Expected<ReductionContract> parseReductionContract(
                               "dependency or message selectors");
         const CheckOperandSegment *operand =
             findOperand(*checkContract, attachment.targetRole);
-        if (!operand ||
-            operand->multiplicity.kind != OperandMultiplicityKind::Exact ||
+        if (!operand)
+          return file.error(attachmentContext +
+                            " references an unknown check operand role");
+        if (operand->multiplicity.kind != OperandMultiplicityKind::Exact ||
             operand->multiplicity.value != parsedSource->arguments.size())
           return file.error(attachmentContext +
                             " value_identity_list length must equal the "

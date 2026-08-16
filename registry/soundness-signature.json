@@ -31,6 +31,20 @@
       "notes": "object: pairing_group_source algebra:bls12_381:g1.",
       "statement": "output a commitment C, a point z, and two accepting openings (v, w), (v', w') at z with v != v'"
     },
+    "zkc.assume.random_words_conjecture": {
+      "citations": [
+        "Diamond-Gruen, ePrint 2025/2010, Section 1.5 (the corrected random-words conjecture)"
+      ],
+      "loss_display": "assumption; the query bound (rho + eta)^ell holds only under it",
+      "notes": "The corrected random-words model: a word sampled by the batching challenge behaves, for distance-to-code purposes, like a uniformly random word up to the stated eta correction. This is a conjecture, refuted at capacity in its uncorrected form by the same paper; every derivation through zkc.rbr.fri.random_words carries this entry, so a conjectured number never reads as a proven one. Discharged: never - it is the assumption the conjectured mode is priced under.",
+      "statement_basis": [
+        {
+          "anchor": "Section 1.5",
+          "revision": "2025-11-04",
+          "source": "eprint:2025/2010"
+        }
+      ]
+    },
     "zkc.assume.sdh": {
       "citations": [
         "Boneh-Boyen; as used by KZG10 Def 2.3 (cacr2010-10)"
@@ -51,6 +65,20 @@
       ],
       "notes": "the scope of the assumption is the sumcheck round-by-round entry rule",
       "statement": "the d/|C| root-counting bound holds for uniform sampling from any subset C of the field (the cited source states its instances at full-field sampling only, and the ArkLib mechanization covers full-field sampling only); this generality is the assumption's own content"
+    },
+    "zkc.assume.threshold_halving_unvetted": {
+      "citations": [
+        "Chai-Fan, ePrint 2026/858 (announced 2026-05-05; not peer-reviewed at recording time)"
+      ],
+      "loss_display": "assumption; the row's theorem stands as cited, unvetted",
+      "notes": "The threshold-halving theorem is months old and not peer-reviewed; the authors claim a Lean 4 formalization that this registry has not independently checked. Every derivation through zkc.rbr.fri.threshold_halving carries this entry: the bound is proven per the citation, and the citation's standing is a recorded obligation. A refutation flips the row's status exactly as the capacity family's was flipped - pinned, recorded, refused - and this entry is then vacuous. Discharged: by community vetting or an independently checked formalization, at which point the row drops this hypothesis.",
+      "statement_basis": [
+        {
+          "anchor": "Theorem 1 (main)",
+          "revision": "2026-05-01",
+          "source": "eprint:2026/858"
+        }
+      ]
     },
     "zkc.completeness.evalopen": {
       "citations": [
@@ -218,6 +246,20 @@
     "zkc.hyp.fiat_shamir_profile_required": {
       "notes": "discharged at: seal policy / FS construction profile",
       "statement": "interactive completeness degrades to 2^-z: admissible only under an FS construction profile"
+    },
+    "zkc.hyp.fixed_point_free_involution_domain": {
+      "citations": [
+        "Chai-Fan, ePrint 2026/858 (the domain hypothesis of the threshold-halving theorem)"
+      ],
+      "loss_display": "hypothesis; no loss of its own",
+      "notes": "The evaluation domain L_0 admits a fixed-point-free involution compatible with the fold pairing - the standard smooth two-adic coset in either characteristic satisfies it (x maps to -x). Discharged at: vocabulary admission, where the family's domain instance names a two-adic coset.",
+      "statement_basis": [
+        {
+          "anchor": "Theorem 1 (main), domain hypothesis",
+          "revision": "2026-05-01",
+          "source": "eprint:2026/858"
+        }
+      ]
     },
     "zkc.hyp.ideal_unsalted_sponge": {
       "notes": "discharged at: construction-profile admission",
@@ -507,7 +549,7 @@
         "wanted": "a mechanized statement of the corrected random-words conjecture's query bound; the statement is a conjecture, so what could be mechanized today is only the accounting shape, and none was found"
       },
       "loss_display": "eps = max{n/|F|, (rho + eta_bar)^ell} with rho = 2^-(n-k); conjectured",
-      "notes": "|F|, n, k, and ell are verified from the fold challenge space, query-domain size, realized fold count, and query-vector count. eta_bar is a request-resolved rational gated at or above the Diamond-Gruen correction (log2(e/rho) * rho / log2 |F|) by zkc.side.random_words_eta_floor, with log2 e bounded above by 1443/1000 and log2 |F| bounded below by its floor, so the priced eta_bar never understates the correction. The conjectured fold term n/|F| follows the conjectured accounting's list-size-one reading; the query term is the corrected conjecture itself. The conjecture rides the obligations ledger as zkc.assume.random_words_conjecture: a conjectured number never blurs into a proven one, because the ledger says which it is. model: classical.",
+      "notes": "|F|, n, k, and ell are verified from the fold challenge space, query-domain size, realized fold count, and query-vector count. eta_bar is a request-resolved rational gated at or above the Diamond-Gruen correction (log2(e/rho) * rho / log2 |F|) by zkc.side.random_words_eta_floor, with log2 e bounded above by 1443/1000 and log2 |F| bounded below by ceil(log2 |F|) - 1, so the priced eta_bar never understates the correction. The conjectured fold term n/|F| follows the conjectured accounting's list-size-one reading; the query term is the corrected conjecture itself. The conjecture rides the obligations ledger as zkc.assume.random_words_conjecture: a conjectured number never blurs into a proven one, because the ledger says which it is. model: classical.",
       "statement_basis": [
         {
           "anchor": "Section 1.5",

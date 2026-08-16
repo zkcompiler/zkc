@@ -22,19 +22,18 @@ use p3_dft::TwoAdicSubgroupDft;
 use p3_field::coset::TwoAdicMultiplicativeCoset;
 use p3_field::extension::BinomialExtensionField;
 use p3_field::{
-    batch_multiplicative_inverse, BasedVectorSpace, Field, PrimeCharacteristicRing, PrimeField32,
+    BasedVectorSpace, Field, PrimeCharacteristicRing, PrimeField32, batch_multiplicative_inverse,
 };
 use p3_fri::{FriFoldingStrategy, TwoAdicFriFolding};
+use p3_matrix::Matrix;
 use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::RowMajorMatrix;
-use p3_matrix::Matrix;
 use p3_util::reverse_slice_index_bits;
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use zkc_plonky3_replay::{
-    fri_parameters_for,
     ChallengeMmcs, Compress, Dft, Event, FieldHash, Pcs, PlainChallenger, RecordingChallenger, Val,
-    ValMmcs, fri_parameters,
+    ValMmcs, fri_parameters_for,
 };
 
 type Challenge = BinomialExtensionField<Val, 4>;
@@ -165,6 +164,9 @@ fn main() {
             .as_str()
             .and_then(|text| text.parse().ok())
             .unwrap_or_else(|| fail("pow space is not decimal"));
+        if !space.is_power_of_two() {
+            fail("pow space is not a power of two");
+        }
         space.trailing_zeros() as usize
     };
     let pcs = Pcs::new(
@@ -272,8 +274,7 @@ fn main() {
     for (index, row) in rows.iter().enumerate() {
         let tag = row[0].as_str().unwrap();
         match tag {
-            "init" | "const" | "hole_call" | "end_stream" | "finish" | "write"
-            | "write_vec" => {}
+            "init" | "const" | "hole_call" | "end_stream" | "finish" | "write" | "write_vec" => {}
             "absorb" => {
                 let value_ref = row[2].to_string();
                 let class = class_of(&row[2], rows, statement_labels.len(), witness_labels);
@@ -472,7 +473,10 @@ challenger events ({noop_pows} zero-bit commit pows enumerated as no-ops)",
         round_trees.push(tree);
     }
     let digest_words = |digest: &[Val; 8]| -> Vec<u32> {
-        digest.iter().map(|element| element.as_canonical_u32()).collect()
+        digest
+            .iter()
+            .map(|element| element.as_canonical_u32())
+            .collect()
     };
     let mut leaves_words: Vec<u32> = Vec::new();
     let mut input_path_words: Vec<Vec<u32>> = Vec::new();

@@ -7,9 +7,10 @@ scoped-claims policy).
 - Instance: query_log2 21, k 20, ell 100, grinding 16 bits — SP1's
   core-config arithmetic (rate 1/2, 100 queries, 16-bit grind) at
   BabyBear-quartic; trace 2^20 x 1 column; wire 754 KiB.
-- Machine: Linux 6.8.0-134-generic, 32 cpus. Revision: 34c585a
-  (upstream pin 3da3467). Toolchain: 1.97.1, release
-  profile, serial grind graph.
+- Machine: Linux 6.8.0-134-generic, 32 cpus. Revision: branch
+  feat/fri-grading, the pull request that introduced this directory;
+  upstream pin 3da3467. Toolchain: 1.97.1, release profile, serial
+  grind graph.
 
 ## Wall clock (criterion, 10 samples)
 

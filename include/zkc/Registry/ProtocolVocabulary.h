@@ -356,8 +356,6 @@ enum class TerminalAttachmentKind {
   ValueIdentity,
   MaterialRefVectorEquality,
   CommonMaterialRefEquality,
-  ValueIdentityVector,
-  ValueIdentityList,
   DescriptorDigest,
 };
 

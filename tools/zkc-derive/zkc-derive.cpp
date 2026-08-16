@@ -259,15 +259,25 @@ int main(int argc, char **argv) {
   if (headline) {
     const llvm::json::Object *conclusion =
         witness->getAsObject()->getObject("conclusion");
-    const llvm::json::Array *rounds =
-        conclusion->getObject("result")->getArray("rounds");
+    const llvm::json::Object *result =
+        conclusion ? conclusion->getObject("result") : nullptr;
+    const llvm::json::Array *rounds = result ? result->getArray("rounds") : nullptr;
+    if (!rounds)
+      return fail("--headline displays round-by-round results; this "
+                  "witness concludes in a different notion");
     std::optional<int64_t> weakest;
     for (const llvm::json::Value &entry : *rounds) {
       const llvm::json::Object *round = entry.getAsObject();
       llvm::StringRef index = *round->getString("round_index");
-      llvm::StringRef constant =
-          *round->getObject("bound")->getObject("quantity")->getString(
-              "constant");
+      const llvm::json::Object *quantity =
+          round->getObject("bound")->getObject("quantity");
+      if (const llvm::json::Array *terms = quantity->getArray("resource_terms"))
+        if (!terms->empty())
+          return fail("--headline displays constant bounds; this witness's "
+                      "round " +
+                      llvm::Twine(index) +
+                      " carries resource terms the display would drop");
+      llvm::StringRef constant = *quantity->getString("constant");
       auto [num, den] = constant.split('/');
       auto value = den.empty()
                        ? zkc::registry::Rational::fromDecimal(num)

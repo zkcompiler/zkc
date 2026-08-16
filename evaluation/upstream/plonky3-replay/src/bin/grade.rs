@@ -10,6 +10,14 @@
 //! `restore_paths` refuses any digest count other than its own
 //! frontier's, so a decoder defect surfaces as a rejection, never as
 //! an acceptance the prover did not earn.
+//!
+//! The judge is one-directional by design: it grades the decoded
+//! statement, and wire bytes the decoding never consumes — the
+//! recomputable digests at paired frontier levels — are outside its
+//! sight. Full wire validity (every byte canonical, every path
+//! authenticated per query) is the zkc verifiers' judgment; a
+//! grade-accept is upstream's verdict on the proof, not on the wire's
+//! canonical form.
 
 use std::env;
 use std::fs;
@@ -25,7 +33,7 @@ use p3_symmetric::{Hash, MerkleCap};
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use zkc_plonky3_replay::{
-    fri_parameters_for, ChallengeMmcs, Compress, Dft, FieldHash, Pcs, PlainChallenger, Val, ValMmcs,
+    ChallengeMmcs, Compress, Dft, FieldHash, Pcs, PlainChallenger, Val, ValMmcs, fri_parameters_for,
 };
 
 type Challenge = BinomialExtensionField<Val, 4>;
@@ -61,12 +69,20 @@ struct Cursor<'a> {
     at: usize,
 }
 
+const BABYBEAR: u32 = 0x78000001;
+
 impl<'a> Cursor<'a> {
     fn word(&mut self) -> u32 {
         if self.at + 4 > self.bytes.len() {
             fail("wire ends inside a word");
         }
         let word = u32::from_be_bytes(self.bytes[self.at..self.at + 4].try_into().unwrap());
+        // Canonical-or-fail, the zkc wire's own rule: a non-canonical
+        // word would reduce silently and grade a wire no zkc verifier
+        // accepts.
+        if word >= BABYBEAR {
+            fail("wire word is outside the canonical field range");
+        }
         self.at += 4;
         word
     }
@@ -91,14 +107,24 @@ fn prune(entries: &[usize], levels: usize, paths: &[Vec<[Val; 8]>]) -> PrunedMer
     frontier.dedup();
     for level in 0..levels {
         // Any query whose entry shifts onto a frontier member supplies
-        // that member's sibling digest at this level.
+        // that member's sibling digest at this level; every such query
+        // must supply the same digest, so the judge never silently
+        // prefers one copy of a disagreeing wire.
         let digest_of = |member: usize| -> [Val; 8] {
-            for (query, entry) in entries.iter().enumerate() {
+            let mut found: Option<[Val; 8]> = None;
+            for (entry, path) in entries.iter().zip(paths) {
                 if entry >> level == member {
-                    return paths[query][level];
+                    let digest = path[level];
+                    match found {
+                        None => found = Some(digest),
+                        Some(first) if first != digest => {
+                            fail("witnessing paths disagree on a frontier digest")
+                        }
+                        Some(_) => {}
+                    }
                 }
             }
-            fail("frontier member has no witnessing path");
+            found.unwrap_or_else(|| fail("frontier member has no witnessing path"))
         };
         let mut next = Vec::new();
         let mut cursor = 0;
@@ -122,7 +148,9 @@ fn prune(entries: &[usize], levels: usize, paths: &[Vec<[Val; 8]>]) -> PrunedMer
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 4 {
-        fail("usage: grade <canonical-verifier-document.json> <statement-f_root-decimal-file> <wire-hex-file>");
+        fail(
+            "usage: grade <canonical-verifier-document.json> <statement-f_root-decimal-file> <wire-hex-file>",
+        );
     }
     let bytes = fs::read(&args[1]).unwrap_or_else(|_| fail("cannot read document"));
     let mut hasher = Sha256::new();
@@ -172,7 +200,8 @@ fn main() {
         .iter()
         .filter(|row| row[0] == "squeeze" && row[3] == "ext_field")
         .count()
-        - 2;
+        .checked_sub(2)
+        .unwrap_or_else(|| fail("fewer extension squeezes than the chain uses"));
     if query_bits != log_size + 1 || fold_rounds + 1 != query_bits {
         fail("the schedule is not the value-faithful family's shape");
     }
@@ -217,7 +246,8 @@ fn main() {
     let perm = default_babybear_poseidon2_16();
     let mut challenger = PlainChallenger::new(perm.clone());
     challenger.observe(Val::from_usize(log_size));
-    let commitment: Hash<Val, Val, 8> = Hash::from(core::array::from_fn::<Val, 8, _>(|i| statement[i]));
+    let commitment: Hash<Val, Val, 8> =
+        Hash::from(core::array::from_fn::<Val, 8, _>(|i| statement[i]));
     let commitment_cap = MerkleCap::new(vec![statement]);
     challenger.observe(commitment_cap.clone());
     let zeta: Challenge = challenger.sample_algebra_element();
@@ -283,8 +313,10 @@ fn main() {
         val_mmcs,
         fri_parameters_for(challenge_mmcs, queries, grind_bits),
     );
-    let domain =
-        <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(&pcs, 1 << log_size);
+    let domain = <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(
+        &pcs,
+        1 << log_size,
+    );
     let mut verifier_challenger = PlainChallenger::new(perm);
     verifier_challenger.observe(Val::from_usize(log_size));
     verifier_challenger.observe(commitment_cap.clone());

@@ -45,7 +45,22 @@ def main() -> None:
         "--rt-path", str(ROOT / "emit" / "zkc-rt"),
         "--out", str(OUT / "crate"),
         "--crate-name", "zkc-fri-prover")
-    print(f"generated: {OUT / 'crate'}")
+    # The golden wire: the replay runner drives the pinned upstream
+    # prover over the same document; the bench holds the emitted leg to
+    # byte equality with it before timing anything, so the two legs can
+    # never silently measure different work.
+    import re
+    record = subprocess.run(
+        ["cargo", "run", "--locked", "--quiet", "--release",
+         "--manifest-path",
+         str(ROOT / "evaluation" / "upstream" / "plonky3-replay" / "Cargo.toml"),
+         "--bin", "prove", "--", str(OUT / "prover.json")],
+        check=True, capture_output=True, text=True).stdout
+    wire = re.search(r"wire: ([0-9a-f]+)", record).group(1)
+    froot = re.search(r"statement f_root: (\d+)", record).group(1)
+    (OUT / "golden-wire.hex").write_text(wire)
+    (OUT / "golden-froot.txt").write_text(froot)
+    print(f"generated: {OUT / 'crate'} (golden wire {len(wire) // 2} bytes)")
 
 
 if __name__ == "__main__":

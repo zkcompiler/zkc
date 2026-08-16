@@ -1,0 +1,21 @@
+# The sealed judgment states the query-phase binding, not just the
+# construction: a spine that cites the same sealed contracts but wires
+# the consistency check's beta or root operands out of the declared
+# dependency order is refused at seal, because the value_identity_list
+# attachments hold each operand to the reduction's own local SSA value.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/spine.mlir -o %t/sealed.mlir
+
+# Swapping two fold challenges in the check's beta positions leaves the
+# construction well-typed and every contract citation intact; only the
+# attachment sees it.
+# RUN: %python -c "import sys; lines=open(sys.argv[1]).read().splitlines(keepends=True); open(sys.argv[2],'w').writelines([l.replace('%fold1, %fold2','%fold2, %fold1') if 'pir.check \"query_consistency\"' in l else l for l in lines])" %t/spine.mlir %t/beta-swap.mlir
+# RUN: not zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/beta-swap.mlir -o %t/x.mlir 2>&1 | FileCheck %s --check-prefix=BETAS
+# BETAS: [zkc-E323] local SSA list attachment does not match role 'betas'
+
+# The same for the per-round commitment roots.
+# RUN: %python -c "import sys; lines=open(sys.argv[1]).read().splitlines(keepends=True); open(sys.argv[2],'w').writelines([l.replace('%g1, %g2','%g2, %g1') if 'pir.check \"query_consistency\"' in l else l for l in lines])" %t/spine.mlir %t/root-swap.mlir
+# RUN: not zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/root-swap.mlir -o %t/x.mlir 2>&1 | FileCheck %s --check-prefix=ROOTS
+# ROOTS: [zkc-E323] local SSA list attachment does not match role 'roots'

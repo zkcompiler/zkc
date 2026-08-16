@@ -1666,7 +1666,14 @@ impl<'a> Walk<'a> {
         if repetitions > 0 {
             // Fixed prefix as a tuple, the repeating tail as one Vec
             // the generated code unpacks group by group, refusing a
-            // fill whose group count is not the schedule's.
+            // fill whose group count is not the schedule's. An empty
+            // prefix has no destructure form; no fill declares one.
+            if signature.results.is_empty() {
+                return Err(format!(
+                    "row {index}: hole '{label}' binds a repeating tail with no fixed \
+                     prefix; the bound fill vocabulary declares none"
+                ));
+            }
             let prefix: Vec<String> = names[..signature.results.len()].to_vec();
             let groups_name = format!("groups_{index}");
             self.line(

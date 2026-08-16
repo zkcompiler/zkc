@@ -1,10 +1,12 @@
 //! The generation-versus-upstream benchmark (the wall-clock half of
 //! the gate): the pinned upstream prover and the emitted zkc prover
 //! over the same sp1-core-shape instance — one deterministic 2^20
-//! column, rate 1/2, 100 queries, a 16-bit grind. Wire byte equality
-//! is asserted once before any timing, so the two legs can never
-//! silently diverge into measuring different work; the recorded
-//! numbers live in RECORD.md with machine and revision provenance.
+//! column, rate 1/2, 100 queries, a 16-bit grind. Before anything is
+//! timed, the emitted wire is held byte for byte to the golden wire
+//! gen.py recorded from the replay runner — the upstream-driven
+//! assembly of this same document — so the two legs can never silently
+//! diverge into measuring different work; the recorded numbers live in
+//! RECORD.md with machine and revision provenance.
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use p3_baby_bear::default_babybear_poseidon2_16;
@@ -71,6 +73,31 @@ fn witness_bytes() -> Vec<u8> {
     (1..=1u32 << LOG_SIZE).flat_map(|w| w.to_be_bytes()).collect()
 }
 
+fn hex_of(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Little-limb-first decimal of the eight statement words — the run
+/// record's own packing.
+fn statement_decimal(words: &[u32]) -> String {
+    let mut limbs: Vec<u32> = words.to_vec();
+    let mut digits = Vec::new();
+    while limbs.iter().any(|&limb| limb != 0) {
+        let mut remainder: u64 = 0;
+        for limb in limbs.iter_mut().rev() {
+            let value = (remainder << 32) | u64::from(*limb);
+            *limb = (value / 10) as u32;
+            remainder = value % 10;
+        }
+        digits.push(b'0' + remainder as u8);
+    }
+    if digits.is_empty() {
+        return "0".to_owned();
+    }
+    digits.reverse();
+    String::from_utf8(digits).unwrap()
+}
+
 fn emitted_prove(statement: &zkc_fri_prover::Statement) -> Vec<u8> {
     let witness = zkc_fri_prover::Witness {
         codeword: zkc_fri_prover::zkc_rt::Payload::new(witness_bytes()),
@@ -90,9 +117,25 @@ fn bench(criterion: &mut Criterion) {
         f_root: statement_words.clone().try_into().expect("one cap root"),
     };
     let emitted_wire = emitted_prove(&statement);
-    assert!(
-        !emitted_wire.is_empty(),
-        "the emitted prover produced an empty wire"
+    let golden = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/generated/golden-wire.hex"
+    ))
+    .expect("gen.py records the golden wire before the bench runs");
+    let golden_froot = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/generated/golden-froot.txt"
+    ))
+    .expect("gen.py records the golden statement");
+    assert_eq!(
+        statement_decimal(&statement_words),
+        golden_froot.trim(),
+        "the upstream leg's statement is not the golden statement"
+    );
+    assert_eq!(
+        hex_of(&emitted_wire),
+        golden.trim(),
+        "the emitted wire is not the runner's golden wire"
     );
 
     let mut group = criterion.benchmark_group("fri-prove-sp1-shape");
