@@ -59,14 +59,11 @@ LogicalResult SlotOp::verify() {
     return emitOpError()
            << "[zkc-E146] " << zkc::challenge::kCountGrammarMessage
            << getCount() << "\"";
-  // A counted slot is read-only material: absorption of a vector has no
-  // framing rule in the transcript-hash input, so admitting one would
-  // void the Binding Lemma's a-injectivity silently
-  // (docs/spec/carrier.md §7). Fail closed until a rule exists.
-  if (*parsed > 1 && !getUnabsorbed())
-    return emitOpError()
-           << "[zkc-E146] a counted slot must be unabsorbed: absorbed "
-              "material has no vector framing rule";
+  // An absorbed counted slot advances the transcript as its elements in
+  // index order, each framed exactly as a scalar of its class; the count
+  // is a static constant of the sealed instance, so the framing stays
+  // injective and prefix-free (docs/spec/kernel.md §1.1,
+  // docs/spec/carrier.md §7).
   return success();
 }
 

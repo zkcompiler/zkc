@@ -1,0 +1,53 @@
+# REQUIRES: cargo
+# The family's shape knobs, executed end to end at the two points the
+# baked template never covered: rate 1/4 (log_blowup 2) and a two-
+# coefficient final polynomial (log_final_poly_len 1). Each instance
+# runs the whole pipeline — family, seal, both projections, the pinned
+# upstream runner, the emitted prover's byte gate against the runner's
+# wire — and the emitted wire is graded by the pinned upstream
+# verifier, an implementation zkc does not own. The tail instance is
+# the first execution of the counted-final-polynomial paths in every
+# leg, including the no-coset final evaluation point.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# ----- Rate 1/4 -----
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf-quarter.json --emit-vocabulary=%t/q.vocab.json --emit-spine=%t/q.spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/q.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/q.spine.mlir -o %t/q.sealed.mlir
+# RUN: zkc-opt '-pir-project=endpoint-kind=prover_skeleton protocol-vocabulary=%t/q.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/q.sealed.mlir -o %t/q.prover.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/q.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/q.sealed.mlir -o %t/q.verifier.mlir
+# RUN: zkc-translate --oir-canonical %t/q.prover.mlir -o %t/q.prover.json
+# RUN: zkc-translate --oir-canonical %t/q.verifier.mlir -o %t/q.verifier.json
+# RUN: zkc-translate --oir-id %t/q.prover.mlir -o %t/q.prover.id
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/q.prover.json > %t/q.runner.out
+# RUN: FileCheck %s --check-prefix=RUNNER < %t/q.runner.out
+# RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/q.runner.out %t/q.prover.id %t/q.vectors.json prover
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/q.prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/q.vectors.json --out %t/q.crate --crate-name zkc-fri-quarter
+# RUN: cargo test --quiet --manifest-path %t/q.crate/Cargo.toml
+# RUN: %python -c "import re,sys; t=open(sys.argv[1]).read(); open(sys.argv[2],'w').write(re.search(r'wire: ([0-9a-f]+)', t).group(1)); open(sys.argv[3],'w').write(re.search(r'statement f_root: (\d+)', t).group(1))" %t/q.runner.out %t/q.wire.hex %t/q.froot.txt
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin grade -- %t/q.verifier.json %t/q.froot.txt %t/q.wire.hex | FileCheck %s --check-prefix=GRADE
+
+# ----- Two-coefficient final polynomial -----
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf-tail.json --emit-vocabulary=%t/f.vocab.json --emit-spine=%t/f.spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/f.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/f.spine.mlir -o %t/f.sealed.mlir
+# RUN: zkc-opt '-pir-project=endpoint-kind=prover_skeleton protocol-vocabulary=%t/f.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/f.sealed.mlir -o %t/f.prover.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/f.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/f.sealed.mlir -o %t/f.verifier.mlir
+# RUN: zkc-translate --oir-canonical %t/f.prover.mlir -o %t/f.prover.json
+# RUN: zkc-translate --oir-canonical %t/f.verifier.mlir -o %t/f.verifier.json
+# RUN: zkc-translate --oir-id %t/f.prover.mlir -o %t/f.prover.id
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin prove -- %t/f.prover.json > %t/f.runner.out
+# RUN: FileCheck %s --check-prefix=RUNNER < %t/f.runner.out
+# RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/f.runner.out %t/f.prover.id %t/f.vectors.json prover
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/f.prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/f.vectors.json --out %t/f.crate --crate-name zkc-fri-tail
+# RUN: cargo test --quiet --manifest-path %t/f.crate/Cargo.toml
+# RUN: %python -c "import re,sys; t=open(sys.argv[1]).read(); open(sys.argv[2],'w').write(re.search(r'wire: ([0-9a-f]+)', t).group(1)); open(sys.argv[3],'w').write(re.search(r'statement f_root: (\d+)', t).group(1))" %t/f.runner.out %t/f.wire.hex %t/f.froot.txt
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin grade -- %t/f.verifier.json %t/f.froot.txt %t/f.wire.hex | FileCheck %s --check-prefix=GRADE
+
+# A corrupted final coefficient in the tail wire must grade rejected:
+# the second coefficient's bytes sit right after the last fold root.
+# RUN: %python -c "import sys; w=bytearray(bytes.fromhex(open(sys.argv[1]).read())); w[128] ^= 1; open(sys.argv[2],'w').write(w.hex())" %t/f.wire.hex %t/f.bad.hex
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin grade -- %t/f.verifier.json %t/f.froot.txt %t/f.bad.hex | FileCheck %s --check-prefix=GRADEBAD
+
+# RUNNER: upstream verify: accepted the runner's proof at the pinned revision
+# GRADE: upstream grade: accepted the decoded wire at the pinned revision
+# GRADEBAD: upstream grade: rejected

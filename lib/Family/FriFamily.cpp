@@ -34,6 +34,13 @@ static const ParamSpec kFriParams[] = {
     {"field", true, "fold-challenge space cardinality, exact decimal string"},
     {"query_log2", true,
      "the query space is 2^query_log2 (dyadic evaluation domain)"},
+    {"log_blowup", false,
+     "the rate is 2^-log_blowup; defaults to query_log2 - k - "
+     "log_final_poly_len, and an explicit value must satisfy the shape "
+     "equation query_log2 = k + log_blowup + log_final_poly_len"},
+    {"log_final_poly_len", false,
+     "the fold chain stops at a final polynomial of 2^log_final_poly_len "
+     "coefficients; defaults to 0 (fold to a constant)"},
     {"ell", true, "iid query repetitions (the vector-mode count)"},
     {"analysis", true,
      "which analysis parameters the reduce declares (none, johnson, "
@@ -51,11 +58,10 @@ static const ParamSpec kFriParams[] = {
      "claim anchors: {contract, statement}, each sha256:<64 hex>"},
     {"value_faithful", false,
      "emit the challenger-value-faithful spine "
-     "(evaluation/upstream/plonky3-replay/README.md): final-polynomial "
-     "coefficient in "
-     "the clear, per-round arity binds, a one-word nonce, and the "
-     "construction routes that make the prover endpoint derivable; "
-     "requires grinding_bits"},
+     "(evaluation/upstream/plonky3-replay/README.md): the final "
+     "polynomial's coefficients in the clear, per-round arity binds, a "
+     "one-word nonce, and the construction routes that make the prover "
+     "endpoint derivable; requires grinding_bits"},
 };
 
 ArrayRef<ParamSpec> zkc::family::friParamSpecs() { return kFriParams; }
@@ -156,6 +162,26 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
     return err("'query_log2' must be a positive integer (at most 1024)");
   desc.queryLog2 = *queryLog2;
 
+  bool explicitBlowup = top->get("log_blowup") != nullptr;
+  if (explicitBlowup) {
+    std::optional<int64_t> value = top->getInteger("log_blowup");
+    if (!value || *value < 1 || *value > 1024)
+      return err("'log_blowup' must be a positive integer (at most 1024)");
+    desc.logBlowup = *value;
+  }
+  if (top->get("log_final_poly_len")) {
+    // The final polynomial rides one counted slot, so 2^log_final_poly_len
+    // lives in the shared count domain (at most 2^20); naming the cap
+    // here keeps the refusal at the knob rather than an IR-level count
+    // grammar error three tools later.
+    std::optional<int64_t> value = top->getInteger("log_final_poly_len");
+    if (!value || *value < 0 || *value > 20)
+      return err("'log_final_poly_len' must be an integer from 0 through 20 "
+                 "(2^log_final_poly_len coefficients ride one counted slot "
+                 "in the shared count domain)");
+    desc.logFinalPolyLen = *value;
+  }
+
   std::optional<int64_t> ell = top->getInteger("ell");
   // The carrier's vector mode floors the count at 2 (a one-draw
   // "vector" would price as repetition without being one); name that
@@ -236,17 +262,6 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
     if (*flag && !desc.grindingBits)
       return err("'value_faithful' requires grinding_bits: the pinned "
                  "challenger semantics carry a grinding round");
-    // The value-faithful template bakes log_blowup 1 and a one-
-    // coefficient final polynomial, so the shape equation
-    // log_blowup + log_final_poly_len + k = query_log2 admits exactly
-    // one fold depth; any other instance would seal a family whose
-    // fold-consistency obligation no conformant supplier can
-    // discharge.
-    if (*flag && desc.k != desc.queryLog2 - 1)
-      return err("'value_faithful' requires k = query_log2 - 1: the "
-                 "template bakes blowup 2^1 and a one-coefficient final "
-                 "polynomial, so the fold chain must cover the rest of "
-                 "the domain");
     desc.valueFaithful = *flag;
   }
 
@@ -325,13 +340,28 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
   }
 
   // Cross-parameter domains the instance would otherwise fail at
-  // dispatch (fri_rate_below_one; space embedding): named at the
+  // dispatch (the shape side condition; space embedding): named at the
   // knobs, so a sweep sees which parameter to move, not an IR-level
   // refusal three tools later.
-  if (desc.queryLog2 <= desc.k)
-    return err("'query_log2' must exceed 'k' (rate below one: the "
-               "evaluation domain 2^query_log2 must be larger than the "
-               "degree 2^k)");
+  //
+  // The shape equation query_log2 = k + log_blowup + log_final_poly_len
+  // is the family's one geometric fact: the evaluation domain covers
+  // the message at rate 2^-log_blowup and the fold chain stops at a
+  // final polynomial of 2^log_final_poly_len coefficients. An omitted
+  // log_blowup is derived from it; an explicit one must satisfy it.
+  // log_blowup >= 1 subsumes rate-below-one.
+  if (!explicitBlowup)
+    desc.logBlowup = desc.queryLog2 - desc.k - desc.logFinalPolyLen;
+  if (explicitBlowup &&
+      desc.queryLog2 != desc.k + desc.logBlowup + desc.logFinalPolyLen)
+    return err("'log_blowup' contradicts the shape equation query_log2 = "
+               "k + log_blowup + log_final_poly_len (move whichever knob "
+               "the sweep owns)");
+  if (desc.logBlowup < 1)
+    return err("'query_log2' must equal k + log_blowup + "
+               "log_final_poly_len with log_blowup at least 1 (rate below "
+               "one: the evaluation domain covers the message and the fold "
+               "chain stops at the final polynomial)");
   APInt fieldValue(/*numBits=*/unsigned(4 * desc.fieldOrder.size() + 8),
                    desc.fieldOrder, /*radix=*/10);
   unsigned width = std::max<unsigned>(fieldValue.getBitWidth(),
@@ -388,7 +418,7 @@ static llvm::json::Object checkSegment(StringRef role, StringRef valueClass,
 /// input tree has height 2^query_log2, round i's tree height
 /// 2^(query_log2 - i), and every path runs leaf to a capless root.
 struct QueryShape {
-  int64_t ell, k, queryLog2;
+  int64_t ell, k, queryLog2, finalLen;
   int64_t inputPaths() const { return ell * queryLog2; }
   int64_t siblings() const { return ell * k; }
   int64_t roundPaths() const {
@@ -455,7 +485,8 @@ static llvm::json::Array consistencyOperands(const QueryShape &shape) {
   operands.push_back(checkSegment("opened", "ext_field", 1));
   operands.push_back(checkSegment("alpha", "ext_field", 1));
   operands.push_back(checkSegment("betas", "ext_field", shape.k));
-  operands.push_back(checkSegment("final_coefficients", "ext_field", 1));
+  operands.push_back(
+      checkSegment("final_coefficients", "ext_field", shape.finalLen));
   operands.push_back(checkSegment("indices", "query_index", shape.ell));
   operands.push_back(checkSegment("leaves", "word", shape.ell));
   operands.push_back(checkSegment("roots", "rs", shape.k));
@@ -468,7 +499,8 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
   std::string out;
   raw_string_ostream os(out);
   StringRef nonceClass = desc.valueFaithful ? "pow_value" : "rs";
-  QueryShape shape{desc.ell, desc.k, desc.queryLog2};
+  QueryShape shape{desc.ell, desc.k, desc.queryLog2,
+                 int64_t(1) << desc.logFinalPolyLen};
   os << "{\n"
      << "  \"registry\": \"zkc.protocol_vocabulary\",\n"
      << "  \"claim_profiles\": {\n"
@@ -594,8 +626,9 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
           "\"operands\": [{\"sort\": \"handle\", \"role\": "
           "\"codeword\", \"class\": \"fri-codeword\"}], "
           "\"results\": [{\"sort\": \"value\", \"role\": "
-          "\"coefficient\", \"class\": \"ext_field\", \"count\": "
-          "\"1\"}, {\"sort\": \"handle\", \"role\": \"codeword\", "
+          "\"coefficient\", \"class\": \"ext_field\", \"count\": \""
+       << shape.finalLen
+       << "\"}, {\"sort\": \"handle\", \"role\": \"codeword\", "
           "\"class\": \"fri-codeword\"}], \"parameters\": [], "
           "\"semantic_parameters\": []},\n"
        << "    \"zkc.hole.fri-openval\": {\"kind\": \"evaluate\", "
@@ -680,11 +713,14 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
     // The stripped harness's own order: the opening point and batch
     // challenge first, then commit-then-sample rounds, then the final
     // coefficient in the query round.
+    // The opening point and batch challenge are the PCS opening phase,
+    // not fold rounds: the kind keeps the fold-count projection honest
+    // (a soundness rule counting fold rounds must see exactly k).
     os << "        {\"challenge_use\": {\"role\": \"zeta\"}, "
-          "\"messages\": [], \"kind\": \"fold\"},\n"
+          "\"messages\": [], \"kind\": \"opening\"},\n"
        << "        {\"challenge_use\": {\"role\": \"alpha\"}, "
           "\"messages\": [{\"role\": \"opened\", \"count\": "
-          "{\"exact\": 1}}], \"kind\": \"fold\"},\n";
+          "{\"exact\": 1}}], \"kind\": \"opening\"},\n";
     for (int64_t i = 1; i <= desc.k; ++i)
       os << "        {\"challenge_use\": {\"role\": \"" << foldRole(desc, i)
          << "\"}, \"messages\": [{\"role\": \"" << msgRole(desc, i)
@@ -693,7 +729,9 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
           "\"count\": "
        << desc.ell
        << "}, \"messages\": [{\"role\": \"final\", \"count\": "
-          "{\"exact\": 1}}], \"kind\": \"query\"}\n"
+          "{\"exact\": "
+       << shape.finalLen
+       << "}}], \"kind\": \"query\"}\n"
        << "      ],\n";
   } else {
     for (int64_t i = 1; i <= desc.k; ++i) {
@@ -709,13 +747,17 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
        << "\", \"count\": {\"exact\": 1}}], \"kind\": \"query\"}\n"
        << "      ],\n";
   }
+  // The shape knobs ride the reduction parameters so a soundness rule
+  // reads the declared rate directly (the analysis-parameter precedent);
+  // the shape side condition ties them to the realized fold count.
   os << ""
      << "      \"parameters\": {";
   if (desc.johnson())
     os << "\"johnson_delta\": \"atom\", \"johnson_eta\": \"atom\", "
-          "\"johnson_m\": \"atom\"";
+          "\"johnson_m\": \"atom\", ";
+  os << "\"log_blowup\": \"atom\", \"log_final_poly_len\": \"atom\"";
   if (desc.udr())
-    os << "\"udr_theta\": \"atom\"";
+    os << ", \"udr_theta\": \"atom\"";
   os << "},\n";
   if (desc.valueFaithful) {
     // The query phase's two obligations, bound to this contract. The
@@ -738,8 +780,9 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
        << "        },\n"
        << "        \"consistency\": {\n"
        << "          \"contract\": \"zkc.check.fri-query-consistency\",\n"
-       << "          \"parameters\": {\"log_blowup\": \"1\", "
-          "\"log_final_poly_len\": \"0\"},\n"
+       << "          \"parameters\": {\"log_blowup\": \""
+       << desc.logBlowup << "\", \"log_final_poly_len\": \""
+       << desc.logFinalPolyLen << "\"},\n"
        << "          \"attachments\": [\n"
        << "            {\"kind\": \"value_identity\", \"source\": "
           "{\"kind\": \"dependency\", \"role\": \"zeta\"}, "
@@ -750,7 +793,9 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
        << "            {\"kind\": \"value_identity\", \"source\": "
           "{\"kind\": \"dependency\", \"role\": \"alpha\"}, "
           "\"target_role\": \"alpha\"},\n"
-       << "            {\"kind\": \"value_identity\", \"source\": "
+       << "            {\"kind\": \""
+       << (shape.finalLen > 1 ? "value_identity_vector" : "value_identity")
+       << "\", \"source\": "
           "{\"kind\": \"message\", \"role\": \"final\", "
           "\"occurrence\": 0}, \"target_role\": "
           "\"final_coefficients\"},\n"
@@ -844,7 +889,7 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
 /// (evaluation/upstream/plonky3-replay/README.md): the stripped pinned
 /// harness's own transcript — sizes and input commitment bound, the opening
 /// point and batch challenge sampled, commit-then-sample rounds, the final
-/// coefficient in the clear, arities in their own segment, a one-word grind —
+/// coefficients in the clear, arities in their own segment, a one-word grind —
 /// with the construction routes that derive the prover.
 static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   std::string out;
@@ -865,8 +910,10 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   // the artifact declares them rather than leaving a supplier to assume
   // them.
   os << " routes {instances = {openval = {contract = "
-        "\"zkc.hole.fri-openval\", params = {log_blowup = \"1\", "
-        "log_final_poly_len = \"0\"}, inputs = [\"chal:zeta\", "
+        "\"zkc.hole.fri-openval\", params = {log_blowup = \""
+     << desc.logBlowup << "\", log_final_poly_len = \""
+     << desc.logFinalPolyLen
+     << "\"}, inputs = [\"chal:zeta\", "
         "\"witness:codeword\"]}, reduce = {contract = "
         "\"zkc.hole.fri-reduce\", inputs = [\"chal:alpha\", "
         "\"openval.1\"]}, ";
@@ -895,10 +942,11 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
      << "\"} : !pir.claim<\"opaque_relation\">\n";
   os << "  %t0 = pir.begin\n";
   // The pinned harness binds the input log-size before anything else;
-  // with the harness's blowup of one, the size is query_log2 - 1.
+  // the trace height is the evaluation domain shrunk by the rate,
+  // query_log2 - log_blowup.
   os << "  %t1, %size = pir.bind %t0 \"log_size\" : \"pow_value\" stage "
         "seal = \""
-     << (desc.queryLog2 - 1) << "\"\n";
+     << (desc.queryLog2 - desc.logBlowup) << "\"\n";
   os << "  %t2, %f = pir.bind %t1 \"f_root\" : \"rs\" stage instance\n";
   os << "  %t3, %zeta = pir.chal %t2 deps(%f : !pir.val<\"rs\">) "
         "\"zeta\" : \"ext_field\" domain \"fri.zeta\" space \""
@@ -930,7 +978,8 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   }
   std::string finalToken = nextToken();
   os << "  " << finalToken << ", %final = pir.slot " << prevToken
-     << " \"final_poly\" : \"ext_field\" in \"" << label
+     << " \"final_poly\" : \"ext_field\" count \""
+     << (int64_t(1) << desc.logFinalPolyLen) << "\" in \"" << label
      << "\" as \"final\" binding \"final.0\"\n";
   prevToken = finalToken;
   for (int64_t i = 1; i <= k; ++i) {
@@ -984,8 +1033,9 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
         "%ipaths : !pir.val<\"rs\">, !pir.val<\"query_index\">, "
         "!pir.val<\"word\">, !pir.val<\"rs\">)\n";
   os << "  pir.check \"query_consistency\" contract "
-        "\"zkc.check.fri-query-consistency\" params {log_blowup = \"1\", "
-        "log_final_poly_len = \"0\"} (%zeta, %openval, %alpha, ";
+        "\"zkc.check.fri-query-consistency\" params {log_blowup = \""
+     << desc.logBlowup << "\", log_final_poly_len = \""
+     << desc.logFinalPolyLen << "\"} (%zeta, %openval, %alpha, ";
   for (int64_t i = 1; i <= k; ++i)
     os << "%fold" << i << ", ";
   os << "%final, %query, %leaves, ";
@@ -1020,12 +1070,16 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
     os << "!pir.val<\"ext_field\">, ";
   os << "!pir.val<\"query_index\">) checks {merkle = \"merkle_open\", "
         "consistency = \"query_consistency\"}";
+  os << " params {";
   if (desc.johnson())
-    os << " params {johnson_m = \"" << desc.johnsonM << "\", johnson_eta = \""
+    os << "johnson_m = \"" << desc.johnsonM << "\", johnson_eta = \""
        << desc.johnsonEta << "\", johnson_delta = \"" << desc.johnsonDelta
-       << "\"}";
+       << "\", ";
+  os << "log_blowup = \"" << desc.logBlowup << "\", log_final_poly_len = \""
+     << desc.logFinalPolyLen << "\"";
   if (desc.udr())
-    os << " params {udr_theta = \"" << desc.udrTheta << "\"}";
+    os << ", udr_theta = \"" << desc.udrTheta << "\"";
+  os << "}";
   os << " anchors [{statement = \"" << desc.anchorStatement
      << "\"}] -> !pir.claim<\"fri_query_consistent\">\n";
   os << "  %s = pir.reduce \"grind\" contract \"grinding\" "
@@ -1128,12 +1182,16 @@ std::string zkc::family::emitFriSpine(const FriDescription &desc) {
     os << "!pir.val<\"ext_field\">, ";
   os << "!pir.val<\"query_index\">)";
   os << " checks {consistency = \"consistency\"}";
+  os << " params {";
   if (desc.johnson())
-    os << " params {johnson_m = \"" << desc.johnsonM << "\", johnson_eta = \""
+    os << "johnson_m = \"" << desc.johnsonM << "\", johnson_eta = \""
        << desc.johnsonEta << "\", johnson_delta = \"" << desc.johnsonDelta
-       << "\"}";
+       << "\", ";
+  os << "log_blowup = \"" << desc.logBlowup << "\", log_final_poly_len = \""
+     << desc.logFinalPolyLen << "\"";
   if (desc.udr())
-    os << " params {udr_theta = \"" << desc.udrTheta << "\"}";
+    os << ", udr_theta = \"" << desc.udrTheta << "\"";
+  os << "}";
   os << " anchors [{statement = \"" << desc.anchorStatement
      << "\"}] -> !pir.claim<\"fri_query_consistent\">\n";
 

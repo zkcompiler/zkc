@@ -22,8 +22,8 @@
 # RUN:   %t/spine.mlir -o %t/sealed.mlir
 # RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/projected.mlir
 # RUN: zkc-run %t/projected.mlir --vectors %S/Inputs/plonky3-fri-exec-vectors.json --profile=plonky3 | FileCheck %s
-# CHECK: empty-proof: abi_decode_failure [18354221309086489836277873110628348392]
-# CHECK: non-canonical-root: abi_decode_failure [18354221309086489836277873110628348392]
+# CHECK: empty-proof: abi_decode_failure [14584773043926938949839335154480361941]
+# CHECK: non-canonical-root: abi_decode_failure [14584773043926938949839335154480361941]
 
 # The same artifact refuses under the toy profile, naming the missing
 # supplier: profiles are closed sets, never fallbacks.

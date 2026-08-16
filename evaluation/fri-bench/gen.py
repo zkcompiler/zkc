@@ -7,6 +7,7 @@ bench crate path-depends on the emitted prover, so this script runs
 before the first `cargo bench`.
 """
 
+import json
 import pathlib
 import subprocess
 import sys
@@ -23,7 +24,26 @@ def run(*argv: str) -> None:
 
 def main() -> None:
     OUT.mkdir(exist_ok=True)
-    instance = HERE / "instance-a.json"
+    instance = HERE / (sys.argv[1] if len(sys.argv) > 1 else "instance-a.json")
+    desc = json.load(open(instance))
+    # The family's own default derivation (lib/Family/FriFamily.cpp):
+    # an omitted log_blowup comes from the shape equation
+    # query_log2 = k + log_blowup + log_final_poly_len.
+    lfpl = int(desc.get("log_final_poly_len", 0))
+    blowup = int(desc.get("log_blowup",
+                          desc["query_log2"] - desc["k"] - lfpl))
+    # The one statement of the instance shape both Rust legs include:
+    # nothing restates LOG_SIZE by hand, so the two binaries cannot
+    # silently diverge from the instance description.
+    (OUT / "shape.rs").write_text(
+        "pub const LOG_SIZE: usize = %d;\n"
+        "pub const QUERIES: usize = %d;\n"
+        "pub const GRIND_BITS: usize = %d;\n"
+        "pub const LOG_BLOWUP: usize = %d;\n"
+        "pub const LOG_FINAL_POLY_LEN: usize = %d;\n"
+        % (desc["query_log2"] - blowup, desc["ell"],
+           desc["grinding_bits"], blowup, lfpl)
+    )
     vocab = OUT / "vocab.json"
     run(str(BUILD / "zkc-family"), str(instance),
         f"--emit-vocabulary={vocab}", f"--emit-spine={OUT / 'spine.mlir'}")

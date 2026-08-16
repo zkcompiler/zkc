@@ -1,0 +1,79 @@
+# The declared rate at a second point: rate 1/4 (log_blowup 2) over
+# the analysis-only template, priced through the same rows the rate-1/2
+# fixtures exercise. The deciders move with the declared rate — the
+# eta-bar floor rises to ~1/148 and the threshold window collapses to
+# (1/2, 3/4) — and two facts are new at this rate: the Johnson row
+# derives for the first time (at rate 1/2 its dyadic sqrt-rho cap
+# admits no positive delta), and the unique-decoding row refuses
+# honestly (the corollary's last-round window is empty at this shape).
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Family/Inputs/friquarter.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-seal %t/spine.mlir --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# Conjectured: fold n/|F|, query (rho + eta_bar)^ell with rho = 1/4
+# and eta_bar = 1/128: (33/128)^2 = 1089/16384.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-quarter-random-words-request.json -o=%t/conjectured.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=CONJ %s < %t/conjectured.json
+# CONJ: "zkc.assume.random_words_conjecture"
+# CONJ: "constant": "1089/16384"
+
+# Proven above Johnson: fold 2^(n-log_blowup)/|F| = 256/|F|, query
+# (1 - delta/2)^ell at delta = 5/8: (11/16)^2 = 121/256.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-quarter-threshold-request.json -o=%t/proven.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=PROVEN %s < %t/proven.json
+# PROVEN: "zkc.assume.threshold_halving_unvetted"
+# PROVEN: "constant": "256/340282366762482138490186164457219031041"
+# PROVEN: "constant": "121/256"
+
+# The Johnson row's first derivable shape: sqrt(rho) bounds are tight
+# dyadics at an even rate exponent, so m = 3, eta = 1/16, delta = 1/4
+# clear every gate that no rate-1/2 instance can.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-quarter-johnson-request.json -o=%t/johnson.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=JOHNSON %s < %t/johnson.json
+# JOHNSON: "notion": "round_by_round"
+
+# The unique-decoding corollary does not cover this shape: the last
+# fold round's block is 8 and the domain floor needs 18, so the row
+# refuses rather than pricing outside its citation.
+# RUN: zkc-family %S/../Family/Inputs/friquarteru.json --emit-vocabulary=%t/u.vocab.json --emit-spine=%t/u.spine.mlir
+# RUN: zkc-seal %t/u.spine.mlir --protocol-vocabulary=%t/u.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/u.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/u.artifacts %t/u.mlirbc
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/u.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-quarter-udr-request.json -o=%t/u.json %t/u.mlirbc 2>&1 \
+# RUN:   | FileCheck --check-prefix=UDR %s
+# UDR: condition_failed at apply.conditions.S2
+
+# The value-faithful mid instance: its anchor binding resolves — the
+# same artifact the upstream judge grades — and the row then refuses at
+# the body, because the opening rounds (zeta, alpha) are outside the
+# FRI citation. Pricing them is the ALI/DEEP composition boundary
+# recorded in evaluation/fri-bench/PRICING.md; the refusal names
+# exactly what stands between this artifact and a priced judgment.
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf-mid.json --emit-vocabulary=%t/m.vocab.json --emit-spine=%t/m.spine.mlir
+# RUN: zkc-seal %t/m.spine.mlir --protocol-vocabulary=%t/m.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/m.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/m.artifacts %t/m.mlirbc
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/m.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-vf-mid-random-words-request.json -o=%t/m.json %t/m.mlirbc 2>&1 \
+# RUN:   | FileCheck --check-prefix=VFBOUND %s
+# VFBOUND: matches no sequence case

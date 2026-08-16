@@ -217,17 +217,23 @@ protected:
     llvm::Expected<const CodecSupplier *> codec = requireCodec(valueClass);
     if (!codec)
       return codec.takeError();
-    llvm::Expected<llvm::APInt> value = get(absorb.getValue());
-    if (!value)
-      return value.takeError();
-    SmallVector<uint8_t> framed;
-    if (value->getActiveBits() > (*codec)->framingBits())
-      return fail(
-          "[zkc-E411] value needs " + std::to_string(value->getActiveBits()) +
-          " bits; the codec for class '" + valueClass + "' frames at most " +
-          std::to_string((*codec)->framingBits()));
-    (*codec)->absorbFraming(*value, framed);
-    sponge->absorb(framed);
+    // A counted value absorbs as its elements in index order, each
+    // framed exactly as a scalar of its class (docs/spec/kernel.md
+    // §1.1); a scalar is the one-element case of the same rule.
+    llvm::Expected<ArrayRef<llvm::APInt>> elements =
+        getElements(absorb.getValue());
+    if (!elements)
+      return elements.takeError();
+    for (const llvm::APInt &value : *elements) {
+      SmallVector<uint8_t> framed;
+      if (value.getActiveBits() > (*codec)->framingBits())
+        return fail(
+            "[zkc-E411] value needs " + std::to_string(value.getActiveBits()) +
+            " bits; the codec for class '" + valueClass + "' frames at most " +
+            std::to_string((*codec)->framingBits()));
+      (*codec)->absorbFraming(value, framed);
+      sponge->absorb(framed);
+    }
     return llvm::Error::success();
   }
 

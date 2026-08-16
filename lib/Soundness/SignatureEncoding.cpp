@@ -245,8 +245,8 @@ const char *machineDeciderKindName(MachineDeciderKind kind) {
     return "same_point";
   case MachineDeciderKind::BatchAfterMaterial:
     return "batch_after_material";
-  case MachineDeciderKind::FriRateBelowOne:
-    return "fri_rate_below_one";
+  case MachineDeciderKind::FriShape:
+    return "fri_shape";
   case MachineDeciderKind::JohnsonFoldParam:
     return "johnson_fold_param";
   case MachineDeciderKind::JohnsonSlack:

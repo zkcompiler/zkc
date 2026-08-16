@@ -1324,6 +1324,8 @@ def _fri_family_contract(k: int, query_count: int) -> dict:
             "johnson_delta": "atom",
             "johnson_eta": "atom",
             "johnson_m": "atom",
+            "log_blowup": "atom",
+            "log_final_poly_len": "atom",
         },
         "checks": {
             "consistency": {
@@ -1447,6 +1449,8 @@ PLONKY3_FRI_REAL = {
                 "johnson_delta": "1/4",
                 "johnson_eta": "1/256",
                 "johnson_m": "3",
+                "log_blowup": "1",
+                "log_final_poly_len": "0",
             },
         ),
         reduce_row(

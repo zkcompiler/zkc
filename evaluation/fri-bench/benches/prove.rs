@@ -22,9 +22,9 @@ use zkc_plonky3_replay::{
 
 type Challenge = BinomialExtensionField<Val, 4>;
 
-const LOG_SIZE: usize = 20;
-const QUERIES: usize = 100;
-const GRIND_BITS: usize = 16;
+// The instance shape, written by gen.py from the instance JSON — one
+// source for both legs and the allocation binary.
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generated/shape.rs"));
 
 fn upstream_pcs() -> Pcs {
     let perm = default_babybear_poseidon2_16();
@@ -35,7 +35,13 @@ fn upstream_pcs() -> Pcs {
     Pcs::new(
         Dft::default(),
         val_mmcs,
-        fri_parameters_for(challenge_mmcs, QUERIES, GRIND_BITS),
+        fri_parameters_for(
+            challenge_mmcs,
+            QUERIES,
+            GRIND_BITS,
+            LOG_BLOWUP,
+            LOG_FINAL_POLY_LEN,
+        ),
     )
 }
 

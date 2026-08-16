@@ -578,7 +578,7 @@ pub fn fri_fold(beta: [u32; 4], mut codeword: Codeword) -> Result<Codeword, Stri
 /// the final polynomial's evaluations, in bit-reversed order; the
 /// coefficients are its inverse transform, and the family's declared
 /// final length says how many there are.
-pub fn fri_final(mut codeword: Codeword) -> Result<([u32; 4], Codeword), String> {
+pub fn fri_final(mut codeword: Codeword) -> Result<(Vec<[u32; 4]>, Codeword), String> {
     let shape = codeword.shape;
     let Stage::Ext(mut evaluations) = take_stage(&mut codeword) else {
         return Err("the final fill consumes the folded codeword".to_owned());
@@ -590,21 +590,35 @@ pub fn fri_final(mut codeword: Codeword) -> Result<([u32; 4], Codeword), String>
             evaluations.len()
         ));
     }
+    // Truncation fixes the length before the transform and the inverse
+    // DFT preserves it, so the full-codeword gate above is the one live
+    // length check; a dishonest higher-degree witness is caught by the
+    // verifier's consistency check, not here.
     evaluations.truncate(1 << shape.log_final_poly_len);
     reverse_slice_index_bits(&mut evaluations);
     let dft = Radix2DFTSmallBatch::<Val>::default();
     let coefficients: Vec<Challenge> = dft.idft_algebra(evaluations);
-    let Some(&constant) = coefficients.first() else {
-        return Err("the final polynomial has no coefficient".to_owned());
-    };
+    codeword.stage = Stage::Final;
+    Ok((
+        coefficients.into_iter().map(words_from_ext).collect(),
+        codeword,
+    ))
+}
+
+/// The fold-to-constant case of [`fri_final`]: the same computation,
+/// with the single coefficient unwrapped for a scalar row. A supplier
+/// binding names this form for an instance whose declared final length
+/// is one, and the counted form above otherwise.
+pub fn fri_final_constant(codeword: Codeword) -> Result<([u32; 4], Codeword), String> {
+    let (mut coefficients, codeword) = fri_final(codeword)?;
     if coefficients.len() != 1 {
         return Err(format!(
-            "the final fill emits one coefficient; this family declares {}",
+            "the constant final fill serves a one-coefficient family; this \
+             instance declares {}",
             coefficients.len()
         ));
     }
-    codeword.stage = Stage::Final;
-    Ok((words_from_ext(constant), codeword))
+    Ok((coefficients.pop().expect("length checked"), codeword))
 }
 
 /// The query-answering fill (hole kind `open`,
@@ -1001,7 +1015,7 @@ mod tests {
                 format!("Codeword::Ext(len {expected_len})")
             );
         }
-        let (constant, answered) = fri_final(cw).unwrap();
+        let (constant, answered) = fri_final_constant(cw).unwrap();
         assert!(words_canonical(&constant));
         // The answer fill opens the retained trees at the sampled
         // indices; a root that is not the witness's own is refused by
@@ -1035,7 +1049,7 @@ mod tests {
             roots.push(root);
             cw = fri_fold(beta, committed).unwrap();
         }
-        let (constant, answered) = fri_final(cw).unwrap();
+        let (constant, answered) = fri_final_constant(cw).unwrap();
         let indices = vec![0u32, 5, 9, 15];
         // The check below takes a different alpha than the chain
         // reduced with — deliberately: one matrix at one point weighs

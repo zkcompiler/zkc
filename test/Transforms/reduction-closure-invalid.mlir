@@ -70,8 +70,10 @@ pir.protocol "closure-dependency" kappa {codecs = {scalar = "ts_be8"}, iv = "art
 
 // -----
 
-// Message-role membership is exact, including its occurrence set.
-// CHECK: [zkc-E244] message role 'm' needs 2 occurrence(s), got 1
+// Message-role membership is exact, including its occurrence set. The
+// multiplicity counts units: a counted slot occurrence contributes its
+// declared count, so a scalar occurrence covers exactly one.
+// CHECK: [zkc-E244] message role 'm' needs 2 unit(s), got 1
 pir.protocol "closure-membership" kappa {codecs = {scalar = "ts_be8"}, iv = "artifact-id", sponge = "toy_duplex"} policy "analysis_only_artifact" {
   %input = pir.instantiate "input" anchors {statement = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"} : !pir.claim<"sumcheck_evaluation">
   %t0 = pir.begin

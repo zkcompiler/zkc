@@ -178,7 +178,8 @@ for label, (n, k, ell) in {
     "capacity k=2": (10, 2, 2),
     "capacity k=3": (10, 3, 2),
 }.items():
-    point = {"field_order": TOY_FIELD, "n": n, "k": k, "ell": ell}
+    point = {"field_order": TOY_FIELD, "n": n, "k": k, "ell": ell,
+             "log_blowup": n - k, "log_final_poly_len": 0}
     declared = max(
         declared_round("zkc.rbr.fri.capacity", "fold", point),
         declared_round("zkc.rbr.fri.capacity", "query", point),
@@ -196,7 +197,8 @@ check(
     "grinding applied to the k=1 query round",
     conjectured(TOY_FIELD, 10, 1, 2) * F(1, 2**16),
     declared_round("zkc.rbr.fri.capacity", "query",
-                   {"field_order": TOY_FIELD, "n": 10, "k": 1, "ell": 2})
+                   {"field_order": TOY_FIELD, "n": 10, "k": 1, "ell": 2,
+                    "log_blowup": 9, "log_final_poly_len": 0})
     * grinding_scale,
 )
 
@@ -209,6 +211,7 @@ BIG_FIELD = 340282366762482138490186164457219031041
 n, k, ell, m, delta = 10, 1, 2, 3, F(9, 10)
 johnson_point = {
     "field_order": BIG_FIELD, "n": n, "k": k, "ell": ell,
+    "log_blowup": n - k, "log_final_poly_len": 0,
     "m": m, "eta": F(1, 64), "delta": delta,
 }
 declared_fold = declared_round("zkc.rbr.fri.johnson", "fold", johnson_point)
@@ -232,7 +235,8 @@ if not declared_fold < (1 - delta) ** ell:
 # bound for every fold round) and the queries at (1 - theta)^ell.
 n, k, ell = 10, 1, 2
 theta = F(63, 128)
-udr_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell, "theta": theta}
+udr_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell,
+             "log_blowup": n - k, "log_final_poly_len": 0, "theta": theta}
 # the corollary's window at the LAST fold round (block 2^(n-k+1),
 # distance 1 - 2^(k-1-n)) — the binding round as the domain shrinks:
 d_last, n_last = 1 - F(1, 2 ** (n - k + 1)), 2 ** (n - k + 1)
@@ -270,6 +274,7 @@ mh = m + F(1, 2)
 rho_p = F(2**k - 1, 2**n)
 linear_point = {
     "field_order": BIG_FIELD, "n": n, "k": k, "ell": ell,
+    "log_blowup": n - k, "log_final_poly_len": 0,
     "m": m, "eta": F(1, 64), "delta": delta,
 }
 declared_t1 = F(2, 3) * mh**5 * 2 ** ((5 * n - 3 * k + 3 + 1) // 2)  # ceil
@@ -391,7 +396,8 @@ eta_bar = F(1, 4096)
 floor = (F(1443, 1000) + (n - k)) * rho / 127
 if not eta_bar >= floor:
     failures.append("random-words: the fixture eta_bar is below the correction floor")
-rw_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell, "eta_bar": eta_bar}
+rw_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell,
+            "log_blowup": n - k, "log_final_poly_len": 0, "eta_bar": eta_bar}
 check(
     "random-words fold term",
     F(n, 1) / BIG_FIELD,
@@ -410,7 +416,8 @@ check(
 delta_th = F(63, 64)
 if not (1 - F(1, 2 ** -(-(n - k) // 2)) < delta_th < 1 - rho):
     failures.append("threshold: the fixture delta is outside the cited window")
-th_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell, "delta": delta_th}
+th_point = {"field_order": BIG_FIELD, "n": n, "k": k, "ell": ell,
+            "log_blowup": n - k, "log_final_poly_len": 0, "delta": delta_th}
 check(
     "threshold fold term",
     F(2**k, 1) / BIG_FIELD,
@@ -425,3 +432,17 @@ check(
 if failures:
     raise SystemExit("soundcalc mismatches:\n  " + "\n  ".join(failures))
 print("soundcalc: every theorem-derived bound matches the declared bound")
+
+# The rate-1/4 points (log_blowup 2 over the same 2^10 domain): the
+# declared-rate convention evaluated where n - k no longer equals the
+# rate exponent's old reading.
+q_rw = {"field_order": BIG_FIELD, "n": 10, "k": 8, "ell": 2,
+        "log_blowup": 2, "log_final_poly_len": 0, "eta_bar": F(1, 128)}
+assert declared_round("zkc.rbr.fri.random_words", "query", q_rw) == \
+    (F(1, 4) + F(1, 128)) ** 2 == F(1089, 16384)
+q_th = {"field_order": BIG_FIELD, "n": 10, "k": 8, "ell": 2,
+        "log_blowup": 2, "log_final_poly_len": 0, "delta": F(5, 8)}
+assert declared_round("zkc.rbr.fri.threshold_halving", "query", q_th) == \
+    (1 - F(5, 16)) ** 2 == F(121, 256)
+assert declared_round("zkc.rbr.fri.threshold_halving", "fold", q_th) == \
+    F(2 ** 8, BIG_FIELD)

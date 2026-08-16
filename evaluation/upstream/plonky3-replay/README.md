@@ -48,7 +48,10 @@ The exercised instance uses:
   height 8; and
 - FRI parameters `log_blowup=1`, `log_final_poly_len=0`, `max_log_arity=1`,
   `num_queries=4`, zero commit proof-of-work bits, and eight query
-  proof-of-work bits.
+  proof-of-work bits. These describe this fixture; the prove and grade
+  binaries derive `log_blowup`, `log_final_poly_len`, the query count, and
+  the grinding bits from each document's own schedule, so any shape the
+  family seals runs against the pin.
 
 The fixture records the source and dependency pins, construction identity, AIR
 content address and shape, public values and degree bits, encoded proof, and

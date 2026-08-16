@@ -396,17 +396,24 @@ private:
         if (found != instance->second.end())
           occurrences = &found->second;
       }
-      uint64_t count = occurrences ? occurrences->size() : 0;
-      if (count != expected.getValue()) {
+      // A message multiplicity counts units, not events: a counted slot
+      // occurrence contributes its declared count and a value is never
+      // split — the check-operand segmentation rule
+      // (docs/spec/vocabularies.md), applied to round messages.
+      uint64_t units = 0;
+      if (occurrences)
+        for (const auto &entry : *occurrences)
+          units += zkc::semantics::checkOperandUnits(entry.second.value);
+      if (units != expected.getValue()) {
         membershipError() << "message role '" << expected.getKey() << "' needs "
-                          << expected.getValue() << " occurrence(s), got "
-                          << count;
+                          << expected.getValue() << " unit(s), got " << units;
         continue;
       }
-      for (uint64_t index = 0; index < expected.getValue(); ++index)
-        if (!occurrences->count(index))
-          membershipError() << "message role '" << expected.getKey()
-                            << "' has a non-canonical occurrence set";
+      if (occurrences)
+        for (uint64_t index = 0; index < occurrences->size(); ++index)
+          if (!occurrences->count(index))
+            membershipError() << "message role '" << expected.getKey()
+                              << "' has a non-canonical occurrence set";
     }
 
     if (reduce.getDeps().size() == contract.depSlots.size()) {

@@ -33,7 +33,8 @@ use p3_symmetric::{Hash, MerkleCap};
 use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use zkc_plonky3_replay::{
-    ChallengeMmcs, Compress, Dft, FieldHash, Pcs, PlainChallenger, Val, ValMmcs, fri_parameters_for,
+    ChallengeMmcs, Compress, Dft, FieldHash, Pcs, PlainChallenger, Val, ValMmcs, doc_shape,
+    fri_parameters_for,
 };
 
 type Challenge = BinomialExtensionField<Val, 4>;
@@ -109,22 +110,28 @@ fn prune(entries: &[usize], levels: usize, paths: &[Vec<[Val; 8]>]) -> PrunedMer
         // Any query whose entry shifts onto a frontier member supplies
         // that member's sibling digest at this level; every such query
         // must supply the same digest, so the judge never silently
-        // prefers one copy of a disagreeing wire.
-        let digest_of = |member: usize| -> [Val; 8] {
-            let mut found: Option<[Val; 8]> = None;
-            for (entry, path) in entries.iter().zip(paths) {
-                if entry >> level == member {
-                    let digest = path[level];
-                    match found {
-                        None => found = Some(digest),
-                        Some(first) if first != digest => {
-                            fail("witnessing paths disagree on a frontier digest")
-                        }
-                        Some(_) => {}
+        // prefers one copy of a disagreeing wire. One pass per level
+        // builds the member map, so pruning stays linear in the query
+        // count rather than rescanning per frontier member.
+        let mut level_digests: std::collections::HashMap<usize, [Val; 8]> =
+            std::collections::HashMap::new();
+        for (entry, path) in entries.iter().zip(paths) {
+            let digest = path[level];
+            match level_digests.entry(entry >> level) {
+                std::collections::hash_map::Entry::Vacant(slot) => {
+                    slot.insert(digest);
+                }
+                std::collections::hash_map::Entry::Occupied(seen) => {
+                    if *seen.get() != digest {
+                        fail("witnessing paths disagree on a frontier digest");
                     }
                 }
             }
-            found.unwrap_or_else(|| fail("frontier member has no witnessing path"))
+        }
+        let digest_of = |member: usize| -> [Val; 8] {
+            *level_digests
+                .get(&member)
+                .unwrap_or_else(|| fail("frontier member has no witnessing path"))
         };
         let mut next = Vec::new();
         let mut cursor = 0;
@@ -166,45 +173,17 @@ fn main() {
         .as_array()
         .unwrap_or_else(|| fail("no program"));
 
-    // The instance shape from the schedule (the same derivations the
-    // parameterized runner uses).
-    let log_size: usize = rows
-        .iter()
-        .find(|row| row[0] == "const")
-        .and_then(|row| row[1].as_str())
-        .and_then(|text| text.parse().ok())
-        .unwrap_or_else(|| fail("no pinned log_size constant"));
-    let space_log2 = |label: &str| -> usize {
-        let row = rows
-            .iter()
-            .find(|row| row[0] == "squeeze" && row[2] == label)
-            .unwrap_or_else(|| fail(&format!("no squeeze labelled {label}")));
-        let space: u128 = row[7]
-            .as_str()
-            .and_then(|text| text.parse().ok())
-            .unwrap_or_else(|| fail("squeeze space is not decimal"));
-        if !space.is_power_of_two() {
-            fail("squeeze space is not a power of two");
-        }
-        space.trailing_zeros() as usize
-    };
-    let grind_bits = space_log2("pow");
-    let query_bits = space_log2("query");
-    let queries: usize = rows
-        .iter()
-        .find(|row| row[0] == "squeeze" && row[2] == "query")
-        .and_then(|row| row[4].as_str())
-        .and_then(|text| text.parse().ok())
-        .unwrap_or_else(|| fail("no counted query squeeze"));
-    let fold_rounds = rows
-        .iter()
-        .filter(|row| row[0] == "squeeze" && row[3] == "ext_field")
-        .count()
-        .checked_sub(2)
-        .unwrap_or_else(|| fail("fewer extension squeezes than the chain uses"));
-    if query_bits != log_size + 1 || fold_rounds + 1 != query_bits {
-        fail("the schedule is not the value-faithful family's shape");
-    }
+    // The instance shape from the schedule — the shared derivation the
+    // runner uses, so the two binaries cannot read one schedule as two
+    // different instances.
+    let shape = doc_shape(rows).unwrap_or_else(|message| fail(&message));
+    let log_size = shape.log_size;
+    let grind_bits = shape.grind_bits;
+    let query_bits = shape.query_bits;
+    let queries = shape.queries;
+    let fold_rounds = shape.fold_rounds;
+    let log_blowup = shape.log_blowup;
+    let log_final_poly_len = shape.log_final_poly_len;
 
     let statement_text =
         fs::read_to_string(&args[2]).unwrap_or_else(|_| fail("cannot read statement"));
@@ -221,7 +200,9 @@ fn main() {
     let commit_phase_commits: Vec<MerkleCap<Val, [Val; 8]>> = (0..fold_rounds)
         .map(|_| MerkleCap::new(vec![cursor.digest()]))
         .collect();
-    let final_poly = vec![cursor.ext()];
+    let final_poly: Vec<Challenge> = (0..1usize << log_final_poly_len)
+        .map(|_| cursor.ext())
+        .collect();
     let query_pow_witness = Val::from_u32(cursor.word());
     let leaves: Vec<Val> = (0..queries).map(|_| Val::from_u32(cursor.word())).collect();
     let input_paths: Vec<Vec<[Val; 8]>> = (0..queries)
@@ -260,7 +241,9 @@ fn main() {
         let beta: Challenge = challenger.sample_algebra_element();
         betas.push(beta);
     }
-    challenger.observe_algebra_element(final_poly[0]);
+    for &coefficient in &final_poly {
+        challenger.observe_algebra_element(coefficient);
+    }
     for _ in 0..fold_rounds {
         challenger.observe(Val::from_usize(1));
     }
@@ -311,7 +294,13 @@ fn main() {
     let pcs = Pcs::new(
         Dft::default(),
         val_mmcs,
-        fri_parameters_for(challenge_mmcs, queries, grind_bits),
+        fri_parameters_for(
+            challenge_mmcs,
+            queries,
+            grind_bits,
+            log_blowup,
+            log_final_poly_len,
+        ),
     );
     let domain = <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(
         &pcs,

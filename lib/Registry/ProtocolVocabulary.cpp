@@ -1348,19 +1348,33 @@ Expected<ReductionContract> parseReductionContract(
         return file.error(attachmentContext +
                           " value_identity source must be dependency or "
                           "message");
-      // The whole-vector identity: one counted challenge dependency
-      // binds one counted operand segment, count for count — the
-      // kernel-level statement that the sampled vector is the vector
-      // the check consumes (docs/spec/carrier.md §7).
+      // The whole-vector identity: one counted source value binds one
+      // counted operand segment, count for count — the kernel-level
+      // statement that the sampled or absorbed vector is the vector the
+      // check consumes (docs/spec/carrier.md §7). The source is a
+      // counted challenge dependency or a counted round message; the
+      // scalar case keeps its own kind, so one realized identity never
+      // has two content spellings.
       if (attachment.kind == ReductionCheckAttachmentKind::ValueIdentityVector) {
-        if (parsedSource->kind != MaterialExprKind::Dependency)
+        uint64_t sourceCount = 0;
+        if (parsedSource->kind == MaterialExprKind::Dependency) {
+          for (const VocabularyRound &round : contract.rounds)
+            if (round.challengeUse.role == parsedSource->name)
+              sourceCount =
+                  round.challengeUse.count ? round.challengeUse.count : 1;
+        } else if (parsedSource->kind == MaterialExprKind::Message) {
+          // A dynamic multiplicity has no static count to agree on;
+          // only exact message roles carry the vector identity.
+          for (const VocabularyRound &round : contract.rounds)
+            for (const VocabularyMessageRole &message : round.messages)
+              if (message.role == parsedSource->name &&
+                  !message.multiplicity.isDynamic())
+                sourceCount = message.multiplicity.exact;
+        } else {
           return file.error(attachmentContext +
                             " value_identity_vector source must be a "
-                            "dependency");
-        uint64_t sourceCount = 0;
-        for (const VocabularyRound &round : contract.rounds)
-          if (round.challengeUse.role == parsedSource->name)
-            sourceCount = round.challengeUse.count ? round.challengeUse.count : 1;
+                            "dependency or message");
+        }
         const CheckOperandSegment *operand =
             findOperand(*checkContract, attachment.targetRole);
         if (!operand)
@@ -1371,8 +1385,8 @@ Expected<ReductionContract> parseReductionContract(
             operand->multiplicity.value != sourceCount)
           return file.error(attachmentContext +
                             " value_identity_vector requires a counted "
-                            "challenge dependency whose count equals the "
-                            "target segment's");
+                            "dependency or message source whose count "
+                            "equals the target segment's");
       }
       // The positional list identity: an ordered list of local-value
       // selectors binds a multi-element segment element for element —

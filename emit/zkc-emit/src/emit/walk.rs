@@ -455,7 +455,23 @@ impl<'a> Walk<'a> {
             Row::Absorb { sponge, value } => {
                 self.consume_sponge(*sponge, index, Ref::Res(index, 0))?;
                 let (expr, class) = self.value(*value, &format!("row {index} (absorb)"))?;
-                self.emit_absorb_of(&expr, &class, index)?;
+                if self.vector_counts.contains_key(value) {
+                    // A counted value absorbs as its elements in index
+                    // order, each framed exactly as a scalar of its
+                    // class (docs/spec/kernel.md §1.1). The per-element
+                    // statement comes from the same single source every
+                    // scalar absorb uses, so the framings cannot drift.
+                    let statement = self.absorb_statement("sponge", "element", &class, index)?;
+                    self.line(1, &format!("for &element in &{expr} {{"));
+                    self.line(2, &statement);
+                    self.line(1, "}");
+                    self.used.sponge = Use {
+                        named: true,
+                        mutated: true,
+                    };
+                } else {
+                    self.emit_absorb_of(&expr, &class, index)?;
+                }
                 Ok(())
             }
 
@@ -1211,12 +1227,17 @@ impl<'a> Walk<'a> {
                     ));
                 }
                 let rounds = (arguments.len() - 6) / 4;
+                // The final polynomial is one coefficient at a
+                // fold-to-constant instance (a scalar row) and a counted
+                // vector above; the operand's own shape decides, and the
+                // fill validates the count against its declared length.
+                let final_is_vector = vector_inputs[3 + rounds];
                 let segments: Vec<(&str, usize, ImplKind, bool)> = vec![
                     ("zeta", 1, ImplKind::P3Ext4, false),
                     ("opened", 1, ImplKind::P3Ext4, false),
                     ("alpha", 1, ImplKind::P3Ext4, false),
                     ("betas", rounds, ImplKind::P3Ext4, false),
-                    ("final", 1, ImplKind::P3Ext4, false),
+                    ("final", 1, ImplKind::P3Ext4, final_is_vector),
                     ("indices", 1, ImplKind::P3Word, true),
                     ("leaves", 1, ImplKind::P3Word, true),
                     ("roots", rounds, ImplKind::P3Digest8, false),
@@ -1254,11 +1275,16 @@ impl<'a> Walk<'a> {
                         flatten(&names[9])
                     ),
                 );
+                let final_arg = if final_is_vector {
+                    format!("&{}", names[4][0])
+                } else {
+                    format!("&[{}]", names[4][0])
+                };
                 self.line(
                     1,
                     &format!(
                         "if !zkc_rt::p3::fri_query_consistency_accepts({}usize, {}usize, \
-                         {}, {}, {}, &[{}], &[{}], &{}, &{}, &[{}], &siblings_{index}, \
+                         {}, {}, {}, &[{}], {}, &{}, &{}, &[{}], &siblings_{index}, \
                          &round_paths_{index}) {{",
                         params[0],
                         params[1],
@@ -1266,7 +1292,7 @@ impl<'a> Walk<'a> {
                         names[1][0],
                         names[2][0],
                         names[3].join(", "),
-                        names[4][0],
+                        final_arg,
                         names[5][0],
                         names[6][0],
                         names[7].join(", ")
@@ -1356,11 +1382,11 @@ impl<'a> Walk<'a> {
             self.line(1, "}");
             self.line(1, &format!("for element in &{expr} {{"));
             let words = if implementation == ImplKind::P3Word {
-                "[*element]".to_owned()
+                "&[*element]".to_owned()
             } else {
-                "*element".to_owned()
+                "element".to_owned()
             };
-            self.line(2, &format!("if !zkc_rt::p3::words_canonical(&{words}) {{"));
+            self.line(2, &format!("if !zkc_rt::p3::words_canonical({words}) {{"));
             self.line(
                 3,
                 &Self::refuse(
@@ -1372,7 +1398,7 @@ impl<'a> Walk<'a> {
             self.line(2, "}");
             self.line(
                 2,
-                &format!("zkc_rt::p3::encode_words(&{words}, &mut proof);"),
+                &format!("zkc_rt::p3::encode_words({words}, &mut proof);"),
             );
             self.line(1, "}");
             return Ok(());
