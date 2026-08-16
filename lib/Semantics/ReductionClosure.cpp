@@ -784,7 +784,11 @@ private:
     // ValueIdentity is deliberately a local SSA judgment. Its source is
     // admitted as exactly dependency/message, so resolving it must not demand
     // a MaterialBinding or manufacture a global semantic reference.
-    if (attachment.kind == ReductionCheckAttachmentKind::ValueIdentity) {
+    if (attachment.kind == ReductionCheckAttachmentKind::ValueIdentity ||
+        attachment.kind == ReductionCheckAttachmentKind::ValueIdentityVector) {
+      // A counted challenge is one SSA value carrying its whole vector,
+      // so the whole-vector identity has the scalar form's mechanics:
+      // one selector, one selected value, equality.
       auto local = localValue(attachment.source, reduce, contract, reduce);
       SmallVector<Value> selected =
           operands(check, attachment.targetRole, reduce);
@@ -793,6 +797,29 @@ private:
             << "local SSA attachment does not match role '"
             << attachment.targetRole << "'";
         return false;
+      }
+      return true;
+    }
+    if (attachment.kind == ReductionCheckAttachmentKind::ValueIdentityList) {
+      // Positional: the k-th selector's value is the k-th value the
+      // layout put into the target segment.
+      SmallVector<Value> selected =
+          operands(check, attachment.targetRole, reduce);
+      if (selected.size() != attachment.source.arguments.size()) {
+        error(reduce, "zkc-E323")
+            << "local SSA list attachment does not match role '"
+            << attachment.targetRole << "'";
+        return false;
+      }
+      for (auto [index, item] :
+           llvm::enumerate(attachment.source.arguments)) {
+        auto local = localValue(item, reduce, contract, reduce);
+        if (!local || selected[index] != *local) {
+          error(reduce, "zkc-E323")
+              << "local SSA list attachment does not match role '"
+              << attachment.targetRole << "'";
+          return false;
+        }
       }
       return true;
     }
@@ -814,6 +841,8 @@ private:
       return true;
     }
     case ReductionCheckAttachmentKind::ValueIdentity:
+    case ReductionCheckAttachmentKind::ValueIdentityVector:
+    case ReductionCheckAttachmentKind::ValueIdentityList:
       llvm_unreachable("handled before material evaluation");
     case ReductionCheckAttachmentKind::MaterialRefEquality: {
       auto value = expected->value.getAsString();

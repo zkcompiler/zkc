@@ -727,7 +727,14 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
        << "        \"merkle\": {\n"
        << "          \"contract\": \"zkc.check.merkle-multi-opening\",\n"
        << "          \"parameters\": {},\n"
-       << "          \"attachments\": []\n"
+       << "          \"attachments\": [\n"
+       << "            {\"kind\": \"material_ref_equality\", \"source\": "
+          "{\"kind\": \"input_anchor\", \"input\": 0, \"anchor\": "
+          "\"statement\"}, \"target_role\": \"root\"},\n"
+       << "            {\"kind\": \"value_identity_vector\", \"source\": "
+          "{\"kind\": \"dependency\", \"role\": \"query\"}, "
+          "\"target_role\": \"indices\"}\n"
+       << "          ]\n"
        << "        },\n"
        << "        \"consistency\": {\n"
        << "          \"contract\": \"zkc.check.fri-query-consistency\",\n"
@@ -746,7 +753,22 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
        << "            {\"kind\": \"value_identity\", \"source\": "
           "{\"kind\": \"message\", \"role\": \"final\", "
           "\"occurrence\": 0}, \"target_role\": "
-          "\"final_coefficients\"}\n"
+          "\"final_coefficients\"},\n"
+       << "            {\"kind\": \"value_identity_vector\", \"source\": "
+          "{\"kind\": \"dependency\", \"role\": \"query\"}, "
+          "\"target_role\": \"indices\"},\n"
+       << "            {\"kind\": \"value_identity_list\", \"source\": "
+          "{\"kind\": \"list\", \"items\": [";
+    for (int64_t i = 1; i <= desc.k; ++i)
+      os << "{\"kind\": \"dependency\", \"role\": \"" << foldRole(desc, i)
+         << "\"}" << (i == desc.k ? "" : ", ");
+    os << "]}, \"target_role\": \"betas\"},\n"
+       << "            {\"kind\": \"value_identity_list\", \"source\": "
+          "{\"kind\": \"list\", \"items\": [";
+    for (int64_t i = 1; i <= desc.k; ++i)
+      os << "{\"kind\": \"message\", \"role\": \"" << msgRole(desc, i)
+         << "\", \"occurrence\": 0}" << (i == desc.k ? "" : ", ");
+    os << "]}, \"target_role\": \"roots\"}\n"
        << "          ]\n"
        << "        }\n"
        << "      },\n";
@@ -1012,6 +1034,8 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
         "\"pow_pin\"} anchors [{statement = \""
      << desc.anchorStatement
      << "\"}] -> !pir.claim<\"fri_query_consistent\">\n";
+  os << "  pir.material_bind %f to \"" << desc.anchorStatement
+     << "\" : !pir.val<\"rs\">\n";
   os << "  pir.residual %s : !pir.claim<\"fri_query_consistent\"> "
         "route \"fri-terminal-not-modeled\"\n";
   os << "}\n";

@@ -1119,6 +1119,7 @@ class ProtocolVocabulary:
             "deps": {slot["role"]: slot for slot in dep_slots},
             "messages": message_counts,
             "parameters": parameters,
+            "rounds": rounds,
         }
         checks = {}
         if not isinstance(body["checks"], dict):
@@ -1173,6 +1174,8 @@ class ProtocolVocabulary:
                     "semantic_parameter",
                     "material_ref_equality",
                     "value_identity",
+                    "value_identity_vector",
+                    "value_identity_list",
                     "material_ref_vector_equality",
                     "common_material_ref_equality",
                 } or not isinstance(target, str) or not target:
@@ -1185,6 +1188,7 @@ class ProtocolVocabulary:
                     if attachment_kind in {
                         "material_ref_vector_equality",
                         "common_material_ref_equality",
+                        "value_identity_list",
                     }
                     else "ref"
                 )
@@ -1210,6 +1214,54 @@ class ProtocolVocabulary:
                         raise Refusal(f"{where} requires an exactly-one target")
                 if attachment_kind == "value_identity" and source["kind"] not in {"dependency", "message"}:
                     raise Refusal(f"{where} value identity needs a local-value selector")
+                if attachment_kind == "value_identity_vector":
+                    # One counted challenge dependency binds one counted
+                    # segment, count for count.
+                    if source["kind"] != "dependency":
+                        raise Refusal(
+                            f"{where} value_identity_vector source must be a dependency"
+                        )
+                    source_count = 0
+                    for round_entry in context["rounds"]:
+                        use = round_entry["challenge_use"]
+                        if use["role"] == source["role"]:
+                            source_count = int(use.get("count", 1))
+                    operand = next(
+                        entry
+                        for entry in check_contract["operands"]
+                        if entry["role"] == target
+                    )
+                    if (
+                        source_count < 2
+                        or operand["multiplicity"] != {"exact": source_count}
+                    ):
+                        raise Refusal(
+                            f"{where} value_identity_vector requires a counted "
+                            "challenge dependency whose count equals the "
+                            "target segment's"
+                        )
+                if attachment_kind == "value_identity_list":
+                    # Positional: k local-value selectors for a
+                    # k-element segment.
+                    items = source.get("items", [])
+                    if source["kind"] != "list" or any(
+                        item["kind"] not in {"dependency", "message"}
+                        for item in items
+                    ):
+                        raise Refusal(
+                            f"{where} value_identity_list items must be "
+                            "dependency or message selectors"
+                        )
+                    operand = next(
+                        entry
+                        for entry in check_contract["operands"]
+                        if entry["role"] == target
+                    )
+                    if operand["multiplicity"] != {"exact": len(items)}:
+                        raise Refusal(
+                            f"{where} value_identity_list length must equal "
+                            "the target segment's count"
+                        )
                 target_key = (
                     "semantic" if attachment_kind == "semantic_parameter" else "operand",
                     target,
