@@ -11,16 +11,31 @@ evaluation harness. One locked Rust crate provides:
 
 - upstream BabyBear/Poseidon2 duplex observations;
 - deterministic proof capture and verifier replay;
-- mutation checks; and
-- a value-faithful prover fill consumed by zkc's native endpoint path.
+- mutation checks;
+- a value-faithful prover fill consumed by zkc's native endpoint path; and
+- a grading judge that decodes zkc's canonical wire into the pinned upstream
+  proof shape and hands it to the upstream verifier, so acceptance comes from
+  an implementation zkc does not own.
 
 The corresponding lit coverage is in
 [`plonky3-replay.test`](../test/Evidence/plonky3-replay.test),
 [`plonky3-fri-value-faithful.mlir`](../test/Oir/plonky3-fri-value-faithful.mlir),
-[`plonky3-duplex-replay.test`](../test/Oir/plonky3-duplex-replay.test), and
-[`prover-real-fill.test`](../test/Oir/prover-real-fill.test). These checks do
+[`plonky3-duplex-replay.test`](../test/Oir/plonky3-duplex-replay.test),
+[`prover-real-fill.test`](../test/Oir/prover-real-fill.test),
+[`emit-fri-prover.test`](../test/Emit/emit-fri-prover.test), and
+[`emit-fri-scale.test`](../test/Emit/emit-fri-scale.test). These checks do
 not establish general Plonky3 conformance, protocol soundness, or production
 readiness.
+
+[`fri-bench/`](fri-bench/README.md) records generation-versus-upstream
+benchmark evidence: the pinned upstream prover and an emitted zkc prover
+timed over the same instance, with the emitted wire held byte for byte to a
+recorded golden wire before anything is timed. The measured numbers live in
+[`RECORD.md`](fri-bench/RECORD.md) with machine, revision, and instance
+provenance; the soundness-accounting alignment against upstream's
+p3-security tooling lives in [`PRICING.md`](fri-bench/PRICING.md). These are
+recorded evidence, not CI gates; only the deterministic byte-equality scale
+gate runs in lit.
 
 ## Regression provenance
 

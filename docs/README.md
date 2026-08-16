@@ -59,6 +59,10 @@ contents; the document does not override the specification.
   and the provenance of source-derived regression fixtures.
 - [Pinned Plonky3 replay/prover harness](../evaluation/upstream/plonky3-replay/README.md)
   — current fixture-scoped upstream evidence.
+- [FRI generation benchmark record](../evaluation/fri-bench/RECORD.md) —
+  measured wall-clock and allocation evidence for one emitted prover against
+  the pinned upstream prover, scoped to its named machine, revision, and
+  instance.
 
 These records preserve the exact scope and residual trust of experiments. They
 do not override [Current Status](status.md), mint general backend conformance,
