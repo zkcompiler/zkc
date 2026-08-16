@@ -58,11 +58,10 @@ static const ParamSpec kFriParams[] = {
      "claim anchors: {contract, statement}, each sha256:<64 hex>"},
     {"value_faithful", false,
      "emit the challenger-value-faithful spine "
-     "(evaluation/upstream/plonky3-replay/README.md): final-polynomial "
-     "coefficient in "
-     "the clear, per-round arity binds, a one-word nonce, and the "
-     "construction routes that make the prover endpoint derivable; "
-     "requires grinding_bits"},
+     "(evaluation/upstream/plonky3-replay/README.md): the final "
+     "polynomial's coefficients in the clear, per-round arity binds, a "
+     "one-word nonce, and the construction routes that make the prover "
+     "endpoint derivable; requires grinding_bits"},
 };
 
 ArrayRef<ParamSpec> zkc::family::friParamSpecs() { return kFriParams; }
@@ -171,10 +170,15 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
     desc.logBlowup = *value;
   }
   if (top->get("log_final_poly_len")) {
+    // The final polynomial rides one counted slot, so 2^log_final_poly_len
+    // lives in the shared count domain (at most 2^20); naming the cap
+    // here keeps the refusal at the knob rather than an IR-level count
+    // grammar error three tools later.
     std::optional<int64_t> value = top->getInteger("log_final_poly_len");
-    if (!value || *value < 0 || *value > 1024)
-      return err("'log_final_poly_len' must be a non-negative integer (at "
-                 "most 1024)");
+    if (!value || *value < 0 || *value > 20)
+      return err("'log_final_poly_len' must be an integer from 0 through 20 "
+                 "(2^log_final_poly_len coefficients ride one counted slot "
+                 "in the shared count domain)");
     desc.logFinalPolyLen = *value;
   }
 
@@ -348,8 +352,12 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
   // log_blowup >= 1 subsumes rate-below-one.
   if (!explicitBlowup)
     desc.logBlowup = desc.queryLog2 - desc.k - desc.logFinalPolyLen;
-  if (desc.logBlowup < 1 ||
+  if (explicitBlowup &&
       desc.queryLog2 != desc.k + desc.logBlowup + desc.logFinalPolyLen)
+    return err("'log_blowup' contradicts the shape equation query_log2 = "
+               "k + log_blowup + log_final_poly_len (move whichever knob "
+               "the sweep owns)");
+  if (desc.logBlowup < 1)
     return err("'query_log2' must equal k + log_blowup + "
                "log_final_poly_len with log_blowup at least 1 (rate below "
                "one: the evaluation domain covers the message and the fold "
@@ -881,7 +889,7 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
 /// (evaluation/upstream/plonky3-replay/README.md): the stripped pinned
 /// harness's own transcript — sizes and input commitment bound, the opening
 /// point and batch challenge sampled, commit-then-sample rounds, the final
-/// coefficient in the clear, arities in their own segment, a one-word grind —
+/// coefficients in the clear, arities in their own segment, a one-word grind —
 /// with the construction routes that derive the prover.
 static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   std::string out;

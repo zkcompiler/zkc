@@ -1,0 +1,23 @@
+{
+ "family": "fri",
+ "name": "bad",
+ "k": 3,
+ "field": "97",
+ "query_log2": 6,
+ "log_final_poly_len": 21,
+ "ell": 2,
+ "analysis": "none",
+ "kappa": {
+  "sponge": "toy_duplex",
+  "iv": "zero",
+  "codecs": {
+   "ext_field": "ts_be8",
+   "query_index": "ts_be8",
+   "rs": "ts_be8"
+  }
+ },
+ "anchors": {
+  "contract": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "statement": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+ }
+}

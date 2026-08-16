@@ -74,3 +74,17 @@ pir.protocol "routes" policy "residual_artifact" {
   // CHECK-NEXT: pir.residual %{{.+}} : <"opaque_relation"> route "open.obligation"
   pir.residual %right : !pir.claim<"opaque_relation"> route "open.obligation"
 }
+
+// An absorbed counted slot verifies: it advances the transcript as its
+// elements in index order, each framed exactly as a scalar of its class
+// (docs/spec/kernel.md §1.1) — the accepting direction of the rule that
+// once refused counted absorption outright.
+// CHECK-LABEL: pir.protocol "counted_absorb"
+pir.protocol "counted_absorb" kappa {codecs = {scalar = "ts_be8"}} {
+  %t0 = pir.begin
+  // CHECK: pir.slot %{{.+}} "coefficients" : "scalar" count "4"
+  %t1, %v = pir.slot %t0 "coefficients" : "scalar" count "4"
+  // CHECK-NEXT: pir.chal %{{.+}} deps(%{{.+}} : !pir.val<"scalar">)
+  %t2, %c = pir.chal %t1 deps(%v : !pir.val<"scalar">) "c" : "scalar" domain "counted.absorb.c" space "2305843009213693952"
+  pir.end %t2
+}

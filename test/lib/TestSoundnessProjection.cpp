@@ -233,7 +233,8 @@ struct TestSoundnessProjectionPass
             evaluateMachineDecider(
                 MachineDeciderKind::UdrDomainFloor,
                 {RuntimeValue::integer(Rational::fromInteger(10000)),
-                 RuntimeValue::integer(Rational::fromInteger(1))}),
+                 RuntimeValue::integer(Rational::fromInteger(1)),
+                 RuntimeValue::integer(Rational::fromInteger(0))}),
             "exponent exceeds the v0 exact arithmetic range",
             "UDR exponent range")))
       return signalPassFailure();

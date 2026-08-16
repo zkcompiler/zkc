@@ -91,6 +91,9 @@
 // RUN: not zkc-family %S/Inputs/bad-embed.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=EMBED %s
 // RUN: not zkc-family %S/Inputs/bad-m.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=M %s
 // RUN: not zkc-family %S/Inputs/bad-ell.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=ELL %s
+// RUN: not zkc-family %S/Inputs/bad-blowup.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=BLOWUP %s
+// RUN: not zkc-family %S/Inputs/bad-final-len.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=FINLEN %s
+// RUN: not zkc-family %S/Inputs/bad-blowup-equation.json --emit-vocabulary=%t.x.json --emit-spine=%t.x.mlir 2>&1 | FileCheck --check-prefix=SHAPE %s
 // BADFAM: unknown family 'stir'
 // BADK: 'k' must be a positive integer
 // UNKNOWN: unknown field 'rate'
@@ -100,3 +103,6 @@
 // EMBED: query space 2^query_log2 must embed in 'field'
 // M: 'johnson.m' must be an integer of at least 3
 // ELL: 'ell' must be an integer from 2 through 2^20
+// BLOWUP: 'log_blowup' must be a positive integer
+// FINLEN: 'log_final_poly_len' must be an integer from 0 through 20
+// SHAPE: 'log_blowup' contradicts the shape equation

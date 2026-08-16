@@ -302,6 +302,82 @@ pub fn fri_parameters(mmcs: ChallengeMmcs) -> FriParameters<ChallengeMmcs> {
 }
 
 /// The family instance's parameter point: the query count and the
+/// The instance shape, derived once from a canonical document's own
+/// rows — the single statement of the derivation both the runner and
+/// the judge use, so the two binaries cannot read one schedule as two
+/// different instances. Bounds are door-front refusals: the field's
+/// two-adicity caps the index space, and the counted-slot domain caps
+/// the final length, so no later shift or verifier failure stands in
+/// for a named error.
+pub struct DocShape {
+    pub log_size: usize,
+    pub queries: usize,
+    pub grind_bits: usize,
+    pub query_bits: usize,
+    pub fold_rounds: usize,
+    pub log_blowup: usize,
+    pub log_final_poly_len: usize,
+}
+
+pub fn doc_shape(rows: &[serde_json::Value]) -> Result<DocShape, String> {
+    let log_size: usize = rows
+        .iter()
+        .find(|row| row[0] == "const")
+        .and_then(|row| row[1].as_str())
+        .and_then(|text| text.parse().ok())
+        .ok_or("no pinned log_size constant")?;
+    let space_log2 = |label: &str| -> Result<usize, String> {
+        let row = rows
+            .iter()
+            .find(|row| row[0] == "squeeze" && row[2] == label)
+            .ok_or_else(|| format!("no squeeze labelled {label}"))?;
+        let space: u128 = row[7]
+            .as_str()
+            .and_then(|text| text.parse().ok())
+            .ok_or("squeeze space is not decimal")?;
+        if !space.is_power_of_two() {
+            return Err("squeeze space is not a power of two".to_owned());
+        }
+        Ok(space.trailing_zeros() as usize)
+    };
+    let grind_bits = space_log2("pow")?;
+    let query_bits = space_log2("query")?;
+    let queries: usize = rows
+        .iter()
+        .find(|row| row[0] == "squeeze" && row[2] == "query")
+        .and_then(|row| row[4].as_str())
+        .and_then(|text| text.parse().ok())
+        .ok_or("no counted query squeeze")?;
+    let fold_rounds = rows
+        .iter()
+        .filter(|row| row[0] == "squeeze" && row[3] == "ext_field")
+        .count()
+        .checked_sub(2)
+        .ok_or("fewer extension squeezes than the chain uses")?;
+    if query_bits > 27 {
+        return Err("the index space exceeds BabyBear's two-adicity (2^27)".to_owned());
+    }
+    let log_blowup = query_bits
+        .checked_sub(log_size)
+        .filter(|&b| b >= 1)
+        .ok_or("the index space does not cover the trace at a rate below one")?;
+    let log_final_poly_len = log_size
+        .checked_sub(fold_rounds)
+        .ok_or("more fold squeezes than the trace height admits")?;
+    if log_final_poly_len > 20 {
+        return Err("the final length exceeds the counted-slot domain (2^20)".to_owned());
+    }
+    Ok(DocShape {
+        log_size,
+        queries,
+        grind_bits,
+        query_bits,
+        fold_rounds,
+        log_blowup,
+        log_final_poly_len,
+    })
+}
+
 /// grinding bits, rate, and final length come from the artifact's own
 /// schedule (the runner and the judge derive them from the document);
 /// the fold arity and commit grinding stay the value-faithful

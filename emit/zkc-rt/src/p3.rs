@@ -590,17 +590,14 @@ pub fn fri_final(mut codeword: Codeword) -> Result<(Vec<[u32; 4]>, Codeword), St
             evaluations.len()
         ));
     }
+    // Truncation fixes the length before the transform and the inverse
+    // DFT preserves it, so the full-codeword gate above is the one live
+    // length check; a dishonest higher-degree witness is caught by the
+    // verifier's consistency check, not here.
     evaluations.truncate(1 << shape.log_final_poly_len);
     reverse_slice_index_bits(&mut evaluations);
     let dft = Radix2DFTSmallBatch::<Val>::default();
     let coefficients: Vec<Challenge> = dft.idft_algebra(evaluations);
-    if coefficients.len() != 1 << shape.log_final_poly_len {
-        return Err(format!(
-            "the final fill emits {} coefficient(s); this family declares {}",
-            coefficients.len(),
-            1 << shape.log_final_poly_len
-        ));
-    }
     codeword.stage = Stage::Final;
     Ok((
         coefficients.into_iter().map(words_from_ext).collect(),

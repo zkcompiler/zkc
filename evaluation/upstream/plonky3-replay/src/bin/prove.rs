@@ -33,7 +33,7 @@ use serde_json::Value as Json;
 use sha2::{Digest, Sha256};
 use zkc_plonky3_replay::{
     ChallengeMmcs, Compress, Dft, Event, FieldHash, Pcs, PlainChallenger, RecordingChallenger, Val,
-    ValMmcs, fri_parameters_for,
+    ValMmcs, doc_shape, fri_parameters_for,
 };
 
 type Challenge = BinomialExtensionField<Val, 4>;
@@ -128,11 +128,13 @@ fn count_of(reference: &Json, rows: &[Json]) -> usize {
         return 1;
     }
     let descriptor = row[2][index].as_array().unwrap();
-    descriptor
-        .get(2)
-        .and_then(|count| count.as_str())
-        .and_then(|text| text.parse().ok())
-        .unwrap_or(1)
+    match descriptor.get(2) {
+        None => 1,
+        Some(count) => count
+            .as_str()
+            .and_then(|text| text.parse().ok())
+            .unwrap_or_else(|| fail("hole result count is not decimal")),
+    }
 }
 
 fn main() {
@@ -172,82 +174,25 @@ fn main() {
     // commit-phase trees with the same schemes and opens them.
     let opener_val_mmcs = val_mmcs.clone();
     let opener_challenge_mmcs = challenge_mmcs.clone();
-    let queries: usize = rows
-        .iter()
-        .find(|row| row[0] == "squeeze" && row[2] == "query")
-        .and_then(|row| row[4].as_str())
-        .and_then(|text| text.parse().ok())
-        .unwrap_or_else(|| fail("no counted query squeeze"));
-    let doc_grind_bits = {
-        let row = rows
-            .iter()
-            .find(|row| row[0] == "squeeze" && row[2] == "pow")
-            .unwrap_or_else(|| fail("no pow squeeze"));
-        let space: u128 = row[7]
-            .as_str()
-            .and_then(|text| text.parse().ok())
-            .unwrap_or_else(|| fail("pow space is not decimal"));
-        if !space.is_power_of_two() {
-            fail("pow space is not a power of two");
-        }
-        space.trailing_zeros() as usize
-    };
-    // The instance shape, read from the document's own rows — the
-    // runner grades whatever the family sealed, not one fixture: the
-    // trace log-size is the first pinned constant, the grinding bits
-    // and query bits are the squeeze spaces, and the fold depth is the
-    // extension-sample count minus the opening point and the batch
-    // challenge.
-    let log_size = {
-        let row = rows
-            .iter()
-            .find(|row| row[0] == "const")
-            .unwrap_or_else(|| fail("no pinned log_size constant"));
-        row[1]
-            .as_str()
-            .and_then(|text| text.parse::<usize>().ok())
-            .unwrap_or_else(|| fail("log_size constant is not decimal"))
-    };
-    let space_log2 = |label: &str| -> usize {
-        let row = rows
-            .iter()
-            .find(|row| row[0] == "squeeze" && row[2] == label)
-            .unwrap_or_else(|| fail(&format!("no squeeze labelled {label}")));
-        let space: u128 = row[7]
-            .as_str()
-            .and_then(|text| text.parse().ok())
-            .unwrap_or_else(|| fail("squeeze space is not decimal"));
-        if !space.is_power_of_two() {
-            fail("squeeze space is not a power of two");
-        }
-        space.trailing_zeros() as usize
-    };
-    let grind_bits = space_log2("pow");
-    let query_bits = space_log2("query");
-    let fold_rounds = rows
-        .iter()
-        .filter(|row| row[0] == "squeeze" && row[3] == "ext_field")
-        .count()
-        .checked_sub(2)
-        .unwrap_or_else(|| fail("fewer extension squeezes than the chain uses"));
-    // The shape equation: index bits = trace height + blowup, and the
-    // fold chain stops log_final_poly_len above a constant.
-    let log_blowup = query_bits
-        .checked_sub(log_size)
-        .filter(|&b| b >= 1)
-        .unwrap_or_else(|| fail("the index space does not cover the trace at a rate below one"));
-    let log_final_poly_len = log_size
-        .checked_sub(fold_rounds)
-        .unwrap_or_else(|| fail("more fold squeezes than the trace height admits"));
+    // The instance shape from the schedule — the shared derivation the
+    // judge uses, so the two binaries cannot read one schedule as two
+    // different instances.
+    let shape = doc_shape(rows).unwrap_or_else(|message| fail(&message));
+    let log_size = shape.log_size;
+    let queries = shape.queries;
+    let grind_bits = shape.grind_bits;
+    let query_bits = shape.query_bits;
+    let fold_rounds = shape.fold_rounds;
+    let log_blowup = shape.log_blowup;
     let pcs = Pcs::new(
         Dft::default(),
         val_mmcs,
         fri_parameters_for(
             challenge_mmcs,
             queries,
-            doc_grind_bits,
+            grind_bits,
             log_blowup,
-            log_final_poly_len,
+            shape.log_final_poly_len,
         ),
     );
     // The deterministic witness column: evaluations 1..=2^log_size.

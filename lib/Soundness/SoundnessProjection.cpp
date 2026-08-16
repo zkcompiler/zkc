@@ -532,8 +532,9 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::JohnsonFoldParam:
     return {ValueSort::Integer};
   case MachineDeciderKind::SpaceCoversBatch:
-  case MachineDeciderKind::UdrDomainFloor:
     return {ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::UdrDomainFloor:
+    return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::FriShape:
     return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer,
             ValueSort::Integer};
@@ -949,9 +950,16 @@ evaluateMachineDecider(MachineDeciderKind kind,
     return delta.compare(johnson) > 0 && delta.compare(cap) < 0;
   }
   case MachineDeciderKind::UdrDomainFloor: {
+    // The cited corollary is stated for the fold-to-constant shape;
+    // its last-round geometry reads n - k as the final domain, which
+    // holds only at log_final_poly_len zero, so any early-stopping
+    // declaration refuses here rather than pricing an overstated
+    // last-round distance.
     const registry::Rational &n = number(arguments[0]);
     const registry::Rational &k = number(arguments[1]);
-    if (n.compare(k) <= 0)
+    const registry::Rational &finalLen = number(arguments[2]);
+    if (n.compare(k) <= 0 ||
+        finalLen.compare(registry::Rational::fromInteger(0)) != 0)
       return false;
     auto quantities = udrLastRound(n, k);
     if (!quantities)

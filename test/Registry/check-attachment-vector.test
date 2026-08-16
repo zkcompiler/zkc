@@ -18,3 +18,11 @@
 # RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); a=d['reduction_contracts']['fri']['checks']['consistency']['attachments']; next(x for x in a if x['kind']=='value_identity_list' and x['target_role']=='betas')['source']['items'].pop(); json.dump(d, open(sys.argv[2],'w'))" %t/vocab.json %t/short-list.json
 # RUN: not zkc-registry-lint %t/short-list.json 2>&1 | FileCheck %s --check-prefix=SHORT
 # SHORT: value_identity_list length must equal the target segment's count
+
+# A reference source that is neither dependency nor message (an anchor
+# reference) cannot carry the whole-vector identity. The tail instance
+# is the one whose final polynomial rides the vector kind.
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf-tail.json --emit-vocabulary=%t/tail-vocab.json --emit-spine=%t/tail-spine.mlir
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); a=d['reduction_contracts']['fri']['checks']['consistency']['attachments']; v=next(x for x in a if x['kind']=='value_identity_vector' and x['target_role']=='final_coefficients'); v['source']={'kind': 'input_anchor', 'input': 0, 'anchor': 'statement'}; json.dump(d, open(sys.argv[2],'w'))" %t/tail-vocab.json %t/anchor-source.json
+# RUN: not zkc-registry-lint %t/anchor-source.json 2>&1 | FileCheck %s --check-prefix=LOCALSRC
+# LOCALSRC: value_identity_vector source must be a dependency or message

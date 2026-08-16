@@ -181,7 +181,7 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
             {ValueSort::Rational, ValueSort::Rational, ValueSort::Integer}};
   case MachineDeciderKind::UdrDomainFloor:
     return {"zkc.side.udr_domain_floor",
-            {ValueSort::Integer, ValueSort::Integer}};
+            {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer}};
   case MachineDeciderKind::UdrThetaWindow:
     return {"zkc.side.udr_theta_window",
             {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer}};

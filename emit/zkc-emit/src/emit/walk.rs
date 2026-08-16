@@ -458,25 +458,12 @@ impl<'a> Walk<'a> {
                 if self.vector_counts.contains_key(value) {
                     // A counted value absorbs as its elements in index
                     // order, each framed exactly as a scalar of its
-                    // class (docs/spec/kernel.md §1.1).
-                    let VClass::Doc(name) = &class else {
-                        return Err(format!(
-                            "row {index}: a counted algebra result has no framing codec"
-                        ));
-                    };
-                    let body = match self.class_impl(name)? {
-                        ImplKind::P3Word => "sponge.absorb(&[*element]);".to_owned(),
-                        ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
-                            "sponge.absorb(element);".to_owned()
-                        }
-                        other => {
-                            return Err(format!(
-                                "row {index}: no counted absorb framing for {other:?}"
-                            ))
-                        }
-                    };
-                    self.line(1, &format!("for element in &{expr} {{"));
-                    self.line(2, &body);
+                    // class (docs/spec/kernel.md §1.1). The per-element
+                    // statement comes from the same single source every
+                    // scalar absorb uses, so the framings cannot drift.
+                    let statement = self.absorb_statement("sponge", "element", &class, index)?;
+                    self.line(1, &format!("for &element in &{expr} {{"));
+                    self.line(2, &statement);
                     self.line(1, "}");
                     self.used.sponge = Use {
                         named: true,

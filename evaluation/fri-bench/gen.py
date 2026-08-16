@@ -26,8 +26,12 @@ def main() -> None:
     OUT.mkdir(exist_ok=True)
     instance = HERE / (sys.argv[1] if len(sys.argv) > 1 else "instance-a.json")
     desc = json.load(open(instance))
-    blowup = int(desc.get("log_blowup", desc["query_log2"] - desc["k"]))
+    # The family's own default derivation (lib/Family/FriFamily.cpp):
+    # an omitted log_blowup comes from the shape equation
+    # query_log2 = k + log_blowup + log_final_poly_len.
     lfpl = int(desc.get("log_final_poly_len", 0))
+    blowup = int(desc.get("log_blowup",
+                          desc["query_log2"] - desc["k"] - lfpl))
     # The one statement of the instance shape both Rust legs include:
     # nothing restates LOG_SIZE by hand, so the two binaries cannot
     # silently diverge from the instance description.
