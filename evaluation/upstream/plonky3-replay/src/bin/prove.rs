@@ -151,9 +151,45 @@ fn main() {
     let opener_challenge_mmcs = challenge_mmcs.clone();
     let pcs = Pcs::new(Dft::default(), val_mmcs, fri_parameters(challenge_mmcs));
 
-    // One deterministic polynomial: the witness channel is the caller's,
-    // and this caller fixes evaluations 1..=8 of a log-size-3 column.
-    let log_size = 3usize;
+    // The instance shape, read from the document's own rows — the
+    // runner grades whatever the family sealed, not one fixture: the
+    // trace log-size is the first pinned constant, the grinding bits
+    // and query bits are the squeeze spaces, and the fold depth is the
+    // extension-sample count minus the opening point and the batch
+    // challenge.
+    let log_size = {
+        let row = rows
+            .iter()
+            .find(|row| row[0] == "const")
+            .unwrap_or_else(|| fail("no pinned log_size constant"));
+        row[1]
+            .as_str()
+            .and_then(|text| text.parse::<usize>().ok())
+            .unwrap_or_else(|| fail("log_size constant is not decimal"))
+    };
+    let space_log2 = |label: &str| -> usize {
+        let row = rows
+            .iter()
+            .find(|row| row[0] == "squeeze" && row[2] == label)
+            .unwrap_or_else(|| fail(&format!("no squeeze labelled {label}")));
+        let space: u128 = row[7]
+            .as_str()
+            .and_then(|text| text.parse().ok())
+            .unwrap_or_else(|| fail("squeeze space is not decimal"));
+        if !space.is_power_of_two() {
+            fail("squeeze space is not a power of two");
+        }
+        space.trailing_zeros() as usize
+    };
+    let grind_bits = space_log2("pow");
+    let query_bits = space_log2("query");
+    let fold_rounds = rows
+        .iter()
+        .filter(|row| row[0] == "squeeze" && row[3] == "ext_field")
+        .count()
+        .checked_sub(2)
+        .unwrap_or_else(|| fail("fewer extension squeezes than the chain uses"));
+    // The deterministic witness column: evaluations 1..=2^log_size.
     let evaluations =
         RowMajorMatrix::<Val>::new((1..=1u32 << log_size).map(Val::from_u32).collect(), 1);
     let domain = <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(
@@ -236,7 +272,7 @@ fn main() {
                         if next_is_pow {
                             match take("grind") {
                                 Event::Grind { bits, witness } => {
-                                    if *bits != 8 {
+                                    if *bits != grind_bits {
                                         fail("grind bits disagree");
                                     }
                                     absorbed.insert(value_ref, vec![*witness]);
@@ -316,7 +352,7 @@ fn main() {
                         for draw in 0..draws {
                             match take("query index") {
                                 Event::SampleBits { bits, value } => {
-                                    if *bits != 4 {
+                                    if *bits != query_bits {
                                         fail("query bits disagree");
                                     }
                                     if draw > 0 {
@@ -359,7 +395,7 @@ challenger events ({noop_pows} zero-bit commit pows enumerated as no-ops)",
     // and challenges, requires every rebuilt root to equal the proof's
     // own commitment — Merkle binding makes the trees upstream's — and
     // opens full paths from them. -----
-    if ext_samples.len() < 5 {
+    if ext_samples.len() != 2 + fold_rounds {
         fail("the schedule sampled fewer extension values than the chain uses");
     }
     let opener_dft = Dft::default();
@@ -396,7 +432,7 @@ challenger events ({noop_pows} zero-bit commit pows enumerated as no-ops)",
         .collect();
     let folding = TwoAdicFriFolding::<(), ()>(std::marker::PhantomData);
     let mut round_trees = Vec::new();
-    for (round, &beta) in ext_samples[2..5].iter().enumerate() {
+    for (round, &beta) in ext_samples[2..2 + fold_rounds].iter().enumerate() {
         let (cap, tree) = opener_challenge_mmcs.commit_matrix(RowMajorMatrix::new(current, 2));
         if cap != opening_proof.commit_phase_commits[round] {
             fail("a rebuilt round tree does not carry the committed root");
