@@ -20,7 +20,7 @@
 # The reference executor accepts the committed vectors, including the
 # accepting one.
 # RUN: zkc-run %t/verifier.mlir --vectors %S/Inputs/plonky3-fri-emit-vectors.json --profile=plonky3 | FileCheck --check-prefix=REF %s
-# REF: honest-ground: accept [133002514227445385074322667934467216245,127139884527345934839558783434612021669,157115104285124571000241449691925121408,0,8|7|11|8]
+# REF: honest-ground: accept [50547986587751102667512479983557345316,90952682806480780488092322886851847128,13650333056140639537455512933088658591,0,5|3|12|10]
 # REF: empty-proof: abi_decode_failure
 # REF: non-canonical-root: abi_decode_failure
 

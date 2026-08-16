@@ -49,6 +49,13 @@ struct FriDescription {
   std::string fieldOrder; // fold-challenge space, exact decimal
   int64_t queryLog2 = 0;  // query space is 2^queryLog2
   int64_t ell = 0;        // iid query repetitions
+  /// The instance's rate and stopping shape. The shape equation
+  /// query_log2 = k + log_blowup + log_final_poly_len holds for every
+  /// admitted description: the evaluation domain covers the message
+  /// (rate 2^-log_blowup) and the fold chain stops at a final
+  /// polynomial of 2^log_final_poly_len coefficients.
+  int64_t logBlowup = 1;
+  int64_t logFinalPolyLen = 0;
   /// Which analysis parameters the generated reduce declares.  This is
   /// protocol content, not a theorem selection: a derivation later chooses a
   /// rule whose machine conditions read whichever parameters it needs.

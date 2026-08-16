@@ -54,7 +54,7 @@
 # RUN:   old=d['derivation']['target']['subject']['artifact_id']; \
 # RUN:   open(sys.argv[3],'w').write(json.dumps(d).replace(old, sys.argv[2]))" \
 # RUN:   %S/Inputs/grinding-over-fri-request.json \
-# RUN:   4358faaa6c342436a3b483b7680d90450ab154c5112f645cf27b75550fda101e %t/absorbed-request.json
+# RUN:   51e96c89f271c738f2ba83253adf4c5761b7dacd5155d9a4b2e602d55b532bad %t/absorbed-request.json
 # RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
 # RUN:   --protocol-vocabulary=%t/vocab.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \

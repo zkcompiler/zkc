@@ -164,23 +164,21 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
     return {"zkc.side.same_point", {ValueSort::ReductionContract}};
   case MachineDeciderKind::BatchAfterMaterial:
     return {"zkc.side.batch_after_material", {ValueSort::ReductionContract}};
-  case MachineDeciderKind::FriRateBelowOne:
-    return {"zkc.side.fri_rate_below_one",
-            {ValueSort::Integer, ValueSort::Integer}};
+  case MachineDeciderKind::FriShape:
+    return {"zkc.side.fri_shape",
+            {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer,
+             ValueSort::Integer}};
   case MachineDeciderKind::JohnsonFoldParam:
     return {"zkc.side.johnson_fold_param", {ValueSort::Integer}};
   case MachineDeciderKind::JohnsonSlack:
     return {"zkc.side.johnson_slack",
-            {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer,
-             ValueSort::Integer}};
+            {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer}};
   case MachineDeciderKind::JohnsonMultiplicity:
     return {"zkc.side.johnson_multiplicity",
-            {ValueSort::Integer, ValueSort::Rational, ValueSort::Integer,
-             ValueSort::Integer}};
+            {ValueSort::Integer, ValueSort::Rational, ValueSort::Integer}};
   case MachineDeciderKind::JohnsonDelta:
     return {"zkc.side.johnson_delta",
-            {ValueSort::Rational, ValueSort::Rational, ValueSort::Integer,
-             ValueSort::Integer}};
+            {ValueSort::Rational, ValueSort::Rational, ValueSort::Integer}};
   case MachineDeciderKind::UdrDomainFloor:
     return {"zkc.side.udr_domain_floor",
             {ValueSort::Integer, ValueSort::Integer}};
@@ -193,11 +191,10 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
     return {"zkc.side.pow_adjacent", {ValueSort::RoundAdjacency}};
   case MachineDeciderKind::RandomWordsEtaFloor:
     return {"zkc.side.random_words_eta_floor",
-            {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer,
-             ValueSort::Integer}};
+            {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer}};
   case MachineDeciderKind::ThresholdDeltaWindow:
     return {"zkc.side.threshold_delta_window",
-            {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer}};
+            {ValueSort::Rational, ValueSort::Integer}};
   case MachineDeciderKind::DuplexSpine:
     return {"zkc.side.duplex_spine", {ValueSort::PathTransition}};
   case MachineDeciderKind::CodecBiasDeclared:

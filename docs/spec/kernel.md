@@ -111,7 +111,11 @@ where T advances only at events in A.
 The kernel fixes event *classes* only insofar as judgments need them:
 
 - **slot** — proof material enters the verifier-visible stream.
-  A slot is absorbing unless explicitly marked unabsorbed (§5.3).
+  A slot is absorbing unless explicitly marked unabsorbed (§5.3). A
+  counted slot in A advances the transcript by its elements in index
+  order, each exactly as a scalar of its class; the count is a static
+  constant of the sealed protocol, so the framing stays injective and
+  prefix-free (§13(e)) without any per-event length tag.
 - **public_bind** — a statement/public-input binding becomes
   protocol-visible. Absorbing.
 - **challenge** — a verifier challenge is introduced (§1.5). Absorbing

@@ -96,7 +96,7 @@
 // UNKNOWN: unknown field 'rate'
 // JOHNSON: needs the 'johnson' block
 // FIELD: 'field' must be a decimal integer string
-// RATE: 'query_log2' must exceed 'k'
+// RATE: 'query_log2' must equal k + log_blowup + log_final_poly_len with log_blowup at least 1
 // EMBED: query space 2^query_log2 must embed in 'field'
 // M: 'johnson.m' must be an integer of at least 3
 // ELL: 'ell' must be an integer from 2 through 2^20

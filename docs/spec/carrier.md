@@ -607,7 +607,11 @@ Realization boundaries:
 width, and counted rows carry statically declared multiplicity over it, so
 every minted wire layout is a constant of its protocol instance. A width not
 statically declared must be computable from transcript state strictly before
-the read — no surveyed opening shape needs more, and none is minted. A future
+the read — no surveyed opening shape needs more, and none is minted. An
+absorbed counted row advances the transcript as its elements in index order,
+each framed exactly as a scalar of its class (`kernel.md` §1.1): count and
+codec width are constants of the sealed instance, so the concatenation stays
+injective and prefix-free with no per-event length tag. A future
 variable-length class that is absorbed needs explicit length framing whose
 injectivity joins the Binding Lemma's a-leg; one that is only read — an
 unabsorbed slot under `kernel.md` §5.3's default — owes unambiguous decoding

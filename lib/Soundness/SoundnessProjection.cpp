@@ -532,24 +532,23 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::JohnsonFoldParam:
     return {ValueSort::Integer};
   case MachineDeciderKind::SpaceCoversBatch:
-  case MachineDeciderKind::FriRateBelowOne:
   case MachineDeciderKind::UdrDomainFloor:
     return {ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::FriShape:
+    return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer,
+            ValueSort::Integer};
   case MachineDeciderKind::JohnsonSlack:
-    return {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer,
-            ValueSort::Integer};
-  case MachineDeciderKind::JohnsonMultiplicity:
-    return {ValueSort::Integer, ValueSort::Rational, ValueSort::Integer,
-            ValueSort::Integer};
-  case MachineDeciderKind::JohnsonDelta:
-    return {ValueSort::Rational, ValueSort::Rational, ValueSort::Integer,
-            ValueSort::Integer};
-  case MachineDeciderKind::UdrThetaWindow:
-  case MachineDeciderKind::ThresholdDeltaWindow:
     return {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::JohnsonMultiplicity:
+    return {ValueSort::Integer, ValueSort::Rational, ValueSort::Integer};
+  case MachineDeciderKind::JohnsonDelta:
+    return {ValueSort::Rational, ValueSort::Rational, ValueSort::Integer};
+  case MachineDeciderKind::UdrThetaWindow:
+    return {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::ThresholdDeltaWindow:
+    return {ValueSort::Rational, ValueSort::Integer};
   case MachineDeciderKind::RandomWordsEtaFloor:
-    return {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer,
-            ValueSort::Integer};
+    return {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::PowPinned:
   case MachineDeciderKind::PowAdjacent:
     return {ValueSort::RoundAdjacency};
@@ -598,10 +597,9 @@ const std::string &text(const RuntimeValue &value) {
   return std::get<std::string>(value.payload);
 }
 
-llvm::Expected<registry::Rational> sqrtRhoBound(const registry::Rational &n,
-                                                const registry::Rational &k,
+llvm::Expected<registry::Rational> sqrtRhoBound(const registry::Rational &blowup,
                                                 bool upper) {
-  auto half = n.sub(k).div(registry::Rational::fromInteger(2));
+  auto half = blowup.div(registry::Rational::fromInteger(2));
   if (!half)
     return half.takeError();
   auto exponent = upper ? half->floorToInt() : half->ceilToInt();
@@ -834,19 +832,30 @@ evaluateMachineDecider(MachineDeciderKind kind,
     }
     return true;
   }
-  case MachineDeciderKind::FriRateBelowOne:
-    return number(arguments[0]).compare(number(arguments[1])) > 0;
+  case MachineDeciderKind::FriShape: {
+    // The declared shape must be the realized one: n = k + log_blowup +
+    // log_final_poly_len with log_blowup >= 1 (rate below one). This is
+    // what stops a declared rate from drifting off the sealed schedule
+    // and silently understating every bound priced from it.
+    const registry::Rational &n = number(arguments[0]);
+    const registry::Rational &k = number(arguments[1]);
+    const registry::Rational &blowup = number(arguments[2]);
+    const registry::Rational &finalLen = number(arguments[3]);
+    if (blowup.compare(one) < 0 ||
+        finalLen.compare(registry::Rational::fromInteger(0)) < 0)
+      return false;
+    return n.compare(k.add(blowup).add(finalLen)) == 0;
+  }
   case MachineDeciderKind::JohnsonFoldParam:
     return number(arguments[0]).compare(registry::Rational::fromInteger(3)) >=
            0;
   case MachineDeciderKind::JohnsonSlack: {
     const registry::Rational &eta = number(arguments[0]);
     const registry::Rational &m = number(arguments[1]);
-    const registry::Rational &n = number(arguments[2]);
-    const registry::Rational &k = number(arguments[3]);
-    if (!positive(eta) || !positive(m) || n.compare(k) <= 0)
+    const registry::Rational &blowup = number(arguments[2]);
+    if (!positive(eta) || !positive(m) || blowup.compare(one) < 0)
       return false;
-    auto sqrtRho = sqrtRhoBound(n, k, /*upper=*/false);
+    auto sqrtRho = sqrtRhoBound(blowup, /*upper=*/false);
     if (!sqrtRho)
       return sqrtRho.takeError();
     auto bound = sqrtRho->div(m.mul(registry::Rational::fromInteger(2)));
@@ -857,11 +866,10 @@ evaluateMachineDecider(MachineDeciderKind kind,
   case MachineDeciderKind::JohnsonMultiplicity: {
     const registry::Rational &m = number(arguments[0]);
     const registry::Rational &eta = number(arguments[1]);
-    const registry::Rational &n = number(arguments[2]);
-    const registry::Rational &k = number(arguments[3]);
-    if (!positive(m) || !positive(eta) || n.compare(k) <= 0)
+    const registry::Rational &blowup = number(arguments[2]);
+    if (!positive(m) || !positive(eta) || blowup.compare(one) < 0)
       return false;
-    auto sqrtRho = sqrtRhoBound(n, k, /*upper=*/true);
+    auto sqrtRho = sqrtRhoBound(blowup, /*upper=*/true);
     if (!sqrtRho)
       return sqrtRho.takeError();
     return m.mul(eta)
@@ -871,11 +879,10 @@ evaluateMachineDecider(MachineDeciderKind kind,
   case MachineDeciderKind::JohnsonDelta: {
     const registry::Rational &delta = number(arguments[0]);
     const registry::Rational &eta = number(arguments[1]);
-    const registry::Rational &n = number(arguments[2]);
-    const registry::Rational &k = number(arguments[3]);
-    if (!positive(delta) || n.compare(k) <= 0)
+    const registry::Rational &blowup = number(arguments[2]);
+    if (!positive(delta) || blowup.compare(one) < 0)
       return false;
-    auto sqrtRho = sqrtRhoBound(n, k, /*upper=*/true);
+    auto sqrtRho = sqrtRhoBound(blowup, /*upper=*/true);
     if (!sqrtRho)
       return sqrtRho.takeError();
     registry::Rational cap = one.sub(*sqrtRho).sub(eta);
@@ -888,12 +895,11 @@ evaluateMachineDecider(MachineDeciderKind kind,
     // floor computed here is at or above the true correction and a
     // passing eta_bar never understates the conjectured loss.
     const registry::Rational &etaBar = number(arguments[0]);
-    const registry::Rational &n = number(arguments[1]);
-    const registry::Rational &k = number(arguments[2]);
-    const registry::Rational &fieldOrder = number(arguments[3]);
-    if (!positive(etaBar) || n.compare(k) <= 0)
+    const registry::Rational &declaredBlowup = number(arguments[1]);
+    const registry::Rational &fieldOrder = number(arguments[2]);
+    if (!positive(etaBar))
       return false;
-    auto blowup = n.sub(k).floorToInt();
+    auto blowup = declaredBlowup.floorToInt();
     if (!blowup)
       return blowup.takeError();
     if (*blowup < 1 || *blowup > kMaxExactExponent)
@@ -924,14 +930,13 @@ evaluateMachineDecider(MachineDeciderKind kind,
     // its dyadic under-approximation, so the lower gate can only be
     // stricter than the theorem's own.
     const registry::Rational &delta = number(arguments[0]);
-    const registry::Rational &n = number(arguments[1]);
-    const registry::Rational &k = number(arguments[2]);
-    if (!positive(delta) || n.compare(k) <= 0)
+    const registry::Rational &declaredBlowup = number(arguments[1]);
+    if (!positive(delta))
       return false;
-    auto sqrtRhoLower = sqrtRhoBound(n, k, /*upper=*/false);
+    auto sqrtRhoLower = sqrtRhoBound(declaredBlowup, /*upper=*/false);
     if (!sqrtRhoLower)
       return sqrtRhoLower.takeError();
-    auto blowup = n.sub(k).floorToInt();
+    auto blowup = declaredBlowup.floorToInt();
     if (!blowup)
       return blowup.takeError();
     if (*blowup < 1 || *blowup > kMaxExactExponent)

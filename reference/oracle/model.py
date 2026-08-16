@@ -1215,17 +1215,31 @@ class ProtocolVocabulary:
                 if attachment_kind == "value_identity" and source["kind"] not in {"dependency", "message"}:
                     raise Refusal(f"{where} value identity needs a local-value selector")
                 if attachment_kind == "value_identity_vector":
-                    # One counted challenge dependency binds one counted
-                    # segment, count for count.
-                    if source["kind"] != "dependency":
+                    # One counted source value binds one counted segment,
+                    # count for count: a counted challenge dependency or a
+                    # counted round message. The scalar case keeps its own
+                    # kind, so one realized identity never has two content
+                    # spellings.
+                    if source["kind"] not in {"dependency", "message"}:
                         raise Refusal(
-                            f"{where} value_identity_vector source must be a dependency"
+                            f"{where} value_identity_vector source must be a "
+                            "dependency or message"
                         )
                     source_count = 0
-                    for round_entry in context["rounds"]:
-                        use = round_entry["challenge_use"]
-                        if use["role"] == source["role"]:
-                            source_count = int(use.get("count", 1))
+                    if source["kind"] == "dependency":
+                        for round_entry in context["rounds"]:
+                            use = round_entry["challenge_use"]
+                            if use["role"] == source["role"]:
+                                source_count = int(use.get("count", 1))
+                    else:
+                        for round_entry in context["rounds"]:
+                            for message in round_entry["messages"]:
+                                if message["role"] == source[
+                                    "role"
+                                ] and not _message_count_is_dynamic(
+                                    message["count"]
+                                ):
+                                    source_count = int(message["count"]["exact"])
                     operand = next(
                         entry
                         for entry in check_contract["operands"]
@@ -1237,8 +1251,8 @@ class ProtocolVocabulary:
                     ):
                         raise Refusal(
                             f"{where} value_identity_vector requires a counted "
-                            "challenge dependency whose count equals the "
-                            "target segment's"
+                            "dependency or message source whose count equals "
+                            "the target segment's"
                         )
                 if attachment_kind == "value_identity_list":
                     # Positional: k local-value selectors for a
@@ -1806,11 +1820,10 @@ def slot(
 ) -> Slot:
     if membership is not None and len(membership) == 2:
         membership = (membership[0], membership[1], 0)
-    if count != "1" and absorbed:
-        raise AssertionError(
-            "a counted slot must be unabsorbed: absorbed material has no "
-            "vector framing rule"
-        )
+    # An absorbed counted slot advances the transcript as its elements in
+    # index order, each framed exactly as a scalar of its class; count and
+    # codec width are constants of the sealed instance, so the framing
+    # stays injective (docs/spec/kernel.md section 1.1).
     return Slot(
         "slot", label, payload_class, absorbed, membership, binding, count
     )
@@ -2699,10 +2712,20 @@ def _validate_contract_shape(
                 )
         for role, count in declared_messages.items():
             occurrences = bound_messages.get(role, {})
-            if set(occurrences) != set(range(count)):
+            # A message multiplicity counts units, not events: a counted
+            # slot occurrence contributes its declared count and a value
+            # is never split — the check-operand segmentation rule
+            # (docs/spec/vocabularies.md), applied to round messages.
+            units = sum(int(slot.count) for slot in occurrences.values())
+            if units != count:
                 raise Refusal(
-                    f"[zkc-E244] message role {role!r} requires occurrence "
-                    f"indices 0..{count - 1}, got {sorted(occurrences)}"
+                    f"[zkc-E244] message role {role!r} needs {count} "
+                    f"unit(s), got {units}"
+                )
+            if set(occurrences) != set(range(len(occurrences))):
+                raise Refusal(
+                    f"[zkc-E244] message role {role!r} has a non-canonical "
+                    f"occurrence set {sorted(occurrences)}"
                 )
 
         prior_challenges: list[tuple[str, Chal]] = []

@@ -510,7 +510,7 @@ enum class MachineDeciderKind {
   SpaceCoversBatch,
   SamePoint,
   BatchAfterMaterial,
-  FriRateBelowOne,
+  FriShape,
   JohnsonFoldParam,
   JohnsonSlack,
   JohnsonMultiplicity,

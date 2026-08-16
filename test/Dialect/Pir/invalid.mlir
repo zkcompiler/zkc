@@ -431,15 +431,4 @@ pir.protocol "bad_slot_count" policy "residual_artifact" {
   pir.end %t1
 }
 
-// -----
-
-// Absorbed material has no vector framing rule: admitting a counted
-// absorbed slot would void the Binding Lemma's a-injectivity silently,
-// so the carrier refuses it at the op.
-pir.protocol "absorbed_counted_slot" policy "residual_artifact" {
-  %t0 = pir.begin
-  // expected-error @below {{[zkc-E146] a counted slot must be unabsorbed: absorbed material has no vector framing rule}}
-  %t1, %v = pir.slot %t0 "vec" : "scalar" count "4"
-  pir.end %t1
-}
 

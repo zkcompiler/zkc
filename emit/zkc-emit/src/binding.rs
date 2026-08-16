@@ -266,6 +266,10 @@ pub enum HoleImpl {
     /// `evaluate`: the final polynomial's constant coefficient; the
     /// handle rides on, carrying the retained trees to the answer fill.
     P3FriFinal,
+    /// `evaluate`: the counted form of the final polynomial — every
+    /// coefficient in ascending degree order as one vector result, for
+    /// an instance whose fold chain stops above a constant.
+    P3FriFinalVec,
     /// `open`: the query answering — leaves, siblings, and paths out of
     /// the retained trees at the sampled indices.
     P3FriAnswer,
@@ -284,6 +288,7 @@ impl HoleImpl {
             "p3_fri_commit" => Some(HoleImpl::P3FriCommit),
             "p3_fri_fold" => Some(HoleImpl::P3FriFold),
             "p3_fri_final" => Some(HoleImpl::P3FriFinal),
+            "p3_fri_final_vec" => Some(HoleImpl::P3FriFinalVec),
             "p3_fri_answer" => Some(HoleImpl::P3FriAnswer),
             _ => None,
         }
@@ -301,7 +306,8 @@ impl HoleImpl {
             HoleImpl::P3FriReduce => "zkc_rt::p3::fri_reduce",
             HoleImpl::P3FriCommit => "zkc_rt::p3::fri_commit",
             HoleImpl::P3FriFold => "zkc_rt::p3::fri_fold",
-            HoleImpl::P3FriFinal => "zkc_rt::p3::fri_final",
+            HoleImpl::P3FriFinal => "zkc_rt::p3::fri_final_constant",
+            HoleImpl::P3FriFinalVec => "zkc_rt::p3::fri_final",
             HoleImpl::P3FriAnswer => "zkc_rt::p3::fri_answer",
         }
     }
@@ -318,6 +324,7 @@ impl HoleImpl {
             | HoleImpl::P3FriCommit
             | HoleImpl::P3FriFold
             | HoleImpl::P3FriFinal
+            | HoleImpl::P3FriFinalVec
             | HoleImpl::P3FriAnswer => "plonky3",
         }
     }
@@ -402,6 +409,15 @@ impl HoleImpl {
                 inputs: &[Operand::Handle("fri-codeword")],
                 results: &[
                     Operand::Value(ImplKind::P3Ext4),
+                    Operand::Handle("fri-codeword"),
+                ],
+                results_repeat: &[],
+            },
+            HoleImpl::P3FriFinalVec => HoleSignature {
+                params: &[],
+                inputs: &[Operand::Handle("fri-codeword")],
+                results: &[
+                    Operand::VectorValue(ImplKind::P3Ext4),
                     Operand::Handle("fri-codeword"),
                 ],
                 results_repeat: &[],

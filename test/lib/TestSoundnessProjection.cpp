@@ -198,14 +198,18 @@ struct TestSoundnessProjectionPass
       return true;
     };
 
-    if (!expectDecider(MachineDeciderKind::FriRateBelowOne,
+    if (!expectDecider(MachineDeciderKind::FriShape,
                        {RuntimeValue::integer(Rational::fromInteger(16)),
-                        RuntimeValue::integer(Rational::fromInteger(8))},
-                       true, "FRI rate positive") ||
-        !expectDecider(MachineDeciderKind::FriRateBelowOne,
-                       {RuntimeValue::integer(Rational::fromInteger(8)),
-                        RuntimeValue::integer(Rational::fromInteger(8))},
-                       false, "FRI rate boundary") ||
+                        RuntimeValue::integer(Rational::fromInteger(13)),
+                        RuntimeValue::integer(Rational::fromInteger(2)),
+                        RuntimeValue::integer(Rational::fromInteger(1))},
+                       true, "FRI shape holds") ||
+        !expectDecider(MachineDeciderKind::FriShape,
+                       {RuntimeValue::integer(Rational::fromInteger(16)),
+                        RuntimeValue::integer(Rational::fromInteger(14)),
+                        RuntimeValue::integer(Rational::fromInteger(2)),
+                        RuntimeValue::integer(Rational::fromInteger(1))},
+                       false, "FRI shape off by one") ||
         !expectDecider(MachineDeciderKind::JohnsonFoldParam,
                        {RuntimeValue::integer(Rational::fromInteger(3))}, true,
                        "Johnson fold positive") ||
@@ -221,8 +225,7 @@ struct TestSoundnessProjectionPass
                 MachineDeciderKind::JohnsonDelta,
                 {RuntimeValue::rational(Rational::fromInteger(1)),
                  RuntimeValue::rational(Rational::fromInteger(1)),
-                 RuntimeValue::integer(Rational::fromInteger(10000)),
-                 RuntimeValue::integer(Rational::fromInteger(1))}),
+                 RuntimeValue::integer(Rational::fromInteger(9999))}),
             "exponent exceeds the v0 exact arithmetic range",
             "Johnson exponent range")) ||
         failed(expectRefusal(

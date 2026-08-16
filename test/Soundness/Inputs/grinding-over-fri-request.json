@@ -19,7 +19,7 @@
     "target": {
       "subject": {
         "kind": "protocol_claim",
-        "artifact_id": "d71d56830f54969b6889762b4c83aa20a235ef523a457cc9415fa8a3efb9b408",
+        "artifact_id": "d65b8ee4dd52f3e764fb304dcb8d44f6b681830630ff0b2571fa3d3a04058193",
         "claim": {
           "claim_index": 2,
           "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
@@ -37,7 +37,7 @@
       "kind": "apply",
       "site": {
         "kind": "reduction",
-        "artifact_id": "d71d56830f54969b6889762b4c83aa20a235ef523a457cc9415fa8a3efb9b408",
+        "artifact_id": "d65b8ee4dd52f3e764fb304dcb8d44f6b681830630ff0b2571fa3d3a04058193",
         "owner_claim": {
           "claim_index": 2,
           "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
@@ -51,7 +51,7 @@
           "kind": "apply",
           "site": {
             "kind": "reduction",
-            "artifact_id": "d71d56830f54969b6889762b4c83aa20a235ef523a457cc9415fa8a3efb9b408",
+            "artifact_id": "d65b8ee4dd52f3e764fb304dcb8d44f6b681830630ff0b2571fa3d3a04058193",
             "owner_claim": {
               "claim_index": 1,
               "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
