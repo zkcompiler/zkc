@@ -32,6 +32,16 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("protocol-vocabulary takes no witness")
         sys.stdout.write(model.canon_json(model.VOCABULARY.document))
         return
+    if mode == "vocabulary-file":
+        # A family-emitted vocabulary, loaded through the same closed
+        # parser as the main registry and re-emitted canonically — the
+        # twin's fail-closed surface applied to generated vocabularies,
+        # which otherwise seal on the C++ leg alone.
+        if len(args) != 1:
+            raise SystemExit("vocabulary-file requires a path")
+        vocabulary = model.ProtocolVocabulary(model.load_json(open(args[0]).read()))
+        sys.stdout.write(model.canon_json(vocabulary.document))
+        return
     if mode == "compiler-config":
         if args:
             raise SystemExit("compiler-config takes no witness")

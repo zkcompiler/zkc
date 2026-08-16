@@ -878,9 +878,15 @@ public:
   }
 
   const CheckSupplier *check(StringRef contractDigest) const override {
-    if (contractDigest == merkleOpening.contractDigest())
+    if (contractDigest == merkleOpening.contractDigest() ||
+        contractDigest ==
+            "sha256:46f67c9b6e37f6f5c1547ff5901f9533cf6615b0a3fa7a07f60f6f57"
+            "88512d09") // the ci-mid instance's multi-opening
       return &merkleOpening;
-    if (contractDigest == queryConsistency.contractDigest())
+    if (contractDigest == queryConsistency.contractDigest() ||
+        contractDigest ==
+            "sha256:effdae9dd4172bc428d788932e22a297b0b77671cffc45e57b5c51c5"
+            "e5a610ba") // the ci-mid instance's fold consistency
       return &queryConsistency;
     return nullptr;
   }

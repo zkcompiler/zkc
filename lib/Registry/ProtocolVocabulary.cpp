@@ -1314,6 +1314,11 @@ Expected<ReductionContract> parseReductionContract(
             ReductionCheckAttachmentKind::CommonMaterialRefEquality;
         requiredSort = MaterialExprSort::Refs;
         singletonTarget = true;
+      } else if (*attachmentKind == "value_identity_vector") {
+        attachment.kind = ReductionCheckAttachmentKind::ValueIdentityVector;
+      } else if (*attachmentKind == "value_identity_list") {
+        attachment.kind = ReductionCheckAttachmentKind::ValueIdentityList;
+        requiredSort = MaterialExprSort::Refs;
       } else {
         return file.error(attachmentContext +
                           " has unknown check-attachment kind '" +
@@ -1343,6 +1348,57 @@ Expected<ReductionContract> parseReductionContract(
         return file.error(attachmentContext +
                           " value_identity source must be dependency or "
                           "message");
+      // The whole-vector identity: one counted challenge dependency
+      // binds one counted operand segment, count for count — the
+      // kernel-level statement that the sampled vector is the vector
+      // the check consumes (docs/spec/carrier.md §7).
+      if (attachment.kind == ReductionCheckAttachmentKind::ValueIdentityVector) {
+        if (parsedSource->kind != MaterialExprKind::Dependency)
+          return file.error(attachmentContext +
+                            " value_identity_vector source must be a "
+                            "dependency");
+        uint64_t sourceCount = 0;
+        for (const VocabularyRound &round : contract.rounds)
+          if (round.challengeUse.role == parsedSource->name)
+            sourceCount = round.challengeUse.count ? round.challengeUse.count : 1;
+        const CheckOperandSegment *operand =
+            findOperand(*checkContract, attachment.targetRole);
+        if (!operand)
+          return file.error(attachmentContext +
+                            " references an unknown check operand role");
+        if (operand->multiplicity.kind != OperandMultiplicityKind::Exact ||
+            sourceCount < 2 ||
+            operand->multiplicity.value != sourceCount)
+          return file.error(attachmentContext +
+                            " value_identity_vector requires a counted "
+                            "challenge dependency whose count equals the "
+                            "target segment's");
+      }
+      // The positional list identity: an ordered list of local-value
+      // selectors binds a multi-element segment element for element —
+      // how per-round scalars (the betas, the round roots) enter one
+      // counted role.
+      if (attachment.kind == ReductionCheckAttachmentKind::ValueIdentityList) {
+        if (parsedSource->kind != MaterialExprKind::List)
+          return file.error(attachmentContext +
+                            " value_identity_list source must be a list");
+        for (const MaterialExpr &item : parsedSource->arguments)
+          if (item.kind != MaterialExprKind::Dependency &&
+              item.kind != MaterialExprKind::Message)
+            return file.error(attachmentContext +
+                              " value_identity_list items must be "
+                              "dependency or message selectors");
+        const CheckOperandSegment *operand =
+            findOperand(*checkContract, attachment.targetRole);
+        if (!operand)
+          return file.error(attachmentContext +
+                            " references an unknown check operand role");
+        if (operand->multiplicity.kind != OperandMultiplicityKind::Exact ||
+            operand->multiplicity.value != parsedSource->arguments.size())
+          return file.error(attachmentContext +
+                            " value_identity_list length must equal the "
+                            "target segment's count");
+      }
       attachment.source = std::move(*parsedSource);
 
       if (semanticTarget) {
@@ -2195,6 +2251,12 @@ json::Value ReductionCheckAttachment::toCanonicalJson() const {
     break;
   case ReductionCheckAttachmentKind::CommonMaterialRefEquality:
     kindName = "common_material_ref_equality";
+    break;
+  case ReductionCheckAttachmentKind::ValueIdentityVector:
+    kindName = "value_identity_vector";
+    break;
+  case ReductionCheckAttachmentKind::ValueIdentityList:
+    kindName = "value_identity_list";
     break;
   }
   return json::Object{{"kind", kindName},

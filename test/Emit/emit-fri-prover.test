@@ -30,6 +30,21 @@
 # RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/prover-vectors.json --out %t/prover-crate --crate-name zkc-prover-fri
 # RUN: cargo test --quiet --manifest-path %t/prover-crate/Cargo.toml
 
+# The fourth cell of the known-answer square: the wire the emitted
+# prover reproduces byte-for-byte (asserted by the corpus above) is
+# decoded into the pinned upstream proof shape — pruned multiproofs
+# rebuilt from the independent paths by index arithmetic — and graded
+# by the pinned upstream verifier itself: an external witness outside
+# the projection circularity. A corrupted wire is graded as rejected.
+# RUN: %python -c "import re,sys; t=open(sys.argv[1]).read(); open(sys.argv[2],'w').write(re.search(r'wire: ([0-9a-f]+)', t).group(1)); open(sys.argv[3],'w').write(re.search(r'statement f_root: (\d+)', t).group(1))" %t/runner.out %t/wire.hex %t/froot.txt
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin grade -- %t/verifier.json %t/froot.txt %t/wire.hex | FileCheck %s --check-prefix=GRADE
+# GRADE: upstream grade: accepted the decoded wire at the pinned revision
+# RUN: %python -c "import sys; w=open(sys.argv[1]).read(); at=300; open(sys.argv[2],'w').write(w[:at]+format(int(w[at:at+2],16)^1,'02x')+w[at+2:])" %t/wire.hex %t/wire-bad.hex
+# RUN: not cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin grade -- %t/verifier.json %t/froot.txt %t/wire-bad.hex | FileCheck %s --check-prefix=GRADEBAD
+# GRADEBAD: upstream grade: rejected
+
 # A payload word outside the canonical field range is the opening
 # fill's own defect, named before any commitment exists.
 # RUN: %python %S/Inputs/fri-prover-negatives.py %t/prover-vectors.json %t/noncanonical.json noncanonical-word

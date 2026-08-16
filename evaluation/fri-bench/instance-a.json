@@ -1,0 +1,31 @@
+{
+ "family": "fri",
+ "name": "plonky3-fri-vf-sp1-shape",
+ "k": 20,
+ "field": "16428751811598850197311699254593454081",
+ "query_log2": 21,
+ "ell": 100,
+ "grinding_bits": 16,
+ "analysis": "johnson",
+ "value_faithful": true,
+ "kappa": {
+  "sponge": "plonky3_bb31_poseidon2_w16_r8_lenpad",
+  "iv": "zero",
+  "codecs": {
+   "pow_value": "plonky3_bb31_low_bits",
+   "query_index": "plonky3_bb31_low_bits",
+   "rs": "plonky3_bb31_digest8",
+   "ext_field": "plonky3_bb31_ext4_tuple",
+   "word": "plonky3_bb31_word"
+  }
+ },
+ "anchors": {
+  "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "statement": "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"
+ },
+ "johnson": {
+  "m": 3,
+  "eta": "1/256",
+  "delta": "1/4"
+ }
+}

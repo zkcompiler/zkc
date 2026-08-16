@@ -17,6 +17,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "zkc/Registry/Rational.h"
 #include "zkc/Artifact/Artifact.h"
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Registry/ProtocolEnvironment.h"
@@ -60,6 +61,11 @@ static cl::opt<bool>
 static cl::opt<bool> skeleton(
     "skeleton",
     cl::desc("With --request, print the derivation without its bounds"));
+static cl::opt<bool> headline(
+    "headline",
+    cl::desc("With --request, also print a display summary: per-round "
+             "loss ceilings in bits, their minimum, and the obligations "
+             "ledger. Display only — the witness stays exact"));
 
 namespace {
 
@@ -242,6 +248,62 @@ int main(int argc, char **argv) {
                  << ", derived " << derived << "\n";
     llvm::outs() << "zkc-derive: witness does not re-derive\n";
     return 1;
+  }
+
+  // The display view: presentation of the exact witness, never a
+  // judgment of its own. Each round's loss is shown as a power-of-two
+  // ceiling (epsilon rounds up, so the shown exponent never overstates
+  // security), the headline is the weakest round, and the obligations
+  // ledger rides beside the number — a bound without its assumptions
+  // is not this tool's product.
+  if (headline) {
+    const llvm::json::Object *conclusion =
+        witness->getAsObject()->getObject("conclusion");
+    const llvm::json::Object *result =
+        conclusion ? conclusion->getObject("result") : nullptr;
+    const llvm::json::Array *rounds = result ? result->getArray("rounds") : nullptr;
+    if (!rounds)
+      return fail("--headline displays round-by-round results; this "
+                  "witness concludes in a different notion");
+    std::optional<int64_t> weakest;
+    for (const llvm::json::Value &entry : *rounds) {
+      const llvm::json::Object *round = entry.getAsObject();
+      llvm::StringRef index = *round->getString("round_index");
+      const llvm::json::Object *quantity =
+          round->getObject("bound")->getObject("quantity");
+      if (const llvm::json::Array *terms = quantity->getArray("resource_terms"))
+        if (!terms->empty())
+          return fail("--headline displays constant bounds; this witness's "
+                      "round " +
+                      llvm::Twine(index) +
+                      " carries resource terms the display would drop");
+      llvm::StringRef constant = *quantity->getString("constant");
+      auto [num, den] = constant.split('/');
+      auto value = den.empty()
+                       ? zkc::registry::Rational::fromDecimal(num)
+                       : zkc::registry::Rational::fromDecimalPair(num, den);
+      if (!value)
+        return failError(value.takeError());
+      if (value->isZero()) {
+        llvm::outs() << "headline round " << index << ": eps = 0\n";
+        continue;
+      }
+      auto ceiling = value->ceilLog2();
+      if (!ceiling)
+        return failError(ceiling.takeError());
+      llvm::outs() << "headline round " << index << ": eps <= 2^" << *ceiling
+                   << "\n";
+      if (!weakest || *ceiling > *weakest)
+        weakest = *ceiling;
+    }
+    if (weakest)
+      llvm::outs() << "headline: the weakest round loses at most 2^"
+                   << *weakest << " per attempt\n";
+    if (const llvm::json::Array *obligations =
+            conclusion->getArray("qualitative_obligations"))
+      for (const llvm::json::Value &entry : *obligations)
+        llvm::outs() << "headline obligation: " << *entry.getAsString()
+                     << "\n";
   }
 
   std::error_code error;

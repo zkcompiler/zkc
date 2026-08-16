@@ -1,0 +1,28 @@
+# REQUIRES: cargo
+# The scale gate (the deterministic half of the benchmark evidence):
+# the ci-mid family instance — fold depth 13, evaluation domain 2^14,
+# 32 queries, a 12-bit grind — runs the whole pipeline, and the
+# emitted prover must reproduce the parameterized runner's wire byte
+# for byte: thirteen commit rounds, thousands of counted-row elements,
+# and a ~112 KiB wire, all through the same machinery the fixture
+# instance exercises at toy scale. The pinned upstream verifier then
+# grades the same wire through the decoding judge.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf-mid.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/spine.mlir -o %t/sealed.mlir
+# RUN: zkc-opt '-pir-project=endpoint-kind=prover_skeleton protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/prover.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/verifier.mlir
+# RUN: zkc-translate --oir-canonical %t/prover.mlir -o %t/prover.json
+# RUN: zkc-translate --oir-canonical %t/verifier.mlir -o %t/verifier.json
+# RUN: zkc-translate --oir-id %t/prover.mlir -o %t/prover.id
+
+# RUN: cargo run --locked --quiet --release --manifest-path %zkc-replay-manifest --bin prove -- %t/prover.json > %t/runner.out
+# RUN: %python %S/../Oir/Inputs/build-runner-vectors.py %t/runner.out %t/prover.id %t/prover-vectors.json prover
+
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --vectors %t/prover-vectors.json --out %t/prover-crate --crate-name zkc-prover-fri-mid
+# RUN: cargo test --quiet --release --manifest-path %t/prover-crate/Cargo.toml
+
+# RUN: %python -c "import re,sys; t=open(sys.argv[1]).read(); open(sys.argv[2],'w').write(re.search(r'wire: ([0-9a-f]+)', t).group(1)); open(sys.argv[3],'w').write(re.search(r'statement f_root: (\d+)', t).group(1))" %t/runner.out %t/wire.hex %t/froot.txt
+# RUN: cargo run --locked --quiet --manifest-path %zkc-replay-manifest --bin grade -- %t/verifier.json %t/froot.txt %t/wire.hex | FileCheck %s --check-prefix=GRADE
+# GRADE: upstream grade: accepted the decoded wire at the pinned revision

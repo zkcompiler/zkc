@@ -1,0 +1,30 @@
+[package]
+name = "zkc-fri-bench"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# The two legs resolve the same pinned upstream kernel crates: the
+# upstream leg through the replay library, the zkc leg through the
+# emitted prover's zkc-rt dependency. `p3-maybe-rayon`'s `parallel`
+# stays off in this whole graph, so both grinds are serial ascending
+# scans and the wire equality asserted before timing can hold.
+[dependencies]
+zkc-plonky3-replay = { path = "../upstream/plonky3-replay" }
+zkc-fri-prover = { path = "generated/crate" }
+p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-challenger = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-commit = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-dft = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-field = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-matrix = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+
+[dev-dependencies]
+criterion = "0.8"
+
+[[bench]]
+name = "prove"
+harness = false
+
+[workspace]

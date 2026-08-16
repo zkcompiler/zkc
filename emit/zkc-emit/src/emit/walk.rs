@@ -1579,16 +1579,42 @@ impl<'a> Walk<'a> {
             }
         }
 
-        // Results, bound back positionally across the mixed list.
-        if results.len() != signature.results.len() {
-            return Err(format!(
-                "row {index}: hole '{label}' binds {} results; the bound fill returns {}",
-                results.len(),
-                signature.results.len()
-            ));
-        }
+        // Results, bound back positionally across the mixed list. A
+        // signature with a repeating tail admits its fixed prefix plus
+        // one or more whole repetitions — the instance's fold depth —
+        // and the fill returns the repetitions as one Vec of groups.
+        let repeat = signature.results_repeat;
+        let repetitions = if repeat.is_empty() {
+            if results.len() != signature.results.len() {
+                return Err(format!(
+                    "row {index}: hole '{label}' binds {} results; the bound fill returns {}",
+                    results.len(),
+                    signature.results.len()
+                ));
+            }
+            0
+        } else {
+            let tail = results.len().checked_sub(signature.results.len());
+            match tail {
+                Some(tail) if tail > 0 && tail % repeat.len() == 0 => tail / repeat.len(),
+                _ => {
+                    return Err(format!(
+                        "row {index}: hole '{label}' binds {} results; the bound fill \
+                         returns {} plus whole groups of {}",
+                        results.len(),
+                        signature.results.len(),
+                        repeat.len()
+                    ))
+                }
+            }
+        };
+        let wants: Vec<&Operand> = signature
+            .results
+            .iter()
+            .chain(repeat.iter().cycle().take(repetitions * repeat.len()))
+            .collect();
         let mut names = Vec::new();
-        for (slot, (result, want)) in results.iter().zip(signature.results).enumerate() {
+        for (slot, (result, &want)) in results.iter().zip(&wants).enumerate() {
             let bare = format!("r{index}_{slot}");
             // A handle result is always consumed — the walk enforces
             // that — but a value result need not be, and an unused local
@@ -1637,33 +1663,96 @@ impl<'a> Walk<'a> {
                 rust::comment(kind)
             ),
         );
-        let (pattern, destructure) = match names.as_slice() {
-            [] => {
+        if repetitions > 0 {
+            // Fixed prefix as a tuple, the repeating tail as one Vec
+            // the generated code unpacks group by group, refusing a
+            // fill whose group count is not the schedule's. An empty
+            // prefix has no destructure form; no fill declares one.
+            if signature.results.is_empty() {
                 return Err(format!(
-                    "row {index}: hole '{label}' binds no results; a fill with nothing to bind \
-                     has no effect the frame can observe"
-                ))
+                    "row {index}: hole '{label}' binds a repeating tail with no fixed \
+                     prefix; the bound fill vocabulary declares none"
+                ));
             }
-            [single] => (single.clone(), "value".to_owned()),
-            many => (format!("({})", many.join(", ")), "results".to_owned()),
-        };
-        self.line(
-            1,
-            &format!(
-                "let {pattern} = match {}({}) {{",
-                hole.implementation.path(),
-                arguments.join(", ")
-            ),
-        );
-        self.line(2, &format!("Ok({destructure}) => {destructure},"));
-        self.line(
-            2,
-            &format!(
-                "Err(message) => return Err(ProveError::Fill {{ label: {}.to_owned(), message }}),",
-                rust::literal(label)
-            ),
-        );
-        self.line(1, "};");
+            let prefix: Vec<String> = names[..signature.results.len()].to_vec();
+            let groups_name = format!("groups_{index}");
+            self.line(
+                1,
+                &format!(
+                    "let ({}, {groups_name}) = match {}({}) {{",
+                    prefix.join(", "),
+                    hole.implementation.path(),
+                    arguments.join(", ")
+                ),
+            );
+            self.line(2, "Ok(results) => results,");
+            self.line(
+                2,
+                &format!(
+                    "Err(message) => return Err(ProveError::Fill {{ label: {}.to_owned(), message }}),",
+                    rust::literal(label)
+                ),
+            );
+            self.line(1, "};");
+            self.line(1, &format!("if {groups_name}.len() != {repetitions} {{"));
+            self.line(
+                2,
+                &Self::refuse(
+                    "Fill",
+                    label,
+                    "fill returned a group count that is not the schedule's",
+                ),
+            );
+            self.line(1, "}");
+            self.line(
+                1,
+                &format!("let mut {groups_name} = {groups_name}.into_iter();"),
+            );
+            for group in 0..repetitions {
+                let at = signature.results.len() + group * repeat.len();
+                let members: Vec<String> = names[at..at + repeat.len()].to_vec();
+                self.line(
+                    1,
+                    &format!(
+                        "let Some(({})) = {groups_name}.next() else {{",
+                        members.join(", ")
+                    ),
+                );
+                self.line(
+                    2,
+                    &Self::refuse("Fill", label, "fill returned too few groups"),
+                );
+                self.line(1, "};");
+            }
+        } else {
+            let (pattern, destructure) = match names.as_slice() {
+                [] => {
+                    return Err(format!(
+                        "row {index}: hole '{label}' binds no results; a fill with nothing to \
+                         bind has no effect the frame can observe"
+                    ))
+                }
+                [single] => (single.clone(), "value".to_owned()),
+                many => (format!("({})", many.join(", ")), "results".to_owned()),
+            };
+            self.line(
+                1,
+                &format!(
+                    "let {pattern} = match {}({}) {{",
+                    hole.implementation.path(),
+                    arguments.join(", ")
+                ),
+            );
+            self.line(2, &format!("Ok({destructure}) => {destructure},"));
+            self.line(
+                2,
+                &format!(
+                    "Err(message) => return Err(ProveError::Fill {{ label: {}.to_owned(), message }}),",
+                    rust::literal(label)
+                ),
+            );
+            self.line(1, "};");
+        }
         Ok(())
     }
 

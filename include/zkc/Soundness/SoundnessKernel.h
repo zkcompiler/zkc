@@ -517,6 +517,8 @@ enum class MachineDeciderKind {
   JohnsonDelta,
   UdrDomainFloor,
   UdrThetaWindow,
+  RandomWordsEtaFloor,
+  ThresholdDeltaWindow,
   PowPinned,
   PowAdjacent,
   DuplexSpine,

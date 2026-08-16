@@ -31,6 +31,20 @@
       "notes": "object: pairing_group_source algebra:bls12_381:g1.",
       "statement": "output a commitment C, a point z, and two accepting openings (v, w), (v', w') at z with v != v'"
     },
+    "zkc.assume.random_words_conjecture": {
+      "citations": [
+        "Diamond-Gruen, ePrint 2025/2010, Section 1.5 (the corrected random-words conjecture)"
+      ],
+      "loss_display": "assumption; the query bound (rho + eta)^ell holds only under it",
+      "notes": "The corrected random-words model: a word sampled by the batching challenge behaves, for distance-to-code purposes, like a uniformly random word up to the stated eta correction. This is a conjecture, refuted at capacity in its uncorrected form by the same paper; every derivation through zkc.rbr.fri.random_words carries this entry, so a conjectured number never reads as a proven one. Discharged: never - it is the assumption the conjectured mode is priced under.",
+      "statement_basis": [
+        {
+          "anchor": "Section 1.5",
+          "revision": "2025-11-04",
+          "source": "eprint:2025/2010"
+        }
+      ]
+    },
     "zkc.assume.sdh": {
       "citations": [
         "Boneh-Boyen; as used by KZG10 Def 2.3 (cacr2010-10)"
@@ -51,6 +65,20 @@
       ],
       "notes": "the scope of the assumption is the sumcheck round-by-round entry rule",
       "statement": "the d/|C| root-counting bound holds for uniform sampling from any subset C of the field (the cited source states its instances at full-field sampling only, and the ArkLib mechanization covers full-field sampling only); this generality is the assumption's own content"
+    },
+    "zkc.assume.threshold_halving_unvetted": {
+      "citations": [
+        "Chai-Fan, ePrint 2026/858 (announced 2026-05-05; not peer-reviewed at recording time)"
+      ],
+      "loss_display": "assumption; the row's theorem stands as cited, unvetted",
+      "notes": "The threshold-halving theorem is months old and not peer-reviewed; the authors claim a Lean 4 formalization that this registry has not independently checked. Every derivation through zkc.rbr.fri.threshold_halving carries this entry: the bound is proven per the citation, and the citation's standing is a recorded obligation. A refutation flips the row's status exactly as the capacity family's was flipped - pinned, recorded, refused - and this entry is then vacuous. Discharged: by community vetting or an independently checked formalization, at which point the row drops this hypothesis.",
+      "statement_basis": [
+        {
+          "anchor": "Theorem 1 (main)",
+          "revision": "2026-05-01",
+          "source": "eprint:2026/858"
+        }
+      ]
     },
     "zkc.completeness.evalopen": {
       "citations": [
@@ -218,6 +246,20 @@
     "zkc.hyp.fiat_shamir_profile_required": {
       "notes": "discharged at: seal policy / FS construction profile",
       "statement": "interactive completeness degrades to 2^-z: admissible only under an FS construction profile"
+    },
+    "zkc.hyp.fixed_point_free_involution_domain": {
+      "citations": [
+        "Chai-Fan, ePrint 2026/858 (the domain hypothesis of the threshold-halving theorem)"
+      ],
+      "loss_display": "hypothesis; no loss of its own",
+      "notes": "The evaluation domain L_0 admits a fixed-point-free involution compatible with the fold pairing - the standard smooth two-adic coset in either characteristic satisfies it (x maps to -x). Discharged at: vocabulary admission, where the family's domain instance names a two-adic coset.",
+      "statement_basis": [
+        {
+          "anchor": "Theorem 1 (main), domain hypothesis",
+          "revision": "2026-05-01",
+          "source": "eprint:2026/858"
+        }
+      ]
     },
     "zkc.hyp.ideal_unsalted_sponge": {
       "notes": "discharged at: construction-profile admission",
@@ -492,6 +534,53 @@
           "anchor": "Thm 4.1",
           "revision": "2024-03-05",
           "source": "eprint:2023/1071"
+        }
+      ]
+    },
+    "zkc.rbr.fri.random_words": {
+      "citations": [
+        "Diamond-Gruen, On the Distribution of the Distances of Random Words, ePrint 2025/2010, Section 1.5 (the corrected random-words conjecture; the same paper refutes the capacity family this registry pins refuted)",
+        "ethSTARK documentation v1.2, ePrint 2021/582, Conjecture 1 and Equation 19 (the accounting shape)"
+      ],
+      "formalization_absence": {
+        "demand": "docs/formalization.md#fri",
+        "repository": "https://github.com/Verified-zkEVM/ArkLib",
+        "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+        "wanted": "a mechanized statement of the corrected random-words conjecture's query bound; the statement is a conjecture, so what could be mechanized today is only the accounting shape, and none was found"
+      },
+      "loss_display": "eps = max{n/|F|, (rho + eta_bar)^ell} with rho = 2^-(n-k); conjectured",
+      "notes": "|F|, n, k, and ell are verified from the fold challenge space, query-domain size, realized fold count, and query-vector count. eta_bar is a request-resolved rational gated at or above the Diamond-Gruen correction (log2(e/rho) * rho / log2 |F|) by zkc.side.random_words_eta_floor, with log2 e bounded above by 1443/1000 and log2 |F| bounded below by ceil(log2 |F|) - 1, so the priced eta_bar never understates the correction. The conjectured fold term n/|F| follows the conjectured accounting's list-size-one reading; the query term is the corrected conjecture itself. The conjecture rides the obligations ledger as zkc.assume.random_words_conjecture: a conjectured number never blurs into a proven one, because the ledger says which it is. model: classical.",
+      "statement_basis": [
+        {
+          "anchor": "Section 1.5",
+          "revision": "2025-11-04",
+          "source": "eprint:2025/2010"
+        },
+        {
+          "anchor": "Conjecture 1 and Equation 19",
+          "revision": "v1.2",
+          "source": "eprint:2021/582"
+        }
+      ]
+    },
+    "zkc.rbr.fri.threshold_halving": {
+      "citations": [
+        "Chai-Fan, FRI Soundness Above the Johnson Bound via Threshold Halving, ePrint 2026/858 (eps <= nR/|F| + (1 - delta/2)^q for delta in (delta_Johnson, 1 - rho); Lean 4 formalization claimed by the authors)",
+        "Rothblum-Vadhan-Wigderson, STOC 2013 (the threshold-halving technique)"
+      ],
+      "formalization_absence": {
+        "demand": "docs/formalization.md#fri",
+        "repository": "https://github.com/iotexproject/fri-threshold-halving",
+        "revision": "unverified",
+        "wanted": "the authors claim a Lean 4 formalization of the main theorem; no independently checkable artifact was found at this revision, so this row records the absence rather than a receipt, and the unvetted status rides the obligations ledger as zkc.assume.threshold_halving_unvetted"
+      },
+      "loss_display": "eps = max{2^k/|F|, (1 - delta/2)^ell} with 2^k = n*R under this template's rate convention; proven per the citation, carried as unvetted",
+      "notes": "|F|, n, k, and ell are verified from the fold challenge space, query-domain size, realized fold count, and query-vector count. delta is a request-resolved rational gated into the cited window (strictly above the Johnson radius through a dyadic bound on sqrt(rho), strictly below 1 - rho exactly) by zkc.side.threshold_delta_window. The commit term n*R/|F| equals 2^k/|F| under this row family's rate convention rho = 2^-(n-k) and is charged per fold round, which can only overstate. The citation is months old and not peer-reviewed: every derivation through this row carries zkc.assume.threshold_halving_unvetted in its obligations ledger, and a refutation flips this row's status exactly as the capacity family's was flipped - pinned, recorded, refused. model: classical.",
+      "statement_basis": [
+        {
+          "anchor": "Theorem 1 (main)",
+          "revision": "2026-05-01",
+          "source": "eprint:2026/858"
         }
       ]
     },
@@ -2034,6 +2123,402 @@
       },
       "premise_relations": {},
       "rule": "zkc.rbr.fri.johnson_linear",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
+    "zkc.rbr.fri.random_words@reduction:fri": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "fri",
+          "source_revision": "sha256:777bae1c38898791601402cb9042b007082f6ae20388b03cc6063d289c0a90a9"
+        }
+      },
+      "condition_argument_bindings": {
+        "S1": [
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpaceLog2",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "count",
+              "field": "RoundIndex",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "fold"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S2": [
+          {
+            "kind": "resolved_parameter",
+            "reference": "eta_bar",
+            "sort": "rational"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpaceLog2",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "count",
+              "field": "RoundIndex",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "fold"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpace",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "fold"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
+      "hypothesis_argument_bindings": {
+        "S3": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "fri_domain",
+            "sort": "fri_domain_instance"
+          }
+        ],
+        "S4": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeCount",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ]
+      },
+      "id": "zkc.rbr.fri.random_words@reduction:fri",
+      "parameter_bindings": {
+        "ell": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeCount",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "query"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "eta_bar": {
+          "kind": "resolved_parameter",
+          "reference": "eta_bar",
+          "sort": "rational"
+        },
+        "field_order": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeSpace",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "fold"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "fri_domain": {
+          "kind": "resolved_parameter",
+          "reference": "fri_domain",
+          "sort": "fri_domain_instance"
+        },
+        "k": {
+          "artifact_projection": {
+            "aggregate": "count",
+            "field": "RoundIndex",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "fold"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "n": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeSpaceLog2",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "query"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        }
+      },
+      "premise_relations": {},
+      "rule": "zkc.rbr.fri.random_words",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
+    "zkc.rbr.fri.threshold_halving@reduction:fri": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "fri",
+          "source_revision": "sha256:777bae1c38898791601402cb9042b007082f6ae20388b03cc6063d289c0a90a9"
+        }
+      },
+      "condition_argument_bindings": {
+        "S1": [
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpaceLog2",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "count",
+              "field": "RoundIndex",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "fold"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S2": [
+          {
+            "kind": "resolved_parameter",
+            "reference": "delta",
+            "sort": "rational"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpaceLog2",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "count",
+              "field": "RoundIndex",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "fold"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
+      "hypothesis_argument_bindings": {
+        "S3": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "fri_domain",
+            "sort": "fri_domain_instance"
+          }
+        ],
+        "S4": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeCount",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ]
+      },
+      "id": "zkc.rbr.fri.threshold_halving@reduction:fri",
+      "parameter_bindings": {
+        "delta": {
+          "kind": "resolved_parameter",
+          "reference": "delta",
+          "sort": "rational"
+        },
+        "ell": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeCount",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "query"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "field_order": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeSpace",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "fold"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "fri_domain": {
+          "kind": "resolved_parameter",
+          "reference": "fri_domain",
+          "sort": "fri_domain_instance"
+        },
+        "k": {
+          "artifact_projection": {
+            "aggregate": "count",
+            "field": "RoundIndex",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "fold"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "n": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeSpaceLog2",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "query"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        }
+      },
+      "premise_relations": {},
+      "rule": "zkc.rbr.fri.threshold_halving",
       "subject_schema": "zkc.subject.protocol_claim"
     },
     "zkc.rbr.fri.udr@reduction:fri": {
@@ -5283,6 +5768,366 @@
       "resources": [],
       "status": "admitted"
     },
+    "zkc.rbr.fri.random_words": {
+      "artifact_facts": [
+        {
+          "name": "contract",
+          "sort": "reduction_contract"
+        }
+      ],
+      "body": {
+        "kind": "native_round_by_round_entry",
+        "rounds": {
+          "cases": [
+            {
+              "bound": {
+                "kind": "quantity",
+                "quantity": {
+                  "kind": "div",
+                  "operands": [
+                    {
+                      "kind": "parameter",
+                      "name": "n"
+                    },
+                    {
+                      "kind": "parameter",
+                      "name": "field_order"
+                    }
+                  ]
+                }
+              },
+              "case_name": "fold",
+              "challenge_space": {
+                "kind": "parameter",
+                "name": "field_order"
+              },
+              "index_projection": "round_index",
+              "selector": {
+                "kind": "round_kind",
+                "round_kind": "fold"
+              }
+            },
+            {
+              "bound": {
+                "kind": "quantity",
+                "quantity": {
+                  "kind": "pow",
+                  "operands": [
+                    {
+                      "kind": "add",
+                      "operands": [
+                        {
+                          "kind": "pow2",
+                          "operands": [
+                            {
+                              "kind": "mul",
+                              "operands": [
+                                {
+                                  "kind": "rational_literal",
+                                  "literal": "-1"
+                                },
+                                {
+                                  "kind": "sub",
+                                  "operands": [
+                                    {
+                                      "kind": "parameter",
+                                      "name": "n"
+                                    },
+                                    {
+                                      "kind": "parameter",
+                                      "name": "k"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "parameter",
+                          "name": "eta_bar"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "parameter",
+                      "name": "ell"
+                    }
+                  ]
+                }
+              },
+              "case_name": "query",
+              "challenge_space": {
+                "kind": "pow2",
+                "operands": [
+                  {
+                    "kind": "parameter",
+                    "name": "n"
+                  }
+                ]
+              },
+              "index_projection": "round_index",
+              "selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            }
+          ],
+          "contract_fact_port": "contract",
+          "kind": "contract"
+        }
+      },
+      "conclusion_index": {
+        "model": "",
+        "notion": "round_by_round",
+        "track": "soundness",
+        "variant": "standard"
+      },
+      "exact_parameter_pins": [],
+      "external_hypotheses": [
+        {
+          "argument_types": [
+            "subject",
+            "fri_domain_instance"
+          ],
+          "proposition_ref": "zkc.hyp.smooth_subgroup_fri_domain",
+          "slot": "S3"
+        },
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.assume.random_words_conjecture",
+          "slot": "S4"
+        }
+      ],
+      "id": "zkc.rbr.fri.random_words",
+      "machine_conditions": [
+        {
+          "argument_types": [
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.fri_rate_below_one",
+          "slot": "S1"
+        },
+        {
+          "argument_types": [
+            "rational",
+            "integer",
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.random_words_eta_floor",
+          "slot": "S2"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "field_order",
+          "sort": "integer"
+        },
+        {
+          "name": "n",
+          "sort": "integer"
+        },
+        {
+          "name": "k",
+          "sort": "integer"
+        },
+        {
+          "name": "ell",
+          "sort": "integer"
+        },
+        {
+          "name": "eta_bar",
+          "sort": "rational"
+        },
+        {
+          "name": "fri_domain",
+          "sort": "fri_domain_instance"
+        }
+      ],
+      "premises": [],
+      "resources": [],
+      "status": "admitted"
+    },
+    "zkc.rbr.fri.threshold_halving": {
+      "artifact_facts": [
+        {
+          "name": "contract",
+          "sort": "reduction_contract"
+        }
+      ],
+      "body": {
+        "kind": "native_round_by_round_entry",
+        "rounds": {
+          "cases": [
+            {
+              "bound": {
+                "kind": "quantity",
+                "quantity": {
+                  "kind": "div",
+                  "operands": [
+                    {
+                      "kind": "pow2",
+                      "operands": [
+                        {
+                          "kind": "parameter",
+                          "name": "k"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "parameter",
+                      "name": "field_order"
+                    }
+                  ]
+                }
+              },
+              "case_name": "fold",
+              "challenge_space": {
+                "kind": "parameter",
+                "name": "field_order"
+              },
+              "index_projection": "round_index",
+              "selector": {
+                "kind": "round_kind",
+                "round_kind": "fold"
+              }
+            },
+            {
+              "bound": {
+                "kind": "quantity",
+                "quantity": {
+                  "kind": "pow",
+                  "operands": [
+                    {
+                      "kind": "sub",
+                      "operands": [
+                        {
+                          "kind": "rational_literal",
+                          "literal": "1"
+                        },
+                        {
+                          "kind": "mul",
+                          "operands": [
+                            {
+                              "kind": "rational_literal",
+                              "literal": "1/2"
+                            },
+                            {
+                              "kind": "parameter",
+                              "name": "delta"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "parameter",
+                      "name": "ell"
+                    }
+                  ]
+                }
+              },
+              "case_name": "query",
+              "challenge_space": {
+                "kind": "pow2",
+                "operands": [
+                  {
+                    "kind": "parameter",
+                    "name": "n"
+                  }
+                ]
+              },
+              "index_projection": "round_index",
+              "selector": {
+                "kind": "round_kind",
+                "round_kind": "query"
+              }
+            }
+          ],
+          "contract_fact_port": "contract",
+          "kind": "contract"
+        }
+      },
+      "conclusion_index": {
+        "model": "",
+        "notion": "round_by_round",
+        "track": "soundness",
+        "variant": "standard"
+      },
+      "exact_parameter_pins": [],
+      "external_hypotheses": [
+        {
+          "argument_types": [
+            "subject",
+            "fri_domain_instance"
+          ],
+          "proposition_ref": "zkc.hyp.fixed_point_free_involution_domain",
+          "slot": "S3"
+        },
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.assume.threshold_halving_unvetted",
+          "slot": "S4"
+        }
+      ],
+      "id": "zkc.rbr.fri.threshold_halving",
+      "machine_conditions": [
+        {
+          "argument_types": [
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.fri_rate_below_one",
+          "slot": "S1"
+        },
+        {
+          "argument_types": [
+            "rational",
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.threshold_delta_window",
+          "slot": "S2"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "field_order",
+          "sort": "integer"
+        },
+        {
+          "name": "n",
+          "sort": "integer"
+        },
+        {
+          "name": "k",
+          "sort": "integer"
+        },
+        {
+          "name": "ell",
+          "sort": "integer"
+        },
+        {
+          "name": "delta",
+          "sort": "rational"
+        },
+        {
+          "name": "fri_domain",
+          "sort": "fri_domain_instance"
+        }
+      ],
+      "premises": [],
+      "resources": [],
+      "status": "admitted"
+    },
     "zkc.rbr.fri.udr": {
       "artifact_facts": [
         {
@@ -6637,6 +7482,19 @@
           "source_revision": "zkc.soundness"
         }
       },
+      "zkc.side.random_words_eta_floor": {
+        "argument_types": [
+          "rational",
+          "integer",
+          "integer",
+          "integer"
+        ],
+        "kind": "random_words_eta_floor",
+        "ref": {
+          "id": "zkc.side.random_words_eta_floor",
+          "source_revision": "zkc.soundness"
+        }
+      },
       "zkc.side.same_point": {
         "argument_types": [
           "reduction_contract"
@@ -6677,6 +7535,18 @@
         "kind": "space_embeds",
         "ref": {
           "id": "zkc.side.space_embeds",
+          "source_revision": "zkc.soundness"
+        }
+      },
+      "zkc.side.threshold_delta_window": {
+        "argument_types": [
+          "rational",
+          "integer",
+          "integer"
+        ],
+        "kind": "threshold_delta_window",
+        "ref": {
+          "id": "zkc.side.threshold_delta_window",
           "source_revision": "zkc.soundness"
         }
       },
@@ -6820,6 +7690,16 @@
           "source_revision": "zkc.soundness.proposition"
         }
       },
+      "zkc.assume.random_words_conjecture": {
+        "argument_types": [
+          "subject",
+          "integer"
+        ],
+        "ref": {
+          "id": "zkc.assume.random_words_conjecture",
+          "source_revision": "zkc.soundness.proposition"
+        }
+      },
       "zkc.assume.sdh": {
         "argument_types": [
           "algebra_instance",
@@ -6849,6 +7729,16 @@
           "source_revision": "zkc.soundness.proposition"
         }
       },
+      "zkc.assume.threshold_halving_unvetted": {
+        "argument_types": [
+          "subject",
+          "integer"
+        ],
+        "ref": {
+          "id": "zkc.assume.threshold_halving_unvetted",
+          "source_revision": "zkc.soundness.proposition"
+        }
+      },
       "zkc.hyp.codec_validated_opening": {
         "argument_types": [
           "subject"
@@ -6864,6 +7754,16 @@
         ],
         "ref": {
           "id": "zkc.hyp.fiat_shamir_profile_required",
+          "source_revision": "zkc.soundness.proposition"
+        }
+      },
+      "zkc.hyp.fixed_point_free_involution_domain": {
+        "argument_types": [
+          "subject",
+          "fri_domain_instance"
+        ],
+        "ref": {
+          "id": "zkc.hyp.fixed_point_free_involution_domain",
           "source_revision": "zkc.soundness.proposition"
         }
       },

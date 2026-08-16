@@ -1,0 +1,66 @@
+# The two pricing modes over one sealed FRI occurrence, priced side by
+# side with the Johnson row's subject: the conjectured random-words row
+# (the corrected conjecture of ePrint 2025/2010 §1.5) and the proven
+# threshold-halving row (ePrint 2026/858, carried with its unvetted
+# status in the obligations ledger). A proven number and a conjectured
+# number never blur: each witness's ledger names the assumption it
+# rides on, and the analysis point arrives request-resolved, gated by
+# the row's own decider into the cited window.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Family/Inputs/frigrind.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-seal %t/spine.mlir --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# Conjectured: fold n/|F|, query (rho + eta_bar)^ell with the
+# instance's rho = 1/512 and the requested eta_bar = 1/4096:
+# (9/4096)^2 = 81/16777216. The ledger carries the conjecture entry.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-random-words-request.json -o=%t/conjectured.json %t/sealed.mlirbc
+# RUN: FileCheck --check-prefix=CONJ %s < %t/conjectured.json
+# CONJ: "zkc.assume.random_words_conjecture"
+# CONJ: "constant": "10/340282366762482138490186164457219031041"
+# CONJ: "constant": "81/16777216"
+
+# An eta_bar below the Diamond-Gruen correction floor understates the
+# conjectured loss; the decider refuses it.
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-random-words-understated-request.json -o=%t/refused.json %t/sealed.mlirbc 2>&1 \
+# RUN:   | FileCheck --check-prefix=CONJBAD %s
+# CONJBAD: condition_failed at apply.conditions.S2
+
+# Proven above the Johnson radius: fold 2^k/|F|, query (1 - delta/2)^ell
+# at the requested delta = 63/64: (65/128)^2 = 4225/16384. The ledger
+# carries the unvetted-status entry — the number is proven per the
+# citation, and the citation's standing is a recorded obligation.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-threshold-request.json -o=%t/proven.json --headline %t/sealed.mlirbc \
+# RUN:   | FileCheck --check-prefix=HEADLINE %s
+# RUN: FileCheck --check-prefix=PROVEN %s < %t/proven.json
+# The display view: presentation of the exact witness — per-round
+# power-of-two ceilings, the weakest round, and the ledger beside the
+# number, soundcalc-comparable. The witness itself stays exact.
+# HEADLINE: headline round 0: eps <= 2^-126
+# HEADLINE: headline round 1: eps <= 2^-1
+# HEADLINE: headline: the weakest round loses at most 2^-1 per attempt
+# HEADLINE: headline obligation: zkc.assume.threshold_halving_unvetted
+# PROVEN: "zkc.assume.threshold_halving_unvetted"
+# PROVEN: "constant": "2/340282366762482138490186164457219031041"
+# PROVEN: "constant": "4225/16384"
+
+# A delta below the Johnson radius is outside the cited statement; the
+# decider refuses to price there.
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-threshold-below-window-request.json -o=%t/refused2.json %t/sealed.mlirbc 2>&1 \
+# RUN:   | FileCheck --check-prefix=PROVENBAD %s
+# PROVENBAD: condition_failed at apply.conditions.S2

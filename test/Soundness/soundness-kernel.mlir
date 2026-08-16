@@ -3,8 +3,8 @@
 // RUN:   %s 2>&1 | FileCheck %s
 
 // CHECK: soundness kernel declaration slice: PASS
-// CHECK-NEXT: rules: 25 declared, 21 admitted
-// CHECK-NEXT: reduction bindings: 18
+// CHECK-NEXT: rules: 27 declared, 23 admitted
+// CHECK-NEXT: reduction bindings: 20
 // CHECK-NEXT: path bindings: 5
 // CHECK-NEXT: zero-binding rules: 5
 // CHECK-NEXT: heterogeneous FRI cases: fold, query
@@ -23,6 +23,6 @@
 // The analysis is named by this digest: it covers the schemas, the rules and
 // the bindings, and nothing else. Correcting a citation must not make an
 // artifact's analysis a different analysis.
-// CHECK-NEXT: signature digest: sha256:4c00592e02b268365320906a76d36339a6346e0f8f51a1978aee5e815e6635f4
+// CHECK-NEXT: signature digest: sha256:79197e065d1354005442e71e6f3032097004c3f13e0e15b54a7d249d035126bf
 
 module {}

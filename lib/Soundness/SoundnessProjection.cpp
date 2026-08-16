@@ -545,7 +545,11 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
     return {ValueSort::Rational, ValueSort::Rational, ValueSort::Integer,
             ValueSort::Integer};
   case MachineDeciderKind::UdrThetaWindow:
+  case MachineDeciderKind::ThresholdDeltaWindow:
     return {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::RandomWordsEtaFloor:
+    return {ValueSort::Rational, ValueSort::Integer, ValueSort::Integer,
+            ValueSort::Integer};
   case MachineDeciderKind::PowPinned:
   case MachineDeciderKind::PowAdjacent:
     return {ValueSort::RoundAdjacency};
@@ -876,6 +880,68 @@ evaluateMachineDecider(MachineDeciderKind kind,
       return sqrtRho.takeError();
     registry::Rational cap = one.sub(*sqrtRho).sub(eta);
     return delta.compare(cap) < 0;
+  }
+  case MachineDeciderKind::RandomWordsEtaFloor: {
+    // The Diamond-Gruen correction floor: eta_bar must not understate
+    // (log2(e/rho) * rho) / log2 |F|. log2 e is bounded above by
+    // 1443/1000 and log2 |F| below by ceil(log2 |F|) - 1, so the
+    // floor computed here is at or above the true correction and a
+    // passing eta_bar never understates the conjectured loss.
+    const registry::Rational &etaBar = number(arguments[0]);
+    const registry::Rational &n = number(arguments[1]);
+    const registry::Rational &k = number(arguments[2]);
+    const registry::Rational &fieldOrder = number(arguments[3]);
+    if (!positive(etaBar) || n.compare(k) <= 0)
+      return false;
+    auto blowup = n.sub(k).floorToInt();
+    if (!blowup)
+      return blowup.takeError();
+    if (*blowup < 1 || *blowup > kMaxExactExponent)
+      return deciderError("rate exponent exceeds the v0 exact range");
+    auto rho = registry::Rational::fromInteger(2).pow(-*blowup);
+    if (!rho)
+      return rho.takeError();
+    auto log2FieldCeil = fieldOrder.ceilLog2();
+    if (!log2FieldCeil)
+      return log2FieldCeil.takeError();
+    int64_t log2FieldFloor = *log2FieldCeil - 1;
+    if (log2FieldFloor < 1)
+      return false;
+    auto log2e = registry::Rational::fromDecimalPair("1443", "1000");
+    if (!log2e)
+      return log2e.takeError();
+    registry::Rational numerator =
+        log2e->add(registry::Rational::fromInteger(*blowup)).mul(*rho);
+    auto floor =
+        numerator.div(registry::Rational::fromInteger(log2FieldFloor));
+    if (!floor)
+      return floor.takeError();
+    return etaBar.compare(*floor) >= 0;
+  }
+  case MachineDeciderKind::ThresholdDeltaWindow: {
+    // The cited window (ePrint 2026/858): strictly above the Johnson
+    // radius, strictly below 1 - rho. sqrt(rho) is bounded below by
+    // its dyadic under-approximation, so the lower gate can only be
+    // stricter than the theorem's own.
+    const registry::Rational &delta = number(arguments[0]);
+    const registry::Rational &n = number(arguments[1]);
+    const registry::Rational &k = number(arguments[2]);
+    if (!positive(delta) || n.compare(k) <= 0)
+      return false;
+    auto sqrtRhoLower = sqrtRhoBound(n, k, /*upper=*/false);
+    if (!sqrtRhoLower)
+      return sqrtRhoLower.takeError();
+    auto blowup = n.sub(k).floorToInt();
+    if (!blowup)
+      return blowup.takeError();
+    if (*blowup < 1 || *blowup > kMaxExactExponent)
+      return deciderError("rate exponent exceeds the v0 exact range");
+    auto rho = registry::Rational::fromInteger(2).pow(-*blowup);
+    if (!rho)
+      return rho.takeError();
+    registry::Rational johnson = one.sub(*sqrtRhoLower);
+    registry::Rational cap = one.sub(*rho);
+    return delta.compare(johnson) > 0 && delta.compare(cap) < 0;
   }
   case MachineDeciderKind::UdrDomainFloor: {
     const registry::Rational &n = number(arguments[0]);

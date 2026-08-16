@@ -273,6 +273,8 @@ enum class ReductionCheckAttachmentKind {
   ValueIdentity,
   MaterialRefVectorEquality,
   CommonMaterialRefEquality,
+  ValueIdentityVector,
+  ValueIdentityList,
 };
 
 /// One exact edge from reduction context into a selected check. The enclosing
