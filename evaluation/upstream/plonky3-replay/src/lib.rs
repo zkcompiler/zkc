@@ -292,21 +292,30 @@ pub fn public_values(a: u64, b: u64, rows: usize) -> Vec<Val> {
 /// The fixture's own parameter point, kept for the captured-transcript
 /// replay legs whose event logs were recorded at it.
 pub fn fri_parameters(mmcs: ChallengeMmcs) -> FriParameters<ChallengeMmcs> {
-    fri_parameters_for(mmcs, NUM_QUERIES, QUERY_POW_BITS)
+    fri_parameters_for(
+        mmcs,
+        NUM_QUERIES,
+        QUERY_POW_BITS,
+        LOG_BLOWUP,
+        LOG_FINAL_POLY_LEN,
+    )
 }
 
 /// The family instance's parameter point: the query count and the
-/// grinding bits come from the artifact's own schedule (the runner and
-/// the judge read them from the document); everything else is the
-/// value-faithful template's shape.
+/// grinding bits, rate, and final length come from the artifact's own
+/// schedule (the runner and the judge derive them from the document);
+/// the fold arity and commit grinding stay the value-faithful
+/// template's shape.
 pub fn fri_parameters_for(
     mmcs: ChallengeMmcs,
     num_queries: usize,
     query_pow_bits: usize,
+    log_blowup: usize,
+    log_final_poly_len: usize,
 ) -> FriParameters<ChallengeMmcs> {
     FriParameters {
-        log_blowup: LOG_BLOWUP,
-        log_final_poly_len: LOG_FINAL_POLY_LEN,
+        log_blowup,
+        log_final_poly_len,
         max_log_arity: MAX_LOG_ARITY,
         num_queries,
         commit_proof_of_work_bits: COMMIT_POW_BITS,

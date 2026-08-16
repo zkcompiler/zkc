@@ -112,6 +112,29 @@ fn class_of(
     }
 }
 
+/// The element count of the value a program-row reference names: a
+/// counted hole result carries it as the descriptor's third entry, and
+/// everything else is scalar.
+fn count_of(reference: &Json, rows: &[Json]) -> usize {
+    let parts = reference
+        .as_array()
+        .unwrap_or_else(|| fail("malformed ref"));
+    if parts[0].as_str() != Some("r") {
+        return 1;
+    }
+    let row = &rows[parts[1].as_u64().unwrap() as usize];
+    let index = parts[2].as_u64().unwrap() as usize;
+    if row[0].as_str() != Some("hole_call") {
+        return 1;
+    }
+    let descriptor = row[2][index].as_array().unwrap();
+    descriptor
+        .get(2)
+        .and_then(|count| count.as_str())
+        .and_then(|text| text.parse().ok())
+        .unwrap_or(1)
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -169,12 +192,6 @@ fn main() {
         }
         space.trailing_zeros() as usize
     };
-    let pcs = Pcs::new(
-        Dft::default(),
-        val_mmcs,
-        fri_parameters_for(challenge_mmcs, queries, doc_grind_bits),
-    );
-
     // The instance shape, read from the document's own rows — the
     // runner grades whatever the family sealed, not one fixture: the
     // trace log-size is the first pinned constant, the grinding bits
@@ -213,6 +230,26 @@ fn main() {
         .count()
         .checked_sub(2)
         .unwrap_or_else(|| fail("fewer extension squeezes than the chain uses"));
+    // The shape equation: index bits = trace height + blowup, and the
+    // fold chain stops log_final_poly_len above a constant.
+    let log_blowup = query_bits
+        .checked_sub(log_size)
+        .filter(|&b| b >= 1)
+        .unwrap_or_else(|| fail("the index space does not cover the trace at a rate below one"));
+    let log_final_poly_len = log_size
+        .checked_sub(fold_rounds)
+        .unwrap_or_else(|| fail("more fold squeezes than the trace height admits"));
+    let pcs = Pcs::new(
+        Dft::default(),
+        val_mmcs,
+        fri_parameters_for(
+            challenge_mmcs,
+            queries,
+            doc_grind_bits,
+            log_blowup,
+            log_final_poly_len,
+        ),
+    );
     // The deterministic witness column: evaluations 1..=2^log_size.
     let evaluations =
         RowMajorMatrix::<Val>::new((1..=1u32 << log_size).map(Val::from_u32).collect(), 1);
@@ -317,8 +354,12 @@ fn main() {
                         }
                     }
                     "ext_field" => {
+                        // A counted value absorbs as its elements in
+                        // index order — four coordinates each, exactly
+                        // the schedule the pinned prover observed.
+                        let count = count_of(&row[2], rows);
                         let mut words = Vec::new();
-                        for _ in 0..4 {
+                        for _ in 0..4 * count {
                             match take("observed coordinate") {
                                 Event::ObserveVal(word) => words.push(*word),
                                 other => fail(&format!(
@@ -425,7 +466,7 @@ challenger events ({noop_pows} zero-bit commit pows enumerated as no-ops)",
     let lde = opener_dft
         .coset_lde_batch(
             RowMajorMatrix::<Val>::new((1..=1u32 << log_size).map(Val::from_u32).collect(), 1),
-            1,
+            log_blowup,
             Val::GENERATOR,
         )
         .bit_reverse_rows()
@@ -434,7 +475,7 @@ challenger events ({noop_pows} zero-bit commit pows enumerated as no-ops)",
     if rebuilt_commit != commitment {
         fail("the rebuilt input tree does not carry the committed root");
     }
-    let log_lde_height = log_size + 1;
+    let log_lde_height = log_size + log_blowup;
     let coset = TwoAdicMultiplicativeCoset::new(Val::GENERATOR, log_lde_height)
         .unwrap_or_else(|| fail("the evaluation domain is not two-adic"));
     let mut points: Vec<Val> = coset.iter().collect();

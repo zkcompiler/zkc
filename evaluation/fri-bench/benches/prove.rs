@@ -35,7 +35,7 @@ fn upstream_pcs() -> Pcs {
     Pcs::new(
         Dft::default(),
         val_mmcs,
-        fri_parameters_for(challenge_mmcs, QUERIES, GRIND_BITS),
+        fri_parameters_for(challenge_mmcs, QUERIES, GRIND_BITS, 1, 0),
     )
 }
 

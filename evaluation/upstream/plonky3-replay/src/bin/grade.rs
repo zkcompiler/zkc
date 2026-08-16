@@ -202,9 +202,18 @@ fn main() {
         .count()
         .checked_sub(2)
         .unwrap_or_else(|| fail("fewer extension squeezes than the chain uses"));
-    if query_bits != log_size + 1 || fold_rounds + 1 != query_bits {
-        fail("the schedule is not the value-faithful family's shape");
-    }
+    // The shape equation: index bits = trace height + blowup, and the
+    // fold chain stops log_final_poly_len above a constant. Both knobs
+    // are derived from the schedule itself, so a document that lies
+    // about one of them fails the height reconstruction inside the
+    // pinned verifier rather than being mis-graded here.
+    let log_blowup = query_bits
+        .checked_sub(log_size)
+        .filter(|&b| b >= 1)
+        .unwrap_or_else(|| fail("the index space does not cover the trace at a rate below one"));
+    let log_final_poly_len = log_size
+        .checked_sub(fold_rounds)
+        .unwrap_or_else(|| fail("more fold squeezes than the trace height admits"));
 
     let statement_text =
         fs::read_to_string(&args[2]).unwrap_or_else(|_| fail("cannot read statement"));
@@ -221,7 +230,9 @@ fn main() {
     let commit_phase_commits: Vec<MerkleCap<Val, [Val; 8]>> = (0..fold_rounds)
         .map(|_| MerkleCap::new(vec![cursor.digest()]))
         .collect();
-    let final_poly = vec![cursor.ext()];
+    let final_poly: Vec<Challenge> = (0..1usize << log_final_poly_len)
+        .map(|_| cursor.ext())
+        .collect();
     let query_pow_witness = Val::from_u32(cursor.word());
     let leaves: Vec<Val> = (0..queries).map(|_| Val::from_u32(cursor.word())).collect();
     let input_paths: Vec<Vec<[Val; 8]>> = (0..queries)
@@ -260,7 +271,9 @@ fn main() {
         let beta: Challenge = challenger.sample_algebra_element();
         betas.push(beta);
     }
-    challenger.observe_algebra_element(final_poly[0]);
+    for &coefficient in &final_poly {
+        challenger.observe_algebra_element(coefficient);
+    }
     for _ in 0..fold_rounds {
         challenger.observe(Val::from_usize(1));
     }
@@ -311,7 +324,13 @@ fn main() {
     let pcs = Pcs::new(
         Dft::default(),
         val_mmcs,
-        fri_parameters_for(challenge_mmcs, queries, grind_bits),
+        fri_parameters_for(
+            challenge_mmcs,
+            queries,
+            grind_bits,
+            log_blowup,
+            log_final_poly_len,
+        ),
     );
     let domain = <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(
         &pcs,

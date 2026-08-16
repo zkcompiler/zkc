@@ -54,6 +54,12 @@
   },
   "sha256:ea063c3e758773bc94d5917528eae4c50826851d0d0c210a58172fae4a68514e": {
    "impl": "p3_fri_answer"
+  },
+  "sha256:4aacf40e965dd46414b4a6f570e089452333c1ac11408e2b3b31f79d10cbaafc": {
+   "impl": "p3_fri_final_vec"
+  },
+  "sha256:24d7987c96998c5081ef38f5834f07f1b30f8f5fdc68c30c1a3f41219db2493a": {
+   "impl": "p3_fri_answer"
   }
  },
  "digests": {

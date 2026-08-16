@@ -54,7 +54,7 @@ fn main() {
     let pcs = Pcs::new(
         Dft::default(),
         val_mmcs,
-        fri_parameters_for(challenge_mmcs, 100, 16),
+        fri_parameters_for(challenge_mmcs, 100, 16, 1, 0),
     );
     let domain =
         <Pcs as PcsTrait<Challenge, PlainChallenger>>::natural_domain_for_degree(&pcs, 1 << LOG_SIZE);
