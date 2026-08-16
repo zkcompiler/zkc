@@ -222,8 +222,8 @@ fn parse_refs(value: &Json, what: &str) -> Result<Vec<Ref>, String> {
     items.iter().map(parse_ref).collect()
 }
 
-/// One typed slot: `["val", class]`, `["handle", class]`, `["stream"]`,
-/// `["sponge"]`. Which of them a position admits is the caller's rule.
+/// A counted row family's element count: a canonical decimal of at
+/// least 2 — the scalar family spells 1 through its own row kind.
 fn parse_count(value: &Json, index: usize) -> Result<u64, String> {
     let text = value
         .as_str()
@@ -233,12 +233,16 @@ fn parse_count(value: &Json, index: usize) -> Result<u64, String> {
         .map_err(|_| format!("row {index}: count is not decimal"))?;
     if count < 2 {
         return Err(format!(
-            "row {index}: a counted row declares at least 2 elements; the              scalar family spells 1"
+            "row {index}: a counted row declares at least 2 elements; the scalar \
+             family spells 1"
         ));
     }
     Ok(count)
 }
 
+/// One typed slot: `["val", class]`, `["val", class, count]`,
+/// `["handle", class]`, `["stream"]`, `["sponge"]`. Which of them a
+/// position admits is the caller's rule.
 fn parse_slot(value: &Json, what: &str) -> Result<Entry, String> {
     match value.as_array() {
         Some([Json::String(kind), Json::String(class)]) if kind == "val" => {

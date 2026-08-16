@@ -4,7 +4,9 @@ The positive vector carries the runner's statement, wire, and challenge
 stream verbatim, expecting acceptance. The corrupt-nonce vector flips
 the nonce word's low byte so the grinding check must refuse; the
 corrupt-path vector flips a byte inside an input authentication path so
-the Merkle multi-opening check must refuse (expected challenges are
+the Merkle multi-opening check must refuse; the corrupt-sibling vector
+flips a byte inside a round's sibling values so the fold-consistency
+check must refuse (expected challenges are
 deliberately empty there — the corrupted stream is not predicted, only
 its reject class is).
 
@@ -63,7 +65,7 @@ def main() -> None:
             indent=1,
         )
         return
-    if mode not in {"accept", "corrupt-nonce", "corrupt-path"}:
+    if mode not in {"accept", "corrupt-nonce", "corrupt-path", "corrupt-sibling"}:
         raise SystemExit(f"unknown mode {mode!r}")
 
     def flip(at: int) -> str:
@@ -92,7 +94,7 @@ def main() -> None:
             "expect": "check_failure",
             "challenges": [],
         }
-    else:
+    elif mode == "corrupt-path":
         # One byte inside the first input authentication path (the
         # openings start at 132: four query leaves, then the paths) —
         # the Merkle multi-opening check must refuse.
@@ -100,6 +102,18 @@ def main() -> None:
             "name": "corrupted-path",
             "statement": {"f_root": statement},
             "proof": flip(148),
+            "expect": "check_failure",
+            "challenges": [],
+        }
+    else:
+        # One byte inside the first round's sibling values (after the
+        # input openings: 132 + 16 leaves + 512 paths) — the fold
+        # consistency check must refuse: the tampered sibling breaks
+        # its own row's authentication.
+        vector = {
+            "name": "corrupted-sibling",
+            "statement": {"f_root": statement},
+            "proof": flip(660),
             "expect": "check_failure",
             "challenges": [],
         }

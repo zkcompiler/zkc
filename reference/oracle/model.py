@@ -3509,7 +3509,14 @@ def _project_prover(
         results = []
         for segment in contract["results"]:
             if segment["sort"] == "value":
-                results.append(["val", segment["class"]])
+                # A counted result carries its count as a third element;
+                # the scalar form is unchanged (docs/spec/carrier.md
+                # §6.2's additive discipline).
+                count = segment.get("count", "1")
+                if count != "1":
+                    results.append(["val", segment["class"], count])
+                else:
+                    results.append(["val", segment["class"]])
             elif segment["sort"] == "handle":
                 results.append(["handle", segment["class"]])
             else:

@@ -141,20 +141,10 @@ LogicalResult HoleCallOp::verify() {
            << "[zkc-E149] only a pow_search hole may take the sponge; kind '"
            << kind << "' has no transcript access";
   }
-  for (Value output : getOutputs()) {
-    if (auto val = dyn_cast<ValType>(output.getType()))
-      if (val.getOrigin() != "hole")
-        return emitOpError() << "[zkc-E149] a hole's value results carry "
-                                "origin 'hole', got '"
-                             << val.getOrigin() << "'";
-    if (output.use_empty())
-      return emitOpError()
-             << "[zkc-E149] every hole result has at least one use (an "
-                "unconsumed result is a hole that silently did nothing)";
-  }
   // Result counts, when declared, cover every result positionally;
   // only value results may be counted — a handle or sponge is one
-  // state, never a vector of them.
+  // state, never a vector of them. Shape precedes linearity: a
+  // mis-declared count is named before any use accounting.
   ArrayAttr resultCounts = getResultCounts();
   if (!resultCounts.empty()) {
     if (resultCounts.size() != getOutputs().size())
@@ -175,6 +165,17 @@ LogicalResult HoleCallOp::verify() {
                                 "counted; result "
                              << index << " is not a value";
     }
+  }
+  for (Value output : getOutputs()) {
+    if (auto val = dyn_cast<ValType>(output.getType()))
+      if (val.getOrigin() != "hole")
+        return emitOpError() << "[zkc-E149] a hole's value results carry "
+                                "origin 'hole', got '"
+                             << val.getOrigin() << "'";
+    if (output.use_empty())
+      return emitOpError()
+             << "[zkc-E149] every hole result has at least one use (an "
+                "unconsumed result is a hole that silently did nothing)";
   }
   return success();
 }

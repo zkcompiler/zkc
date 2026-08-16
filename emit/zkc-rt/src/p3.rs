@@ -330,10 +330,12 @@ enum Stage {
 pub struct Codeword {
     shape: Shape,
     stage: Stage,
-    /// The input commitment's tree, built by the opening fill; its
-    /// root is the statement the answer fill checks the witness
-    /// against.
-    input_tree: Option<Box<ValProverData>>,
+    /// The bit-reversed low-degree extension, owned so the zeroize
+    /// feature scrubs it on drop exactly as it scrubbed the opening
+    /// stage's copy before the trees existed. The answer fill rebuilds
+    /// the input tree from it transiently; its root is the statement
+    /// the witness is checked against.
+    trace_extension: Vec<Val>,
     /// One tree per commit round, retained as each fold consumes its
     /// leaf view — exactly what query answering opens.
     round_trees: Vec<ChallengeProverData>,
@@ -344,14 +346,14 @@ impl Codeword {
         Codeword {
             shape,
             stage,
-            input_tree: None,
+            trace_extension: Vec::new(),
             round_trees: Vec::new(),
         }
     }
 
     /// Thread the trees from a consumed handle into its successor.
     fn threaded(mut self, from: &mut Codeword) -> Codeword {
-        self.input_tree = from.input_tree.take();
+        self.trace_extension = core::mem::take(&mut from.trace_extension);
         self.round_trees = core::mem::take(&mut from.round_trees);
         self
     }
@@ -372,12 +374,14 @@ fn scrub<T: PrimeCharacteristicRing>(values: &mut [T]) {
 #[cfg(feature = "zeroize")]
 impl Drop for Codeword {
     fn drop(&mut self) {
+        scrub(&mut self.trace_extension);
         match &mut self.stage {
             Stage::Opened { inv_denoms, .. } => scrub(inv_denoms),
             Stage::Ext(evaluations) => scrub(evaluations),
-            // Committed leaves and the retained trees live inside the
-            // commitment scheme's own prover data, which owns its
-            // buffers.
+            // Committed leaves and the retained round trees live inside
+            // the commitment scheme's own prover data, which owns its
+            // buffers — the same boundary the committed stage always
+            // had; the scrub chain claims nothing past it.
             Stage::Committed(_) | Stage::Final => {}
         }
     }
@@ -482,13 +486,12 @@ pub fn fri_openval(
     let weights = compute_adjusted_weights(zeta, &inv_denoms[..height]);
     let (low_coset, _) = lde.split_rows(height);
     let opened = low_coset.interpolate_coset_with_precomputation(Val::GENERATOR, zeta, &weights)[0];
-    // The input tree: the same commitment the statement's f_root came
-    // from, rebuilt over the bit-reversed extension. Query answering
-    // opens it, and the answer fill refuses a witness whose root is
-    // not the statement's.
-    let (_, input_tree) = val_mmcs().commit_matrix(lde);
+    // The extension stays owned on the handle — the zeroize chain's
+    // subject — and rides to the answer fill, which rebuilds the input
+    // tree from it transiently and refuses a witness whose root is not
+    // the statement's.
     let mut codeword = Codeword::new(shape, Stage::Opened { inv_denoms, opened });
-    codeword.input_tree = Some(Box::new(input_tree));
+    codeword.trace_extension = lde.values;
     Ok((words_from_ext(opened), codeword))
 }
 
@@ -503,19 +506,15 @@ pub fn fri_reduce(alpha: [u32; 4], mut codeword: Codeword) -> Result<Codeword, S
     let Stage::Opened { inv_denoms, opened } = take_stage(&mut codeword) else {
         return Err("the reduce fill consumes the opening fill's handle".to_owned());
     };
-    let Some(input_tree) = codeword.input_tree.as_deref() else {
-        return Err("the opening fill's handle carries no input tree".to_owned());
-    };
-    let lde = *val_mmcs()
-        .get_matrices(input_tree)
-        .first()
-        .ok_or("the input tree holds no matrix")?;
+    if codeword.trace_extension.is_empty() {
+        return Err("the opening fill's handle carries no extension".to_owned());
+    }
     let alpha = ext_from_words(alpha)?;
     // Both batching sums have the same shape — powers of alpha against
     // the values they weigh — and at this width both are single-term.
     let combined_opening: Challenge = dot_product(alpha.powers(), core::iter::once(opened));
-    let evaluations: Vec<Challenge> = lde
-        .values
+    let evaluations: Vec<Challenge> = codeword
+        .trace_extension
         .iter()
         .zip(&inv_denoms)
         .map(|(&value, &inv_denom)| {
@@ -652,9 +651,9 @@ pub fn fri_answer(
     if !matches!(take_stage(&mut codeword), Stage::Final) {
         return Err("the answer fill consumes the final fill's handle".to_owned());
     }
-    let Some(input_tree) = codeword.input_tree.as_deref() else {
-        return Err("the answer fill's handle carries no input tree".to_owned());
-    };
+    if codeword.trace_extension.is_empty() {
+        return Err("the answer fill's handle carries no extension".to_owned());
+    }
     if codeword.round_trees.len() != 3 {
         return Err(format!(
             "this answer fill realizes the three-round contract; the handle holds {} round \
@@ -669,15 +668,17 @@ pub fn fri_answer(
         }
         words
     };
+    // The input tree, rebuilt transiently from the owned extension —
+    // determinism makes it the committed tree exactly when the witness
+    // is the statement's, which the root equality decides by name.
+    let extension = core::mem::take(&mut codeword.trace_extension);
+    let log_height = extension.len().trailing_zeros() as usize;
+    let (_, input_tree) = val_mmcs().commit_matrix(RowMajorMatrix::new(extension, 1));
+    let input_tree = &input_tree;
     let derived_root: [Val; 8] = input_tree.root().into();
     if root_words(&derived_root) != f_root {
         return Err("the witness does not commit to the statement".to_owned());
     }
-    let log_height = val_mmcs()
-        .get_matrices(input_tree)
-        .first()
-        .map(|matrix| matrix.height().trailing_zeros() as usize)
-        .ok_or("the input tree holds no matrix")?;
     let mut leaves = Vec::with_capacity(indices.len());
     let mut input_paths = Vec::new();
     let mut siblings: [Vec<[u32; 4]>; 3] = [Vec::new(), Vec::new(), Vec::new()];
@@ -1056,7 +1057,8 @@ mod tests {
         let zeta = [7, 11, 13, 17];
         let (opened, cw) = fri_openval(1, 0, zeta, Payload::new(trace)).unwrap();
         let f_root = {
-            let tree = cw.input_tree.as_deref().unwrap();
+            let (_, tree) =
+                val_mmcs().commit_matrix(RowMajorMatrix::new(cw.trace_extension.clone(), 1));
             let digest: [Val; 8] = tree.root().into();
             let mut words = [0u32; 8];
             for (word, element) in words.iter_mut().zip(&digest) {

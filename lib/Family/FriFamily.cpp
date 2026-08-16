@@ -236,6 +236,17 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
     if (*flag && !desc.grindingBits)
       return err("'value_faithful' requires grinding_bits: the pinned "
                  "challenger semantics carry a grinding round");
+    // The value-faithful template bakes log_blowup 1 and a one-
+    // coefficient final polynomial, so the shape equation
+    // log_blowup + log_final_poly_len + k = query_log2 admits exactly
+    // one fold depth; any other instance would seal a family whose
+    // fold-consistency obligation no conformant supplier can
+    // discharge.
+    if (*flag && desc.k != desc.queryLog2 - 1)
+      return err("'value_faithful' requires k = query_log2 - 1: the "
+                 "template bakes blowup 2^1 and a one-coefficient final "
+                 "polynomial, so the fold chain must cover the rest of "
+                 "the domain");
     desc.valueFaithful = *flag;
   }
 

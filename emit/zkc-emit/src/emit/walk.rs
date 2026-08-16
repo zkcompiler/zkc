@@ -39,6 +39,11 @@ pub(crate) struct Walk<'a> {
     binding: &'a Binding,
     /// Rust expression and class per value reference.
     values: HashMap<Ref, (String, VClass)>,
+    /// Counted bindings and their declared element counts: a vector
+    /// value and a scalar of the same class are different shapes, and
+    /// mis-wiring one into the other is a refusal here, never a type
+    /// error in generated code.
+    vector_counts: HashMap<Ref, u64>,
     /// Live handles: Rust expression and handle class. A handle is
     /// removed when consumed, so the carrier's exactly-once rule
     /// (zkc-E149) is a lookup failure here and a borrow-checker error in
@@ -293,7 +298,8 @@ impl<'a> Walk<'a> {
                 // binds a counted statement value.
                 Entry::ValVec(class, _) => {
                     return Err(format!(
-                        "entry argument {index} is a counted vector of class                          '{class}', but the statement ABI is scalar"
+                        "entry argument {index} is a counted vector of class \
+                         '{class}', but the statement ABI is scalar"
                     ))
                 }
                 Entry::Val(class) => {
@@ -593,11 +599,15 @@ impl<'a> Walk<'a> {
             let decode = match implementation {
                 ImplKind::P3Word => "zkc_rt::p3::decode_words::<1>(wire)[0]".to_owned(),
                 ImplKind::P3Ext4 | ImplKind::P3Digest8 => {
-                    format!("zkc_rt::p3::decode_words::<{}>(wire)", implementation.limbs())
+                    format!(
+                        "zkc_rt::p3::decode_words::<{}>(wire)",
+                        implementation.limbs()
+                    )
                 }
                 other => {
                     return Err(format!(
-                        "row {index}: counted reads are implemented for the BabyBear                          classes only (class '{class}' has {other:?})"
+                        "row {index}: counted reads are implemented for the \
+                         BabyBear classes only (class '{class}' has {other:?})"
                     ))
                 }
             };
@@ -636,6 +646,7 @@ impl<'a> Walk<'a> {
             let bare = format!("r{index}_1");
             self.values
                 .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
+            self.vector_counts.insert(Ref::Res(index, 1), count);
             return Ok(());
         }
         let comment = format!(
@@ -895,6 +906,7 @@ impl<'a> Walk<'a> {
             let bare = format!("r{index}_1");
             self.values
                 .insert(Ref::Res(index, 1), (bare, VClass::Doc(class.to_owned())));
+            self.vector_counts.insert(Ref::Res(index, 1), count);
         }
         Ok(())
     }
@@ -993,6 +1005,10 @@ impl<'a> Walk<'a> {
         for input in inputs {
             arguments.push(self.value(*input, &format!("row {index} (check_call)"))?);
         }
+        let vector_inputs: Vec<bool> = inputs
+            .iter()
+            .map(|input| self.vector_counts.contains_key(input))
+            .collect();
         let expect_kind = |walk: &Self,
                            argument: &(String, VClass),
                            want: ImplKind,
@@ -1005,6 +1021,30 @@ impl<'a> Walk<'a> {
                      which is not the contract's {want:?}"
                 )),
             }
+        };
+        // A vector binding and a scalar of the same class are different
+        // shapes; the marshal refuses a mismatch here rather than
+        // leaving it to the generated crate's type errors.
+        let expect_shape = |positions: &[(usize, bool)]| -> Result<(), String> {
+            for &(position, wants_vector) in positions {
+                if vector_inputs[position] != wants_vector {
+                    return Err(format!(
+                        "row {index}: check '{label}' operand {position} is {}, but its \
+                         segment takes {}",
+                        if vector_inputs[position] {
+                            "a counted vector"
+                        } else {
+                            "a scalar"
+                        },
+                        if wants_vector {
+                            "a counted vector"
+                        } else {
+                            "a scalar"
+                        }
+                    ));
+                }
+            }
+            Ok(())
         };
         self.line(
             1,
@@ -1098,6 +1138,15 @@ impl<'a> Walk<'a> {
                 self.line(1, "}");
             }
             CheckImpl::P3MerkleMultiOpening => {
+                // The contract declares no static parameters; a row
+                // citing any is mis-wired, refused here like every
+                // other shape defect.
+                if !params.is_empty() {
+                    return Err(format!(
+                        "row {index}: check '{label}' cites parameters {params:?}; the \
+                         multi-opening contract declares none"
+                    ));
+                }
                 // Segment order: root, indices, leaves, paths — one
                 // vector binding per counted segment.
                 if arguments.len() != 4 {
@@ -1107,6 +1156,7 @@ impl<'a> Walk<'a> {
                         arguments.len()
                     ));
                 }
+                expect_shape(&[(0, false), (1, true), (2, true), (3, true)])?;
                 let root = expect_kind(self, &arguments[0], ImplKind::P3Digest8, "root")?;
                 let indices = expect_kind(self, &arguments[1], ImplKind::P3Word, "indices")?;
                 let leaves = expect_kind(self, &arguments[2], ImplKind::P3Word, "leaves")?;
@@ -1145,6 +1195,18 @@ impl<'a> Walk<'a> {
                     ));
                 }
                 let rounds = (arguments.len() - 6) / 4;
+                let mut shapes: Vec<(usize, bool)> = Vec::new();
+                for position in 0..arguments.len() {
+                    // Scalars: zeta, opened, alpha, the k betas, the
+                    // final coefficient, and the k roots; vectors:
+                    // indices, leaves, and the per-round sibling and
+                    // path segments.
+                    let wants_vector = position == 4 + rounds
+                        || position == 5 + rounds
+                        || position >= 6 + 2 * rounds;
+                    shapes.push((position, wants_vector));
+                }
+                expect_shape(&shapes)?;
                 let zeta = expect_kind(self, &arguments[0], ImplKind::P3Ext4, "zeta")?;
                 let opened = expect_kind(self, &arguments[1], ImplKind::P3Ext4, "opened")?;
                 let alpha = expect_kind(self, &arguments[2], ImplKind::P3Ext4, "alpha")?;
@@ -1236,6 +1298,21 @@ impl<'a> Walk<'a> {
             // order, each behind the same canonicality gate; the row's
             // count is the schedule's, so a fill whose vector disagrees
             // is refused before any byte reaches the wire.
+            match self.vector_counts.get(&value) {
+                Some(declared) if *declared == count => {}
+                Some(declared) => {
+                    return Err(format!(
+                        "row {index}: write '{label}' declares count {count}, but its \
+                         value carries {declared} element(s)"
+                    ))
+                }
+                None => {
+                    return Err(format!(
+                        "row {index}: write '{label}' declares count {count}, but its \
+                         value is a scalar"
+                    ))
+                }
+            }
             if !matches!(
                 implementation,
                 ImplKind::P3Word | ImplKind::P3Ext4 | ImplKind::P3Digest8
@@ -1285,6 +1362,12 @@ impl<'a> Walk<'a> {
             );
             self.line(1, "}");
             return Ok(());
+        }
+        if self.vector_counts.contains_key(&value) {
+            return Err(format!(
+                "row {index}: write '{label}' is scalar, but its value is a counted \
+                 vector"
+            ));
         }
         self.line(
             1,
@@ -1452,6 +1535,25 @@ impl<'a> Walk<'a> {
                             ))
                         }
                     }
+                    let wants_vector =
+                        matches!(signature.inputs[position], Operand::VectorValue(_));
+                    let is_vector = self.vector_counts.contains_key(input);
+                    if wants_vector != is_vector {
+                        return Err(format!(
+                            "row {index}: hole '{label}' operand {position} is {}, but the \
+                             bound fill takes {}",
+                            if is_vector {
+                                "a counted vector"
+                            } else {
+                                "a scalar"
+                            },
+                            if wants_vector {
+                                "a counted vector"
+                            } else {
+                                "a scalar"
+                            }
+                        ));
+                    }
                     arguments.push(expression);
                 }
                 Operand::Sponge => {
@@ -1486,7 +1588,7 @@ impl<'a> Walk<'a> {
                     self.values
                         .insert(Ref::Res(index, slot), (bare, VClass::Doc(class.clone())));
                 }
-                (Entry::ValVec(class, _), Operand::VectorValue(want))
+                (Entry::ValVec(class, count), Operand::VectorValue(want))
                     if self.class_impl(class)? == *want =>
                 {
                     if !self.referenced.contains(&(index, slot)) {
@@ -1494,6 +1596,7 @@ impl<'a> Walk<'a> {
                     }
                     self.values
                         .insert(Ref::Res(index, slot), (bare, VClass::Doc(class.clone())));
+                    self.vector_counts.insert(Ref::Res(index, slot), *count);
                 }
                 (Entry::Handle(class), Operand::Handle(want)) if class == want => {
                     self.handles
@@ -1890,6 +1993,7 @@ impl<'a> Walk<'a> {
             values: Default::default(),
             handles: Default::default(),
             referenced: Default::default(),
+            vector_counts: Default::default(),
             current_sponge: None,
             current_stream: None,
             body: String::new(),

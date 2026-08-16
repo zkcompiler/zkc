@@ -811,10 +811,14 @@ private:
           SmallVector<SmallVector<uint8_t, 32>> handles;
           for (Value input : hole.getInputs()) {
             if (isa<oir::ValType>(input.getType())) {
-              llvm::Expected<llvm::APInt> value = get(input);
-              if (!value)
-                return value.takeError();
-              values.push_back(*value);
+              // Counted operands flatten into the value list, exactly
+              // as counted results flatten out of it — the contract
+              // fixes both orders.
+              llvm::Expected<ArrayRef<llvm::APInt>> elements =
+                  getElements(input);
+              if (!elements)
+                return elements.takeError();
+              values.append(elements->begin(), elements->end());
             } else if (isa<oir::HandleType>(input.getType())) {
               auto it = handleEnv.find(input);
               if (it == handleEnv.end())
