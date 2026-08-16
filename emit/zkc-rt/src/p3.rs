@@ -224,7 +224,6 @@ type ValMmcs =
 type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
 type ChallengeProverData =
     <ChallengeMmcs as Mmcs<Challenge>>::ProverData<RowMajorMatrix<Challenge>>;
-type ValProverData = <ValMmcs as Mmcs<Val>>::ProverData<RowMajorMatrix<Val>>;
 
 /// The extension element for four squeezed words, basis-coefficient
 /// order 0..3 — the order the `plonky3_bb31_ext4_tuple` codec packs and
