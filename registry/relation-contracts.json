@@ -1,19 +1,21 @@
 {
   "contracts": {
     "plonky3.fri.value-faithful": {
-      "claim_profile": "opaque_relation",
+      "claim_profile": {
+        "digest": "sha256:PROFILE-OPAQUE",
+        "name": "opaque_relation"
+      },
       "format": "opaque",
       "identity": {
-        "attested_id": "plonky3.fri.value-faithful",
-        "attestor": "zkc.family-generator"
+        "attested_id": "zkc.family.fri-value-faithful",
+        "attestor": "zkc.repository-fixture"
       },
       "instance_anchors": [
         "statement"
       ],
       "instance_encoding": {
-        "arity": 1,
-        "field_order": "2013265921",
-        "kind": "field_vector"
+        "kind": "commitment",
+        "payload_class": "rs"
       },
       "relation_anchors": {
         "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -26,22 +28,30 @@
       ],
       "witness_ports": {
         "kind": "opaque",
-        "port": "codeword"
+        "port": {
+          "name": "codeword"
+        }
       }
     },
     "toy.r1cs.entry": {
-      "claim_profile": "r1cs",
+      "claim_profile": {
+        "digest": "sha256:PROFILE-R1CS",
+        "name": "r1cs"
+      },
+      "declared_shape": {
+        "constraint_count": 8
+      },
       "format": "r1cs-bin-v1",
       "identity": {
-        "attested_id": "toy.r1cs.entry",
-        "attestor": "zkc.test-fixture"
+        "attested_id": "zkc.test.r1cs-entry-fixture",
+        "attestor": "zkc.repository-fixture"
       },
       "instance_anchors": [
         "public"
       ],
       "instance_encoding": {
         "arity": 2,
-        "field_order": "2305843009213693951",
+        "field_order": "2305843009213697249",
         "kind": "field_vector"
       },
       "relation_anchors": {
@@ -63,7 +73,7 @@
         "kind": "enumerated",
         "ports": [
           {
-            "count": 8,
+            "count": 5,
             "name": "assignment"
           }
         ]

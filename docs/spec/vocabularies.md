@@ -186,8 +186,8 @@ adding any is a versioned format decision.
   exact `{id,digest}` contract pin.
   This protocol-local `ReductionContract` is unrelated to the
   relation-domain `RelationContract` (`relations.md`): the former states one
-  verifier reduction implication, while the latter authorizes an imported
-  relation ABI as a post-seal, content-addressed document.
+  verifier reduction implication, while the latter states how an imported
+  relation's ABI is read, as a post-seal, content-addressed document.
   Instance parameters have the closed sorts `atom`, `material_ref`, and
   `material_ref_vector`; the instance dictionary is exact. Constraints are
   same-sort expression equalities, and output constructors are the sole
