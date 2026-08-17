@@ -3,6 +3,7 @@ add_mlir_library(ZkcRegistry
   ProtocolEnvironment.cpp
   ProtocolVocabulary.cpp
   Rational.cpp
+  RelationContractRegistry.cpp
   RegistryFile.cpp
 
   ADDITIONAL_HEADER_DIRS
