@@ -210,6 +210,11 @@ struct SealedSoundnessView {
   std::vector<std::map<std::string, std::string, std::less<>>>
       claimAnchorsByIndex;
   std::set<std::string, std::less<>> boundMaterialRefs;
+  /// The public statement ABI: instance-stage binding labels in spine
+  /// order, which is the order an endpoint's arguments carry. Projected
+  /// for consumers that relate the artifact's statement to an external
+  /// object (docs/spec/relations.md §2.6); no judgment here reads it.
+  std::vector<std::string> statementLabels;
   std::map<uint64_t, SealedReduction> reductionsByTransformerPosition;
   std::optional<SealedDuplexFacts> duplex;
 };

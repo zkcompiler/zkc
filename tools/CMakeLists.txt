@@ -1,5 +1,6 @@
 add_subdirectory(zkc-opt)
 add_subdirectory(zkc-registry-lint)
+add_subdirectory(zkc-relation)
 add_subdirectory(zkc-translate)
 add_subdirectory(zkc-run)
 add_subdirectory(zkc-artifact)

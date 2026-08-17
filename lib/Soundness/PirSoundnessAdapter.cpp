@@ -675,6 +675,13 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
     view.claimsByIndex.push_back(std::move(*claim));
   }
 
+  // The public statement ABI, in spine order: the same list, in the
+  // same order, that projection turns into endpoint arguments.
+  for (mlir::Operation &operation : sealed.getBody().front())
+    if (auto bind = mlir::dyn_cast<pir::BindOp>(operation))
+      if (bind.getStage() == pir::Stage::Instance)
+        view.statementLabels.push_back(bind.getLabel().str());
+
   llvm::StringMap<pir::CheckOp> checksByLabel;
   llvm::StringMap<uint64_t> materialEventPositions;
   for (mlir::Operation &operation : sealed.getBody().front()) {
