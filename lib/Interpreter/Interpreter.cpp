@@ -232,6 +232,16 @@ protected:
             " bits; the codec for class '" + valueClass + "' frames at most " +
             std::to_string((*codec)->framingBits()));
       (*codec)->absorbFraming(value, framed);
+      // A value that changes on its way into the sponge is not the
+      // value the sealed artifact declares, so a non-canonical element
+      // refuses here rather than being reduced silently. The framing
+      // is the wire form for these classes, so the wire's own
+      // canonicality rule is the one that applies.
+      if (!(*codec)->wireCanonical(framed))
+        return fail("[zkc-E413] absorbed value is not canonical for class '" +
+                    valueClass +
+                    "'; the sponge would reduce it, and the transcript would "
+                    "carry a value the artifact does not declare");
       sponge->absorb(framed);
     }
     return llvm::Error::success();

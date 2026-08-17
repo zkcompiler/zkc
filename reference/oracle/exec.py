@@ -403,7 +403,22 @@ REAL_WORDS = {"rs": 8, "ext_field": 4, "pow_value": 1, "query_index": 1}
 
 
 def _real_words(value: int, count: int) -> list[int]:
-    return [(value >> (32 * i)) & 0xFFFFFFFF for i in range(count)]
+    """The value's 32-bit limbs, refusing anything the C++ leg refuses.
+
+    A value wider than the class frames would be silently truncated by
+    the mask, and a limb at or above the characteristic would be
+    silently reduced by the sponge; both put a value in the transcript
+    that the sealed artifact does not declare, so both refuse here as
+    they do on the other leg, which names them zkc-E411 and zkc-E413.
+    """
+
+    if value < 0 or value.bit_length() > 32 * count:
+        raise model.Refusal("absorbed value is wider than its framing")
+    words = [(value >> (32 * i)) & 0xFFFFFFFF for i in range(count)]
+    for word in words:
+        if word >= babybear.P:
+            raise model.Refusal("absorbed value is not canonical")
+    return words
 
 
 def run_real(protocol: dict, statement: dict[str, str], proof: bytes) -> dict:
@@ -450,9 +465,13 @@ def run_real(protocol: dict, statement: dict[str, str], proof: bytes) -> dict:
     for index, row in enumerate(document["program"]):
         tag = row[0]
         if tag == "init":
-            if row[1:] != [REAL_SPONGE, "artifact-id"]:
+            if row[1] != REAL_SPONGE or row[2] not in ("artifact-id", "zero"):
                 raise AssertionError("execution witness left the real profile")
-            duplex = babybear.Duplex(document["source"])
+            # The value-faithful family starts from a fresh duplex; the
+            # transcription instances seed from the artifact identity.
+            duplex = babybear.Duplex(
+                document["source"] if row[2] == "artifact-id" else None
+            )
         elif tag == "const":
             environment["r", index, 0] = int(row[1])
             classes["r", index, 0] = row[2]

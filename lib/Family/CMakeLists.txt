@@ -14,4 +14,5 @@ add_mlir_library(ZkcFamily
   LINK_LIBS PUBLIC
   ZkcEncodingCore
   ZkcRegistry
+  ZkcRelation
 )

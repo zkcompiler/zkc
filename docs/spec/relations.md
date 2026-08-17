@@ -202,13 +202,23 @@ cross-checked; that slot `i` *means* what the label suggests is
 asserted, permanently, because no surveyed format authenticates names —
 that assertion is the named assumption
 `zkc.assume.statement_correspondence_wiring`. Where the sealed
-artifact carries a `pir.material_bind` from a labelled statement value
-to any anchor of this contract — instance anchors included, since a
-statement anchor is exactly where a sealed binding grounds an instance
-— the judgment checks that the bound value's label is one the
-correspondence wires; a binding whose label the correspondence does not
-wire refuses. A binding to an unlabelled value is reported as such and
-grounds nothing.
+artifact carries a `pir.material_bind` to an anchor of this contract,
+what the judgment checks depends on which part of the partition the
+anchor belongs to, because the two parts are grounded by different
+kinds of fact.
+
+- **Instance anchors** are grounded by a statement value: the bound
+  value's label MUST be one the correspondence wires, and a binding
+  whose label the correspondence does not wire refuses. A statement
+  anchor is exactly where a sealed binding grounds an instance.
+- **Relation anchors** are grounded by identity: the bound value MUST
+  equal the anchor's transcript projection (§2.8), and a binding whose
+  value does not refuses. Wiring is not the question here — the bound
+  value is not a statement position, it is the relation's own
+  identity entering the protocol.
+
+A binding to an unlabelled value against an instance anchor is
+reported as such and grounds nothing.
 
 ### 2.7 Declared shape
 
@@ -219,6 +229,39 @@ bytes make it checkable: `constraint_count` (the number the assumption
 in a checkable place, cross-checked against the header's constraint
 count when bytes are present, and still an assumption where no bytes
 are).
+
+### 2.8 The transcript projection of an anchor
+
+An anchor is a digest; a transcript absorbs field elements. Binding a
+relation's identity into a protocol's transcript therefore needs a
+stated map from the one to the other, and the map is normative here
+rather than left to each author, so that two artifacts binding the
+same relation bind the same value.
+
+The transcript projection of a `sha256:` anchor is the ordered
+eight-element vector whose element `i` is the low 27 bits of the
+`i`-th big-endian 32-bit word of the digest, in the payload class's
+limb order.
+
+Two properties earn the definition. Every element is below any
+admitted field's characteristic that a digest payload class frames, so
+the absorption of a projection is injective on its domain: no two
+distinct projections absorb identically, and a party cannot present a
+second digest whose projection collides by arithmetic reduction. And
+the map is total and fixed, so the projection is a function of the
+anchor alone — an author never chooses it, and a judgment can
+recompute it.
+
+What the projection does not carry is the remaining bits: it is a
+216-bit binding of a 256-bit digest, and a second preimage against it
+is correspondingly cheaper. That is stated, not hidden; a protocol
+whose security argument needs the full digest binds it by another
+means.
+
+An absorbed value that is not canonical for its payload class refuses
+at framing rather than being reduced into the transcript, because a
+value that changes on its way into the sponge is not the value the
+sealed artifact declares.
 
 ## 3. Trust tiers — a mapping, not a taxonomy
 
