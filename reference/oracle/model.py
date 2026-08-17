@@ -3214,6 +3214,19 @@ def _normalized_transformers(protocol: dict[str, Any]):
         protocol["sources"],
         key=lambda entry: (entry.profile, canon_json(entry.anchors)),
     )
+    # Two sources with identical content cannot be separated by content,
+    # so the tie would fall to authored order and one protocol would
+    # take two identities. The other leg refuses this; so does this one,
+    # or the canonical form is complete on only one of them.
+    for earlier, later in zip(sources, sources[1:]):
+        if (earlier.profile, canon_json(earlier.anchors)) == (
+            later.profile,
+            canon_json(later.anchors),
+        ):
+            raise Refusal(
+                "two sources have identical profile and anchors, so their "
+                "claim positions would depend on authored order"
+            )
     reduces = protocol.get("reduces", [])
     claim_pos: dict[str, int] = {}
     transformer_pos: dict[str, int] = {}

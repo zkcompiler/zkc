@@ -424,8 +424,17 @@ computeCodecBiases(const SealedDuplexFacts &facts) {
     unsigned width = static_cast<unsigned>(widthNeeded);
     llvm::APInt domain(width, 1);
     llvm::APInt base = alphabet->zext(width);
-    for (uint64_t symbol = 0; symbol < challenge.squeezeSymbols; ++symbol)
-      domain *= base;
+    // Square and multiply. The symbol count is bounded by the profile
+    // loader, but the alphabet is only bounded in width here, so a
+    // repeated multiply is quadratic in a number an admitted profile
+    // chooses; this is logarithmic in the same number.
+    for (uint64_t exponent = challenge.squeezeSymbols; exponent;
+         exponent >>= 1) {
+      if (exponent & 1)
+        domain *= base;
+      if (exponent > 1)
+        base *= base;
+    }
 
     unsigned common = std::max(domain.getBitWidth(), space->getBitWidth());
     llvm::APInt n = domain.zext(common);

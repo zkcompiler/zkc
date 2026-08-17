@@ -239,10 +239,18 @@ public:
             instanceBody
                 ? dyn_cast_or_null<StringAttr>(instanceBody.get("contract"))
                 : StringAttr();
-        assert(contractId && "admitted route instance lost its contract");
+        // Admission establishes both of these, but this pass reads a
+        // loaded artifact and every other failure here is a refusal;
+        // an assertion is absent from the build that ships.
+        if (!contractId)
+          return refuse("route instance '" + entry.getName().strref() +
+                        "' carries no contract");
         const zkc::registry::HoleContract *contract =
             vocabulary.lookupHoleContract(contractId.getValue());
-        assert(contract && "admitted hole contract absent from environment");
+        if (!contract)
+          return refuse("route instance '" + entry.getName().strref() +
+                        "' cites hole contract '" + contractId.getValue() +
+                        "', which this environment does not admit");
         contracts[entry.getName().strref()] = contract;
       }
     }
@@ -740,15 +748,40 @@ public:
     // the Tier-1 conformance evidence (boundaries.md §2); its
     // positions come from the canonical event index by construction,
     // so only the licensing judgment is a refusal.
+    int64_t highestCovered = -1;
     for (Operation &op : *programBlock) {
       auto srcAttr = op.getAttrOfType<ArrayAttr>("src");
       if (!srcAttr)
         continue;
       StringRef family = oirFamily(&op);
+      // Order: the emitted program realizes the spine's events in the
+      // spine's order. The single-pass walk above produces that by
+      // construction, and the endpoint-projection judgment is exactly
+      // the claim that it holds, so it is checked here rather than
+      // trusted to the walk that just ran.
+      int64_t highestHere = -1;
+      for (Attribute entry : srcAttr)
+        highestHere =
+            std::max(highestHere, cast<IntegerAttr>(entry).getInt());
+      if (highestHere < highestCovered) {
+        InFlightDiagnostic diag = op.emitOpError();
+        diag << "[zkc-E237] projection coverage does not equal the "
+                "obligation set: op family '"
+             << family << "' realizes event position " << highestHere
+             << " after position " << highestCovered
+             << ", so the emitted order is not the spine's";
+        return diag;
+      }
+      highestCovered = highestHere;
       for (Attribute entry : srcAttr) {
         int64_t position = cast<IntegerAttr>(entry).getInt();
-        assert(position >= 0 && position < eventCount &&
-               "src cites a position outside the canonical event range");
+        if (position < 0 || position >= eventCount) {
+          InFlightDiagnostic diag = op.emitOpError();
+          diag << "[zkc-E237] projection coverage does not equal the "
+                  "obligation set: src cites event position "
+               << position << ", outside the canonical range";
+          return diag;
+        }
         if (!licensedFamily(obligations[position].discharge, family,
                             endpointKind)) {
           InFlightDiagnostic diag = op.emitOpError();
