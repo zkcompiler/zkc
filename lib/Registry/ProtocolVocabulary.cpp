@@ -503,7 +503,7 @@ parseHoleSegments(const RegistryFile &file, const json::Array &segments,
   std::vector<HoleSegment> parsed;
   llvm::StringSet<> roles;
   for (const auto &[index, value] : llvm::enumerate(segments)) {
-    auto where = context + " segment #" + Twine(index);
+    std::string where = (context + " segment #" + Twine(index)).str();
     const json::Object *object = value.getAsObject();
     if (!object)
       return file.error(where + " must be an object");

@@ -188,6 +188,19 @@ public:
     llvm::stable_sort(sourceRows, [](const SourceRow &a, const SourceRow &b) {
       return a.key < b.key;
     });
+    // Two sources with identical content would be ordered by the order
+    // they were authored in, and their claim positions would follow —
+    // so one protocol could take two identities depending on how it
+    // was written. The canonical form is a complete invariant only if
+    // that cannot happen, and the container already refuses duplicate
+    // descriptor bytes one level up, so this refuses rather than
+    // breaking the tie. An author who wants two claims about the same
+    // relation distinguishes them by anchor.
+    for (size_t index = 1; index < sourceRows.size(); ++index)
+      if (sourceRows[index].key == sourceRows[index - 1].key)
+        return llvm::createStringError(
+            "[zkc-E172] two sources have identical profile and anchors, so "
+            "their claim positions would depend on authored order");
     for (SourceRow &row : sourceRows) {
       claimPos[row.op.getClaim()] = claimCount++;
       transformerCount++;

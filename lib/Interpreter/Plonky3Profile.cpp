@@ -21,6 +21,8 @@
 
 #include "zkc/Interpreter/ExecutionProfile.h"
 
+#include <iterator>
+
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
@@ -491,6 +493,12 @@ constexpr uint64_t kTwoAdicGenerators[] = {
     0x3bd57996, 0x4483d85a, 0x3a26eef8, 0x1a427a41};
 constexpr uint64_t kCosetShift = 31;
 
+/// One past the largest two-adic order this profile can name. Every
+/// shift by a declared log is bounded against it before the shift, so
+/// a log an artifact binds can never reach undefined behaviour or a
+/// generator the table does not hold.
+constexpr uint64_t kTwoAdicLimit = std::size(kTwoAdicGenerators);
+
 uint64_t bitrev(uint64_t value, unsigned bits) {
   uint64_t out = 0;
   for (unsigned i = 0; i < bits; ++i)
@@ -667,6 +675,15 @@ public:
       return createStringError(
           "check operand counts do not shape a merkle multi-opening");
     uint64_t logHeight = (totals.rs - 1) / ell;
+    // The height comes from operand counts rather than a declared
+    // parameter, and this supplier deliberately re-derives shape from
+    // counts because it serves several contract digests. So it is
+    // bounded here too: a contract admitted later with variadic
+    // multiplicities would otherwise reach the shift below.
+    if (logHeight >= kTwoAdicLimit)
+      return createStringError(
+          "check operand counts shape a domain beyond the profile's "
+          "two-adic generators");
     SmallVector<APInt> root, indices, leaves, paths;
     if (llvm::Error error = flattenOperands(
             operands, {{"rs", 1, &root},
@@ -746,6 +763,16 @@ public:
         params[1].getAsInteger(10, logFinalPolyLen))
       return createStringError(
           "the consistency check takes log_blowup and log_final_poly_len");
+    // Both logs bound a shift below, and a check contract's digest
+    // covers its parameter names rather than the values an artifact
+    // binds to them, so the declared logs are untrusted input and are
+    // bounded before anything shifts by them. The domain bound is the
+    // generator table's height, which is what every later shape check
+    // is measured against.
+    if (logBlowup >= kTwoAdicLimit || logFinalPolyLen >= kTwoAdicLimit)
+      return createStringError(
+          "the consistency check's declared logs exceed the domain the "
+          "profile's two-adic generators reach");
     // The shape, from the operands and the declared logs: segment
     // order fixes the extension total at 3 + k + 2^lfpl + ell·k, so
     // the fold depth and the domain height fall out; the rs and path
@@ -759,7 +786,7 @@ public:
           "check operand counts do not shape a fold consistency");
     uint64_t k = (totals.ext - 3 - finalLen) / (1 + ell);
     uint64_t logHeight = logBlowup + logFinalPolyLen + k;
-    if (k == 0 || logHeight >= 28 ||
+    if (k == 0 || logHeight >= kTwoAdicLimit ||
         totals.rs != k + ell * (k * logHeight - k * (k + 1) / 2))
       return createStringError(
           "check operand counts do not shape a fold consistency");

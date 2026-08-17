@@ -17,6 +17,15 @@
 using namespace llvm;
 using namespace zkc::registry;
 
+namespace {
+/// The widest alphabet an admitted profile may name, in decimal digits.
+/// A sample space is a field or a digest space; 1024 bits of them is
+/// past anything a construction names, and it keeps the squeeze-domain
+/// exponentiation's operands to a size exact arithmetic answers
+/// promptly.
+constexpr size_t kMaxAlphabetDigits = 309;
+} // namespace
+
 json::Value SpongeProfile::toCanonicalJson() const {
   return json::Object{{"alphabet_order", alphabetOrder},
                       {"capacity", capacity},
@@ -56,6 +65,13 @@ Expected<SpongeProfile> ConstructionProfileRegistry::parseEntry(
   if (profile.alphabetOrder == "0" || profile.alphabetOrder == "1" ||
       profile.alphabetOrder.front() == '0')
     return err("'alphabet_order' must be at least 2, without leading zeros");
+  // The exponent is bounded below; the base is bounded here. An
+  // alphabet wide enough to make the bound evaluator's exact
+  // arithmetic slow is refused rather than admitted and then endured,
+  // which is the same rule the capacity and rate carry.
+  if (profile.alphabetOrder.size() > kMaxAlphabetDigits)
+    return err("'alphabet_order' is wider than the exact bound arithmetic "
+               "admits");
   std::optional<int64_t> capacity = object->getInteger("capacity");
   if (!capacity || *capacity <= 0)
     return err("needs a positive integer 'capacity'");
