@@ -1731,6 +1731,13 @@ def construction_profiles_document() -> dict[str, Any]:
             or int(alphabet) < 2
         ):
             raise Refusal(f"sponge {name!r} has no exact alphabet order")
+        # The width the other leg bounds, bounded here too: an alphabet
+        # wide enough to slow exact bound arithmetic is refused at
+        # admission, and a profile either leg would refuse must be a
+        # profile both refuse.
+        if len(alphabet) > 309:
+            raise Refusal(f"sponge {name!r} has an alphabet wider than the "
+                          "exact bound arithmetic admits")
         for dimension in ("capacity", "rate"):
             value = body.get(dimension)
             if type(value) is not int or not 1 <= value <= 4096:

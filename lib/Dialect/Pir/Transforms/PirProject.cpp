@@ -760,9 +760,19 @@ public:
       // the claim that it holds, so it is checked here rather than
       // trusted to the walk that just ran.
       int64_t highestHere = -1;
-      for (Attribute entry : srcAttr)
-        highestHere =
-            std::max(highestHere, cast<IntegerAttr>(entry).getInt());
+      for (Attribute entry : srcAttr) {
+        auto position = dyn_cast<IntegerAttr>(entry);
+        if (!position)
+          return op.emitOpError()
+                 << "[zkc-E237] projection coverage does not equal the "
+                    "obligation set: src carries an entry that is not an "
+                    "event position";
+        highestHere = std::max(highestHere, position.getInt());
+      }
+      // An op citing no position covers nothing, so it neither advances
+      // the frontier nor can fall behind it.
+      if (highestHere < 0)
+        continue;
       if (highestHere < highestCovered) {
         InFlightDiagnostic diag = op.emitOpError();
         diag << "[zkc-E237] projection coverage does not equal the "
