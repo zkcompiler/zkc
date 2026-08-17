@@ -350,7 +350,10 @@ int main(int argc, char **argv) {
       "zkc-run: execute one OIR endpoint. --vectors checks a verifier against "
       "golden vectors, --prove runs a prover skeleton and can verify the "
       "proof it produced, --replay-duplex replays a pinned upstream "
-      "transcript. Supplying the registries admits the artifact first.\n");
+      "transcript. Supplying the registries admits the artifact "
+      "first.\n\n\nExit: 0 the answer is yes, 1 the subject was examined and "
+      "the answer is no, 2 the invocation never reached its subject "
+      "(docs/getting-started.md).\n");
 
   if (!replayDuplexFilename.empty())
     return replayDuplex(replayDuplexFilename);

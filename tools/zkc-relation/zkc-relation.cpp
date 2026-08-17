@@ -82,7 +82,10 @@ constexpr StringLiteral kEmptyInputDigest =
 int main(int argc, char **argv) {
   InitLLVM init(argc, argv);
   cl::ParseCommandLineOptions(
-      argc, argv, "zkc-relation: the relation correspondence judgment\n");
+      argc, argv,
+      "zkc-relation: the relation correspondence judgment\n\n\nExit: 0 the "
+      "answer is yes, 1 the subject was examined and the answer is no, 2 the "
+      "invocation never reached its subject (docs/getting-started.md).\n");
 
   auto contracts =
       zkc::registry::RelationContractRegistry::loadFromFile(contractsFilename);

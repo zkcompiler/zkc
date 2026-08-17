@@ -47,7 +47,10 @@ static cl::alias outputDirShort("o", cl::aliasopt(outputDir), cl::Hidden);
 int main(int argc, char **argv) {
   InitLLVM init(argc, argv);
   cl::ParseCommandLineOptions(
-      argc, argv, "zkc-seal: seal protocols and write their artifacts\n");
+      argc, argv,
+      "zkc-seal: seal protocols and write their artifacts\n\n\nExit: 0 the "
+      "answer is yes, 1 the subject was examined and the answer is no, 2 the "
+      "invocation never reached its subject (docs/getting-started.md).\n");
 
   MLIRContext context;
   context.loadDialect<zkc::pir::PirDialect>();

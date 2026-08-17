@@ -87,9 +87,12 @@ std::string refusalText(const snd::SoundnessRefusal &refusal) {
 
 int main(int argc, char **argv) {
   llvm::InitLLVM initLlvm(argc, argv);
-  cl::ParseCommandLineOptions(argc, argv,
-                              "zkc-derive: derive a conditional security "
-                              "judgment about a sealed protocol\n");
+  cl::ParseCommandLineOptions(
+      argc, argv,
+      "zkc-derive: derive a conditional security "
+      "judgment about a sealed protocol\n\n\nExit: 0 the answer is yes, 1 the "
+      "subject was examined and the answer is no, 2 the invocation never "
+      "reached its subject (docs/getting-started.md).\n");
 
   if (skeleton && requestFilename.empty())
     return fail("--skeleton needs a --request");

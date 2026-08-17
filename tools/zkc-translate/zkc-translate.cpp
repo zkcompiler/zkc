@@ -140,7 +140,9 @@ int main(int argc, char **argv) {
       argc, argv,
       "zkc-translate: emit one canonical encoding or identity for a sealed "
       "protocol or a projected endpoint. Exactly one emission flag per "
-      "invocation; identity is per-artifact.\n");
+      "invocation; identity is per-artifact.\n\n\nExit: 0 the answer is yes, 1 "
+      "the subject was examined and the answer is no, 2 the invocation never "
+      "reached its subject (docs/getting-started.md).\n");
 
   // The flag choice is validated before any file is touched, so a
   // zero-flag invocation names the actual problem, not a container

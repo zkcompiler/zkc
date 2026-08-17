@@ -35,7 +35,10 @@ static cl::opt<std::string> outputFilename("o", cl::init("-"),
 int main(int argc, char **argv) {
   llvm::InitLLVM init(argc, argv);
   cl::ParseCommandLineOptions(
-      argc, argv, "zkc-project: project one admitted PIR artifact to OIR\n");
+      argc, argv,
+      "zkc-project: project one admitted PIR artifact to OIR\n\n\nExit: 0 the "
+      "answer is yes, 1 the subject was examined and the answer is no, 2 the "
+      "invocation never reached its subject (docs/getting-started.md).\n");
 
   auto kind = zkc::pir::parseEndpointKind(endpointKind);
   if (!kind)

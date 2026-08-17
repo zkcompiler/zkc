@@ -15,6 +15,15 @@
 # asserting a specific non-zero status: plain `not` accepts any of
 # them, which is exactly the conflation this file exists to refuse.
 
+# The convention reaches the place a script author looks. It lives in
+# the guide in full; --help has to at least say the codes are not
+# interchangeable, or a caller writing `|| exit 1` never learns there
+# was a distinction to make.
+# RUN: zkc-relation --help 2>&1 | FileCheck %s --check-prefix=HELP
+# RUN: zkc-registry-lint --help 2>&1 | FileCheck %s --check-prefix=HELP
+# RUN: zkc-run --help 2>&1 | FileCheck %s --check-prefix=HELP
+# HELP: Exit: 0 the answer is yes, 1 the subject was examined and the answer is no, 2 the invocation never reached its subject
+
 # RUN: rm -rf %t && mkdir -p %t
 
 # -- 2: the invocation never reached its subject. ---------------------

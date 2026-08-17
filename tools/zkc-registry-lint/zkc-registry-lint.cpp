@@ -106,7 +106,10 @@ static int lintSoundnessSignature(StringRef json, StringRef source) {
 int main(int argc, char **argv) {
   InitLLVM init(argc, argv);
   cl::ParseCommandLineOptions(
-      argc, argv, "zkc-registry-lint: validate a zkc registry file\n");
+      argc, argv,
+      "zkc-registry-lint: validate a zkc registry file\n\n\nExit: 0 the answer "
+      "is yes, 1 the subject was examined and the answer is no, 2 the "
+      "invocation never reached its subject (docs/getting-started.md).\n");
 
   // The only path in this tool that never reaches its subject: every
   // other exit is the admission judgment this tool exists to make.

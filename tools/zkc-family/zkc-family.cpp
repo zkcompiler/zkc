@@ -57,7 +57,9 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(
       argc, argv,
       "zkc-family: emit one family instance (vocabulary + spine) from a "
-      "declarative description\n");
+      "declarative description\n\n\nExit: 0 the answer is yes, 1 the subject "
+      "was examined and the answer is no, 2 the invocation never reached its "
+      "subject (docs/getting-started.md).\n");
 
   auto buffer = MemoryBuffer::getFile(inputFilename, /*IsText=*/true);
   if (!buffer)
