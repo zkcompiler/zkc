@@ -18,9 +18,10 @@ set_target_properties(ZkcUnitTests PROPERTIES FOLDER "zkc unit tests")
 function(add_zkc_unittest name)
   add_executable(${name} ${ARGN})
   llvm_update_compile_flags(${name})
-  target_include_directories(${name} SYSTEM PRIVATE
-    ${LLVM_MAIN_SRC_DIR}/utils/unittest/googletest/include
-    ${LLVM_MAIN_SRC_DIR}/third-party/unittest/googletest/include)
+  # gtest's own include directories arrive through the imported target;
+  # naming them here as well would duplicate them at best and, built
+  # from a variable this out-of-tree build does not define, name
+  # directories that do not exist.
   target_link_libraries(${name} PRIVATE llvm_gtest llvm_gtest_main LLVMSupport)
   add_dependencies(ZkcUnitTests ${name})
   set_target_properties(${name} PROPERTIES FOLDER "zkc unit tests")

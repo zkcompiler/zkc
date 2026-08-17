@@ -28,6 +28,12 @@ EXEMPT = {
         "depth-one form, and an instance of depth k emits the depth-k form, "
         "which is the same theorem over more rounds"
     ),
+    "check_contracts.zkc.check.pow-zero": (
+        "the nonce's payload class is the instance's: a value-faithful "
+        "instance carries a one-word nonce where the registry's base form "
+        "carries a digest, so the two differ in that operand's class and "
+        "in nothing else"
+    ),
 }
 
 
@@ -35,32 +41,42 @@ def canonical(value) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
-generated = json.loads(Path(sys.argv[1]).read_text())
-registry = json.loads(Path(sys.argv[2]).read_text())
+if len(sys.argv) < 3:
+    raise SystemExit(
+        "usage: vocabulary-drift.py <registry> <generated vocabulary>..."
+    )
+registry = json.loads(Path(sys.argv[1]).read_text())
 
+# Every instance at once, because whether an exemption is still needed
+# is a fact about the corpus rather than about one instance: an entry
+# two instances share can differ in one of them and not the other.
 shared = 0
 drifted = []
 exercised = set()
-for section in sorted(set(generated) & set(registry)):
-    left, right = generated[section], registry[section]
-    if not isinstance(left, dict) or not isinstance(right, dict):
-        continue
-    for name in sorted(set(left) & set(right)):
-        key = f"{section}.{name}"
-        shared += 1
-        if canonical(left[name]) == canonical(right[name]):
+for source in sys.argv[2:]:
+    generated = json.loads(Path(source).read_text())
+    for section in sorted(set(generated) & set(registry)):
+        left, right = generated[section], registry[section]
+        if not isinstance(left, dict) or not isinstance(right, dict):
             continue
-        if key in EXEMPT:
-            exercised.add(key)
-            continue
-        drifted.append(key)
+        for name in sorted(set(left) & set(right)):
+            key = f"{section}.{name}"
+            shared += 1
+            if canonical(left[name]) == canonical(right[name]):
+                continue
+            if key in EXEMPT:
+                exercised.add(key)
+                continue
+            drifted.append(f"{Path(source).name}: {key}")
 
 failures = []
 if drifted:
     failures.append(
         "generated vocabulary redefines registry entries: "
-        + ", ".join(drifted)
+        + ", ".join(sorted(set(drifted)))
     )
+# An exemption no instance needs is stale, and a stale exemption hides
+# the next drift.
 stale = sorted(set(EXEMPT) - exercised)
 if stale:
     failures.append(
@@ -74,4 +90,5 @@ if failures:
     for line in failures:
         print(line)
     raise SystemExit(1)
-print(f"{shared} shared identifiers, {len(exercised)} exempt, none redefined")
+print(f"{shared} shared identifiers across {len(sys.argv) - 2} instances, "
+      f"{len(exercised)} exempt, none redefined")
