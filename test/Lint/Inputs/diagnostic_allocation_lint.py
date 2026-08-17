@@ -145,7 +145,30 @@ def validate(table):
         range_live = parse_ids(entry, "live", lo, hi, seen)
         for ident in range_live:
             live[ident] = tuple(sources)
-        reserved.update(parse_ids(entry, "reserved", lo, hi, seen))
+        range_reserved = parse_ids(entry, "reserved", lo, hi, seen)
+        reserved.update(range_reserved)
+        # What an id means, in one sentence, beside the allocation.
+        # versioning.md §3 says a shipped id never changes meaning; with
+        # the meaning written nowhere a reader can check, that rule is
+        # unauditable and nothing catches a reuse. Both directions fail
+        # closed: an allocated id with no sentence, and a sentence for an
+        # id this range does not allocate.
+        means = entry.get("means", {})
+        if not isinstance(means, dict) or not all(
+                isinstance(v, str) for v in means.values()):
+            die("range %s: means is not a map from id to sentence"
+                % entry["range"])
+        allocated = set(range_live) | set(range_reserved)
+        for ident in sorted(allocated - set(means)):
+            die("range %s: %s is allocated and means records nothing for it"
+                % (entry["range"], ident))
+        for ident in sorted(set(means) - allocated):
+            die("range %s: means describes %s, which the range does not "
+                "allocate" % (entry["range"], ident))
+        for ident, sentence in sorted(means.items()):
+            if not sentence.strip():
+                die("range %s: %s has an empty sentence"
+                    % (entry["range"], ident))
         # The twin facet is the declared parity surface: exactly which of a
         # range's live ids the reference twin also spells. Both drift
         # directions are checked in main() against reference/oracle/.
