@@ -67,7 +67,6 @@ public:
   }
 
   uint64_t offset() const { return at; }
-  void seek(uint64_t position) { at = position; }
   uint64_t size() const { return bytes.size(); }
 
 private:

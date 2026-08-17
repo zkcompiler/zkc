@@ -94,12 +94,32 @@ int main(int argc, char **argv) {
   if (!view)
     return failError(view.takeError());
 
+  // The profile pin is what keeps a vocabulary edit from changing what a
+  // fixed contract means, so it is checked rather than carried: the
+  // named profile must exist in this environment and its content digest
+  // must be the one the contract pinned.
+  const zkc::registry::ClaimProfile *profile =
+      artifact->environment().protocolVocabulary().lookupProfile(
+          contract->profileName);
+  if (!profile)
+    return fail("the contract pins claim profile '" + contract->profileName +
+                "', which this protocol vocabulary does not admit");
+  if (profile->contentDigest() != contract->profileDigest)
+    return fail("the contract pins claim profile '" + contract->profileName +
+                "' at " + contract->profileDigest +
+                ", this vocabulary admits it at " +
+                profile->contentDigest().str());
+
   Report report;
+  report.computed.push_back("claim profile '" + contract->profileName +
+                            "' resolves at the pinned digest");
 
   // -- Step 1: the partition against the artifact's claim descriptors.
   // -- A contract that names no claim of this artifact is a refusal,
   // -- not an empty pass.
   bool matched = false;
+  const std::map<std::string, std::string, std::less<>> *matchedAnchors =
+      nullptr;
   for (const auto &anchors : view->claimAnchorsByIndex) {
     bool candidate = !anchors.empty();
     for (const auto &[name, value] : contract->relationAnchors) {
@@ -109,6 +129,7 @@ int main(int argc, char **argv) {
     if (!candidate)
       continue;
     matched = true;
+    matchedAnchors = &anchors;
     for (const auto &[name, value] : contract->relationAnchors) {
       report.computed.push_back("relation anchor '" + name +
                                 "' equals the artifact's");
@@ -232,20 +253,53 @@ int main(int argc, char **argv) {
   if (!fieldOrder.empty() &&
       encoding.kind == zkc::registry::InstanceEncodingKind::FieldVector) {
     if (fieldOrder != encoding.fieldOrder)
-      return fail("the declared analysis field " + fieldOrder +
+      return fail("the expected field " + fieldOrder +
                   " disagrees with the contract's instance field " +
                   encoding.fieldOrder);
+    // Named for what it is: this side is the caller's, not a fact read
+    // out of a derivation. Reading the analysis parameter from the
+    // artifact's own derivations is the specified form and is recorded
+    // as a gap, so the label may not claim it here.
     report.crossChecked.push_back(
-        "contract-declared field agrees with the derivation's declared field");
+        "contract-declared field agrees with the caller-supplied expected "
+        "field");
   }
 
-  // Sealed material bindings covering a contract anchor: the bound
-  // value's label must appear in the correspondence.
-  for (const auto &[name, value] : contract->relationAnchors)
-    if (view->boundMaterialRefs.count(value))
-      report.crossChecked.push_back("a sealed material binding grounds "
-                                    "relation anchor '" +
-                                    name + "'");
+  // Sealed material bindings covering a contract anchor: where one
+  // exists, the bound value's label must appear in the correspondence,
+  // and a binding that contradicts the wiring refuses. Instance anchors
+  // are included deliberately — a statement anchor is exactly where a
+  // sealed binding grounds the instance.
+  std::map<std::string, std::string, std::less<>> contractAnchors =
+      contract->relationAnchors;
+  if (matchedAnchors)
+    for (const std::string &name : contract->instanceAnchors) {
+      auto found = matchedAnchors->find(name);
+      if (found != matchedAnchors->end())
+        contractAnchors[name] = found->second;
+    }
+  for (const auto &[name, value] : contractAnchors) {
+    if (!view->boundMaterialRefs.count(value))
+      continue;
+    auto label = view->boundMaterialLabels.find(value);
+    if (label == view->boundMaterialLabels.end()) {
+      report.computed.push_back("anchor '" + name +
+                                "' is materially bound to an unlabelled "
+                                "value");
+      continue;
+    }
+    bool wired = false;
+    for (const auto &entry : contract->correspondence)
+      wired |= entry.label == label->second;
+    if (!wired)
+      return fail("a sealed material binding grounds anchor '" + name +
+                  "' in statement value '" + label->second +
+                  "', which the correspondence does not wire");
+    report.crossChecked.push_back(
+        "a sealed material binding grounds anchor '" + name +
+        "' in statement value '" + label->second +
+        "', which the correspondence wires");
+  }
 
   // -- Step 4: the asserted remainder, always named.
   if (contract->attestedOnly())
@@ -267,10 +321,14 @@ int main(int argc, char **argv) {
   report.asserted.push_back(
       "that the relation is not underconstrained, that its witness "
       "generator is correct, and the provenance of its bytes");
-  if (contract->constraintCount && !header)
+  if (contract->constraintCount)
     report.asserted.push_back(
-        "the declared constraint count (zkc.assume."
-        "constraint_count_matches_relation)");
+        header ? "that the constraint count agreeing with the supplied "
+                 "bytes is the count of the relation the anchors name "
+                 "(zkc.assume.constraint_count_matches_relation, reduced "
+                 "to the bytes-to-anchors gap)"
+               : "the declared constraint count (zkc.assume."
+                 "constraint_count_matches_relation)");
 
   json::Array computed, crossChecked, asserted;
   for (const std::string &line : report.computed)

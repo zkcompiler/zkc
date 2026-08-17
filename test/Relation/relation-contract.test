@@ -27,20 +27,23 @@
 # DECLARED-SAME: "cross_checked":[]
 
 # With bytes: the same contract, now read. The arity, the field, the
-# witness-port total, and the constraint count cross-check, and the
-# constraint-count assumption is gone from the asserted list.
+# witness-port total, and the constraint count cross-check — and the
+# constraint-count assumption is reduced rather than discharged, because
+# whether those bytes are the relation the anchors name is the one gap
+# no reader closes.
 # RUN: zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json \
 # RUN:   --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
 # RUN:   --relation-bytes=%S/Inputs/good.r1cs --declared-field-order=2305843009213697249 \
 # RUN:   | FileCheck %s --check-prefix=READ
-# READ: "computed":[
+# READ: "asserted":[
+# READ-SAME: reduced to the bytes-to-anchors gap
+# READ-SAME: "computed":[
 # READ-SAME: header prime 2305843009213697249
 # READ-SAME: header public arity 2
 # READ-SAME: header constraint count 8
 # READ-SAME: "cross_checked":["contract-declared arity agrees with the byte-derived one"
 # READ-SAME: contract-declared constraint count agrees with the byte-derived one
-# READ-NOT: constraint_count_matches_relation
 
 # The judgment refuses a contract that does not describe the artifact:
 # the value-faithful contract's anchors name no claim here.
@@ -68,6 +71,20 @@
 # COUNT: sections and carries
 # WIRES: counts exceed its wire count
 # TRAILING: carries trailing bytes
+
+# The profile pin is enforced, not carried: a contract naming the right
+# profile at the wrong digest cannot be judged, which is what keeps a
+# vocabulary edit from changing what a fixed contract means.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['contracts']['toy.r1cs.entry']['claim_profile']['digest']='sha256:'+'ab'*32; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/relation-contracts.json %t/wrong-profile.json
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%t/wrong-profile.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json 2>&1 | FileCheck %s --check-prefix=PIN
+# PIN: this vocabulary admits it at
+
+# A reading form and an instance encoding are not independent: r1cs
+# bytes state a field and an arity, so an r1cs contract whose instance
+# is not a field vector refuses at admission.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['contracts']['toy.r1cs.entry']['instance_encoding']={'kind':'commitment','payload_class':'rs'}; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/relation-contracts.json %t/format-encoding.json
+# RUN: not zkc-registry-lint %t/format-encoding.json 2>&1 | FileCheck %s --check-prefix=FMTENC
+# FMTENC: reads a field-vector instance
 
 # The cross-implementation gate: both parsers admit the registry under
 # their own closed schemas and re-emit it, with the entry digests, byte

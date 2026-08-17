@@ -1501,6 +1501,16 @@ _ANCHOR_PARTITION = {
 }
 
 
+def _relation_text(value: Any, where: str) -> str:
+    """A registry string, held to the same gate the C++ loader applies:
+    non-empty and inside the canonical encoding domain."""
+
+    if (not isinstance(value, str) or not value
+            or any(not 0x20 <= ord(c) <= 0x7E for c in value)):
+        raise Refusal(f"{where} must be non-empty printable ASCII")
+    return value
+
+
 def relation_contracts_document() -> dict[str, Any]:
     """Admit the relation-contract registry and return the lint form."""
 
@@ -1534,7 +1544,8 @@ def relation_contracts_document() -> dict[str, Any]:
         _closed(profile, {"name", "digest"}, f"{where} claim_profile")
         profile_name = profile.get("name")
         profile_digest = profile.get("digest")
-        if not isinstance(profile_name, str) or not is_sha256_ref(profile_digest):
+        _relation_text(profile_name, f"{where} claim_profile name")
+        if not is_sha256_ref(profile_digest):
             raise Refusal(f"{where} has a malformed claim_profile pin")
         partition = _ANCHOR_PARTITION.get(profile_name)
         if partition is None:
@@ -1548,7 +1559,9 @@ def relation_contracts_document() -> dict[str, Any]:
             if not is_sha256_ref(value):
                 raise Refusal(f"{where} anchor {anchor_name!r} is not a digest")
         instances = body.get("instance_anchors")
-        if not isinstance(instances, list) or set(instances) != instance_names:
+        if (not isinstance(instances, list)
+                or len(instances) != len(set(instances))
+                or set(instances) != instance_names):
             raise Refusal(f"{where} must carry the profile's instance anchors")
 
         fmt = body.get("format")
@@ -1565,9 +1578,10 @@ def relation_contracts_document() -> dict[str, Any]:
         attested = identity.get("attested_id")
         if content is not None and not is_sha256_ref(content):
             raise Refusal(f"{where} content_digest is not a digest")
-        if attested is not None and not isinstance(identity.get("attestor"), str):
+        if attested is not None:
             # An assertion whose party the ledger cannot name has no subject.
-            raise Refusal(f"{where} attested_id has no attestor")
+            _relation_text(attested, f"{where} attested_id")
+            _relation_text(identity.get("attestor"), f"{where} attestor")
         if "attestor" in identity and attested is None:
             raise Refusal(f"{where} names an attestor with no attested_id")
         if content is None and attested is None:
@@ -1594,8 +1608,8 @@ def relation_contracts_document() -> dict[str, Any]:
         elif kind == "commitment":
             _closed(encoding, {"kind", "payload_class"},
                     f"{where} instance_encoding")
-            if not isinstance(encoding.get("payload_class"), str):
-                raise Refusal(f"{where} commitment needs a payload_class")
+            _relation_text(encoding.get("payload_class"),
+                           f"{where} commitment payload_class")
         else:
             raise Refusal(f"{where} has an unadmitted instance_encoding kind")
 
@@ -1613,9 +1627,10 @@ def relation_contracts_document() -> dict[str, Any]:
                 if not isinstance(entry, dict):
                     raise Refusal(f"{where} port is not an object")
                 _closed(entry, {"name", "count"}, f"{where} witness port")
-                port_name = entry.get("name")
-                if not isinstance(port_name, str) or port_name in seen_ports:
-                    raise Refusal(f"{where} has a malformed or repeated port")
+                port_name = _relation_text(entry.get("name"),
+                                           f"{where} witness port name")
+                if port_name in seen_ports:
+                    raise Refusal(f"{where} repeats witness port {port_name!r}")
                 seen_ports.add(port_name)
                 if type(entry.get("count")) is not int or entry["count"] < 0:
                     raise Refusal(f"{where} port {port_name!r} has no count")
@@ -1625,8 +1640,7 @@ def relation_contracts_document() -> dict[str, Any]:
             if not isinstance(port, dict):
                 raise Refusal(f"{where} opaque port must be an object")
             _closed(port, {"name"}, f"{where} witness port")
-            if not isinstance(port.get("name"), str):
-                raise Refusal(f"{where} opaque port has no name")
+            _relation_text(port.get("name"), f"{where} opaque port name")
         else:
             raise Refusal(f"{where} has an unadmitted witness_ports kind")
 
@@ -1641,14 +1655,19 @@ def relation_contracts_document() -> dict[str, Any]:
             slot, label = entry.get("slot"), entry.get("label")
             if type(slot) is not int or slot < 0 or slot in slots:
                 raise Refusal(f"{where} has a malformed or repeated slot")
-            if not isinstance(label, str) or label in labels:
-                raise Refusal(f"{where} has a malformed or repeated label")
+            _relation_text(label, f"{where} correspondence label")
+            if label in labels:
+                raise Refusal(f"{where} repeats correspondence label {label!r}")
             slots.add(slot)
             labels.add(label)
         if slots != set(range(len(wiring))):
             raise Refusal(f"{where} correspondence slots have a gap")
         if kind == "field_vector" and len(wiring) != encoding["arity"]:
             raise Refusal(f"{where} correspondence does not cover every slot")
+
+        if fmt == "r1cs-bin-v1" and kind != "field_vector":
+            raise Refusal(f"{where} reads r1cs bytes but declares another "
+                          "instance encoding")
 
         shape = body.get("declared_shape")
         if shape is not None:

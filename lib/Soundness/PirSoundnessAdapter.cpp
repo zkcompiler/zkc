@@ -696,6 +696,18 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
     if (!position)
       return position.takeError();
     view.boundMaterialRefs.insert(material.getSemanticRef().str());
+    // The bound value's own label, where it has one: a statement
+    // binding or a proof slot. Anything else stays unlabelled rather
+    // than being given a manufactured name.
+    if (mlir::Operation *producer = material.getValue().getDefiningOp()) {
+      llvm::StringRef label;
+      if (auto bind = mlir::dyn_cast<pir::BindOp>(producer))
+        label = bind.getLabel();
+      else if (auto slot = mlir::dyn_cast<pir::SlotOp>(producer))
+        label = slot.getLabel();
+      if (!label.empty())
+        view.boundMaterialLabels[material.getSemanticRef().str()] = label.str();
+    }
     if (!materialEventPositions
              .try_emplace(material.getSemanticRef(), *position)
              .second)

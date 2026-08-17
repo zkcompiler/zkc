@@ -210,6 +210,11 @@ struct SealedSoundnessView {
   std::vector<std::map<std::string, std::string, std::less<>>>
       claimAnchorsByIndex;
   std::set<std::string, std::less<>> boundMaterialRefs;
+  /// The label of the value each semantic reference is bound to, where
+  /// the bound value comes from a labelled spine event. A consumer
+  /// relating an artifact's statement to an external object needs the
+  /// label, not only the fact that some value was bound.
+  std::map<std::string, std::string, std::less<>> boundMaterialLabels;
   /// The public statement ABI: instance-stage binding labels in spine
   /// order, which is the order an endpoint's arguments carry. Projected
   /// for consumers that relate the artifact's statement to an external

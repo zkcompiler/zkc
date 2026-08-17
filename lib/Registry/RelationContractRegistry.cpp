@@ -20,6 +20,7 @@
 
 #include "zkc/Encoding/EncodingDomain.h"
 #include "llvm/ADT/StringExtras.h"
+#include <algorithm>
 
 using namespace llvm;
 using namespace zkc::registry;
@@ -194,11 +195,17 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
   if (contract.instanceAnchors.size() != partition->instanceAnchors.size())
     return err("'instance_anchors' must carry exactly the profile's "
                "instance-level anchors");
-  for (const std::string &anchorName : contract.instanceAnchors)
-    if (!is_contained(partition->instanceAnchors, anchorName))
-      return err("instance anchor '" + anchorName +
+  for (auto it = contract.instanceAnchors.begin();
+       it != contract.instanceAnchors.end(); ++it) {
+    if (!is_contained(partition->instanceAnchors, *it))
+      return err("instance anchor '" + *it +
                  "' is not an instance-level anchor of profile '" +
                  contract.profileName + "'");
+    // Size-plus-membership admits a repeat once a profile has two
+    // instance anchors, which would leave the other unmentioned.
+    if (std::find(contract.instanceAnchors.begin(), it, *it) != it)
+      return err("instance anchor '" + *it + "' is named twice");
+  }
 
   // -- The reading form: closed, and a name without stated reading
   // -- rules is not admitted.
@@ -426,6 +433,15 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
   } else if (object->get("declared_shape")) {
     return err("'declared_shape' must be an object");
   }
+
+  // A reading form and an instance encoding are not independent: the
+  // r1cs header states a field and a public arity, so an r1cs contract
+  // whose instance is not a field vector would leave the reader without
+  // the declared width that bounds it.
+  if (contract.format == "r1cs-bin-v1" &&
+      contract.instanceEncoding.kind != InstanceEncodingKind::FieldVector)
+    return err("format 'r1cs-bin-v1' reads a field-vector instance; this "
+               "contract declares another encoding");
 
   auto digest = RegistryFile::digestEntry("zkc/relation-contract\n",
                                           contract.toCanonicalJson());

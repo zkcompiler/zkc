@@ -97,19 +97,25 @@ bytes. The admitted set is exactly:
 
 A format outside the set refuses. The set grows one admitted form at a
 time; a name whose reading rules this document does not state is not
-admitted.
+admitted. A format and an instance encoding are not independent: a form
+that reads a field and a public arity from its header, as
+`r1cs-bin-v1` does, admits only a `field_vector` instance, so the
+declared field bounds the reader (§5) instead of leaving it unbounded.
 
 ### 2.3 Anchor partition
 
 `claim_profile` is `{name, digest}` — the profile's name and its
 content digest, so a vocabulary edit cannot change what a fixed
-contract means. The contract partitions that profile's anchors:
+contract means. The correspondence judgment resolves the name in its
+environment and refuses unless the admitted profile's content digest is
+the pinned one; a pin that is only carried would state the guarantee
+without providing it. The contract partitions that profile's anchors:
 
 - `relation_anchors` — a map from anchor name to the `sha256:` value
   the contract is scoped to. One contract serves every artifact whose
   descriptor carries exactly these values at these names.
-- `instance_anchors` — a list of anchor names whose values vary per
-  artifact and are checked against each artifact's descriptor by the
+- `instance_anchors` — a list of distinct anchor names whose values vary
+  per artifact and are checked against each artifact's descriptor by the
   correspondence judgment, never fixed by the contract.
 
 The partition MUST cover the profile's anchor set exactly, and it MUST
@@ -196,10 +202,13 @@ cross-checked; that slot `i` *means* what the label suggests is
 asserted, permanently, because no surveyed format authenticates names —
 that assertion is the named assumption
 `zkc.assume.statement_correspondence_wiring`. Where the sealed
-artifact carries a `pir.material_bind` from a statement value to an
-anchor of this contract, the judgment checks that the bound value's
-label appears in the correspondence at an entry covering that anchor's
-part; a bind that contradicts the wiring refuses.
+artifact carries a `pir.material_bind` from a labelled statement value
+to any anchor of this contract — instance anchors included, since a
+statement anchor is exactly where a sealed binding grounds an instance
+— the judgment checks that the bound value's label is one the
+correspondence wires; a binding whose label the correspondence does not
+wire refuses. A binding to an unlabelled value is reported as such and
+grounds nothing.
 
 ### 2.7 Declared shape
 
@@ -237,6 +246,12 @@ every field:
   Lands as a named assumption carried by every judgment that reads the
   contract — the pattern `zkc.assume.constraint_count_matches_relation`
   establishes, generalized rather than replaced.
+
+A cross-check reduces an assumption; it does not discharge one. A
+declared fact agreeing with bytes establishes that the contract
+describes those bytes, and whether those bytes are the relation the
+anchors name remains asserted (§6), so the assumption is restated in
+its reduced form rather than removed.
 
 A contract may declare everything opaque. The consequence is not a
 refusal but a ledger: every judgment over it names the full pile of
