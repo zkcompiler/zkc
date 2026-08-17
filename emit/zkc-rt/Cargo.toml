@@ -41,15 +41,15 @@ zeroize = ["dep:zeroize"]
 sha2 = { version = "=0.10.9", optional = true }
 # Exactly the replay harness's pin (evaluation/upstream/plonky3-replay):
 # one upstream revision for the whole repository.
-p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-field = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-symmetric = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-matrix = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-dft = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-commit = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-fri = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
-p3-util = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078", optional = true }
+p3-baby-bear = { workspace = true, optional = true }
+p3-field = { workspace = true, optional = true }
+p3-symmetric = { workspace = true, optional = true }
+p3-matrix = { workspace = true, optional = true }
+p3-dft = { workspace = true, optional = true }
+p3-commit = { workspace = true, optional = true }
+p3-merkle-tree = { workspace = true, optional = true }
+p3-fri = { workspace = true, optional = true }
+p3-util = { workspace = true, optional = true }
 ark-bls12-381 = { version = "=0.6.0", optional = true, default-features = false, features = ["curve"] }
 ark-ec = { version = "=0.6.0", optional = true, default-features = false }
 ark-ff = { version = "=0.6.0", optional = true, default-features = false }
