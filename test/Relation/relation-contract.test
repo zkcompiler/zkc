@@ -1,0 +1,70 @@
+# The relation contract end to end (docs/spec/relations.md): admission
+# of the closed schema, then the correspondence judgment over a sealed
+# artifact — first with no relation bytes, where every interface fact
+# stays asserted, then with bytes, where the reader promotes four of
+# them to cross-checked. The promotion is the point: what a judgment
+# establishes grows with what zkc can read, and what it cannot read it
+# names.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-registry-lint %zkc-registry-dir/relation-contracts.json | FileCheck %s --check-prefix=ADMIT
+# ADMIT: "contracts"
+# ADMIT: "digests"
+
+# RUN: zkc-seal %S/../Soundness/Inputs/r1cs-entry.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# Without bytes: the anchors and the statement labels are computed from
+# the artifact, and every relation-side fact is named as asserted.
+# RUN: zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json \
+# RUN:   --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   | FileCheck %s --check-prefix=DECLARED
+# DECLARED: "asserted":["identity is attested only
+# DECLARED-SAME: every interface fact this contract declares: no bytes were supplied
+# DECLARED-SAME: zkc.assume.statement_correspondence_wiring
+# DECLARED-SAME: zkc.assume.constraint_count_matches_relation
+# DECLARED-SAME: "cross_checked":[]
+
+# With bytes: the same contract, now read. The arity, the field, the
+# witness-port total, and the constraint count cross-check, and the
+# constraint-count assumption is gone from the asserted list.
+# RUN: zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json \
+# RUN:   --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --relation-bytes=%S/Inputs/good.r1cs --declared-field-order=2305843009213697249 \
+# RUN:   | FileCheck %s --check-prefix=READ
+# READ: "computed":[
+# READ-SAME: header prime 2305843009213697249
+# READ-SAME: header public arity 2
+# READ-SAME: header constraint count 8
+# READ-SAME: "cross_checked":["contract-declared arity agrees with the byte-derived one"
+# READ-SAME: contract-declared constraint count agrees with the byte-derived one
+# READ-NOT: constraint_count_matches_relation
+
+# The judgment refuses a contract that does not describe the artifact:
+# the value-faithful contract's anchors name no claim here.
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json \
+# RUN:   --contract=plonky3.fri.value-faithful --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=FOREIGN
+# FOREIGN: does not describe this artifact
+
+# The malformed corpus: one refusal per rule docs/spec/relations.md §5
+# states, each named at what failed.
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/bad-magic.r1cs 2>&1 | FileCheck %s --check-prefix=MAGIC
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/bad-version.r1cs 2>&1 | FileCheck %s --check-prefix=VERSION
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/unadmitted-section.r1cs 2>&1 | FileCheck %s --check-prefix=SECTION
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/two-headers.r1cs 2>&1 | FileCheck %s --check-prefix=TWOHDR
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/no-header.r1cs 2>&1 | FileCheck %s --check-prefix=NOHDR
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/count-mismatch.r1cs 2>&1 | FileCheck %s --check-prefix=COUNT
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/counts-exceed-wires.r1cs 2>&1 | FileCheck %s --check-prefix=WIRES
+# RUN: not zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --relation-bytes=%S/Inputs/trailing-header.r1cs 2>&1 | FileCheck %s --check-prefix=TRAILING
+# MAGIC: the magic bytes are not 'r1cs'
+# VERSION: is not the admitted version 1
+# SECTION: unadmitted r1cs section type
+# TWOHDR: two header sections
+# NOHDR: no header section
+# COUNT: sections and carries
+# WIRES: counts exceed its wire count
+# TRAILING: carries trailing bytes
