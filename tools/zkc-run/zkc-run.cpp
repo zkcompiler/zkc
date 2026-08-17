@@ -52,9 +52,10 @@ static cl::opt<std::string> verifyWith(
              "bytes with the same statement — the in-process round trip"));
 static cl::opt<std::string> protocolVocabulary(
     "protocol-vocabulary", cl::init(""),
-    cl::desc("With --prove: admit the standalone artifact against this "
-             "ProtocolVocabulary before proving (hole-contract ABI "
-             "re-resolution)"));
+    cl::desc("Admit the standalone artifact against this "
+             "ProtocolVocabulary before executing it. Read on both the "
+             "prover and the verifier path; the hole-contract ABI is "
+             "re-resolved from it."));
 static cl::opt<std::string> constructionProfileRegistry(
     "construction-profile-registry", cl::init(""),
     cl::desc("Construction-profile registry accompanying "

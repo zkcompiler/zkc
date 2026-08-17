@@ -43,8 +43,11 @@ static cl::opt<std::string>
     bytesFilename("relation-bytes", cl::init(""),
                   cl::desc("Relation-artifact bytes, read per the format"));
 static cl::opt<std::string>
-    fieldOrder("declared-field-order", cl::init(""),
-               cl::desc("The field a derivation over this artifact declares"));
+    fieldOrder("expect-field-order", cl::init(""),
+               cl::desc("The field this caller expects the instance to be "
+                        "over. Compared against the contract's declaration "
+                        "and reported as caller-supplied: nothing here reads "
+                        "a derivation."));
 
 static int fail(const Twine &message) {
   errs() << "error: " << message << "\n";

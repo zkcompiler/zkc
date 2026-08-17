@@ -34,7 +34,7 @@
 # RUN: zkc-relation %t/sealed.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json \
 # RUN:   --contract=toy.r1cs.entry --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --relation-bytes=%S/Inputs/good.r1cs --declared-field-order=2305843009213697249 \
+# RUN:   --relation-bytes=%S/Inputs/good.r1cs --expect-field-order=2305843009213697249 \
 # RUN:   | FileCheck %s --check-prefix=READ
 # READ: "asserted":[
 # READ-SAME: reduced to the bytes-to-anchors gap
