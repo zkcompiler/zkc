@@ -24,7 +24,9 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-PIN = (REPO / "arklib-pin.txt").read_text().strip()
+PIN = json.loads(
+    (REPO / "registry" / "upstreams.json").read_text()
+)["upstreams"]["arklib"]["revision"]
 ARKLIB = "https://github.com/Verified-zkEVM/ArkLib"
 
 problems = []
@@ -72,7 +74,7 @@ for declaration_id, index, receipt in receipts(signature):
         if receipt.get("revision") != PIN:
             problems.append(
                 f"{where}: pinned at {receipt.get('revision') or '(none)'}, "
-                f"but arklib-pin.txt says {PIN}"
+                f"but registry/upstreams.json records {PIN}"
             )
         elif not receipt.get("statement"):
             unpinned.append(f"{where}: {name} — no recorded type to compare")

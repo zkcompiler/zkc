@@ -1,16 +1,17 @@
-# Each upstream revision is recorded once and restated in agreement.
+# Each upstream revision is registered once, and no list is kept of
+# where it is restated.
 #
-# A revision cannot be stated only once: a Cargo manifest reads no file,
-# a captured fixture carries what it was captured against, and a
-# third-party notice has to name what it notices. So the pin file is
-# where the revision is decided, and every restatement is held to it —
-# in both directions. A site that stops carrying the pin has dropped out
-# of the set the pin governs; a site carrying a revision no pin file
-# records is the drift a pin exists to prevent.
+# A revision cannot be stated only once — a Cargo manifest reads no
+# file, a captured fixture carries what it was captured against, a
+# third-party notice must name what it notices. What can be avoided is
+# a hand-maintained register of those sites, because a site nobody
+# remembered to add is a site the check passes over in silence, which
+# is how a gate like this usually stops meaning anything.
 #
-# The count is pinned too. Without it a site could be dropped from the
-# list and the check would pass over a smaller world, which is the way
-# a gate like this usually stops meaning anything.
+# So the check finds rather than enumerates: every Cargo dependency's
+# revision, wherever the manifest lives, and every file that says for
+# itself that it restates a pin. An upstream nothing depends on fails
+# too, so an entry cannot linger past its dependant.
 
 # RUN: %python %S/Inputs/upstream-pins.py %S/../.. | FileCheck %s
-# CHECK: 12 pin statements agree
+# CHECK: {{[0-9]+}} statements agree with 2 registered upstreams

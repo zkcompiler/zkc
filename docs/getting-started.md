@@ -157,7 +157,7 @@ compiler-request schema or compiler CLI.
 | zkc build | CMake 3.20+, Ninja, C++17 | [`CMakeLists.txt`](../CMakeLists.txt) |
 | Python reference twin | Python 3.12+ and **no dependencies at all** | [`reference/pyproject.toml`](../reference/pyproject.toml) and [`reference/uv.lock`](../reference/uv.lock) |
 | Optional Plonky3 harness | stable Rust 1.85 or newer (the crate is edition 2024); the upstream revision | its `Cargo.toml` and `Cargo.lock` |
-| ArkLib receipt reading | exact ArkLib revision | [`arklib-pin.txt`](../arklib-pin.txt) and the checkout's Lean/Lake files |
+| ArkLib receipt reading | exact ArkLib revision | [`registry/upstreams.json`](../registry/upstreams.json) and the checkout's Lean/Lake files |
 
 Each of these is as tight as what it guards, and no tighter.
 

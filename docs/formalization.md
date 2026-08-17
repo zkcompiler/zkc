@@ -23,7 +23,7 @@ premise, change a bound, or alter a derivation result.
 
 A theorem-backed end-to-end judgment needs the following chain. The labels in
 the right column report the reading at the ArkLib revision in
-[`arklib-pin.txt`](../arklib-pin.txt).
+[`registry/upstreams.json`](../registry/upstreams.json).
 
 | Link | Required statement | Current reading |
 |---|---|---|
@@ -142,7 +142,7 @@ python3 test/Soundness/Inputs/formalization_receipts.py \
 ```
 
 For the external reading, build an ArkLib checkout at the exact
-`arklib-pin.txt` revision and run:
+revision `registry/upstreams.json` records and run:
 
 ```sh
 python3 test/Soundness/Inputs/formalization_receipts.py \
