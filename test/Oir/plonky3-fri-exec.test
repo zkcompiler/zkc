@@ -28,7 +28,7 @@
 # The same artifact refuses under the toy profile, naming the missing
 # supplier: profiles are closed sets, never fallbacks.
 # RUN: not zkc-run %t/projected.mlir --vectors %S/Inputs/plonky3-fri-exec-vectors.json --profile=toy 2>&1 | FileCheck --check-prefix=TOY %s
-# TOY: [zkc-E400] pinned construction 'codec:plonky3_bb31_digest8' has no supplier in profile 'toy'
+# TOY: [zkc-E400] pinned codec construction 'codec:plonky3_bb31_digest8' has no supplier in profile 'toy'
 
 # Leg (c): the twin regenerates the committed vectors without reading
 # them — same artifact id, same reject classes, same independently

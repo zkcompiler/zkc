@@ -58,9 +58,17 @@ A new check takes the next available number in its component's allocated
 range. Every live id must be emitted by the declared source component and
 asserted by a test in the same change, unless the allocation records a
 specific coverage exemption. Reserved ids must not be emitted.
-The exact range, source allowlist, live-id, reserved-id, and coverage-exemption
-allocation is machine-readable in
+Every allocated id — live or reserved — carries one sentence saying what
+condition it names. The stability rule above is a claim about meaning, so the
+meaning is written where it can be read back and held to; an id whose meaning
+lives only in the code it is emitted from cannot be checked against reuse, and
+a number held in reserve with no recorded purpose is indistinguishable from one
+held by accident.
+
+The exact range, source allowlist, live-id, reserved-id, meaning, and
+coverage-exemption allocation is machine-readable in
 [`registry/diagnostic-allocation.json`](../../registry/diagnostic-allocation.json).
 That file is the single allocation authority. The lint checks that emitted
 diagnostics belong to their declared source ranges, live ids have emitters and
-test assertions, reserved ids are not emitted, and exemptions carry reasons.
+test assertions, reserved ids are not emitted, every allocated id has a
+sentence and every sentence an allocated id, and exemptions carry reasons.

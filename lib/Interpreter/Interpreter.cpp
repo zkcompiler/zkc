@@ -123,9 +123,12 @@ protected:
       std::optional<StringRef> supplied =
           profile.constructionDigest(taggedName);
       if (!supplied)
-        return fail((taggedName.starts_with("sponge:")
-                         ? "[zkc-E401] pinned construction '"
-                         : "[zkc-E400] pinned construction '") +
+        // Which supplier is missing is what separates the two ids, so it
+      // is what the sentence says: identical prose under two numbers
+      // leaves a reader unable to tell why the number differs.
+      return fail((taggedName.starts_with("sponge:")
+                         ? "[zkc-E401] pinned sponge construction '"
+                         : "[zkc-E400] pinned codec construction '") +
                     taggedName + "' has no supplier in profile '" +
                     profile.name() + "'");
       // A supplier implementing different bytes than the pin cannot judge

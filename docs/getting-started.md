@@ -85,6 +85,18 @@ Ten tools land in `build/bin`, beside the test-only pass driver. Each takes
 `--help`; this is what they are for and which are load-bearing for the claims in
 [Current Status](status.md).
 
+Each answers one question, and its exit code says which of three things
+happened. **0** — the question was answered affirmatively. **1** — the subject
+was examined and the answer is negative: a registry that does not admit, a
+witness that does not re-derive, a verifier that rejects, a contract that
+disagrees with the bytes it pins. **2** — the invocation never reached its
+subject: an unreadable file, a flag naming no job, a registry the environment
+does not supply.
+
+A caller that treats every non-zero exit alike cannot tell a protocol it should
+fix from an invocation it should fix. Both write to stderr in the same spelling,
+because the code is what a script reads and the message is what a person reads.
+
 | Tool | What it does |
 |---|---|
 | `zkc-seal` | Seal one textual Open PIR protocol into a persisted artifact directory. The seal judgment runs here. |

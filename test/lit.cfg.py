@@ -87,6 +87,10 @@ config.substitutions.append(
 config.substitutions.append(
     ("%zkc-registry-dir", os.path.join(config.zkc_src_root, "registry"))
 )
+# For a check that hands a tool to a helper script rather than running it
+# from a RUN line: the tool substitutions above are expanded by lit, not
+# resolved on PATH, so a subprocess cannot find them by name.
+config.substitutions.append(("%zkc-tools-dir", config.zkc_tools_dir))
 # The full seal configuration, spelled once: the same
 # flag string recurs on every sealing RUN line, and a drifted copy
 # would test a different battery than the tools ship.

@@ -140,7 +140,9 @@ int main(int argc, char **argv) {
       argc, argv,
       "zkc-translate: emit one canonical encoding or identity for a sealed "
       "protocol or a projected endpoint. Exactly one emission flag per "
-      "invocation; identity is per-artifact.\n");
+      "invocation; identity is per-artifact.\n\n\nExit: 0 the answer is yes, 1 "
+      "the subject was examined and the answer is no, 2 the invocation never "
+      "reached its subject (docs/getting-started.md).\n");
 
   // The flag choice is validated before any file is touched, so a
   // zero-flag invocation names the actual problem, not a container
@@ -149,15 +151,17 @@ int main(int argc, char **argv) {
           (int)emitOirId + (int)emitOirSemanticId + (int)emitProofSize +
           (int)emitTranscriptSchedule !=
       1) {
-    return zkc::tool::reportError("exactly one emission flag required");
+    return zkc::tool::reportCannotAnswer(
+        "[zkc-E901] exactly one emission flag required");
   }
 
   MLIRContext context;
   context.loadDialect<zkc::pir::PirDialect, zkc::oir::OirDialect>();
   zkc::tool::ParsedModule parsed =
       zkc::tool::parseModule(inputFilename, context);
+  // A file this tool cannot take: parseModule has named it.
   if (!parsed)
-    return 1;
+    return 2;
   ModuleOp module = parsed.get();
 
   bool wantOir = emitOirCanonical || emitOirId || emitOirSemanticId ||
@@ -167,13 +171,15 @@ int main(int argc, char **argv) {
         return wantOir ? isa<zkc::oir::ArtifactOp>(op)
                        : isa<zkc::pir::ProtocolOp, zkc::pir::SealedOp>(op);
       });
+  // Not the container this flag takes: the invocation handed the tool
+  // the wrong document, and getSingleOp has already named it.
   if (!container)
-    return 1;
+    return 2;
 
   std::string error;
   auto output = openOutputFile(outputFilename, &error);
   if (!output) {
-    return zkc::tool::reportError(error);
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + error);
   }
 
   auto result =

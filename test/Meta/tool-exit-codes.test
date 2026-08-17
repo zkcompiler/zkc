@@ -1,0 +1,65 @@
+# One exit code per kind of answer, across the tools.
+#
+# A caller that treats every non-zero exit alike cannot tell a protocol
+# it should fix from an invocation it should fix. The codes are the
+# machine-readable half of that distinction and the prose is not, so
+# they are pinned here rather than left to whichever helper a site
+# happened to call (docs/getting-started.md §4a):
+#
+#   0  the question was answered affirmatively
+#   1  the subject was examined and the answer is negative
+#   2  the invocation never reached its subject
+#
+# Both non-zero codes write to stderr in the same spelling, so this
+# checks the code and not the wording. `not --crash` is lit's way of
+# asserting a specific non-zero status: plain `not` accepts any of
+# them, which is exactly the conflation this file exists to refuse.
+
+# The convention reaches the place a script author looks. It lives in
+# the guide in full; --help has to at least say the codes are not
+# interchangeable, or a caller writing `|| exit 1` never learns there
+# was a distinction to make.
+# RUN: zkc-relation --help 2>&1 | FileCheck %s --check-prefix=HELP
+# RUN: zkc-registry-lint --help 2>&1 | FileCheck %s --check-prefix=HELP
+# RUN: zkc-run --help 2>&1 | FileCheck %s --check-prefix=HELP
+# HELP: Exit: 0 the answer is yes, 1 the subject was examined and the answer is no, 2 the invocation never reached its subject
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# -- 2: the invocation never reached its subject. ---------------------
+# An unreadable file, whatever the tool would have done with it.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-registry-lint %t/absent.json
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-family %t/absent.json --emit-vocabulary=%t/v.json --emit-spine=%t/s.mlir
+# A flag set that names no job.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-translate %S/../Encoding/schnorr.mlir
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-run %S/../Encoding/schnorr.mlir
+# A contract the environment supplied does not carry.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-relation %S/../Encoding/schnorr.mlir --contracts=%zkc-registry-dir/relation-contracts.json --contract=no.such.contract --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json
+
+# A file the tool cannot take at all. These four were the review's
+# finding: each reported its mistake through the exit-2 channel, threw
+# the code away, and returned 1 from the caller — so the message named
+# an invocation error and the status said the subject had been examined.
+# RUN: echo 'not a module' > %t/notmlir.mlir
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-seal %t/notmlir.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --output-dir=%t/out
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-translate --id %t/notmlir.mlir
+# A profile the environment does not carry, and a malformed payload flag.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-run %S/../Oir/Inputs/schnorr-verifier.mlir --profile=no-such-profile --vectors=%t/absent.json
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-run %S/../Oir/Inputs/schnorr-verifier.mlir --prove malformed --statement y=1
+
+# -- 1: the subject was examined and refused. -------------------------
+# A registry that does not admit is this tool's whole question, so its
+# parse refusal is an answer rather than a failure to reach one.
+# RUN: echo '{"registry":"zkc.protocol_vocabulary","unknown_section":1}' > %t/bad.json
+# RUN: %python %S/Inputs/exit-code.py 1 zkc-registry-lint %t/bad.json
+# A description outside the family's closed point selection.
+# RUN: %python %S/Inputs/exit-code.py 1 zkc-family %S/../Family/Inputs/bad-k.json --emit-vocabulary=%t/v.json --emit-spine=%t/s.mlir
+# A protocol that parses and that the seal battery refuses — the case
+# that keeps the fixes above from having simply moved everything to 2.
+# RUN: %python -c "import re,sys,pathlib; s=pathlib.Path(sys.argv[1]).read_text(); pathlib.Path(sys.argv[2]).write_text(re.sub(r'(anchors .\{statement = \"sha256:)([0-9a-f]{4})', r'\g<1>dead', s, count=1))" %S/../Encoding/routed-schnorr.mlir %t/battery-refuses.mlir
+# RUN: %python %S/Inputs/exit-code.py 1 zkc-seal %t/battery-refuses.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --output-dir=%t/out2
+
+# -- 0: answered affirmatively. ---------------------------------------
+# The control: without it the checks above are satisfied by a tool that
+# refuses everything.
+# RUN: %python %S/Inputs/exit-code.py 0 zkc-registry-lint %zkc-registry-dir/protocol-vocabulary.json

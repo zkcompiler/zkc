@@ -47,7 +47,10 @@ static cl::alias outputDirShort("o", cl::aliasopt(outputDir), cl::Hidden);
 int main(int argc, char **argv) {
   InitLLVM init(argc, argv);
   cl::ParseCommandLineOptions(
-      argc, argv, "zkc-seal: seal protocols and write their artifacts\n");
+      argc, argv,
+      "zkc-seal: seal protocols and write their artifacts\n\n\nExit: 0 the "
+      "answer is yes, 1 the subject was examined and the answer is no, 2 the "
+      "invocation never reached its subject (docs/getting-started.md).\n");
 
   MLIRContext context;
   context.loadDialect<zkc::pir::PirDialect>();
@@ -58,8 +61,9 @@ int main(int argc, char **argv) {
 
   zkc::tool::ParsedModule parsed =
       zkc::tool::parseModule(inputFilename, context);
+  // A file this tool cannot take: parseModule has named it.
   if (!parsed)
-    return 1;
+    return 2;
   ModuleOp module = parsed.get();
 
   PassManager passManager(&context);
@@ -71,8 +75,8 @@ int main(int argc, char **argv) {
     return 1;
 
   if (std::error_code error = llvm::sys::fs::create_directories(outputDir)) {
-    return zkc::tool::reportError("cannot create '" + outputDir + "': " +
-                                  error.message());
+    return zkc::tool::reportCannotAnswer("[zkc-E900] cannot create '" +
+                                         outputDir + "': " + error.message());
   }
   // Every artifact writes before any is kept: a failure mid-module
   // leaves no partial output set behind.
@@ -83,7 +87,7 @@ int main(int argc, char **argv) {
     std::string error;
     std::unique_ptr<ToolOutputFile> output = openOutputFile(path, &error);
     if (!output) {
-      return zkc::tool::reportError(error);
+      return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + error);
     }
     if (failed(zkc::artifact::writeArtifact(sealed, output->os())))
       return 1;

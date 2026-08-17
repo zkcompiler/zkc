@@ -17,13 +17,14 @@ ParsedModule parseModule(llvm::StringRef path, MLIRContext &context) {
       std::make_unique<SourceMgrDiagnosticHandler>(*parsed.sourceMgr, &context);
   auto input = llvm::MemoryBuffer::getFileOrSTDIN(path);
   if (!input) {
-    emitError(UnknownLoc::get(&context)) << "cannot read source '" << path
-                                         << "': " << input.getError().message();
+    emitError(UnknownLoc::get(&context))
+        << "[zkc-E900] cannot read source '" << path
+        << "': " << input.getError().message();
     return parsed;
   }
   if (isBytecode((*input)->getMemBufferRef())) {
     emitError(UnknownLoc::get(&context))
-        << "source parser " << kBytecodeRefusal;
+        << "[zkc-E903] source parser " << kBytecodeRefusal;
     return parsed;
   }
   parsed.sourceMgr->AddNewSourceBuffer(std::move(*input), llvm::SMLoc());
@@ -31,13 +32,25 @@ ParsedModule parseModule(llvm::StringRef path, MLIRContext &context) {
   return parsed;
 }
 
-int reportError(llvm::Error error) {
-  return reportError(llvm::toString(std::move(error)));
+/// One spelling on stderr for both, because a reader scanning output
+/// should recognize a failure without knowing which binary produced it.
+/// The exit code, not the prefix, is what tells the two apart, and the
+/// message says which happened.
+static int report(const llvm::Twine &message, int code) {
+  llvm::errs() << "error: " << message << "\n";
+  return code;
 }
 
-int reportError(const llvm::Twine &message) {
-  llvm::errs() << "error: " << message << "\n";
-  return 1;
+int reportRefusal(llvm::Error error) {
+  return reportRefusal(llvm::toString(std::move(error)));
+}
+int reportRefusal(const llvm::Twine &message) { return report(message, 1); }
+
+int reportCannotAnswer(llvm::Error error) {
+  return reportCannotAnswer(llvm::toString(std::move(error)));
+}
+int reportCannotAnswer(const llvm::Twine &message) {
+  return report(message, 2);
 }
 
 } // namespace tool

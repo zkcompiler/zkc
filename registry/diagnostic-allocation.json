@@ -1,40 +1,37 @@
 {
-  "schema": "zkc.diagnostic_allocation",
+  "coverage_exempt": {
+    "E233": "extension backstop: the current sealed-container verifier rejects every non-member at E131 before projection; this remains the fail-closed default for a future ProtocolMember extension",
+    "E237": "projection self-check over freshly emitted OIR: every public path admits PIR first, so an input cannot intentionally create phantom, unlicensed, or missing coverage without bypassing the production boundary",
+    "E904": "generator self-check over freshly emitted output: the family emits a vocabulary and a spine and then admits them through the same loaders the tools ship, so reaching this needs a defect in the generator rather than an input. It stays live and fail-closed because that is the defect it exists to catch"
+  },
   "ranges": [
     {
-      "range": "E100-E119",
       "component": "reserved (unallocated)",
-      "sources": [],
       "live": [],
+      "range": "E100-E119",
       "reserved": [],
+      "sources": [],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "unallocated"
+        "excluded_reason": "unallocated",
+        "mirrored": []
       }
     },
     {
-      "range": "E120-E129",
       "component": "protocol-vocabulary consumption",
+      "live": [],
+      "range": "E120-E129",
+      "reserved": [],
       "sources": [
         "include/zkc/Registry/",
         "lib/Registry/"
       ],
-      "live": [],
-      "reserved": [
-        "E121"
-      ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "unallocated"
+        "excluded_reason": "unallocated",
+        "mirrored": []
       }
     },
     {
-      "range": "E130-E149",
       "component": "container verifiers",
-      "sources": [
-        "lib/Dialect/",
-        "reference/oracle/"
-      ],
       "live": [
         "E131",
         "E132",
@@ -56,20 +53,42 @@
         "E148",
         "E149"
       ],
+      "means": {
+        "E131": "an operation appears in a protocol body that is not a protocol member",
+        "E132": "a protocol body's operations do not run sources, begin, events, end in that order",
+        "E133": "an event does not consume the live token, so the spine is not a chain",
+        "E134": "an event label is empty or repeats another in the same body",
+        "E135": "a claim is consumed more than once, or is never routed",
+        "E136": "a role selects a check label the body does not declare",
+        "E137": "a PIR artifact id is not 64 lowercase hex digits",
+        "E138": "a payload class names the retired 'chal' class",
+        "E139": "a challenge space is not an exact sample-space cardinality",
+        "E140": "a vector challenge mode is not one the grammar admits",
+        "E141": "an OIR artifact's own fields are wrong: its program count, its id's form, or its source citation's form",
+        "E142": "an OIR program's transcript framing is wrong: other than one transcript_init, or a decision that is not final",
+        "E143": "a sponge or stream state is not consumed exactly once",
+        "E144": "an OIR program's arguments are not exactly its labeled statement values",
+        "E145": "a challenge capability's shape is wrong: its count, identified value, type, payload class, or sampling rule",
+        "E146": "a squeeze event's shape is wrong: its domain, payload class, sampling rule, or space",
+        "E147": "a check_call's contract_digest is not a digest reference",
+        "E148": "an OIR artifact's provenance rows are wrong: endpoint kind, counterparty rows, witness labels, or pinned parameters. Broad: this identifier covers several unrelated conditions and is a split candidate (notes/answer-surface-2026-08.md)",
+        "E149": "a hole's declaration or the use discipline of its results is wrong. Broad: this identifier covers several unrelated conditions and is a split candidate (notes/answer-surface-2026-08.md)"
+      },
+      "range": "E130-E149",
       "reserved": [],
+      "sources": [
+        "lib/Dialect/",
+        "reference/oracle/"
+      ],
       "twin": {
+        "excluded_reason": "the remaining ids are MLIR op/container grammar the twin's input representation cannot spell",
         "mirrored": [
           "E145"
-        ],
-        "excluded_reason": "the remaining ids are MLIR op/container grammar the twin's input representation cannot spell"
+        ]
       }
     },
     {
-      "range": "E150-E159",
       "component": "container verifiers (continued)",
-      "sources": [
-        "lib/Dialect/"
-      ],
       "live": [
         "E151",
         "E152",
@@ -81,73 +100,93 @@
         "E158",
         "E159"
       ],
+      "means": {
+        "E151": "a membership names a reduce instance the body does not declare",
+        "E152": "a membership is incomplete, or an event is a dep operand of the reduce whose message it claims to be",
+        "E153": "a reduction does not both consume at least one claim and produce one",
+        "E154": "a challenge dependency set names one value twice",
+        "E155": "one check is selected for more than one role of the same owner",
+        "E156": "an anchor value is not a digest reference",
+        "E157": "a reduction produces other than exactly one claim, or a terminal binds no check role",
+        "E158": "a contract, rule, or route identifier is empty",
+        "E159": "a material binding's semantic_ref is not a digest reference"
+      },
+      "range": "E150-E159",
       "reserved": [],
-      "twin": {
-        "mirrored": [],
-        "excluded_reason": "MLIR op/container grammar the twin's input representation cannot spell"
-      }
-    },
-    {
-      "range": "E160-E169",
-      "component": "carrier semantic bindings",
       "sources": [
         "lib/Dialect/"
       ],
+      "twin": {
+        "excluded_reason": "MLIR op/container grammar the twin's input representation cannot spell",
+        "mirrored": []
+      }
+    },
+    {
+      "component": "carrier semantic bindings",
       "live": [
         "E161",
         "E162"
       ],
-      "reserved": [
-        "E160"
+      "means": {
+        "E161": "a verifier value carries more than one semantic material binding",
+        "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity"
+      },
+      "range": "E160-E169",
+      "reserved": [],
+      "sources": [
+        "lib/Dialect/"
       ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "carrier bindings judged by message-text parity in the differential suites, not by id"
+        "excluded_reason": "carrier bindings judged by message-text parity in the differential suites, not by id",
+        "mirrored": []
       }
     },
     {
-      "range": "E170-E179",
       "component": "consumer identity authentication",
-      "sources": [
-        "lib/Encoding/"
-      ],
       "live": [
         "E170",
         "E171",
         "E172"
       ],
+      "means": {
+        "E170": "a stored OIR artifact's id does not match its canonical encoding",
+        "E171": "a stored PIR artifact's id does not match its canonical encoding",
+        "E172": "two claim sources carry identical profile and anchors, so their descriptors collide"
+      },
+      "range": "E170-E179",
       "reserved": [],
+      "sources": [
+        "lib/Encoding/"
+      ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "identity recheck is judged by byte parity on the encodings themselves"
+        "excluded_reason": "identity recheck is judged by byte parity on the encodings themselves",
+        "mirrored": []
       }
     },
     {
-      "range": "E200-E209",
       "component": "seal: routing/discharge",
-      "sources": [
-        "lib/Dialect/Pir/Transforms/",
-        "lib/Semantics/",
-        "reference/oracle/"
-      ],
       "live": [
         "E201",
         "E202"
       ],
+      "means": {
+        "E201": "a terminal route reference does not resolve",
+        "E202": "pir-seal was given something other than open pir.protocol roots, or left one unjudged"
+      },
+      "range": "E200-E209",
       "reserved": [],
-      "twin": {
-        "mirrored": [],
-        "excluded_reason": "routing/discharge judged by message-text parity in the differential suites, not by id"
-      }
-    },
-    {
-      "range": "E210-E219",
-      "component": "seal: BIND battery",
       "sources": [
         "lib/Dialect/Pir/Transforms/",
         "lib/Semantics/",
         "reference/oracle/"
       ],
+      "twin": {
+        "excluded_reason": "routing/discharge judged by message-text parity in the differential suites, not by id",
+        "mirrored": []
+      }
+    },
+    {
+      "component": "seal: BIND battery",
       "live": [
         "E211",
         "E212",
@@ -156,25 +195,32 @@
         "E215",
         "E216"
       ],
+      "means": {
+        "E211": "a challenge names a dependency that is not absorbed before it",
+        "E212": "an unabsorbed proof slot precedes a challenge",
+        "E213": "a contract round's challenge or message falls outside the order BIND fixes",
+        "E214": "a statement binding follows a challenge that must be bound to it",
+        "E215": "segment starts are not strictly increasing event positions",
+        "E216": "a challenge domain repeats another in the same protocol"
+      },
+      "range": "E210-E219",
       "reserved": [],
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Semantics/",
+        "reference/oracle/"
+      ],
       "twin": {
+        "excluded_reason": "the remaining BIND ids are judged by message-text parity",
         "mirrored": [
           "E213",
           "E214",
           "E215"
-        ],
-        "excluded_reason": "the remaining BIND ids are judged by message-text parity"
+        ]
       }
     },
     {
-      "range": "E220-E229",
       "component": "seal: WF/encoding-domain/kappa",
-      "sources": [
-        "lib/Dialect/Pir/Transforms/",
-        "lib/Encoding/",
-        "lib/Semantics/",
-        "reference/oracle/"
-      ],
       "live": [
         "E221",
         "E222",
@@ -186,21 +232,34 @@
         "E228",
         "E229"
       ],
+      "means": {
+        "E221": "a payload class is empty or leaves the encoding domain",
+        "E222": "a check names a contract the protocol vocabulary does not admit",
+        "E223": "construction routes are declared without exactly one protocol body",
+        "E224": "a seal policy name is not one the vocabulary admits",
+        "E225": "a kappa axis or constant is malformed, or the axis is not one kappa declares",
+        "E226": "a check's transparent expression is outside the grammar, or its presence disagrees with the contract's mode",
+        "E227": "a material binding's stage disagrees with whether it carries an explicit value",
+        "E228": "a value leaves the canonical attribute domain: nesting depth, booleans, integer range, non-printable strings, or non-string keys",
+        "E229": "kappa cites a construction profile the registry does not supply"
+      },
+      "range": "E220-E229",
       "reserved": [],
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Encoding/",
+        "lib/Semantics/",
+        "reference/oracle/"
+      ],
       "twin": {
+        "excluded_reason": "WF/encoding-domain judged by message-text parity in the differential suites, not by id",
         "mirrored": [
           "E228"
-        ],
-        "excluded_reason": "WF/encoding-domain judged by message-text parity in the differential suites, not by id"
+        ]
       }
     },
     {
-      "range": "E230-E239",
       "component": "project",
-      "sources": [
-        "lib/Dialect/Pir/Transforms/",
-        "reference/oracle/"
-      ],
       "live": [
         "E231",
         "E232",
@@ -210,22 +269,28 @@
         "E238",
         "E239"
       ],
-      "reserved": [
-        "E235"
+      "means": {
+        "E231": "an endpoint kind is not one projection admits",
+        "E232": "kappa does not name an axis the projection requires",
+        "E233": "no projection rule covers this operation for the requested endpoint",
+        "E234": "the projected verifier program is empty",
+        "E237": "projection coverage does not equal the projection obligation",
+        "E238": "a standalone OIR artifact fails admission against the environment supplied",
+        "E239": "prover projection lacks a construction route, a kappa constant, or a slot binding it requires"
+      },
+      "range": "E230-E239",
+      "reserved": [],
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "reference/oracle/"
       ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "projection is judged by byte parity on the projected encodings; refusal ids are native-side"
+        "excluded_reason": "projection is judged by byte parity on the projected encodings; refusal ids are native-side",
+        "mirrored": []
       }
     },
     {
-      "range": "E240-E249",
       "component": "seal: LIN/protocol-vocab/anchors",
-      "sources": [
-        "lib/Dialect/Pir/Transforms/",
-        "lib/Semantics/",
-        "reference/oracle/"
-      ],
       "live": [
         "E243",
         "E244",
@@ -233,35 +298,45 @@
         "E247",
         "E248"
       ],
+      "means": {
+        "E241": "retired and dead: it named the version-agreement half of a check that a content-digest pin already decides. The number is never reissued (docs/spec/versioning.md \u00a73)",
+        "E243": "a reduce's dependency arity or a round's challenge realization disagrees with its contract",
+        "E244": "a reduce's message occurrences disagree with its contract: missing role, wrong count, duplicate, or non-canonical",
+        "E245": "one challenge fills two dependency slots, or is shared by two reductions",
+        "E247": "a claim profile is not admitted by the protocol vocabulary",
+        "E248": "pir-link ran without a protocol-vocabulary authority"
+      },
+      "range": "E240-E249",
       "reserved": [
         "E241"
       ],
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Semantics/",
+        "reference/oracle/"
+      ],
       "twin": {
+        "excluded_reason": "the remaining ids are judged by message-text parity",
         "mirrored": [
           "E243",
           "E244",
           "E245"
-        ],
-        "excluded_reason": "the remaining ids are judged by message-text parity"
+        ]
       }
     },
     {
-      "range": "E250-E299",
       "component": "retired (theorem-in-artifact dispatch)",
-      "sources": [],
       "live": [],
+      "range": "E250-E299",
       "reserved": [],
+      "sources": [],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "retired"
+        "excluded_reason": "retired",
+        "mirrored": []
       }
     },
     {
-      "range": "E300-E319",
       "component": "terminal closure",
-      "sources": [
-        "lib/Semantics/"
-      ],
       "live": [
         "E300",
         "E301",
@@ -273,20 +348,29 @@
         "E307",
         "E308"
       ],
+      "means": {
+        "E300": "a claim descriptor or its anchors have no canonical form, or do not meet the profile's anchor set exactly",
+        "E301": "a check's parameters, semantic arguments, or transparency mode do not match its contract",
+        "E302": "a check's operand sequence has other than exactly one valid layout under its contract",
+        "E303": "a transparent expression is malformed",
+        "E304": "a terminal attachment's producer is absent, unadmitted, or lacks the role the attachment names",
+        "E305": "a selected check operand has no material binding",
+        "E306": "a terminal attachment does not match the role or the source it names",
+        "E307": "a discharge's check roles, terminal rule, or producer pin do not match",
+        "E308": "a transparent predicate for a terminal role does not match its rule"
+      },
+      "range": "E300-E319",
       "reserved": [],
+      "sources": [
+        "lib/Semantics/"
+      ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "terminal closure judged by message-text parity in the differential suites, not by id"
+        "excluded_reason": "terminal closure judged by message-text parity in the differential suites, not by id",
+        "mirrored": []
       }
     },
     {
-      "range": "E320-E339",
       "component": "reduction closure and shared closure accounting",
-      "sources": [
-        "lib/Semantics/",
-        "lib/Dialect/Pir/Transforms/",
-        "reference/oracle/"
-      ],
       "live": [
         "E320",
         "E321",
@@ -298,18 +382,31 @@
         "E327",
         "E328"
       ],
+      "means": {
+        "E320": "a reduce names an unadmitted reduction contract, or its parameters do not match it",
+        "E321": "a reduce's body-check selection does not match its contract",
+        "E322": "a selected check's fixed parameters or transparent predicate do not match the contract",
+        "E323": "a reduction attachment does not match the operand role it names",
+        "E324": "a material expression does not resolve against the reduction's inputs",
+        "E325": "an admitted material-identity constraint does not hold",
+        "E326": "a reduction's output anchors do not match its contract",
+        "E327": "one check justifies more than one reduction, or is selected for two roles",
+        "E328": "a material binding is consumed by no reduction or terminal attachment"
+      },
+      "range": "E320-E339",
       "reserved": [],
+      "sources": [
+        "lib/Semantics/",
+        "lib/Dialect/Pir/Transforms/",
+        "reference/oracle/"
+      ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "reduction closure judged by message-text parity in the differential suites, not by id"
+        "excluded_reason": "reduction closure judged by message-text parity in the differential suites, not by id",
+        "mirrored": []
       }
     },
     {
-      "range": "E400-E419",
       "component": "endpoint execution profile",
-      "sources": [
-        "lib/Interpreter/"
-      ],
       "live": [
         "E400",
         "E401",
@@ -326,19 +423,34 @@
         "E412",
         "E413"
       ],
+      "means": {
+        "E400": "the profile supplies no codec for a routed payload class or a pinned codec construction",
+        "E401": "the profile supplies no sponge for a pinned sponge construction or a transcript init",
+        "E402": "a sampling shape is not one the profile's codec realizes",
+        "E403": "the profile supplies no check supplier for a contract, or the opaque check kind is unknown",
+        "E404": "an algebra operation is not one the profile implements",
+        "E405": "a statement value execution requires is absent or malformed",
+        "E406": "a constant is not written as a decimal",
+        "E407": "the profile supplies no hole supplier for a hole contract",
+        "E408": "a fill or emission crosses the boundary its contract fixes: wrong digest, out-of-range value, or an undeclared write",
+        "E409": "the endpoint kind is not executable by the entry point invoked",
+        "E410": "a witness payload the artifact requires is absent",
+        "E411": "a value needs more bits than the execution domain admits",
+        "E412": "a pow_search hole's trial is not the check the verifier performs",
+        "E413": "an absorbed value is not canonical for its payload class"
+      },
+      "range": "E400-E419",
       "reserved": [],
+      "sources": [
+        "lib/Interpreter/"
+      ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "execution-profile refusals are native runtime facts; the twin executor mirrors verdicts and challenge streams"
+        "excluded_reason": "execution-profile refusals are native runtime facts; the twin executor mirrors verdicts and challenge streams",
+        "mirrored": []
       }
     },
     {
-      "range": "E700-E709",
       "component": "link",
-      "sources": [
-        "lib/Dialect/Pir/Transforms/",
-        "lib/Semantics/"
-      ],
       "live": [
         "E701",
         "E702",
@@ -347,32 +459,75 @@
         "E705",
         "E706"
       ],
+      "means": {
+        "E701": "pir-link does not resolve exactly one distinct open protocol",
+        "E702": "a kappa axis disagrees between the protocols being linked",
+        "E703": "a face does not prefix namespace labels and challenge domains",
+        "E704": "link cannot rewrite a material-binding endpoint, or one endpoint is bound twice",
+        "E705": "an exported claim finds no consumer source with its exact descriptor",
+        "E706": "an exported claim matches several consumer sources, so no fact decides which face receives it"
+      },
+      "range": "E700-E709",
       "reserved": [],
+      "sources": [
+        "lib/Dialect/Pir/Transforms/",
+        "lib/Semantics/"
+      ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "the link boundary has no reference twin (boundaries.md)"
+        "excluded_reason": "the link boundary has no reference twin (boundaries.md)",
+        "mirrored": []
       }
     },
     {
-      "range": "E800-E809",
       "component": "loader/artifact store",
-      "sources": [
-        "lib/Artifact/"
-      ],
       "live": [
         "E801",
         "E802",
         "E803"
       ],
+      "means": {
+        "E801": "a requested or stored artifact id does not match the artifact in hand",
+        "E802": "an artifact's producer or version marker is rejected",
+        "E803": "an artifact cannot be read, is malformed, or its identity cannot be recomputed before write. Broad: this identifier covers an I/O failure, a malformed document, and an internal ordering error, and is a split candidate (notes/answer-surface-2026-08.md)"
+      },
+      "range": "E800-E809",
       "reserved": [],
+      "sources": [
+        "lib/Artifact/"
+      ],
       "twin": {
-        "mirrored": [],
-        "excluded_reason": "bytecode transport is native-only"
+        "excluded_reason": "bytecode transport is native-only",
+        "mirrored": []
+      }
+    },
+    {
+      "component": "tool invocation surface",
+      "live": [
+        "E900",
+        "E901",
+        "E902",
+        "E903",
+        "E904"
+      ],
+      "means": {
+        "E900": "an input the invocation names cannot be read, or an output path cannot be written",
+        "E901": "the flags name no job to do, or more than one",
+        "E902": "something the invocation names is absent from the environment it supplied",
+        "E903": "a file the invocation supplied is not the document that flag takes",
+        "E904": "a generator emitted something its own admission refuses, which is a defect in the generator rather than in its input"
+      },
+      "range": "E900-E909",
+      "reserved": [],
+      "sources": [
+        "include/zkc/Tools/",
+        "lib/Tools/",
+        "tools/"
+      ],
+      "twin": {
+        "excluded_reason": "the twin has no command-line surface: these name what an invocation of a zkc binary got wrong, and the twin is imported as a module",
+        "mirrored": []
       }
     }
   ],
-  "coverage_exempt": {
-    "E233": "extension backstop: the current sealed-container verifier rejects every non-member at E131 before projection; this remains the fail-closed default for a future ProtocolMember extension",
-    "E237": "projection self-check over freshly emitted OIR: every public path admits PIR first, so an input cannot intentionally create phantom, unlicensed, or missing coverage without bypassing the production boundary"
-  }
+  "schema": "zkc.diagnostic_allocation"
 }

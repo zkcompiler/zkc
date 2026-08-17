@@ -22,7 +22,7 @@ static int load() {
   Expected<zkc::artifact::DecodedPirArtifact> loaded =
       zkc::artifact::loadArtifact(inputFilename, expectedId);
   if (!loaded)
-    return zkc::tool::reportError(loaded.takeError());
+    return zkc::tool::reportRefusal(loaded.takeError());
   outs() << "decoded artifact " << loaded->id() << "\n";
   loaded->print(outs());
   outs() << "\n";
@@ -31,7 +31,10 @@ static int load() {
 
 int main(int argc, char **argv) {
   InitLLVM init(argc, argv);
-  cl::ParseCommandLineOptions(argc, argv,
-                              "zkc-artifact: inspect one PIR artifact\n");
+  cl::ParseCommandLineOptions(
+      argc, argv,
+      "zkc-artifact: inspect one PIR artifact\n\n\nExit: 0 the answer is yes, "
+      "1 the subject was examined and the answer is no, 2 the invocation never "
+      "reached its subject (docs/getting-started.md).\n");
   return load();
 }
