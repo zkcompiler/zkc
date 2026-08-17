@@ -83,3 +83,26 @@
 # RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['preamble'][0]={'label':'log_size','class':'pow_value','value':'4'}; json.dump(d, open(sys.argv[2],'w'))" %S/../Oir/Inputs/plonky3-fri-vf-bound.json %t/collide.json
 # RUN: not zkc-family %t/collide.json --emit-vocabulary=%t/x.json --emit-spine=%t/x.mlir 2>&1 | FileCheck %s --check-prefix=COLLIDE
 # COLLIDE: is a label this family already emits
+
+# The authored event changes identity, not analysis. Over the
+# analysis-only template — where the FRI rows actually price, unlike the
+# value-faithful instance whose opening rounds sit outside the citation
+# — the same request against the bound and unbound artifacts derives a
+# byte-identical conclusion: the same rows, the same bound constants,
+# the same named assumptions. What differs is the artifact identity and
+# the canonical event positions the witness records. A judgment that
+# priced an absorb would be reading a knob the pricing algebra does not
+# expose.
+# RUN: zkc-family %S/Inputs/friquarter.json --emit-vocabulary=%t/q.vocab.json --emit-spine=%t/q.spine.mlir
+# RUN: zkc-family %S/Inputs/friquarter-bound.json --emit-vocabulary=%t/qb.vocab.json --emit-spine=%t/qb.spine.mlir
+# RUN: zkc-seal %t/q.spine.mlir --protocol-vocabulary=%t/q.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t/q.artifacts > /dev/null
+# RUN: zkc-seal %t/qb.spine.mlir --protocol-vocabulary=%t/qb.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t/qb.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/q.artifacts %t/q.mlirbc
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/qb.artifacts %t/qb.mlirbc
+# RUN: %python %S/Inputs/retarget-request.py %S/../Soundness/Inputs/fri-quarter-random-words-request.json %t/q.artifacts %t/q.req.json
+# RUN: %python %S/Inputs/retarget-request.py %S/../Soundness/Inputs/fri-quarter-random-words-request.json %t/qb.artifacts %t/qb.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json --protocol-vocabulary=%t/q.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --request=%t/q.req.json -o=%t/q.out.json %t/q.mlirbc
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json --protocol-vocabulary=%t/qb.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --request=%t/qb.req.json -o=%t/qb.out.json %t/qb.mlirbc
+# RUN: %python -c "import json,sys; a,b=[json.load(open(p)) for p in sys.argv[1:]]; print('CONCLUSION-SAME' if json.dumps(a['conclusion'],sort_keys=True)==json.dumps(b['conclusion'],sort_keys=True) else 'CONCLUSION-MOVED'); print('IDENTITY-MOVED' if a['identity']!=b['identity'] else 'IDENTITY-SAME')" %t/q.out.json %t/qb.out.json | FileCheck %s --check-prefix=DERIVED2
+# DERIVED2: CONCLUSION-SAME
+# DERIVED2-NEXT: IDENTITY-MOVED
