@@ -22,16 +22,24 @@ implementation of a protocol family.
 - **Soundness** — derive a conditional adversarial-security judgment.
 - **Completeness** — derive an honest-prover acceptance judgment.
 - **Checked optimization** — apply and verify a protocol transformation.
+- **Seal policy** — which sinks the exercised artifact's policy permits.
+  A *closed proof* routes every claim to a discharge, so the artifact
+  states its conclusion outright. *Analysis only* additionally permits
+  residual, export, and assumption routes, so some claim the protocol
+  raises is carried rather than closed — the soundness cell then prices
+  the claims that were, and the artifact is not a proof of the whole
+  statement. The distinction is invisible in the marks above and
+  changes what a filled cell means, so it is a column.
 
-| Protocol or component | Describe | Check and identify | Verifier path | Prover path | Soundness | Completeness | Checked optimization |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Schnorr | ● | ● | ● | ● | ● | ● | — |
-| DLEQ / OR-Sigma | ● | ● | ● | — | — | — | — |
-| Sumcheck | ● | ● | ● | — | ● | — | — |
-| GKR | ◐ | ◐ | — | — | ◐ | — | — |
-| KZG openings / same-point batching | ● | ● | ● | — | ◐ | — | ● |
-| FRI | ◐ | ◐ | ◐ | ◐ | ◐ | — | — |
-| R1CS → Sumcheck | ◐ | ◐ | — | — | ◐ | — | — |
+| Protocol or component | Describe | Check and identify | Verifier path | Prover path | Soundness | Completeness | Checked optimization | Seal policy |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|---|
+| Schnorr | ● | ● | ● | ● | ● | ● | — | closed proof |
+| DLEQ / OR-Sigma | ● | ● | ● | — | — | — | — | analysis only |
+| Sumcheck | ● | ● | ● | — | ● | — | — | analysis only |
+| GKR | ◐ | ◐ | — | — | ◐ | — | — | analysis only |
+| KZG openings / same-point batching | ● | ● | ● | — | ◐ | — | ● | closed proof |
+| FRI | ◐ | ◐ | ◐ | ◐ | ◐ | — | — | analysis only |
+| R1CS → Sumcheck | ◐ | ◐ | — | — | ◐ | — | — | analysis only |
 
 Profile scope: Schnorr refers to the included native profile; GKR to the
 width-two, depth-three fixture; FRI to the parameterized generator and pinned

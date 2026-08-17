@@ -106,3 +106,23 @@
 // BLOWUP: 'log_blowup' must be a positive integer
 // FINLEN: 'log_final_poly_len' must be an integer from 0 through 20
 // SHAPE: 'query_log2' must equal k + log_blowup + log_final_poly_len
+
+# What the family mints, and what it may not redefine.
+#
+# Seal is fail-closed against a closed vocabulary, and for a generated
+# instance that vocabulary comes from the same tool that wrote the spine
+# it will judge. For entries the family mints for itself that is the
+# arrangement working — the seal judgment holds the spine to a contract,
+# whoever wrote it. For entries that also exist in the repository's
+# registry it is not: a generator could redefine one and then satisfy
+# its own redefinition, and seal would pass over a protocol that means
+# something else. Every shared identifier must therefore carry the same
+# definition on both sides, and the gate refuses a run where the two
+# documents share nothing, since that would pass without checking
+# anything. One entry is exempt with its reason — the FRI reduction
+# contract is depth-parameterized, so an instance of depth k emits the
+# depth-k form of the theorem the registry pins at depth one — and an
+# exemption that stops being needed fails too, because a stale one
+# would hide the next drift.
+# RUN: %python %S/Inputs/vocabulary-drift.py %t.k2.vocab.json %zkc-registry-dir/protocol-vocabulary.json | FileCheck %s --check-prefix=DRIFT
+# DRIFT: shared identifiers, {{[0-9]+}} exempt, none redefined

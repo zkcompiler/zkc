@@ -1546,6 +1546,57 @@ underlying theorems or the whole protocol. Primitive advantages remain
 symbolic unless a separate, explicit game bound is supplied by a future
 semantic rule.
 
+### 8.1 The derivation is independently re-checkable
+
+A derivation's witness is a proof object, not a log. A party holding
+only the signature, the sealed artifact, and the witness re-checks the
+judgment by re-running the rule bodies the witness names against the
+facts it records — without re-running the producer, and without
+trusting it. The producer's search is unconstrained; what is checked is
+its output.
+
+This is the property the rest of this section's contract rests on, and
+it is what a `DERIVE` implementation exists to make true: a small
+checker of a caller-supplied plan, never a prover. Everything the
+kernel refuses to do — theorem search, provider resolution,
+cheapest-path selection, fallback — it refuses in order to keep the
+checking side small enough to be re-implemented by someone who trusts
+none of it.
+
+### 8.2 The bound order is sound on every valuation
+
+`ClosedBound` is a ground rational plus non-negative-coefficient terms
+over resource variables and primitive-game advantages. Its order
+compares coefficientwise, an absent term reading as zero.
+
+That order is sound: if every coefficient of the candidate is at most
+the corresponding coefficient of the ceiling, then for every valuation
+of the resource variables and every value of the advantages, the
+candidate's value is at most the ceiling's — because non-negative
+coefficients make each term monotone in its own coefficient, and a sum
+of such terms is monotone in all of them.
+
+It is deliberately incomplete. Two bounds that are equal under every
+valuation but spelled differently — a resource substitution written
+two ways, a term that a change of variable would align — compare as
+incomparable, and dispatch refuses. Refusal is the admitted direction:
+an order that answered by approximating would price a protocol under a
+bound nobody stated.
+
+### 8.3 The projection algebra is adequate
+
+`ArtifactProjection` is the finite, kernel-owned signature through
+which a rule reads a sealed artifact, closed to caller extension. Its
+adequacy is the statement that it is the *whole* channel: two sealed
+artifacts agreeing on every admitted projection admit exactly the same
+derivable judgments.
+
+Adequacy is what makes the projection set a specification rather than a
+convenience. It fails the moment a rule reads an artifact through any
+other route, which is why the signature is closed — and because the
+set is finite, the statement is checkable by exhausting it rather than
+argued.
+
 ## 9. Core conformance
 
 A conforming implementation:
