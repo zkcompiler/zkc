@@ -32,7 +32,7 @@
 # supplier gate's, not the identity gate's.
 # RUN: sed 's/sha256:d45f029644f09ac28a8284a5048c0a773e03509d810daecf0ea8ec65576962b6/sha256:9999999999999999999999999999999999999999999999999999999999999999/g' %t/prover.mlir > %t/unsupplied-raw.mlir
 # RUN: zkc-translate --oir-id %t/unsupplied-raw.mlir -o %t/unsupplied.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
 # RUN: not zkc-run %t/unsupplied.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E407 %s
 # E407: [zkc-E407] hole contract 'sha256:9999999999999999999999999999999999999999999999999999999999999999' (kind 'pow_search') has no supplier in profile 'toy'
 
@@ -40,6 +40,6 @@
 # proof-of-work squeeze must draw from a space of exactly 2^bits.
 # RUN: sed 's/space "256"/space "512"/g' %t/prover.mlir > %t/wrong-space-raw.mlir
 # RUN: zkc-translate --oir-id %t/wrong-space-raw.mlir -o %t/wrong-space.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t/wrong-space-raw.mlir %t/wrong-space.mlir %t/wrong-space.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t/wrong-space-raw.mlir %t/wrong-space.mlir %t/wrong-space.id
 # RUN: not zkc-run %t/wrong-space.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E412 %s
 # E412: [zkc-E412] pow_search hole 'grind': the proof-of-work squeeze must draw one uniform value from a space of exactly 2^bits; the trial the fill would run is not the check the verifier performs

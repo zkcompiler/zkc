@@ -14,6 +14,6 @@
 
 // A static cost view is still an attributable consumer: it authenticates the
 // OIR bytes instead of pricing a program under a forged authored id.
-// RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/f-add-large-operands.mlir %t.forged 0000000000000000000000000000000000000000000000000000000000000000
+// RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/f-add-large-operands.mlir %t.forged 0000000000000000000000000000000000000000000000000000000000000000
 // RUN: not zkc-translate --proof-size %t.forged 2>&1 | FileCheck --check-prefix=IDENTITY %s
 // IDENTITY: [zkc-E170] stored OIR artifact id does not match its canonical identity

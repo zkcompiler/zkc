@@ -20,6 +20,6 @@
 // Equality between a vector citation and an authored id is not identity
 // authentication. Even when both carry the same forged value, the runner
 // recomputes OIR identity before execution.
-// RUN: %python %S/Inputs/rewrite-oir-id.py %t.mlir %t.wrong-id.mlir 0000000000000000000000000000000000000000000000000000000000000000
+// RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t.mlir %t.wrong-id.mlir 0000000000000000000000000000000000000000000000000000000000000000
 // RUN: not zkc-run %t.wrong-id.mlir --vectors %S/Inputs/bad-vectors-wrong-artifact.json 2>&1 | FileCheck --check-prefix=WRONG-STORED-ID %s
 // WRONG-STORED-ID: [zkc-E170] stored OIR artifact id does not match its canonical identity

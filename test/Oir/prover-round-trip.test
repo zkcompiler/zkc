@@ -37,7 +37,7 @@
 # the supplier gate's, not the identity gate's.
 # RUN: sed 's/sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15/sha256:9999999999999999999999999999999999999999999999999999999999999999/' %t/prover.mlir > %t/unsupplied-raw.mlir
 # RUN: zkc-translate --oir-id %t/unsupplied-raw.mlir -o %t/unsupplied.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
 # RUN: not zkc-run %t/unsupplied.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E407 %s
 # E407: [zkc-E407] hole contract 'sha256:9999999999999999999999999999999999999999999999999999999999999999' (kind 'commit') has no supplier in profile 'toy'
 

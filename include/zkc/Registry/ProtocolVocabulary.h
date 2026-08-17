@@ -414,7 +414,6 @@ public:
                                                   llvm::StringRef sourceName);
 
   const ClaimProfile *lookupProfile(llvm::StringRef id) const;
-  const CheckPredicateSpec *lookupPredicateSpec(llvm::StringRef digest) const;
   const CheckContract *lookupCheckContract(llvm::StringRef id) const;
   const HoleContract *lookupHoleContract(llvm::StringRef id) const;
   const ReductionContract *lookupReductionContract(llvm::StringRef id) const;

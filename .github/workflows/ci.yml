@@ -90,7 +90,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             emit/target
-            evaluation/upstream/plonky3-replay/target
+            build/cargo-target
           key: cargo-${{ runner.os }}-${{ hashFiles('emit/Cargo.lock', 'evaluation/upstream/plonky3-replay/Cargo.lock') }}
 
       - name: Emit workspace suites (tests, lints, format)

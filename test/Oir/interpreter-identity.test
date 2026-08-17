@@ -2,6 +2,6 @@
 // earlier vector/citation gate. The test-only pass calls execute() directly;
 // production has no identity bypass mode.
 //
-// RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/f-add-large-operands.mlir %t.forged 0000000000000000000000000000000000000000000000000000000000000000
+// RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/f-add-large-operands.mlir %t.forged 0000000000000000000000000000000000000000000000000000000000000000
 // RUN: not zkc-test-opt -test-oir-execute %t.forged 2>&1 | FileCheck %s
 // CHECK: [zkc-E170] stored OIR artifact id does not match its canonical identity

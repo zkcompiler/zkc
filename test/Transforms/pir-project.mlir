@@ -1,6 +1,6 @@
 // RUN: zkc-opt %pir-seal-full %pir-project-full %s | FileCheck %s
 // RUN: zkc-opt %pir-seal-full %s -o %t.sealed
-// RUN: %python %S/rewrite-pir-id.py %t.sealed %t.forged 0000000000000000000000000000000000000000000000000000000000000000
+// RUN: %python %S/../Oir/Inputs/rewrite-artifact-id.py pir.sealed %t.sealed %t.forged 0000000000000000000000000000000000000000000000000000000000000000
 // RUN: not zkc-opt %pir-project-full %t.forged 2>&1 | FileCheck --check-prefix=IDENTITY %s
 //
 // Projection consumes a sealed protocol whose semantic closure is exact.

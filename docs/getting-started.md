@@ -81,8 +81,8 @@ setup interface.
 
 ## 4a. The shipped tools
 
-Nine binaries land in `build/bin`. Each takes `--help`; this is what they are
-for and which are load-bearing for the claims in
+Ten tools land in `build/bin`, beside the test-only pass driver. Each takes
+`--help`; this is what they are for and which are load-bearing for the claims in
 [Current Status](status.md).
 
 | Tool | What it does |
@@ -94,6 +94,7 @@ for and which are load-bearing for the claims in
 | `zkc-run` | Execute an endpoint. `--vectors` checks a verifier against golden vectors, `--prove` runs a prover skeleton and can verify what it produced, `--replay-duplex` replays a pinned upstream transcript. This is the tool behind every "Verifier path" and "Prover path" cell. |
 | `zkc-derive` | Derive a soundness or completeness judgment from an admitted artifact plus a signature. `--describe` lists the application sites an artifact offers; `--check` re-derives a recorded witness. |
 | `zkc-registry-lint` | Load one registry fail-closed and print its normalized content — the carrier half of every registry parity test. |
+| `zkc-relation` | Judge a relation contract against an admitted artifact, reporting what was computed, what two declarations agree on, and what remains asserted, apart. Reads the relation's bytes where the format has a reader. |
 | `zkc-family` | Generate a parameterized protocol family (currently FRI). |
 | `zkc-opt` | The MLIR pass driver, carrying the zkc dialects and passes. |
 

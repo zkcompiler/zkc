@@ -2549,10 +2549,6 @@ const ClaimProfile *ProtocolVocabulary::lookupProfile(StringRef id) const {
   return lookup(profiles_, id);
 }
 
-const CheckPredicateSpec *
-ProtocolVocabulary::lookupPredicateSpec(StringRef digest) const {
-  return lookup(predicateSpecs_, digest);
-}
 
 const CheckContract *
 ProtocolVocabulary::lookupCheckContract(StringRef id) const {

@@ -99,8 +99,8 @@
 # RUN: zkc-seal %t/qb.spine.mlir --protocol-vocabulary=%t/qb.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t/qb.artifacts > /dev/null
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/q.artifacts %t/q.mlirbc
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/qb.artifacts %t/qb.mlirbc
-# RUN: %python %S/Inputs/retarget-request.py %S/../Soundness/Inputs/fri-quarter-random-words-request.json %t/q.artifacts %t/q.req.json
-# RUN: %python %S/Inputs/retarget-request.py %S/../Soundness/Inputs/fri-quarter-random-words-request.json %t/qb.artifacts %t/qb.req.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/../Soundness/Inputs/fri-quarter-random-words-request.json %t/q.artifacts %t/q.req.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/../Soundness/Inputs/fri-quarter-random-words-request.json %t/qb.artifacts %t/qb.req.json
 # RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json --protocol-vocabulary=%t/q.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --request=%t/q.req.json -o=%t/q.out.json %t/q.mlirbc
 # RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json --protocol-vocabulary=%t/qb.vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --request=%t/qb.req.json -o=%t/qb.out.json %t/qb.mlirbc
 # RUN: %python -c "import json,sys; a,b=[json.load(open(p)) for p in sys.argv[1:]]; print('CONCLUSION-SAME' if json.dumps(a['conclusion'],sort_keys=True)==json.dumps(b['conclusion'],sort_keys=True) else 'CONCLUSION-MOVED'); print('IDENTITY-MOVED' if a['identity']!=b['identity'] else 'IDENTITY-SAME')" %t/q.out.json %t/qb.out.json | FileCheck %s --check-prefix=DERIVED2

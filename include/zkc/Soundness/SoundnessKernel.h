@@ -585,16 +585,8 @@ RuleWfResult checkRuleBindingWellFormed(const SchemaContext &context,
                                         const SoundnessRule &rule,
                                         const RuleBinding &binding);
 
-/// Check one value-source node against a rule declaration.  This is exposed for
-/// adapters that need an exact local refusal before constructing a full
-/// binding; complete bindings must use checkRuleBindingWellFormed.
-RuleWfResult checkBindingValueWellFormed(const SchemaContext &context,
-                                         const SoundnessRule &rule,
-                                         const BindingValue &value,
-                                         ValueSort expectedSort);
 
 const char *ruleWfRefusalCodeName(RuleWfRefusalCode code);
-const char *ruleBodyName(const RuleBody &body);
 const char *ruleStatusName(RuleStatus status);
 
 } // namespace zkc::soundness

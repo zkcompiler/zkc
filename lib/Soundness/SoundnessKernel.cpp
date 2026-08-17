@@ -1658,20 +1658,6 @@ bool detail::validMachineDecider(const std::string &lookupRef,
   return validMachineDeciderImpl(lookupRef, definition);
 }
 
-RuleWfResult checkBindingValueWellFormed(const SchemaContext &context,
-                                         const SoundnessRule &rule,
-                                         const BindingValue &value,
-                                         ValueSort expectedSort) {
-  RuleEnvironment env{context,
-                      rule,
-                      declarationMap(rule.parameters),
-                      declarationMap(rule.resources),
-                      declarationMap(rule.artifactFacts),
-                      {}};
-  for (const PremisePort &port : rule.premises)
-    env.premises.emplace(port.name, &port);
-  return checkBindingValue(env, value, expectedSort, "binding_value");
-}
 
 RuleWfResult checkRuleBindingWellFormed(const SchemaContext &context,
                                         const SoundnessRule &rule,
@@ -2444,31 +2430,5 @@ const char *ruleStatusName(RuleStatus status) {
   return "unknown";
 }
 
-const char *ruleBodyName(const RuleBody &body) {
-  return std::visit(
-      [](const auto &value) -> const char * {
-        using Body = std::decay_t<decltype(value)>;
-        if constexpr (std::is_same_v<Body, SpecialSoundnessEntry>)
-          return "special_soundness_entry";
-        if constexpr (std::is_same_v<Body, NativeRoundByRoundEntry>)
-          return "native_round_by_round_entry";
-        if constexpr (std::is_same_v<Body, ComputationalEntry>)
-          return "computational_entry";
-        if constexpr (std::is_same_v<Body, CompletenessEntry>)
-          return "completeness_entry";
-        if constexpr (std::is_same_v<Body, SpecialSoundnessPreservation>)
-          return "special_soundness_preservation";
-        if constexpr (std::is_same_v<Body, RoundByRoundPreservation>)
-          return "round_by_round_preservation";
-        if constexpr (std::is_same_v<Body, RoundScaling>)
-          return "round_scaling";
-        if constexpr (std::is_same_v<Body, SpecialSoundnessToRoundByRound>)
-          return "special_soundness_to_round_by_round";
-        if constexpr (std::is_same_v<Body, RoundByRoundToStateRestoration>)
-          return "round_by_round_to_state_restoration";
-        return "state_restoration_to_fiat_shamir_duplex";
-      },
-      body);
-}
 
 } // namespace zkc::soundness

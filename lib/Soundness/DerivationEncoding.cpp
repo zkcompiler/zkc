@@ -1018,9 +1018,6 @@ parseDerivationRequest(StringRef json, StringRef source,
   return readRequestBody(reader, body);
 }
 
-Value encodeJudgmentDocument(const SecurityJudgment &judgment) {
-  return encodeJudgment(judgment);
-}
 
 namespace {
 

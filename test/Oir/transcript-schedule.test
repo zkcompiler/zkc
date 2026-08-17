@@ -9,7 +9,7 @@
 
 # A derived view authenticates its source instead of republishing an authored
 # id. A forged stored id therefore refuses before any schedule row is read.
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t.projected %t.wrong-id.projected 0000000000000000000000000000000000000000000000000000000000000000
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t.projected %t.wrong-id.projected 0000000000000000000000000000000000000000000000000000000000000000
 # RUN: not zkc-translate --transcript-schedule %t.wrong-id.projected 2>&1 | FileCheck --check-prefix=WRONG-STORED-ID %s
 # WRONG-STORED-ID: [zkc-E170] stored OIR artifact id does not match its canonical identity
 
@@ -19,7 +19,7 @@
 # failing at the earlier identity boundary.
 # RUN: sed 's/scalar = "plonky3_bb31_ext4_tuple", //g' %t.projected > %t.no-scalar.unminted.mlir
 # RUN: zkc-translate --oir-id %t.no-scalar.unminted.mlir -o %t.no-scalar.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t.no-scalar.unminted.mlir %t.no-scalar.mlir %t.no-scalar.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t.no-scalar.unminted.mlir %t.no-scalar.mlir %t.no-scalar.id
 # RUN: not zkc-translate --transcript-schedule %t.no-scalar.mlir 2>&1 | FileCheck --check-prefix=NO-CODEC %s
 # NO-CODEC: projected program has no codec for class 'scalar'
 
