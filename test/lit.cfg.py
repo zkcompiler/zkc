@@ -15,9 +15,22 @@ config.test_exec_root = os.path.join(config.zkc_obj_root, "test")
 
 llvm_config.use_default_substitutions()
 llvm_config.with_environment("PATH", config.llvm_tools_dir, append_path=True)
-for env_name in ("CARGO_TARGET_DIR", "UV_CACHE_DIR", "XDG_CACHE_HOME"):
+for env_name in ("UV_CACHE_DIR", "XDG_CACHE_HOME"):
     if env_name in os.environ:
         llvm_config.with_environment(env_name, os.environ[env_name])
+# Emitted crates are generated into a fresh directory per test, so each
+# would otherwise build its dependency tree from scratch — the upstream
+# field crates among them, which is most of the suite's wall clock. They
+# share one target directory instead. Cargo locks it, so builds
+# serialize rather than race, and after the first the rest are cache
+# hits. An outer CARGO_TARGET_DIR still wins, for callers who want the
+# cache somewhere of their own.
+llvm_config.with_environment(
+    "CARGO_TARGET_DIR",
+    os.environ.get(
+        "CARGO_TARGET_DIR", os.path.join(config.zkc_obj_root, "cargo-target")
+    ),
+)
 llvm_config.add_tool_substitutions(
     ["zkc-opt", "zkc-test-opt", "zkc-registry-lint", "zkc-family",
      "zkc-project",
