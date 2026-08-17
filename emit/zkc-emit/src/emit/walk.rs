@@ -72,6 +72,28 @@ pub(crate) struct Use {
     mutated: bool,
 }
 
+/// A decimal constant as the eight 32-bit limbs the digest class packs,
+/// low limb first. The value is wider than any Rust integer literal, so
+/// it is accumulated a digit at a time rather than parsed.
+fn digest8_limbs(value: &str) -> Result<[u32; 8], String> {
+    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("not a decimal integer".to_owned());
+    }
+    let mut limbs = [0u32; 8];
+    for digit in value.bytes() {
+        let mut carry = u64::from(digit - b'0');
+        for limb in limbs.iter_mut() {
+            let wide = u64::from(*limb) * 10 + carry;
+            *limb = (wide & 0xffff_ffff) as u32;
+            carry = wide >> 32;
+        }
+        if carry != 0 {
+            return Err("wider than the eight limbs the class frames".to_owned());
+        }
+    }
+    Ok(limbs)
+}
+
 impl Use {
     /// `""`, `"mut "`, or the `_` prefix an unnamed local needs.
     pub(crate) fn qualifier(self) -> &'static str {
@@ -959,6 +981,16 @@ impl<'a> Walk<'a> {
                     .parse()
                     .map_err(|_| format!("row {index}: constant '{value}' is not a decimal u32"))?;
                 format!("{parsed}u32")
+            }
+            ImplKind::P3Digest8 => {
+                // A digest-class constant is wider than any scalar
+                // literal: an authored binding of a relation identity
+                // states the whole projection, so the literal is the
+                // class's own limbs.
+                let limbs = digest8_limbs(value)
+                    .map_err(|error| format!("row {index}: constant '{value}': {error}"))?;
+                let rendered: Vec<String> = limbs.iter().map(|limb| format!("{limb}u32")).collect();
+                format!("[{}]", rendered.join(", "))
             }
             other => {
                 return Err(format!(
