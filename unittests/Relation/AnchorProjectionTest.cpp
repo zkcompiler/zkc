@@ -108,15 +108,9 @@ TEST(AnchorProjection, RefusesAnythingThatIsNotAnAnchor) {
       "sha256:" + std::string(65, 'a'),
       "sha256:" + std::string(64, 'A'),
       "sha256:" + std::string(64, 'g')};
-  for (const std::string &bad : refused) {
-    auto elements = anchorProjection(bad);
-    EXPECT_FALSE(static_cast<bool>(elements)) << "admitted: " << bad;
-    if (!elements)
-      llvm::consumeError(elements.takeError());
-    auto value = anchorProjectionValue(bad);
-    EXPECT_FALSE(static_cast<bool>(value)) << "admitted: " << bad;
-    if (!value)
-      llvm::consumeError(value.takeError());
+  FOR_EACH(bad, refused) {
+    EXPECT_REFUSED(anchorProjection(bad));
+    EXPECT_REFUSED(anchorProjectionValue(bad));
   }
 }
 
