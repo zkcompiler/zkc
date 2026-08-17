@@ -13,8 +13,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["oracle"]
-
-[tool.ruff]
-# The twin is judged by byte parity against the C++ implementation and
-# the specification, not by style; lint only for actual defects.
-lint.select = ["E4", "E7", "E9", "F"]
