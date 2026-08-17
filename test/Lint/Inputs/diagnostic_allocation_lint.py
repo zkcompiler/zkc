@@ -58,7 +58,13 @@ ID_FORM = re.compile(r"^E(\d{3})$")
 RANGE_FORM = re.compile(r"^E(\d{3})-E(\d{3})$")
 TEST_ASSERTION = re.compile(
     r"(?:expected-(?:error|warning|remark)"
-    r"|(?:^|\s)(?:CHECK(?:-[A-Z0-9_-]+)?|[A-Z][A-Z0-9_-]*):"
+    # A custom FileCheck prefix, but never one of lit's own directives:
+    # naming an id in a RUN line is running a command, not asserting a
+    # refusal, and counting it as one lets the real assertion be
+    # deleted while this stays green.
+    r"|(?:^|\s)(?:CHECK(?:-[A-Z0-9_-]+)?"
+    r"|(?!RUN:|REQUIRES:|UNSUPPORTED:|XFAIL:|DEFINE:|REDEFINE:)"
+    r"[A-Z][A-Z0-9_-]*):"
     r"|EXPECT_[A-Z_]+|assert\b)"
     r".*?(?<![A-Za-z0-9])E(\d{3})(?!\d)"
 )
