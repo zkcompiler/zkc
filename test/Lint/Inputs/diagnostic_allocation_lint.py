@@ -53,9 +53,11 @@ TEST_EXCLUDE = TEST_DIR / "Lint"
 EMISSION = re.compile(r"\[zkc-(E\d{3})\]")
 # A file-level `REQUIRES:`/`UNSUPPORTED:`/`XFAIL:` decides whether the
 # file runs at all; a per-RUN-line `%if` does not, which is the whole
-# distinction the coverage rule needs.
-WHOLE_FILE_GATE = re.compile(r"^[#/ ]*(?:REQUIRES|UNSUPPORTED|XFAIL):",
-                             re.MULTILINE)
+# distinction the coverage rule needs. Matched anywhere in a line
+# because that is where lit reads it — lit scans each line for the
+# keyword rather than anchoring it, so a gate an anchored pattern
+# skipped past would gate the file while reading as ungated here.
+WHOLE_FILE_GATE = re.compile(r"(?:REQUIRES|UNSUPPORTED|XFAIL):")
 ID_FORM = re.compile(r"^E(\d{3})$")
 RANGE_FORM = re.compile(r"^E(\d{3})-E(\d{3})$")
 TEST_ASSERTION = re.compile(

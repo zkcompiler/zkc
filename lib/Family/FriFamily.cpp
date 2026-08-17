@@ -749,7 +749,10 @@ static llvm::json::Object
 checkContracts(const FriDescription &desc, const QueryShape &shape,
                const std::optional<QueryPhaseSpecs> &specs) {
   llvm::json::Object contracts;
-  if (desc.valueFaithful) {
+  // Branching on the specs rather than on the flag that produced them:
+  // the two agree, and writing the dereference under the thing being
+  // dereferenced is what keeps them agreeing.
+  if (specs) {
     contracts["zkc.check.merkle-multi-opening"] = opaqueContract(
         specs->merkle, llvm::json::Array{}, merkleOperands(shape));
     contracts["zkc.check.fri-query-consistency"] = opaqueContract(

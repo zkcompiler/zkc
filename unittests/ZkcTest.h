@@ -20,6 +20,7 @@
 #ifndef ZKC_UNITTESTS_ZKCTEST_H
 #define ZKC_UNITTESTS_ZKCTEST_H
 
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
 
