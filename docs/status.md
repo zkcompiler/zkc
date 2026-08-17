@@ -67,7 +67,7 @@ read; this table says which, so a claim can be checked rather than taken.
 | GKR | [`test/Evidence/gkr-width2-depth3-parity.test`](../test/Evidence/gkr-width2-depth3-parity.test), [`test/Evidence/gkr-width2-stress.test`](../test/Evidence/gkr-width2-stress.test) |
 | KZG openings / batching | [`test/Encoding/kzg-before.mlir`](../test/Encoding/kzg-before.mlir), [`test/Transforms/pir-batch-open.mlir`](../test/Transforms/pir-batch-open.mlir), [`test/Compiler/kzg-batch-core.mlir`](../test/Compiler/kzg-batch-core.mlir), [`test/Soundness/soundness-kzg-preservation.mlir`](../test/Soundness/soundness-kzg-preservation.mlir), [`test/Emit/emit-kzg-batching.test`](../test/Emit/emit-kzg-batching.test) |
 | FRI | [`test/Family/fri-family.test`](../test/Family/fri-family.test), [`test/Oir/plonky3-fri-exec.test`](../test/Oir/plonky3-fri-exec.test), [`test/Evidence/plonky3-replay.test`](../test/Evidence/plonky3-replay.test), [`test/Soundness/grinding-over-fri.test`](../test/Soundness/grinding-over-fri.test), [`test/Soundness/fri-pricing-modes.test`](../test/Soundness/fri-pricing-modes.test), [`test/Emit/emit-plonky3-fri.test`](../test/Emit/emit-plonky3-fri.test), [`test/Emit/emit-plonky3-real-fill.test`](../test/Emit/emit-plonky3-real-fill.test), [`test/Emit/emit-fri-prover.test`](../test/Emit/emit-fri-prover.test), [`test/Emit/emit-fri-scale.test`](../test/Emit/emit-fri-scale.test), [`test/Emit/emit-fri-shapes.test`](../test/Emit/emit-fri-shapes.test), [`test/Soundness/fri-quarter-pricing.test`](../test/Soundness/fri-quarter-pricing.test), [`test/Registry/family-vocabulary-parity.test`](../test/Registry/family-vocabulary-parity.test), [`test/Registry/check-attachment-vector.test`](../test/Registry/check-attachment-vector.test), [`test/SemanticClosure/check-attachment-binding.test`](../test/SemanticClosure/check-attachment-binding.test) |
-| R1CS → Sumcheck | [`test/Soundness/r1cs-entry.test`](../test/Soundness/r1cs-entry.test) |
+| R1CS → Sumcheck | [`test/Soundness/r1cs-entry.test`](../test/Soundness/r1cs-entry.test), [`test/Relation/relation-contract.test`](../test/Relation/relation-contract.test) |
 
 A dash means no test executes that half. It is not a statement that the path
 is impossible — GKR and R1CS project — only that nothing here runs the
@@ -85,7 +85,7 @@ specification intentionally include north-star contracts beyond this matrix.
 | Architecture area | Implemented | Partial | Not built | Exercised scope |
 |---|:---:|:---:|:---:|---|
 | Protocol authoring and import |  | ● |  | Low-level PIR authoring and parameterized FRI family generation. |
-| Relation interface |  | ● |  | Opaque relation identities and the `r1cs` anchor profile. |
+| Relation interface |  | ● |  | Opaque relation identities, the `r1cs` anchor profile, and the relation contract: a post-seal document stating a relation's reading format, anchor partition, instance encoding, witness ports, and statement correspondence, judged against a sealed artifact with the computed, cross-checked, and asserted parts reported apart. The `r1cs-bin-v1` header reader promotes arity, field, private count, and constraint count from asserted to cross-checked. |
 | PIR sealing |  | ● |  | One seal engine owns structural, claim-flow, transcript, route, cited-vocabulary, and identity checks. |
 | PIR canonical identity | ● |  |  | PIR content-derived identity. |
 | Persisted PIR artifact lifecycle | ● |  |  | the canonical encoding decode, stored-identity validation, registry-backed admission against exact cited authority, and immutable in-process reuse. |

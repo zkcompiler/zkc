@@ -35,6 +35,7 @@ set(ZKC_TEST_DEPENDS
   zkc-project
   zkc-test-opt
   zkc-registry-lint
+  zkc-relation
   zkc-run
   zkc-seal
   zkc-translate

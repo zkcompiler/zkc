@@ -8,6 +8,7 @@
 
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Registry/ConstructionProfileRegistry.h"
+#include "zkc/Registry/RelationContractRegistry.h"
 #include "zkc/Registry/ProtocolVocabulary.h"
 #include "zkc/Registry/RegistryFile.h"
 #include "zkc/Soundness/SignatureEncoding.h"
@@ -49,6 +50,22 @@ static int lintConstructionProfiles(StringRef json, StringRef source) {
     codecs[name] = codec.toCanonicalJson();
   return emit(json::Object{{"codecs", std::move(codecs)},
                            {"sponges", std::move(sponges)}});
+}
+
+static int lintRelationContracts(StringRef json, StringRef source) {
+  auto registry = zkc::registry::RelationContractRegistry::parse(json, source);
+  if (!registry)
+    return fail(registry.takeError());
+  json::Object contracts, revisions;
+  for (const auto &[name, contract] : registry->entries()) {
+    contracts[name] = contract.toCanonicalJson();
+    // The entry digest is what a judgment cites; the map key above is
+    // a lookup handle and is not covered by it
+    // (docs/spec/relations.md §1).
+    revisions[name] = contract.digest;
+  }
+  return emit(json::Object{{"contracts", std::move(contracts)},
+                           {"digests", std::move(revisions)}});
 }
 
 static int lintSoundnessSignature(StringRef json, StringRef source) {
@@ -113,8 +130,11 @@ int main(int argc, char **argv) {
     return lintConstructionProfiles(json, inputFilename);
   if (name == "zkc.soundness_signature")
     return lintSoundnessSignature(json, inputFilename);
+  if (name == "zkc.relation_contract")
+    return lintRelationContracts(json, inputFilename);
   return fail(createStringError("unknown registry '" + name +
                                 "' (this lint knows zkc.protocol_vocabulary, "
-                                "zkc.construction_profiles, and "
-                                "zkc.soundness_signature)"));
+                                "zkc.construction_profiles, "
+                                "zkc.soundness_signature, and "
+                                "zkc.relation_contract)"));
 }

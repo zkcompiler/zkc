@@ -1491,6 +1491,219 @@ def _load_registry(name: str) -> dict[str, Any]:
 _CONSTRUCTION_DOCUMENT = _load_registry("construction-profiles.json")
 
 
+# The normative anchor partition per admitted claim profile
+# (docs/spec/relations.md section 2.3): which anchors identify the
+# relation and which identify one instance. A fact about the profile,
+# stated once, so a contract cannot widen its own scope.
+_ANCHOR_PARTITION = {
+    "r1cs": ({"a", "b", "c"}, {"public"}),
+    "opaque_relation": ({"contract"}, {"statement"}),
+}
+
+
+def _relation_text(value: Any, where: str) -> str:
+    """A registry string, held to the same gate the C++ loader applies:
+    non-empty and inside the canonical encoding domain."""
+
+    if (not isinstance(value, str) or not value
+            or any(not 0x20 <= ord(c) <= 0x7E for c in value)):
+        raise Refusal(f"{where} must be non-empty printable ASCII")
+    return value
+
+
+def relation_contracts_document() -> dict[str, Any]:
+    """Admit the relation-contract registry and return the lint form."""
+
+    document = _load_registry("relation-contracts.json")
+    _closed(document, {"registry", "contracts"}, "relation contract registry")
+    if document["registry"] != "zkc.relation_contract":
+        raise Refusal("unsupported relation-contract envelope")
+    contracts = document["contracts"]
+    if not isinstance(contracts, dict):
+        raise Refusal("relation contracts must be an object")
+
+    admitted: dict[str, Any] = {}
+    digests: dict[str, str] = {}
+    for name, body in contracts.items():
+        if not isinstance(name, str) or not isinstance(body, dict):
+            raise Refusal("relation contracts need string names and objects")
+        where = f"relation contract {name!r}"
+        required = {"claim_profile", "relation_anchors", "instance_anchors",
+                    "format", "identity", "instance_encoding", "witness_ports",
+                    "statement_correspondence"}
+        optional = {"declared_shape"}
+        unknown = set(body) - required - optional
+        missing = required - set(body)
+        if unknown or missing:
+            raise Refusal(
+                f"{where} has missing={sorted(missing)} unknown={sorted(unknown)}"
+            )
+        profile = body.get("claim_profile")
+        if not isinstance(profile, dict):
+            raise Refusal(f"{where} needs a claim_profile object")
+        _closed(profile, {"name", "digest"}, f"{where} claim_profile")
+        profile_name = profile.get("name")
+        profile_digest = profile.get("digest")
+        _relation_text(profile_name, f"{where} claim_profile name")
+        if not is_sha256_ref(profile_digest):
+            raise Refusal(f"{where} has a malformed claim_profile pin")
+        partition = _ANCHOR_PARTITION.get(profile_name)
+        if partition is None:
+            raise Refusal(f"{where} names a profile with no admitted partition")
+        relation_names, instance_names = partition
+
+        anchors = body.get("relation_anchors")
+        if not isinstance(anchors, dict) or set(anchors) != relation_names:
+            raise Refusal(f"{where} must carry the profile's relation anchors")
+        for anchor_name, value in anchors.items():
+            if not is_sha256_ref(value):
+                raise Refusal(f"{where} anchor {anchor_name!r} is not a digest")
+        instances = body.get("instance_anchors")
+        if (not isinstance(instances, list)
+                or len(instances) != len(set(instances))
+                or set(instances) != instance_names):
+            raise Refusal(f"{where} must carry the profile's instance anchors")
+
+        fmt = body.get("format")
+        if fmt not in {"r1cs-bin-v1", "opaque"}:
+            raise Refusal(f"{where} has an unadmitted format")
+
+        identity = body.get("identity")
+        if not isinstance(identity, dict):
+            raise Refusal(f"{where} needs an identity object")
+        unknown = set(identity) - {"content_digest", "attested_id", "attestor"}
+        if unknown:
+            raise Refusal(f"{where} identity has unknown={sorted(unknown)}")
+        content = identity.get("content_digest")
+        attested = identity.get("attested_id")
+        if content is not None and not is_sha256_ref(content):
+            raise Refusal(f"{where} content_digest is not a digest")
+        if attested is not None:
+            # An assertion whose party the ledger cannot name has no subject.
+            _relation_text(attested, f"{where} attested_id")
+            _relation_text(identity.get("attestor"), f"{where} attestor")
+        if "attestor" in identity and attested is None:
+            raise Refusal(f"{where} names an attestor with no attested_id")
+        if content is None and attested is None:
+            raise Refusal(f"{where} identity carries neither primitive")
+
+        encoding = body.get("instance_encoding")
+        if not isinstance(encoding, dict):
+            raise Refusal(f"{where} needs an instance_encoding; there is no default")
+        kind = encoding.get("kind")
+        if kind == "field_vector":
+            _closed(encoding, {"kind", "field_order", "arity"},
+                    f"{where} instance_encoding")
+            order = encoding.get("field_order")
+            if (not isinstance(order, str) or not order.isdecimal()
+                    or order.startswith("0")):
+                raise Refusal(f"{where} field_order is not an exact cardinality")
+            if type(encoding.get("arity")) is not int or encoding["arity"] < 0:
+                raise Refusal(f"{where} arity is not a count")
+        elif kind == "opaque_bytes":
+            _closed(encoding, {"kind", "digest_function"},
+                    f"{where} instance_encoding")
+            if encoding.get("digest_function") != "sha256":
+                raise Refusal(f"{where} has an unadmitted digest_function")
+        elif kind == "commitment":
+            _closed(encoding, {"kind", "payload_class"},
+                    f"{where} instance_encoding")
+            _relation_text(encoding.get("payload_class"),
+                           f"{where} commitment payload_class")
+        else:
+            raise Refusal(f"{where} has an unadmitted instance_encoding kind")
+
+        ports = body.get("witness_ports")
+        if not isinstance(ports, dict):
+            raise Refusal(f"{where} needs a witness_ports object")
+        ports_kind = ports.get("kind")
+        if ports_kind == "enumerated":
+            _closed(ports, {"kind", "ports"}, f"{where} witness_ports")
+            entries = ports.get("ports")
+            if not isinstance(entries, list) or not entries:
+                raise Refusal(f"{where} enumerated ports must be non-empty")
+            seen_ports = set()
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    raise Refusal(f"{where} port is not an object")
+                _closed(entry, {"name", "count"}, f"{where} witness port")
+                port_name = _relation_text(entry.get("name"),
+                                           f"{where} witness port name")
+                if port_name in seen_ports:
+                    raise Refusal(f"{where} repeats witness port {port_name!r}")
+                seen_ports.add(port_name)
+                if type(entry.get("count")) is not int or entry["count"] < 0:
+                    raise Refusal(f"{where} port {port_name!r} has no count")
+        elif ports_kind == "opaque":
+            _closed(ports, {"kind", "port"}, f"{where} witness_ports")
+            port = ports.get("port")
+            if not isinstance(port, dict):
+                raise Refusal(f"{where} opaque port must be an object")
+            _closed(port, {"name"}, f"{where} witness port")
+            _relation_text(port.get("name"), f"{where} opaque port name")
+        else:
+            raise Refusal(f"{where} has an unadmitted witness_ports kind")
+
+        wiring = body.get("statement_correspondence")
+        if not isinstance(wiring, list):
+            raise Refusal(f"{where} needs a statement_correspondence list")
+        slots, labels = set(), set()
+        for entry in wiring:
+            if not isinstance(entry, dict):
+                raise Refusal(f"{where} correspondence entry is not an object")
+            _closed(entry, {"slot", "label"}, f"{where} correspondence")
+            slot, label = entry.get("slot"), entry.get("label")
+            if type(slot) is not int or slot < 0 or slot in slots:
+                raise Refusal(f"{where} has a malformed or repeated slot")
+            _relation_text(label, f"{where} correspondence label")
+            if label in labels:
+                raise Refusal(f"{where} repeats correspondence label {label!r}")
+            slots.add(slot)
+            labels.add(label)
+        if slots != set(range(len(wiring))):
+            raise Refusal(f"{where} correspondence slots have a gap")
+        if kind == "field_vector" and len(wiring) != encoding["arity"]:
+            raise Refusal(f"{where} correspondence does not cover every slot")
+
+        if fmt == "r1cs-bin-v1" and kind != "field_vector":
+            raise Refusal(f"{where} reads r1cs bytes but declares another "
+                          "instance encoding")
+
+        shape = body.get("declared_shape")
+        if shape is not None:
+            if not isinstance(shape, dict):
+                raise Refusal(f"{where} declared_shape must be an object")
+            _closed(shape, {"constraint_count"}, f"{where} declared_shape")
+            count = shape.get("constraint_count")
+            if type(count) is not int or count < 0:
+                raise Refusal(f"{where} constraint_count is not a count")
+
+        canonical: dict[str, Any] = {
+            "claim_profile": {"digest": profile_digest, "name": profile_name},
+            "format": fmt,
+            "identity": {k: identity[k] for k in sorted(identity)},
+            "instance_anchors": list(instances),
+            "instance_encoding": {k: encoding[k] for k in sorted(encoding)},
+            "relation_anchors": {k: anchors[k] for k in sorted(anchors)},
+            "statement_correspondence": [
+                {"label": entry["label"], "slot": entry["slot"]} for entry in wiring
+            ],
+            "witness_ports": (
+                {"kind": "opaque", "port": {"name": ports["port"]["name"]}}
+                if ports_kind == "opaque"
+                else {"kind": "enumerated",
+                      "ports": [{"count": e["count"], "name": e["name"]}
+                                for e in ports["ports"]]}
+            ),
+        }
+        if shape is not None:
+            canonical["declared_shape"] = {"constraint_count": shape["constraint_count"]}
+        admitted[name] = canonical
+        digests[name] = tagged_digest("zkc/relation-contract\n", canonical)
+
+    return {"contracts": admitted, "digests": digests}
+
+
 def construction_profiles_document() -> dict[str, Any]:
     """Normalize the current construction-profile registry envelope."""
 

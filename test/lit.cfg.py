@@ -21,7 +21,8 @@ for env_name in ("CARGO_TARGET_DIR", "UV_CACHE_DIR", "XDG_CACHE_HOME"):
 llvm_config.add_tool_substitutions(
     ["zkc-opt", "zkc-test-opt", "zkc-registry-lint", "zkc-family",
      "zkc-project",
-     "zkc-translate", "zkc-run", "zkc-seal", "zkc-artifact", "zkc-derive"],
+     "zkc-translate", "zkc-run", "zkc-seal", "zkc-artifact", "zkc-derive",
+     "zkc-relation"],
     [config.zkc_tools_dir],
 )
 

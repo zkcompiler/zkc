@@ -74,8 +74,9 @@ PIR admits `seal`, `project`, and `link` as checked boundaries. `descend` and
 Signature as above. `OpenP` carries its selected construction profile and SealPolicy.
 Anchor values are opaque digest-shaped
 semantic references carried by the artifact; seal does not load or validate a
-future `RelationContract` or `BindingSchema` body. That separation is an
-intentional boundary, not a missing seal check.
+`RelationContract` (`relations.md`) or `BindingSchema` body. That separation
+is an intentional boundary, not a missing seal check: the contract is
+post-seal by design.
 
 The check battery is exactly the kernel conjunction:
 WF/LIN/BIND/COV_obl, `TerminalClosureOK`, and `ReductionClosureOK`. The two

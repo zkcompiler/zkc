@@ -1,0 +1,84 @@
+{
+  "contracts": {
+    "plonky3.fri.value-faithful": {
+      "claim_profile": {
+        "digest": "sha256:db632a627bb1fb032a5e09257482a3c92e166288a92825629291f93a8f681042",
+        "name": "opaque_relation"
+      },
+      "format": "opaque",
+      "identity": {
+        "attested_id": "zkc.family.fri-value-faithful",
+        "attestor": "zkc.repository-fixture"
+      },
+      "instance_anchors": [
+        "statement"
+      ],
+      "instance_encoding": {
+        "kind": "commitment",
+        "payload_class": "rs"
+      },
+      "relation_anchors": {
+        "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "statement_correspondence": [
+        {
+          "label": "f_root",
+          "slot": 0
+        }
+      ],
+      "witness_ports": {
+        "kind": "opaque",
+        "port": {
+          "name": "codeword"
+        }
+      }
+    },
+    "toy.r1cs.entry": {
+      "claim_profile": {
+        "digest": "sha256:52e98c58d3e6b81cb68dcdeb77116de172da64091f041b116c3ca3f1ebd55d54",
+        "name": "r1cs"
+      },
+      "declared_shape": {
+        "constraint_count": 8
+      },
+      "format": "r1cs-bin-v1",
+      "identity": {
+        "attested_id": "zkc.test.r1cs-entry-fixture",
+        "attestor": "zkc.repository-fixture"
+      },
+      "instance_anchors": [
+        "public"
+      ],
+      "instance_encoding": {
+        "arity": 2,
+        "field_order": "2305843009213697249",
+        "kind": "field_vector"
+      },
+      "relation_anchors": {
+        "a": "sha256:6f7a1f3cbca32bf858d859646653a2d98e391f519150223e3222da84dec07e8b",
+        "b": "sha256:abb35bd25c2c9ce6fd7fcc4fe346743fbdbf56b5c35bdd3284f385fd99a04107",
+        "c": "sha256:e8497146da914e320456166bd1f69a74ec8b59fd91e2d63e3a8d480fd004bc14"
+      },
+      "statement_correspondence": [
+        {
+          "label": "x",
+          "slot": 0
+        },
+        {
+          "label": "cs",
+          "slot": 1
+        }
+      ],
+      "witness_ports": {
+        "kind": "enumerated",
+        "ports": [
+          {
+            "count": 5,
+            "name": "assignment"
+          }
+        ]
+      }
+    }
+  },
+  "registry": "zkc.relation_contract"
+}
