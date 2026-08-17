@@ -50,11 +50,19 @@ static cl::opt<std::string>
                         "a derivation."));
 
 namespace {
-/// The judgment's three lists. Keeping them apart in the type is what
+/// The judgment's four lists. Keeping them apart in the type is what
 /// keeps them apart in the output.
+///
+/// `disagreed` is the negative half of `crossChecked`: a cross-check
+/// whose two sides are both present and do not match. That is a
+/// judgment about the contract and the bytes, not a failure of this
+/// tool, so it is reported here and the document is still emitted —
+/// a caller learns which cross-check failed and what the two sides
+/// said, which a refusal on the first disagreement never told it.
 struct Report {
   std::vector<std::string> computed;
   std::vector<std::string> crossChecked;
+  std::vector<std::string> disagreed;
   std::vector<std::string> asserted;
 };
 
@@ -169,11 +177,12 @@ int main(int argc, char **argv) {
                               digest);
     if (!contract->contentDigest.empty()) {
       if (contract->contentDigest != digest)
-        return zkc::tool::reportRefusal("the supplied bytes digest to " +
-                                        digest + ", the contract pins " +
-                                        contract->contentDigest);
-      report.crossChecked.push_back(
-          "contract-declared content digest agrees with the byte-derived one");
+        report.disagreed.push_back("the supplied bytes digest to " + digest +
+                                   ", the contract pins " +
+                                   contract->contentDigest);
+      else
+        report.crossChecked.push_back("contract-declared content digest "
+                                      "agrees with the byte-derived one");
     }
     auto parsed = zkc::relation::readR1csHeader(
         bytes, contract->instanceEncoding.fieldOrder);
@@ -194,52 +203,58 @@ int main(int argc, char **argv) {
   if (header) {
     if (encoding.kind == zkc::registry::InstanceEncodingKind::FieldVector) {
       if (encoding.arity != header->publicArity)
-        return zkc::tool::reportRefusal(
+        report.disagreed.push_back(
             "declared arity " + std::to_string(encoding.arity) +
             " disagrees with the header's public arity " +
             std::to_string(header->publicArity));
-      report.crossChecked.push_back(
-          "contract-declared arity agrees with the byte-derived one");
+      else
+        report.crossChecked.push_back(
+            "contract-declared arity agrees with the byte-derived one");
       if (encoding.fieldOrder != header->prime)
-        return zkc::tool::reportRefusal(
-            "declared field order " + encoding.fieldOrder +
-            " disagrees with the header prime " + header->prime);
-      report.crossChecked.push_back(
-          "contract-declared field order agrees with the header prime");
+        report.disagreed.push_back("declared field order " +
+                                   encoding.fieldOrder +
+                                   " disagrees with the header prime " +
+                                   header->prime);
+      else
+        report.crossChecked.push_back(
+            "contract-declared field order agrees with the header prime");
     }
     if (!contract->witnessPorts.opaque) {
       int64_t declared = 0;
       for (const auto &port : contract->witnessPorts.ports)
         declared += port.count;
       if (declared != header->privateInputs)
-        return zkc::tool::reportRefusal(
+        report.disagreed.push_back(
             "declared witness-port total " + std::to_string(declared) +
             " disagrees with the header's private-input count " +
             std::to_string(header->privateInputs));
-      report.crossChecked.push_back(
-          "contract-declared witness-port total agrees with the byte-derived "
-          "private-input count");
+      else
+        report.crossChecked.push_back("contract-declared witness-port total "
+                                      "agrees with the byte-derived "
+                                      "private-input count");
     }
     if (contract->constraintCount) {
       if (*contract->constraintCount != header->constraintCount)
-        return zkc::tool::reportRefusal(
+        report.disagreed.push_back(
             "declared constraint count " +
             std::to_string(*contract->constraintCount) +
             " disagrees with the header's " +
             std::to_string(header->constraintCount));
-      report.crossChecked.push_back(
-          "contract-declared constraint count agrees with the byte-derived "
-          "one");
+      else
+        report.crossChecked.push_back("contract-declared constraint count "
+                                      "agrees with the byte-derived one");
     }
   }
 
   // The correspondence against the artifact's own statement ABI.
   for (const auto &entry : contract->correspondence) {
-    if (!is_contained(view->statementLabels, entry.label))
-      return zkc::tool::reportRefusal(
+    if (!is_contained(view->statementLabels, entry.label)) {
+      report.disagreed.push_back(
           "correspondence slot " + std::to_string(entry.slot) +
           " names statement label '" + entry.label +
           "', which the artifact's ABI does not carry");
+      continue;
+    }
     report.computed.push_back("statement label '" + entry.label +
                               "' is in the artifact's ABI");
   }
@@ -261,10 +276,11 @@ int main(int argc, char **argv) {
   if (!fieldOrder.empty() &&
       encoding.kind == zkc::registry::InstanceEncodingKind::FieldVector) {
     if (fieldOrder != encoding.fieldOrder)
-      return zkc::tool::reportRefusal(
-          "the expected field " + fieldOrder +
-          " disagrees with the contract's instance field " +
-          encoding.fieldOrder);
+      report.disagreed.push_back("the expected field " + fieldOrder +
+                                 " disagrees with the contract's instance "
+                                 "field " +
+                                 encoding.fieldOrder);
+    else
     // Named for what it is: this side is the caller's, not a fact read
     // out of a derivation. Reading the analysis parameter from the
     // artifact's own derivations is the specified form and is recorded
@@ -322,11 +338,13 @@ int main(int argc, char **argv) {
     bool wired = false;
     for (const auto &entry : contract->correspondence)
       wired |= entry.label == label->second;
-    if (!wired)
-      return zkc::tool::reportRefusal(
+    if (!wired) {
+      report.disagreed.push_back(
           "a sealed material binding grounds anchor '" + name +
           "' in statement value '" + label->second +
           "', which the correspondence does not wire");
+      continue;
+    }
     report.crossChecked.push_back("a sealed material binding grounds anchor '" +
                                   name + "' in statement value '" +
                                   label->second +
@@ -366,21 +384,28 @@ int main(int argc, char **argv) {
                : "the declared constraint count (zkc.assume."
                  "constraint_count_matches_relation)");
 
-  json::Array computed, crossChecked, asserted;
+  json::Array computed, crossChecked, disagreed, asserted;
   for (const std::string &line : report.computed)
     computed.push_back(line);
   for (const std::string &line : report.crossChecked)
     crossChecked.push_back(line);
+  for (const std::string &line : report.disagreed)
+    disagreed.push_back(line);
   for (const std::string &line : report.asserted)
     asserted.push_back(line);
   json::Object out{{"artifact", view->artifactId},
                    {"asserted", std::move(asserted)},
                    {"contract_digest", contract->digest},
                    {"cross_checked", std::move(crossChecked)},
+                   {"disagreed", std::move(disagreed)},
                    {"computed", std::move(computed)}};
   if (Error err = zkc::encoding::writeCanonicalJson(json::Value(std::move(out)),
                                                     outs()))
     return zkc::tool::reportRefusal(std::move(err));
   outs() << "\n";
-  return 0;
+  // The document is the answer either way; the code says which answer.
+  // A disagreement is this tool's negative verdict on the correspondence
+  // it was asked to judge, not a failure to judge it
+  // (docs/getting-started.md §4a).
+  return report.disagreed.empty() ? 0 : 1;
 }

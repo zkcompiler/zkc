@@ -1,0 +1,60 @@
+# What the judgment says when the contract and the bytes disagree.
+#
+# Every cross-check in `relation-contract.test` is asserted in its
+# agreeing direction and none in its disagreeing one, which left the
+# negative half of this tool's whole question untested. The coverage
+# rule could not see the gap either: these paths carried prose rather
+# than diagnostic identifiers, so nothing counted them.
+#
+# A disagreement is the judgment, not a failure to reach one. So each
+# case below checks three things a refusal never gave a caller: the
+# document is still emitted, the disagreement is named in `disagreed`
+# with both sides, and the cross-checks that did agree are still
+# reported. The exit status is 1 — the subject was examined and the
+# answer is negative — and `exit-code.py` pins it exactly, because
+# lit's `not` would equally accept the 2 that means the tool never got
+# there (docs/getting-started.md §4a).
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Soundness/Inputs/r1cs-entry.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --output-dir=%t > %t/sealed.txt
+# RUN: %python -c "import sys,glob; sys.stdout.write(glob.glob(sys.argv[1] + '/*.mlirbc')[0])" %t > %t/artifact.path
+
+# DEFINE: %{judge} = %python %S/Inputs/judge-with.py %zkc-tools-dir/zkc-relation %t/artifact.path %zkc-registry-dir %S/Inputs/good.r1cs
+
+# The control: the unmutated contract agrees on every cross-check and
+# the tool answers affirmatively. Without it the cases below are
+# satisfied by a tool that disagrees with everything.
+# RUN: %{judge} 0 none | FileCheck %s --check-prefix=AGREE
+# AGREE: disagreed: []
+# AGREE: cross_checked: 4
+
+# A declared constraint count the header does not carry.
+# RUN: %{judge} 1 declared_shape.constraint_count=999 | FileCheck %s --check-prefix=COUNT
+# COUNT: disagreed: ["declared constraint count 999 disagrees with the header's 8"]
+# The cross-checks that did agree survive the one that did not: a
+# refusal on the first disagreement told the caller nothing about them.
+# COUNT: cross_checked: 3
+
+# A declared witness-port total the header does not carry.
+# RUN: %{judge} 1 witness_ports.ports.0.count=99 | FileCheck %s --check-prefix=PORTS
+# PORTS: disagreed: ["declared witness-port total 99 disagrees with the header's private-input count 5"]
+#
+# The arity cross-check has no case here, and deliberately: an arity the
+# correspondence does not cover is refused by the contract loader before
+# any judgment reads the bytes, so reaching it needs a contract whose
+# wiring moves with it. That is a fixture, not a mutation, and it waits
+# for wave D, which recomputes these anchors rather than comparing two
+# declarations.
+
+# A declared field the header's prime is not.
+# RUN: %{judge} 1 instance_encoding.field_order=13 | FileCheck %s --check-prefix=FIELD
+# FIELD: disagreed: ["declared field order 13 disagrees with the header prime
+
+# A content digest the supplied bytes do not hash to.
+# RUN: %{judge} 1 identity.content_digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | FileCheck %s --check-prefix=DIGEST
+# DIGEST: disagreed: ["the supplied bytes digest to sha256:
+
+# Two disagreements at once are both reported. A judgment that stops at
+# the first tells a caller to fix one thing and come back.
+# RUN: %{judge} 1 declared_shape.constraint_count=999,witness_ports.ports.0.count=99 | FileCheck %s --check-prefix=BOTH
+# BOTH: disagreed: ["declared witness-port total 99 {{.*}}", "declared constraint count 999
