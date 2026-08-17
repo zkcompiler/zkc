@@ -68,3 +68,11 @@
 # COUNT: sections and carries
 # WIRES: counts exceed its wire count
 # TRAILING: carries trailing bytes
+
+# The cross-implementation gate: both parsers admit the registry under
+# their own closed schemas and re-emit it, with the entry digests, byte
+# for byte.
+# REQUIRES: uv
+# RUN: zkc-registry-lint %zkc-registry-dir/relation-contracts.json > %t/contracts.zkc
+# RUN: %uv python -m oracle.parity relation-contracts > %t/contracts.oracle
+# RUN: diff %t/contracts.zkc %t/contracts.oracle

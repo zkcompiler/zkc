@@ -58,6 +58,11 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("construction-profiles takes no witness")
         sys.stdout.write(model.canon_json(model.construction_profiles_document()))
         return
+    if mode == "relation-contracts":
+        if args:
+            raise SystemExit("relation-contracts takes no witness")
+        sys.stdout.write(model.canon_json(model.relation_contracts_document()))
+        return
     if mode == "soundness-signature":
         if args:
             raise SystemExit("soundness-signature takes no witness")
