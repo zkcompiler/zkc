@@ -49,7 +49,13 @@ private:
       }
       if (byte != '"')
         continue;
-      auto parsed = json::parse(StringRef(start, cursor - start));
+      StringRef literal(start, cursor - start);
+      // An unescaped key is its own value. Almost every key in every
+      // registry is one, and parsing each built a parser and a JSON
+      // value per string in the file; only an escape needs the parser.
+      if (literal.find('\\') == StringRef::npos)
+        return literal.drop_front().drop_back().str();
+      auto parsed = json::parse(literal);
       if (!parsed || !parsed->getAsString()) {
         if (!parsed)
           consumeError(parsed.takeError());
