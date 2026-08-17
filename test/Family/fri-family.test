@@ -15,13 +15,17 @@
 //
 // LINT: "reduction_contracts"
 // LINT: "registry":"zkc.protocol_vocabulary"
-// K2-VOCAB: "registry": "zkc.protocol_vocabulary"
-// K2-VOCAB: "opaque_relation"
-// K2-VOCAB: "predicate_specs": {}
-// K2-VOCAB: "zkc.check.rs-equality"
-// K2-VOCAB: "reduction_contracts"
-// K2-VOCAB: "fri"
-// K2-VOCAB: "terminal_rules": {}
+// Which sections the emitted document carries, not the order it
+// happens to write them in: the digests are taken over the canonical
+// form, so key order in this file reaches nothing and asserting it
+// would hold the writer to a spelling rather than to content.
+// K2-VOCAB-DAG: "registry": "zkc.protocol_vocabulary"
+// K2-VOCAB-DAG: "opaque_relation"
+// K2-VOCAB-DAG: "predicate_specs": {}
+// K2-VOCAB-DAG: "zkc.check.rs-equality"
+// K2-VOCAB-DAG: "reduction_contracts"
+// K2-VOCAB-DAG: "fri"
+// K2-VOCAB-DAG: "terminal_rules": {}
 // K2-SPINE: pir.protocol "frik2"
 // K2-SPINE-SAME: policy "analysis_only_artifact"
 // K2-SPINE: pir.check "consistency" contract "zkc.check.rs-equality"

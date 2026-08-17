@@ -23,6 +23,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -530,12 +531,12 @@ static std::string reduceLabel(const FriDescription &desc) {
 /// One exact operand segment for the query-phase check contracts —
 /// shared between each contract and its predicate-spec ABI, so the two
 /// can never disagree.
-static llvm::json::Object checkSegment(StringRef role, StringRef valueClass,
-                                       int64_t exact) {
+static llvm::json::Object checkSegment(std::string role,
+                                       std::string valueClass, int64_t exact) {
   return llvm::json::Object{
-      {"class", valueClass},
+      {"class", std::move(valueClass)},
       {"multiplicity", llvm::json::Object{{"exact", exact}}},
-      {"role", role}};
+      {"role", std::move(role)}};
 }
 
 /// The query-phase counts, all constants of the family instance: the
@@ -619,220 +620,295 @@ static llvm::json::Array consistencyOperands(const QueryShape &shape) {
   return operands;
 }
 
-std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
-  std::string out;
-  raw_string_ostream os(out);
-  StringRef nonceClass = desc.valueFaithful ? "pow_value" : "rs";
-  QueryShape shape{desc.ell, desc.k, desc.queryLog2,
-                 int64_t(1) << desc.logFinalPolyLen};
-  os << "{\n"
-     << "  \"registry\": \"zkc.protocol_vocabulary\",\n"
-     << "  \"claim_profiles\": {\n"
-     << "    \"opaque_relation\": {\"kind\": \"relation\", "
-        "\"anchors\": [\"contract\", \"statement\"]},\n"
-     << "    \"fri_query_consistent\": {\"kind\": \"evaluation\", "
-        "\"anchors\": [\"statement\"]}\n"
-     << "  },\n";
+//===----------------------------------------------------------------------===//
+// The vocabulary document
+//
+// Every section is a value the assembly names, rather than a run of
+// text spelled into a stream in the order it happens to be written.
+// The reason is not tidiness. Two sections share the minted predicate
+// digests — `predicate_specs` files each spec under its digest and
+// `check_contracts` cites the same digest — and a stream forces that
+// shared state to be computed where the first section needs it and
+// carried by hand to the second, which is what makes the two sections
+// hard to separate. Named values let the mint happen once, above both.
+//
+// Spelling reaches nothing here: the digests are taken over the
+// canonical form, so key order and whitespace are the writer's
+// business. `test/Family/generator-output.test` pins the canonical
+// form and the sealed identity, not these bytes, which is what makes
+// the arrangement of this file free to change and a change of content
+// loud.
+//===----------------------------------------------------------------------===//
+
+/// The two claim profiles every instance carries: what the relation
+/// input is, and what the reduction concludes about it.
+static llvm::json::Object claimProfiles() {
+  return llvm::json::Object{
+      {"opaque_relation",
+       llvm::json::Object{{"kind", "relation"},
+                          {"anchors", llvm::json::Array{"contract",
+                                                        "statement"}}}},
+      {"fri_query_consistent",
+       llvm::json::Object{{"kind", "evaluation"},
+                          {"anchors", llvm::json::Array{"statement"}}}}};
+}
+
+/// The query-phase specs, minted once for both of the sections that
+/// name them. A spec's digest is the key `predicate_specs` files it
+/// under and the value `check_contracts` cites, so a second mint would
+/// be a second chance for the two to disagree.
+struct QueryPhaseSpecs {
+  MintedSpec merkle;
+  MintedSpec consistency;
+};
+
+static QueryPhaseSpecs mintQueryPhaseSpecs(const QueryShape &shape) {
+  MintedSpec merkle = mintSpec(
+      "FRI input-layer Merkle multi-opening predicate",
+      {"Ben-Sasson-Chiesa-Spooner, TCC 2016, ePrint 2016/116 (vector "
+       "commitments in the BCS transformation)"},
+      {"Interpret the paths operand as, per query index in order, one "
+       "authentication path of tree-height sibling digests, leaf to "
+       "capless root, over the codec's digest words.",
+       "For each query index, hash the paired leaf row and compress "
+       "along the path selected by the index bits; accept exactly when "
+       "every derived root equals the root operand.",
+       "The tree height is the per-query path length, which is the "
+       "paths element count divided by the indices element count; an "
+       "index outside the tree rejects.",
+       "The predicate performs no transcript, proof-stream, sponge, "
+       "route, or ambient protocol effects."},
+      {}, merkleOperands(shape));
+  MintedSpec consistency = mintSpec(
+      "FRI query fold-consistency predicate",
+      {"ethSTARK documentation v1.2, ePrint 2021/582 (query-phase "
+       "consistency)"},
+      {"Reconstruct, per query index, the reduced opening "
+       "(opened - leaf(x)) / (zeta - x) over the bit-reversed shifted "
+       "coset, batch-weighted by powers of alpha; a query point equal "
+       "to an opening point rejects.",
+       "Fold arity-2 rounds in order: each round interpolates the "
+       "index pair at its beta, authenticates the pair row against "
+       "that round's root operand with its segment of round_paths, "
+       "and halves the index.",
+       "Accept exactly when every query's folded value equals the "
+       "final polynomial (final_coefficients, low degree first) "
+       "evaluated at the query's domain point, under the declared "
+       "log_blowup and log_final_poly_len.",
+       "Element counts bind the shape: betas and roots carry one "
+       "element per round, siblings one per query per round, and "
+       "round_paths the per-round tree heights; any other count "
+       "rejects.",
+       "The predicate performs no transcript, proof-stream, sponge, "
+       "route, or ambient protocol effects."},
+      {"log_blowup", "log_final_poly_len"}, consistencyOperands(shape));
+  return {std::move(merkle), std::move(consistency)};
+}
+
+static llvm::json::Object
+predicateSpecs(const std::optional<QueryPhaseSpecs> &specs) {
+  llvm::json::Object entries;
+  if (!specs)
+    return entries;
+  entries[specs->merkle.digest] = llvm::json::Object(specs->merkle.body);
+  entries[specs->consistency.digest] =
+      llvm::json::Object(specs->consistency.body);
+  return entries;
+}
+
+/// A check contract whose predicate is an opaque spec, cited by the
+/// digest under which `predicate_specs` files it.
+static llvm::json::Object opaqueContract(const MintedSpec &spec,
+                                         llvm::json::Array parameters,
+                                         llvm::json::Array operands) {
+  return llvm::json::Object{
+      {"mode", "opaque"},
+      {"predicate",
+       llvm::json::Object{{"format", "zkc-opaque-predicate-spec"},
+                          {"content_digest", spec.digest},
+                          {"entrypoint", "accept"}}},
+      {"parameters", std::move(parameters)},
+      {"semantic_parameters", llvm::json::Array{}},
+      {"operands", std::move(operands)}};
+}
+
+/// A check contract the carrier evaluates itself; the expression rides
+/// the citing reduction, not the contract.
+static llvm::json::Object transparentContract(llvm::json::Array operands) {
+  return llvm::json::Object{
+      {"mode", "transparent"},
+      {"predicate",
+       llvm::json::Object{{"format", "zkc-transparent-expression"}}},
+      {"parameters", llvm::json::Array{}},
+      {"semantic_parameters", llvm::json::Array{}},
+      {"operands", std::move(operands)}};
+}
+
+static llvm::json::Object
+checkContracts(const FriDescription &desc, const QueryShape &shape,
+               const std::optional<QueryPhaseSpecs> &specs) {
+  llvm::json::Object contracts;
   if (desc.valueFaithful) {
-    MintedSpec merkle = mintSpec(
-        "FRI input-layer Merkle multi-opening predicate",
-        {"Ben-Sasson-Chiesa-Spooner, TCC 2016, ePrint 2016/116 (vector "
-         "commitments in the BCS transformation)"},
-        {"Interpret the paths operand as, per query index in order, one "
-         "authentication path of tree-height sibling digests, leaf to "
-         "capless root, over the codec's digest words.",
-         "For each query index, hash the paired leaf row and compress "
-         "along the path selected by the index bits; accept exactly when "
-         "every derived root equals the root operand.",
-         "The tree height is the per-query path length, which is the "
-         "paths element count divided by the indices element count; an "
-         "index outside the tree rejects.",
-         "The predicate performs no transcript, proof-stream, sponge, "
-         "route, or ambient protocol effects."},
-        {}, merkleOperands(shape));
-    MintedSpec consistency = mintSpec(
-        "FRI query fold-consistency predicate",
-        {"ethSTARK documentation v1.2, ePrint 2021/582 (query-phase "
-         "consistency)"},
-        {"Reconstruct, per query index, the reduced opening "
-         "(opened - leaf(x)) / (zeta - x) over the bit-reversed shifted "
-         "coset, batch-weighted by powers of alpha; a query point equal "
-         "to an opening point rejects.",
-         "Fold arity-2 rounds in order: each round interpolates the "
-         "index pair at its beta, authenticates the pair row against "
-         "that round's root operand with its segment of round_paths, "
-         "and halves the index.",
-         "Accept exactly when every query's folded value equals the "
-         "final polynomial (final_coefficients, low degree first) "
-         "evaluated at the query's domain point, under the declared "
-         "log_blowup and log_final_poly_len.",
-         "Element counts bind the shape: betas and roots carry one "
-         "element per round, siblings one per query per round, and "
-         "round_paths the per-round tree heights; any other count "
-         "rejects.",
-         "The predicate performs no transcript, proof-stream, sponge, "
-         "route, or ambient protocol effects."},
-        {"log_blowup", "log_final_poly_len"}, consistencyOperands(shape));
-    os << "  \"predicate_specs\": {\n    \"" << merkle.digest << "\": "
-       << llvm::json::Value(llvm::json::Object(merkle.body)) << ",\n    \""
-       << consistency.digest << "\": "
-       << llvm::json::Value(llvm::json::Object(consistency.body)) << "\n  },\n"
-       << "  \"check_contracts\": {\n    \"zkc.check.merkle-multi-opening\": "
-       << llvm::json::Value(llvm::json::Object{
-              {"mode", "opaque"},
-              {"predicate",
-               llvm::json::Object{{"format", "zkc-opaque-predicate-spec"},
-                                  {"content_digest", merkle.digest},
-                                  {"entrypoint", "accept"}}},
-              {"parameters", llvm::json::Array{}},
-              {"semantic_parameters", llvm::json::Array{}},
-              {"operands", merkleOperands(shape)}})
-       << ",\n    \"zkc.check.fri-query-consistency\": "
-       << llvm::json::Value(llvm::json::Object{
-              {"mode", "opaque"},
-              {"predicate",
-               llvm::json::Object{{"format", "zkc-opaque-predicate-spec"},
-                                  {"content_digest", consistency.digest},
-                                  {"entrypoint", "accept"}}},
-              {"parameters",
-               llvm::json::Array{"log_blowup", "log_final_poly_len"}},
-              {"semantic_parameters", llvm::json::Array{}},
-              {"operands", consistencyOperands(shape)}})
-       << "";
+    contracts["zkc.check.merkle-multi-opening"] = opaqueContract(
+        specs->merkle, llvm::json::Array{}, merkleOperands(shape));
+    contracts["zkc.check.fri-query-consistency"] = opaqueContract(
+        specs->consistency,
+        llvm::json::Array{"log_blowup", "log_final_poly_len"},
+        consistencyOperands(shape));
   } else {
-    os << "  \"predicate_specs\": {},\n"
-       << "  \"check_contracts\": {";
-  }
-  bool firstCheck = !desc.valueFaithful;
-  if (!desc.valueFaithful) {
-    os << "\n    \"zkc.check.rs-equality\": {\"mode\": \"transparent\", "
-          "\"predicate\": {\"format\": "
-          "\"zkc-transparent-expression\"}, \"parameters\": [], "
-          "\"semantic_parameters\": [], \"operands\": "
-          "[{\"role\": \"lhs\", \"class\": \"rs\", \"multiplicity\": "
-          "{\"exact\": 1}}, {\"role\": \"rhs\", \"class\": \"rs\", "
-          "\"multiplicity\": {\"exact\": 1}}]}";
-    firstCheck = false;
+    contracts["zkc.check.rs-equality"] = transparentContract(llvm::json::Array{
+        checkSegment("lhs", "rs", 1), checkSegment("rhs", "rs", 1)});
   }
   if (desc.grindingBits) {
-    os << (firstCheck ? "\n" : ",\n")
-       << "    \"zkc.check.pow-zero\": {\"mode\": \"transparent\", "
-          "\"predicate\": {\"format\": "
-          "\"zkc-transparent-expression\"}, \"parameters\": [], "
-          "\"semantic_parameters\": [], \"operands\": "
-          "[{\"role\": \"nonce\", \"class\": \""
-       << nonceClass
-       << "\", \"multiplicity\": "
-          "{\"exact\": 1}}, {\"role\": \"challenge\", \"class\": "
-          "\"pow_value\", "
-          "\"multiplicity\": {\"exact\": 1}}]}";
+    // The nonce is a one-word value in the value-faithful variant and a
+    // digest in the base form, which is the one place the two spellings
+    // of the same round differ.
+    const char *nonceClass = desc.valueFaithful ? "pow_value" : "rs";
+    contracts["zkc.check.pow-zero"] = transparentContract(
+        llvm::json::Array{checkSegment("nonce", nonceClass, 1),
+                          checkSegment("challenge", "pow_value", 1)});
   }
-  os << "\n  },\n";
+  return contracts;
+}
+
+//===----------------------------------------------------------------------===//
+// Hole contracts
+//===----------------------------------------------------------------------===//
+
+static llvm::json::Object valueSlot(std::string role, std::string valueClass,
+                                    int64_t count) {
+  return llvm::json::Object{{"sort", "value"},
+                            {"role", std::move(role)},
+                            {"class", std::move(valueClass)},
+                            {"count", std::to_string(count)}};
+}
+static llvm::json::Object handleSlot(std::string role,
+                                     std::string handleClass) {
+  return llvm::json::Object{{"sort", "handle"},
+                            {"role", std::move(role)},
+                            {"class", std::move(handleClass)}};
+}
+static llvm::json::Object spongeSlot(std::string role) {
+  return llvm::json::Object{{"sort", "sponge"}, {"role", std::move(role)}};
+}
+static llvm::json::Object holeContract(std::string kind,
+                                       llvm::json::Array operands,
+                                       llvm::json::Array results,
+                                       llvm::json::Array parameters) {
+  return llvm::json::Object{{"kind", std::move(kind)},
+                            {"operands", std::move(operands)},
+                            {"results", std::move(results)},
+                            {"parameters", std::move(parameters)},
+                            {"semantic_parameters", llvm::json::Array{}}};
+}
+
+/// The prover's compute holes (docs/spec/vocabularies.md §5.1;
+/// docs/spec/endpoints.md §6.2): backend-neutral decomposition
+/// contracts the routes cite; the pow-search hole alone peeks the
+/// transcript. The witness payload and the derived codeword are
+/// separate handle classes: they are different objects, and naming them
+/// apart is what lets a supplier binding refuse a route that feeds one
+/// where the other belongs.
+static llvm::json::Object holeContracts(const FriDescription &desc,
+                                        const QueryShape &shape) {
+  llvm::json::Object holes;
+  if (!desc.valueFaithful)
+    return holes;
+
+  holes["zkc.hole.fri-commit"] = holeContract(
+      "commit", llvm::json::Array{handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{valueSlot("cap", "rs", 1),
+                        handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{});
+  holes["zkc.hole.fri-final"] = holeContract(
+      "evaluate", llvm::json::Array{handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{valueSlot("coefficient", "ext_field", shape.finalLen),
+                        handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{});
+  holes["zkc.hole.fri-openval"] = holeContract(
+      "evaluate",
+      llvm::json::Array{valueSlot("zeta", "ext_field", 1),
+                        handleSlot("codeword", "fri-trace")},
+      llvm::json::Array{valueSlot("opened", "ext_field", 1),
+                        handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{"log_blowup", "log_final_poly_len"});
+  holes["zkc.hole.fri-reduce"] = holeContract(
+      "extend",
+      llvm::json::Array{valueSlot("alpha", "ext_field", 1),
+                        handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{});
+  holes["zkc.hole.fri-fold"] = holeContract(
+      "fold",
+      llvm::json::Array{valueSlot("beta", "ext_field", 1),
+                        handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{handleSlot("codeword", "fri-codeword")},
+      llvm::json::Array{});
+  holes["zkc.hole.fri-pow"] = holeContract(
+      "pow_search", llvm::json::Array{spongeSlot("transcript")},
+      llvm::json::Array{valueSlot("nonce", "pow_value", 1),
+                        spongeSlot("transcript")},
+      llvm::json::Array{"bits"});
+
+  // The query-answering hole: the reserved `open` kind's first use. It
+  // consumes the codeword handle (the retained trees), the sampled
+  // indices, and the statement root — so a witness that does not commit
+  // to the statement is refused by the fill, by name, before any
+  // opening reaches the wire. Results ride in wire order.
+  llvm::json::Array answers{valueSlot("leaves", "word", desc.ell),
+                            valueSlot("input_paths", "rs", shape.inputPaths())};
+  for (int64_t i = 1; i <= desc.k; ++i) {
+    answers.push_back(
+        valueSlot("sib" + std::to_string(i), "ext_field", desc.ell));
+    answers.push_back(valueSlot("path" + std::to_string(i), "rs",
+                                desc.ell * (desc.queryLog2 - i)));
+  }
+  holes["zkc.hole.fri-answer"] = holeContract(
+      "open",
+      llvm::json::Array{valueSlot("indices", "query_index", desc.ell),
+                        valueSlot("root", "rs", 1),
+                        handleSlot("codeword", "fri-codeword")},
+      std::move(answers), llvm::json::Array{});
+  return holes;
+}
+
+//===----------------------------------------------------------------------===//
+// Reduction contracts
+//===----------------------------------------------------------------------===//
+
+static llvm::json::Object depSlot(std::string role, std::string slotClass) {
+  return llvm::json::Object{{"role", std::move(role)},
+                            {"source", "challenge_capability"},
+                            {"class", std::move(slotClass)}};
+}
+static llvm::json::Object message(std::string role, int64_t exact) {
+  return llvm::json::Object{
+      {"role", std::move(role)},
+      {"count", llvm::json::Object{{"exact", exact}}}};
+}
+static llvm::json::Object round(llvm::json::Object challengeUse,
+                                llvm::json::Array messages,
+                                std::string kind) {
+  return llvm::json::Object{{"challenge_use", std::move(challengeUse)},
+                            {"messages", std::move(messages)},
+                            {"kind", std::move(kind)}};
+}
+
+static llvm::json::Array friDepSlots(const FriDescription &desc) {
+  llvm::json::Array slots;
   if (desc.valueFaithful) {
-    // The prover's compute holes (docs/spec/vocabularies.md §5.1;
-    // docs/spec/endpoints.md §6.2):
-    // backend-neutral decomposition contracts the routes cite; the
-    // pow-search hole alone peeks the transcript. The witness
-    // payload and the derived codeword are separate handle classes:
-    // they are different objects, and naming them apart is what
-    // lets a supplier binding refuse a route that feeds one where
-    // the other belongs.
-    os << "  \"hole_contracts\": {\n"
-       << "    \"zkc.hole.fri-commit\": {\"kind\": \"commit\", "
-          "\"operands\": [{\"sort\": \"handle\", \"role\": "
-          "\"codeword\", \"class\": \"fri-codeword\"}], "
-          "\"results\": [{\"sort\": \"value\", \"role\": \"cap\", "
-          "\"class\": \"rs\", \"count\": \"1\"}, {\"sort\": "
-          "\"handle\", \"role\": \"codeword\", \"class\": "
-          "\"fri-codeword\"}], \"parameters\": [], "
-          "\"semantic_parameters\": []},\n"
-       << "    \"zkc.hole.fri-final\": {\"kind\": \"evaluate\", "
-          "\"operands\": [{\"sort\": \"handle\", \"role\": "
-          "\"codeword\", \"class\": \"fri-codeword\"}], "
-          "\"results\": [{\"sort\": \"value\", \"role\": "
-          "\"coefficient\", \"class\": \"ext_field\", \"count\": \""
-       << shape.finalLen
-       << "\"}, {\"sort\": \"handle\", \"role\": \"codeword\", "
-          "\"class\": \"fri-codeword\"}], \"parameters\": [], "
-          "\"semantic_parameters\": []},\n"
-       << "    \"zkc.hole.fri-openval\": {\"kind\": \"evaluate\", "
-          "\"operands\": [{\"sort\": \"value\", \"role\": \"zeta\", "
-          "\"class\": \"ext_field\", \"count\": \"1\"}, {\"sort\": "
-          "\"handle\", \"role\": \"codeword\", \"class\": "
-          "\"fri-trace\"}], \"results\": [{\"sort\": \"value\", "
-          "\"role\": \"opened\", \"class\": \"ext_field\", "
-          "\"count\": \"1\"}, {\"sort\": \"handle\", \"role\": "
-          "\"codeword\", \"class\": \"fri-codeword\"}], "
-          "\"parameters\": [\"log_blowup\", \"log_final_poly_len\"], "
-          "\"semantic_parameters\": []},\n"
-       << "    \"zkc.hole.fri-reduce\": {\"kind\": \"extend\", "
-          "\"operands\": [{\"sort\": \"value\", \"role\": \"alpha\", "
-          "\"class\": \"ext_field\", \"count\": \"1\"}, {\"sort\": "
-          "\"handle\", \"role\": \"codeword\", \"class\": "
-          "\"fri-codeword\"}], \"results\": [{\"sort\": \"handle\", "
-          "\"role\": \"codeword\", \"class\": \"fri-codeword\"}], "
-          "\"parameters\": [], \"semantic_parameters\": []},\n"
-       << "    \"zkc.hole.fri-fold\": {\"kind\": \"fold\", "
-          "\"operands\": [{\"sort\": \"value\", \"role\": \"beta\", "
-          "\"class\": \"ext_field\", \"count\": \"1\"}, {\"sort\": "
-          "\"handle\", \"role\": \"codeword\", \"class\": "
-          "\"fri-codeword\"}], \"results\": [{\"sort\": \"handle\", "
-          "\"role\": \"codeword\", \"class\": \"fri-codeword\"}], "
-          "\"parameters\": [], \"semantic_parameters\": []},\n"
-       << "    \"zkc.hole.fri-pow\": {\"kind\": \"pow_search\", "
-          "\"operands\": [{\"sort\": \"sponge\", \"role\": "
-          "\"transcript\"}], \"results\": [{\"sort\": \"value\", "
-          "\"role\": \"nonce\", \"class\": \"pow_value\", "
-          "\"count\": \"1\"}, {\"sort\": \"sponge\", \"role\": "
-          "\"transcript\"}], \"parameters\": [\"bits\"], "
-          "\"semantic_parameters\": []},\n";
-    // The query-answering hole: the reserved `open` kind's first use.
-    // It consumes the codeword handle (the retained trees), the sampled
-    // indices, and the statement root — so a witness that does not
-    // commit to the statement is refused by the fill, by name, before
-    // any opening reaches the wire. Results ride in wire order.
-    os << "    \"zkc.hole.fri-answer\": {\"kind\": \"open\", "
-          "\"operands\": [{\"sort\": \"value\", \"role\": \"indices\", "
-          "\"class\": \"query_index\", \"count\": \""
-       << desc.ell
-       << "\"}, {\"sort\": \"value\", \"role\": \"root\", \"class\": "
-          "\"rs\", \"count\": \"1\"}, {\"sort\": \"handle\", \"role\": "
-          "\"codeword\", \"class\": \"fri-codeword\"}], \"results\": "
-          "[{\"sort\": \"value\", \"role\": \"leaves\", \"class\": "
-          "\"word\", \"count\": \""
-       << desc.ell
-       << "\"}, {\"sort\": \"value\", \"role\": \"input_paths\", "
-          "\"class\": \"rs\", \"count\": \""
-       << shape.inputPaths() << "\"}";
-    for (int64_t i = 1; i <= desc.k; ++i)
-      os << ", {\"sort\": \"value\", \"role\": \"sib" << i
-         << "\", \"class\": \"ext_field\", \"count\": \"" << desc.ell
-         << "\"}, {\"sort\": \"value\", \"role\": \"path" << i
-         << "\", \"class\": \"rs\", \"count\": \""
-         << desc.ell * (desc.queryLog2 - i) << "\"}";
-    os << "], \"parameters\": [], \"semantic_parameters\": []}\n"
-       << "  },\n";
-  } else {
-    os << "  \"hole_contracts\": {},\n";
+    slots.push_back(depSlot("zeta", "ext_field"));
+    slots.push_back(depSlot("alpha", "ext_field"));
   }
-  os << ""
-     << "  \"reduction_contracts\": {\n"
-     << "    \"fri\": {\n"
-     << "      \"consumes\": [\"opaque_relation\"],\n"
-     << "      \"dep_slots\": [\n";
-  if (desc.valueFaithful)
-    os << "        {\"role\": \"zeta\", \"source\": "
-          "\"challenge_capability\", \"class\": \"ext_field\"},\n"
-       << "        {\"role\": \"alpha\", \"source\": "
-          "\"challenge_capability\", \"class\": \"ext_field\"},\n";
   for (int64_t i = 1; i <= desc.k; ++i)
-    os << "        {\"role\": \"" << foldRole(desc, i)
-       << "\", \"source\": \"challenge_capability\", \"class\": "
-          "\"ext_field\"},\n";
-  os << "        {\"role\": \"query\", \"source\": "
-        "\"challenge_capability\", \"class\": \"query_index\"}\n"
-     << "      ],\n"
-     << "      \"rounds\": [\n";
+    slots.push_back(depSlot(foldRole(desc, i), "ext_field"));
+  slots.push_back(depSlot("query", "query_index"));
+  return slots;
+}
+
+static llvm::json::Array friRounds(const FriDescription &desc,
+                                   const QueryShape &shape) {
+  llvm::json::Array rounds;
   if (desc.valueFaithful) {
     // The stripped harness's own order: the opening point and batch
     // challenge first, then commit-then-sample rounds, then the final
@@ -840,172 +916,211 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
     // The opening point and batch challenge are the PCS opening phase,
     // not fold rounds: the kind keeps the fold-count projection honest
     // (a soundness rule counting fold rounds must see exactly k).
-    os << "        {\"challenge_use\": {\"role\": \"zeta\"}, "
-          "\"messages\": [], \"kind\": \"opening\"},\n"
-       << "        {\"challenge_use\": {\"role\": \"alpha\"}, "
-          "\"messages\": [{\"role\": \"opened\", \"count\": "
-          "{\"exact\": 1}}], \"kind\": \"opening\"},\n";
+    rounds.push_back(round(llvm::json::Object{{"role", "zeta"}},
+                           llvm::json::Array{}, "opening"));
+    rounds.push_back(round(llvm::json::Object{{"role", "alpha"}},
+                           llvm::json::Array{message("opened", 1)}, "opening"));
     for (int64_t i = 1; i <= desc.k; ++i)
-      os << "        {\"challenge_use\": {\"role\": \"" << foldRole(desc, i)
-         << "\"}, \"messages\": [{\"role\": \"" << msgRole(desc, i)
-         << "\", \"count\": {\"exact\": 1}}], \"kind\": \"fold\"},\n";
-    os << "        {\"challenge_use\": {\"role\": \"query\", "
-          "\"count\": "
-       << desc.ell
-       << "}, \"messages\": [{\"role\": \"final\", \"count\": "
-          "{\"exact\": "
-       << shape.finalLen
-       << "}}], \"kind\": \"query\"}\n"
-       << "      ],\n";
-  } else {
-    for (int64_t i = 1; i <= desc.k; ++i) {
-      os << "        {\"challenge_use\": {\"role\": \"" << foldRole(desc, i)
-         << "\"}, \"messages\": [";
-      if (i > 1)
-        os << "{\"role\": \"" << msgRole(desc, i - 1)
-           << "\", \"count\": {\"exact\": 1}}";
-      os << "], \"kind\": \"fold\"},\n";
-    }
-    os << "        {\"challenge_use\": {\"role\": \"query\", \"count\": "
-       << desc.ell << "}, \"messages\": [{\"role\": \"" << msgRole(desc, desc.k)
-       << "\", \"count\": {\"exact\": 1}}], \"kind\": \"query\"}\n"
-       << "      ],\n";
+      rounds.push_back(round(llvm::json::Object{{"role", foldRole(desc, i)}},
+                             llvm::json::Array{message(msgRole(desc, i), 1)},
+                             "fold"));
+    rounds.push_back(
+        round(llvm::json::Object{{"role", "query"}, {"count", desc.ell}},
+              llvm::json::Array{message("final", shape.finalLen)}, "query"));
+    return rounds;
   }
-  // The shape knobs ride the reduction parameters so a soundness rule
-  // reads the declared rate directly (the analysis-parameter precedent);
-  // the shape side condition ties them to the realized fold count.
-  os << ""
-     << "      \"parameters\": {";
-  if (desc.johnson())
-    os << "\"johnson_delta\": \"atom\", \"johnson_eta\": \"atom\", "
-          "\"johnson_m\": \"atom\", ";
-  os << "\"log_blowup\": \"atom\", \"log_final_poly_len\": \"atom\"";
+  for (int64_t i = 1; i <= desc.k; ++i) {
+    llvm::json::Array messages;
+    if (i > 1)
+      messages.push_back(message(msgRole(desc, i - 1), 1));
+    rounds.push_back(round(llvm::json::Object{{"role", foldRole(desc, i)}},
+                           std::move(messages), "fold"));
+  }
+  rounds.push_back(
+      round(llvm::json::Object{{"role", "query"}, {"count", desc.ell}},
+            llvm::json::Array{message(msgRole(desc, desc.k), 1)}, "query"));
+  return rounds;
+}
+
+/// The shape knobs ride the reduction parameters so a soundness rule
+/// reads the declared rate directly (the analysis-parameter precedent);
+/// the shape side condition ties them to the realized fold count.
+static llvm::json::Object friParameters(const FriDescription &desc) {
+  llvm::json::Object parameters{{"log_blowup", "atom"},
+                                {"log_final_poly_len", "atom"}};
+  if (desc.johnson()) {
+    parameters["johnson_delta"] = "atom";
+    parameters["johnson_eta"] = "atom";
+    parameters["johnson_m"] = "atom";
+  }
   if (desc.udr())
-    os << ", \"udr_theta\": \"atom\"";
-  os << "},\n";
-  if (desc.valueFaithful) {
-    // The query phase's two obligations, bound to this contract. The
-    // openings themselves are response material, not round messages —
-    // they follow the query challenge unabsorbed — so the attachments
-    // pin what the round structure already carries: the sampled
-    // dependencies and the absorbed pre-challenge messages.
-    os << "      \"checks\": {\n"
-       << "        \"merkle\": {\n"
-       << "          \"contract\": \"zkc.check.merkle-multi-opening\",\n"
-       << "          \"parameters\": {},\n"
-       << "          \"attachments\": [\n"
-       << "            {\"kind\": \"material_ref_equality\", \"source\": "
-          "{\"kind\": \"input_anchor\", \"input\": 0, \"anchor\": "
-          "\"statement\"}, \"target_role\": \"root\"},\n"
-       << "            {\"kind\": \"value_identity_vector\", \"source\": "
-          "{\"kind\": \"dependency\", \"role\": \"query\"}, "
-          "\"target_role\": \"indices\"}\n"
-       << "          ]\n"
-       << "        },\n"
-       << "        \"consistency\": {\n"
-       << "          \"contract\": \"zkc.check.fri-query-consistency\",\n"
-       << "          \"parameters\": {\"log_blowup\": \""
-       << desc.logBlowup << "\", \"log_final_poly_len\": \""
-       << desc.logFinalPolyLen << "\"},\n"
-       << "          \"attachments\": [\n"
-       << "            {\"kind\": \"value_identity\", \"source\": "
-          "{\"kind\": \"dependency\", \"role\": \"zeta\"}, "
-          "\"target_role\": \"zeta\"},\n"
-       << "            {\"kind\": \"value_identity\", \"source\": "
-          "{\"kind\": \"message\", \"role\": \"opened\", "
-          "\"occurrence\": 0}, \"target_role\": \"opened\"},\n"
-       << "            {\"kind\": \"value_identity\", \"source\": "
-          "{\"kind\": \"dependency\", \"role\": \"alpha\"}, "
-          "\"target_role\": \"alpha\"},\n"
-       << "            {\"kind\": \""
-       << (shape.finalLen > 1 ? "value_identity_vector" : "value_identity")
-       << "\", \"source\": "
-          "{\"kind\": \"message\", \"role\": \"final\", "
-          "\"occurrence\": 0}, \"target_role\": "
-          "\"final_coefficients\"},\n"
-       << "            {\"kind\": \"value_identity_vector\", \"source\": "
-          "{\"kind\": \"dependency\", \"role\": \"query\"}, "
-          "\"target_role\": \"indices\"},\n"
-       << "            {\"kind\": \"value_identity_list\", \"source\": "
-          "{\"kind\": \"list\", \"items\": [";
-    for (int64_t i = 1; i <= desc.k; ++i)
-      os << "{\"kind\": \"dependency\", \"role\": \"" << foldRole(desc, i)
-         << "\"}" << (i == desc.k ? "" : ", ");
-    os << "]}, \"target_role\": \"betas\"},\n"
-       << "            {\"kind\": \"value_identity_list\", \"source\": "
-          "{\"kind\": \"list\", \"items\": [";
-    for (int64_t i = 1; i <= desc.k; ++i)
-      os << "{\"kind\": \"message\", \"role\": \"" << msgRole(desc, i)
-         << "\", \"occurrence\": 0}" << (i == desc.k ? "" : ", ");
-    os << "]}, \"target_role\": \"roots\"}\n"
-       << "          ]\n"
-       << "        }\n"
-       << "      },\n";
-  } else {
-    os << "      \"checks\": {\n"
-       << "        \"consistency\": {\n"
-       << "          \"contract\": \"zkc.check.rs-equality\",\n"
-       << "          \"parameters\": {},\n"
-       << "          \"transparent_predicate\": [\"eq\", [\"role\", "
-          "\"lhs\"], [\"role\", \"rhs\"]],\n"
-       << "          \"attachments\": [\n"
-       << "            {\"kind\": \"material_ref_equality\", \"source\": "
-          "{\"kind\": \"input_anchor\", \"input\": 0, \"anchor\": "
-          "\"statement\"}, \"target_role\": \"lhs\"},\n"
-       << "            {\"kind\": \"value_identity\", \"source\": "
-          "{\"kind\": \"message\", \"role\": \""
-       << msgRole(desc, desc.k)
-       << "\", \"occurrence\": 0}, \"target_role\": \"rhs\"}\n"
-       << "          ]\n"
-       << "        }\n"
-       << "      },\n";
+    parameters["udr_theta"] = "atom";
+  return parameters;
+}
+
+static llvm::json::Object attachment(std::string kind,
+                                     llvm::json::Object source,
+                                     std::string targetRole) {
+  return llvm::json::Object{{"kind", std::move(kind)},
+                            {"source", std::move(source)},
+                            {"target_role", std::move(targetRole)}};
+}
+static llvm::json::Object fromDependency(std::string role) {
+  return llvm::json::Object{{"kind", "dependency"},
+                            {"role", std::move(role)}};
+}
+static llvm::json::Object fromMessage(std::string role) {
+  return llvm::json::Object{{"kind", "message"},
+                            {"role", std::move(role)},
+                            {"occurrence", 0}};
+}
+static llvm::json::Object fromInputAnchor(int64_t input, std::string anchor) {
+  return llvm::json::Object{{"kind", "input_anchor"},
+                            {"input", input},
+                            {"anchor", std::move(anchor)}};
+}
+static llvm::json::Object fromList(llvm::json::Array items) {
+  return llvm::json::Object{{"kind", "list"}, {"items", std::move(items)}};
+}
+
+/// The query phase's obligations, bound to this contract. In the
+/// value-faithful variant the openings themselves are response
+/// material, not round messages — they follow the query challenge
+/// unabsorbed — so the attachments pin what the round structure already
+/// carries: the sampled dependencies and the absorbed pre-challenge
+/// messages.
+static llvm::json::Object friChecks(const FriDescription &desc,
+                                    const QueryShape &shape) {
+  if (!desc.valueFaithful)
+    return llvm::json::Object{
+        {"consistency",
+         llvm::json::Object{
+             {"contract", "zkc.check.rs-equality"},
+             {"parameters", llvm::json::Object{}},
+             {"transparent_predicate",
+              llvm::json::Array{"eq", llvm::json::Array{"role", "lhs"},
+                                llvm::json::Array{"role", "rhs"}}},
+             {"attachments",
+              llvm::json::Array{
+                  attachment("material_ref_equality",
+                             fromInputAnchor(0, "statement"), "lhs"),
+                  attachment("value_identity",
+                             fromMessage(msgRole(desc, desc.k)), "rhs")}}}}};
+
+  llvm::json::Array betas, roots;
+  for (int64_t i = 1; i <= desc.k; ++i) {
+    betas.push_back(fromDependency(foldRole(desc, i)));
+    roots.push_back(fromMessage(msgRole(desc, i)));
   }
-  os << "      \"constraints\": [],\n"
-     << "      \"outputs\": [{\"profile\": \"fri_query_consistent\", "
-        "\"anchors\": {\"statement\": {\"kind\": \"input_anchor\", "
-        "\"input\": 0, \"anchor\": \"statement\"}}}]\n"
-     << "    }";
-  if (desc.grindingBits) {
-    // Grinding is a separate local implication: exact shape, exact pow-pin
-    // premise, and one anchor-free evaluation output.
-    os << ",\n"
-       << "    \"grinding\": {\n"
-       << "      \"consumes\": [\"fri_query_consistent\"],\n"
-       << "      \"dep_slots\": [\n"
-       << "        {\"role\": \"pow\", \"source\": "
-          "\"challenge_capability\", \"class\": \"pow_value\"}\n"
-       << "      ],\n"
-       << "      \"rounds\": [\n"
-       << "        {\"challenge_use\": {\"role\": \"pow\"}, "
-          "\"messages\": [{\"role\": \"nonce\", \"count\": "
-          "{\"exact\": 1}}], \"kind\": \"pow\"}\n"
-       << "      ],\n"
-       << "      \"parameters\": {},\n"
-       << "      \"checks\": {\n"
-       << "        \"pow_pin\": {\n"
-       << "          \"contract\": \"zkc.check.pow-zero\",\n"
-       << "          \"parameters\": {},\n"
-       << "          \"transparent_predicate\": [\"eq\", [\"role\", "
-          "\"challenge\"], [\"const\", \"zero\"]],\n"
-       << "          \"attachments\": [\n"
-       << "            {\"kind\": \"value_identity\", \"source\": "
-          "{\"kind\": \"message\", \"role\": \"nonce\", "
-          "\"occurrence\": 0}, \"target_role\": \"nonce\"},\n"
-       << "            {\"kind\": \"value_identity\", \"source\": "
-          "{\"kind\": \"dependency\", \"role\": \"pow\"}, "
-          "\"target_role\": \"challenge\"}\n"
-       << "          ]\n"
-       << "        }\n"
-       << "      },\n"
-       << "      \"constraints\": [],\n"
-       << "      \"outputs\": [{\"profile\": \"fri_query_consistent\", "
-          "\"anchors\": {\"statement\": {\"kind\": \"input_anchor\", "
-          "\"input\": 0, \"anchor\": \"statement\"}}}]\n"
-       << "    }";
-  }
-  os << "\n  },\n"
-     << "  \"terminal_rules\": {}\n"
-     << "}\n";
+  return llvm::json::Object{
+      {"merkle",
+       llvm::json::Object{
+           {"contract", "zkc.check.merkle-multi-opening"},
+           {"parameters", llvm::json::Object{}},
+           {"attachments",
+            llvm::json::Array{
+                attachment("material_ref_equality",
+                           fromInputAnchor(0, "statement"), "root"),
+                attachment("value_identity_vector", fromDependency("query"),
+                           "indices")}}}},
+      {"consistency",
+       llvm::json::Object{
+           {"contract", "zkc.check.fri-query-consistency"},
+           {"parameters",
+            llvm::json::Object{
+                {"log_blowup", std::to_string(desc.logBlowup)},
+                {"log_final_poly_len",
+                 std::to_string(desc.logFinalPolyLen)}}},
+           {"attachments",
+            llvm::json::Array{
+                attachment("value_identity", fromDependency("zeta"), "zeta"),
+                attachment("value_identity", fromMessage("opened"), "opened"),
+                attachment("value_identity", fromDependency("alpha"), "alpha"),
+                attachment(shape.finalLen > 1 ? "value_identity_vector"
+                                              : "value_identity",
+                           fromMessage("final"), "final_coefficients"),
+                attachment("value_identity_vector", fromDependency("query"),
+                           "indices"),
+                attachment("value_identity_list", fromList(std::move(betas)),
+                           "betas"),
+                attachment("value_identity_list", fromList(std::move(roots)),
+                           "roots")}}}}};
+}
+
+/// The one conclusion both reductions reach, over the statement anchor
+/// the relation input carries.
+static llvm::json::Object queryConsistentOutput() {
+  return llvm::json::Object{
+      {"profile", "fri_query_consistent"},
+      {"anchors",
+       llvm::json::Object{{"statement", fromInputAnchor(0, "statement")}}}};
+}
+
+static llvm::json::Object friReduction(const FriDescription &desc,
+                                       const QueryShape &shape) {
+  return llvm::json::Object{
+      {"consumes", llvm::json::Array{"opaque_relation"}},
+      {"dep_slots", friDepSlots(desc)},
+      {"rounds", friRounds(desc, shape)},
+      {"parameters", friParameters(desc)},
+      {"checks", friChecks(desc, shape)},
+      {"constraints", llvm::json::Array{}},
+      {"outputs", llvm::json::Array{queryConsistentOutput()}}};
+}
+
+/// Grinding is a separate local implication: exact shape, exact pow-pin
+/// premise, and one anchor-free evaluation output.
+static llvm::json::Object grindingReduction() {
+  return llvm::json::Object{
+      {"consumes", llvm::json::Array{"fri_query_consistent"}},
+      {"dep_slots", llvm::json::Array{depSlot("pow", "pow_value")}},
+      {"rounds",
+       llvm::json::Array{round(llvm::json::Object{{"role", "pow"}},
+                               llvm::json::Array{message("nonce", 1)}, "pow")}},
+      {"parameters", llvm::json::Object{}},
+      {"checks",
+       llvm::json::Object{
+           {"pow_pin",
+            llvm::json::Object{
+                {"contract", "zkc.check.pow-zero"},
+                {"parameters", llvm::json::Object{}},
+                {"transparent_predicate",
+                 llvm::json::Array{"eq",
+                                   llvm::json::Array{"role", "challenge"},
+                                   llvm::json::Array{"const", "zero"}}},
+                {"attachments",
+                 llvm::json::Array{
+                     attachment("value_identity", fromMessage("nonce"),
+                                "nonce"),
+                     attachment("value_identity", fromDependency("pow"),
+                                "challenge")}}}}}},
+      {"constraints", llvm::json::Array{}},
+      {"outputs", llvm::json::Array{queryConsistentOutput()}}};
+}
+
+std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
+  QueryShape shape{desc.ell, desc.k, desc.queryLog2,
+                   int64_t(1) << desc.logFinalPolyLen};
+  std::optional<QueryPhaseSpecs> specs;
+  if (desc.valueFaithful)
+    specs = mintQueryPhaseSpecs(shape);
+
+  llvm::json::Object reductions{{"fri", friReduction(desc, shape)}};
+  if (desc.grindingBits)
+    reductions["grinding"] = grindingReduction();
+
+  llvm::json::Object document{
+      {"registry", "zkc.protocol_vocabulary"},
+      {"claim_profiles", claimProfiles()},
+      {"predicate_specs", predicateSpecs(specs)},
+      {"check_contracts", checkContracts(desc, shape, specs)},
+      {"hole_contracts", holeContracts(desc, shape)},
+      {"reduction_contracts", std::move(reductions)},
+      {"terminal_rules", llvm::json::Object{}}};
+
+  std::string out;
+  raw_string_ostream os(out);
+  os << llvm::formatv("{0:2}", llvm::json::Value(std::move(document))) << "\n";
   return out;
 }
 
