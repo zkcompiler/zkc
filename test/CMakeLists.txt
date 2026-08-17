@@ -41,7 +41,21 @@ set(ZKC_TEST_DEPENDS
   zkc-translate
 )
 
-add_lit_testsuite(check-zkc "Running the zkc lit tests"
+add_lit_testsuite(check-zkc-lit "Running the zkc lit tests"
   ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS ${ZKC_TEST_DEPENDS}
 )
+
+# The suite is both halves. The lit tests judge whole artifacts through
+# the tools; the unit tests state the properties of the pure cores those
+# tools are built from, which are claims about every input rather than
+# about a corpus. One name runs both, so neither can be forgotten.
+add_custom_target(check-zkc
+  COMMAND ${CMAKE_COMMAND} -E echo "Running the zkc unit tests"
+  COMMAND $<TARGET_FILE:ZkcEncodingTests>
+  COMMAND $<TARGET_FILE:ZkcRegistryTests>
+  COMMAND $<TARGET_FILE:ZkcRelationTests>
+  DEPENDS ZkcUnitTests
+  USES_TERMINAL
+)
+add_dependencies(check-zkc check-zkc-lit)

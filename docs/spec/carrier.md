@@ -23,6 +23,21 @@ identity, ≤-ordered absorption preserved through projection, and
 transcript-hash input (§13(e) — ambiguous framing voids the Binding
 Lemma's a-injectivity, independently of everything else).
 
+What the carrier is chosen for. A compiler framework earns its cost
+through the transformations it hosts, and this dialect currently hosts
+one admitted transform family. What it supplies today is a parser and
+printer for documents people author, op verifiers, located
+diagnostics, and a test discipline that runs judgments over whole
+artifacts. Identity is not among them: the canonical encoding is
+defined here and computed here, independently of any framework, which
+is what keeps a carrier change from being an identity change.
+
+The investment answers to the reserved extensions rather than to the
+present: spine synthesis — scheduling a transcript over an authored
+claim graph under BIND — and security-parameter synthesis are search
+over this representation, and those are what a compiler framework is
+for. Until one of them lands, the honest statement is that a carrier
+is being paid for in advance.
 ## 2. Dialects
 
 Two registered ODS dialects: `pir` (the protocol object: events,
@@ -36,12 +51,12 @@ program — is the unit of identity and verification.
 
 - The protocol body is a single ordered block. Event order in the
   block IS ≤; there is no other order.
-- Events are chained through the **builtin `token` type**, using the
-  upstream `TokenProducerTrait`/`TokenConsumerTrait` discipline.
-  Scope of the upstream guarantee: **no-forwarding, not linearity** —
-  exactly-one-use comes from the container verifier; the token
-  commit itself prescribes op-level side effects for stronger
-  contracts, which is the resource below. A toolchain-pin change MUST
+- Events are chained through the **builtin `token` type**. The chain's
+  guarantees come from this dialect's own container verifier, not from
+  an upstream trait: exactly-one-use, single producer, and block order
+  as the only order are all checked here. The upstream token discipline
+  is the model this follows, and adopting its traits would move no
+  verdict — which is the reason not to claim them until they are used. A toolchain-pin change MUST
   revalidate the token isolation and no-forwarding assumptions.
 - Absorption (membership in A) is an event property, not implied by
   op kind; unabsorbed slots carry it explicitly (`kernel.md` §5.3).

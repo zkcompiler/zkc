@@ -979,14 +979,16 @@ llvm::Error zkc::pir::admitOirArtifact(
   // segments must be exactly the contract's.
   const zkc::registry::ProtocolVocabulary &vocabulary =
       environment.protocolVocabulary();
+  // Dispatch is by digest and the vocabulary is keyed by name, so the
+  // index is built once rather than rescanned per hole.
+  llvm::StringMap<const zkc::registry::HoleContract *> byDigest;
+  for (const auto &[id, candidate] : vocabulary.holeContracts())
+    byDigest[candidate.contentDigest()] = &candidate;
   for (zkc::oir::HoleCallOp hole :
        program.getBody().front().getOps<zkc::oir::HoleCallOp>()) {
-    const zkc::registry::HoleContract *contract = nullptr;
-    for (const auto &[id, candidate] : vocabulary.holeContracts())
-      if (candidate.contentDigest() == hole.getContractDigest()) {
-        contract = &candidate;
-        break;
-      }
+    auto found = byDigest.find(hole.getContractDigest());
+    const zkc::registry::HoleContract *contract =
+        found == byDigest.end() ? nullptr : found->second;
     if (!contract)
       return refuse("hole_call '" + hole.getLabel() +
                     "' cites a contract digest with no loaded HoleContract");

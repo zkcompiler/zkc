@@ -1,6 +1,8 @@
-# The canonical byte layer (JSON writer + domain) has no MLIR
-# dependency: the registry library computes contract digests over it, so
-# it stays Support-only.
+# The canonical byte layer (JSON writer, unique-key parser, domain rule)
+# has no MLIR dependency: the registry library computes contract digests
+# over it, so it stays Support-only. The attribute conversion that does
+# read MLIR lives in ZkcEncoding below, where the encoder is — the claim
+# here is checked by the unit tests, which link this library alone.
 add_mlir_library(ZkcEncodingCore
   CanonicalJson.cpp
   PARTIAL_SOURCES_INTENDED
@@ -13,6 +15,7 @@ add_mlir_library(ZkcEncodingCore
 )
 
 add_mlir_library(ZkcEncoding
+  AttributeJson.cpp
   CanonicalEncoder.cpp
   PARTIAL_SOURCES_INTENDED
 

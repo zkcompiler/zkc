@@ -11,6 +11,7 @@
 
 #include "zkc/Family/FriFamily.h"
 
+#include "zkc/Family/FriShape.h"
 #include "zkc/Relation/AnchorProjection.h"
 
 #include "zkc/ChallengeShape.h"
@@ -478,16 +479,13 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
   // log_blowup >= 1 subsumes rate-below-one.
   if (!explicitBlowup)
     desc.logBlowup = desc.queryLog2 - desc.k - desc.logFinalPolyLen;
-  if (explicitBlowup &&
-      desc.queryLog2 != desc.k + desc.logBlowup + desc.logFinalPolyLen)
-    return err("'log_blowup' contradicts the shape equation query_log2 = "
-               "k + log_blowup + log_final_poly_len (move whichever knob "
-               "the sweep owns)");
-  if (desc.logBlowup < 1)
+  if (!friShapeHolds(desc.queryLog2, desc.k, desc.logBlowup,
+                     desc.logFinalPolyLen))
     return err("'query_log2' must equal k + log_blowup + "
                "log_final_poly_len with log_blowup at least 1 (rate below "
                "one: the evaluation domain covers the message and the fold "
-               "chain stops at the final polynomial)");
+               "chain stops at the final polynomial); move whichever knob "
+               "the sweep owns");
   APInt fieldValue(/*numBits=*/unsigned(4 * desc.fieldOrder.size() + 8),
                    desc.fieldOrder, /*radix=*/10);
   unsigned width = std::max<unsigned>(fieldValue.getBitWidth(),

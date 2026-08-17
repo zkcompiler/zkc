@@ -1,0 +1,70 @@
+# What the generator emits, pinned across changes to the generator.
+#
+# Two things already compare generated output and neither pins it: the
+# determinism check diffs two runs of one binary, and the parity check
+# diffs this implementation against the twin at the same revision. Both
+# pass unchanged if a generator edit moves what every instance means,
+# because both sides move together.
+#
+# This pins the other axis. For each admitted instance the corpus
+# carries the vocabulary in the canonical form its digests are taken
+# over, and the identity of the artifact that vocabulary seals. A
+# refactor of the emitter is expected to leave both untouched; a change
+# to what an instance means is expected to move them, and then the diff
+# is where the author says so.
+#
+# The canonical form is what is pinned, not the emitted bytes, because
+# the digests are taken over the canonical form: an entry's spelling —
+# its whitespace, its key order — reaches nothing. That is what makes
+# restructuring the emitter safe and a content change loud.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# RUN: zkc-family %S/Inputs/frik2.json --emit-vocabulary=%t/frik2.json --emit-spine=%t/frik2.mlir
+# RUN: zkc-registry-lint %t/frik2.json | diff %S/Expected/frik2.vocabulary.json -
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/frik2.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/frik2.mlir | grep -oE 'id "[0-9a-f]{64}"' | head -1 | diff %S/Expected/frik2.identity -
+
+# RUN: zkc-family %S/Inputs/friquarter.json --emit-vocabulary=%t/friquarter.json --emit-spine=%t/friquarter.mlir
+# RUN: zkc-registry-lint %t/friquarter.json | diff %S/Expected/friquarter.vocabulary.json -
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/friquarter.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/friquarter.mlir | grep -oE 'id "[0-9a-f]{64}"' | head -1 | diff %S/Expected/friquarter.identity -
+
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vf.json --emit-spine=%t/vf.mlir
+# RUN: zkc-registry-lint %t/vf.json | diff %S/Expected/plonky3-fri-vf.vocabulary.json -
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vf.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/vf.mlir | grep -oE 'id "[0-9a-f]{64}"' | head -1 | diff %S/Expected/plonky3-fri-vf.identity -
+
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-real.json --emit-vocabulary=%t/real.json --emit-spine=%t/real.mlir
+# RUN: zkc-registry-lint %t/real.json | diff %S/Expected/plonky3-fri-real.vocabulary.json -
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/real.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/real.mlir | grep -oE 'id "[0-9a-f]{64}"' | head -1 | diff %S/Expected/plonky3-fri-real.identity -
+
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf-bound.json --emit-vocabulary=%t/bound.json --emit-spine=%t/bound.mlir
+# RUN: zkc-registry-lint %t/bound.json | diff %S/Expected/plonky3-fri-vf-bound.vocabulary.json -
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/bound.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/bound.mlir | grep -oE 'id "[0-9a-f]{64}"' | head -1 | diff %S/Expected/plonky3-fri-vf-bound.identity -
+
+# The pin is not vacuous: the same instance with one parameter moved
+# emits a different vocabulary and seals to a different identity, so a
+# diff against these files means what it says.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['grinding_bits']=d['grinding_bits']+1; json.dump(d, open(sys.argv[2],'w'))" %S/../Oir/Inputs/plonky3-fri-vf.json %t/moved.json
+# RUN: zkc-family %t/moved.json --emit-vocabulary=%t/moved.vocab.json --emit-spine=%t/moved.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/moved.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/moved.mlir | grep -oE 'id "[0-9a-f]{64}"' | head -1 | not diff %S/Expected/plonky3-fri-vf.identity -
+
+# What the family mints, and what it may not redefine.
+#
+# Seal is fail-closed against a closed vocabulary, and for a generated
+# instance that vocabulary comes from the same tool that wrote the spine
+# it will judge. For entries the family mints for itself that is the
+# arrangement working — the seal judgment holds the spine to a contract,
+# whoever wrote it. For entries that also exist in the repository's
+# registry it is not: a generator could redefine one and then satisfy
+# its own redefinition, and seal would pass over a protocol that means
+# something else. So every shared identifier carries the same definition
+# on both sides, for every instance rather than for a chosen one, since
+# the instances differ in which entries they share.
+#
+# Two entries differ by design and are exempt with their reasons: the
+# FRI reduction contract is depth-parameterized, and a value-faithful
+# instance's proof-of-work nonce is a one-word value where the base
+# form's is a digest. An exemption for an entry an instance does not
+# carry says nothing about it; one for an entry it carries and does not
+# redefine fails, because a stale exemption hides the next drift.
+# RUN: %python %S/Inputs/vocabulary-drift.py %zkc-registry-dir/protocol-vocabulary.json %t/frik2.json %t/friquarter.json %t/vf.json %t/real.json %t/bound.json | FileCheck %s --check-prefix=DRIFT
+# DRIFT: shared identifiers across 5 instances, {{[0-9]+}} exempt, none redefined

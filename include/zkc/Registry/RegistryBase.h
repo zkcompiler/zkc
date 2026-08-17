@@ -45,21 +45,44 @@ public:
     if (!file)
       return file.takeError();
     Derived result;
-    for (const auto &entry : file->payload()) {
+    if (llvm::Error error = parseSection(
+            *file, file->payload(), Derived::kEntryNoun,
+            [&](const RegistryFile &from, llvm::StringRef name,
+                const llvm::json::Value &value) -> llvm::Error {
+              llvm::Expected<EntryT> parsed =
+                  Derived::parseEntry(from, name, value);
+              if (!parsed)
+                return parsed.takeError();
+              result.entries_[name.str()] = std::move(*parsed);
+              return llvm::Error::success();
+            }))
+      return std::move(error);
+    return result;
+  }
+
+  /// Admit one named section of a registry envelope: each key is held
+  /// to the entry-name gate, then handed to `admit` with its value.
+  ///
+  /// Every registry in this repository walks a named object this way,
+  /// including the ones whose envelopes carry several sections and so
+  /// cannot use `parse` above. Stating the loop once is what keeps the
+  /// name gate from being a rule three loaders remember to apply.
+  template <typename AdmitT>
+  static llvm::Error parseSection(const RegistryFile &file,
+                                  const llvm::json::Object &section,
+                                  llvm::StringRef entryNoun, AdmitT admit) {
+    for (const auto &entry : section) {
       llvm::StringRef name(entry.first);
       // Entry names reach the canonical encoding, so admission is where
       // the domain gate lives; emptiness is refused explicitly because
       // the domain predicate is vacuously true on the empty string.
       if (name.empty() || !zkc::encoding::inEncodingDomain(name))
-        return file->error(llvm::Twine(Derived::kEntryNoun) +
-                           " names must be non-empty printable ASCII");
-      llvm::Expected<EntryT> parsed =
-          Derived::parseEntry(*file, name, entry.second);
-      if (!parsed)
-        return parsed.takeError();
-      result.entries_[name.str()] = std::move(*parsed);
+        return file.error(llvm::Twine(entryNoun) +
+                          " names must be non-empty printable ASCII");
+      if (llvm::Error error = admit(file, name, entry.second))
+        return error;
     }
-    return result;
+    return llvm::Error::success();
   }
 
   /// Returns the entry registered under `name`, or null — the caller's
@@ -76,9 +99,9 @@ public:
   }
 
 protected:
-  /// For a derived registry that owns its parse (multi-section
-  /// envelopes): entries still pass the same name gate + parseEntry
-  /// path, they just land through here.
+  /// For a derived registry whose envelope carries several sections:
+  /// entries reach here from a `parseSection` walk, so they pass the
+  /// same name gate as every other entry.
   void addEntry(llvm::StringRef name, EntryT entry) {
     entries_[name.str()] = std::move(entry);
   }

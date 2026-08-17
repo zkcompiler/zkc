@@ -19,7 +19,9 @@
 #include "zkc/Registry/RelationContractRegistry.h"
 
 #include "zkc/Encoding/EncodingDomain.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSet.h"
 #include <algorithm>
 
 using namespace llvm;
@@ -313,6 +315,7 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
 
   // -- Witness ports: enumerated or opaque, because the families
   // -- genuinely differ and forcing one shape misdescribes the other.
+  llvm::StringSet<> portNames;
   const json::Object *ports = object->getObject("witness_ports");
   if (!ports)
     return err("'witness_ports' must be an object");
@@ -343,9 +346,8 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
         return err("witness port '" + parsed.name +
                    "' needs a non-negative integer 'count'");
       parsed.count = *count;
-      for (const WitnessPort &seen : contract.witnessPorts.ports)
-        if (seen.name == parsed.name)
-          return err("witness port '" + parsed.name + "' is declared twice");
+      if (!portNames.insert(parsed.name).second)
+        return err("witness port '" + parsed.name + "' is declared twice");
       contract.witnessPorts.ports.push_back(std::move(parsed));
     }
   } else if (*portsKind == "opaque") {
@@ -373,6 +375,9 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
   // -- and statement labels. Slots are the instance order, exactly
   // -- once each; labels are checked against an artifact's ABI by the
   // -- correspondence judgment, not here.
+  llvm::DenseSet<int64_t> slots;
+  llvm::StringSet<> labels;
+  int64_t highestSlot = -1;
   const json::Array *wiring = object->getArray("statement_correspondence");
   if (!wiring)
     return err("'statement_correspondence' must be an array");
@@ -392,26 +397,23 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
                                           context + " correspondence",
                                           parsed.label))
       return std::move(e);
-    for (const CorrespondenceEntry &seen : contract.correspondence) {
-      if (seen.slot == parsed.slot)
-        return err("correspondence slot " + Twine(parsed.slot) +
-                   " is wired twice");
-      if (seen.label == parsed.label)
-        return err("correspondence label '" + parsed.label +
-                   "' is wired twice");
-    }
+    if (!slots.insert(parsed.slot).second)
+      return err("correspondence slot " + Twine(parsed.slot) +
+                 " is wired twice");
+    if (!labels.insert(parsed.label).second)
+      return err("correspondence label '" + parsed.label +
+                 "' is wired twice");
+    highestSlot = std::max(highestSlot, parsed.slot);
     contract.correspondence.push_back(std::move(parsed));
   }
   // The instance positions a correspondence covers are a prefix-free
   // set of the instance order; a gap would leave a slot's wiring
   // unstated while the count still looked complete.
-  for (size_t index = 0; index < contract.correspondence.size(); ++index) {
-    bool found = false;
-    for (const CorrespondenceEntry &entry : contract.correspondence)
-      found |= entry.slot == static_cast<int64_t>(index);
-    if (!found)
-      return err("correspondence slots must be 0..n-1 without gaps");
-  }
+  // Slots are distinct and non-negative, so covering 0..n-1 without a
+  // gap is exactly the highest being n-1.
+  if (!contract.correspondence.empty() &&
+      highestSlot != static_cast<int64_t>(contract.correspondence.size()) - 1)
+    return err("correspondence slots must be 0..n-1 without gaps");
   if (contract.instanceEncoding.kind == InstanceEncodingKind::FieldVector &&
       contract.correspondence.size() !=
           static_cast<size_t>(contract.instanceEncoding.arity))

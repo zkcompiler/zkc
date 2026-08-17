@@ -49,7 +49,13 @@ private:
       }
       if (byte != '"')
         continue;
-      auto parsed = json::parse(StringRef(start, cursor - start));
+      StringRef literal(start, cursor - start);
+      // An unescaped key is its own value. Almost every key in every
+      // registry is one, and parsing each built a parser and a JSON
+      // value per string in the file; only an escape needs the parser.
+      if (literal.find('\\') == StringRef::npos)
+        return literal.drop_front().drop_back().str();
+      auto parsed = json::parse(literal);
       if (!parsed || !parsed->getAsString()) {
         if (!parsed)
           consumeError(parsed.takeError());
@@ -236,56 +242,6 @@ llvm::Error zkc::encoding::writeCanonicalJson(const json::Value &value,
   llvm_unreachable("unknown JSON value kind");
 }
 
-llvm::Expected<json::Value>
-zkc::encoding::attributeToCanonicalJson(mlir::Attribute attribute,
-                                        unsigned depth) {
-  if (depth > kMaxAttrDepth)
-    return createStringError(
-        "attribute nesting exceeds the canonical depth bound");
-  if (auto string = mlir::dyn_cast<mlir::StringAttr>(attribute)) {
-    if (!inEncodingDomain(string.getValue()))
-      return createStringError(
-          "string leaves the canonical encoding domain (printable ASCII)");
-    return json::Value(string.getValue().str());
-  }
-  if (mlir::isa<mlir::BoolAttr>(attribute))
-    return createStringError(
-        "boolean leaves the canonical encoding domain (no boolean encoding)");
-  if (auto integer = mlir::dyn_cast<mlir::IntegerAttr>(attribute)) {
-    const bool isUnsigned = integer.getType().isUnsignedInteger();
-    if (!inIntegerDomain(integer.getValue(), isUnsigned))
-      return createStringError(
-          "integer leaves the canonical encoding domain (signed 64-bit)");
-    return json::Value(
-        isUnsigned ? static_cast<int64_t>(integer.getValue().getZExtValue())
-                   : integer.getValue().getSExtValue());
-  }
-  if (auto array = mlir::dyn_cast<mlir::ArrayAttr>(attribute)) {
-    json::Array result;
-    for (mlir::Attribute member : array) {
-      auto converted = attributeToCanonicalJson(member, depth + 1);
-      if (!converted)
-        return converted.takeError();
-      result.push_back(std::move(*converted));
-    }
-    return json::Value(std::move(result));
-  }
-  if (auto dictionary = mlir::dyn_cast<mlir::DictionaryAttr>(attribute)) {
-    json::Object result;
-    for (mlir::NamedAttribute named : dictionary) {
-      if (!inEncodingDomain(named.getName().getValue()))
-        return createStringError(
-            "dictionary key leaves the canonical encoding domain "
-            "(printable ASCII)");
-      auto converted = attributeToCanonicalJson(named.getValue(), depth + 1);
-      if (!converted)
-        return converted.takeError();
-      result[named.getName().getValue()] = std::move(*converted);
-    }
-    return json::Value(std::move(result));
-  }
-  return createStringError("attribute kind has no canonical encoding");
-}
 
 llvm::Expected<std::string>
 zkc::encoding::canonicalJsonBytes(const json::Value &value) {

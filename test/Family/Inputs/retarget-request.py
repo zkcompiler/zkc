@@ -12,6 +12,10 @@ import json
 import sys
 from pathlib import Path
 
+if len(sys.argv) != 4:
+    raise SystemExit(
+        "usage: retarget-request.py <request> <artifacts dir> <output>"
+    )
 request = json.loads(Path(sys.argv[1]).read_text())
 sealed = sorted(Path(sys.argv[2]).glob("*.mlirbc"))
 if len(sealed) != 1:

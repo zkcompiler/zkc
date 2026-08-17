@@ -115,8 +115,11 @@ int main(int argc, char **argv) {
 
   // Dispatch on the file's own name field; the chosen loader
   // re-validates the envelope fail-closed.
+  // The peek reads one field to choose a loader, and the loader it
+  // chooses re-parses under the uniqueness scan; running that scan here
+  // too would read the file twice to learn nothing twice.
   std::string name;
-  if (Expected<json::Value> peek = zkc::encoding::parseJsonUniqueKeys(json)) {
+  if (Expected<json::Value> peek = json::parse(json)) {
     if (const json::Object *root = peek->getAsObject())
       name = root->getString("registry").value_or("").str();
   } else {
