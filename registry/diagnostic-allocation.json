@@ -1,7 +1,8 @@
 {
   "coverage_exempt": {
     "E233": "extension backstop: the current sealed-container verifier rejects every non-member at E131 before projection; this remains the fail-closed default for a future ProtocolMember extension",
-    "E237": "projection self-check over freshly emitted OIR: every public path admits PIR first, so an input cannot intentionally create phantom, unlicensed, or missing coverage without bypassing the production boundary"
+    "E237": "projection self-check over freshly emitted OIR: every public path admits PIR first, so an input cannot intentionally create phantom, unlicensed, or missing coverage without bypassing the production boundary",
+    "E904": "generator self-check over freshly emitted output: the family emits a vocabulary and a spine and then admits them through the same loaders the tools ship, so reaching this needs a defect in the generator rather than an input. It stays live and fail-closed because that is the defect it exists to catch"
   },
   "ranges": [
     {
@@ -496,6 +497,34 @@
       ],
       "twin": {
         "excluded_reason": "bytecode transport is native-only",
+        "mirrored": []
+      }
+    },
+    {
+      "component": "tool invocation surface",
+      "live": [
+        "E900",
+        "E901",
+        "E902",
+        "E903",
+        "E904"
+      ],
+      "means": {
+        "E900": "an input the invocation names cannot be read, or an output path cannot be written",
+        "E901": "the flags name no job to do, or more than one",
+        "E902": "something the invocation names is absent from the environment it supplied",
+        "E903": "a file the invocation supplied is not the document that flag takes",
+        "E904": "a generator emitted something its own admission refuses, which is a defect in the generator rather than in its input"
+      },
+      "range": "E900-E909",
+      "reserved": [],
+      "sources": [
+        "include/zkc/Tools/",
+        "lib/Tools/",
+        "tools/"
+      ],
+      "twin": {
+        "excluded_reason": "the twin has no command-line surface: these name what an invocation of a zkc binary got wrong, and the twin is imported as a module",
         "mirrored": []
       }
     }

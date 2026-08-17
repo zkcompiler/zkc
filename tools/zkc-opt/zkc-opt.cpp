@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<llvm::MemoryBuffer> input =
       mlir::openInputFile(inputFilename, &error);
   if (!input)
-    return zkc::tool::reportCannotAnswer(error);
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + error);
   if (mlir::isBytecode(input->getMemBufferRef())) {
     return zkc::tool::reportRefusal(llvm::Twine("zkc-opt ") +
                                     zkc::tool::kBytecodeRefusal);
@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<llvm::ToolOutputFile> output =
       mlir::openOutputFile(outputFilename, &error);
   if (!output)
-    return zkc::tool::reportCannotAnswer(error);
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + error);
   if (mlir::failed(
           mlir::MlirOptMain(output->os(), std::move(input), registry, config)))
     return 1;

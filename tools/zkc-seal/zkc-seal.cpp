@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     return 1;
 
   if (std::error_code error = llvm::sys::fs::create_directories(outputDir)) {
-    return zkc::tool::reportCannotAnswer("cannot create '" + outputDir +
+    return zkc::tool::reportCannotAnswer("[zkc-E900] cannot create '" + outputDir +
                                          "': " + error.message());
   }
   // Every artifact writes before any is kept: a failure mid-module
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     std::string error;
     std::unique_ptr<ToolOutputFile> output = openOutputFile(path, &error);
     if (!output) {
-      return zkc::tool::reportCannotAnswer(error);
+      return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + error);
     }
     if (failed(zkc::artifact::writeArtifact(sealed, output->os())))
       return 1;

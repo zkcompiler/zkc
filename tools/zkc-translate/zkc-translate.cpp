@@ -149,7 +149,7 @@ int main(int argc, char **argv) {
           (int)emitOirId + (int)emitOirSemanticId + (int)emitProofSize +
           (int)emitTranscriptSchedule !=
       1) {
-    return zkc::tool::reportCannotAnswer("exactly one emission flag required");
+    return zkc::tool::reportCannotAnswer("[zkc-E901] exactly one emission flag required");
   }
 
   MLIRContext context;
@@ -167,13 +167,15 @@ int main(int argc, char **argv) {
         return wantOir ? isa<zkc::oir::ArtifactOp>(op)
                        : isa<zkc::pir::ProtocolOp, zkc::pir::SealedOp>(op);
       });
+  // Not the container this flag takes: the invocation handed the tool
+  // the wrong document, and getSingleOp has already named it.
   if (!container)
-    return 1;
+    return 2;
 
   std::string error;
   auto output = openOutputFile(outputFilename, &error);
   if (!output) {
-    return zkc::tool::reportCannotAnswer(error);
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + error);
   }
 
   auto result =

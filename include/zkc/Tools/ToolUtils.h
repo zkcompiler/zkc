@@ -59,13 +59,13 @@ getSingleOp(mlir::ModuleOp module, llvm::StringRef what,
     if (!matches(op))
       continue;
     if (found) {
-      module.emitError("expected exactly one ") << what;
+      module.emitError("[zkc-E903] expected exactly one ") << what;
       return nullptr;
     }
     found = &op;
   }
   if (!found)
-    module.emitError("expected exactly one ") << what;
+    module.emitError("[zkc-E903] expected exactly one ") << what;
   return found;
 }
 

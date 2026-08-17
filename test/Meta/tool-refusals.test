@@ -1,0 +1,59 @@
+# What an invocation got wrong, named by identifier.
+#
+# `tools/` had no diagnostic range at all, so the refusals a caller
+# actually meets — the ones about the command it typed rather than about
+# the protocol it wrote — were the one part of the refusal surface with
+# no stable name. These five say what an invocation got wrong, and they
+# are deliberately not about the subject: everything the tools refuse
+# *after* reaching their subject is a library judgment carrying that
+# library's identifier.
+#
+# Each of these exits 2, because naming the invocation's mistake is the
+# same statement as "this never reached its subject"
+# (docs/getting-started.md §4a). The identifier says which mistake.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# E900 — an input that cannot be read, or an output that cannot be
+# written. The same identifier for both because they are the same fact
+# about the invocation: a path it named does not work.
+# RUN: not zkc-registry-lint %t/absent.json 2>&1 | FileCheck %s --check-prefix=READFAIL
+# READFAIL: [zkc-E900]
+# RUN: not zkc-family %t/absent.json --emit-vocabulary=%t/v.json --emit-spine=%t/s.mlir 2>&1 | FileCheck %s --check-prefix=READFAIL2
+# READFAIL2: [zkc-E900] cannot read
+# RUN: not zkc-translate --id %S/../Encoding/schnorr.mlir -o %t/nosuchdir/out.txt 2>&1 | FileCheck %s --check-prefix=OUTFAIL
+# OUTFAIL: [zkc-E900]
+
+# E901 — the flags name no job, or more than one.
+# RUN: not zkc-translate %S/../Encoding/schnorr.mlir 2>&1 | FileCheck %s --check-prefix=NOJOB
+# NOJOB: [zkc-E901] exactly one emission flag required
+# RUN: not zkc-run %S/../Encoding/schnorr.mlir 2>&1 | FileCheck %s --check-prefix=NOJOB2
+# NOJOB2: [zkc-E901] either --vectors, --prove, or --replay-duplex is required
+
+# E902 — something the invocation names is absent from the environment
+# it supplied. Distinct from E900: the file was read, and what the
+# caller asked for is not in it.
+# RUN: not zkc-relation %S/../Encoding/schnorr.mlir --contracts=%zkc-registry-dir/relation-contracts.json --contract=no.such.contract --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json 2>&1 | FileCheck %s --check-prefix=ABSENT
+# ABSENT: [zkc-E902] no relation contract 'no.such.contract'
+# A file that is not the document a flag takes, caught before the tool
+# reaches any subject.
+# RUN: not zkc-translate --oir-id %S/../Encoding/schnorr.mlir 2>&1 | FileCheck %s --check-prefix=WRONGKIND
+# WRONGKIND: [zkc-E903] expected exactly one protocol container
+
+# E903 — a file the invocation supplied is not the document that flag
+# takes. Distinct from E902 again: the environment had what was asked
+# for; a *payload* file is the wrong shape.
+# RUN: echo 'not json at all' > %t/notjson.json
+# RUN: not zkc-run --replay-duplex=%t/notjson.json 2>&1 | FileCheck %s --check-prefix=WRONGDOC
+# WRONGDOC: [zkc-E903] fixture:
+# RUN: echo '{"transcript":[]}' > %t/notranscript.json
+# RUN: echo '{}' > %t/empty.json
+# RUN: not zkc-run --replay-duplex=%t/empty.json 2>&1 | FileCheck %s --check-prefix=WRONGDOC2
+# WRONGDOC2: [zkc-E903] fixture carries no transcript
+
+# E904 names a generator emitting something its own admission refuses.
+# It has no case here and carries a coverage exemption instead: the
+# family admits what it emits through the same loaders the tools ship,
+# so reaching it needs a defect in the generator rather than an input.
+# It stays live and fail-closed because that is the defect it exists to
+# catch — the same standing as E237.

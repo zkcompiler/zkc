@@ -98,7 +98,7 @@ static LoadedEndpoint loadEndpoint(llvm::StringRef path, MLIRContext &context) {
 static const zkc::interpreter::ExecutionProfile *resolveProfile() {
   auto profile = zkc::interpreter::selectProfile(profileName);
   if (!profile) {
-    zkc::tool::reportCannotAnswer(profile.takeError());
+    zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E902] ") + llvm::toString(profile.takeError()));
     return nullptr;
   }
   return &*profile;
@@ -116,18 +116,18 @@ namespace {
 int replayDuplex(llvm::StringRef path) {
   auto buffer = llvm::MemoryBuffer::getFile(path);
   if (!buffer) {
-    return zkc::tool::reportCannotAnswer("cannot read " + path);
+    return zkc::tool::reportCannotAnswer("[zkc-E900] cannot read " + path);
   }
   auto parsed = llvm::json::parse((*buffer)->getBuffer());
   if (!parsed) {
-    return zkc::tool::reportCannotAnswer("fixture: " +
+    return zkc::tool::reportCannotAnswer("[zkc-E903] fixture: " +
                                          llvm::toString(parsed.takeError()));
   }
   const llvm::json::Object *root = parsed->getAsObject();
   const llvm::json::Array *events =
       root ? root->getArray("transcript") : nullptr;
   if (!events) {
-    return zkc::tool::reportCannotAnswer("fixture carries no transcript");
+    return zkc::tool::reportCannotAnswer("[zkc-E903] fixture carries no transcript");
   }
 
   // The element framing belongs to the profile's codec, not to this
@@ -139,7 +139,7 @@ int replayDuplex(llvm::StringRef path) {
       zkc::interpreter::plonky3Profile().codec("plonky3_bb31_low_bits");
   if (!codec) {
     return zkc::tool::reportCannotAnswer(
-        "the plonky3 profile supplies no low-bits codec for replay framing");
+        "[zkc-E902] the plonky3 profile supplies no low-bits codec for replay framing");
   }
   auto duplex = zkc::interpreter::rawPlonky3Duplex();
   auto absorbElement = [&](uint64_t element) {
@@ -162,7 +162,7 @@ int replayDuplex(llvm::StringRef path) {
     // the same fail-closed treatment the --vectors file gets.
     auto malformed = [&](llvm::StringRef what) {
       return zkc::tool::reportCannotAnswer(
-          "fixture: malformed event " + llvm::Twine(index) + " (" + what + ")");
+          "[zkc-E903] fixture: malformed event " + llvm::Twine(index) + " (" + what + ")");
     };
     const llvm::json::Object *event = entry.getAsObject();
     if (!event)
@@ -259,7 +259,7 @@ static bool parsePairs(llvm::StringRef text, llvm::StringMap<std::string> &out,
   for (llvm::StringRef entry : entries) {
     auto [key, value] = entry.split('=');
     if (key.empty() || value.empty()) {
-      zkc::tool::reportCannotAnswer(what + ": malformed entry '" + entry + "'");
+      zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + what + ": malformed entry '" + entry + "'");
       return false;
     }
     out[key] = value.str();
@@ -278,19 +278,19 @@ static int proveRoundTrip() {
   context.loadDialect<zkc::oir::OirDialect, zkc::pir::PirDialect>();
   LoadedEndpoint prover = loadEndpoint(inputFilename, context);
   if (!prover)
-    return 1;
+    return 2;
   zkc::oir::ArtifactOp artifact = prover.artifact;
   if (!protocolVocabulary.empty()) {
     auto environment = zkc::registry::ProtocolEnvironment::loadFromFiles(
         protocolVocabulary, constructionProfileRegistry);
     if (!environment) {
       return zkc::tool::reportCannotAnswer(
-          "prove: " + llvm::toString(environment.takeError()));
+          "[zkc-E902] prove: " + llvm::toString(environment.takeError()));
     }
     if (llvm::Error error =
             zkc::pir::admitOirArtifact(artifact, *environment)) {
       return zkc::tool::reportCannotAnswer(
-          "prove: standalone admission refused: " +
+          "[zkc-E903] prove: standalone admission refused: " +
           llvm::toString(std::move(error)));
     }
   }
@@ -316,7 +316,7 @@ static int proveRoundTrip() {
 
   LoadedEndpoint verifier = loadEndpoint(verifyWith, context);
   if (!verifier)
-    return 1;
+    return 2;
   auto result = zkc::interpreter::execute(verifier.artifact, *profile,
                                           statement, proved->proof);
   if (!result) {
@@ -350,14 +350,14 @@ int main(int argc, char **argv) {
     return proveRoundTrip();
   if (vectorsFilename.empty()) {
     return zkc::tool::reportCannotAnswer(
-        "either --vectors, --prove, or --replay-duplex is required");
+        "[zkc-E901] either --vectors, --prove, or --replay-duplex is required");
   }
 
   MLIRContext context;
   context.loadDialect<zkc::oir::OirDialect, zkc::pir::PirDialect>();
   LoadedEndpoint endpoint = loadEndpoint(inputFilename, context);
   if (!endpoint)
-    return 1;
+    return 2;
   zkc::oir::ArtifactOp artifact = endpoint.artifact;
 
   // The verify side re-admits against the environment on the same terms the
@@ -370,23 +370,23 @@ int main(int argc, char **argv) {
         protocolVocabulary, constructionProfileRegistry);
     if (!environment) {
       return zkc::tool::reportCannotAnswer(
-          "vectors: " + llvm::toString(environment.takeError()));
+          "[zkc-E902] vectors: " + llvm::toString(environment.takeError()));
     }
     if (llvm::Error error =
             zkc::pir::admitOirArtifact(artifact, *environment)) {
       return zkc::tool::reportCannotAnswer(
-          "vectors: standalone admission refused: " +
+          "[zkc-E903] vectors: standalone admission refused: " +
           llvm::toString(std::move(error)));
     }
   }
 
   auto buffer = llvm::MemoryBuffer::getFile(vectorsFilename);
   if (!buffer) {
-    return zkc::tool::reportCannotAnswer("cannot read " + vectorsFilename);
+    return zkc::tool::reportCannotAnswer("[zkc-E900] cannot read " + vectorsFilename);
   }
   auto json = zkc::encoding::parseJsonUniqueKeys((*buffer)->getBuffer());
   if (!json) {
-    return zkc::tool::reportCannotAnswer("vectors: " +
+    return zkc::tool::reportCannotAnswer("[zkc-E903] vectors: " +
                                          llvm::toString(json.takeError()));
   }
   // A malformed vector file is a clean refusal, never a null deref:
@@ -396,7 +396,7 @@ int main(int argc, char **argv) {
   // masks the actual malformed-input diagnostic and makes negative fixtures
   // accidentally depend on one validation order.
   auto malformed = [&](llvm::StringRef what) {
-    return zkc::tool::reportCannotAnswer("vectors: malformed file (" + what +
+    return zkc::tool::reportCannotAnswer("[zkc-E903] vectors: malformed file (" + what +
                                          ")");
   };
   const auto *root = json->getAsObject();
@@ -449,7 +449,7 @@ int main(int argc, char **argv) {
   // gate exists so the citation below is judged against the recomputed
   // identity, never against an unauthenticated authored string).
   if (llvm::Error error = zkc::encoding::validateOirIdentity(artifact)) {
-    return zkc::tool::reportCannotAnswer(std::move(error));
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + llvm::toString(std::move(error)));
   }
   auto identity = zkc::encoding::computeOirId(artifact);
   if (!identity) {
@@ -471,7 +471,7 @@ int main(int argc, char **argv) {
         ArrayRef<uint8_t>((const uint8_t *)vector.proofBytes.data(),
                           vector.proofBytes.size()));
     if (!result) {
-      return zkc::tool::reportCannotAnswer("profile error: " +
+      return zkc::tool::reportCannotAnswer("[zkc-E902] profile error: " +
                                            llvm::toString(result.takeError()));
     }
     std::string challenges = llvm::join(result->challenges, ",");

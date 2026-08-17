@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
   auto environment = zkc::registry::ProtocolEnvironment::loadFromFiles(
       protocolVocabulary, constructionProfileRegistry);
   if (!environment)
-    return zkc::tool::reportCannotAnswer(environment.takeError());
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E902] ") + llvm::toString(environment.takeError()));
 
   auto admitted = zkc::artifact::loadAndAdmitArtifact(inputFilename,
                                                       std::move(*environment));
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<llvm::ToolOutputFile> output =
       mlir::openOutputFile(outputFilename, &error);
   if (!output) {
-    return zkc::tool::reportCannotAnswer(error);
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + error);
   }
   projected->print(output->os());
   output->os() << "\n";

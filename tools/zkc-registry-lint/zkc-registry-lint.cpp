@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
   // other exit is the admission judgment this tool exists to make.
   auto buffer = zkc::registry::RegistryFile::readFile(inputFilename);
   if (!buffer)
-    return zkc::tool::reportCannotAnswer(buffer.takeError());
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + llvm::toString(buffer.takeError()));
   StringRef json = (*buffer)->getBuffer();
 
   // Dispatch on the file's own name field; the chosen loader

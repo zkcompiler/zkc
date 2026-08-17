@@ -81,24 +81,24 @@ int main(int argc, char **argv) {
   auto contracts =
       zkc::registry::RelationContractRegistry::loadFromFile(contractsFilename);
   if (!contracts)
-    return zkc::tool::reportCannotAnswer(contracts.takeError());
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + llvm::toString(contracts.takeError()));
   const zkc::registry::RelationContract *contract =
       contracts->lookup(contractName);
   if (!contract)
     return zkc::tool::reportCannotAnswer(
-        "no relation contract '" + contractName + "' in " + contractsFilename);
+        "[zkc-E902] no relation contract '" + contractName + "' in " + contractsFilename);
 
   auto environment = zkc::registry::ProtocolEnvironment::loadFromFiles(
       vocabularyFilename, profileFilename);
   if (!environment)
-    return zkc::tool::reportCannotAnswer(environment.takeError());
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E902] ") + llvm::toString(environment.takeError()));
   auto artifact = zkc::artifact::loadAndAdmitArtifact(inputFilename,
                                                       std::move(*environment));
   if (!artifact)
-    return zkc::tool::reportCannotAnswer(artifact.takeError());
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + llvm::toString(artifact.takeError()));
   auto view = snd::buildSealedSoundnessView(*artifact);
   if (!view)
-    return zkc::tool::reportCannotAnswer(view.takeError());
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + llvm::toString(view.takeError()));
 
   // The profile pin is what keeps a vocabulary edit from changing what a
   // fixed contract means, so it is checked rather than carried: the
@@ -163,11 +163,11 @@ int main(int argc, char **argv) {
   if (!bytesFilename.empty()) {
     if (contract->format != "r1cs-bin-v1")
       return zkc::tool::reportCannotAnswer(
-          "format '" + contract->format +
+          "[zkc-E902] format '" + contract->format +
           "' has no reader; relation bytes cannot be read for it");
     auto buffer = MemoryBuffer::getFile(bytesFilename, /*IsText=*/false);
     if (!buffer)
-      return zkc::tool::reportCannotAnswer("cannot read '" + bytesFilename +
+      return zkc::tool::reportCannotAnswer("[zkc-E900] cannot read '" + bytesFilename +
                                            "'");
     StringRef bytes = (*buffer)->getBuffer();
     SHA256 hasher;
@@ -187,7 +187,7 @@ int main(int argc, char **argv) {
     auto parsed = zkc::relation::readR1csHeader(
         bytes, contract->instanceEncoding.fieldOrder);
     if (!parsed)
-      return zkc::tool::reportCannotAnswer(parsed.takeError());
+      return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + llvm::toString(parsed.takeError()));
     header = *parsed;
     report.computed.push_back("header prime " + header->prime);
     report.computed.push_back("header public arity " +
