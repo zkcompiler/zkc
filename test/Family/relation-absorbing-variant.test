@@ -1,0 +1,85 @@
+# An authored variant that binds the relation's identity into its own
+# transcript, beside the transcription it departs from.
+#
+# The pinned upstream verifier absorbs the statement but not the AIR
+# program, an acknowledged gap its own replay harness states; the
+# transcription instance reproduces that transcript byte for byte and so
+# inherits the gap. This variant is the same family with one authored
+# event at the head of the spine: the relation anchor's transcript
+# projection (docs/spec/relations.md §2.8), absorbed before anything
+# else, so every later challenge is bound to which relation is being
+# proven. Upstream cannot grade it — that is the point, not a defect —
+# so the evidence here is what the artifact and its judgments say, and
+# what changes when the bound identity changes.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# The variant generates, seals, and projects through the same path as
+# every other instance: the delta is authored description content, not a
+# tool that knows about relations.
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf-bound.json --emit-vocabulary=%t/bound-vocab.json --emit-spine=%t/bound.mlir
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/plain-vocab.json --emit-spine=%t/plain.mlir
+
+# The authored event is one binding at the head, carrying the anchor's
+# projection, and the segment count moves with it.
+# RUN: FileCheck %s --check-prefix=SPINE --input-file=%t/bound.mlir
+# SPINE: segments [13]
+# SPINE: %t0 = pir.begin
+# SPINE-NEXT: %p1, %pre1 = pir.bind %t0 "air_id" : "rs" stage seal = "2503430093901322661312567318047816930087251456050582343313930034622361329442"
+# SPINE-NEXT: %t1, %size = pir.bind %p1 "log_size"
+
+# The vocabulary is untouched by the authored event: a binding cites no
+# contract, so the delta is protocol identity and nothing else. This is
+# what makes the seal judgment, not the generator, the authority over
+# what an author may write.
+# RUN: diff %t/plain-vocab.json %t/bound-vocab.json
+
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/bound-vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/bound.mlir -o %t/bound-sealed.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/plain-vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/plain.mlir -o %t/plain-sealed.mlir
+
+# Two protocols, two identities: the authored event is in canonical
+# content, so the variant is a different artifact rather than a mode of
+# the same one.
+# RUN: %python -c "import re,sys; ids=[re.search(r'id \"([0-9a-f]{64})\"', open(p).read()).group(1) for p in sys.argv[1:]]; print('DISTINCT' if ids[0] != ids[1] else 'SAME')" %t/bound-sealed.mlir %t/plain-sealed.mlir | FileCheck %s --check-prefix=IDENTITY
+# IDENTITY: DISTINCT
+
+# The correspondence judgment reports the binding as computed for the
+# variant — established from sealed content, not declared.
+# RUN: zkc-seal %t/bound.mlir --protocol-vocabulary=%t/bound-vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t/bound.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/bound.artifacts %t/bound.mlirbc
+# RUN: zkc-relation %t/bound.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=plonky3.fri.value-faithful-bound --protocol-vocabulary=%t/bound-vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json | FileCheck %s --check-prefix=BOUND
+# BOUND: "computed":[
+# BOUND-SAME: relation anchor 'contract' is transcript-carried: seal-stage binding 'air_id' absorbs its projection
+
+# And reports its absence for the transcription, which carries the same
+# relation structurally and binds nothing. A reader must not take
+# silence for a binding, so the absence is stated rather than omitted.
+# RUN: zkc-seal %t/plain.mlir --protocol-vocabulary=%t/plain-vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json -o %t/plain.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/plain.artifacts %t/plain.mlirbc
+# RUN: zkc-relation %t/plain.mlirbc --contracts=%zkc-registry-dir/relation-contracts.json --contract=plonky3.fri.value-faithful --protocol-vocabulary=%t/plain-vocab.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json | FileCheck %s --check-prefix=PLAIN
+# PLAIN: "asserted":[
+# PLAIN-SAME: no seal-stage binding carries a relation anchor's transcript projection, so no challenge is bound to it
+
+# The binding bites: one flipped bit in the relation's identity is a
+# different absorbed value, a different artifact, and a different first
+# challenge. Were the identity merely structural, none of the three
+# would move.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); a=d['anchors']['contract']; d['anchors']['contract']='sha256:'+('%x'%(int(a[7:],16)^1)).rjust(64,'0'); json.dump(d, open(sys.argv[2],'w'))" %S/../Oir/Inputs/plonky3-fri-vf-bound.json %t/flipped.json
+# RUN: zkc-family %t/flipped.json --emit-vocabulary=%t/flipped-vocab.json --emit-spine=%t/flipped.mlir
+# RUN: not diff -q %t/bound.mlir %t/flipped.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/flipped-vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/flipped.mlir -o %t/flipped-sealed.mlir
+# RUN: %python -c "import re,sys; ids=[re.search(r'id \"([0-9a-f]{64})\"', open(p).read()).group(1) for p in sys.argv[1:]]; print('DISTINCT' if ids[0] != ids[1] else 'SAME')" %t/bound-sealed.mlir %t/flipped-sealed.mlir | FileCheck %s --check-prefix=FLIPPED
+# FLIPPED: DISTINCT
+
+# The projection is derived, never authored: an entry may not carry both
+# an anchor and a value, because a generated artifact must not be able
+# to bind a value the anchor does not name.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['preamble'][0]['value']='7'; json.dump(d, open(sys.argv[2],'w'))" %S/../Oir/Inputs/plonky3-fri-vf-bound.json %t/both.json
+# RUN: not zkc-family %t/both.json --emit-vocabulary=%t/x.json --emit-spine=%t/x.mlir 2>&1 | FileCheck %s --check-prefix=DERIVED
+# DERIVED: names an 'anchor' and a 'value'
+
+# A preamble label the family already emits refuses at the description,
+# where the author can see which label collided.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['preamble'][0]={'label':'log_size','class':'pow_value','value':'4'}; json.dump(d, open(sys.argv[2],'w'))" %S/../Oir/Inputs/plonky3-fri-vf-bound.json %t/collide.json
+# RUN: not zkc-family %t/collide.json --emit-vocabulary=%t/x.json --emit-spine=%t/x.mlir 2>&1 | FileCheck %s --check-prefix=COLLIDE
+# COLLIDE: is a label this family already emits

@@ -681,6 +681,8 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
     if (auto bind = mlir::dyn_cast<pir::BindOp>(operation))
       if (bind.getStage() == pir::Stage::Instance)
         view.statementLabels.push_back(bind.getLabel().str());
+      else if (std::optional<llvm::StringRef> value = bind.getValue())
+        view.sealBindValues[bind.getLabel().str()] = value->str();
 
   llvm::StringMap<pir::CheckOp> checksByLabel;
   llvm::StringMap<uint64_t> materialEventPositions;
