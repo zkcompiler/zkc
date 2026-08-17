@@ -33,6 +33,39 @@
         }
       }
     },
+    "plonky3.fri.value-faithful-bound": {
+      "claim_profile": {
+        "digest": "sha256:db632a627bb1fb032a5e09257482a3c92e166288a92825629291f93a8f681042",
+        "name": "opaque_relation"
+      },
+      "format": "opaque",
+      "identity": {
+        "attested_id": "zkc.replay.fib_air",
+        "attestor": "zkc.replay-fixture"
+      },
+      "instance_anchors": [
+        "statement"
+      ],
+      "instance_encoding": {
+        "kind": "commitment",
+        "payload_class": "rs"
+      },
+      "relation_anchors": {
+        "contract": "sha256:c64d5f2230e9c2f6853e0bc596090058c681ed35069a28882569f05a6588e427"
+      },
+      "statement_correspondence": [
+        {
+          "label": "f_root",
+          "slot": 0
+        }
+      ],
+      "witness_ports": {
+        "kind": "opaque",
+        "port": {
+          "name": "codeword"
+        }
+      }
+    },
     "toy.r1cs.entry": {
       "claim_profile": {
         "digest": "sha256:52e98c58d3e6b81cb68dcdeb77116de172da64091f041b116c3ca3f1ebd55d54",

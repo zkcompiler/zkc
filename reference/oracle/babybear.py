@@ -139,10 +139,14 @@ class Duplex:
     (a short final chunk keeps only the bytes present) and absorbed before
     any protocol event."""
 
-    def __init__(self, source_identity: str):
+    def __init__(self, source_identity: str | None):
         self.state = [0] * 16
         self.inputs: list[int] = []
         self.outputs: list[int] = []
+        # A zero initialization vector is a fresh duplex: nothing is
+        # absorbed before the protocol's own first event.
+        if source_identity is None:
+            return
         raw = source_identity.encode("ascii")
         for i in range(0, len(raw), 4):
             word = 0

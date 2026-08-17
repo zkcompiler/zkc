@@ -11,6 +11,8 @@
 
 #include "zkc/Family/FriFamily.h"
 
+#include "zkc/Relation/AnchorProjection.h"
+
 #include "zkc/ChallengeShape.h"
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Encoding/EncodingDomain.h"
@@ -56,6 +58,11 @@ static const ParamSpec kFriParams[] = {
      "rs[, pow_value][, word]}}"},
     {"anchors", true,
      "claim anchors: {contract, statement}, each sha256:<64 hex>"},
+    {"preamble", false,
+     "authored seal-stage bindings emitted at the head of the spine, each "
+     "{label, class} with either a 'value' (decimal, canonical for the "
+     "class) or an 'anchor' naming a claim anchor whose transcript "
+     "projection becomes the value"},
     {"value_faithful", false,
      "emit the challenger-value-faithful spine "
      "(evaluation/upstream/plonky3-replay/README.md): the final "
@@ -88,6 +95,23 @@ static bool isRationalString(StringRef s) {
     return false;
   }
   return true;
+}
+
+/// The codec this description declares for a payload class, or empty
+/// when it declares none.
+static llvm::StringRef codecFor(const FriDescription &desc,
+                                llvm::StringRef payloadClass) {
+  if (payloadClass == "ext_field")
+    return desc.extFieldCodec;
+  if (payloadClass == "query_index")
+    return desc.queryIndexCodec;
+  if (payloadClass == "pow_value")
+    return desc.powValueCodec;
+  if (payloadClass == "rs")
+    return desc.rsCodec;
+  if (payloadClass == "word")
+    return desc.wordCodec;
+  return {};
 }
 
 Expected<FriDescription>
@@ -337,6 +361,108 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
       return err("'anchors." + key + "' must be sha256:<64 lowercase hex>");
     (key == "contract" ? desc.anchorContract : desc.anchorStatement) =
         std::move(*value);
+  }
+
+  if (const json::Value *preambleValue = top->get("preamble")) {
+    const json::Array *entries = preambleValue->getAsArray();
+    if (!entries)
+      return err("'preamble' must be an array of seal-stage bindings");
+    for (const json::Value &entryValue : *entries) {
+      const json::Object *entry = entryValue.getAsObject();
+      if (!entry)
+        return err("each 'preamble' entry must be an object");
+      for (const auto &field : *entry) {
+        StringRef key = field.first;
+        if (key != "label" && key != "class" && key != "value" &&
+            key != "anchor")
+          return err("unknown field 'preamble." + key + "'");
+      }
+      FriDescription::PreambleEntry parsed;
+      auto label = stringField(*entry, "label", "preamble.");
+      if (!label)
+        return label.takeError();
+      parsed.label = std::move(*label);
+      auto payloadClass = stringField(*entry, "class", "preamble.");
+      if (!payloadClass)
+        return payloadClass.takeError();
+      parsed.payloadClass = std::move(*payloadClass);
+      // A binding's class keys its codec, so a class this instance's
+      // kappa does not carry is refused where the author wrote it
+      // rather than at seal, which could only name generated IR.
+      if (codecFor(desc, parsed.payloadClass).empty())
+        return err("'preamble' entry '" + parsed.label + "' names class '" +
+                   parsed.payloadClass +
+                   "', which this instance's kappa carries no codec for");
+
+      // The label namespace is global across every member of the
+      // spine, so a collision is refused here rather than at seal,
+      // where the diagnostic would name an operation the author never
+      // wrote.
+      for (StringRef reserved :
+           {"log_size", "f_root", "opened_value", "final_poly", "nonce",
+            "prox", "frij", "pow_pin", "merkle_open", "query_consistency"})
+        if (parsed.label == reserved)
+          return err("'preamble' label '" + parsed.label +
+                     "' is a label this family already emits");
+      for (const FriDescription::PreambleEntry &earlier : desc.preamble)
+        if (earlier.label == parsed.label)
+          return err("'preamble' label '" + parsed.label + "' appears twice");
+
+      const json::Value *value = entry->get("value");
+      const json::Value *anchor = entry->get("anchor");
+      if (!value && !anchor)
+        return err("'preamble' entry '" + parsed.label +
+                   "' needs a 'value' or an 'anchor'");
+      if (value && anchor)
+        return err("'preamble' entry '" + parsed.label +
+                   "' names an 'anchor' and a 'value'; an anchored entry's "
+                   "value is the anchor's transcript projection and is "
+                   "never authored");
+      if (anchor) {
+        auto anchorName = stringField(*entry, "anchor", "preamble.");
+        if (!anchorName)
+          return anchorName.takeError();
+        parsed.anchor = std::move(*anchorName);
+        if (parsed.anchor != "contract")
+          return err("'preamble' entry '" + parsed.label + "' cites anchor '" +
+                     parsed.anchor +
+                     "'; only 'contract' may be cited, because this family "
+                     "already binds the statement anchor to its own value "
+                     "and a semantic reference is bound once");
+        auto projected =
+            zkc::relation::anchorProjectionValue(desc.anchorContract);
+        if (!projected)
+          return projected.takeError();
+        parsed.value = std::move(*projected);
+      } else {
+        auto literal = stringField(*entry, "value", "preamble.");
+        if (!literal)
+          return literal.takeError();
+        parsed.value = std::move(*literal);
+        if (parsed.value.empty() ||
+            !llvm::all_of(parsed.value, [](char c) { return c >= '0' && c <= '9'; }) ||
+            (parsed.value.size() > 1 && parsed.value[0] == '0'))
+          return err("'preamble' entry '" + parsed.label +
+                     "' needs an exact decimal value");
+        // An authored value is a scalar. A class framing several field
+        // elements is canonical only element by element, which is a
+        // fact about the execution profile's field rather than about
+        // this description, so a wide binding states an 'anchor' and
+        // carries its transcript projection (docs/spec/relations.md
+        // section 2.8) instead of a hand-written number no author can
+        // check.
+        if (parsed.payloadClass == "rs" || parsed.payloadClass == "ext_field")
+          return err("'preamble' entry '" + parsed.label + "' has class '" +
+                     parsed.payloadClass +
+                     "', which frames several field elements; such a binding "
+                     "states an 'anchor' and carries its transcript "
+                     "projection rather than an authored value");
+        if (parsed.value.size() > 19)
+          return err("'preamble' entry '" + parsed.label +
+                     "' has a value wider than its class frames");
+      }
+      desc.preamble.push_back(std::move(parsed));
+    }
   }
 
   // Cross-parameter domains the instance would otherwise fail at
@@ -885,6 +1011,23 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
   return out;
 }
 
+/// Emit the authored preamble after `pir.begin` and return the token
+/// the family's own first event chains from. The preamble uses its own
+/// token names so adding one changes no other line of the spine.
+static std::string emitPreamble(llvm::raw_ostream &os,
+                                const FriDescription &desc) {
+  std::string token = "%t0";
+  for (size_t index = 0; index < desc.preamble.size(); ++index) {
+    const FriDescription::PreambleEntry &entry = desc.preamble[index];
+    std::string next = "%p" + std::to_string(index + 1);
+    os << "  " << next << ", %pre" << (index + 1) << " = pir.bind " << token
+       << " \"" << entry.label << "\" : \"" << entry.payloadClass
+       << "\" stage seal = \"" << entry.value << "\"\n";
+    token = next;
+  }
+  return token;
+}
+
 /// The challenger-value-faithful spine
 /// (evaluation/upstream/plonky3-replay/README.md): the stripped pinned
 /// harness's own transcript — sizes and input commitment bound, the opening
@@ -935,16 +1078,18 @@ static std::string emitValueFaithfulSpine(const FriDescription &desc) {
   // Arity binds live past the sampling rounds: a second declared phase
   // (kernel.md §5.3), so the per-segment statement-binding default is
   // met rather than bypassed.
-  os << " segments [" << (6 + 2 * k) << "]";
+  os << " segments [" << (6 + 2 * k + (int64_t)desc.preamble.size())
+     << "]";
   os << " policy \"analysis_only_artifact\" {\n";
   os << "  %c = pir.instantiate \"prox\" anchors {contract = \""
      << desc.anchorContract << "\", statement = \"" << desc.anchorStatement
      << "\"} : !pir.claim<\"opaque_relation\">\n";
   os << "  %t0 = pir.begin\n";
+  std::string head = emitPreamble(os, desc);
   // The pinned harness binds the input log-size before anything else;
   // the trace height is the evaluation domain shrunk by the rate,
   // query_log2 - log_blowup.
-  os << "  %t1, %size = pir.bind %t0 \"log_size\" : \"pow_value\" stage "
+  os << "  %t1, %size = pir.bind " << head << " \"log_size\" : \"pow_value\" stage "
         "seal = \""
      << (desc.queryLog2 - desc.logBlowup) << "\"\n";
   os << "  %t2, %f = pir.bind %t1 \"f_root\" : \"rs\" stage instance\n";
@@ -1120,7 +1265,9 @@ std::string zkc::family::emitFriSpine(const FriDescription &desc) {
   int64_t token = 1;
   auto nextToken = [&]() { return "%t" + std::to_string(++token); };
   os << "  %t0 = pir.begin\n";
-  os << "  %t1, %f = pir.bind %t0 \"f_root\" : \"rs\" stage instance\n";
+  std::string head = emitPreamble(os, desc);
+  os << "  %t1, %f = pir.bind " << head
+     << " \"f_root\" : \"rs\" stage instance\n";
   std::string prevToken = "%t1";
 
   std::string prevMsg = "%f";

@@ -220,6 +220,13 @@ struct SealedSoundnessView {
   /// for consumers that relate the artifact's statement to an external
   /// object (docs/spec/relations.md §2.6); no judgment here reads it.
   std::vector<std::string> statementLabels;
+
+  /// The values of seal-stage bindings, by label. A seal-stage binding
+  /// carries its value in sealed content, so a consumer relating an
+  /// artifact to an external object can check what the transcript
+  /// carries rather than take it on the artifact's word
+  /// (docs/spec/relations.md §2.8); no judgment here reads it.
+  std::map<std::string, std::string, std::less<>> sealBindValues;
   std::map<uint64_t, SealedReduction> reductionsByTransformerPosition;
   std::optional<SealedDuplexFacts> duplex;
 };

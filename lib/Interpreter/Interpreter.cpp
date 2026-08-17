@@ -232,6 +232,16 @@ protected:
             " bits; the codec for class '" + valueClass + "' frames at most " +
             std::to_string((*codec)->framingBits()));
       (*codec)->absorbFraming(value, framed);
+      // A value that changes on its way into the sponge is not the
+      // value the sealed artifact declares, so a non-canonical element
+      // refuses here rather than being reduced silently. The framing
+      // is the wire form for these classes, so the wire's own
+      // canonicality rule is the one that applies.
+      if (!(*codec)->wireCanonical(framed))
+        return fail("[zkc-E413] absorbed value is not canonical for class '" +
+                    valueClass +
+                    "'; the sponge would reduce it, and the transcript would "
+                    "carry a value the artifact does not declare");
       sponge->absorb(framed);
     }
     return llvm::Error::success();
@@ -277,10 +287,16 @@ protected:
   }
 
   llvm::Error stepConstant(oir::ConstantOp constant) {
-    uint64_t value;
-    if (StringRef(constant.getValue()).getAsInteger(10, value))
+    // A pinned constant is as wide as its class frames: an authored
+    // binding of a digest-shaped identity states a value no scalar
+    // holds, so the parse is arbitrary precision, the same one a
+    // statement value already takes.
+    StringRef text = constant.getValue();
+    if (text.empty() ||
+        text.find_first_not_of("0123456789") != StringRef::npos ||
+        llvm::APInt::getSufficientBitsNeeded(text, 10) > kValueBits)
       return fail("[zkc-E406] constant is not decimal");
-    env.try_emplace(constant.getVal(), makeValue(value));
+    env.try_emplace(constant.getVal(), llvm::APInt(kValueBits, text, 10));
     return llvm::Error::success();
   }
 

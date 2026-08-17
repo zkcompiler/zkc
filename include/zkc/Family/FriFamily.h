@@ -77,6 +77,24 @@ struct FriDescription {
   std::string wordCodec; // value-faithful only: queried trace rows
   std::string anchorContract, anchorStatement;
 
+  /// One authored seal-stage binding emitted at the head of the spine,
+  /// before anything the family itself binds. The point is generality:
+  /// an author states a pinned public commitment they want every later
+  /// challenge bound to, and the family does not care what it means.
+  ///
+  /// An entry citing an `anchor` carries no author-written value. Its
+  /// value is the anchor's transcript projection (docs/spec/relations.md
+  /// §2.8), derived here so that a generated artifact cannot bind a
+  /// value the anchor does not name, and the entry additionally emits a
+  /// material binding to that anchor.
+  struct PreambleEntry {
+    std::string label;
+    std::string payloadClass;
+    std::string value;  // derived when anchor is set
+    std::string anchor; // empty, or the cited anchor name
+  };
+  std::vector<PreambleEntry> preamble;
+
   bool johnson() const { return analysis == "johnson"; }
   bool udr() const { return analysis == "udr"; }
 };

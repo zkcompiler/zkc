@@ -1,0 +1,40 @@
+# A value that the sponge would reduce on its way in refuses at framing.
+#
+# The width gate (execution-domain.test) catches a value too wide for its
+# codec. It does not catch the other way a transcript can carry something
+# the artifact does not declare: a value that fits the framing but whose
+# limbs are not canonical for the field the sponge computes in. This
+# profile's duplex reduces each limb modulo the characteristic as it
+# absorbs, so two declared values differing by exactly the characteristic
+# in one limb would absorb identically, derive identical challenges, and
+# reach the same verdict — the same binding collision the width gate
+# exists to refuse, entered through a different door.
+#
+# The pair below is that collision made concrete: the second value is the
+# first with the characteristic added to its low limb. Both refuse, and
+# the refusal names the class whose framing would have reduced them.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-opt '-pir-seal=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/spine.mlir -o %t/sealed.mlir
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/sealed.mlir -o %t/verifier.mlir
+
+# The statement's low limb holds exactly the characteristic: in range for
+# the 256-bit framing, outside the field the sponge computes in.
+# RUN: %python %S/Inputs/one-vector.py %t/verifier.mlir 2013265921 > %t/noncanonical.json
+# RUN: not zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/noncanonical.json 2>&1 | FileCheck %s --check-prefix=REDUCED
+# REDUCED: [zkc-E413] absorbed value is not canonical for class 'rs'
+
+# The partner of the collision: the same limb plus the characteristic
+# again. Were the reduction silent, this and the value above would be one
+# transcript; the gate refuses it for the same stated reason.
+# RUN: %python %S/Inputs/one-vector.py %t/verifier.mlir 4026531842 > %t/partner.json
+# RUN: not zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/partner.json 2>&1 | FileCheck %s --check-prefix=PARTNER
+# PARTNER: [zkc-E413] absorbed value is not canonical for class 'rs'
+
+# A canonical statement passes this gate and stops later, at the query
+# phase — so the refusals above are the canonicality rule and not the
+# fixture.
+# RUN: %python %S/Inputs/one-vector.py %t/verifier.mlir 7 > %t/canonical.json
+# RUN: not zkc-run %t/verifier.mlir --profile plonky3 --vectors %t/canonical.json 2>&1 | FileCheck %s --check-prefix=CANONICAL
+# CANONICAL-NOT: zkc-E413

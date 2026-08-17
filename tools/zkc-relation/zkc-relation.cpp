@@ -11,6 +11,7 @@
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Registry/ProtocolEnvironment.h"
 #include "zkc/Registry/RelationContractRegistry.h"
+#include "zkc/Relation/AnchorProjection.h"
 #include "zkc/Relation/R1csHeader.h"
 #include "zkc/Soundness/PirSoundnessAdapter.h"
 #include "zkc/Soundness/SealedSoundnessView.h"
@@ -265,6 +266,28 @@ int main(int argc, char **argv) {
         "field");
   }
 
+  // A relation anchor whose transcript projection a seal-stage binding
+  // carries is bound into every later challenge of this protocol
+  // (docs/spec/relations.md §2.8). This is the one place a relation
+  // fact is established from the artifact's own sealed content rather
+  // than declared.
+  bool anyCarried = false;
+  for (const auto &[name, value] : contract->relationAnchors) {
+    auto projected = zkc::relation::anchorProjectionValue(value);
+    if (!projected)
+      return failError(projected.takeError());
+    for (const auto &[label, bound] : view->sealBindValues)
+      if (bound == *projected) {
+        anyCarried = true;
+        report.computed.push_back(
+            "relation anchor '" + name +
+            "' is transcript-carried: seal-stage binding '" + label +
+            "' absorbs its projection, so every later challenge is bound "
+            "to the relation's identity");
+        break;
+      }
+  }
+
   // Sealed material bindings covering a contract anchor: where one
   // exists, the bound value's label must appear in the correspondence,
   // and a binding that contradicts the wiring refuses. Instance anchors
@@ -315,6 +338,11 @@ int main(int argc, char **argv) {
     report.asserted.push_back(
         "every interface fact this contract declares: no bytes were "
         "supplied, so nothing was read");
+  if (!anyCarried)
+    report.asserted.push_back(
+        "that this protocol is about the relation the anchors name beyond "
+        "its own identity: no seal-stage binding carries a relation "
+        "anchor's transcript projection, so no challenge is bound to it");
   report.asserted.push_back(
       "what each statement slot means (zkc.assume."
       "statement_correspondence_wiring)");

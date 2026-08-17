@@ -55,10 +55,21 @@ impl P3Duplex {
 
     /// Absorb canonical field elements: buffered, invalidating any
     /// pending output; a full rate buffer duplexes.
+    ///
+    /// A word at or above the characteristic panics rather than being
+    /// reduced. Two declared values differing by the characteristic in
+    /// one word would otherwise absorb identically and derive identical
+    /// challenges, so the generated verifier refuses exactly what the
+    /// interpreter refuses at framing.
     pub fn absorb(&mut self, words: &[u32]) {
         for &word in words {
+            assert!(
+                word < BB,
+                "absorbed word {word} is not canonical; the transcript would \
+                 carry a value the artifact does not declare"
+            );
             self.output_buffer.clear();
-            self.input_buffer.push(word % BB);
+            self.input_buffer.push(word);
             if self.input_buffer.len() == 8 {
                 self.duplexing();
             }
