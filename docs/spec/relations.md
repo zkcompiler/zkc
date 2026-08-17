@@ -254,9 +254,12 @@ recompute it.
 
 What the projection does not carry is the remaining bits: it is a
 216-bit binding of a 256-bit digest, and a second preimage against it
-is correspondingly cheaper. That is stated, not hidden; a protocol
-whose security argument needs the full digest binds it by another
-means.
+is correspondingly cheaper. That shortfall is a computational
+quantity, so it belongs where this specification puts every other one
+— as a named primitive-game advantage carried in the bound of any rule
+whose protocol binds a relation identity this way, never as a remark a
+reader is trusted to remember. A protocol whose security argument
+needs the full digest binds it by another means.
 
 An absorbed value that is not canonical for its payload class refuses
 at framing rather than being reduced into the transcript, because a
