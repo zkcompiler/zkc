@@ -12,17 +12,21 @@ each other, fail-closed:
      emits is table drift, not documentation;
   3. every `live` id appears in an expected diagnostic or test assertion under
      test/ (the negative-test conformance rule, carrier.md §5), unless the
-     block carries an explicit coverage exemption with a reason;
+     block carries an explicit coverage exemption with a reason — and the
+     assertion is in a file that always runs, not one gated whole on a
+     feature the machine may not have;
   4. `reserved` ids (allocated, unshipped) are emitted nowhere;
   5. an emitted id outside every declared range fails.
 
-Emission sites are recognized by the patterns the tree actually uses:
-`[zkc-Eddd]` literals, TerminalClosure's `error(..., "zkc-Eddd")`,
-`refuse("Eddd"` (the certificate checker prepends `zkc-` at format
-time), ReductionClosure's `instanceError("zkc-Eddd")` helper, and the
-reference oracle's `("Eddd",` tuples and
-`"Eddd: ..."` messages. Prose mentions (`zkc-Eddd` without an
-emitting call, in comments or ODS descriptions) are not emissions.
+An emission site is a source line carrying `[zkc-Eddd]`, which is how
+the identifier reads in the diagnostic itself, on both legs. That is
+the whole recognition rule, and it is a rule rather than a list of
+idioms on purpose: a second spelling — the identifier handed to a
+helper that brackets it, or a message that punctuates it differently —
+is invisible to a search for the identifier a reader saw, and every
+such spelling this pattern learns to accept is one more place the next
+one can hide. Prose mentions are not emissions, but prose does not
+bracket, so nothing needs to distinguish them.
 
 Exit 0 on agreement; 1 on any violation; 2 when the allocation itself
 cannot be established (missing or malformed file) — parse
@@ -46,19 +50,25 @@ TEST_DIR = ROOT / "test"
 # named only here is not exercised by a negative test.
 TEST_EXCLUDE = TEST_DIR / "Lint"
 
-EMISSION = re.compile(
-    r"\[zkc-(E\d{3})\]"  # C++ diagnostic literals
-    r"|error\([^\n]*\"zkc-(E\d{3})\""  # TerminalClosure matcher
-    r"|Error\(\"zkc-(E\d{3})\""  # ReductionClosure's instanceError helper
-    r"|refuse\(\"(E\d{3})\""  # checker ids, zkc- prefixed at format time
-    r"|\(\"(E\d{3})\""  # oracle (code, subject) tuples
-    r"|f?\"(E\d{3}):"  # oracle message-prefixed raises
-)
+EMISSION = re.compile(r"\[zkc-(E\d{3})\]")
+# A file-level `REQUIRES:`/`UNSUPPORTED:`/`XFAIL:` decides whether the
+# file runs at all; a per-RUN-line `%if` does not, which is the whole
+# distinction the coverage rule needs. Matched anywhere in a line
+# because that is where lit reads it — lit scans each line for the
+# keyword rather than anchoring it, so a gate an anchored pattern
+# skipped past would gate the file while reading as ungated here.
+WHOLE_FILE_GATE = re.compile(r"(?:REQUIRES|UNSUPPORTED|XFAIL):")
 ID_FORM = re.compile(r"^E(\d{3})$")
 RANGE_FORM = re.compile(r"^E(\d{3})-E(\d{3})$")
 TEST_ASSERTION = re.compile(
     r"(?:expected-(?:error|warning|remark)"
-    r"|(?:^|\s)(?:CHECK(?:-[A-Z0-9_-]+)?|[A-Z][A-Z0-9_-]*):"
+    # A custom FileCheck prefix, but never one of lit's own directives:
+    # naming an id in a RUN line is running a command, not asserting a
+    # refusal, and counting it as one lets the real assertion be
+    # deleted while this stays green.
+    r"|(?:^|\s)(?:CHECK(?:-[A-Z0-9_-]+)?"
+    r"|(?!RUN:|REQUIRES:|UNSUPPORTED:|XFAIL:|DEFINE:|REDEFINE:)"
+    r"[A-Z][A-Z0-9_-]*):"
     r"|EXPECT_[A-Z_]+|assert\b)"
     r".*?(?<![A-Za-z0-9])E(\d{3})(?!\d)"
 )
@@ -180,28 +190,44 @@ def scan_sources():
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
             for match in EMISSION.finditer(text):
-                ident = next(g for g in match.groups() if g)
+                ident = match.group(1)
                 rel = path.relative_to(ROOT).as_posix()
                 emitted.setdefault(ident, set()).add(rel)
     return emitted
 
 
 def scan_tests():
-    """Return ids asserted by tests, excluding prose-only mentions."""
-    asserted = set()
+    """Ids asserted by tests, split by whether the assertion always runs.
+
+    A `REQUIRES:` line gates the whole file, so on a machine without that
+    feature the suite is green with the file never read. An id asserted
+    only in such files is reported covered while nothing exercises it,
+    which is the coverage rule saying the opposite of what it means.
+    Lit's per-RUN-line `%if feature %{ ... %}` is the narrower gate, and
+    an id that needs it says so here rather than being taken on trust.
+    """
+    always = set()
+    gated = {}
     for path in TEST_DIR.rglob("*"):
         if not path.is_file() or path.is_relative_to(TEST_EXCLUDE):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        rel = path.relative_to(ROOT).as_posix()
+        gate = WHOLE_FILE_GATE.search(text)
         for line in text.splitlines():
-            asserted.update("E" + m for m in TEST_ASSERTION.findall(line))
-    return asserted
+            for match in TEST_ASSERTION.findall(line):
+                ident = "E" + match
+                if gate:
+                    gated.setdefault(ident, set()).add(rel)
+                else:
+                    always.add(ident)
+    return always, gated
 
 
 def main():
     live, reserved, exempt, mirrored = validate(load_table())
     emitted = scan_sources()
-    asserted = scan_tests()
+    asserted, gatedOnly = scan_tests()
 
     problems = []
     for ident in sorted(emitted):
@@ -240,9 +266,17 @@ def main():
                 "move it to reserved or drop it"
                 % (ident, "/".join(SOURCE_DIRS)))
         elif ident not in asserted and ident not in exempt:
-            problems.append(
-                "%s is live but no file under test/ asserts it "
-                "(negative-test conformance rule, carrier.md §5)" % ident)
+            if ident in gatedOnly:
+                problems.append(
+                    "%s is asserted only in whole-file-gated tests (%s): on a "
+                    "machine without that feature the suite is green and this "
+                    "refusal is never exercised. Narrow the gate to the RUN "
+                    "lines that need it (`%%if feature %%{ ... %%}`)"
+                    % (ident, ", ".join(sorted(gatedOnly[ident]))))
+            else:
+                problems.append(
+                    "%s is live but no file under test/ asserts it "
+                    "(negative-test conformance rule, carrier.md §5)" % ident)
 
     if problems:
         for problem in problems:

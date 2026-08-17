@@ -20,11 +20,16 @@ axiom was admitted.
 """
 
 import json
+import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-PIN = (REPO / "arklib-pin.txt").read_text().strip()
+PIN = json.loads(
+    (REPO / "registry" / "upstreams.json").read_text()
+)["upstreams"]["arklib"]["revision"]
 ARKLIB = "https://github.com/Verified-zkEVM/ArkLib"
 
 problems = []
@@ -72,7 +77,7 @@ for declaration_id, index, receipt in receipts(signature):
         if receipt.get("revision") != PIN:
             problems.append(
                 f"{where}: pinned at {receipt.get('revision') or '(none)'}, "
-                f"but arklib-pin.txt says {PIN}"
+                f"but registry/upstreams.json records {PIN}"
             )
         elif not receipt.get("statement"):
             unpinned.append(f"{where}: {name} — no recorded type to compare")
@@ -110,10 +115,6 @@ if "--checkout" not in sys.argv:
 # default and never runs in the compiler's build. What it does is the whole
 # reason the receipt records a type and an axiom profile: both are strings a
 # later reading reproduces, so drift is a diff rather than a re-judgement.
-import re
-import subprocess
-import tempfile
-
 checkout = Path(sys.argv[sys.argv.index("--checkout") + 1]).resolve()
 head = subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD"],
                       capture_output=True, text=True).stdout.strip()

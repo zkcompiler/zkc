@@ -33,9 +33,16 @@ static cl::opt<std::string> constructionProfileRegistry(
     "construction-profile-registry", cl::init(""),
     cl::desc("Path to the construction-profile registry JSON file "
              "(required when kappa consumes a sponge or codec)"));
+// Sealing writes one artifact per protocol in the module, so its
+// destination is a directory where every sibling tool's `-o` is a file.
+// One letter meaning two things across a tool family is a mistake a
+// caller makes silently — a path that was meant as a file becomes a
+// directory — so the directory has its own name and `-o` stays as an
+// alias for the callers that already spell it.
 static cl::opt<std::string>
-    outputDir("o", cl::Required,
+    outputDir("output-dir", cl::Required,
               cl::desc("Directory the artifacts are written into"));
+static cl::alias outputDirShort("o", cl::aliasopt(outputDir), cl::Hidden);
 
 int main(int argc, char **argv) {
   InitLLVM init(argc, argv);
@@ -64,9 +71,8 @@ int main(int argc, char **argv) {
     return 1;
 
   if (std::error_code error = llvm::sys::fs::create_directories(outputDir)) {
-    errs() << "error: cannot create '" << outputDir << "': " << error.message()
-           << "\n";
-    return 1;
+    return zkc::tool::reportError("cannot create '" + outputDir + "': " +
+                                  error.message());
   }
   // Every artifact writes before any is kept: a failure mid-module
   // leaves no partial output set behind.
@@ -77,8 +83,7 @@ int main(int argc, char **argv) {
     std::string error;
     std::unique_ptr<ToolOutputFile> output = openOutputFile(path, &error);
     if (!output) {
-      errs() << "error: " << error << "\n";
-      return 1;
+      return zkc::tool::reportError(error);
     }
     if (failed(zkc::artifact::writeArtifact(sealed, output->os())))
       return 1;

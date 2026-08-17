@@ -1,5 +1,6 @@
 //===- SoundnessProjection.cpp - Closed fact projection/deciders ---------===//
 #include "zkc/Soundness/SoundnessProjection.h"
+#include "zkc/Soundness/KernelPredicates.h"
 
 #include "zkc/Family/FriShape.h"
 
@@ -27,22 +28,9 @@ llvm::Error deciderError(const llvm::Twine &detail) {
   return llvm::createStringError("soundness machine decider: " + detail);
 }
 
-bool validRef(const ExactRef &ref) {
-  return !ref.id.empty() && !ref.sourceRevision.empty();
-}
-
 bool equalRational(const registry::Rational &left,
                    const registry::Rational &right) {
   return left.compare(right) == 0;
-}
-
-bool isInteger(const registry::Rational &value) {
-  return value.denStr() == "1";
-}
-
-bool isPositiveInteger(const registry::Rational &value) {
-  return isInteger(value) &&
-         value.compare(registry::Rational::fromInteger(0)) > 0;
 }
 
 llvm::Expected<registry::Rational> rationalFromUint64(uint64_t value) {

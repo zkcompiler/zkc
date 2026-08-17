@@ -81,7 +81,7 @@ These dependencies are not vendored in this source repository:
 | arkworks crates (`ark-bls12-381`, `ark-ec`, `ark-ff`, `ark-serialize`) | The emitter runtime's BLS12-381 kernel for the KZG check adapters | [`emit/Cargo.lock`](emit/Cargo.lock) | MIT OR Apache-2.0 |
 | `postcard`, `serde`, `serde_json`, `sha2`, `hex`, `zeroize`, and their transitive crates | Optional Rust harness and emitter support | [`evaluation/upstream/plonky3-replay/Cargo.lock`](evaluation/upstream/plonky3-replay/Cargo.lock), [`emit/Cargo.lock`](emit/Cargo.lock) | Per-crate terms; not redistributed in this source tree |
 | Rust | Builds the optional Rust harness | stable toolchain available on the host | Rust toolchain component licenses |
-| ArkLib, Lean, Lake, Mathlib, and elan | Separate formalization-drift reading | [`arklib-pin.txt`](arklib-pin.txt) and the pinned ArkLib dependency files | Per-project terms; not compiler dependencies |
+| ArkLib, Lean, Lake, Mathlib, and elan | Separate formalization-drift reading | [`registry/upstreams.json`](registry/upstreams.json) and the pinned ArkLib dependency files | Per-project terms; not compiler dependencies |
 | uv and Hatchling | Python environment and packaging tools | workflow plus Python project files | Tool-specific terms; executables are not vendored |
 | GitHub Actions used by workflows | Checkout, cache, and uv setup | exact major action tags in `.github/workflows/` | Action-specific terms; not part of zkc artifacts |
 
@@ -109,3 +109,5 @@ Before publishing a binary, container, package, or bundled toolchain, generate
 and review a complete license-and-notice bundle for every included LLVM
 component, Rust crate, runtime library, and packaged asset. This source
 inventory does not by itself clear a binary distribution.
+
+<!-- The revisions above are restated from registry/upstreams.json, and are held to it: upstream-pin: arklib upstream-pin: plonky3 -->

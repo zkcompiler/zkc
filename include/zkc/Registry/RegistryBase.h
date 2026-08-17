@@ -13,6 +13,44 @@
 namespace zkc {
 namespace registry {
 
+/// The gate every name a registry admits passes: entry names, and the
+/// names inside an entry (entrypoints, parameters, roles). Names reach
+/// the canonical encoding, so admission is where the domain is
+/// enforced; emptiness is refused explicitly because the domain
+/// predicate is vacuously true on the empty string.
+///
+/// `noun` is the word the diagnostic uses for what was being named.
+inline llvm::Error requireEntryName(const RegistryFile &file,
+                                    llvm::StringRef noun,
+                                    llvm::StringRef name) {
+  if (!name.empty() && zkc::encoding::inEncodingDomain(name))
+    return llvm::Error::success();
+  return file.error(llvm::Twine(noun) +
+                    " names must be non-empty printable ASCII");
+}
+
+/// Admit one named section of a registry envelope: each key is held to
+/// the name gate, then handed to `admit` with its value.
+///
+/// Every registry in this repository walks a named object this way,
+/// including the ones whose envelopes carry several sections and so
+/// cannot use `RegistryBase::parse`. Stating the loop once is what
+/// keeps the name gate from being a rule each loader remembers to
+/// apply.
+template <typename AdmitT>
+llvm::Error parseSection(const RegistryFile &file,
+                         const llvm::json::Object &section,
+                         llvm::StringRef entryNoun, AdmitT admit) {
+  for (const auto &entry : section) {
+    llvm::StringRef name(entry.first);
+    if (llvm::Error error = requireEntryName(file, entryNoun, name))
+      return error;
+    if (llvm::Error error = admit(file, name, entry.second))
+      return error;
+  }
+  return llvm::Error::success();
+}
+
 /// The loading skeleton every zkc registry shares. The base owns the
 /// fail-closed pipeline — file read, envelope validation
 /// (RegistryFile::parse), the entry-name domain gate, and the sorted
@@ -58,31 +96,6 @@ public:
             }))
       return std::move(error);
     return result;
-  }
-
-  /// Admit one named section of a registry envelope: each key is held
-  /// to the entry-name gate, then handed to `admit` with its value.
-  ///
-  /// Every registry in this repository walks a named object this way,
-  /// including the ones whose envelopes carry several sections and so
-  /// cannot use `parse` above. Stating the loop once is what keeps the
-  /// name gate from being a rule three loaders remember to apply.
-  template <typename AdmitT>
-  static llvm::Error parseSection(const RegistryFile &file,
-                                  const llvm::json::Object &section,
-                                  llvm::StringRef entryNoun, AdmitT admit) {
-    for (const auto &entry : section) {
-      llvm::StringRef name(entry.first);
-      // Entry names reach the canonical encoding, so admission is where
-      // the domain gate lives; emptiness is refused explicitly because
-      // the domain predicate is vacuously true on the empty string.
-      if (name.empty() || !zkc::encoding::inEncodingDomain(name))
-        return file.error(llvm::Twine(entryNoun) +
-                          " names must be non-empty printable ASCII");
-      if (llvm::Error error = admit(file, name, entry.second))
-        return error;
-    }
-    return llvm::Error::success();
   }
 
   /// Returns the entry registered under `name`, or null — the caller's

@@ -40,7 +40,7 @@
 # A dropped semantic binding: the count no longer matches the contract's.
 # RUN: sed 's/ semantic \[[^]]*\]//' %t/prover.mlir > %t/dropped.raw
 # RUN: zkc-translate --oir-id %t/dropped.raw -o %t/dropped.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t/dropped.raw %t/dropped.mlir %t/dropped.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t/dropped.raw %t/dropped.mlir %t/dropped.id
 # RUN: not zkc-run %t/dropped.mlir --protocol-vocabulary=%t/vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck %s --check-prefix=DROPPED
 # DROPPED: [zkc-E238] hole_call 'commit' carries 0 semantic parameter(s), the cited contract declares 1
 
@@ -48,7 +48,7 @@
 # could hold, whatever else it might mean.
 # RUN: sed -E 's/(semantic \[")sha256:[0-9a-f]+/\1the-usual-one/' %t/prover.mlir > %t/unnamed.raw
 # RUN: zkc-translate --oir-id %t/unnamed.raw -o %t/unnamed.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t/unnamed.raw %t/unnamed.mlir %t/unnamed.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t/unnamed.raw %t/unnamed.mlir %t/unnamed.id
 # RUN: not zkc-run %t/unnamed.mlir --protocol-vocabulary=%t/vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck %s --check-prefix=UNNAMED
 # UNNAMED: [zkc-E238] hole_call 'commit' semantic parameter 'reference_string' must be a sha256 content reference, got 'the-usual-one'
 
@@ -56,7 +56,7 @@
 # and this boundary must refuse again — it has no sealing behind it.
 # RUN: sed 's/params \["batched"\]/params [""]/' %t/prover.mlir > %t/empty.raw
 # RUN: zkc-translate --oir-id %t/empty.raw -o %t/empty.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t/empty.raw %t/empty.mlir %t/empty.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t/empty.raw %t/empty.mlir %t/empty.id
 # RUN: not zkc-run %t/empty.mlir --protocol-vocabulary=%t/vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck %s --check-prefix=EMPTY
 # EMPTY: [zkc-E238] hole_call 'commit' static parameter 'mode' must be a non-empty printable binding
 

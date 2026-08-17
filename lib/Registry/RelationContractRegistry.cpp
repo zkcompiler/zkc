@@ -159,7 +159,8 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
                                         contract.profileDigest))
     return std::move(e);
   if (!zkc::encoding::isSha256Ref(contract.profileDigest))
-    return err("'claim_profile.digest' must be sha256:<64 lowercase hex>");
+    return err(llvm::Twine("'claim_profile.digest' ") +
+               zkc::encoding::kSha256RefMessage);
 
   // -- The partition, held to the normative table rather than to the
   // -- contract's own say-so.
@@ -177,8 +178,8 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
     StringRef anchorName(anchor.first);
     std::optional<StringRef> anchorValue = anchor.second.getAsString();
     if (!anchorValue || !zkc::encoding::isSha256Ref(*anchorValue))
-      return err("relation anchor '" + anchorName +
-                 "' must be sha256:<64 lowercase hex>");
+      return err("relation anchor '" + anchorName + "' " +
+                 zkc::encoding::kSha256RefMessage);
     if (!is_contained(partition->relationAnchors, anchorName))
       return err("relation anchor '" + anchorName +
                  "' is not a relation-level anchor of profile '" +
@@ -232,7 +233,8 @@ RelationContractRegistry::parseEntry(const RegistryFile &file, StringRef name,
                                           contract.contentDigest))
       return std::move(e);
     if (!zkc::encoding::isSha256Ref(contract.contentDigest))
-      return err("'identity.content_digest' must be sha256:<64 lowercase hex>");
+      return err(llvm::Twine("'identity.content_digest' ") +
+                 zkc::encoding::kSha256RefMessage);
   }
   if (identity->get("attested_id")) {
     if (Error e = file.requireStringField(*identity, "attested_id",

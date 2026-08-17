@@ -140,24 +140,18 @@ TEST(R1csHeader, NoPrefixOfAWellFormedFileWalksOffTheBuffer) {
   // read past the end, and the reader is total on every input.
   std::string whole = wellFormed();
   for (size_t length = 0; length < whole.size(); ++length) {
-    auto parsed = readR1csHeader(llvm::StringRef(whole).take_front(length),
-                                 kFieldOrder);
-    EXPECT_FALSE(static_cast<bool>(parsed))
-        << "admitted a " << length << "-byte prefix";
-    if (!parsed)
-      llvm::consumeError(parsed.takeError());
+    zkctest::ScopedContext prefix(llvm::Twine(length) + "-byte prefix");
+    EXPECT_REFUSED(
+        readR1csHeader(llvm::StringRef(whole).take_front(length), kFieldOrder));
   }
 }
 
 TEST(R1csHeader, IsTotalOnBytesThatAreNotAnR1csFileAtAll) {
-  for (llvm::StringRef bytes :
-       {llvm::StringRef(""), llvm::StringRef("r"), llvm::StringRef("r1cs"),
-        llvm::StringRef("\xff\xff\xff\xff\xff\xff\xff\xff")}) {
-    auto parsed = readR1csHeader(bytes, kFieldOrder);
-    EXPECT_FALSE(static_cast<bool>(parsed));
-    if (!parsed)
-      llvm::consumeError(parsed.takeError());
-  }
+  FOR_EACH(bytes, (std::initializer_list<llvm::StringRef>{
+                      llvm::StringRef(""), llvm::StringRef("r"),
+                      llvm::StringRef("r1cs"),
+                      llvm::StringRef("\xff\xff\xff\xff\xff\xff\xff\xff")}))
+    EXPECT_REFUSED(readR1csHeader(bytes, kFieldOrder));
 }
 
 TEST(R1csHeader, AnUnboundedDeclaredFieldStillBoundsTheRead) {

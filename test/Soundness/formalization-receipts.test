@@ -1,5 +1,5 @@
 # Every formalization receipt must be well formed, must agree with itself about
-# whether a hole was admitted, and must be pinned at the revision arklib-pin.txt
+# whether a hole was admitted, and must be pinned at the revision registry/upstreams.json
 # names. Running the emitted commands needs a Lean toolchain and a checkout,
 # which is deliberately outside this build; what is checked here is that the
 # record is in a state a later reading can be compared against.

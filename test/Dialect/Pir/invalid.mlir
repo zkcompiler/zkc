@@ -299,7 +299,7 @@ pir.protocol "duplicate_terminal_role" {
 
 // Anchors are digest-shaped semantic references (E156).
 pir.protocol "bad_anchor" policy "residual_artifact" {
-  // expected-error @below {{[zkc-E156] anchor 'contract' must be a sha256:-prefixed 64-lowercase-hex digest reference}}
+  // expected-error @below {{[zkc-E156] anchor 'contract' must be sha256:<64 lowercase hex>}}
   %claim = pir.instantiate "claim" anchors {contract = "c0ffee", statement = "sha256:043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89"} : !pir.claim<"opaque_relation">
   %t0 = pir.begin
   pir.end %t0
@@ -344,7 +344,7 @@ pir.protocol "bad_material_ref" {
   %t0 = pir.begin
   %t1, %value = pir.slot %t0 "value" : "fr"
   pir.end %t1
-  // expected-error @below {{[zkc-E159] semantic_ref must be a sha256:-prefixed 64-lowercase-hex digest reference}}
+  // expected-error @below {{[zkc-E159] semantic_ref must be sha256:<64 lowercase hex>}}
   pir.material_bind %value to "not-a-digest" : !pir.val<"fr">
 }
 

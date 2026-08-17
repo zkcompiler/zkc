@@ -37,12 +37,41 @@ Error RegistryFile::requireStringField(const json::Object &object,
   return Error::success();
 }
 
+Expected<const json::Object *>
+RegistryFile::requireObject(const json::Object &object, StringRef key,
+                            const Twine &context) const {
+  const json::Object *value = object.getObject(key);
+  if (!value)
+    return error(context + " needs an object '" + key + "'");
+  return value;
+}
+
+Expected<const json::Array *>
+RegistryFile::requireArray(const json::Object &object, StringRef key,
+                           const Twine &context) const {
+  const json::Array *value = object.getArray(key);
+  if (!value)
+    return error(context + " needs an array '" + key + "'");
+  return value;
+}
+
+Expected<int64_t> RegistryFile::requireInteger(const json::Object &object,
+                                               StringRef key,
+                                               const Twine &context) const {
+  std::optional<int64_t> value = object.getInteger(key);
+  if (!value)
+    return error(context + " needs an integer '" + key + "'");
+  return *value;
+}
+
 Expected<std::vector<std::string>>
 RegistryFile::requireStringList(const json::Object &object, StringRef key,
                                 const Twine &context) const {
-  const json::Array *array = object.getArray(key);
-  if (!array)
-    return error(context + " needs an array '" + key + "'");
+  Expected<const json::Array *> arrayOrError = requireArray(object, key,
+                                                            context);
+  if (!arrayOrError)
+    return arrayOrError.takeError();
+  const json::Array *array = *arrayOrError;
   std::vector<std::string> result;
   result.reserve(array->size());
   for (const json::Value &member : *array) {

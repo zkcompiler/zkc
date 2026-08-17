@@ -95,18 +95,18 @@ def check_domain(value: Any, depth: int = 0) -> None:
     """Admit exactly the identity-bearing MLIR attribute domain."""
 
     if depth > MAX_ATTR_DEPTH:
-        raise ValueError("E228: canonical attribute nesting exceeds 64")
+        raise ValueError("[zkc-E228] canonical attribute nesting exceeds 64")
     if value is None:
         return
     if type(value) is bool:
-        raise ValueError("E228: booleans are outside the canonical domain")
+        raise ValueError("[zkc-E228] booleans are outside the canonical domain")
     if type(value) is int:
         if not -(1 << 63) <= value < 1 << 63:
-            raise ValueError("E228: integer is outside signed 64-bit range")
+            raise ValueError("[zkc-E228] integer is outside signed 64-bit range")
         return
     if isinstance(value, str):
         if not all(0x20 <= ord(char) <= 0x7E for char in value):
-            raise ValueError("E228: strings must be printable ASCII")
+            raise ValueError("[zkc-E228] strings must be printable ASCII")
         return
     if isinstance(value, (list, tuple)):
         for member in value:
@@ -115,11 +115,11 @@ def check_domain(value: Any, depth: int = 0) -> None:
     if isinstance(value, dict):
         for key, member in value.items():
             if not isinstance(key, str):
-                raise ValueError("E228: canonical dictionary keys are strings")
+                raise ValueError("[zkc-E228] canonical dictionary keys are strings")
             check_domain(key, depth + 1)
             check_domain(member, depth + 1)
         return
-    raise ValueError(f"E228: unsupported canonical value {type(value).__name__}")
+    raise ValueError(f"[zkc-E228] unsupported canonical value {type(value).__name__}")
 
 
 def check_atom_domain(value: Any, depth: int = 0) -> None:

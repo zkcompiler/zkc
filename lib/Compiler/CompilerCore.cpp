@@ -1,5 +1,6 @@
 //===- CompilerCore.cpp - Closed compiler selection semantics -------------===//
 #include "zkc/Compiler/CompilerCore.h"
+#include "zkc/Soundness/KernelPredicates.h"
 
 #include "CompilerCoreInternal.h"
 
@@ -57,10 +58,6 @@ template <typename T> llvm::Expected<T> error(const llvm::Twine &message) {
 
 llvm::Error failure(const llvm::Twine &message) {
   return llvm::createStringError(llvm::inconvertibleErrorCode(), message);
-}
-
-bool validRef(const ExactRef &ref) {
-  return !ref.id.empty() && !ref.sourceRevision.empty();
 }
 
 bool siteEqual(const soundness::ApplicationSite &lhs,

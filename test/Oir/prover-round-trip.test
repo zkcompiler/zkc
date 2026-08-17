@@ -1,4 +1,3 @@
-# REQUIRES: uv
 # The in-tree prover-endpoint round trip
 # (docs/spec/endpoints.md §§6.3–6.4): a toy prover-skeleton run emits proof
 # bytes the derived toy verifier endpoint accepts — derived orchestration on
@@ -37,7 +36,7 @@
 # the supplier gate's, not the identity gate's.
 # RUN: sed 's/sha256:b939155d962c0e82baee8477daebdd8168d59a1c828dabfd8f5724ab18b13e15/sha256:9999999999999999999999999999999999999999999999999999999999999999/' %t/prover.mlir > %t/unsupplied-raw.mlir
 # RUN: zkc-translate --oir-id %t/unsupplied-raw.mlir -o %t/unsupplied.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %t/unsupplied-raw.mlir %t/unsupplied.mlir %t/unsupplied.id
 # RUN: not zkc-run %t/unsupplied.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" 2>&1 | FileCheck --check-prefix=E407 %s
 # E407: [zkc-E407] hole contract 'sha256:9999999999999999999999999999999999999999999999999999999999999999' (kind 'commit') has no supplier in profile 'toy'
 
@@ -59,5 +58,9 @@
 # derived document with its own toy fills and must reproduce the exact
 # challenge stream and proof bytes the carrier emitted.
 # RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" | grep -E "prover challenges|proof:" > %t/carrier.txt
-# RUN: %uv python -m oracle.exec derived-prove schnorr-routed "s:y=1024" "w:w=00000000000000050000000000000007" > %t/twin.txt
-# RUN: diff %t/carrier.txt %t/twin.txt
+# Only the twin's half needs uv, so only the twin's half is gated. A
+# whole-file feature gate would take the four native refusals above with
+# it, and on a machine without uv the suite would be green with them
+# unexercised — which test/Lint/diagnostic-allocation.test now refuses.
+# RUN: %if uv %{ %uv python -m oracle.exec derived-prove schnorr-routed "s:y=1024" "w:w=00000000000000050000000000000007" > %t/twin.txt %}
+# RUN: %if uv %{ diff %t/carrier.txt %t/twin.txt %}

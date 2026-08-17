@@ -32,7 +32,11 @@ ParsedModule parseModule(llvm::StringRef path, MLIRContext &context) {
 }
 
 int reportError(llvm::Error error) {
-  llvm::errs() << "error: " << llvm::toString(std::move(error)) << "\n";
+  return reportError(llvm::toString(std::move(error)));
+}
+
+int reportError(const llvm::Twine &message) {
+  llvm::errs() << "error: " << message << "\n";
   return 1;
 }
 

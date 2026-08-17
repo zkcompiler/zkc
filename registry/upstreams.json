@@ -1,0 +1,15 @@
+{
+  "schema": "zkc.upstream_pins",
+  "upstreams": {
+    "arklib": {
+      "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+      "repository": "https://github.com/verified-zkevm/ArkLib",
+      "why": "the formalization corpus the signature's receipts and surveyed absences are read against"
+    },
+    "plonky3": {
+      "revision": "3da346791c813433b201299afc3d10bf42f8a078",
+      "repository": "https://github.com/Plonky3/Plonky3",
+      "why": "the upstream whose verifier grades emitted proofs and whose field and sponge the pinned profile reproduces"
+    }
+  }
+}

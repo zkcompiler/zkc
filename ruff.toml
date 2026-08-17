@@ -1,0 +1,17 @@
+# One lint configuration for every Python in the repository: the
+# reference twin, the fixture generators and gates under `test/`, and
+# the tools.
+#
+# The rule set is narrow on purpose. This code is judged by what it
+# produces — byte parity against the C++ implementation, and lit tests
+# that pin what the generators emit — not by style, and a rewrite of a
+# generator to satisfy a style rule can change what it generates. So the
+# selection is the classes that name actual defects: undefined and
+# unused names, shadowed or duplicated definitions, imports that do not
+# resolve, and syntax that does not mean what it looks like.
+lint.select = ["E4", "E7", "E9", "F"]
+
+[lint.per-file-ignores]
+# lit hands a config file `config` and `lit_config` as injected globals;
+# there is nothing to import and nothing to declare.
+"test/lit.cfg.py" = ["F821"]

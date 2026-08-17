@@ -106,9 +106,12 @@ public:
   }
 
 private:
-  InFlightDiagnostic error(Operation *operation, StringRef code) {
+  /// The identifier is written as the diagnostic carries it, here and
+  /// in every other emitting file, so one search finds every site that
+  /// raises a given refusal (docs/spec/versioning.md §3).
+  InFlightDiagnostic error(Operation *operation, StringRef id) {
     ok = false;
-    return operation->emitOpError() << "[" << code << "] ";
+    return operation->emitOpError() << id << " ";
   }
 
   void indexCarrier() {
@@ -153,12 +156,12 @@ private:
     auto descriptor =
         zkc::encoding::canonicalClaimDescriptor(type.getProfile(), anchors);
     if (!descriptor) {
-      error(at, "zkc-E320") << llvm::toString(descriptor.takeError());
+      error(at, "[zkc-E320]") << llvm::toString(descriptor.takeError());
       return;
     }
     auto bytes = zkc::encoding::canonicalJsonBytes(*descriptor);
     if (!bytes) {
-      error(at, "zkc-E320") << llvm::toString(bytes.takeError());
+      error(at, "[zkc-E320]") << llvm::toString(bytes.takeError());
       return;
     }
     claims[value] = ClaimView{type.getProfile().str(), anchors,
@@ -241,7 +244,7 @@ private:
     const CheckContract *contract =
         vocabulary.lookupCheckContract(check.getContract());
     if (!contract) {
-      error(at, "zkc-E321") << "selected check contract '"
+      error(at, "[zkc-E321]") << "selected check contract '"
                             << check.getContract() << "' is not admitted";
       return std::nullopt;
     }
@@ -249,19 +252,19 @@ private:
             sortedCopy(contract->parameters) ||
         sortedNames(check.getSemanticArgs().value_or(DictionaryAttr())) !=
             sortedCopy(contract->semanticParameters)) {
-      error(at, "zkc-E321")
+      error(at, "[zkc-E321]")
           << "selected check does not have the admitted parameter surface";
       return std::nullopt;
     }
     if (contract->isTransparent() != check.getExpr().has_value()) {
-      error(at, "zkc-E321")
+      error(at, "[zkc-E321]")
           << "selected check has the wrong opaque/transparent mode";
       return std::nullopt;
     }
     SmallVector<OperandView> layouts;
     zkc::semantics::solveCheckLayout(*contract, check.getInputs(), layouts);
     if (layouts.size() != 1) {
-      error(at, "zkc-E321")
+      error(at, "[zkc-E321]")
           << "selected check has " << layouts.size()
           << " valid operand layouts (exactly one is required)";
       return std::nullopt;
@@ -270,7 +273,7 @@ private:
     if (check.getExpr()) {
       auto normalized = normalizeExpr(*check.getExpr(), view.operands);
       if (!normalized) {
-        error(at, "zkc-E322")
+        error(at, "[zkc-E322]")
             << "selected transparent check expression is malformed: "
             << llvm::toString(normalized.takeError());
         return std::nullopt;
@@ -297,7 +300,7 @@ private:
   canonicalAttribute(Attribute attribute, Operation *at, StringRef what) {
     auto result = zkc::encoding::attributeToCanonicalJson(attribute);
     if (!result) {
-      error(at, "zkc-E320") << what << " is outside the canonical domain: "
+      error(at, "[zkc-E320]") << what << " is outside the canonical domain: "
                             << llvm::toString(result.takeError());
       return std::nullopt;
     }
@@ -307,24 +310,24 @@ private:
   bool validateInstanceShape(ReduceOp reduce,
                              const ReductionContract &contract) {
     bool valid = true;
-    auto instanceError = [&](StringRef code) -> InFlightDiagnostic {
+    auto instanceError = [&](StringRef id) -> InFlightDiagnostic {
       valid = false;
-      return error(reduce, code);
+      return error(reduce, id);
     };
     auto shapeError = [&]() -> InFlightDiagnostic {
-      return instanceError("zkc-E320");
+      return instanceError("[zkc-E320]");
     };
     auto dependencyError = [&]() -> InFlightDiagnostic {
-      return instanceError("zkc-E243");
+      return instanceError("[zkc-E243]");
     };
     auto membershipError = [&]() -> InFlightDiagnostic {
-      return instanceError("zkc-E244");
+      return instanceError("[zkc-E244]");
     };
     auto sharingError = [&]() -> InFlightDiagnostic {
-      return instanceError("zkc-E245");
+      return instanceError("[zkc-E245]");
     };
     auto prefixError = [&]() -> InFlightDiagnostic {
-      return instanceError("zkc-E213");
+      return instanceError("[zkc-E213]");
     };
 
     if (contract.consumes.size() == 1 &&
@@ -489,7 +492,7 @@ private:
   validateParameters(ReduceOp reduce, const ReductionContract &contract) {
     DictionaryAttr params = reduce.getParams().value_or(DictionaryAttr());
     if (sortedNames(params) != sortedKeys(contract.parameters)) {
-      error(reduce, "zkc-E320")
+      error(reduce, "[zkc-E320]")
           << "reduction parameter names do not exactly match contract '"
           << reduce.getContract() << "'";
       return std::nullopt;
@@ -510,7 +513,7 @@ private:
       case ReductionParameterSort::MaterialRef: {
         auto string = dyn_cast<StringAttr>(attribute);
         if (!string || !zkc::encoding::isSha256Ref(string.getValue())) {
-          error(reduce, "zkc-E320")
+          error(reduce, "[zkc-E320]")
               << "parameter '" << name << "' must be one MaterialRef";
           return std::nullopt;
         }
@@ -524,7 +527,7 @@ private:
               auto string = dyn_cast<StringAttr>(member);
               return string && zkc::encoding::isSha256Ref(string.getValue());
             })) {
-          error(reduce, "zkc-E320")
+          error(reduce, "[zkc-E320]")
               << "parameter '" << name << "' must be a MaterialRef vector";
           return std::nullopt;
         }
@@ -540,7 +543,7 @@ private:
   ClaimView *claim(Value value, Operation *at) {
     auto found = claims.find(value);
     if (found == claims.end()) {
-      error(at, "zkc-E324")
+      error(at, "[zkc-E324]")
           << "consumed claim has no canonical anchored descriptor";
       return nullptr;
     }
@@ -564,7 +567,7 @@ private:
     for (auto pair : llvm::zip(result, llvm::drop_begin(result)))
       if (std::get<0>(pair)->descriptorBytes ==
           std::get<1>(pair)->descriptorBytes) {
-        error(at, "zkc-E324")
+        error(at, "[zkc-E324]")
             << "canonical_unique inputs contain duplicate descriptors";
         return {};
       }
@@ -576,7 +579,7 @@ private:
     for (auto [index, slot] : llvm::enumerate(contract.depSlots))
       if (slot.role == role && index < reduce.getDeps().size())
         return reduce.getDeps()[index];
-    error(at, "zkc-E324") << "material expression cannot resolve dependency '"
+    error(at, "[zkc-E324]") << "material expression cannot resolve dependency '"
                           << role << "'";
     return {};
   }
@@ -592,7 +595,7 @@ private:
           return found->second.value;
       }
     }
-    error(at, "zkc-E324") << "material expression cannot resolve message '"
+    error(at, "[zkc-E324]") << "material expression cannot resolve message '"
                           << role << "' occurrence " << occurrence;
     return {};
   }
@@ -600,7 +603,7 @@ private:
   std::optional<std::string> binding(Value value, Operation *at) {
     auto found = bindingsByValue.find(value);
     if (found == bindingsByValue.end()) {
-      error(at, "zkc-E324")
+      error(at, "[zkc-E324]")
           << "material expression value has no MaterialBinding";
       return std::nullopt;
     }
@@ -619,7 +622,7 @@ private:
       Value value = message(reduce, expr.name, expr.index, at);
       return value ? std::optional<Value>(value) : std::nullopt;
     }
-    error(at, "zkc-E323")
+    error(at, "[zkc-E323]")
         << "value-identity attachment source is not a local-value selector";
     return std::nullopt;
   }
@@ -631,7 +634,7 @@ private:
            Operation *at) {
     auto ref = [&](StringRef value) -> std::optional<EvaluatedMaterial> {
       if (!zkc::encoding::isSha256Ref(value)) {
-        error(at, "zkc-E324")
+        error(at, "[zkc-E324]")
             << "material expression resolved a non-MaterialRef value";
         return std::nullopt;
       }
@@ -643,14 +646,14 @@ private:
       return ref(expr.name);
     case MaterialExprKind::InputAnchor: {
       if (expr.index >= reduce.getClaims().size()) {
-        error(at, "zkc-E324") << "input-anchor index is out of range";
+        error(at, "[zkc-E324]") << "input-anchor index is out of range";
         return std::nullopt;
       }
       ClaimView *view = claim(reduce.getClaims()[expr.index], at);
       auto anchor =
           view ? view->anchors.getAs<StringAttr>(expr.name) : StringAttr();
       if (!anchor) {
-        error(at, "zkc-E324")
+        error(at, "[zkc-E324]")
             << "input anchor '" << expr.name << "' does not resolve";
         return std::nullopt;
       }
@@ -669,7 +672,7 @@ private:
     case MaterialExprKind::ParameterAtom: {
       auto found = params.find(expr.name);
       if (found == params.end() || found->second.sort != expr.sort) {
-        error(at, "zkc-E324") << "material expression parameter '" << expr.name
+        error(at, "[zkc-E324]") << "material expression parameter '" << expr.name
                               << "' has the wrong runtime sort";
         return std::nullopt;
       }
@@ -693,7 +696,7 @@ private:
       auto digest = zkc::encoding::taggedSha256Ref(
           "zkc/material-expr\n", llvm::json::Value(std::move(preimage)));
       if (!digest) {
-        error(at, "zkc-E324") << "material constructor is not canonical: "
+        error(at, "[zkc-E324]") << "material constructor is not canonical: "
                               << llvm::toString(digest.takeError());
         return std::nullopt;
       }
@@ -707,7 +710,7 @@ private:
       for (ClaimView *view : inputs) {
         auto anchor = view->anchors.getAs<StringAttr>(expr.name);
         if (!anchor || !zkc::encoding::isSha256Ref(anchor.getValue())) {
-          error(at, "zkc-E324") << "input anchor vector does not resolve";
+          error(at, "[zkc-E324]") << "input anchor vector does not resolve";
           return std::nullopt;
         }
         values.push_back(anchor.getValue());
@@ -744,7 +747,7 @@ private:
     }
     case MaterialExprKind::InputDescriptor: {
       if (expr.index >= reduce.getClaims().size()) {
-        error(at, "zkc-E324") << "input-descriptor index is out of range";
+        error(at, "[zkc-E324]") << "input-descriptor index is out of range";
         return std::nullopt;
       }
       ClaimView *view = claim(reduce.getClaims()[expr.index], at);
@@ -771,7 +774,7 @@ private:
   SmallVector<Value> operands(CheckView &check, StringRef role, Operation *at) {
     auto found = check.operands.roles.find(role);
     if (found == check.operands.roles.end()) {
-      error(at, "zkc-E323")
+      error(at, "[zkc-E323]")
           << "selected check has no operand role '" << role << "'";
       return {};
     }
@@ -800,7 +803,7 @@ private:
       SmallVector<Value> selected =
           operands(check, attachment.targetRole, reduce);
       if (!local || selected.size() != 1 || selected.front() != *local) {
-        error(reduce, "zkc-E323")
+        error(reduce, "[zkc-E323]")
             << "local SSA attachment does not match role '"
             << attachment.targetRole << "'";
         return false;
@@ -813,7 +816,7 @@ private:
       SmallVector<Value> selected =
           operands(check, attachment.targetRole, reduce);
       if (selected.size() != attachment.source.arguments.size()) {
-        error(reduce, "zkc-E323")
+        error(reduce, "[zkc-E323]")
             << "local SSA list attachment does not match role '"
             << attachment.targetRole << "'";
         return false;
@@ -822,7 +825,7 @@ private:
            llvm::enumerate(attachment.source.arguments)) {
         auto local = localValue(item, reduce, contract, reduce);
         if (!local || selected[index] != *local) {
-          error(reduce, "zkc-E323")
+          error(reduce, "[zkc-E323]")
               << "local SSA list attachment does not match role '"
               << attachment.targetRole << "'";
           return false;
@@ -840,7 +843,7 @@ private:
       auto value = expected->value.getAsString();
       if (expected->sort != MaterialExprSort::Ref || !value ||
           semanticArgument(check.op, attachment.targetRole) != *value) {
-        error(reduce, "zkc-E323")
+        error(reduce, "[zkc-E323]")
             << "semantic parameter attachment does not match role '"
             << attachment.targetRole << "'";
         return false;
@@ -859,7 +862,7 @@ private:
                                          : std::nullopt;
       if (expected->sort != MaterialExprSort::Ref || !value || !actual ||
           *actual != *value) {
-        error(reduce, "zkc-E323")
+        error(reduce, "[zkc-E323]")
             << "material-reference attachment does not match role '"
             << attachment.targetRole << "'";
         return false;
@@ -879,7 +882,7 @@ private:
         matches &= expectedRef && actual && *expectedRef == *actual;
       }
       if (!matches) {
-        error(reduce, "zkc-E323")
+        error(reduce, "[zkc-E323]")
             << "material-reference vector does not match role '"
             << attachment.targetRole << "'";
         return false;
@@ -904,7 +907,7 @@ private:
         matches &= actual && common && *actual == *common;
       }
       if (!matches) {
-        error(reduce, "zkc-E323")
+        error(reduce, "[zkc-E323]")
             << "common-material attachment does not match role '"
             << attachment.targetRole << "'";
         return false;
@@ -920,7 +923,7 @@ private:
       const std::map<std::string, EvaluatedMaterial, std::less<>> &params) {
     DictionaryAttr selections = reduce.getChecks();
     if (sortedNames(selections) != sortedKeys(contract.checks)) {
-      error(reduce, "zkc-E321")
+      error(reduce, "[zkc-E321]")
           << "body-check roles do not exactly match reduction contract '"
           << reduce.getContract() << "'";
       return;
@@ -933,20 +936,20 @@ private:
                              ? checksByLabel.lookup(selectedLabel.getValue())
                              : CheckOp();
       if (!selected || selected.getContract() != slot.contract) {
-        error(reduce, "zkc-E321") << "body role '" << role
+        error(reduce, "[zkc-E321]") << "body role '" << role
                                   << "' does not select a check of contract '"
                                   << slot.contract << "'";
         continue;
       }
       if (!selectedHere.insert(selected.getOperation()).second) {
-        error(reduce, "zkc-E327")
+        error(reduce, "[zkc-E327]")
             << "one check is selected for two roles in the same reduction";
         continue;
       }
       auto [owner, fresh] = ledger.reductionCheckOwners.try_emplace(
           selected.getOperation(), reduce.getOperation());
       if (!fresh && owner->second != reduce.getOperation()) {
-        error(reduce, "zkc-E327") << "check '" << selectedLabel.getValue()
+        error(reduce, "[zkc-E327]") << "check '" << selectedLabel.getValue()
                                   << "' already justifies another reduction";
         continue;
       }
@@ -965,7 +968,7 @@ private:
       if (!actualParameters ||
           !sameJson(*actualParameters,
                     llvm::json::Value(std::move(expectedParameters)))) {
-        error(reduce, "zkc-E322")
+        error(reduce, "[zkc-E322]")
             << "body role '" << role << "' has the wrong fixed parameters";
         continue;
       }
@@ -973,7 +976,7 @@ private:
                                                 ? *slot.transparentPredicate
                                                 : llvm::json::Value(nullptr);
       if (!sameJson(view->normalizedExpr, expectedPredicate)) {
-        error(reduce, "zkc-E322")
+        error(reduce, "[zkc-E322]")
             << "body role '" << role << "' has the wrong transparent predicate";
         continue;
       }
@@ -992,7 +995,7 @@ private:
       if (!left || !right)
         continue;
       if (left->sort != right->sort || !sameJson(left->value, right->value))
-        error(reduce, "zkc-E325")
+        error(reduce, "[zkc-E325]")
             << "an admitted material-identity constraint does not hold: left "
             << llvm::formatv("{0}", left->value) << ", right "
             << llvm::formatv("{0}", right->value);
@@ -1004,7 +1007,7 @@ private:
       const std::map<std::string, EvaluatedMaterial, std::less<>> &params) {
     ArrayAttr authored = reduce.getOutAnchors().value_or(ArrayAttr());
     if (!authored || authored.size() != contract.outputs.size()) {
-      error(reduce, "zkc-E326") << "out_anchors must contain one exact "
+      error(reduce, "[zkc-E326]") << "out_anchors must contain one exact "
                                    "dictionary per contract output";
       return;
     }
@@ -1014,7 +1017,7 @@ private:
     for (auto [index, output] : llvm::enumerate(contract.outputs)) {
       auto authoredDictionary = dyn_cast<DictionaryAttr>(authored[index]);
       if (!authoredDictionary) {
-        error(reduce, "zkc-E326")
+        error(reduce, "[zkc-E326]")
             << "output " << index << " anchor assertion is not a dictionary";
         continue;
       }
@@ -1043,7 +1046,7 @@ private:
               actual ? zkc::encoding::canonicalJsonBytes(*actual)
                      : llvm::Expected<std::string>(llvm::createStringError(
                            "anchor dictionary is not canonical"));
-          auto diagnostic = error(reduce, "zkc-E326")
+          auto diagnostic = error(reduce, "[zkc-E326]")
                             << "output " << index
                             << " descriptor does not equal the contract "
                                "constructor";
@@ -1066,7 +1069,7 @@ private:
     const ReductionContract *contract =
         vocabulary.lookupReductionContract(reduce.getContract());
     if (!contract) {
-      error(reduce, "zkc-E320")
+      error(reduce, "[zkc-E320]")
           << "unknown reduction contract '" << reduce.getContract() << "'";
       return;
     }

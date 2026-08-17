@@ -523,9 +523,10 @@ canonical encoding and refuses.
 
 ## 7. Registries
 
-All JSON vocabularies use one `zkc::registry` loading discipline: versioned,
-closed-field schemas; unknown fields, constructors, ids, and versions fail
-closed. Duplicate object keys refuse at every nesting depth before schema
+All JSON vocabularies use one `zkc::registry` loading discipline:
+closed-field schemas named by their `registry` string and carrying no version
+field ([versioning.md §1](versioning.md)); unknown fields, constructors, and
+ids fail closed. Duplicate object keys refuse at every nesting depth before schema
 validation, so no authority input has a parser-dependent last-wins reading.
 The verifier/seal split remains: unknown ids in authored IR may parse, but seal
 refuses them. Candidate registries are seal-time environment and do not enter

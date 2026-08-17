@@ -5,6 +5,7 @@
 #include "zkc/ChallengeShape.h"
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Encoding/EncodingDomain.h"
+#include "zkc/Registry/RegistryBase.h"
 #include "zkc/Registry/RegistryFile.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSet.h"
@@ -21,13 +22,6 @@ const T *lookup(const std::map<std::string, T, std::less<>> &entries,
                 StringRef id) {
   auto it = entries.find(id);
   return it == entries.end() ? nullptr : &it->second;
-}
-
-Error requireEntryName(const RegistryFile &file, StringRef section,
-                       StringRef id) {
-  if (!id.empty() && zkc::encoding::inEncodingDomain(id))
-    return Error::success();
-  return file.error(section + " names must be non-empty printable ASCII");
 }
 
 Error requireUnique(const RegistryFile &file, ArrayRef<std::string> values,
@@ -780,7 +774,8 @@ Expected<MaterialExpr> parseMaterialExpr(
     if (Error e = stringField("value", expr.name))
       return std::move(e);
     if (!zkc::encoding::isSha256Ref(expr.name))
-      return file.error(context + " value must be sha256:<64 lowercase hex>");
+      return file.error(context + " value " +
+                        zkc::encoding::kSha256RefMessage);
     expr.kind = MaterialExprKind::LiteralRef;
     expr.sort = MaterialExprSort::Ref;
   } else if (*kind == "input_anchor") {
@@ -2067,21 +2062,25 @@ parseRule(const RegistryFile &file, StringRef id, const json::Value &value,
   return rule;
 }
 
+/// The vocabulary's envelope carries seven named sections, so it walks
+/// them itself rather than through RegistryBase::parse. The walk is the
+/// shared one — same name gate, same order — with the one thing these
+/// call sites all want added: the admitted entry lands in the section's
+/// map.
 template <typename Entry, typename Parse>
-Error parseSection(const RegistryFile &file, StringRef section,
+Error parseEntries(const RegistryFile &file, StringRef section,
                    const json::Object &object,
                    std::map<std::string, Entry, std::less<>> &out,
                    Parse &&parse) {
-  for (const auto &member : object) {
-    StringRef id(member.first);
-    if (Error e = requireEntryName(file, section, id))
-      return e;
-    auto entry = parse(id, member.second);
-    if (!entry)
-      return entry.takeError();
-    out[id.str()] = std::move(*entry);
-  }
-  return Error::success();
+  return parseSection(file, object, section,
+                      [&](const RegistryFile &, StringRef id,
+                          const json::Value &value) -> Error {
+                        auto entry = parse(id, value);
+                        if (!entry)
+                          return entry.takeError();
+                        out[id.str()] = std::move(*entry);
+                        return Error::success();
+                      });
 }
 
 } // namespace
@@ -2493,25 +2492,25 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
     return file->error("'terminal_rules' must be an object");
 
   ProtocolVocabulary vocabulary;
-  if (Error e = parseSection(*file, "claim profile", file->payload(),
+  if (Error e = parseEntries(*file, "claim profile", file->payload(),
                              vocabulary.profiles_,
                              [&](StringRef id, const json::Value &value) {
                                return parseProfile(*file, id, value);
                              }))
     return std::move(e);
-  if (Error e = parseSection(*file, "predicate spec", *predicateSpecs,
+  if (Error e = parseEntries(*file, "predicate spec", *predicateSpecs,
                              vocabulary.predicateSpecs_,
                              [&](StringRef id, const json::Value &value) {
                                return parsePredicateSpec(*file, id, value);
                              }))
     return std::move(e);
-  if (Error e = parseSection(
+  if (Error e = parseEntries(
           *file, "check contract", *contracts, vocabulary.checkContracts_,
           [&](StringRef id, const json::Value &value) {
             return parseContract(*file, id, value, vocabulary.predicateSpecs_);
           }))
     return std::move(e);
-  if (Error e = parseSection(*file, "hole contract", *holeContracts,
+  if (Error e = parseEntries(*file, "hole contract", *holeContracts,
                              vocabulary.holeContracts_,
                              [&](StringRef id, const json::Value &value) {
                                return parseHoleContract(*file, id, value);
@@ -2525,7 +2524,7 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
     if (!citedPredicateSpecs.contains(digest))
       return file->error("predicate spec '" + digest +
                          "' is not cited by any opaque check contract");
-  if (Error e = parseSection(*file, "reduction contract", *reductionContracts,
+  if (Error e = parseEntries(*file, "reduction contract", *reductionContracts,
                              vocabulary.reductionContracts_,
                              [&](StringRef id, const json::Value &value) {
                                return parseReductionContract(
@@ -2533,7 +2532,7 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
                                    vocabulary.checkContracts_);
                              }))
     return std::move(e);
-  if (Error e = parseSection(*file, "terminal rule", *rules, vocabulary.rules_,
+  if (Error e = parseEntries(*file, "terminal rule", *rules, vocabulary.rules_,
                              [&](StringRef id, const json::Value &value) {
                                return parseRule(*file, id, value,
                                                 vocabulary.profiles_,
@@ -2549,10 +2548,6 @@ const ClaimProfile *ProtocolVocabulary::lookupProfile(StringRef id) const {
   return lookup(profiles_, id);
 }
 
-const CheckPredicateSpec *
-ProtocolVocabulary::lookupPredicateSpec(StringRef digest) const {
-  return lookup(predicateSpecs_, digest);
-}
 
 const CheckContract *
 ProtocolVocabulary::lookupCheckContract(StringRef id) const {

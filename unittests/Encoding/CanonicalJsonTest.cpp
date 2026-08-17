@@ -22,10 +22,7 @@ namespace {
 std::string canonical(const json::Value &value) {
   std::string out;
   raw_string_ostream stream(out);
-  Error error = writeCanonicalJson(value, stream);
-  EXPECT_FALSE(static_cast<bool>(error));
-  if (error)
-    consumeError(std::move(error));
+  EXPECT_ADMITTED(writeCanonicalJson(value, stream));
   return out;
 }
 
@@ -87,14 +84,10 @@ TEST(CanonicalJson, RoundTripsThroughItsOwnParser) {
 }
 
 TEST(CanonicalJson, RefusesDuplicateKeysAtEveryDepth) {
-  for (StringRef text :
-       {"{\"a\":1,\"a\":2}", "{\"outer\":{\"a\":1,\"a\":2}}",
-        "[{\"a\":1,\"a\":2}]", "{\"a\":1,\"b\":2,\"a\":3}"}) {
-    auto parsed = parseJsonUniqueKeys(text);
-    EXPECT_FALSE(static_cast<bool>(parsed)) << "admitted: " << text.str();
-    if (!parsed)
-      consumeError(parsed.takeError());
-  }
+  FOR_EACH(text, (std::initializer_list<StringRef>{
+                     "{\"a\":1,\"a\":2}", "{\"outer\":{\"a\":1,\"a\":2}}",
+                     "[{\"a\":1,\"a\":2}]", "{\"a\":1,\"b\":2,\"a\":3}"}))
+    EXPECT_REFUSED(parseJsonUniqueKeys(text));
 }
 
 TEST(CanonicalJson, AdmitsKeysThatOnlyLookAlike) {
@@ -104,12 +97,9 @@ TEST(CanonicalJson, AdmitsKeysThatOnlyLookAlike) {
 }
 
 TEST(CanonicalJson, RefusesTextThatIsNotJson) {
-  for (StringRef text : {"", "{", "{\"a\":}", "nope", "{\"a\":1,}"}) {
-    auto parsed = parseJsonUniqueKeys(text);
-    EXPECT_FALSE(static_cast<bool>(parsed)) << "admitted: " << text.str();
-    if (!parsed)
-      consumeError(parsed.takeError());
-  }
+  FOR_EACH(text, (std::initializer_list<StringRef>{"", "{", "{\"a\":}", "nope",
+                                                   "{\"a\":1,}"}))
+    EXPECT_REFUSED(parseJsonUniqueKeys(text));
 }
 
 } // namespace

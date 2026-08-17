@@ -57,9 +57,8 @@ void expectCanonical(const Rational &value, const std::string &where) {
 
 Rational parse(llvm::StringRef text) {
   auto value = Rational::fromDecimal(text);
-  EXPECT_TRUE(static_cast<bool>(value)) << text.str();
   if (!value) {
-    llvm::consumeError(value.takeError());
+    EXPECT_ADMITTED(std::move(value));
     return Rational();
   }
   return *value;
@@ -67,10 +66,8 @@ Rational parse(llvm::StringRef text) {
 
 Rational ratio(llvm::StringRef numerator, llvm::StringRef denominator) {
   auto value = Rational::fromDecimalPair(numerator, denominator);
-  EXPECT_TRUE(static_cast<bool>(value))
-      << numerator.str() << "/" << denominator.str();
   if (!value) {
-    llvm::consumeError(value.takeError());
+    EXPECT_ADMITTED(std::move(value));
     return Rational();
   }
   return *value;
@@ -87,20 +84,14 @@ TEST(Rational, ReducesWhatItParses) {
 }
 
 TEST(Rational, RefusesWhatIsNotAnExactInteger) {
-  for (llvm::StringRef text :
-       {"", "-", "1.5", "1 ", " 1", "+1", "one", "0x10", "1/2", "--1", "01"}) {
-    auto value = Rational::fromDecimal(text);
-    EXPECT_FALSE(static_cast<bool>(value)) << "admitted: " << text.str();
-    if (!value)
-      llvm::consumeError(value.takeError());
-  }
+  FOR_EACH(text, (std::initializer_list<llvm::StringRef>{
+                     "", "-", "1.5", "1 ", " 1", "+1", "one", "0x10", "1/2",
+                     "--1", "01"}))
+    EXPECT_REFUSED(Rational::fromDecimal(text));
 }
 
 TEST(Rational, RefusesAZeroDenominator) {
-  auto value = Rational::fromDecimalPair("1", "0");
-  EXPECT_FALSE(static_cast<bool>(value));
-  if (!value)
-    llvm::consumeError(value.takeError());
+  EXPECT_REFUSED(Rational::fromDecimalPair("1", "0"));
 }
 
 TEST(Rational, ArithmeticPreservesTheCanonicalForm) {
@@ -130,10 +121,7 @@ TEST(Rational, AdditionAndSubtractionInvertEachOther) {
 }
 
 TEST(Rational, DivisionByZeroRefusesRatherThanTrapping) {
-  auto quotient = ratio("1", "2").div(parse("0"));
-  EXPECT_FALSE(static_cast<bool>(quotient));
-  if (!quotient)
-    llvm::consumeError(quotient.takeError());
+  EXPECT_REFUSED(ratio("1", "2").div(parse("0")));
 }
 
 TEST(Rational, PowerAgreesWithRepeatedMultiplication) {
@@ -156,10 +144,7 @@ TEST(Rational, ANegativeExponentInvertsAndRefusesOverZero) {
   auto inverted = ratio("2", "3").pow(-2);
   ASSERT_TRUE(static_cast<bool>(inverted));
   EXPECT_EQ(inverted->str(), "9/4");
-  auto refused = parse("0").pow(-1);
-  EXPECT_FALSE(static_cast<bool>(refused));
-  if (!refused)
-    llvm::consumeError(refused.takeError());
+  EXPECT_REFUSED(parse("0").pow(-1));
 }
 
 TEST(Rational, CompareIsATotalOrder) {
@@ -191,10 +176,7 @@ TEST(Rational, CeilLog2RoundsALossUpward) {
     EXPECT_EQ(*bits, item.bits)
         << item.numerator << "/" << item.denominator;
   }
-  auto refused = parse("0").ceilLog2();
-  EXPECT_FALSE(static_cast<bool>(refused));
-  if (!refused)
-    llvm::consumeError(refused.takeError());
+  EXPECT_REFUSED(parse("0").ceilLog2());
 }
 
 TEST(Rational, FloorAndCeilBracketEveryValue) {

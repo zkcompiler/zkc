@@ -22,7 +22,8 @@ field equals its only value.
 | Producer marker | `zkc_v<release>` in the bytecode header | error locality only: it names a foreign or stale artifact clearly; acceptance never rides on it — the identity recheck and the version blob are the gates |
 
 Registries (`zkc.protocol_vocabulary`, `zkc.construction_profiles`,
-`zkc.soundness_signature`, `zkc.derivation_request`,
+`zkc.relation_contract`, `zkc.soundness_signature`,
+`zkc.diagnostic_allocation`, `zkc.upstream_pins`, `zkc.derivation_request`,
 `zkc.derivation_witness`) are named by their `registry` string and carry no
 version field. Their loaders are fail-closed — unknown fields, duplicate
 keys, floats, unresolved references, and ABI divergence refuse — so a schema

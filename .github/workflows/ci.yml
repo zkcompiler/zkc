@@ -61,8 +61,13 @@ jobs:
       - name: Run the oracle self-checks
         working-directory: reference
         run: uv run --locked python -m oracle.model
-      - name: Lint the reference twin (defect rules only)
-        run: uvx ruff check reference/oracle
+      # Every Python in the tree, under the one configuration in
+      # ruff.toml. The fixture generators were outside this and had no
+      # reason to be: what they emit is pinned by lit, so a defect in
+      # one of them shows up as a mismatch nobody can read rather than
+      # as a lint finding.
+      - name: Lint the Python (defect rules only)
+        run: uvx ruff check .
 
   build:
     name: Build and test (C++ / MLIR)
@@ -90,7 +95,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             emit/target
-            evaluation/upstream/plonky3-replay/target
+            build/cargo-target
           key: cargo-${{ runner.os }}-${{ hashFiles('emit/Cargo.lock', 'evaluation/upstream/plonky3-replay/Cargo.lock') }}
 
       - name: Emit workspace suites (tests, lints, format)

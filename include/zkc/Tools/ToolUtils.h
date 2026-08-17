@@ -79,8 +79,13 @@ OpT getSingleOp(mlir::ModuleOp module, llvm::StringRef what) {
 }
 
 /// Print an error to stderr in the tools' one spelling and return the
-/// failure exit code.
+/// failure exit code. Every failure exit in `tools/` goes through here,
+/// including the ones that have no `llvm::Error` to carry: a caller
+/// reading stderr should not have to know which binary produced a line
+/// in order to recognize it as a failure, and a tool that spells its
+/// own exit is a tool whose spelling drifts.
 int reportError(llvm::Error error);
+int reportError(const llvm::Twine &message);
 
 } // namespace tool
 } // namespace zkc

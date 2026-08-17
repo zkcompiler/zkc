@@ -16,7 +16,7 @@ oir.artifact "a" id "nope"
 // -----
 
 // A source citation without its algorithm prefix (E141).
-// expected-error @below {{[zkc-E141] source citation must be an algorithm-prefixed sealed artifact id}}
+// expected-error @below {{[zkc-E141] source citation must be sha256:<64 lowercase hex>}}
 oir.artifact "a" id "0000000000000000000000000000000000000000000000000000000000000000"
     source "987db52abcc816efde63c64e94705cc6bc902003c031690b836b3766735bd69b"
     endpoint "verifier" {
@@ -248,7 +248,7 @@ oir.artifact "bad-check-digest"
   oir.program {
   ^bb0(%proof: !oir.stream):
     %sp0 = oir.transcript_init sponge "toy_duplex" iv "artifact-id"
-    // expected-error @below {{[zkc-E147] contract_digest must be a sha256:-prefixed 64-lowercase-hex CheckContract content digest}}
+    // expected-error @below {{[zkc-E147] contract_digest must be sha256:<64 lowercase hex>}}
     oir.check_call "predicate" kind "zkc.check.relation-predicate" digest "not-a-digest"
     oir.expect_end %proof
     oir.decide %sp0

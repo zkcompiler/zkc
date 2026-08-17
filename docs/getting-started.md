@@ -81,8 +81,8 @@ setup interface.
 
 ## 4a. The shipped tools
 
-Nine binaries land in `build/bin`. Each takes `--help`; this is what they are
-for and which are load-bearing for the claims in
+Ten tools land in `build/bin`, beside the test-only pass driver. Each takes
+`--help`; this is what they are for and which are load-bearing for the claims in
 [Current Status](status.md).
 
 | Tool | What it does |
@@ -94,6 +94,7 @@ for and which are load-bearing for the claims in
 | `zkc-run` | Execute an endpoint. `--vectors` checks a verifier against golden vectors, `--prove` runs a prover skeleton and can verify what it produced, `--replay-duplex` replays a pinned upstream transcript. This is the tool behind every "Verifier path" and "Prover path" cell. |
 | `zkc-derive` | Derive a soundness or completeness judgment from an admitted artifact plus a signature. `--describe` lists the application sites an artifact offers; `--check` re-derives a recorded witness. |
 | `zkc-registry-lint` | Load one registry fail-closed and print its normalized content — the carrier half of every registry parity test. |
+| `zkc-relation` | Judge a relation contract against an admitted artifact, reporting what was computed, what two declarations agree on, and what remains asserted, apart. Reads the relation's bytes where the format has a reader. |
 | `zkc-family` | Generate a parameterized protocol family (currently FRI). |
 | `zkc-opt` | The MLIR pass driver, carrying the zkc dialects and passes. |
 
@@ -127,7 +128,7 @@ mkdir -p "$ZKC_QUICKSTART_DIR/artifacts"
 build/bin/zkc-seal test/Encoding/routed-schnorr.mlir \
   --protocol-vocabulary registry/protocol-vocabulary.json \
   --construction-profile-registry registry/construction-profiles.json \
-  -o "$ZKC_QUICKSTART_DIR/artifacts"
+  --output-dir "$ZKC_QUICKSTART_DIR/artifacts"
 
 build/bin/zkc-project "$ZKC_QUICKSTART_DIR"/artifacts/*.mlirbc \
   --endpoint-kind verifier \
@@ -156,7 +157,7 @@ compiler-request schema or compiler CLI.
 | zkc build | CMake 3.20+, Ninja, C++17 | [`CMakeLists.txt`](../CMakeLists.txt) |
 | Python reference twin | Python 3.12+ and **no dependencies at all** | [`reference/pyproject.toml`](../reference/pyproject.toml) and [`reference/uv.lock`](../reference/uv.lock) |
 | Optional Plonky3 harness | stable Rust 1.85 or newer (the crate is edition 2024); the upstream revision | its `Cargo.toml` and `Cargo.lock` |
-| ArkLib receipt reading | exact ArkLib revision | [`arklib-pin.txt`](../arklib-pin.txt) and the checkout's Lean/Lake files |
+| ArkLib receipt reading | exact ArkLib revision | [`registry/upstreams.json`](../registry/upstreams.json) and the checkout's Lean/Lake files |
 
 Each of these is as tight as what it guards, and no tighter.
 

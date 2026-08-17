@@ -47,6 +47,15 @@ inline bool isSha256Ref(llvm::StringRef value) {
   return value.consume_front("sha256:") && isLowerHex64(value);
 }
 
+/// The one spelling of what `isSha256Ref` wanted, shared by every site
+/// that refuses on it — the same arrangement `kCountGrammarMessage`
+/// makes for the count grammar, and for the same reason. A predicate
+/// held in one place whose refusal is worded five ways reads, to
+/// whoever hits two of them, as five different requirements; each site
+/// still names its own subject and prefixes its own diagnostic id.
+inline constexpr const char kSha256RefMessage[] =
+    "must be sha256:<64 lowercase hex>";
+
 /// The nesting bound for identity-bearing attribute trees (expr,
 /// kappa, params, anchors). Real interiors are a handful of levels;
 /// the bound exists so every recursive walk over authored or loaded

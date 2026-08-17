@@ -71,8 +71,6 @@ struct PreservationObligation {
   uint64_t applicationIndex = 0;
 };
 
-/// The canonical document for one judgment, for digesting and comparison.
-llvm::json::Value encodeJudgmentDocument(const SecurityJudgment &judgment);
 
 /// The derivation with every bound removed: the plan's shape, each node's site
 /// and binding, and the part of each conclusion that structure alone

@@ -274,7 +274,7 @@ private:
                       "' must be a non-empty printable string");
       if (semantic.contains(name) && !encoding::isSha256Ref(value.getValue()))
         return reject("route instance '" + instance + "' semantic param '" +
-                      name + "' must be a sha256 content reference");
+                      name + "' " + encoding::kSha256RefMessage);
     }
     return success();
   }

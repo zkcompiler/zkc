@@ -5,3 +5,18 @@ members = ["zkc-rt", "zkc-emit"]
 # Emitted crates are separate packages outside this workspace: each one
 # resolves its own dependency graph against the same pins, which is the
 # self-containment the emitter exists to produce.
+
+# The Plonky3 revision, once for this workspace. Emitted crates depend
+# on zkc-rt by path, so they inherit it rather than restating it —
+# which is what keeps a generated crate pinned to the same upstream
+# the runtime was built against.
+[workspace.dependencies]
+p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-field = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-symmetric = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-matrix = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-dft = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-commit = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-fri = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }
+p3-util = { git = "https://github.com/Plonky3/Plonky3.git", rev = "3da346791c813433b201299afc3d10bf42f8a078" }

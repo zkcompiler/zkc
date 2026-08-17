@@ -31,7 +31,7 @@ jobs:
 
       - name: Read the pin
         id: pin
-        run: echo "rev=$(cat arklib-pin.txt)" >> "$GITHUB_OUTPUT"
+        run: echo "rev=$(python3 -c 'import json;print(json.load(open("registry/upstreams.json"))["upstreams"]["arklib"]["revision"])')" >> "$GITHUB_OUTPUT"
 
       - name: Check out ArkLib at the pin
         uses: actions/checkout@v7

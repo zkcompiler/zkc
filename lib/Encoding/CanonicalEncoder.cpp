@@ -802,8 +802,8 @@ private:
             "material binding value has no canonical event position");
       if (!zkc::encoding::isSha256Ref(binding.getSemanticRef()))
         return llvm::createStringError(
-            "material binding semantic reference is not a canonical "
-            "sha256 reference");
+            llvm::Twine("material binding semantic reference ") +
+            zkc::encoding::kSha256RefMessage);
       if (llvm::Error err = checkStrings({binding.getSemanticRef()}))
         return err;
       if (!endpoints.insert(endpoint->second).second)

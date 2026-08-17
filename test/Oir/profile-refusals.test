@@ -10,33 +10,33 @@
 # RUN: rm -rf %t && mkdir -p %t
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-sponge.mlir -o %t/sponge.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-sponge.mlir %t/sponge.mlir %t/sponge.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-sponge.mlir %t/sponge.mlir %t/sponge.id
 # RUN: not zkc-test-opt -test-oir-execute %t/sponge.mlir 2>&1 | FileCheck --check-prefix=SPONGE %s
 # SPONGE: [zkc-E401] sponge construction 'plonky3_bb31_poseidon2_w16_r8_lenpad' with iv policy 'artifact-id' has no supplier in profile 'toy'
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-codec.mlir -o %t/codec.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-codec.mlir %t/codec.mlir %t/codec.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-codec.mlir %t/codec.mlir %t/codec.id
 # RUN: not zkc-test-opt -test-oir-execute %t/codec.mlir 2>&1 | FileCheck --check-prefix=CODEC %s
 # CODEC: [zkc-E400] no codec route for class 'rs': codec 'plonky3_bb31_ext4_tuple' has no supplier in profile 'toy'
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-sampling.mlir -o %t/sampling.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-sampling.mlir %t/sampling.mlir %t/sampling.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-sampling.mlir %t/sampling.mlir %t/sampling.id
 # RUN: not zkc-test-opt -test-oir-execute %t/sampling.mlir 2>&1 | FileCheck --check-prefix=SAMPLING %s
 # SAMPLING: [zkc-E402] sampling shape at 'query' (rule 'uniform_independent', count 4, space 16) has no supplier in profile 'toy'
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-check.mlir -o %t/check.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-check.mlir %t/check.mlir %t/check.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-check.mlir %t/check.mlir %t/check.id
 # RUN: not zkc-test-opt -test-oir-execute %t/check.mlir 2>&1 | FileCheck --check-prefix=CHECK-CALL %s
 # CHECK-CALL: [zkc-E403] opaque check kind 'zkc.check.merkle-path' has no executable contract in profile 'toy'
 
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-statement.mlir -o %t/statement.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-statement.mlir %t/statement.mlir %t/statement.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-statement.mlir %t/statement.mlir %t/statement.id
 # RUN: not zkc-test-opt -test-oir-execute %t/statement.mlir 2>&1 | FileCheck --check-prefix=STATEMENT %s
 # STATEMENT: [zkc-E405] statement value 'x' missing
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-constant.mlir -o %t/constant.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-constant.mlir %t/constant.mlir %t/constant.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-constant.mlir %t/constant.mlir %t/constant.id
 # RUN: not zkc-test-opt -test-oir-execute %t/constant.mlir 2>&1 | FileCheck --check-prefix=CONSTANT %s
 # CONSTANT: [zkc-E406] constant is not decimal
 
@@ -46,19 +46,19 @@
 # refusals, never proof verdicts (endpoints.md §4).
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-pin-supplier.mlir -o %t/pin-supplier.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-pin-supplier.mlir %t/pin-supplier.mlir %t/pin-supplier.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-pin-supplier.mlir %t/pin-supplier.mlir %t/pin-supplier.id
 # RUN: not zkc-test-opt -test-oir-execute %t/pin-supplier.mlir 2>&1 | FileCheck --check-prefix=PIN-SUPPLIER %s
 # PIN-SUPPLIER: [zkc-E401] pinned construction 'sponge:plonky3_bb31_poseidon2_w16_r8_lenpad' has no supplier in profile 'toy'
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-pin-mismatch.mlir -o %t/pin-mismatch.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-pin-mismatch.mlir %t/pin-mismatch.mlir %t/pin-mismatch.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-pin-mismatch.mlir %t/pin-mismatch.mlir %t/pin-mismatch.id
 # RUN: not zkc-test-opt -test-oir-execute %t/pin-mismatch.mlir 2>&1 | FileCheck --check-prefix=PIN-MISMATCH %s
 # PIN-MISMATCH: [zkc-E408] param_digest_mismatch at 'sponge:toy_duplex'
 
 # Algebra is the profile's to supply: an op with no declared moduli is a
 # refusal, never a silent computation in another profile's field.
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-no-algebra.mlir -o %t/no-algebra.id
-# RUN: %python %S/Inputs/rewrite-oir-id.py %S/Inputs/refusal-no-algebra.mlir %t/no-algebra.mlir %t/no-algebra.id
+# RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-no-algebra.mlir %t/no-algebra.mlir %t/no-algebra.id
 # RUN: %python -c "import json,sys; print(json.dumps({'artifact_id': open(sys.argv[1]).read().strip(), 'vectors': [{'name': 'alg', 'statement': {}, 'proof': '', 'expect': 'accept', 'challenges': []}]}))" %t/no-algebra.id > %t/no-algebra-vectors.json
 # RUN: not zkc-run %t/no-algebra.mlir --profile plonky3 --vectors %t/no-algebra-vectors.json 2>&1 | FileCheck --check-prefix=NO-ALGEBRA %s
 # NO-ALGEBRA: [zkc-E404] algebra op 'f_add' has no moduli in profile 'plonky3'
