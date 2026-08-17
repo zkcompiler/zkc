@@ -105,4 +105,4 @@
 // ELL: 'ell' must be an integer from 2 through 2^20
 // BLOWUP: 'log_blowup' must be a positive integer
 // FINLEN: 'log_final_poly_len' must be an integer from 0 through 20
-// SHAPE: 'log_blowup' contradicts the shape equation
+// SHAPE: 'query_log2' must equal k + log_blowup + log_final_poly_len

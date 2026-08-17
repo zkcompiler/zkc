@@ -1,6 +1,8 @@
 //===- SoundnessProjection.cpp - Closed fact projection/deciders ---------===//
 #include "zkc/Soundness/SoundnessProjection.h"
 
+#include "zkc/Family/FriShape.h"
+
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Twine.h"
@@ -843,18 +845,26 @@ evaluateMachineDecider(MachineDeciderKind kind,
     return true;
   }
   case MachineDeciderKind::FriShape: {
-    // The declared shape must be the realized one: n = k + log_blowup +
-    // log_final_poly_len with log_blowup >= 1 (rate below one). This is
-    // what stops a declared rate from drifting off the sealed schedule
-    // and silently understating every bound priced from it.
-    const registry::Rational &n = number(arguments[0]);
-    const registry::Rational &k = number(arguments[1]);
-    const registry::Rational &blowup = number(arguments[2]);
-    const registry::Rational &finalLen = number(arguments[3]);
-    if (blowup.compare(one) < 0 ||
-        finalLen.compare(registry::Rational::fromInteger(0)) < 0)
-      return false;
-    return n.compare(k.add(blowup).add(finalLen)) == 0;
+    // The declared shape must be the realized one. The equation itself
+    // is stated once, in the family header: this is the same fact read
+    // from projected facts rather than from a description, and what it
+    // stops is a declared rate drifting off the sealed schedule and
+    // silently understating every bound priced from it.
+    int64_t shape[4];
+    for (unsigned index = 0; index < 4; ++index) {
+      auto integer = number(arguments[index]).floorToInt();
+      if (!integer) {
+        llvm::consumeError(integer.takeError());
+        return false;
+      }
+      // The argument sorts declare these integers; a value that is not
+      // one cannot decide the equation, so it decides against.
+      if (registry::Rational::fromInteger(*integer).compare(
+              number(arguments[index])) != 0)
+        return false;
+      shape[index] = *integer;
+    }
+    return zkc::family::friShapeHolds(shape[0], shape[1], shape[2], shape[3]);
   }
   case MachineDeciderKind::JohnsonFoldParam:
     return number(arguments[0]).compare(registry::Rational::fromInteger(3)) >=

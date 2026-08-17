@@ -151,30 +151,35 @@ parseCodec(const RegistryFile &file, StringRef name, const json::Value &value) {
 
 Expected<ConstructionProfileRegistry>
 ConstructionProfileRegistry::parse(StringRef json, StringRef sourceName) {
+  // Two sections, one loop: sponges land as the base's entries, codecs
+  // in this registry's own map, and both pass the same name gate.
   Expected<RegistryFile> file = RegistryFile::parse(
       json, sourceName, kRegistryName, kPayloadField, {"codecs"});
   if (!file)
     return file.takeError();
   ConstructionProfileRegistry result;
-  for (const auto &entry : file->payload()) {
-    StringRef name(entry.first);
-    if (name.empty() || !zkc::encoding::inEncodingDomain(name))
-      return file->error("sponge names must be non-empty printable ASCII");
-    auto parsed = parseEntry(*file, name, entry.second);
-    if (!parsed)
-      return parsed.takeError();
-    result.addEntry(name, std::move(*parsed));
-  }
-  if (const json::Object *codecs = file->extra("codecs")) {
-    for (const auto &entry : *codecs) {
-      StringRef name(entry.first);
-      if (name.empty() || !zkc::encoding::inEncodingDomain(name))
-        return file->error("codec names must be non-empty printable ASCII");
-      auto parsed = parseCodec(*file, name, entry.second);
-      if (!parsed)
-        return parsed.takeError();
-      result.codecs_[name.str()] = std::move(*parsed);
-    }
-  }
+  if (Error error = parseSection(
+          *file, file->payload(), kEntryNoun,
+          [&](const RegistryFile &from, StringRef name,
+              const llvm::json::Value &value) -> Error {
+            auto parsed = parseEntry(from, name, value);
+            if (!parsed)
+              return parsed.takeError();
+            result.addEntry(name, std::move(*parsed));
+            return Error::success();
+          }))
+    return std::move(error);
+  if (const llvm::json::Object *codecs = file->extra("codecs"))
+    if (Error error = parseSection(
+            *file, *codecs, "codec",
+            [&](const RegistryFile &from, StringRef name,
+                const llvm::json::Value &value) -> Error {
+              auto parsed = parseCodec(from, name, value);
+              if (!parsed)
+                return parsed.takeError();
+              result.codecs_[name.str()] = std::move(*parsed);
+              return Error::success();
+            }))
+      return std::move(error);
   return result;
 }
