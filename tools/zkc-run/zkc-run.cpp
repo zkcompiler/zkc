@@ -295,12 +295,15 @@ static int proveRoundTrip() {
     }
   }
   const zkc::interpreter::ExecutionProfile *profile = resolveProfile();
+  // resolveProfile has already reported the absent profile as E902.
   if (!profile)
-    return 1;
+    return 2;
   llvm::StringMap<std::string> statement, witness;
+  // A malformed --statement or --witness is the invocation's mistake;
+  // parsePairs has already reported it as E903.
   if (!parsePairs(proveStatement, statement, "statement") ||
       !parsePairs(proveWitness, witness, "witness"))
-    return 1;
+    return 2;
   auto proved = zkc::interpreter::prove(artifact, *profile, statement, witness);
   if (!proved) {
     return zkc::tool::reportRefusal("prove: " +
@@ -461,8 +464,9 @@ int main(int argc, char **argv) {
   }
 
   const zkc::interpreter::ExecutionProfile *profile = resolveProfile();
+  // resolveProfile has already reported the absent profile as E902.
   if (!profile)
-    return 1;
+    return 2;
 
   bool allHeld = true;
   for (const GoldenVector &vector : validated) {

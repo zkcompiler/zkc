@@ -27,6 +27,17 @@
 # A contract the environment supplied does not carry.
 # RUN: %python %S/Inputs/exit-code.py 2 zkc-relation %S/../Encoding/schnorr.mlir --contracts=%zkc-registry-dir/relation-contracts.json --contract=no.such.contract --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json
 
+# A file the tool cannot take at all. These four were the review's
+# finding: each reported its mistake through the exit-2 channel, threw
+# the code away, and returned 1 from the caller — so the message named
+# an invocation error and the status said the subject had been examined.
+# RUN: echo 'not a module' > %t/notmlir.mlir
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-seal %t/notmlir.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --output-dir=%t/out
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-translate --id %t/notmlir.mlir
+# A profile the environment does not carry, and a malformed payload flag.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-run %S/../Oir/Inputs/schnorr-verifier.mlir --profile=no-such-profile --vectors=%t/absent.json
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-run %S/../Oir/Inputs/schnorr-verifier.mlir --prove malformed --statement y=1
+
 # -- 1: the subject was examined and refused. -------------------------
 # A registry that does not admit is this tool's whole question, so its
 # parse refusal is an answer rather than a failure to reach one.
@@ -34,6 +45,10 @@
 # RUN: %python %S/Inputs/exit-code.py 1 zkc-registry-lint %t/bad.json
 # A description outside the family's closed point selection.
 # RUN: %python %S/Inputs/exit-code.py 1 zkc-family %S/../Family/Inputs/bad-k.json --emit-vocabulary=%t/v.json --emit-spine=%t/s.mlir
+# A protocol that parses and that the seal battery refuses — the case
+# that keeps the fixes above from having simply moved everything to 2.
+# RUN: %python -c "import re,sys,pathlib; s=pathlib.Path(sys.argv[1]).read_text(); pathlib.Path(sys.argv[2]).write_text(re.sub(r'(anchors .\{statement = \"sha256:)([0-9a-f]{4})', r'\g<1>dead', s, count=1))" %S/../Encoding/routed-schnorr.mlir %t/battery-refuses.mlir
+# RUN: %python %S/Inputs/exit-code.py 1 zkc-seal %t/battery-refuses.mlir --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json --output-dir=%t/out2
 
 # -- 0: answered affirmatively. ---------------------------------------
 # The control: without it the checks above are satisfied by a tool that

@@ -156,8 +156,9 @@ int main(int argc, char **argv) {
   context.loadDialect<zkc::pir::PirDialect, zkc::oir::OirDialect>();
   zkc::tool::ParsedModule parsed =
       zkc::tool::parseModule(inputFilename, context);
+  // A file this tool cannot take: parseModule has named it.
   if (!parsed)
-    return 1;
+    return 2;
   ModuleOp module = parsed.get();
 
   bool wantOir = emitOirCanonical || emitOirId || emitOirSemanticId ||

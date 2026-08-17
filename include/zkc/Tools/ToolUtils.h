@@ -79,9 +79,15 @@ OpT getSingleOp(mlir::ModuleOp module, llvm::StringRef what) {
 }
 
 /// The two ways a tool can end without an affirmative answer, in the
-/// tools' one spelling on stderr. Every non-zero exit in `tools/` goes
-/// through one of these, and which one is a fact only the call site
-/// holds: whether the tool reached the subject it was asked about.
+/// tools' one spelling on stderr. Which one is a fact only the call
+/// site holds: whether the tool reached the subject it was asked about.
+///
+/// Not every non-zero exit goes through these, and the exceptions are
+/// the ones that must not: a pass pipeline, an op verifier, and the
+/// encoders emit their own located diagnostics carrying their own
+/// identifiers, and their callers return 1 directly because the subject
+/// was reached and refused. What goes through here is what those layers
+/// have no way to say — that the tool never got that far.
 ///
 /// `reportRefusal` exits 1 — the subject was examined and the answer is
 /// negative. A registry that does not admit, a witness that does not

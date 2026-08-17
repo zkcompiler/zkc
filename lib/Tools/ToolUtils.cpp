@@ -17,13 +17,13 @@ ParsedModule parseModule(llvm::StringRef path, MLIRContext &context) {
       std::make_unique<SourceMgrDiagnosticHandler>(*parsed.sourceMgr, &context);
   auto input = llvm::MemoryBuffer::getFileOrSTDIN(path);
   if (!input) {
-    emitError(UnknownLoc::get(&context)) << "cannot read source '" << path
+    emitError(UnknownLoc::get(&context)) << "[zkc-E900] cannot read source '" << path
                                          << "': " << input.getError().message();
     return parsed;
   }
   if (isBytecode((*input)->getMemBufferRef())) {
     emitError(UnknownLoc::get(&context))
-        << "source parser " << kBytecodeRefusal;
+        << "[zkc-E903] source parser " << kBytecodeRefusal;
     return parsed;
   }
   parsed.sourceMgr->AddNewSourceBuffer(std::move(*input), llvm::SMLoc());
