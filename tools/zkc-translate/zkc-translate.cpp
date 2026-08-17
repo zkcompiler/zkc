@@ -149,7 +149,8 @@ int main(int argc, char **argv) {
           (int)emitOirId + (int)emitOirSemanticId + (int)emitProofSize +
           (int)emitTranscriptSchedule !=
       1) {
-    return zkc::tool::reportCannotAnswer("[zkc-E901] exactly one emission flag required");
+    return zkc::tool::reportCannotAnswer(
+        "[zkc-E901] exactly one emission flag required");
   }
 
   MLIRContext context;

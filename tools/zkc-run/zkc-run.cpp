@@ -98,7 +98,8 @@ static LoadedEndpoint loadEndpoint(llvm::StringRef path, MLIRContext &context) {
 static const zkc::interpreter::ExecutionProfile *resolveProfile() {
   auto profile = zkc::interpreter::selectProfile(profileName);
   if (!profile) {
-    zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E902] ") + llvm::toString(profile.takeError()));
+    zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E902] ") +
+                                  llvm::toString(profile.takeError()));
     return nullptr;
   }
   return &*profile;
@@ -127,7 +128,8 @@ int replayDuplex(llvm::StringRef path) {
   const llvm::json::Array *events =
       root ? root->getArray("transcript") : nullptr;
   if (!events) {
-    return zkc::tool::reportCannotAnswer("[zkc-E903] fixture carries no transcript");
+    return zkc::tool::reportCannotAnswer(
+        "[zkc-E903] fixture carries no transcript");
   }
 
   // The element framing belongs to the profile's codec, not to this
@@ -139,7 +141,8 @@ int replayDuplex(llvm::StringRef path) {
       zkc::interpreter::plonky3Profile().codec("plonky3_bb31_low_bits");
   if (!codec) {
     return zkc::tool::reportCannotAnswer(
-        "[zkc-E902] the plonky3 profile supplies no low-bits codec for replay framing");
+        "[zkc-E902] the plonky3 profile supplies no low-bits codec for replay "
+        "framing");
   }
   auto duplex = zkc::interpreter::rawPlonky3Duplex();
   auto absorbElement = [&](uint64_t element) {
@@ -162,7 +165,8 @@ int replayDuplex(llvm::StringRef path) {
     // the same fail-closed treatment the --vectors file gets.
     auto malformed = [&](llvm::StringRef what) {
       return zkc::tool::reportCannotAnswer(
-          "[zkc-E903] fixture: malformed event " + llvm::Twine(index) + " (" + what + ")");
+          "[zkc-E903] fixture: malformed event " + llvm::Twine(index) + " (" +
+          what + ")");
     };
     const llvm::json::Object *event = entry.getAsObject();
     if (!event)
@@ -259,7 +263,8 @@ static bool parsePairs(llvm::StringRef text, llvm::StringMap<std::string> &out,
   for (llvm::StringRef entry : entries) {
     auto [key, value] = entry.split('=');
     if (key.empty() || value.empty()) {
-      zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + what + ": malformed entry '" + entry + "'");
+      zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + what +
+                                    ": malformed entry '" + entry + "'");
       return false;
     }
     out[key] = value.str();
@@ -385,7 +390,8 @@ int main(int argc, char **argv) {
 
   auto buffer = llvm::MemoryBuffer::getFile(vectorsFilename);
   if (!buffer) {
-    return zkc::tool::reportCannotAnswer("[zkc-E900] cannot read " + vectorsFilename);
+    return zkc::tool::reportCannotAnswer("[zkc-E900] cannot read " +
+                                         vectorsFilename);
   }
   auto json = zkc::encoding::parseJsonUniqueKeys((*buffer)->getBuffer());
   if (!json) {
@@ -399,8 +405,8 @@ int main(int argc, char **argv) {
   // masks the actual malformed-input diagnostic and makes negative fixtures
   // accidentally depend on one validation order.
   auto malformed = [&](llvm::StringRef what) {
-    return zkc::tool::reportCannotAnswer("[zkc-E903] vectors: malformed file (" + what +
-                                         ")");
+    return zkc::tool::reportCannotAnswer(
+        "[zkc-E903] vectors: malformed file (" + what + ")");
   };
   const auto *root = json->getAsObject();
   if (!root)
@@ -452,7 +458,8 @@ int main(int argc, char **argv) {
   // gate exists so the citation below is judged against the recomputed
   // identity, never against an unauthenticated authored string).
   if (llvm::Error error = zkc::encoding::validateOirIdentity(artifact)) {
-    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + llvm::toString(std::move(error)));
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") +
+                                         llvm::toString(std::move(error)));
   }
   auto identity = zkc::encoding::computeOirId(artifact);
   if (!identity) {

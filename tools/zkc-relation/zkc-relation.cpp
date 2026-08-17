@@ -59,6 +59,12 @@ namespace {
 /// tool, so it is reported here and the document is still emitted —
 /// a caller learns which cross-check failed and what the two sides
 /// said, which a refusal on the first disagreement never told it.
+///
+/// Nothing after the first cross-check may exit through the
+/// cannot-answer channel: a judgment already made would be thrown away
+/// and the caller handed the one answer that is false, that nothing was
+/// learned. The header read below is the case that forced this, and it
+/// is a disagreement rather than a failure for the same reason.
 struct Report {
   std::vector<std::string> computed;
   std::vector<std::string> crossChecked;
@@ -81,24 +87,29 @@ int main(int argc, char **argv) {
   auto contracts =
       zkc::registry::RelationContractRegistry::loadFromFile(contractsFilename);
   if (!contracts)
-    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + llvm::toString(contracts.takeError()));
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") +
+                                         llvm::toString(contracts.takeError()));
   const zkc::registry::RelationContract *contract =
       contracts->lookup(contractName);
   if (!contract)
-    return zkc::tool::reportCannotAnswer(
-        "[zkc-E902] no relation contract '" + contractName + "' in " + contractsFilename);
+    return zkc::tool::reportCannotAnswer("[zkc-E902] no relation contract '" +
+                                         contractName + "' in " +
+                                         contractsFilename);
 
   auto environment = zkc::registry::ProtocolEnvironment::loadFromFiles(
       vocabularyFilename, profileFilename);
   if (!environment)
-    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E902] ") + llvm::toString(environment.takeError()));
+    return zkc::tool::reportCannotAnswer(
+        llvm::Twine("[zkc-E902] ") + llvm::toString(environment.takeError()));
   auto artifact = zkc::artifact::loadAndAdmitArtifact(inputFilename,
                                                       std::move(*environment));
   if (!artifact)
-    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") + llvm::toString(artifact.takeError()));
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E900] ") +
+                                         llvm::toString(artifact.takeError()));
   auto view = snd::buildSealedSoundnessView(*artifact);
   if (!view)
-    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + llvm::toString(view.takeError()));
+    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") +
+                                         llvm::toString(view.takeError()));
 
   // The profile pin is what keeps a vocabulary edit from changing what a
   // fixed contract means, so it is checked rather than carried: the
@@ -167,8 +178,8 @@ int main(int argc, char **argv) {
           "' has no reader; relation bytes cannot be read for it");
     auto buffer = MemoryBuffer::getFile(bytesFilename, /*IsText=*/false);
     if (!buffer)
-      return zkc::tool::reportCannotAnswer("[zkc-E900] cannot read '" + bytesFilename +
-                                           "'");
+      return zkc::tool::reportCannotAnswer("[zkc-E900] cannot read '" +
+                                           bytesFilename + "'");
     StringRef bytes = (*buffer)->getBuffer();
     SHA256 hasher;
     hasher.update(bytes);
@@ -184,18 +195,30 @@ int main(int argc, char **argv) {
         report.crossChecked.push_back("contract-declared content digest "
                                       "agrees with the byte-derived one");
     }
+    // Bytes the declared format cannot read are a disagreement, not a
+    // failure to judge: the caller said these bytes are the relation and
+    // the contract says what a relation of this format looks like, so
+    // the two do not correspond. Treating it as a failure would also
+    // discard any disagreement found above it.
     auto parsed = zkc::relation::readR1csHeader(
         bytes, contract->instanceEncoding.fieldOrder);
-    if (!parsed)
-      return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E903] ") + llvm::toString(parsed.takeError()));
-    header = *parsed;
-    report.computed.push_back("header prime " + header->prime);
-    report.computed.push_back("header public arity " +
-                              std::to_string(header->publicArity));
-    report.computed.push_back("header private-input count " +
-                              std::to_string(header->privateInputs));
-    report.computed.push_back("header constraint count " +
-                              std::to_string(header->constraintCount));
+    if (!parsed) {
+      report.disagreed.push_back(
+          "the contract declares format '" + contract->format +
+          "' and the supplied bytes do not read as one: " +
+          llvm::toString(parsed.takeError()));
+    } else {
+      header = *parsed;
+    }
+    if (header) {
+      report.computed.push_back("header prime " + header->prime);
+      report.computed.push_back("header public arity " +
+                                std::to_string(header->publicArity));
+      report.computed.push_back("header private-input count " +
+                                std::to_string(header->privateInputs));
+      report.computed.push_back("header constraint count " +
+                                std::to_string(header->constraintCount));
+    }
   }
 
   // -- Step 3: every cross-check whose two sides are present.
@@ -211,10 +234,9 @@ int main(int argc, char **argv) {
         report.crossChecked.push_back(
             "contract-declared arity agrees with the byte-derived one");
       if (encoding.fieldOrder != header->prime)
-        report.disagreed.push_back("declared field order " +
-                                   encoding.fieldOrder +
-                                   " disagrees with the header prime " +
-                                   header->prime);
+        report.disagreed.push_back(
+            "declared field order " + encoding.fieldOrder +
+            " disagrees with the header prime " + header->prime);
       else
         report.crossChecked.push_back(
             "contract-declared field order agrees with the header prime");
@@ -235,11 +257,10 @@ int main(int argc, char **argv) {
     }
     if (contract->constraintCount) {
       if (*contract->constraintCount != header->constraintCount)
-        report.disagreed.push_back(
-            "declared constraint count " +
-            std::to_string(*contract->constraintCount) +
-            " disagrees with the header's " +
-            std::to_string(header->constraintCount));
+        report.disagreed.push_back("declared constraint count " +
+                                   std::to_string(*contract->constraintCount) +
+                                   " disagrees with the header's " +
+                                   std::to_string(header->constraintCount));
       else
         report.crossChecked.push_back("contract-declared constraint count "
                                       "agrees with the byte-derived one");
@@ -249,10 +270,10 @@ int main(int argc, char **argv) {
   // The correspondence against the artifact's own statement ABI.
   for (const auto &entry : contract->correspondence) {
     if (!is_contained(view->statementLabels, entry.label)) {
-      report.disagreed.push_back(
-          "correspondence slot " + std::to_string(entry.slot) +
-          " names statement label '" + entry.label +
-          "', which the artifact's ABI does not carry");
+      report.disagreed.push_back("correspondence slot " +
+                                 std::to_string(entry.slot) +
+                                 " names statement label '" + entry.label +
+                                 "', which the artifact's ABI does not carry");
       continue;
     }
     report.computed.push_back("statement label '" + entry.label +
@@ -281,13 +302,13 @@ int main(int argc, char **argv) {
                                  "field " +
                                  encoding.fieldOrder);
     else
-    // Named for what it is: this side is the caller's, not a fact read
-    // out of a derivation. Reading the analysis parameter from the
-    // artifact's own derivations is the specified form and is recorded
-    // as a gap, so the label may not claim it here.
-    report.crossChecked.push_back(
-        "contract-declared field agrees with the caller-supplied expected "
-        "field");
+      // Named for what it is: this side is the caller's, not a fact read
+      // out of a derivation. Reading the analysis parameter from the
+      // artifact's own derivations is the specified form and is recorded
+      // as a gap, so the label may not claim it here.
+      report.crossChecked.push_back(
+          "contract-declared field agrees with the caller-supplied expected "
+          "field");
   }
 
   // A relation anchor whose transcript projection a seal-stage binding
@@ -339,10 +360,10 @@ int main(int argc, char **argv) {
     for (const auto &entry : contract->correspondence)
       wired |= entry.label == label->second;
     if (!wired) {
-      report.disagreed.push_back(
-          "a sealed material binding grounds anchor '" + name +
-          "' in statement value '" + label->second +
-          "', which the correspondence does not wire");
+      report.disagreed.push_back("a sealed material binding grounds anchor '" +
+                                 name + "' in statement value '" +
+                                 label->second +
+                                 "', which the correspondence does not wire");
       continue;
     }
     report.crossChecked.push_back("a sealed material binding grounds anchor '" +

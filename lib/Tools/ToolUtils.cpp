@@ -17,8 +17,9 @@ ParsedModule parseModule(llvm::StringRef path, MLIRContext &context) {
       std::make_unique<SourceMgrDiagnosticHandler>(*parsed.sourceMgr, &context);
   auto input = llvm::MemoryBuffer::getFileOrSTDIN(path);
   if (!input) {
-    emitError(UnknownLoc::get(&context)) << "[zkc-E900] cannot read source '" << path
-                                         << "': " << input.getError().message();
+    emitError(UnknownLoc::get(&context))
+        << "[zkc-E900] cannot read source '" << path
+        << "': " << input.getError().message();
     return parsed;
   }
   if (isBytecode((*input)->getMemBufferRef())) {

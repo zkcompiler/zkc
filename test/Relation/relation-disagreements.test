@@ -54,6 +54,14 @@
 # RUN: %{judge} 1 identity.content_digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | FileCheck %s --check-prefix=DIGEST
 # DIGEST: disagreed: ["the supplied bytes digest to sha256:
 
+# Bytes the declared format cannot read are a disagreement, not a
+# failure to judge — and this is the case that made the rule. Reporting
+# it as a failure discarded the digest disagreement found above it and
+# told the caller nothing was learned, which is the one answer that was
+# false.
+# RUN: %python %S/Inputs/judge-with.py %zkc-tools-dir/zkc-relation %t/artifact.path %zkc-registry-dir %S/Inputs/bad-magic.r1cs 1 identity.content_digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 | FileCheck %s --check-prefix=UNREADABLE
+# UNREADABLE: disagreed: ["the supplied bytes digest to {{[^"]*}}", "the contract declares format 'r1cs-bin-v1' and the supplied bytes do not read as one
+
 # Two disagreements at once are both reported. A judgment that stops at
 # the first tells a caller to fix one thing and come back.
 # RUN: %{judge} 1 declared_shape.constraint_count=999,witness_ports.ports.0.count=99 | FileCheck %s --check-prefix=BOTH

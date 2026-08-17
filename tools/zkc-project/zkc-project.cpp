@@ -44,7 +44,8 @@ int main(int argc, char **argv) {
   auto environment = zkc::registry::ProtocolEnvironment::loadFromFiles(
       protocolVocabulary, constructionProfileRegistry);
   if (!environment)
-    return zkc::tool::reportCannotAnswer(llvm::Twine("[zkc-E902] ") + llvm::toString(environment.takeError()));
+    return zkc::tool::reportCannotAnswer(
+        llvm::Twine("[zkc-E902] ") + llvm::toString(environment.takeError()));
 
   auto admitted = zkc::artifact::loadAndAdmitArtifact(inputFilename,
                                                       std::move(*environment));
