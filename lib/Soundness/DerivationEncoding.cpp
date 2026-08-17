@@ -369,17 +369,11 @@ public:
   }
   Expected<const Object *> object(const Object &parent, StringRef key,
                                   const Twine &context) const {
-    const Object *value = parent.getObject(key);
-    if (!value)
-      return file.error(context + " needs an object '" + key + "'");
-    return value;
+    return file.requireObject(parent, key, context);
   }
   Expected<const Array *> array(const Object &parent, StringRef key,
                                 const Twine &context) const {
-    const Array *value = parent.getArray(key);
-    if (!value)
-      return file.error(context + " needs an array '" + key + "'");
-    return value;
+    return file.requireArray(parent, key, context);
   }
   Expected<uint64_t> count(const Object &parent, StringRef key,
                            const Twine &context) const {

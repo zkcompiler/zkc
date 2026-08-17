@@ -149,8 +149,7 @@ int main(int argc, char **argv) {
           (int)emitOirId + (int)emitOirSemanticId + (int)emitProofSize +
           (int)emitTranscriptSchedule !=
       1) {
-    llvm::errs() << "exactly one emission flag required\n";
-    return 1;
+    return zkc::tool::reportError("exactly one emission flag required");
   }
 
   MLIRContext context;
@@ -174,8 +173,7 @@ int main(int argc, char **argv) {
   std::string error;
   auto output = openOutputFile(outputFilename, &error);
   if (!output) {
-    llvm::errs() << error << "\n";
-    return 1;
+    return zkc::tool::reportError(error);
   }
 
   auto result =

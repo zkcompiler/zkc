@@ -71,9 +71,12 @@ public:
   }
 
 private:
-  InFlightDiagnostic error(Operation *operation, StringRef code) {
+  /// The identifier is written as the diagnostic carries it, here and
+  /// in every other emitting file, so one search finds every site that
+  /// raises a given refusal (docs/spec/versioning.md §3).
+  InFlightDiagnostic error(Operation *operation, StringRef id) {
     ok = false;
-    return operation->emitOpError() << "[" << code << "] ";
+    return operation->emitOpError() << id << " ";
   }
 
   void indexCarrier() {
@@ -103,20 +106,20 @@ private:
     ClaimView view{type.getProfile().str(), anchors, producer, output, {}};
     const ClaimProfile *profile = vocabulary.lookupProfile(view.profile);
     if (!profile) {
-      error(value.getDefiningOp(), "zkc-E300")
+      error(value.getDefiningOp(), "[zkc-E300]")
           << "claim profile '" << view.profile
           << "' is not admitted by the protocol vocabulary";
       return;
     }
     if (!anchors) {
-      error(value.getDefiningOp(), "zkc-E300")
+      error(value.getDefiningOp(), "[zkc-E300]")
           << "claim profile '" << view.profile << "' has no anchor dictionary";
       return;
     }
     std::vector<std::string> actual = sortedNames(anchors);
     std::vector<std::string> expected = sortedCopy(profile->anchors);
     if (actual != expected) {
-      error(value.getDefiningOp(), "zkc-E300")
+      error(value.getDefiningOp(), "[zkc-E300]")
           << "claim profile '" << view.profile
           << "' requires exactly its admitted anchor set";
       return;
@@ -124,14 +127,14 @@ private:
     auto descriptor =
         zkc::encoding::canonicalClaimDescriptor(view.profile, anchors);
     if (!descriptor) {
-      error(value.getDefiningOp(), "zkc-E300")
+      error(value.getDefiningOp(), "[zkc-E300]")
           << "claim anchors have no canonical form: "
           << llvm::toString(descriptor.takeError());
       return;
     }
     auto bytes = zkc::encoding::canonicalJsonBytes(*descriptor);
     if (!bytes) {
-      error(value.getDefiningOp(), "zkc-E300")
+      error(value.getDefiningOp(), "[zkc-E300]")
           << "claim descriptor has no canonical form: "
           << llvm::toString(bytes.takeError());
       return;
@@ -147,7 +150,7 @@ private:
       } else if (auto reduce = dyn_cast<ReduceOp>(operation)) {
         if (auto all = reduce.getOutAnchors();
             all && all->size() != reduce.getOuts().size()) {
-          error(reduce, "zkc-E300")
+          error(reduce, "[zkc-E300]")
               << "out_anchors must contain one dictionary per produced "
                  "claim";
           continue;
@@ -214,26 +217,26 @@ private:
       const CheckContract *contract =
           vocabulary.lookupCheckContract(check.getContract());
       if (!contract) {
-        error(check, "zkc-E301")
+        error(check, "[zkc-E301]")
             << "check contract '" << check.getContract() << "' is not admitted";
         continue;
       }
       if (sortedNames(check.getParams().value_or(DictionaryAttr())) !=
           sortedCopy(contract->parameters)) {
-        error(check, "zkc-E301")
+        error(check, "[zkc-E301]")
             << "parameter names do not match check contract '"
             << check.getContract() << "'";
         continue;
       }
       if (sortedNames(check.getSemanticArgs().value_or(DictionaryAttr())) !=
           sortedCopy(contract->semanticParameters)) {
-        error(check, "zkc-E301")
+        error(check, "[zkc-E301]")
             << "semantic argument names do not match check contract '"
             << check.getContract() << "'";
         continue;
       }
       if (contract->isTransparent() != check.getExpr().has_value()) {
-        error(check, "zkc-E301")
+        error(check, "[zkc-E301]")
             << (contract->isTransparent()
                     ? "transparent check contract requires an expression"
                     : "opaque check contract forbids an expression");
@@ -242,7 +245,7 @@ private:
       SmallVector<OperandView> layouts;
       zkc::semantics::solveCheckLayout(*contract, check.getInputs(), layouts);
       if (layouts.size() != 1) {
-        error(check, "zkc-E302")
+        error(check, "[zkc-E302]")
             << "operand sequence has " << layouts.size()
             << " valid layouts under check contract '" << check.getContract()
             << "' (exactly one is required)";
@@ -252,7 +255,7 @@ private:
       if (check.getExpr()) {
         auto normalized = normalizeExpr(*check.getExpr(), view.operands);
         if (!normalized) {
-          error(check, "zkc-E303") << "transparent expression is malformed: "
+          error(check, "[zkc-E303]") << "transparent expression is malformed: "
                                    << llvm::toString(normalized.takeError());
           continue;
         }
@@ -276,13 +279,13 @@ private:
                                                  Operation *at) {
     SmallVector<ClaimView *> inputs;
     if (!view.producer) {
-      error(at, "zkc-E304") << "terminal rule requires a reduction producer";
+      error(at, "[zkc-E304]") << "terminal rule requires a reduction producer";
       return inputs;
     }
     for (Value value : view.producer.getClaims()) {
       ClaimView *input = claim(value);
       if (!input) {
-        error(at, "zkc-E304")
+        error(at, "[zkc-E304]")
             << "producer input has no admitted claim descriptor";
         return {};
       }
@@ -294,7 +297,7 @@ private:
     for (auto pair : llvm::zip(inputs, llvm::drop_begin(inputs)))
       if (std::get<0>(pair)->descriptorBytes ==
           std::get<1>(pair)->descriptorBytes) {
-        error(at, "zkc-E304") << "producer input descriptors are not unique";
+        error(at, "[zkc-E304]") << "producer input descriptors are not unique";
         return {};
       }
     return inputs;
@@ -306,7 +309,7 @@ private:
             ? vocabulary.lookupReductionContract(view.producer.getContract())
             : nullptr;
     if (!contract) {
-      error(at, "zkc-E304")
+      error(at, "[zkc-E304]")
           << "attachment requires an admitted reduction producer";
       return {};
     }
@@ -316,14 +319,14 @@ private:
           break;
         return view.producer.getDeps()[index];
       }
-    error(at, "zkc-E304") << "producer has no dependency role '" << role << "'";
+    error(at, "[zkc-E304]") << "producer has no dependency role '" << role << "'";
     return {};
   }
 
   Value producerMessage(ClaimView &view, StringRef role, uint64_t index,
                         Operation *at) {
     if (!view.producer) {
-      error(at, "zkc-E304") << "attachment requires a reduction producer";
+      error(at, "[zkc-E304]") << "attachment requires a reduction producer";
       return {};
     }
     auto instance = messages.find(view.producer.getLabel());
@@ -335,7 +338,7 @@ private:
           return value->second;
       }
     }
-    error(at, "zkc-E304") << "producer has no message role '" << role
+    error(at, "[zkc-E304]") << "producer has no message role '" << role
                           << "' at index " << index;
     return {};
   }
@@ -343,7 +346,7 @@ private:
   StringRef binding(Value value, Operation *at) {
     auto found = bindingsByValue.find(value);
     if (found == bindingsByValue.end()) {
-      error(at, "zkc-E305") << "selected check operand has no material binding";
+      error(at, "[zkc-E305]") << "selected check operand has no material binding";
       return {};
     }
     ledger.usedMaterialBindings.insert(found->second.getOperation());
@@ -354,7 +357,7 @@ private:
                                    Operation *at) {
     auto found = check.operands.roles.find(role);
     if (found == check.operands.roles.end()) {
-      error(at, "zkc-E306")
+      error(at, "[zkc-E306]")
           << "selected check has no operand role '" << role << "'";
       return {};
     }
@@ -367,20 +370,20 @@ private:
       return anchor(view, source.anchor);
     if (source.kind == AttachmentSourceKind::ProducerInputAnchor) {
       if (!view.producer || source.index >= view.producer.getClaims().size()) {
-        error(at, "zkc-E306") << "producer input anchor index is out of range";
+        error(at, "[zkc-E306]") << "producer input anchor index is out of range";
         return {};
       }
       ClaimView *input = claim(view.producer.getClaims()[source.index]);
       return input ? anchor(*input, source.anchor) : StringRef();
     }
-    error(at, "zkc-E306") << "attachment source is not a scalar claim anchor";
+    error(at, "[zkc-E306]") << "attachment source is not a scalar claim anchor";
     return {};
   }
 
   SmallVector<StringRef> sourceAnchorVector(const AttachmentSource &source,
                                             ClaimView &view, Operation *at) {
     if (source.kind != AttachmentSourceKind::ProducerInputsAnchor) {
-      error(at, "zkc-E306")
+      error(at, "[zkc-E306]")
           << "attachment source is not a producer-input anchor vector";
       return {};
     }
@@ -396,7 +399,7 @@ private:
       return producerDependency(view, source.role, at);
     if (source.kind == AttachmentSourceKind::ProducerMessage)
       return producerMessage(view, source.role, source.index, at);
-    error(at, "zkc-E306") << "attachment source is not an SSA value";
+    error(at, "[zkc-E306]") << "attachment source is not an SSA value";
     return {};
   }
 
@@ -414,7 +417,7 @@ private:
     if (!attachment.checkRole.empty()) {
       auto found = selected.find(attachment.checkRole);
       if (found == selected.end()) {
-        error(at, "zkc-E306") << "attachment names unknown terminal role '"
+        error(at, "[zkc-E306]") << "attachment names unknown terminal role '"
                               << attachment.checkRole << "'";
         return;
       }
@@ -426,7 +429,7 @@ private:
       StringRef expected = sourceAnchor(attachment.source, claimView, at);
       if (!check || expected.empty() ||
           semanticArgument(check->op, attachment.targetRole) != expected)
-        error(at, "zkc-E306")
+        error(at, "[zkc-E306]")
             << "semantic parameter attachment does not match role '"
             << attachment.targetRole << "'";
       return;
@@ -438,7 +441,7 @@ private:
                 : SmallVector<Value>();
       if (expected.empty() || operands.size() != 1 ||
           binding(operands.front(), at) != expected)
-        error(at, "zkc-E306")
+        error(at, "[zkc-E306]")
             << "material reference attachment does not match role '"
             << attachment.targetRole << "'";
       return;
@@ -449,7 +452,7 @@ private:
           check ? checkOperands(*check, attachment.targetRole, at)
                 : SmallVector<Value>();
       if (!expected || operands.size() != 1 || operands.front() != expected)
-        error(at, "zkc-E306") << "SSA attachment does not match role '"
+        error(at, "[zkc-E306]") << "SSA attachment does not match role '"
                               << attachment.targetRole << "'";
       return;
     }
@@ -463,7 +466,7 @@ private:
       for (size_t index = 0; matches && index < operands.size(); ++index)
         matches &= binding(operands[index], at) == expected[index];
       if (!matches)
-        error(at, "zkc-E306")
+        error(at, "[zkc-E306]")
             << "material reference vector does not match role '"
             << attachment.targetRole << "'";
       return;
@@ -485,14 +488,14 @@ private:
       if (operands.size() == 1)
         matches &= binding(operands.front(), at) == common;
       if (!matches)
-        error(at, "zkc-E306")
+        error(at, "[zkc-E306]")
             << "common material reference attachment does not match";
       return;
     }
     case TerminalAttachmentKind::DescriptorDigest: {
       if (attachment.source.kind !=
           AttachmentSourceKind::ProducerInputDescriptors) {
-        error(at, "zkc-E306")
+        error(at, "[zkc-E306]")
             << "descriptor digest requires producer_input_descriptors";
         return;
       }
@@ -501,7 +504,7 @@ private:
         auto parsed =
             zkc::encoding::parseJsonUniqueKeys(input->descriptorBytes);
         if (!parsed) {
-          error(at, "zkc-E306") << "internal claim descriptor parse failed";
+          error(at, "[zkc-E306]") << "internal claim descriptor parse failed";
           return;
         }
         descriptors.push_back(std::move(*parsed));
@@ -511,7 +514,7 @@ private:
       if (!digest || anchor(claimView, attachment.claimAnchor) != *digest) {
         if (!digest)
           llvm::consumeError(digest.takeError());
-        error(at, "zkc-E306")
+        error(at, "[zkc-E306]")
             << "producer descriptor-vector digest does not match claim "
                "anchor '"
             << attachment.claimAnchor << "'";
@@ -542,13 +545,13 @@ private:
         continue;
       const TerminalRule *rule = vocabulary.lookupRule(discharge.getRule());
       if (!rule) {
-        error(discharge, "zkc-E307")
+        error(discharge, "[zkc-E307]")
             << "terminal rule '" << discharge.getRule() << "' is not admitted";
         continue;
       }
       ClaimView *claimView = claim(discharge.getClaim());
       if (!claimView || claimView->profile != rule->claimProfile) {
-        error(discharge, "zkc-E307")
+        error(discharge, "[zkc-E307]")
             << "terminal rule does not match the consumed claim profile";
         continue;
       }
@@ -556,7 +559,7 @@ private:
         if (!claimView->producer ||
             claimView->producer.getContract() != rule->producer->contract ||
             claimView->output != rule->producer->output) {
-          error(discharge, "zkc-E307")
+          error(discharge, "[zkc-E307]")
               << "terminal rule producer pin does not match the consumed "
                  "claim";
           continue;
@@ -569,7 +572,7 @@ private:
       for (const auto &[role, contract] : rule->checks)
         expectedRoles.push_back(role);
       if (actualRoles != expectedRoles) {
-        error(discharge, "zkc-E307")
+        error(discharge, "[zkc-E307]")
             << "discharge check roles do not exactly match terminal rule '"
             << discharge.getRule() << "'";
         continue;
@@ -583,7 +586,7 @@ private:
             check ? checkViews.find(check.getOperation()) : checkViews.end();
         if (!check || view == checkViews.end() ||
             check.getContract() != expectedContract) {
-          error(discharge, "zkc-E307")
+          error(discharge, "[zkc-E307]")
               << "terminal role '" << role
               << "' does not select a conforming check of contract '"
               << expectedContract << "'";
@@ -599,7 +602,7 @@ private:
               claimView->producer.getContract() == rule->producer->contract &&
               claimView->output == rule->producer->output;
           if (!exactPinnedOutput) {
-            error(discharge, "zkc-E307")
+            error(discharge, "[zkc-E307]")
                 << "check '" << label
                 << "' is owned by a reduction and may be reused only to "
                    "discharge that reduction's exact producer-pinned output";
@@ -608,7 +611,7 @@ private:
           }
         }
         if (!selectedGlobally.insert(check.getOperation()).second) {
-          error(discharge, "zkc-E307")
+          error(discharge, "[zkc-E307]")
               << "check '" << label
               << "' is selected by more than one discharge";
           selectionOk = false;
@@ -623,7 +626,7 @@ private:
         auto selectedCheck = selected.find(role);
         if (selectedCheck == selected.end() ||
             !sameJson(selectedCheck->second->normalizedExpr, predicate)) {
-          error(discharge, "zkc-E308")
+          error(discharge, "[zkc-E308]")
               << "transparent predicate for terminal role '" << role
               << "' does not match the admitted rule";
           selectionOk = false;

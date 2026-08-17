@@ -104,21 +104,17 @@ int main(int argc, char **argv) {
   std::string error;
   std::unique_ptr<llvm::MemoryBuffer> input =
       mlir::openInputFile(inputFilename, &error);
-  if (!input) {
-    llvm::errs() << error << "\n";
-    return 1;
-  }
+  if (!input)
+    return zkc::tool::reportError(error);
   if (mlir::isBytecode(input->getMemBufferRef())) {
-    llvm::errs() << "zkc-opt " << zkc::tool::kBytecodeRefusal << "\n";
-    return 1;
+    return zkc::tool::reportError(llvm::Twine("zkc-opt ") +
+                                  zkc::tool::kBytecodeRefusal);
   }
 
   std::unique_ptr<llvm::ToolOutputFile> output =
       mlir::openOutputFile(outputFilename, &error);
-  if (!output) {
-    llvm::errs() << error << "\n";
-    return 1;
-  }
+  if (!output)
+    return zkc::tool::reportError(error);
   if (mlir::failed(
           mlir::MlirOptMain(output->os(), std::move(input), registry, config)))
     return 1;

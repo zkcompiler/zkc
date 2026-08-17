@@ -17,7 +17,11 @@
 // RUN: %uv python -m oracle.parity oir-id schnorr > %t.oir-id.oracle
 // RUN: diff %t.oir-id.zkc %t.oir-id.oracle
 // RUN: rm -rf %t.artifacts
-// RUN: zkc-seal %s %zkc-seal-full -o %t.artifacts
+// The destination is named `--output-dir` because it is a directory
+// where every sibling tool's `-o` is a file; `-o` remains as an alias
+// and the rest of the suite still spells it that way, so both names are
+// exercised.
+// RUN: zkc-seal %s %zkc-seal-full --output-dir %t.artifacts
 // RUN: not zkc-translate --id %s 2>&1 | FileCheck --check-prefix=UNSEALED %s
 //
 // UNSEALED: container carries no resolved-vocabulary table

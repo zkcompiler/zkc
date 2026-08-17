@@ -15,6 +15,7 @@ target_link_libraries(zkc-test-opt PRIVATE
   ZkcPir
   ZkcPirTransforms
   ZkcTestPasses
+  ZkcToolUtils
 )
 mlir_check_all_link_libraries(zkc-test-opt)
 

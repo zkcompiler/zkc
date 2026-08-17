@@ -128,7 +128,7 @@ mkdir -p "$ZKC_QUICKSTART_DIR/artifacts"
 build/bin/zkc-seal test/Encoding/routed-schnorr.mlir \
   --protocol-vocabulary registry/protocol-vocabulary.json \
   --construction-profile-registry registry/construction-profiles.json \
-  -o "$ZKC_QUICKSTART_DIR/artifacts"
+  --output-dir "$ZKC_QUICKSTART_DIR/artifacts"
 
 build/bin/zkc-project "$ZKC_QUICKSTART_DIR"/artifacts/*.mlirbc \
   --endpoint-kind verifier \

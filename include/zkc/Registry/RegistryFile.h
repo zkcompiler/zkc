@@ -102,6 +102,24 @@ public:
                                  const llvm::Twine &context,
                                  std::string &out) const;
 
+  /// The shape validators, in the one spelling the loaders share.
+  /// Without them each loader writes its own sentence for "this key is
+  /// not the shape the schema says", and a reader who has seen two of
+  /// them cannot tell whether they mean the same thing. A site with
+  /// something further to say about the shape says it separately rather
+  /// than by rewording the refusal.
+  llvm::Expected<const llvm::json::Object *>
+  requireObject(const llvm::json::Object &object, llvm::StringRef key,
+                const llvm::Twine &context) const;
+
+  llvm::Expected<const llvm::json::Array *>
+  requireArray(const llvm::json::Object &object, llvm::StringRef key,
+               const llvm::Twine &context) const;
+
+  llvm::Expected<int64_t> requireInteger(const llvm::json::Object &object,
+                                         llvm::StringRef key,
+                                         const llvm::Twine &context) const;
+
   /// A required array field whose members are all held to the same
   /// domain gate as requireString. An empty array is legal — presence
   /// requirements beyond existence stay with the caller.

@@ -59,8 +59,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<llvm::ToolOutputFile> output =
       mlir::openOutputFile(outputFilename, &error);
   if (!output) {
-    llvm::errs() << "error: " << error << "\n";
-    return 1;
+    return zkc::tool::reportError(error);
   }
   projected->print(output->os());
   output->os() << "\n";

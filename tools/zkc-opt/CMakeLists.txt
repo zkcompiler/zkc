@@ -6,6 +6,7 @@ set(LIBS
   ZkcOir
   ZkcPir
   ZkcPirTransforms
+  ZkcToolUtils
 )
 add_llvm_executable(zkc-opt zkc-opt.cpp)
 llvm_update_compile_flags(zkc-opt)

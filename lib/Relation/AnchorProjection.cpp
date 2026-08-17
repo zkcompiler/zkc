@@ -7,6 +7,7 @@
 
 #include "zkc/Relation/AnchorProjection.h"
 
+#include "zkc/Encoding/EncodingDomain.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -25,8 +26,8 @@ constexpr unsigned kLimbStride = 32;
 Expected<std::vector<uint32_t>>
 zkc::relation::anchorProjection(StringRef anchor) {
   if (!anchor.consume_front(kPrefix) || anchor.size() != kHexDigits)
-    return createStringError(
-        "an anchor projection needs a sha256:<64 lowercase hex> reference");
+    return createStringError(llvm::Twine("an anchor projection's anchor ") +
+                             zkc::encoding::kSha256RefMessage);
   std::vector<uint32_t> elements;
   elements.reserve(kAnchorProjectionElements);
   for (unsigned word = 0; word < kAnchorProjectionElements; ++word) {

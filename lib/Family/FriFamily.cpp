@@ -360,7 +360,8 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
     if (!value)
       return value.takeError();
     if (!zkc::encoding::isSha256Ref(*value))
-      return err("'anchors." + key + "' must be sha256:<64 lowercase hex>");
+      return err("'anchors." + key + "' " +
+                 zkc::encoding::kSha256RefMessage);
     (key == "contract" ? desc.anchorContract : desc.anchorStatement) =
         std::move(*value);
   }

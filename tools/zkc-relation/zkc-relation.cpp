@@ -49,11 +49,6 @@ static cl::opt<std::string>
                         "and reported as caller-supplied: nothing here reads "
                         "a derivation."));
 
-static int fail(const Twine &message) {
-  errs() << "error: " << message << "\n";
-  return 1;
-}
-static int failError(Error err) { return zkc::tool::reportError(std::move(err)); }
 
 namespace {
 /// The judgment's three lists. Keeping them apart in the type is what
@@ -79,24 +74,24 @@ int main(int argc, char **argv) {
   auto contracts = zkc::registry::RelationContractRegistry::loadFromFile(
       contractsFilename);
   if (!contracts)
-    return failError(contracts.takeError());
+    return zkc::tool::reportError(contracts.takeError());
   const zkc::registry::RelationContract *contract =
       contracts->lookup(contractName);
   if (!contract)
-    return fail("no relation contract '" + contractName + "' in " +
+    return zkc::tool::reportError("no relation contract '" + contractName + "' in " +
                 contractsFilename);
 
   auto environment = zkc::registry::ProtocolEnvironment::loadFromFiles(
       vocabularyFilename, profileFilename);
   if (!environment)
-    return failError(environment.takeError());
+    return zkc::tool::reportError(environment.takeError());
   auto artifact =
       zkc::artifact::loadAndAdmitArtifact(inputFilename, std::move(*environment));
   if (!artifact)
-    return failError(artifact.takeError());
+    return zkc::tool::reportError(artifact.takeError());
   auto view = snd::buildSealedSoundnessView(*artifact);
   if (!view)
-    return failError(view.takeError());
+    return zkc::tool::reportError(view.takeError());
 
   // The profile pin is what keeps a vocabulary edit from changing what a
   // fixed contract means, so it is checked rather than carried: the
@@ -106,10 +101,10 @@ int main(int argc, char **argv) {
       artifact->environment().protocolVocabulary().lookupProfile(
           contract->profileName);
   if (!profile)
-    return fail("the contract pins claim profile '" + contract->profileName +
+    return zkc::tool::reportError("the contract pins claim profile '" + contract->profileName +
                 "', which this protocol vocabulary does not admit");
   if (profile->contentDigest() != contract->profileDigest)
-    return fail("the contract pins claim profile '" + contract->profileName +
+    return zkc::tool::reportError("the contract pins claim profile '" + contract->profileName +
                 "' at " + contract->profileDigest +
                 ", this vocabulary admits it at " +
                 profile->contentDigest().str());
@@ -150,7 +145,7 @@ int main(int argc, char **argv) {
     break;
   }
   if (!matched)
-    return fail("no claim of artifact " + view->artifactId +
+    return zkc::tool::reportError("no claim of artifact " + view->artifactId +
                 " carries the contract's relation anchors: the contract "
                 "does not describe this artifact");
 
@@ -158,11 +153,11 @@ int main(int argc, char **argv) {
   std::optional<zkc::relation::R1csHeader> header;
   if (!bytesFilename.empty()) {
     if (contract->format != "r1cs-bin-v1")
-      return fail("format '" + contract->format +
+      return zkc::tool::reportError("format '" + contract->format +
                   "' has no reader; relation bytes cannot be read for it");
     auto buffer = MemoryBuffer::getFile(bytesFilename, /*IsText=*/false);
     if (!buffer)
-      return fail("cannot read '" + bytesFilename + "'");
+      return zkc::tool::reportError("cannot read '" + bytesFilename + "'");
     StringRef bytes = (*buffer)->getBuffer();
     SHA256 hasher;
     hasher.update(bytes);
@@ -171,7 +166,7 @@ int main(int argc, char **argv) {
                               digest);
     if (!contract->contentDigest.empty()) {
       if (contract->contentDigest != digest)
-        return fail("the supplied bytes digest to " + digest +
+        return zkc::tool::reportError("the supplied bytes digest to " + digest +
                     ", the contract pins " + contract->contentDigest);
       report.crossChecked.push_back(
           "contract-declared content digest agrees with the byte-derived one");
@@ -179,7 +174,7 @@ int main(int argc, char **argv) {
     auto parsed = zkc::relation::readR1csHeader(
         bytes, contract->instanceEncoding.fieldOrder);
     if (!parsed)
-      return failError(parsed.takeError());
+      return zkc::tool::reportError(parsed.takeError());
     header = *parsed;
     report.computed.push_back("header prime " + header->prime);
     report.computed.push_back("header public arity " +
@@ -195,13 +190,13 @@ int main(int argc, char **argv) {
   if (header) {
     if (encoding.kind == zkc::registry::InstanceEncodingKind::FieldVector) {
       if (encoding.arity != header->publicArity)
-        return fail("declared arity " + std::to_string(encoding.arity) +
+        return zkc::tool::reportError("declared arity " + std::to_string(encoding.arity) +
                     " disagrees with the header's public arity " +
                     std::to_string(header->publicArity));
       report.crossChecked.push_back(
           "contract-declared arity agrees with the byte-derived one");
       if (encoding.fieldOrder != header->prime)
-        return fail("declared field order " + encoding.fieldOrder +
+        return zkc::tool::reportError("declared field order " + encoding.fieldOrder +
                     " disagrees with the header prime " + header->prime);
       report.crossChecked.push_back(
           "contract-declared field order agrees with the header prime");
@@ -211,7 +206,7 @@ int main(int argc, char **argv) {
       for (const auto &port : contract->witnessPorts.ports)
         declared += port.count;
       if (declared != header->privateInputs)
-        return fail("declared witness-port total " + std::to_string(declared) +
+        return zkc::tool::reportError("declared witness-port total " + std::to_string(declared) +
                     " disagrees with the header's private-input count " +
                     std::to_string(header->privateInputs));
       report.crossChecked.push_back(
@@ -220,7 +215,7 @@ int main(int argc, char **argv) {
     }
     if (contract->constraintCount) {
       if (*contract->constraintCount != header->constraintCount)
-        return fail("declared constraint count " +
+        return zkc::tool::reportError("declared constraint count " +
                     std::to_string(*contract->constraintCount) +
                     " disagrees with the header's " +
                     std::to_string(header->constraintCount));
@@ -233,7 +228,7 @@ int main(int argc, char **argv) {
   // The correspondence against the artifact's own statement ABI.
   for (const auto &entry : contract->correspondence) {
     if (!is_contained(view->statementLabels, entry.label))
-      return fail("correspondence slot " + std::to_string(entry.slot) +
+      return zkc::tool::reportError("correspondence slot " + std::to_string(entry.slot) +
                   " names statement label '" + entry.label +
                   "', which the artifact's ABI does not carry");
     report.computed.push_back("statement label '" + entry.label +
@@ -257,7 +252,7 @@ int main(int argc, char **argv) {
   if (!fieldOrder.empty() &&
       encoding.kind == zkc::registry::InstanceEncodingKind::FieldVector) {
     if (fieldOrder != encoding.fieldOrder)
-      return fail("the expected field " + fieldOrder +
+      return zkc::tool::reportError("the expected field " + fieldOrder +
                   " disagrees with the contract's instance field " +
                   encoding.fieldOrder);
     // Named for what it is: this side is the caller's, not a fact read
@@ -278,7 +273,7 @@ int main(int argc, char **argv) {
   for (const auto &[name, value] : contract->relationAnchors) {
     auto projected = zkc::relation::anchorProjectionValue(value);
     if (!projected)
-      return failError(projected.takeError());
+      return zkc::tool::reportError(projected.takeError());
     for (const auto &[label, bound] : view->sealBindValues)
       if (bound == *projected) {
         anyCarried = true;
@@ -318,7 +313,7 @@ int main(int argc, char **argv) {
     for (const auto &entry : contract->correspondence)
       wired |= entry.label == label->second;
     if (!wired)
-      return fail("a sealed material binding grounds anchor '" + name +
+      return zkc::tool::reportError("a sealed material binding grounds anchor '" + name +
                   "' in statement value '" + label->second +
                   "', which the correspondence does not wire");
     report.crossChecked.push_back(
@@ -375,7 +370,7 @@ int main(int argc, char **argv) {
                    {"computed", std::move(computed)}};
   if (Error err = zkc::encoding::writeCanonicalJson(json::Value(std::move(out)),
                                                     outs()))
-    return failError(std::move(err));
+    return zkc::tool::reportError(std::move(err));
   outs() << "\n";
   return 0;
 }

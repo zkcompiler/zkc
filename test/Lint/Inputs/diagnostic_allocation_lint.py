@@ -16,13 +16,15 @@ each other, fail-closed:
   4. `reserved` ids (allocated, unshipped) are emitted nowhere;
   5. an emitted id outside every declared range fails.
 
-Emission sites are recognized by the patterns the tree actually uses:
-`[zkc-Eddd]` literals, TerminalClosure's `error(..., "zkc-Eddd")`,
-`refuse("Eddd"` (the certificate checker prepends `zkc-` at format
-time), ReductionClosure's `instanceError("zkc-Eddd")` helper, and the
-reference oracle's `("Eddd",` tuples and
-`"Eddd: ..."` messages. Prose mentions (`zkc-Eddd` without an
-emitting call, in comments or ODS descriptions) are not emissions.
+An emission site is a source line carrying `[zkc-Eddd]`, which is how
+the identifier reads in the diagnostic itself, on both legs. That is
+the whole recognition rule, and it is a rule rather than a list of
+idioms on purpose: a second spelling — the identifier handed to a
+helper that brackets it, or a message that punctuates it differently —
+is invisible to a search for the identifier a reader saw, and every
+such spelling this pattern learns to accept is one more place the next
+one can hide. Prose mentions are not emissions, but prose does not
+bracket, so nothing needs to distinguish them.
 
 Exit 0 on agreement; 1 on any violation; 2 when the allocation itself
 cannot be established (missing or malformed file) — parse
@@ -46,14 +48,7 @@ TEST_DIR = ROOT / "test"
 # named only here is not exercised by a negative test.
 TEST_EXCLUDE = TEST_DIR / "Lint"
 
-EMISSION = re.compile(
-    r"\[zkc-(E\d{3})\]"  # C++ diagnostic literals
-    r"|error\([^\n]*\"zkc-(E\d{3})\""  # TerminalClosure matcher
-    r"|Error\(\"zkc-(E\d{3})\""  # ReductionClosure's instanceError helper
-    r"|refuse\(\"(E\d{3})\""  # checker ids, zkc- prefixed at format time
-    r"|\(\"(E\d{3})\""  # oracle (code, subject) tuples
-    r"|f?\"(E\d{3}):"  # oracle message-prefixed raises
-)
+EMISSION = re.compile(r"\[zkc-(E\d{3})\]")
 ID_FORM = re.compile(r"^E(\d{3})$")
 RANGE_FORM = re.compile(r"^E(\d{3})-E(\d{3})$")
 TEST_ASSERTION = re.compile(
@@ -186,7 +181,7 @@ def scan_sources():
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
             for match in EMISSION.finditer(text):
-                ident = next(g for g in match.groups() if g)
+                ident = match.group(1)
                 rel = path.relative_to(ROOT).as_posix()
                 emitted.setdefault(ident, set()).add(rel)
     return emitted

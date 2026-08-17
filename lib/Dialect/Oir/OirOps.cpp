@@ -77,8 +77,8 @@ LogicalResult SqueezeOp::verify() {
 LogicalResult CheckCallOp::verify() {
   if (!zkc::encoding::isSha256Ref(getContractDigest()))
     return emitOpError()
-           << "[zkc-E147] contract_digest must be a sha256:-prefixed "
-              "64-lowercase-hex CheckContract content digest";
+           << "[zkc-E147] contract_digest "
+           << zkc::encoding::kSha256RefMessage;
   return success();
 }
 
@@ -119,8 +119,8 @@ LogicalResult HoleCallOp::verify() {
            << kind << "'";
   if (!zkc::encoding::isSha256Ref(getContractDigest()))
     return emitOpError()
-           << "[zkc-E149] contract_digest must be a sha256:-prefixed "
-              "64-lowercase-hex HoleContract content digest";
+           << "[zkc-E149] contract_digest "
+           << zkc::encoding::kSha256RefMessage;
   if (getOutputs().empty())
     return emitOpError() << "[zkc-E149] a hole declares at least one result";
   unsigned spongeIns = llvm::count_if(getInputs().getTypes(),
@@ -206,9 +206,8 @@ LogicalResult ArtifactOp::verify() {
   // References to identities carry the algorithm-prefixed form
   // (kernel.md §8); the artifact's own id stays bare.
   if (!zkc::encoding::isSha256Ref(getSource()))
-    return emitOpError() << "[zkc-E141] source citation must be an "
-                            "algorithm-prefixed sealed artifact id "
-                            "(sha256:<64-lowercase-hex>)";
+    return emitOpError() << "[zkc-E141] source citation "
+                         << zkc::encoding::kSha256RefMessage;
   auto programs = getBody().getOps<ProgramOp>();
   if (!llvm::hasSingleElement(programs) ||
       !llvm::hasSingleElement(getBody().front().getOperations()))

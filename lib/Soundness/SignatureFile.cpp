@@ -2,6 +2,7 @@
 #include "zkc/Soundness/SignatureFile.h"
 
 #include "zkc/Encoding/EncodingDomain.h"
+#include "zkc/Registry/RegistryBase.h"
 #include "zkc/Registry/RegistryFile.h"
 #include "zkc/Soundness/SignatureEncoding.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -75,18 +76,12 @@ public:
 
   Expected<const Object *> object(const Object &parent, StringRef key,
                                   const Twine &context) const {
-    const Object *value = parent.getObject(key);
-    if (!value)
-      return file.error(context + " needs an object '" + key + "'");
-    return value;
+    return file.requireObject(parent, key, context);
   }
 
   Expected<const Array *> array(const Object &parent, StringRef key,
                                 const Twine &context) const {
-    const Array *value = parent.getArray(key);
-    if (!value)
-      return file.error(context + " needs an array '" + key + "'");
-    return value;
+    return file.requireArray(parent, key, context);
   }
 
 private:
@@ -2111,17 +2106,28 @@ Expected<Signature> parseSignature(StringRef json, StringRef sourceName) {
   if (!schemas)
     return schemas.takeError();
 
+  // The three named sections walk through the shared admission rather
+  // than each spelling the walk again. No refusal moves: a rule and a
+  // binding restate their key in an `id` field that carries the domain
+  // gate, and an annotation must name something the signature declares,
+  // so every key here was already reached. What changes is that the
+  // gate is now applied where the name is read instead of arriving
+  // through three separate arguments about why it could not be missed.
   std::map<std::string, SoundnessRule, std::less<>> rules;
-  for (const auto &field : reader.registryFile().payload()) {
-    const Object *entry = field.second.getAsObject();
-    if (!entry)
-      return reader.failed<Signature>("rule '" + field.first.str() +
-                                      "' must be an object");
-    auto rule = readRule(reader, field.first, *entry);
-    if (!rule)
-      return rule.takeError();
-    rules.emplace(field.first.str(), std::move(*rule));
-  }
+  if (Error err = registry::parseSection(
+          reader.registryFile(), reader.registryFile().payload(), "rule",
+          [&](const registry::RegistryFile &, StringRef name,
+              const llvm::json::Value &value) -> Error {
+            const Object *entry = value.getAsObject();
+            if (!entry)
+              return reader.fail("rule '" + name + "' must be an object");
+            auto rule = readRule(reader, name, *entry);
+            if (!rule)
+              return rule.takeError();
+            rules.emplace(name.str(), std::move(*rule));
+            return Error::success();
+          }))
+    return std::move(err);
 
   // Every section a signature declares is written, empty if it has nothing
   // to say. An omitted one and one written as the wrong shape are both
@@ -2133,32 +2139,39 @@ Expected<Signature> parseSignature(StringRef json, StringRef sourceName) {
                                       "' must be an object");
 
   std::map<std::string, RuleBinding, std::less<>> bindings;
-  if (const Object *entries = reader.registryFile().extra("bindings")) {
-    for (const auto &field : *entries) {
-      const Object *entry = field.second.getAsObject();
-      if (!entry)
-        return reader.failed<Signature>("binding '" + field.first.str() +
-                                        "' must be an object");
-      auto binding = readBinding(reader, field.first, *entry, rules);
-      if (!binding)
-        return binding.takeError();
-      bindings.emplace(field.first.str(), std::move(*binding));
-    }
-  }
+  if (const Object *entries = reader.registryFile().extra("bindings"))
+    if (Error err = registry::parseSection(
+            reader.registryFile(), *entries, "binding",
+            [&](const registry::RegistryFile &, StringRef name,
+                const llvm::json::Value &value) -> Error {
+              const Object *entry = value.getAsObject();
+              if (!entry)
+                return reader.fail("binding '" + name + "' must be an object");
+              auto binding = readBinding(reader, name, *entry, rules);
+              if (!binding)
+                return binding.takeError();
+              bindings.emplace(name.str(), std::move(*binding));
+              return Error::success();
+            }))
+      return std::move(err);
 
   std::map<std::string, DeclarationAnnotation, std::less<>> annotations;
-  if (const Object *entries = reader.registryFile().extra("annotations")) {
-    for (const auto &field : *entries) {
-      const Object *entry = field.second.getAsObject();
-      if (!entry)
-        return reader.failed<Signature>("annotation '" + field.first.str() +
-                                        "' must be an object");
-      auto annotation = readAnnotation(reader, field.first, *entry);
-      if (!annotation)
-        return annotation.takeError();
-      annotations.emplace(field.first.str(), std::move(*annotation));
-    }
-  }
+  if (const Object *entries = reader.registryFile().extra("annotations"))
+    if (Error err = registry::parseSection(
+            reader.registryFile(), *entries, "annotation",
+            [&](const registry::RegistryFile &, StringRef name,
+                const llvm::json::Value &value) -> Error {
+              const Object *entry = value.getAsObject();
+              if (!entry)
+                return reader.fail("annotation '" + name +
+                                   "' must be an object");
+              auto annotation = readAnnotation(reader, name, *entry);
+              if (!annotation)
+                return annotation.takeError();
+              annotations.emplace(name.str(), std::move(*annotation));
+              return Error::success();
+            }))
+      return std::move(err);
 
   auto catalog = freezeSoundnessCatalog(std::move(*schemas), std::move(rules),
                                         std::move(bindings));

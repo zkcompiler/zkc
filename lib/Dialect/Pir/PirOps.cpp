@@ -220,9 +220,8 @@ static LogicalResult verifyAnchorValues(Operation *op, DictionaryAttr anchors) {
     auto value = dyn_cast<StringAttr>(named.getValue());
     if (!value || !zkc::encoding::isSha256Ref(value.getValue()))
       return op->emitOpError()
-             << "[zkc-E156] anchor '" << named.getName().getValue()
-             << "' must be a sha256:-prefixed 64-lowercase-hex digest "
-                "reference";
+             << "[zkc-E156] anchor '" << named.getName().getValue() << "' "
+             << zkc::encoding::kSha256RefMessage;
   }
   return success();
 }
@@ -470,8 +469,8 @@ private:
       StringRef semanticRef = binding.getSemanticRef();
       if (!zkc::encoding::isSha256Ref(semanticRef))
         return op->emitOpError()
-               << "[zkc-E159] semantic_ref must be a sha256:-prefixed "
-                  "64-lowercase-hex digest reference";
+               << "[zkc-E159] semantic_ref "
+               << zkc::encoding::kSha256RefMessage;
       if (!boundValues.insert(binding.getValue()).second)
         return op->emitOpError()
                << "[zkc-E161] a verifier value may have at most one "
