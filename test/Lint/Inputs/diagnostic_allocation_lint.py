@@ -12,7 +12,9 @@ each other, fail-closed:
      emits is table drift, not documentation;
   3. every `live` id appears in an expected diagnostic or test assertion under
      test/ (the negative-test conformance rule, carrier.md §5), unless the
-     block carries an explicit coverage exemption with a reason;
+     block carries an explicit coverage exemption with a reason — and the
+     assertion is in a file that always runs, not one gated whole on a
+     feature the machine may not have;
   4. `reserved` ids (allocated, unshipped) are emitted nowhere;
   5. an emitted id outside every declared range fails.
 
@@ -49,6 +51,11 @@ TEST_DIR = ROOT / "test"
 TEST_EXCLUDE = TEST_DIR / "Lint"
 
 EMISSION = re.compile(r"\[zkc-(E\d{3})\]")
+# A file-level `REQUIRES:`/`UNSUPPORTED:`/`XFAIL:` decides whether the
+# file runs at all; a per-RUN-line `%if` does not, which is the whole
+# distinction the coverage rule needs.
+WHOLE_FILE_GATE = re.compile(r"^[#/ ]*(?:REQUIRES|UNSUPPORTED|XFAIL):",
+                             re.MULTILINE)
 ID_FORM = re.compile(r"^E(\d{3})$")
 RANGE_FORM = re.compile(r"^E(\d{3})-E(\d{3})$")
 TEST_ASSERTION = re.compile(
@@ -188,21 +195,37 @@ def scan_sources():
 
 
 def scan_tests():
-    """Return ids asserted by tests, excluding prose-only mentions."""
-    asserted = set()
+    """Ids asserted by tests, split by whether the assertion always runs.
+
+    A `REQUIRES:` line gates the whole file, so on a machine without that
+    feature the suite is green with the file never read. An id asserted
+    only in such files is reported covered while nothing exercises it,
+    which is the coverage rule saying the opposite of what it means.
+    Lit's per-RUN-line `%if feature %{ ... %}` is the narrower gate, and
+    an id that needs it says so here rather than being taken on trust.
+    """
+    always = set()
+    gated = {}
     for path in TEST_DIR.rglob("*"):
         if not path.is_file() or path.is_relative_to(TEST_EXCLUDE):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        rel = path.relative_to(ROOT).as_posix()
+        gate = WHOLE_FILE_GATE.search(text)
         for line in text.splitlines():
-            asserted.update("E" + m for m in TEST_ASSERTION.findall(line))
-    return asserted
+            for match in TEST_ASSERTION.findall(line):
+                ident = "E" + match
+                if gate:
+                    gated.setdefault(ident, set()).add(rel)
+                else:
+                    always.add(ident)
+    return always, gated
 
 
 def main():
     live, reserved, exempt, mirrored = validate(load_table())
     emitted = scan_sources()
-    asserted = scan_tests()
+    asserted, gatedOnly = scan_tests()
 
     problems = []
     for ident in sorted(emitted):
@@ -241,9 +264,17 @@ def main():
                 "move it to reserved or drop it"
                 % (ident, "/".join(SOURCE_DIRS)))
         elif ident not in asserted and ident not in exempt:
-            problems.append(
-                "%s is live but no file under test/ asserts it "
-                "(negative-test conformance rule, carrier.md §5)" % ident)
+            if ident in gatedOnly:
+                problems.append(
+                    "%s is asserted only in whole-file-gated tests (%s): on a "
+                    "machine without that feature the suite is green and this "
+                    "refusal is never exercised. Narrow the gate to the RUN "
+                    "lines that need it (`%%if feature %%{ ... %%}`)"
+                    % (ident, ", ".join(sorted(gatedOnly[ident]))))
+            else:
+                problems.append(
+                    "%s is live but no file under test/ asserts it "
+                    "(negative-test conformance rule, carrier.md §5)" % ident)
 
     if problems:
         for problem in problems:

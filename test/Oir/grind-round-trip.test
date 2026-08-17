@@ -1,4 +1,3 @@
-# REQUIRES: uv
 # The transcript-peek supplier path (docs/spec/endpoints.md §6.2), end
 # to end on the smallest subject that has one: routed Schnorr with a
 # grinding round. The pow_search fill receives only a trial the
@@ -24,8 +23,11 @@
 # The twin's independent search returns the same least witness: the
 # whole prover output, byte for byte.
 # RUN: zkc-run %t/prover.mlir --prove "w=00000000000000050000000000000007" --statement "y=1024" | grep -E "prover challenges|proof:" > %t/native.txt
-# RUN: %uv python -m oracle.exec derived-prove schnorr-grind "s:y=1024" "w:w=00000000000000050000000000000007" > %t/twin.txt
-# RUN: diff %t/native.txt %t/twin.txt
+# Only the twin's half needs uv. The native refusals below are the sole
+# assertion of E407 and E412 anywhere that always runs, so a whole-file
+# feature gate would leave them unexercised wherever uv is absent.
+# RUN: %if uv %{ %uv python -m oracle.exec derived-prove schnorr-grind "s:y=1024" "w:w=00000000000000050000000000000007" > %t/twin.txt %}
+# RUN: %if uv %{ diff %t/native.txt %t/twin.txt %}
 
 # A peek digest without a supplier is the ordinary named gap. The
 # mutant's identity is re-minted so the refusal under test is the
