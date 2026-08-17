@@ -106,3 +106,38 @@
 # RUN: %python -c "import json,sys; a,b=[json.load(open(p)) for p in sys.argv[1:]]; print('CONCLUSION-SAME' if json.dumps(a['conclusion'],sort_keys=True)==json.dumps(b['conclusion'],sort_keys=True) else 'CONCLUSION-MOVED'); print('IDENTITY-MOVED' if a['identity']!=b['identity'] else 'IDENTITY-SAME')" %t/q.out.json %t/qb.out.json | FileCheck %s --check-prefix=DERIVED2
 # DERIVED2: CONCLUSION-SAME
 # DERIVED2-NEXT: IDENTITY-MOVED
+
+# A class this instance's kappa carries no codec for refuses at the
+# description, where the author can see which field is wrong, rather
+# than at seal, which could only name generated IR.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['preamble'][0]={'label':'x','class':'no_such_class','value':'5'}; json.dump(d, open(sys.argv[2],'w'))" %S/../Oir/Inputs/plonky3-fri-vf-bound.json %t/badclass.json
+# RUN: not zkc-family %t/badclass.json --emit-vocabulary=%t/x.json --emit-spine=%t/x.mlir 2>&1 | FileCheck %s --check-prefix=NOCODEC
+# NOCODEC: carries no codec for
+
+# A hand-written value for a class that frames several field elements
+# refuses too: whether such a value is canonical is a fact about the
+# execution profile's field, not about this description, so a wide
+# binding takes an anchor's projection instead of a number no author
+# can check.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['preamble'][0]={'label':'y','class':'rs','value':'12345'}; json.dump(d, open(sys.argv[2],'w'))" %S/../Oir/Inputs/plonky3-fri-vf-bound.json %t/widelit.json
+# RUN: not zkc-family %t/widelit.json --emit-vocabulary=%t/x.json --emit-spine=%t/x.mlir 2>&1 | FileCheck %s --check-prefix=WIDELIT
+# WIDELIT: frames several field elements
+
+# The variant's own verifier executes: the projection is a constant
+# wider than any scalar, so the interpreter parses it at the width its
+# class frames and the transcript carries it. A probe with no proof
+# bytes reaches the wire and stops there, which is past every step this
+# variant adds.
+# RUN: zkc-opt '-pir-project=protocol-vocabulary=%t/bound-vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t/bound-sealed.mlir -o %t/bound-verifier.mlir
+# RUN: %python %S/../Oir/Inputs/one-vector.py %t/bound-verifier.mlir 7 > %t/probe.json
+# RUN: not zkc-run %t/bound-verifier.mlir --profile plonky3 --vectors %t/probe.json 2>&1 | FileCheck %s --check-prefix=RUNS
+# RUNS-NOT: zkc-E406
+# RUNS: abi_decode_failure
+
+# The emitted crate carries the same constant as its class's limbs, so
+# the generated verifier's transcript is the interpreter's.
+# REQUIRES: cargo
+# RUN: zkc-translate --oir-canonical %t/bound-verifier.mlir -o %t/bound-verifier.json
+# RUN: cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/bound-verifier.json --binding %zkc-emit-bindings/plonky3-zero-iv.json --rt-path %zkc-rt-dir --out %t/crate
+# RUN: FileCheck %s --check-prefix=LIMBS --input-file=%t/crate/src/lib.rs
+# LIMBS: let r{{[0-9]+}}_0: [u32; 8] = [105733922u32, 15319798u32, 87952325u32, 101253208u32, 109178165u32, 110766216u32, 90828890u32, 92857383u32];

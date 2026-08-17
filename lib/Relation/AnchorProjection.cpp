@@ -33,15 +33,10 @@ zkc::relation::anchorProjection(StringRef anchor) {
     uint32_t value = 0;
     for (unsigned digit = 0; digit < 8; ++digit) {
       char c = anchor[word * 8 + digit];
-      unsigned nibble;
-      if (c >= '0' && c <= '9')
-        nibble = c - '0';
-      else if (c >= 'a' && c <= 'f')
-        nibble = 10 + (c - 'a');
-      else
+      if (!llvm::isDigit(c) && !(c >= 'a' && c <= 'f'))
         return createStringError(
             "an anchor projection needs lowercase hexadecimal digits");
-      value = (value << 4) | nibble;
+      value = (value << 4) | llvm::hexDigitValue(c);
     }
     elements.push_back(value & ((1u << kAnchorProjectionBits) - 1));
   }

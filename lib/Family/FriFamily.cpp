@@ -97,6 +97,23 @@ static bool isRationalString(StringRef s) {
   return true;
 }
 
+/// The codec this description declares for a payload class, or empty
+/// when it declares none.
+static llvm::StringRef codecFor(const FriDescription &desc,
+                                llvm::StringRef payloadClass) {
+  if (payloadClass == "ext_field")
+    return desc.extFieldCodec;
+  if (payloadClass == "query_index")
+    return desc.queryIndexCodec;
+  if (payloadClass == "pow_value")
+    return desc.powValueCodec;
+  if (payloadClass == "rs")
+    return desc.rsCodec;
+  if (payloadClass == "word")
+    return desc.wordCodec;
+  return {};
+}
+
 Expected<FriDescription>
 zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
   auto err = [&](const Twine &message) {
@@ -369,6 +386,13 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
       if (!payloadClass)
         return payloadClass.takeError();
       parsed.payloadClass = std::move(*payloadClass);
+      // A binding's class keys its codec, so a class this instance's
+      // kappa does not carry is refused where the author wrote it
+      // rather than at seal, which could only name generated IR.
+      if (codecFor(desc, parsed.payloadClass).empty())
+        return err("'preamble' entry '" + parsed.label + "' names class '" +
+                   parsed.payloadClass +
+                   "', which this instance's kappa carries no codec for");
 
       // The label namespace is global across every member of the
       // spine, so a collision is refused here rather than at seal,
@@ -420,6 +444,22 @@ zkc::family::parseFriDescription(StringRef jsonText, StringRef sourceName) {
             (parsed.value.size() > 1 && parsed.value[0] == '0'))
           return err("'preamble' entry '" + parsed.label +
                      "' needs an exact decimal value");
+        // An authored value is a scalar. A class framing several field
+        // elements is canonical only element by element, which is a
+        // fact about the execution profile's field rather than about
+        // this description, so a wide binding states an 'anchor' and
+        // carries its transcript projection (docs/spec/relations.md
+        // section 2.8) instead of a hand-written number no author can
+        // check.
+        if (parsed.payloadClass == "rs" || parsed.payloadClass == "ext_field")
+          return err("'preamble' entry '" + parsed.label + "' has class '" +
+                     parsed.payloadClass +
+                     "', which frames several field elements; such a binding "
+                     "states an 'anchor' and carries its transcript "
+                     "projection rather than an authored value");
+        if (parsed.value.size() > 19)
+          return err("'preamble' entry '" + parsed.label +
+                     "' has a value wider than its class frames");
       }
       desc.preamble.push_back(std::move(parsed));
     }

@@ -287,10 +287,16 @@ protected:
   }
 
   llvm::Error stepConstant(oir::ConstantOp constant) {
-    uint64_t value;
-    if (StringRef(constant.getValue()).getAsInteger(10, value))
+    // A pinned constant is as wide as its class frames: an authored
+    // binding of a digest-shaped identity states a value no scalar
+    // holds, so the parse is arbitrary precision, the same one a
+    // statement value already takes.
+    StringRef text = constant.getValue();
+    if (text.empty() ||
+        text.find_first_not_of("0123456789") != StringRef::npos ||
+        llvm::APInt::getSufficientBitsNeeded(text, 10) > kValueBits)
       return fail("[zkc-E406] constant is not decimal");
-    env.try_emplace(constant.getVal(), makeValue(value));
+    env.try_emplace(constant.getVal(), llvm::APInt(kValueBits, text, 10));
     return llvm::Error::success();
   }
 
