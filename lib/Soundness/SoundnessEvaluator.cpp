@@ -1,5 +1,6 @@
 //===- SoundnessEvaluator.cpp - Executable soundness judgments ----------===//
 #include "zkc/Soundness/SoundnessEvaluator.h"
+#include "zkc/Soundness/KernelPredicates.h"
 
 #include "zkc/Soundness/SoundnessProjection.h"
 #include "llvm/Support/Error.h"
@@ -65,22 +66,6 @@ constexpr int64_t kMaxExactExponent = 4096;
 constexpr const char *kProtocolClaimSchema = "zkc.subject.protocol_claim";
 constexpr const char *kConsumedClaimVectorSchema =
     "zkc.subject.consumed_claim_vector";
-
-bool isInteger(const registry::Rational &value) {
-  return value.denStr() == "1";
-}
-
-bool isPositive(const registry::Rational &value) {
-  return value.compare(registry::Rational::fromInteger(0)) > 0;
-}
-
-bool isNonnegative(const registry::Rational &value) {
-  return !value.isNegative();
-}
-
-bool validRef(const ExactRef &ref) {
-  return !ref.id.empty() && !ref.sourceRevision.empty();
-}
 
 SoundnessRefusal makeRefusal(RuntimePhase phase, RuntimeRefusalCode code,
                              std::string location, std::string detail) {

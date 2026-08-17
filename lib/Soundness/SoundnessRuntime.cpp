@@ -1,4 +1,5 @@
 //===- SoundnessRuntime.cpp - Owned closed soundness values --------------===//
+#include "zkc/Soundness/KernelPredicates.h"
 #include "zkc/Soundness/SoundnessRuntime.h"
 
 #include <algorithm>
@@ -22,22 +23,6 @@ bool equalOptionalRational(const std::optional<registry::Rational> &lhs,
   if (lhs.has_value() != rhs.has_value())
     return false;
   return !lhs || equalRational(*lhs, *rhs);
-}
-
-bool validRef(const ExactRef &ref) {
-  return !ref.id.empty() && !ref.sourceRevision.empty();
-}
-
-bool isInteger(const registry::Rational &value) {
-  return value.denStr() == "1";
-}
-
-bool isPositive(const registry::Rational &value) {
-  return value.compare(registry::Rational::fromInteger(0)) > 0;
-}
-
-bool isNonnegative(const registry::Rational &value) {
-  return !value.isNegative();
 }
 
 bool validChallengeShape(ChallengeShape shape) {
