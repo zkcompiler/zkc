@@ -10,7 +10,7 @@
 
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
-#include "gtest/gtest.h"
+#include "ZkcTest.h"
 
 #include <string>
 

@@ -9,7 +9,7 @@
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/Support/Error.h"
-#include "gtest/gtest.h"
+#include "ZkcTest.h"
 
 #include <string>
 #include <vector>

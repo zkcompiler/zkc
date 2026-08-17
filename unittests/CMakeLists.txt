@@ -8,21 +8,23 @@
 # limitation but the selection rule: those are the pieces whose
 # correctness is a mathematical statement rather than a statement about
 # a compiled artifact.
+#
+# The harness is local (`ZkcTest.h`) rather than gtest, because a
+# packaged LLVM ships no gtest and a gate that runs only where someone
+# built LLVM from source is not a gate.
 add_custom_target(ZkcUnitTests)
 set_target_properties(ZkcUnitTests PROPERTIES FOLDER "zkc unit tests")
 
 # Plain CMake rather than add_llvm_executable: these link one zkc
-# library, gtest, and LLVMSupport, and none of the wrapper's plugin,
-# export, or install handling applies to a test binary that never
-# ships.
+# library, the local harness, and LLVMSupport, and none of the
+# wrapper's plugin, export, or install handling applies to a test
+# binary that never ships.
 function(add_zkc_unittest name)
-  add_executable(${name} ${ARGN})
+  add_executable(${name} ${ARGN} ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/ZkcTest.cpp)
   llvm_update_compile_flags(${name})
-  # gtest's own include directories arrive through the imported target;
-  # naming them here as well would duplicate them at best and, built
-  # from a variable this out-of-tree build does not define, name
-  # directories that do not exist.
-  target_link_libraries(${name} PRIVATE llvm_gtest llvm_gtest_main LLVMSupport)
+  target_include_directories(${name} PRIVATE
+    ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
+  target_link_libraries(${name} PRIVATE LLVMSupport)
   add_dependencies(ZkcUnitTests ${name})
   set_target_properties(${name} PROPERTIES FOLDER "zkc unit tests")
 endfunction()
