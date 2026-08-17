@@ -8,9 +8,9 @@
 
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Registry/ConstructionProfileRegistry.h"
-#include "zkc/Registry/RelationContractRegistry.h"
 #include "zkc/Registry/ProtocolVocabulary.h"
 #include "zkc/Registry/RegistryFile.h"
+#include "zkc/Registry/RelationContractRegistry.h"
 #include "zkc/Soundness/SignatureEncoding.h"
 #include "zkc/Soundness/SignatureFile.h"
 #include "zkc/Tools/ToolUtils.h"
@@ -23,7 +23,7 @@ using namespace llvm;
 
 static cl::opt<std::string> inputFilename(cl::Positional, cl::Required,
                                           cl::desc("<registry.json>"));
-static int fail(Error err) { return zkc::tool::reportError(std::move(err)); }
+static int fail(Error err) { return zkc::tool::reportRefusal(std::move(err)); }
 
 static int emit(json::Value value) {
   if (Error err = zkc::encoding::writeCanonicalJson(value, outs()))
@@ -99,8 +99,8 @@ static int lintSoundnessSignature(StringRef json, StringRef source) {
       {"revisions", json::Object{{"bindings", std::move(bindingRevisions)},
                                  {"rules", std::move(ruleRevisions)}}},
       {"rules", std::move(rules)},
-      {"schemas",
-       zkc::soundness::encodeSchemaContextDocument(signature->catalog.schemas)}});
+      {"schemas", zkc::soundness::encodeSchemaContextDocument(
+                      signature->catalog.schemas)}});
 }
 
 int main(int argc, char **argv) {
@@ -108,9 +108,11 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(
       argc, argv, "zkc-registry-lint: validate a zkc registry file\n");
 
+  // The only path in this tool that never reaches its subject: every
+  // other exit is the admission judgment this tool exists to make.
   auto buffer = zkc::registry::RegistryFile::readFile(inputFilename);
   if (!buffer)
-    return fail(buffer.takeError());
+    return zkc::tool::reportCannotAnswer(buffer.takeError());
   StringRef json = (*buffer)->getBuffer();
 
   // Dispatch on the file's own name field; the chosen loader

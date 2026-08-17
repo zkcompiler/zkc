@@ -48,7 +48,7 @@
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-pin-supplier.mlir -o %t/pin-supplier.id
 # RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-pin-supplier.mlir %t/pin-supplier.mlir %t/pin-supplier.id
 # RUN: not zkc-test-opt -test-oir-execute %t/pin-supplier.mlir 2>&1 | FileCheck --check-prefix=PIN-SUPPLIER %s
-# PIN-SUPPLIER: [zkc-E401] pinned construction 'sponge:plonky3_bb31_poseidon2_w16_r8_lenpad' has no supplier in profile 'toy'
+# PIN-SUPPLIER: [zkc-E401] pinned sponge construction 'sponge:plonky3_bb31_poseidon2_w16_r8_lenpad' has no supplier in profile 'toy'
 
 # RUN: zkc-translate --oir-id %S/Inputs/refusal-pin-mismatch.mlir -o %t/pin-mismatch.id
 # RUN: %python %S/Inputs/rewrite-artifact-id.py oir.artifact %S/Inputs/refusal-pin-mismatch.mlir %t/pin-mismatch.mlir %t/pin-mismatch.id

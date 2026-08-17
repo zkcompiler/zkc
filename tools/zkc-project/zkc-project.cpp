@@ -39,27 +39,27 @@ int main(int argc, char **argv) {
 
   auto kind = zkc::pir::parseEndpointKind(endpointKind);
   if (!kind)
-    return zkc::tool::reportError(kind.takeError());
+    return zkc::tool::reportRefusal(kind.takeError());
 
   auto environment = zkc::registry::ProtocolEnvironment::loadFromFiles(
       protocolVocabulary, constructionProfileRegistry);
   if (!environment)
-    return zkc::tool::reportError(environment.takeError());
+    return zkc::tool::reportCannotAnswer(environment.takeError());
 
   auto admitted = zkc::artifact::loadAndAdmitArtifact(inputFilename,
                                                       std::move(*environment));
   if (!admitted)
-    return zkc::tool::reportError(admitted.takeError());
+    return zkc::tool::reportRefusal(admitted.takeError());
 
   auto projected = zkc::pir::projectArtifact(*admitted, *kind);
   if (!projected)
-    return zkc::tool::reportError(projected.takeError());
+    return zkc::tool::reportRefusal(projected.takeError());
 
   std::string error;
   std::unique_ptr<llvm::ToolOutputFile> output =
       mlir::openOutputFile(outputFilename, &error);
   if (!output) {
-    return zkc::tool::reportError(error);
+    return zkc::tool::reportCannotAnswer(error);
   }
   projected->print(output->os());
   output->os() << "\n";

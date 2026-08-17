@@ -71,8 +71,8 @@ int main(int argc, char **argv) {
     return 1;
 
   if (std::error_code error = llvm::sys::fs::create_directories(outputDir)) {
-    return zkc::tool::reportError("cannot create '" + outputDir + "': " +
-                                  error.message());
+    return zkc::tool::reportCannotAnswer("cannot create '" + outputDir +
+                                         "': " + error.message());
   }
   // Every artifact writes before any is kept: a failure mid-module
   // leaves no partial output set behind.
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     std::string error;
     std::unique_ptr<ToolOutputFile> output = openOutputFile(path, &error);
     if (!output) {
-      return zkc::tool::reportError(error);
+      return zkc::tool::reportCannotAnswer(error);
     }
     if (failed(zkc::artifact::writeArtifact(sealed, output->os())))
       return 1;

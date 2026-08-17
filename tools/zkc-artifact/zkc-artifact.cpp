@@ -22,7 +22,7 @@ static int load() {
   Expected<zkc::artifact::DecodedPirArtifact> loaded =
       zkc::artifact::loadArtifact(inputFilename, expectedId);
   if (!loaded)
-    return zkc::tool::reportError(loaded.takeError());
+    return zkc::tool::reportRefusal(loaded.takeError());
   outs() << "decoded artifact " << loaded->id() << "\n";
   loaded->print(outs());
   outs() << "\n";

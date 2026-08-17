@@ -1,0 +1,41 @@
+# One exit code per kind of answer, across the tools.
+#
+# A caller that treats every non-zero exit alike cannot tell a protocol
+# it should fix from an invocation it should fix. The codes are the
+# machine-readable half of that distinction and the prose is not, so
+# they are pinned here rather than left to whichever helper a site
+# happened to call (docs/getting-started.md §4a):
+#
+#   0  the question was answered affirmatively
+#   1  the subject was examined and the answer is negative
+#   2  the invocation never reached its subject
+#
+# Both non-zero codes write to stderr in the same spelling, so this
+# checks the code and not the wording. `not --crash` is lit's way of
+# asserting a specific non-zero status: plain `not` accepts any of
+# them, which is exactly the conflation this file exists to refuse.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# -- 2: the invocation never reached its subject. ---------------------
+# An unreadable file, whatever the tool would have done with it.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-registry-lint %t/absent.json
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-family %t/absent.json --emit-vocabulary=%t/v.json --emit-spine=%t/s.mlir
+# A flag set that names no job.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-translate %S/../Encoding/schnorr.mlir
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-run %S/../Encoding/schnorr.mlir
+# A contract the environment supplied does not carry.
+# RUN: %python %S/Inputs/exit-code.py 2 zkc-relation %S/../Encoding/schnorr.mlir --contracts=%zkc-registry-dir/relation-contracts.json --contract=no.such.contract --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json --construction-profile-registry=%zkc-registry-dir/construction-profiles.json
+
+# -- 1: the subject was examined and refused. -------------------------
+# A registry that does not admit is this tool's whole question, so its
+# parse refusal is an answer rather than a failure to reach one.
+# RUN: echo '{"registry":"zkc.protocol_vocabulary","unknown_section":1}' > %t/bad.json
+# RUN: %python %S/Inputs/exit-code.py 1 zkc-registry-lint %t/bad.json
+# A description outside the family's closed point selection.
+# RUN: %python %S/Inputs/exit-code.py 1 zkc-family %S/../Family/Inputs/bad-k.json --emit-vocabulary=%t/v.json --emit-spine=%t/s.mlir
+
+# -- 0: answered affirmatively. ---------------------------------------
+# The control: without it the checks above are satisfied by a tool that
+# refuses everything.
+# RUN: %python %S/Inputs/exit-code.py 0 zkc-registry-lint %zkc-registry-dir/protocol-vocabulary.json

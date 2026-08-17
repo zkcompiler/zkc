@@ -61,14 +61,14 @@ int main(int argc, char **argv) {
 
   auto buffer = MemoryBuffer::getFile(inputFilename, /*IsText=*/true);
   if (!buffer)
-    return zkc::tool::reportError(
-        createStringError("cannot read '" + StringRef(inputFilename) + "': " +
-                          buffer.getError().message()));
+    return zkc::tool::reportCannotAnswer(
+        createStringError("cannot read '" + StringRef(inputFilename) +
+                          "': " + buffer.getError().message()));
 
   auto description =
       zkc::family::parseFriDescription((*buffer)->getBuffer(), inputFilename);
   if (!description) {
-    int exit = zkc::tool::reportError(description.takeError());
+    int exit = zkc::tool::reportRefusal(description.takeError());
     printParamSurface(errs());
     return exit;
   }
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
   auto admitted = zkc::registry::ProtocolVocabulary::parse(
       vocabulary, "generated protocol vocabulary");
   if (!admitted)
-    return zkc::tool::reportError(createStringError(
+    return zkc::tool::reportCannotAnswer(createStringError(
         "internal template error (the emitted registry does not admit): " +
         toString(admitted.takeError())));
 
@@ -89,12 +89,12 @@ int main(int argc, char **argv) {
   mlir::OwningOpRef<mlir::ModuleOp> module =
       mlir::parseSourceString<mlir::ModuleOp>(spine, &context);
   if (!module)
-    return zkc::tool::reportError(createStringError(
+    return zkc::tool::reportCannotAnswer(createStringError(
         "internal template error (the emitted spine does not parse)"));
 
   if (Error err = writeFile(emitVocabulary, vocabulary))
-    return zkc::tool::reportError(std::move(err));
+    return zkc::tool::reportRefusal(std::move(err));
   if (Error err = writeFile(emitSpine, spine))
-    return zkc::tool::reportError(std::move(err));
+    return zkc::tool::reportRefusal(std::move(err));
   return 0;
 }

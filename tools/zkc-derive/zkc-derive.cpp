@@ -17,10 +17,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "zkc/Registry/Rational.h"
 #include "zkc/Artifact/Artifact.h"
 #include "zkc/Encoding/CanonicalJson.h"
 #include "zkc/Registry/ProtocolEnvironment.h"
+#include "zkc/Registry/Rational.h"
 #include "zkc/Soundness/DerivationEncoding.h"
 #include "zkc/Soundness/PirSoundnessAdapter.h"
 #include "zkc/Soundness/SignatureEncoding.h"
@@ -70,11 +70,11 @@ static cl::opt<bool> headline(
 namespace {
 
 int fail(const llvm::Twine &message) {
-  return zkc::tool::reportError(llvm::createStringError(message));
+  return zkc::tool::reportRefusal(llvm::createStringError(message));
 }
 
 int failError(llvm::Error error) {
-  return zkc::tool::reportError(std::move(error));
+  return zkc::tool::reportRefusal(std::move(error));
 }
 
 std::string refusalText(const snd::SoundnessRefusal &refusal) {
@@ -261,7 +261,8 @@ int main(int argc, char **argv) {
         witness->getAsObject()->getObject("conclusion");
     const llvm::json::Object *result =
         conclusion ? conclusion->getObject("result") : nullptr;
-    const llvm::json::Array *rounds = result ? result->getArray("rounds") : nullptr;
+    const llvm::json::Array *rounds =
+        result ? result->getArray("rounds") : nullptr;
     if (!rounds)
       return fail("--headline displays round-by-round results; this "
                   "witness concludes in a different notion");
@@ -297,13 +298,12 @@ int main(int argc, char **argv) {
         weakest = *ceiling;
     }
     if (weakest)
-      llvm::outs() << "headline: the weakest round loses at most 2^"
-                   << *weakest << " per attempt\n";
+      llvm::outs() << "headline: the weakest round loses at most 2^" << *weakest
+                   << " per attempt\n";
     if (const llvm::json::Array *obligations =
             conclusion->getArray("qualitative_obligations"))
       for (const llvm::json::Value &entry : *obligations)
-        llvm::outs() << "headline obligation: " << *entry.getAsString()
-                     << "\n";
+        llvm::outs() << "headline obligation: " << *entry.getAsString() << "\n";
   }
 
   std::error_code error;

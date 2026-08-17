@@ -78,14 +78,28 @@ OpT getSingleOp(mlir::ModuleOp module, llvm::StringRef what) {
   return found ? llvm::cast<OpT>(found) : OpT();
 }
 
-/// Print an error to stderr in the tools' one spelling and return the
-/// failure exit code. Every failure exit in `tools/` goes through here,
-/// including the ones that have no `llvm::Error` to carry: a caller
-/// reading stderr should not have to know which binary produced a line
-/// in order to recognize it as a failure, and a tool that spells its
-/// own exit is a tool whose spelling drifts.
-int reportError(llvm::Error error);
-int reportError(const llvm::Twine &message);
+/// The two ways a tool can end without an affirmative answer, in the
+/// tools' one spelling on stderr. Every non-zero exit in `tools/` goes
+/// through one of these, and which one is a fact only the call site
+/// holds: whether the tool reached the subject it was asked about.
+///
+/// `reportRefusal` exits 1 — the subject was examined and the answer is
+/// negative. A registry that does not admit, a witness that does not
+/// re-derive, a contract that disagrees with the bytes it pins.
+///
+/// `reportCannotAnswer` exits 2 — the invocation never reached its
+/// subject. An unreadable file, a flag naming no job, a registry the
+/// environment does not supply.
+///
+/// There is deliberately no third function that picks for the caller.
+/// A single `llvm::Error` type carries both kinds of answer, so a
+/// helper reading one cannot tell them apart, and a caller that does
+/// not choose is a caller whose exit code means nothing
+/// (docs/getting-started.md).
+int reportRefusal(llvm::Error error);
+int reportRefusal(const llvm::Twine &message);
+int reportCannotAnswer(llvm::Error error);
+int reportCannotAnswer(const llvm::Twine &message);
 
 } // namespace tool
 } // namespace zkc
