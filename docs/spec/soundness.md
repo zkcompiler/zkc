@@ -272,8 +272,13 @@ conclusion hypotheses
 
 Here “specialized” means after the premise port's total resource substitution
 has been applied. The rule transform cannot select this set. Removing or
-discharging a hypothesis requires a future explicit rule whose conclusion
-states that effect; no v0 rule does so.
+discharging a hypothesis requires an explicit derivation-layer operation
+whose conclusion states that effect, not a rule: hypothesis discharge is
+structural — it has no theorem to cite and no author to attribute — so it
+belongs to the derivation plan rather than to the signature. A qualitative
+hypothesis has no discharge form at all; only an `AssumedJudgmentHolds`
+marker can be discharged, and only against a derivation of exactly the
+judgment it asserts.
 
 The truth and faithful encoding of a `SoundnessRule` and `RuleBinding` are
 meta-level antecedents of the kernel interpretation. `RULE_WF` does not prove
@@ -579,6 +584,40 @@ Each body has one exact index signature:
 Extra premise ports refuse. The table is stronger than result-schema
 compatibility: in particular, sharing `ScalarResult` does not permit FS→SR,
 SR→SR, or FS→FS under either scalar body.
+
+#### The judgment forms, and what admits a new rule
+
+The ten bodies are instances of five judgment forms. The partition is a
+**chosen** one, not a discovered necessity — `RoundScaling` folds into
+preservation if one prefers four — and it is written down so that an
+eleventh rule is argued against a stated criterion rather than against a
+constraint nobody recorded:
+
+| Form | Bodies | Shape |
+|---|---|---|
+| entry | the four `*Entry` bodies | no premise; the bound comes from declared coordinates or rounds |
+| preservation | `SpecialSoundnessPreservation`, `RoundByRoundPreservation` | one premise, appended structure, the notion preserved |
+| scaling | `RoundScaling` | one premise, a selected round, a scale |
+| transformation | the three ladder hops | one premise, and a recipe that changes the notion |
+| cut | — | structural: discharging an assumption against a derivation of it, which is a derivation-layer operation rather than a rule (§6) |
+
+A new rule is admitted as **data** when it is an instance of entry,
+preservation, or scaling: premise ports, artifact projections, machine
+conditions, and a bound template are all declaration content, and adding one
+requires no implementation change on either leg.
+
+A new **transformation recipe** is the one admitted reason for a body kind to
+be added, because a transformation carries the computational content of the
+theorem it mechanizes — how a premise's coordinates become a per-round bound,
+how a move budget scales a maximum, how a duplex model counts queries — and
+that content cannot be expressed as a bound template over the premise. Adding
+one is a **specification event**: it names the theorem it mechanizes, states
+its cost on both implementations, and is reviewed as a semantic change rather
+than as an enum that grew.
+
+This is a rule about admission, not a claim that the five forms are complete.
+A body that is none of them is not forbidden; it is a signal that the calculus
+is being extended, which is exactly the moment that should be visible.
 
 The supporting sequence templates are closed:
 
