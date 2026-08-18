@@ -1,0 +1,3 @@
+add_zkc_unittest(ZkcSoundnessTests
+  TransformerGroupTest.cpp)
+target_link_libraries(ZkcSoundnessTests PRIVATE ZkcSoundness)

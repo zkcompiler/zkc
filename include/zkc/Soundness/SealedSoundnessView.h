@@ -239,6 +239,46 @@ struct SealedSoundnessView {
   std::string policy;
 };
 
+/// One transformer's body extent and whether it commutes.
+///
+/// The extent is the transformer's membership events -- the messages its
+/// contract's rounds declare -- in canonical positions. It deliberately does
+/// not cover the challenges those rounds sample: a challenge reaches a
+/// reduction as a dependency operand rather than as a member, and a
+/// transformer may sample one inside another's block on purpose. Grinding is
+/// exactly that shape, and the adjacency value the adapter builds is what
+/// authenticates and prices the placement.
+///
+/// `central` is kernel.md §4's predicate: a transformer whose body contains
+/// no absorbing event and no challenge event "neither writes what the
+/// transcript reads nor reads what it writes", so it commutes, and central
+/// transformers form a symmetric monoidal sub-category of the premonoidal
+/// one. Interchange fails for everything else, which is why soundness.md
+/// §9.3 must be conservative about interleaved groups.
+struct TransformerExtent {
+  std::string instance;
+  uint64_t begin = 0;
+  uint64_t end = 0;
+  bool central = true;
+};
+
+/// Kernel §4's decomposition decision, computed rather than assumed: an
+/// interleaved group decomposes per-transformer exactly when all but one of
+/// its members is central. Groups are the transitive closure of extent
+/// overlap, not merely overlapping pairs -- two non-central transformers
+/// joined through a central one are one group and must be counted together.
+///
+/// The admitting direction is unreachable today and is implemented anyway:
+/// `vocabularies.md` requires a reduction contract to declare at least one
+/// round, because "a contract with no interaction rounds states no local
+/// transition to judge or price", so every admitted transformer samples a
+/// challenge and none is central. Writing the kernel's criterion rather than
+/// the constant it currently evaluates to is what keeps this correct if that
+/// vocabulary rule ever admits a bookkeeping transformer; the constant is a
+/// fact about today's vocabulary, the criterion is a fact about the category.
+llvm::Error
+requireDecomposableTransformerGroups(std::vector<TransformerExtent> extents);
+
 /// Whether a derivation covers the artifact rather than one site of it.
 ///
 /// Every judgment beside this one is about a step: this reduction is

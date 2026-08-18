@@ -17,7 +17,6 @@
 #include "llvm/Support/Error.h"
 
 #include <algorithm>
-#include <iterator>
 #include <limits>
 #include <optional>
 #include <utility>
@@ -28,24 +27,6 @@ namespace {
 
 llvm::Error adapterError(const llvm::Twine &detail) {
   return llvm::createStringError("sealed soundness adapter: " + detail);
-}
-
-llvm::Error
-requireComponentwiseReductionBodies(const semantics::ProtocolFacts &facts) {
-  const auto &spans = facts.bodySpans();
-  for (auto left = spans.begin(); left != spans.end(); ++left) {
-    for (auto right = std::next(left); right != spans.end(); ++right) {
-      const auto &leftSpan = left->getValue();
-      const auto &rightSpan = right->getValue();
-      if (std::max(leftSpan.first, rightSpan.first) >
-          std::min(leftSpan.second, rightSpan.second))
-        continue;
-      return adapterError(llvm::Twine("interleaved reduction bodies '") +
-                          left->getKey() + "' and '" + right->getKey() +
-                          "' require an exact composite soundness rule");
-    }
-  }
-  return llvm::Error::success();
 }
 
 llvm::Expected<ClaimRef>
@@ -624,8 +605,6 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
     return canonical.takeError();
   semantics::ProtocolFacts protocolFacts =
       semantics::ProtocolFacts::compute(sealed.getBody().front());
-  if (llvm::Error error = requireComponentwiseReductionBodies(protocolFacts))
-    return std::move(error);
 
   SealedSoundnessView view;
   view.artifactId = admittedArtifactId.str();
@@ -719,6 +698,7 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
   }
 
   size_t reductionCount = 0;
+  std::vector<TransformerExtent> transformerExtents;
   for (mlir::Operation &operation : sealed.getBody().front()) {
     auto reduce = mlir::dyn_cast<pir::ReduceOp>(operation);
     if (!reduce)
@@ -792,6 +772,46 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
       owned.rounds.push_back(std::move(*fact));
     }
 
+    // The transformer's body extent, in canonical event positions.
+    {
+      TransformerExtent extent;
+      extent.instance = reduce.getLabel().str();
+      bool seen = false;
+      auto observe = [&](uint64_t position) {
+        extent.begin = seen ? std::min(extent.begin, position) : position;
+        extent.end = seen ? std::max(extent.end, position) : position;
+        seen = true;
+      };
+      auto instanceRoles = protocolFacts.memberships().find(reduce.getLabel());
+      if (instanceRoles != protocolFacts.memberships().end())
+        for (const auto &role : instanceRoles->second)
+          for (const auto &occurrence : role.getValue())
+            for (mlir::Operation *member : occurrence.second) {
+              auto slot = mlir::dyn_cast<pir::SlotOp>(member);
+              if (!slot)
+                continue;
+              auto position = canonicalEventPosition(
+                  *canonical, slot.getVal(), "a reduction message member");
+              if (!position)
+                return position.takeError();
+              observe(*position);
+              if (slot.isAbsorbing())
+                extent.central = false;
+            }
+      // Sampling a challenge is exactly what makes a transformer non-central
+      // (kernel.md §4).  Today no admitted contract can avoid one --
+      // vocabularies.md requires a non-empty round list, because "a contract
+      // with no interaction rounds states no local transition to judge or
+      // price" -- so this is unconditional in practice.  It is written as the
+      // predicate the kernel states rather than as the constant it currently
+      // evaluates to: the constant is a fact about the vocabulary, the
+      // predicate is a fact about the category.
+      if (!owned.rounds.empty())
+        extent.central = false;
+      if (seen)
+        transformerExtents.push_back(std::move(extent));
+    }
+
     for (mlir::NamedAttribute selection : reduce.getChecks()) {
       auto label = mlir::dyn_cast<mlir::StringAttr>(selection.getValue());
       if (!label)
@@ -827,6 +847,10 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
       view.reductionsByTransformerPosition.size() != reductionCount)
     return adapterError(
         "canonical transformer table does not cover every reduction exactly");
+
+  if (llvm::Error error =
+          requireDecomposableTransformerGroups(std::move(transformerExtents)))
+    return std::move(error);
 
   auto duplex = buildDuplexFacts(sealed, profiles, *canonical);
   if (!duplex)

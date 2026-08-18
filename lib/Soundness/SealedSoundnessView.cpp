@@ -1,6 +1,10 @@
 //===- SealedSoundnessView.cpp - Exact owned subject resolution ----------===//
 #include "zkc/Soundness/SealedSoundnessView.h"
 
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+
+#include <algorithm>
 #include <set>
 #include <utility>
 
@@ -199,6 +203,44 @@ makeConsumedSubject(const SealedSoundnessView &sealed,
 }
 
 } // namespace
+
+llvm::Error
+requireDecomposableTransformerGroups(std::vector<TransformerExtent> extents) {
+  if (extents.size() < 2)
+    return llvm::Error::success();
+  llvm::sort(extents, [](const TransformerExtent &lhs,
+                         const TransformerExtent &rhs) {
+    return std::tie(lhs.begin, lhs.end) < std::tie(rhs.begin, rhs.end);
+  });
+
+  size_t groupStart = 0;
+  uint64_t groupEnd = extents.front().end;
+  auto closeGroup = [&](size_t pastEnd) -> llvm::Error {
+    llvm::SmallVector<llvm::StringRef> nonCentral;
+    for (size_t index = groupStart; index < pastEnd; ++index)
+      if (!extents[index].central)
+        nonCentral.push_back(extents[index].instance);
+    if (nonCentral.size() < 2)
+      return llvm::Error::success();
+    return llvm::createStringError(
+        "sealed soundness adapter: interleaved reduction bodies '" +
+        nonCentral[0] + "' and '" + nonCentral[1] +
+        "' are both non-central, so the group does not decompose "
+        "per-transformer and requires an exact composite soundness rule");
+  };
+
+  for (size_t index = 1; index < extents.size(); ++index) {
+    if (extents[index].begin <= groupEnd) {
+      groupEnd = std::max(groupEnd, extents[index].end);
+      continue;
+    }
+    if (llvm::Error error = closeGroup(index))
+      return error;
+    groupStart = index;
+    groupEnd = extents[index].end;
+  }
+  return closeGroup(extents.size());
+}
 
 ArtifactJudgment judgeArtifact(const SealedSoundnessView &sealed,
                                const ClaimRef &targetClaim) {

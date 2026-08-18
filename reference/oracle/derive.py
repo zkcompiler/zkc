@@ -71,27 +71,75 @@ class SealedView:
     reductions: dict[int, SealedReduction]
 
 
-def _refuse_interleaved_component_pricing(protocol: dict[str, Any]) -> None:
-    """Require each independently priced reduction body to be contiguous."""
+def _refuse_undecomposable_transformer_groups(
+        protocol: dict[str, Any],
+        vocabulary: model.ProtocolVocabulary) -> None:
+    """Apply kernel.md section 4's decomposition decision.
 
-    spans: dict[str, tuple[int, int]] = {}
+    An interleaved group decomposes per-transformer exactly when all but one
+    of its members is central, where a central transformer's body contains no
+    absorbing event and no challenge event and therefore commutes.  The
+    extent covers a transformer's message members only: a challenge reaches a
+    reduction as a dependency rather than as a member, and grinding samples
+    one inside the block of the reduction it protects on purpose.
+    """
+
+    extents: dict[str, list[Any]] = {}
     for position, event in enumerate(protocol["events"]):
         if not isinstance(event, model.Slot) or event.membership is None:
             continue
         instance = event.membership[0]
-        if instance in spans:
-            spans[instance] = (spans[instance][0], position)
-        else:
-            spans[instance] = (position, position)
+        extent = extents.get(instance)
+        if extent is None:
+            extents[instance] = [position, position, not event.absorbed]
+            continue
+        extent[1] = position
+        if event.absorbed:
+            extent[2] = False
 
-    ordered = sorted(spans.items())
-    for left_index, (left_name, left) in enumerate(ordered):
-        for right_name, right in ordered[left_index + 1:]:
-            if max(left[0], right[0]) <= min(left[1], right[1]):
-                raise Refusal(
-                    "interleaved reduction bodies require an exact composite "
-                    f"soundness rule ({left_name!r}, {right_name!r})"
-                )
+    # Sampling a challenge is what makes a transformer non-central.  No
+    # admitted contract can avoid one today -- a reduction contract needs a
+    # non-empty round list -- so this is unconditional in practice, and is
+    # written as the kernel's predicate rather than as the constant it
+    # currently evaluates to.
+    for reduce in protocol.get("reduces", ()):
+        contract = vocabulary.reductions.get(reduce.contract)
+        if contract and contract.get("rounds") and reduce.label in extents:
+            extents[reduce.label][2] = False
+
+    ordered = sorted(
+        ((name, extent) for name, extent in extents.items()),
+        key=lambda item: (item[1][0], item[1][1], item[0]),
+    )
+    if len(ordered) < 2:
+        return
+
+    group_start = 0
+    group_end = ordered[0][1][1]
+
+    def close(past_end: int) -> None:
+        non_central = [
+            name for name, extent in ordered[group_start:past_end]
+            if not extent[2]
+        ]
+        if len(non_central) < 2:
+            return
+        raise Refusal(
+            f"interleaved reduction bodies {non_central[0]!r} and "
+            f"{non_central[1]!r} are both non-central, so the group does not "
+            "decompose per-transformer and requires an exact composite "
+            "soundness rule"
+        )
+
+    for index in range(1, len(ordered)):
+        begin, end, _ = ordered[index][1]
+        if begin <= group_end:
+            group_end = max(group_end, end)
+            continue
+        close(index)
+        group_start = index
+        group_end = end
+    close(len(ordered))
 
 
 def sealed_view(protocol: dict[str, Any],
@@ -104,7 +152,7 @@ def sealed_view(protocol: dict[str, Any],
     structure is the selected binding's business.
     """
     model.validate_protocol(protocol, vocabulary)
-    _refuse_interleaved_component_pricing(protocol)
+    _refuse_undecomposable_transformer_groups(protocol, vocabulary)
     # A site names a CANONICAL position, not an authored one: sources are
     # ordered by profile and canonical anchors, and reduces topologically.
     # Reading the authored order here would agree with the carrier only when

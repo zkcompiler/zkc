@@ -3,6 +3,12 @@
 # composite rule, derivation must not price the two bodies independently
 # (kernel.md section 9.3).
 #
+# The refusal is now the decision kernel.md section 4 states rather than a
+# blanket rule: a group decomposes per-transformer exactly when all but one
+# of its members is central, and a transformer that samples a challenge is
+# not. Both bodies here sample, so the group does not decompose and the
+# diagnostic names which two members carry the transcript effect.
+#
 # RUN: rm -rf %t && mkdir -p %t
 # RUN: zkc-seal %S/Inputs/interleaved-open.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
@@ -12,5 +18,6 @@
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
 # RUN:   --request=%S/Inputs/interleaved-a-request.json -o=/dev/null %t/sealed.mlirbc \
 # RUN:   2>&1 | FileCheck %s
-# CHECK: interleaved reduction bodies
-# CHECK-SAME: require an exact composite soundness rule
+# CHECK: interleaved reduction bodies 'opa' and 'opb' are both non-central
+# CHECK-SAME: does not decompose per-transformer
+# CHECK-SAME: requires an exact composite soundness rule

@@ -1,6 +1,11 @@
 # The reference twin enforces the same theorem boundary as the native
-# soundness adapter. This is deliberately not a carrier/seal refusal.
+# soundness adapter, and states the same decision: kernel.md section 4's
+# group criterion rather than a blanket rule, naming the two members whose
+# transcript effect makes the group indecomposable. This is deliberately not
+# a carrier/seal refusal.
 #
 # REQUIRES: uv
 # RUN: %uv python %S/Inputs/reference_interleaving.py | FileCheck %s
-# CHECK: interleaved reduction bodies require an exact composite soundness rule
+# CHECK: interleaved reduction bodies {{.*}} are both non-central
+# CHECK-SAME: does not decompose per-transformer
+# CHECK-SAME: requires an exact composite soundness rule
