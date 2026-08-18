@@ -1,0 +1,101 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.gkr-width2-chain@reduction:gkr_width2_addmul_layer",
+      "zkc.rbr.from_ss@path:ss_to_rbr:soundness:standard"
+    ],
+    "resolved_parameters": {
+      "zkc.rbr.gkr-width2-chain@reduction:gkr_width2_addmul_layer": {
+        "field_class": {
+          "sort": "string",
+          "value": "scalar"
+        }
+      }
+    },
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "9f5fe6007955b880283e0c93dbf353b086f358d2b77ba8aa6949fe35c512fd5e",
+        "claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:9a0845222e4a14a666de737d5c02627eccda5f285be5c5c83e363ad71d194a0f"
+        }
+      },
+      "index": {
+        "notion": "round_by_round",
+        "track": "soundness",
+        "variant": "standard",
+        "model": "",
+        "quantification": "static"
+      },
+      "resource_variables": []
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "reduction",
+        "artifact_id": "9f5fe6007955b880283e0c93dbf353b086f358d2b77ba8aa6949fe35c512fd5e",
+        "owner_claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:9a0845222e4a14a666de737d5c02627eccda5f285be5c5c83e363ad71d194a0f"
+        },
+        "transformer_position": 2,
+        "output_index": 0
+      },
+      "binding": "zkc.rbr.gkr-width2-chain@reduction:gkr_width2_addmul_layer",
+      "premises": {
+        "source_rbr": {
+          "kind": "apply",
+          "site": {
+            "kind": "path",
+            "artifact_id": "9f5fe6007955b880283e0c93dbf353b086f358d2b77ba8aa6949fe35c512fd5e",
+            "claim": {
+              "claim_index": 1,
+              "descriptor_digest": "sha256:e9ecfd6f5fddce6b280b1137956eb0c6081430b04ad3bc1d3c4e3a2ffaec5e8c"
+            }
+          },
+          "binding": "zkc.rbr.from_ss@path:ss_to_rbr:soundness:standard",
+          "premises": {
+            "source_ss": {
+              "kind": "assume",
+              "judgment": {
+                "subject": {
+                  "kind": "protocol_claim",
+                  "artifact_id": "9f5fe6007955b880283e0c93dbf353b086f358d2b77ba8aa6949fe35c512fd5e",
+                  "claim": {
+                    "claim_index": 1,
+                    "descriptor_digest": "sha256:e9ecfd6f5fddce6b280b1137956eb0c6081430b04ad3bc1d3c4e3a2ffaec5e8c"
+                  }
+                },
+                "index": {
+                  "notion": "special_soundness",
+                  "track": "soundness",
+                  "variant": "",
+                  "model": "",
+                  "quantification": "static"
+                },
+                "result": {
+                  "kind": "extraction",
+                  "coordinates": [
+                    {
+                      "label": "layer",
+                      "arity": {
+                        "constant": "2",
+                        "resource_terms": []
+                      },
+                      "challenge_space": {
+                        "constant": "2305843009213693952",
+                        "resource_terms": []
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
