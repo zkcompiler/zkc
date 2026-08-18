@@ -629,6 +629,7 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
 
   SealedSoundnessView view;
   view.artifactId = admittedArtifactId.str();
+  view.policy = sealed.getPolicy().str();
 
   const size_t claimCount = canonical->claimPositions.size();
   if (canonical->claimDescriptors.size() != claimCount)

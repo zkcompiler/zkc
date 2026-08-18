@@ -207,6 +207,21 @@ int main(int argc, char **argv) {
                                view->boundMaterialRefs.count(valueRef) != 0);
   }
 
+  // Whether the derivation covers the artifact, not one site of it. Every
+  // line above is about a step; a consumer wants to know that the whole
+  // thing is discharged, and until now nothing said it.
+  if (const auto *protocolClaim = std::get_if<snd::ProtocolClaimSubject>(
+          &request.target.subject.payload)) {
+    snd::ArtifactJudgment artifact =
+        snd::judgeArtifact(*view, protocolClaim->claim);
+    llvm::outs() << "artifact judgment: "
+                 << (artifact.discharged ? "discharged" : "not discharged")
+                 << " (policy " << artifact.policy << ")\n";
+    for (uint64_t index : artifact.uncoveredClaims)
+      llvm::outs() << "artifact judgment: claim " << index
+                   << " is neither consumed nor the derivation's target\n";
+  }
+
   auto witness = snd::encodeWitness(view->artifactId, *signatureDigest, request,
                                     *outcome.result, {}, grounding);
   if (!witness)

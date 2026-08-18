@@ -1,0 +1,44 @@
+# Whether a derivation covers the artifact, or one site of it.
+#
+# Every other line this tool prints is about a step: which rule applied
+# where, at what cost, resting on which obligations. None of them says
+# the thing a consumer is actually after — that the artifact as a whole
+# is discharged — and `soundness.md` §8.1 already claims a third party
+# re-checks *the derivation*, which is a claim about a final sequent the
+# system did not produce.
+#
+# The judgment is not a new check. Seal decided the policy and refused
+# an escaping claim, and the claim graph is already in the sealed view.
+# What is new is saying that they hold together with a derivation's own
+# coverage. That is an accounting statement over an artifact rather than
+# a security theorem about a subject, which is why it is computed here
+# and not written as a signature rule: the rule language would have
+# needed a notion, a body kind, an artifact projection, and a view field
+# to say something it is not for.
+
+# RUN: rm -rf %t && mkdir -p %t
+
+# A closed proof: one conclusion, nothing left standing, sealed under
+# the policy that admits no residual.
+# RUN: zkc-seal %S/../Encoding/routed-schnorr.mlir %zkc-seal-full -o %t/closed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/closed.artifacts %t/closed.mlirbc
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/schnorr-completeness-request.json -o=%t/w.json \
+# RUN:   %t/closed.mlirbc | FileCheck %s --check-prefix=CLOSED
+# CLOSED: artifact judgment: discharged (policy closed_proof)
+
+# An artifact sealed for analysis says so. This is not a defect and the
+# judgment does not treat it as one: an `analysis_only_artifact` never
+# claimed to be a closed proof, and reporting the policy is what lets a
+# reader tell "this derivation is incomplete" from "this artifact does
+# not claim closure".
+# RUN: zkc-seal %S/Inputs/r1cs-entry.mlir %zkc-seal-full -o %t/analysis.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/analysis.artifacts %t/analysis.mlirbc
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/r1cs-entry-request.json -o=%t/w2.json \
+# RUN:   %t/analysis.mlirbc | FileCheck %s --check-prefix=ANALYSIS
+# ANALYSIS: artifact judgment: not discharged (policy analysis_only_artifact)
