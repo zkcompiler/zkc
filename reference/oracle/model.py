@@ -3059,6 +3059,84 @@ def _validate_contract_shape(
             claim_profiles[label] = profile
 
 
+def _validate_artifact_verify(
+    event: ArtifactVerify, position: int, protocol: dict[str, Any]
+) -> None:
+    """The obligations a bounded artifact verification carries (endpoints.md
+    section 3.1). The reserved contract binds every fact it lists, and an
+    incomplete form fails closed rather than defaulting a missing one."""
+
+    required = (
+        ("child", event.child), ("endpoint", event.endpoint),
+        ("semantics", event.semantics), ("key", event.key),
+        ("statement", event.statement), ("protocol", event.protocol),
+        ("relation_contract", event.relation_contract),
+        ("route", event.route), ("label", event.label),
+    )
+    for name, value in required:
+        if not value:
+            raise Refusal(
+                f"[zkc-E150] a bounded artifact verification leaves {name!r} "
+                "empty"
+            )
+    # The child's endpoint kind is what the parent verifies against, so it is
+    # a closed vocabulary rather than free text.
+    if event.endpoint != "verifier":
+        raise Refusal(
+            f"[zkc-E150] a bounded artifact verification names child endpoint "
+            f"kind {event.endpoint!r}; only 'verifier' is admitted"
+        )
+    # An absent ABI is the form section 3.1 admits for a child with no
+    # distinct one. An empty ABI claims a distinct one and declines to name
+    # it, and it encodes as the absent form does.
+    if event.abi is not None and not event.abi:
+        raise Refusal(
+            "[zkc-E150] a bounded artifact verification declares an empty "
+            "child artifact ABI"
+        )
+
+    slots = {
+        entry.label: index
+        for index, entry in enumerate(protocol["events"])
+        if isinstance(entry, Slot)
+    }
+    seen: set[str] = set()
+    for label in event.proof_slots:
+        if label in seen:
+            raise Refusal(
+                f"[zkc-E150] a bounded artifact verification names proof slot "
+                f"{label!r} more than once"
+            )
+        seen.add(label)
+        # A proof slot must be a slot of this artifact. Resolved against every
+        # event instead, a verification could name a challenge or another
+        # verification, and the encoder would give it that event's position.
+        if label not in slots:
+            raise Refusal(
+                f"[zkc-E164] unresolved proof slot {label!r}: artifact "
+                f"verification {event.label!r} names it, and it is not a slot "
+                "of this artifact"
+            )
+        # The spine is a total order and an event reads what precedes it.
+        if slots[label] > position:
+            raise Refusal(
+                f"[zkc-E165] out-of-order proof slot {label!r}: artifact "
+                f"verification {event.label!r} names it, and it follows the "
+                "verification on the spine"
+            )
+
+    # Section 3.1: a child's assumptions, exports, residuals, and carried
+    # obligations are discharged by the child-verifier semantics or lifted
+    # into the parent-visible route surface, never dropped at the boundary.
+    surface = {sink.route for sink in protocol["sinks"]
+               if isinstance(sink, Route)}
+    if event.route not in surface:
+        raise Refusal(
+            f"[zkc-E163] artifact verification {event.label!r} routes through "
+            f"{event.route!r}, which no sink of this artifact names"
+        )
+
+
 def validate_protocol(
     protocol: dict[str, Any], vocabulary: ProtocolVocabulary
 ) -> None:
@@ -3146,6 +3224,10 @@ def validate_protocol(
                 absorbed.add(event.label)
             elif first_unabsorbed is None:
                 first_unabsorbed = event.label
+        elif isinstance(event, ArtifactVerify):
+            _validate_artifact_verify(event, event_position, protocol)
+            if event.absorbed:
+                absorbed.add(event.label)
         elif isinstance(event, Chal):
             if event.domain in domains:
                 raise Refusal(f"duplicate challenge domain {event.domain!r}")
@@ -3333,6 +3415,18 @@ def _normalized_transformers(protocol: dict[str, Any]):
     return sources, normalized, claim_pos, transformer_pos
 
 
+def _proof_slot_position(
+    event_pos: dict[str, int], protocol: dict[str, Any], label: str
+) -> int:
+    position = event_pos.get(label)
+    if position is None or not isinstance(protocol["events"][position], Slot):
+        raise Refusal(
+            "an artifact verification names a proof slot that resolves to no "
+            "slot event"
+        )
+    return position
+
+
 def canonical_document(
     protocol: dict[str, Any], vocabulary: ProtocolVocabulary
 ) -> dict[str, Any]:
@@ -3487,8 +3581,12 @@ def canonical_document(
                     event.abi,
                     # Slot labels normalize to canonical event positions,
                     # like every other label the encoder emits: renaming a
-                    # slot must not move the identity.
-                    [event_pos[label] for label in event.proof_slots],
+                    # slot must not move the identity. Resolved against slot
+                    # events only, and failing closed: a label resolving to
+                    # nothing must never alias onto a position, which would
+                    # give two different protocols one identity.
+                    [_proof_slot_position(event_pos, protocol, label)
+                     for label in event.proof_slots],
                 ]
             )
         else:
@@ -4373,6 +4471,54 @@ def _self_test() -> None:
         ],
         "opaque check_call carries its contract id and content digest",
     )
+    # The bounded artifact verification's obligations, mirrored from the
+    # other implementation. Each shape below is one the carrier refuses; a
+    # twin that accepts them would let a differential pass on an artifact the
+    # tools would never seal.
+    def verify_refuses(reason: str, note: str, **replacements: Any) -> None:
+        mutated = copy.deepcopy(witnesses.ARTIFACT_VERIFY)
+        index = next(position
+                     for position, event in enumerate(mutated["events"])
+                     if isinstance(event, ArtifactVerify))
+        mutated["events"][index] = mutated["events"][index]._replace(
+            **replacements)
+        try:
+            validate_protocol(mutated, VOCABULARY)
+        except Refusal as error:
+            ok(reason in str(error), note)
+        else:
+            raise AssertionError(f"artifact verification accepted: {note}")
+
+    verify_refuses("[zkc-E150]", "a required verification fact may not be empty",
+                   semantics="")
+    verify_refuses("[zkc-E150]", "the child endpoint kind is a closed set",
+                   endpoint="prover")
+    verify_refuses("[zkc-E150]", "an empty child ABI is not an absent one",
+                   abi="")
+    verify_refuses("[zkc-E150]", "the proof slots are a set",
+                   proof_slots=["child_pi", "child_pi"])
+    verify_refuses("[zkc-E164]", "a proof slot resolves to a slot of this "
+                   "artifact", proof_slots=["no_such_slot"])
+    verify_refuses("[zkc-E164]", "a proof slot is a slot and not any event",
+                   proof_slots=["x"])
+    verify_refuses("[zkc-E163]", "a verification routes through this "
+                   "artifact's own surface", route="unlifted")
+
+    # The slot a verification names must already have entered the stream.
+    late = copy.deepcopy(witnesses.ARTIFACT_VERIFY)
+    verify_index = next(position
+                        for position, event in enumerate(late["events"])
+                        if isinstance(event, ArtifactVerify))
+    late["events"].insert(verify_index + 1, slot("late_pi", "rs", True, None))
+    late["events"][verify_index] = late["events"][verify_index]._replace(
+        proof_slots=["child_pi", "late_pi"])
+    try:
+        validate_protocol(late, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E165]" in str(error), "a proof slot precedes its verification")
+    else:
+        raise AssertionError("a verification naming a later slot was accepted")
+
     print(f"oracle: {checks} checks ok")
 
 
