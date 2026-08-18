@@ -197,7 +197,8 @@ SecurityResult :=
     }
   | RoundResult {
       rounds: nonempty ordered [
-        {round_index, challenge_space, bound: ClosedBound}
+        {round_index, challenge_space, bound: ClosedBound,
+         optional state_predicate}
       ]
     }
   | ScalarResult {
@@ -224,6 +225,26 @@ roundMaximum(RoundResult) = Max(round.bound for round in rounds)
 
 is derived when a later rule explicitly requests it. An IT extraction result
 similarly does not carry a decorative zero bound.
+
+Round-by-round soundness is defined over a state function on partial
+transcripts — the empty transcript is alive, a doomed transcript stays doomed
+except with the round's probability, and a doomed full transcript is rejected.
+The `state_predicate` names that function rather than leaving it implicit in
+the bound:
+
+```text
+state_predicate := claim_unsatisfied(claim_ref)
+```
+
+is the one admitted form: the state is doomed exactly when the named claim is
+unsatisfied. The predicate is computed, not declared — rounds built at a
+reduction occurrence name the site's owner claim, since that claim is what the
+rounds argue, and rounds built anywhere else carry no predicate rather than a
+default, since no claim is consumed there. A rule that concatenates round
+sequences from two occurrences keeps each entry's own predicate, which is why
+the predicate is a field of the entry and not of the result: the composed
+transcript dooms on different claims over different spans, and that fact is
+the claim graph restated rather than a new obligation.
 
 ### 3.4 Hypotheses
 
@@ -842,6 +863,17 @@ result =
 `local_duplex_bound` contains only the construction-specific capacity and
 codec-bias terms; it cannot reread or replace the premise scalar. Thus the
 premise loss is inherited exactly once.
+
+One of its terms is not a sponge quantity: a protocol that binds a relation
+identity into its transcript does so through the 216-bit anchor projection
+(`relations.md` §2.8), and the shortfall of that binding is a computational
+quantity. The duplex bound therefore carries the named advantage
+`Adv^CR[sha256-216]` scaled by the artifact's bound-relation-anchor count — a
+projection of the sealed artifact, not a declaration — so the addend is
+exactly zero for a protocol that binds no relation identity and one advantage
+term per bound anchor otherwise. The non-interactive argument is where the
+truncated value is all a verifier checks, which is why the addend lives on
+the Fiat-Shamir step rather than on the interactive rounds.
 
 `resolve` evaluates a sequence template against authenticated facts. `close`
 performs typed substitution and produces a `ClosedBound`; failure to close

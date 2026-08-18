@@ -1617,9 +1617,20 @@ bool operator!=(const ExtractionResult &lhs, const ExtractionResult &rhs) {
   return !(lhs == rhs);
 }
 
+bool operator==(const RoundStatePredicate &lhs,
+                const RoundStatePredicate &rhs) {
+  return lhs.claimUnsatisfied == rhs.claimUnsatisfied;
+}
+
+bool operator!=(const RoundStatePredicate &lhs,
+                const RoundStatePredicate &rhs) {
+  return !(lhs == rhs);
+}
+
 bool operator==(const RoundResultEntry &lhs, const RoundResultEntry &rhs) {
   return lhs.roundIndex == rhs.roundIndex &&
-         lhs.challengeSpace == rhs.challengeSpace && lhs.bound == rhs.bound;
+         lhs.challengeSpace == rhs.challengeSpace && lhs.bound == rhs.bound &&
+         lhs.statePredicate == rhs.statePredicate;
 }
 
 bool operator!=(const RoundResultEntry &lhs, const RoundResultEntry &rhs) {

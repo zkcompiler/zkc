@@ -2,6 +2,7 @@
 
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
+#include "zkc/Relation/AnchorProjection.h"
 #include "zkc/Soundness/SoundnessProjection.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
@@ -153,6 +154,45 @@ struct TestSoundnessProjectionPass
     llvm::outs()
         << "projection: exact parameter and IID-only challenge count\n";
     llvm::outs() << "projection: scalar ChallengeCount refused\n";
+
+    // The bound-relation-anchor count: a seal-stage binding counts
+    // exactly when its value is the transcript projection of a claim's
+    // declared contract anchor (docs/spec/relations.md §2.8). One
+    // matching binding counts once; an unrelated binding and an
+    // artifact with no such binding count zero — the addend the count
+    // scales must vanish exactly where no relation identity enters the
+    // transcript.
+    {
+      const std::string anchor =
+          "sha256:c64d5f2230e9c2f6853e0bc596090058c681ed35069a28882569f05a"
+          "6588e427";
+      auto projected = zkc::relation::anchorProjectionValue(anchor);
+      if (!projected)
+        return fail(llvm::toString(projected.takeError()));
+      ArtifactProjection count;
+      count.kind = ArtifactProjectionKind::BoundRelationAnchorCount;
+      count.resultSort = ValueSort::Integer;
+
+      SealedSoundnessView bound = makeFixture();
+      bound.claimAnchorsByIndex.assign(bound.claimsByIndex.size(), {});
+      bound.claimAnchorsByIndex[0]["contract"] = anchor;
+      bound.sealBindValues["air_id"] = *projected;
+      bound.sealBindValues["log_size"] = "3";
+      auto one = projectArtifactFact(bound, reductionSite, count);
+      if (!one || !isNumber(*one, ValueSort::Integer, 1))
+        return fail(one ? "one bound anchor did not count as one"
+                        : llvm::toString(one.takeError()));
+
+      SealedSoundnessView plain = makeFixture();
+      plain.claimAnchorsByIndex.assign(plain.claimsByIndex.size(), {});
+      plain.claimAnchorsByIndex[0]["contract"] = anchor;
+      plain.sealBindValues["log_size"] = "3";
+      auto zero = projectArtifactFact(plain, reductionSite, count);
+      if (!zero || !isNumber(*zero, ValueSort::Integer, 0))
+        return fail(zero ? "an unbound anchor counted"
+                         : llvm::toString(zero.takeError()));
+    }
+    llvm::outs() << "projection: bound relation anchors counted exactly\n";
 
     RuleBinding authorized;
     authorized.ref = {"fri-path-binding", "binding-digest"};

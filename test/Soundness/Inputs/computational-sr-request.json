@@ -43,7 +43,8 @@
         "notion": "state_restoration",
         "track": "soundness",
         "variant": "standard",
-        "model": ""
+        "model": "",
+        "quantification": "static"
       },
       "resource_variables": [
         {

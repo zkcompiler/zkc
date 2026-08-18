@@ -263,12 +263,29 @@ MUTATIONS: list[tuple[str, object]] = [
                     [])),
     ("an admitted index carries a variant its notion has no room for",
      lambda d: _at(d, ["schemas", "security_indices"]).append(
-         {"model": "", "notion": "special_soundness", "track": "soundness",
+         {"model": "", "notion": "special_soundness",
+          "quantification": "static", "track": "soundness",
           "variant": "v"})),
     ("an admitted round-by-round index names a model",
      lambda d: _at(d, ["schemas", "security_indices"]).append(
-         {"model": "duplex", "notion": "round_by_round", "track": "soundness",
+         {"model": "duplex", "notion": "round_by_round",
+          "quantification": "static", "track": "soundness",
           "variant": "standard"})),
+
+    # The quantification variable is a rule-pattern device. An admitted
+    # index states values; a conclusion's variable restates what a
+    # premise bound, so with no premise naming it there is nothing to
+    # restate; and a premise pattern some admitted index satisfies is
+    # the least a rule needs to ever fire.
+    ("an admitted index carries a quantification variable",
+     lambda d: _at(d, ["schemas", "security_indices"]).append(
+         {"model": "", "notion": "special_soundness",
+          "quantification": "$q", "track": "soundness", "variant": ""})),
+    ("a conclusion carries an index variable no premise binds",
+     lambda d: _set(d, [*SIGMA, "conclusion_index", "quantification"], "$q")),
+    ("a premise pattern no admitted index satisfies",
+     lambda d: _set(d, [*TO_SR, "premises", 0, "expected_index", "variant"],
+                    "nonexistent")),
 
     # The completeness notion and track come together or not at all: a
     # judgment that prices honest-prover acceptance must not read as a

@@ -40,7 +40,8 @@
         "notion": "round_by_round",
         "track": "knowledge",
         "variant": "straightline",
-        "model": ""
+        "model": "",
+        "quantification": "static"
       },
       "resource_variables": []
     },

@@ -725,10 +725,10 @@ private:
     snd::DerivationPlan arsdhPlan =
         makePlan(site, environment.arsdhBinding->ref, assumption);
     snd::DerivationTarget ebDbTarget{targetSubject,
-                                     environment.ebDbRule->conclusionIndex,
+                                     environment.ebDbRule->conclusionIndex.index,
                                      environment.ebDbRule->resources};
     snd::DerivationTarget arsdhTarget{targetSubject,
-                                      environment.arsdhRule->conclusionIndex,
+                                      environment.arsdhRule->conclusionIndex.index,
                                       environment.arsdhRule->resources};
     snd::DeriveOutcome ebDb = snd::deriveSoundness(
         *environment.soundness, preview->finalArtifact->observation.soundness,
@@ -772,10 +772,10 @@ private:
     target.admittedSchemaKeys = {kEbDbSchema.str(), kArsdhSchema.str()};
     request.targets.push_back(std::move(target));
     request.targetSchemas.push_back({kEbDbSchema.str(),
-                                     environment.ebDbRule->conclusionIndex,
+                                     environment.ebDbRule->conclusionIndex.index,
                                      environment.ebDbRule->resources});
     request.targetSchemas.push_back({kArsdhSchema.str(),
-                                     environment.arsdhRule->conclusionIndex,
+                                     environment.arsdhRule->conclusionIndex.index,
                                      environment.arsdhRule->resources});
     request.derivationSurface.allowedBindingRefs = {
         environment.ebDbBinding->ref, environment.arsdhBinding->ref};

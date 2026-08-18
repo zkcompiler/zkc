@@ -22,6 +22,18 @@
 # JOHNSON: "constant": "110534070370304/1020847100287446415470558493371657093123"
 # JOHNSON: "constant": "1/100"
 
+# Round-by-round soundness is defined over a state function on
+# transcripts; these rounds were built at a reduction occurrence, so
+# each names it: the state is doomed exactly when the site's owner
+# claim is unsatisfied. The claim is spelled in full because the
+# predicate is the claim graph restated, not a new assertion.
+# JOHNSON: "state_predicate": {
+# JOHNSON-NEXT: "claim": {
+# JOHNSON-NEXT: "claim_index": 1,
+# JOHNSON-NEXT: "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+# JOHNSON-NEXT: },
+# JOHNSON-NEXT: "kind": "claim_unsatisfied"
+
 # The chain: grinding consumes the FRI claim, carries its descriptor through
 # by identity, and scales exactly the adjacent predecessor round by 2^-16,
 # with the exponent projected from the sealed pow round rather than asserted.

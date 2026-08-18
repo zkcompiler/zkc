@@ -15,4 +15,4 @@
 # refusal only while the tool is known to admit something, so deleting the
 # control has to break this test rather than quietly weaken it.
 # CHECK: control: the unmutated signature admits
-# CHECK: 79/79 refused by both
+# CHECK: 82/82 refused by both

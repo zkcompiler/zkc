@@ -225,7 +225,7 @@ struct TestSoundnessSemanticRegressionsPass
 
     snd::SecurityJudgment premise;
     premise.subject = protocolSubject(view, premiseClaim);
-    premise.index = rule->premises.front().expectedIndex;
+    premise.index = rule->premises.front().expectedIndex.index;
     premise.result =
         snd::RoundResult{{roundEntry("1", 17, 10), roundEntry("0", 19, 20)}};
     snd::TypedPremiseJudgments premises{{"source_rbr", premise}};
@@ -288,7 +288,7 @@ struct TestSoundnessSemanticRegressionsPass
     snd::DerivationPlan plan;
     plan.node = std::move(rootApplication);
     snd::DerivationTarget target{protocolSubject(view, ownerClaim),
-                                 rule->conclusionIndex, rule->resources};
+                                 rule->conclusionIndex.index, rule->resources};
     if (failed(expectDeriveRefusal(
             module, snd::deriveSoundness(context, view, target, plan),
             snd::RuntimePhase::Derivation,

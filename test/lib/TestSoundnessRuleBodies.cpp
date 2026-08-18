@@ -142,7 +142,7 @@ struct TestSoundnessRuleBodiesPass
     const snd::SecurityJudgment &sigmaConclusion = sigma.applied->conclusion;
     const auto *extraction =
         std::get_if<snd::ExtractionResult>(&sigmaConclusion.result);
-    if (sigmaConclusion.index != sigmaRule->second.conclusionIndex ||
+    if (sigmaConclusion.index != sigmaRule->second.conclusionIndex.index ||
         !extraction || extraction->coordinates.size() != 1 ||
         extraction->coordinates.front().label != "0" ||
         extraction->coordinates.front().arity != expectedArity ||
@@ -169,7 +169,7 @@ struct TestSoundnessRuleBodiesPass
     expectedPerRound.constant = *expectedBound;
     const snd::SecurityJudgment &rbrConclusion = ssToRbr.applied->conclusion;
     const auto *rounds = std::get_if<snd::RoundResult>(&rbrConclusion.result);
-    if (rbrConclusion.index != ssToRbrRule->second.conclusionIndex || !rounds ||
+    if (rbrConclusion.index != ssToRbrRule->second.conclusionIndex.index || !rounds ||
         rounds->rounds.size() != 1 ||
         rounds->rounds.front().roundIndex != "0" ||
         rounds->rounds.front().challengeSpace != expectedSpace ||

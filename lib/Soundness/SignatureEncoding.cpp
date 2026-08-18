@@ -195,6 +195,8 @@ const char *artifactProjectionKindName(ArtifactProjectionKind kind) {
     return "contract_round_family_field";
   case ArtifactProjectionKind::PathBindingField:
     return "path_binding_field";
+  case ArtifactProjectionKind::BoundRelationAnchorCount:
+    return "bound_relation_anchor_count";
   }
   return "unknown";
 }
@@ -294,11 +296,36 @@ Value encodeValueSorts(const std::vector<ValueSort> &sorts) {
   return items;
 }
 
+llvm::StringRef securityQuantificationName(SecurityQuantification value) {
+  switch (value) {
+  case SecurityQuantification::Static:
+    return "static";
+  case SecurityQuantification::AdaptiveInstance:
+    return "adaptive_instance";
+  case SecurityQuantification::AdaptiveIndex:
+    return "adaptive_index";
+  }
+  return "static";
+}
+
 Value encodeSecurityIndex(const SecurityIndex &index) {
+  // Written unconditionally rather than elided when static: the
+  // canonical form is total, and a field that appears only sometimes is
+  // a field two readers can disagree about.
   return Object{{"notion", securityNotionName(index.notion)},
                 {"track", securityTrackName(index.track)},
                 {"variant", index.variant},
-                {"model", index.model}};
+                {"model", index.model},
+                {"quantification",
+                 securityQuantificationName(index.quantification)}};
+}
+
+Value encodeSecurityIndexPattern(const SecurityIndexPattern &pattern) {
+  Value encoded = encodeSecurityIndex(pattern.index);
+  if (!pattern.quantificationVariable.empty())
+    (*encoded.getAsObject())["quantification"] =
+        pattern.quantificationVariable;
+  return encoded;
 }
 
 Value encodeRoundSelector(const ContractRoundSelector &selector) {
@@ -321,6 +348,7 @@ Value encodeArtifactProjection(const ArtifactProjection &projection) {
   case ArtifactProjectionKind::ConclusionReductionContract:
   case ArtifactProjectionKind::ContractRoundAdjacency:
   case ArtifactProjectionKind::ReductionInputCount:
+  case ArtifactProjectionKind::BoundRelationAnchorCount:
     break;
   case ArtifactProjectionKind::ReductionParameter:
   case ArtifactProjectionKind::PathBindingField:
@@ -589,7 +617,8 @@ Value encodePremises(const std::vector<PremisePort> &premises) {
     items.push_back(Object{
         {"name", port.name},
         {"expected_subject_schema", port.expectedSubjectSchema},
-        {"expected_index", encodeSecurityIndex(port.expectedIndex)},
+        {"expected_index",
+         encodeSecurityIndexPattern(port.expectedIndex)},
         {"expected_result", resultSchemaName(port.expectedResult)},
         {"expected_resources", encodeTypedDeclarations(port.expectedResources)},
         {"result_constraints", std::move(constraints)},
@@ -670,7 +699,8 @@ Value encodeRuleDocument(const SoundnessRule &rule) {
                 {"machine_conditions", std::move(conditions)},
                 {"external_hypotheses", std::move(hypotheses)},
                 {"exact_parameter_pins", std::move(pins)},
-                {"conclusion_index", encodeSecurityIndex(rule.conclusionIndex)},
+                {"conclusion_index",
+                 encodeSecurityIndexPattern(rule.conclusionIndex)},
                 {"body", encodeBody(rule.body)}};
 }
 

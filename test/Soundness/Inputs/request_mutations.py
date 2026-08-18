@@ -109,6 +109,14 @@ MUTATIONS: list[tuple[str, object]] = [
     ("the target declares a resource the root does not quantify over",
      lambda d: _at(d, ["derivation", "target", "resource_variables"]).append(
          {"name": "q", "sort": "integer"})),
+    # A request states the actual index it targets: the quantification
+    # variable is a rule-pattern device and the canonical form is total.
+    ("the target index carries a quantification variable",
+     lambda d: _set(d, ["derivation", "target", "index", "quantification"],
+                    "$q")),
+    ("the target index omits its quantification",
+     lambda d: _at(d, ["derivation", "target", "index"]).pop(
+         "quantification")),
 
     # The format is closed.
     ("the request carries a field the format does not declare",

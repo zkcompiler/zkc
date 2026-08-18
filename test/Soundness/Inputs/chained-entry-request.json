@@ -29,7 +29,8 @@
         "notion": "round_by_round",
         "track": "soundness",
         "variant": "standard",
-        "model": ""
+        "model": "",
+        "quantification": "static"
       },
       "resource_variables": []
     },

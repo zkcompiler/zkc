@@ -18,7 +18,8 @@
         "notion": "completeness",
         "track": "completeness",
         "variant": "",
-        "model": ""
+        "model": "",
+        "quantification": "static"
       },
       "resource_variables": []
     },

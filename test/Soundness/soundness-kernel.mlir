@@ -3,8 +3,8 @@
 // RUN:   %s 2>&1 | FileCheck %s
 
 // CHECK: soundness kernel declaration slice: PASS
-// CHECK-NEXT: rules: 27 declared, 23 admitted
-// CHECK-NEXT: reduction bindings: 25
+// CHECK-NEXT: rules: 28 declared, 24 admitted
+// CHECK-NEXT: reduction bindings: 26
 // CHECK-NEXT: path bindings: 5
 // CHECK-NEXT: zero-binding rules: 5
 // CHECK-NEXT: heterogeneous FRI cases: fold, query
@@ -20,9 +20,11 @@
 // CHECK-NEXT: declarations carry their own content digests
 // CHECK-NEXT: receipt overclaim refused: yes
 // CHECK-NEXT: stray unmatched obligation refused: yes
+// CHECK-NEXT: index variable binds once and instantiates: yes
+// CHECK-NEXT: unbound conclusion variable refused: yes
 // The analysis is named by this digest: it covers the schemas, the rules and
 // the bindings, and nothing else. Correcting a citation must not make an
 // artifact's analysis a different analysis.
-// CHECK-NEXT: signature digest: sha256:af8b6064037562cb1e1cd8f8283e45eee0db460525d6d5bab8774e6a4dd1bf13
+// CHECK-NEXT: signature digest: sha256:9b1069894040e0a07a0826740ebb4e303177c1e4c69028828f0c7f88d75ea22d
 
 module {}

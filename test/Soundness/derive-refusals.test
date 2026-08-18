@@ -18,4 +18,4 @@
 # The control is asserted, not merely run: a non-zero exit is evidence of
 # refusal only while the tool is known to derive something.
 # CHECK: control: the unmutated request derives
-# CHECK: 19/19 refused by both
+# CHECK: 21/21 refused by both

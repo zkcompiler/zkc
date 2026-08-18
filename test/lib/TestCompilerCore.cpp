@@ -577,7 +577,7 @@ struct TestCompilerCorePass
     fsApplication.premises.emplace("source_sr", srPlan);
     derivation.node = std::move(fsApplication);
 
-    snd::DerivationTarget derivationTarget{subject, fsRule.conclusionIndex,
+    snd::DerivationTarget derivationTarget{subject, fsRule.conclusionIndex.index,
                                            fsRule.resources};
     snd::DeriveOutcome expected = snd::deriveSoundness(
         *soundnessContext, *view, derivationTarget, derivation);
@@ -626,9 +626,9 @@ struct TestCompilerCorePass
     target.admittedSchemaKeys = {"fs-a", "fs-b"};
     request.targets.push_back(target);
     request.targetSchemas.push_back(
-        {"fs-a", fsRule.conclusionIndex, fsRule.resources});
+        {"fs-a", fsRule.conclusionIndex.index, fsRule.resources});
     request.targetSchemas.push_back(
-        {"fs-b", fsRule.conclusionIndex, fsRule.resources});
+        {"fs-b", fsRule.conclusionIndex.index, fsRule.resources});
     request.derivationSurface.allowedBindingRefs = {
         nativeBinding.ref, srBinding.ref, fsBinding.ref};
     for (const snd::Hypothesis &hypothesis :
@@ -951,7 +951,7 @@ struct TestCompilerCorePass
           "decision checker rejected the recomputed no-selection result");
     llvm::outs() << "compiler missing width: no eligible candidate\n";
 
-    snd::DerivationTarget nativeTarget{subject, nativeRule.conclusionIndex,
+    snd::DerivationTarget nativeTarget{subject, nativeRule.conclusionIndex.index,
                                        nativeRule.resources};
     snd::DeriveOutcome nativeExpected = snd::deriveSoundness(
         *soundnessContext, *view, nativeTarget, *nativePlan);
@@ -995,7 +995,7 @@ struct TestCompilerCorePass
     roundRequest.targets.clear();
     roundRequest.targets.push_back({"native-rbr", {owner}, {}, {"rbr"}});
     roundRequest.targetSchemas = {
-        {"rbr", nativeRule.conclusionIndex, nativeRule.resources}};
+        {"rbr", nativeRule.conclusionIndex.index, nativeRule.resources}};
     roundRequest.soundnessConstraints.clear();
     collectEvaluatedPropositions(
         nativeExpected.result->root,
@@ -1180,7 +1180,7 @@ struct TestCompilerCorePass
     fakeOutputs.selector.outputRole = "merged";
     fakeRequest.targets.push_back(fakeOutputs);
     fakeRequest.targetSchemas = {
-        {"fs-a", fsRule.conclusionIndex, fsRule.resources}};
+        {"fs-a", fsRule.conclusionIndex.index, fsRule.resources}};
     fakeRequest.soundnessConstraints.clear();
     fakeRequest.comparisonScope = cmp::ClosedDomainScope();
     for (const snd::Hypothesis &hypothesis :
@@ -1280,7 +1280,7 @@ struct TestCompilerCorePass
          {finishedSubject, survivorSubject}) {
       snd::DerivationPlan previewPlan = assumedPlan(previewSubject);
       snd::DerivationTarget previewTarget{
-          previewSubject, fsRule.conclusionIndex, fsRule.resources};
+          previewSubject, fsRule.conclusionIndex.index, fsRule.resources};
       snd::DeriveOutcome preview = snd::deriveSoundness(
           *soundnessContext, previewTrace->finalArtifact->observation.soundness,
           previewTarget, previewPlan);
@@ -1314,7 +1314,7 @@ struct TestCompilerCorePass
     const snd::SecuritySubject sourceSurvivorSubject =
         fakeSourceSubject(fakeClaim(2, "source-survivor"));
     snd::DerivationPlan sourceAPlan = assumedPlan(sourceASubject);
-    snd::DerivationTarget sourceATarget{sourceASubject, fsRule.conclusionIndex,
+    snd::DerivationTarget sourceATarget{sourceASubject, fsRule.conclusionIndex.index,
                                         fsRule.resources};
     snd::DeriveOutcome sourceAPreview = snd::deriveSoundness(
         *soundnessContext, fakeSourceView, sourceATarget, sourceAPlan);
@@ -1396,7 +1396,7 @@ struct TestCompilerCorePass
     auto &unrelatedSource = std::get<cmp::SourceProjection>(
         unrelatedBaseline.soundnessConstraints.front().baseline.payload);
     unrelatedSource.sourceTarget = {sourceSurvivorSubject,
-                                    fsRule.conclusionIndex, fsRule.resources};
+                                    fsRule.conclusionIndex.index, fsRule.resources};
     unrelatedSource.sourceDerivationPlan = assumedPlan(sourceSurvivorSubject);
     unrelatedSource.targetRelation.exactSourceClaimRef =
         fakeClaim(2, "source-survivor");

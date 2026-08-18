@@ -331,7 +331,7 @@ struct TestSoundnessEvaluatorPass
     snd::ClosedQuantity expectedPerRound;
     expectedPerRound.constant = *perRound;
     if (nativeConclusion.subject != subject ||
-        nativeConclusion.index != sumcheckRule.conclusionIndex ||
+        nativeConclusion.index != sumcheckRule.conclusionIndex.index ||
         !nativeConclusion.resourceVariables.empty() || !roundResult ||
         roundResult->rounds.size() != 2)
       return fail("native sumcheck APPLY returned the wrong judgment shape");
@@ -374,7 +374,7 @@ struct TestSoundnessEvaluatorPass
     snd::DerivationPlan plan;
     plan.node = std::move(fsApplication);
 
-    snd::DerivationTarget target{subject, fsRule.conclusionIndex,
+    snd::DerivationTarget target{subject, fsRule.conclusionIndex.index,
                                  fsRule.resources};
     snd::DeriveOutcome derived =
         snd::deriveSoundness(context, *view, target, plan);
@@ -406,7 +406,7 @@ struct TestSoundnessEvaluatorPass
     expectedSr.resourceTerms.push_back({*perRound, "t", 1});
     const auto *srResult =
         std::get_if<snd::ScalarResult>(&srEvaluated->conclusion.result);
-    if (srEvaluated->conclusion.index != srRule.conclusionIndex || !srResult ||
+    if (srEvaluated->conclusion.index != srRule.conclusionIndex.index || !srResult ||
         srResult->bound.quantity != expectedSr ||
         !srResult->bound.primitiveGameTerms.empty() ||
         !sameDeclarations(srEvaluated->conclusion.resourceVariables,
@@ -419,7 +419,7 @@ struct TestSoundnessEvaluatorPass
     const snd::SecurityJudgment &fsConclusion = fsEvaluated->conclusion;
     const auto *fsResult = std::get_if<snd::ScalarResult>(&fsConclusion.result);
     if (fsConclusion.subject != subject ||
-        fsConclusion.index != fsRule.conclusionIndex || !fsResult ||
+        fsConclusion.index != fsRule.conclusionIndex.index || !fsResult ||
         fsResult->bound.quantity != expectedFs ||
         !fsResult->bound.primitiveGameTerms.empty() ||
         !sameDeclarations(fsConclusion.resourceVariables, fsRule.resources))

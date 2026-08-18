@@ -52,6 +52,13 @@
       "notes": "object: pairing_group_source algebra:bls12_381:g1.",
       "statement": "given <g, g^a, ..., g^{a^t}>, output <c, g^{1/(a+c)}> for any c != -a"
     },
+    "zkc.assume.sha256_216_collision": {
+      "citations": [
+        "FIPS 180-4 (SHA-256); the transcript projection keeps the low 27 bits of each big-endian 32-bit word, 216 bits in all (docs/spec/relations.md section 2.8), so the generic birthday collision cost is 2^108 evaluations"
+      ],
+      "notes": "object: none; the hash and the projection are normative constants, so the game takes no instance arguments. The advantage is scaled in a bound by the artifact's bound-relation-anchor count: zero where no relation identity enters the transcript, and the addend vanishes.",
+      "statement": "win: output byte strings r1 != r2 with proj216(sha256(r1)) = proj216(sha256(r2)), where proj216 is the transcript projection of docs/spec/relations.md section 2.8"
+    },
     "zkc.assume.srs_ceremony": {
       "citations": [
         "per-deployment ceremony transcript"
@@ -111,6 +118,27 @@
         }
       ],
       "status_rationale": "declared: minted to carry the receipt; no derivation consumes the random-query completeness fact yet, and admission should arrive with its first consumer rather than ahead of one"
+    },
+    "zkc.completeness.fri": {
+      "citations": [
+        "BBHR18, Fast Reed-Solomon Interactive Oracle Proofs of Proximity (ICALP 2018), Sec. 4: the COMMIT and QUERY phases accept an honest prover's codeword identically - every fold consistency check is an algebraic identity on honest layers and every opened value is the committed one",
+        "the exact reduction contract this binding anchors adds Merkle multi-opening and query-consistency checks, each an identity for honestly committed data, so acceptance failure remains 0"
+      ],
+      "formalization_absence": {
+        "demand": "docs/formalization.md#entry-theorems",
+        "repository": "https://github.com/Verified-zkEVM/ArkLib",
+        "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+        "wanted": "a completeness statement for the FRI commit/query phases; the FRI family's completeness direction is absent from the mechanization (completeness inventory, 2026-07-28)"
+      },
+      "loss_display": "perfect completeness: the honest prover's acceptance-failure bound is 0",
+      "notes": "the completeness lattice's second entry instance (soundness.md section 3.2): a completeness judgment prices honest-prover acceptance and says nothing about any adversary. The anchor pins the exact FRI reduction-contract table the citations were read against. Its first consumer is the relation-absorbing variant, whose emitted prover has no external grader (the absorbed anchor changes the transcript upstream implementations do not produce), so its acceptance evidence is derived rather than graded.",
+      "statement_basis": [
+        {
+          "anchor": "Sec. 4",
+          "revision": "ICALP 2018",
+          "source": "bbhr:fast-reed-solomon-iopp"
+        }
+      ]
     },
     "zkc.completeness.r1cs_batch": {
       "citations": [
@@ -975,6 +1003,23 @@
     }
   },
   "bindings": {
+    "zkc.completeness.fri@reduction:fri": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "fri",
+          "source_revision": "sha256:06bc29d265b12cd99f9f36158dea8653a041221d0c76c47aefecaf685c89b122"
+        }
+      },
+      "condition_argument_bindings": {},
+      "fact_bindings": {},
+      "hypothesis_argument_bindings": {},
+      "id": "zkc.completeness.fri@reduction:fri",
+      "parameter_bindings": {},
+      "premise_relations": {},
+      "rule": "zkc.completeness.fri",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
     "zkc.completeness.sigma@reduction:sigma": {
       "anchor": {
         "kind": "reduction_contract",
@@ -1041,6 +1086,14 @@
           "artifact_projection": {
             "field": "sponge.alphabet_order",
             "kind": "path_binding_field",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "bound_relation_anchors": {
+          "artifact_projection": {
+            "kind": "bound_relation_anchor_count",
             "result_sort": "integer"
           },
           "kind": "sealed_artifact_projection",
@@ -1131,6 +1184,14 @@
           "artifact_projection": {
             "field": "sponge.alphabet_order",
             "kind": "path_binding_field",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "bound_relation_anchors": {
+          "artifact_projection": {
+            "kind": "bound_relation_anchor_count",
             "result_sort": "integer"
           },
           "kind": "sealed_artifact_projection",
@@ -5071,6 +5132,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "completeness",
+        "quantification": "static",
         "track": "completeness",
         "variant": ""
       },
@@ -5082,6 +5144,34 @@
       "premises": [],
       "resources": [],
       "status": "declared"
+    },
+    "zkc.completeness.fri": {
+      "artifact_facts": [],
+      "body": {
+        "bound": {
+          "kind": "quantity",
+          "quantity": {
+            "kind": "rational_literal",
+            "literal": "0"
+          }
+        },
+        "kind": "completeness_entry"
+      },
+      "conclusion_index": {
+        "model": "",
+        "notion": "completeness",
+        "quantification": "static",
+        "track": "completeness",
+        "variant": ""
+      },
+      "exact_parameter_pins": [],
+      "external_hypotheses": [],
+      "id": "zkc.completeness.fri",
+      "machine_conditions": [],
+      "parameters": [],
+      "premises": [],
+      "resources": [],
+      "status": "admitted"
     },
     "zkc.completeness.r1cs_batch": {
       "artifact_facts": [],
@@ -5098,6 +5188,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "completeness",
+        "quantification": "static",
         "track": "completeness",
         "variant": ""
       },
@@ -5125,6 +5216,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "completeness",
+        "quantification": "static",
         "track": "completeness",
         "variant": ""
       },
@@ -5152,6 +5244,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "completeness",
+        "quantification": "static",
         "track": "completeness",
         "variant": ""
       },
@@ -5236,6 +5329,28 @@
                 "kind": "parameter",
                 "name": "codec_bias_sum"
               }
+            },
+            {
+              "kind": "scale",
+              "operands": [
+                {
+                  "game": {
+                    "instance_arguments": [],
+                    "ref": "zkc.assume.sha256_216_collision"
+                  },
+                  "kind": "primitive_advantage",
+                  "resource_substitution": {
+                    "tau": {
+                      "kind": "resource_variable",
+                      "name": "tau"
+                    }
+                  }
+                }
+              ],
+              "scale": {
+                "kind": "parameter",
+                "name": "bound_relation_anchors"
+              }
             }
           ]
         },
@@ -5244,6 +5359,7 @@
       "conclusion_index": {
         "model": "duplex",
         "notion": "fiat_shamir",
+        "quantification": "$q",
         "track": "soundness",
         "variant": "standard"
       },
@@ -5304,6 +5420,10 @@
         {
           "name": "codec_bias_sum",
           "sort": "rational"
+        },
+        {
+          "name": "bound_relation_anchors",
+          "sort": "integer"
         }
       ],
       "premises": [
@@ -5311,6 +5431,7 @@
           "expected_index": {
             "model": "",
             "notion": "state_restoration",
+            "quantification": "$q",
             "track": "soundness",
             "variant": "standard"
           },
@@ -5335,6 +5456,10 @@
       "resources": [
         {
           "name": "t",
+          "sort": "integer"
+        },
+        {
+          "name": "tau",
           "sort": "integer"
         }
       ],
@@ -5412,6 +5537,28 @@
                 "kind": "parameter",
                 "name": "codec_bias_sum"
               }
+            },
+            {
+              "kind": "scale",
+              "operands": [
+                {
+                  "game": {
+                    "instance_arguments": [],
+                    "ref": "zkc.assume.sha256_216_collision"
+                  },
+                  "kind": "primitive_advantage",
+                  "resource_substitution": {
+                    "tau": {
+                      "kind": "resource_variable",
+                      "name": "tau"
+                    }
+                  }
+                }
+              ],
+              "scale": {
+                "kind": "parameter",
+                "name": "bound_relation_anchors"
+              }
             }
           ]
         },
@@ -5420,6 +5567,7 @@
       "conclusion_index": {
         "model": "duplex",
         "notion": "fiat_shamir",
+        "quantification": "$q",
         "track": "knowledge",
         "variant": "straightline"
       },
@@ -5480,6 +5628,10 @@
         {
           "name": "codec_bias_sum",
           "sort": "rational"
+        },
+        {
+          "name": "bound_relation_anchors",
+          "sort": "integer"
         }
       ],
       "premises": [
@@ -5487,6 +5639,7 @@
           "expected_index": {
             "model": "",
             "notion": "state_restoration",
+            "quantification": "$q",
             "track": "knowledge",
             "variant": "straightline"
           },
@@ -5511,6 +5664,10 @@
       "resources": [
         {
           "name": "t",
+          "sort": "integer"
+        },
+        {
+          "name": "tau",
           "sort": "integer"
         }
       ],
@@ -5605,6 +5762,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "computational_special_soundness",
+        "quantification": "$q",
         "track": "knowledge",
         "variant": ""
       },
@@ -5710,6 +5868,7 @@
           "expected_index": {
             "model": "",
             "notion": "special_soundness",
+            "quantification": "$q",
             "track": "knowledge",
             "variant": ""
           },
@@ -5822,6 +5981,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "computational_special_soundness",
+        "quantification": "$q",
         "track": "knowledge",
         "variant": ""
       },
@@ -5927,6 +6087,7 @@
           "expected_index": {
             "model": "",
             "notion": "special_soundness",
+            "quantification": "$q",
             "track": "knowledge",
             "variant": ""
           },
@@ -6000,6 +6161,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "computational_special_soundness",
+        "quantification": "static",
         "track": "knowledge",
         "variant": ""
       },
@@ -6123,6 +6285,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -6282,6 +6445,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -6518,6 +6682,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -6949,6 +7114,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7150,6 +7316,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7344,6 +7511,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7537,6 +7705,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7662,6 +7831,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "$q",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7683,6 +7853,7 @@
           "expected_index": {
             "model": "",
             "notion": "special_soundness",
+            "quantification": "$q",
             "track": "soundness",
             "variant": ""
           },
@@ -7747,6 +7918,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "$q",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7800,6 +7972,7 @@
           "expected_index": {
             "model": "",
             "notion": "round_by_round",
+            "quantification": "$q",
             "track": "soundness",
             "variant": "standard"
           },
@@ -7863,6 +8036,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7951,6 +8125,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "$q",
         "track": "soundness",
         "variant": "standard"
       },
@@ -7992,6 +8167,7 @@
           "expected_index": {
             "model": "",
             "notion": "round_by_round",
+            "quantification": "$q",
             "track": "soundness",
             "variant": "standard"
           },
@@ -8054,6 +8230,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
@@ -8146,6 +8323,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "knowledge",
         "variant": "straightline"
       },
@@ -8251,6 +8429,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "$q",
         "track": "knowledge",
         "variant": "straightline"
       },
@@ -8321,6 +8500,7 @@
           "expected_index": {
             "model": "",
             "notion": "round_by_round",
+            "quantification": "$q",
             "track": "knowledge",
             "variant": "straightline"
           },
@@ -8384,6 +8564,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "knowledge",
         "variant": "straightline"
       },
@@ -8466,6 +8647,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "state_restoration",
+        "quantification": "$q",
         "track": "soundness",
         "variant": "standard"
       },
@@ -8485,6 +8667,7 @@
           "expected_index": {
             "model": "",
             "notion": "round_by_round",
+            "quantification": "$q",
             "track": "soundness",
             "variant": "standard"
           },
@@ -8520,6 +8703,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "state_restoration",
+        "quantification": "$q",
         "track": "knowledge",
         "variant": "straightline"
       },
@@ -8544,6 +8728,7 @@
           "expected_index": {
             "model": "",
             "notion": "round_by_round",
+            "quantification": "$q",
             "track": "knowledge",
             "variant": "straightline"
           },
@@ -8601,6 +8786,7 @@
       "conclusion_index": {
         "model": "",
         "notion": "special_soundness",
+        "quantification": "static",
         "track": "soundness",
         "variant": ""
       },
@@ -8944,6 +9130,19 @@
             "sort": "integer"
           }
         ]
+      },
+      "zkc.assume.sha256_216_collision": {
+        "instance_argument_types": [],
+        "ref": {
+          "id": "zkc.assume.sha256_216_collision",
+          "source_revision": "zkc.soundness.primitive-game"
+        },
+        "resources": [
+          {
+            "name": "tau",
+            "sort": "integer"
+          }
+        ]
       }
     },
     "propositions": {
@@ -9179,60 +9378,70 @@
       {
         "model": "",
         "notion": "special_soundness",
+        "quantification": "static",
         "track": "soundness",
         "variant": ""
       },
       {
         "model": "",
         "notion": "special_soundness",
+        "quantification": "static",
         "track": "knowledge",
         "variant": ""
       },
       {
         "model": "",
         "notion": "computational_special_soundness",
+        "quantification": "static",
         "track": "knowledge",
         "variant": ""
       },
       {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
       {
         "model": "",
         "notion": "round_by_round",
+        "quantification": "static",
         "track": "knowledge",
         "variant": "straightline"
       },
       {
         "model": "",
         "notion": "state_restoration",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
       {
         "model": "",
         "notion": "state_restoration",
+        "quantification": "static",
         "track": "knowledge",
         "variant": "straightline"
       },
       {
         "model": "duplex",
         "notion": "fiat_shamir",
+        "quantification": "static",
         "track": "soundness",
         "variant": "standard"
       },
       {
         "model": "duplex",
         "notion": "fiat_shamir",
+        "quantification": "static",
         "track": "knowledge",
         "variant": "straightline"
       },
       {
         "model": "",
         "notion": "completeness",
+        "quantification": "static",
         "track": "completeness",
         "variant": ""
       }

@@ -20,7 +20,7 @@ not have, so those checks hold by construction rather than by inspection.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import Any
 
@@ -678,6 +678,9 @@ def _check_projection(projection, where: str) -> None:
     elif kind == "reduction_input_count":
         if projection.result_sort != "integer":
             raise Refusal(f"{where} does not produce an integer count")
+    elif kind == "bound_relation_anchor_count":
+        if projection.result_sort != "integer":
+            raise Refusal(f"{where} does not produce an integer count")
     elif kind == "reduction_parameter":
         if projection.result_sort not in ("integer", "rational", "string",
                                           "boolean"):
@@ -715,6 +718,14 @@ def _index_admitted(schemas: SchemaContext, index: SecurityIndex) -> bool:
             return False
     elif index.model:
         return False
+    # A quantification variable describes a set of indices rather than
+    # one, so what it must satisfy is satisfiability: some admitted
+    # index matches it on every other coordinate. For a literal this
+    # degenerates to membership.
+    if index.quantification.startswith("$"):
+        return any(
+            replace(index, quantification=admitted.quantification) == admitted
+            for admitted in schemas.security_indices)
     return index in schemas.security_indices
 
 
@@ -748,7 +759,18 @@ def _check_subject_schema(schemas: SchemaContext, identifier: str, where: str):
 
 def check_rule_well_formed(schemas: SchemaContext, rule: Rule) -> None:
     where = f"rule '{rule.id}'"
-    if not _index_admitted(schemas, rule.conclusion_index):
+    conclusion = rule.conclusion_index
+    if conclusion.quantification.startswith("$"):
+        # A conclusion's variable restates what a premise bound; with no
+        # premise naming it there is nothing to restate and the
+        # conclusion denotes no index at all. The instantiated index is
+        # checked where the conclusion is assembled, since which index
+        # that is depends on the derivation.
+        if not any(port.expected_index.quantification
+                   == conclusion.quantification for port in rule.premises):
+            raise Refusal(f"{where} concludes an index variable no premise "
+                          "binds")
+    if not _index_admitted(schemas, conclusion):
         raise Refusal(f"{where} concludes an index the vocabulary does not "
                       "admit")
     for item in rule.resources:
@@ -853,10 +875,20 @@ def _check_body(environment: Environment, schemas: SchemaContext, rule: Rule,
             premise_notion, conclusion.track,
             conclusion.variant if carries_variant else "",
             conclusion.model if body.kind == "round_scaling" else "",
+            conclusion.quantification,
         )
         premise_port = environment.premises.get(name) if name else None
+        # A premise whose quantification is a variable matches whatever
+        # the body asks for on that coordinate alone; every other
+        # coordinate is compared exactly.
+        def _port_carries(pattern: SecurityIndex) -> bool:
+            if pattern.quantification.startswith("$"):
+                return (replace(pattern,
+                                quantification=expected_index.quantification)
+                        == expected_index)
+            return pattern == expected_index
         if (premise_port is None
-                or premise_port.expected_index != expected_index
+                or not _port_carries(premise_port.expected_index)
                 or premise_port.expected_result
                 != RESULT_OF_NOTION[premise_notion]):
             raise Refusal(f"{where} body reads premise '{name}', which does not "
@@ -1097,6 +1129,10 @@ def _check_anchor(binding: Binding, value, where: str) -> None:
         if binding.anchor_kind != "path_transition":
             raise Refusal(f"{where} reads a path field at a reduction "
                           "occurrence")
+        return
+    # A fact about the whole artifact rather than one occurrence, so it
+    # is readable from either anchor kind.
+    if value.artifact_projection.kind == "bound_relation_anchor_count":
         return
     if binding.anchor_kind != "reduction_contract":
         raise Refusal(f"{where} reads a reduction projection at a path "

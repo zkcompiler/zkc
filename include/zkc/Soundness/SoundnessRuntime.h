@@ -327,10 +327,30 @@ struct ExtractionResult {
 bool operator==(const ExtractionResult &lhs, const ExtractionResult &rhs);
 bool operator!=(const ExtractionResult &lhs, const ExtractionResult &rhs);
 
+/// The state a round-by-round argument tracks, named. Round-by-round
+/// soundness is defined over a state function on transcripts
+/// (docs/spec/soundness.md §5), and this repository carried the bound
+/// machinery without naming the function. The one admitted predicate
+/// says the state is doomed exactly when this claim is unsatisfied,
+/// which ties a round's bound back to the claim graph instead of
+/// leaving the state function implicit.
+struct RoundStatePredicate {
+  ClaimRef claimUnsatisfied;
+};
+
+bool operator==(const RoundStatePredicate &lhs, const RoundStatePredicate &rhs);
+bool operator!=(const RoundStatePredicate &lhs, const RoundStatePredicate &rhs);
+
 struct RoundResultEntry {
   std::string roundIndex;
   ClosedQuantity challengeSpace;
   ClosedBound bound;
+  /// Present at a reduction occurrence, where the site's owner claim is
+  /// the thing the rounds argue; absent — not defaulted — elsewhere,
+  /// since a path occurrence consumes no claim to name. Preservation
+  /// concatenates entries from different sites, which is why the
+  /// predicate lives on the entry rather than on the result.
+  std::optional<RoundStatePredicate> statePredicate;
 };
 
 bool operator==(const RoundResultEntry &lhs, const RoundResultEntry &rhs);
