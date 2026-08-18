@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 
-from . import model, wellformed, witnesses
+from . import derive, model, wellformed, witnesses
 
 
 def _witness(table: dict[str, dict], name: str) -> dict:
@@ -195,6 +195,11 @@ def main(argv: list[str] | None = None) -> None:
         )
     elif mode == "id":
         print(model.compute_id(protocol, model.VOCABULARY))
+    elif mode == "bodies":
+        for body in derive.transformer_bodies(protocol, model.VOCABULARY):
+            kind = "central" if body.central else "non-central"
+            print(f"transformer body: {body.instance} events "
+                  f"{body.begin}..{body.end} {kind}")
     elif mode == "validate":
         model.validate_protocol(protocol, model.VOCABULARY)
         print("ok")

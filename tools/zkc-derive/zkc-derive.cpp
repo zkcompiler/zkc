@@ -128,6 +128,14 @@ int main(int argc, char **argv) {
                      << claim.descriptorDigest << "\n";
       }
     }
+    // The bodies the sealed view projects. A consumer asking whether two
+    // transformers commute needs the footprint, and no judgment here reads
+    // it, so this is where it becomes visible -- and where the two
+    // implementations are compared on it.
+    for (const snd::TransformerExtent &body : view->transformerBodies)
+      llvm::outs() << "transformer body: " << body.instance << " events "
+                   << body.begin << ".." << body.end
+                   << (body.central ? " central" : " non-central") << "\n";
     return 0;
   }
 
