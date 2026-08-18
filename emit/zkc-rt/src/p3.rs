@@ -1184,13 +1184,11 @@ mod tests {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../test/Oir/Inputs/duplex-framing-kat.json");
         let corpus: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&path)
-                .unwrap_or_else(|e| panic!("cannot read {path:?}: {e}")),
+            &std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {path:?}: {e}")),
         )
         .expect("the framing corpus parses");
 
-        let mut first: std::collections::BTreeMap<String, Vec<String>> =
-            Default::default();
+        let mut first: std::collections::BTreeMap<String, Vec<String>> = Default::default();
         for case in corpus["cases"].as_array().expect("cases") {
             let name = case["name"].as_str().expect("name");
             let iv = case["iv"].as_str().expect("iv");
@@ -1206,8 +1204,7 @@ mod tests {
                         .collect();
                     duplex.absorb(&words);
                 } else {
-                    let count =
-                        step["squeeze"].as_u64().expect("squeeze count");
+                    let count = step["squeeze"].as_u64().expect("squeeze count");
                     for _ in 0..count {
                         outputs.push(duplex.squeeze_element().to_string());
                     }
