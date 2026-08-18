@@ -445,6 +445,58 @@ struct TestSoundnessEvaluatorPass
       return fail("Fiat-Shamir application returned the wrong hypothesis set");
     llvm::outs() << "derive: sumcheck -> sr -> fs exact\n";
 
+    // The adaptivity coordinate, stressed in both directions with the
+    // same premise. The shipped registry admits only static indices, so
+    // an adaptive premise judgment must refuse at intake — the
+    // coordinate is fail-closed until the vocabulary declares an
+    // adaptive index. Against a signature whose schema does declare the
+    // adaptive forms (the second RUN widens it), the carrying rules
+    // must preserve the value instead: the variable premise binds
+    // adaptive_instance and each conclusion instantiates it, twice in a
+    // row across the sr and fs hops.
+    {
+      snd::SecurityJudgment adaptiveRbr = nativeEvaluated->conclusion;
+      adaptiveRbr.index.quantification =
+          snd::SecurityQuantification::AdaptiveInstance;
+      snd::SecurityIndex adaptiveSr = srRule.conclusionIndex.index;
+      adaptiveSr.quantification =
+          snd::SecurityQuantification::AdaptiveInstance;
+      const bool admitsAdaptive =
+          llvm::is_contained(context.schemas().securityIndices, adaptiveSr);
+      snd::TypedPremiseJudgments adaptivePremise{{"source_rbr", adaptiveRbr}};
+      snd::ApplyOutcome carried = snd::applySoundnessRule(
+          context, *view, srSite, srBinding.ref, adaptivePremise);
+      if (!admitsAdaptive) {
+        if (carried.accepted())
+          return fail("an adaptive premise was admitted by a vocabulary that "
+                      "declares no adaptive index");
+        llvm::outs() << "adaptive premise: refused fail-closed\n";
+      } else {
+        if (!carried.accepted())
+          return fail("adaptive sr carry refused: " +
+                      refusalText(*carried.refusal));
+        if (carried.applied->conclusion.index.quantification !=
+                snd::SecurityQuantification::AdaptiveInstance ||
+            carried.applied->conclusion.index !=
+                snd::instantiateSecurityIndex(
+                    srRule.conclusionIndex,
+                    snd::SecurityQuantification::AdaptiveInstance))
+          return fail("the sr conclusion did not restate the premise's "
+                      "quantification");
+        snd::TypedPremiseJudgments adaptiveFsPremise{
+            {"source_sr", carried.applied->conclusion}};
+        snd::ApplyOutcome fsCarried = snd::applySoundnessRule(
+            context, *view, fsSite, fsBinding.ref, adaptiveFsPremise);
+        if (!fsCarried.accepted())
+          return fail("adaptive fs carry refused: " +
+                      refusalText(*fsCarried.refusal));
+        if (fsCarried.applied->conclusion.index.quantification !=
+            snd::SecurityQuantification::AdaptiveInstance)
+          return fail("the fs conclusion dropped the carried quantification");
+        llvm::outs() << "adaptive quantification: carried to fs\n";
+      }
+    }
+
     // The owned projection does not alias a mutable copy of its aggregate.
     snd::SealedSoundnessView mutableBareView = *view;
     mutableBareView.artifactId = "caller-forged";

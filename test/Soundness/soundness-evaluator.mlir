@@ -4,9 +4,28 @@
 
 // CHECK: apply: native sumcheck exact
 // CHECK-NEXT: derive: sumcheck -> sr -> fs exact
+// CHECK-NEXT: adaptive premise: refused fail-closed
 // CHECK-NEXT: path binding mismatch: refused
 // CHECK-NEXT: missing premise: refused
 // CHECK-NEXT: condition false: refused
 // CHECK-NEXT: dynamic exponent range: refused
 // CHECK-NEXT: root assume: refused
 // CHECK-NEXT: soundness evaluator: PASS
+
+// The same evaluator against a signature whose schema also admits the
+// adaptive_instance forms (schema-only widening; every rule and binding
+// digest is unchanged). The carrying rules must preserve the premise's
+// quantification through both hops instead of refusing it — this is the
+// only place in the tree a non-static value actually flows, so it is
+// what keeps the coordinate from being decorative.
+// RUN: %python %S/Inputs/widen_quantification.py \
+// RUN:   %zkc-registry-dir/soundness-signature.json %t.widened.json
+// RUN: zkc-test-opt %pir-seal-full \
+// RUN:   -test-soundness-evaluator='protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json signature=%t.widened.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' \
+// RUN:   %S/../Encoding/sumcheck-fs.mlir 2>&1 | FileCheck %s --check-prefix=WIDE
+
+// WIDE: derive: sumcheck -> sr -> fs exact
+// WIDE-NEXT: adaptive quantification: carried to fs
+// WIDE: soundness evaluator: PASS
+
+module {}
