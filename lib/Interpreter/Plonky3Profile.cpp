@@ -293,8 +293,8 @@ private:
 
 } // namespace
 
-std::unique_ptr<SpongeState> rawPlonky3Duplex() {
-  return std::make_unique<DuplexState>();
+std::unique_ptr<SpongeState> rawPlonky3Duplex(StringRef sourceIdentity) {
+  return std::make_unique<DuplexState>(sourceIdentity);
 }
 
 namespace {

@@ -282,9 +282,14 @@ const ExecutionProfile &plonky3Profile();
 /// an error naming the profile; callers keep only the flag.
 llvm::Expected<const ExecutionProfile &> selectProfile(llvm::StringRef name);
 
-/// A raw pinned duplex (zero state, no identity binding) for replay
-/// validation against captured upstream transcripts.
-std::unique_ptr<SpongeState> rawPlonky3Duplex();
+/// A raw pinned duplex for replay validation against captured upstream
+/// transcripts and for the framing corpus. An empty identity is the
+/// zero-state construction with no identity binding; a non-empty one is
+/// absorbed exactly as the iv policy does it — big-endian four-byte
+/// chunks with a short final chunk — which is one of the framing rules
+/// the corpus exists to pin.
+std::unique_ptr<SpongeState>
+rawPlonky3Duplex(llvm::StringRef sourceIdentity = llvm::StringRef());
 
 } // namespace interpreter
 } // namespace zkc

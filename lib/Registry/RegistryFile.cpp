@@ -103,7 +103,8 @@ Error RegistryFile::requireEncodingDomain(StringRef json) const {
       inString = true;
     } else if (c == '{' || c == '[') {
       if (++depth > kMaxRegistryDepth)
-        return error("nesting exceeds " + Twine(kMaxRegistryDepth) + " levels");
+        return error("[zkc-E120] nesting exceeds " +
+                     Twine(kMaxRegistryDepth) + " levels");
     } else if (c == '}' || c == ']') {
       if (depth > 0)
         --depth;
@@ -116,7 +117,7 @@ Error RegistryFile::requireEncodingDomain(StringRef json) const {
       // A number token has no interior whitespace, so the preceding
       // character settles whether this is part of one.
       if (index > 0 && (isDigit(json[index - 1]) || json[index - 1] == '.'))
-        return error("a numeric value leaves the encoding domain: exact "
+        return error("[zkc-E120] a numeric value leaves the encoding domain: exact "
                      "values are decimal integers or decimal strings");
     }
   }
@@ -156,24 +157,27 @@ Expected<RegistryFile> RegistryFile::parse(StringRef json, StringRef sourceName,
 
   Expected<json::Value> parsed = zkc::encoding::parseJsonUniqueKeys(json);
   if (!parsed)
-    return file.error(toString(parsed.takeError()));
+    return file.error("[zkc-E120] " + toString(parsed.takeError()));
   file.root = std::move(*parsed);
 
   const json::Object *rootObject = file.root.getAsObject();
   if (!rootObject)
-    return file.error("top level must be an object");
+    return file.error("[zkc-E120] top level must be an object");
   SmallVector<StringRef> allowed{"registry", payloadField};
   allowed.append(extraFields.begin(), extraFields.end());
-  if (Error err = file.requireClosedFields(*rootObject, allowed, "top level"))
+  if (Error err = file.requireClosedFields(*rootObject, allowed,
+                                           "[zkc-E120] top level"))
     return std::move(err);
 
   std::optional<StringRef> registryName = rootObject->getString("registry");
   if (registryName != expectedName)
-    return file.error("'registry' must be the string \"" + expectedName + "\"");
+    return file.error("[zkc-E120] 'registry' must be the string \"" +
+                      expectedName + "\"");
 
   const json::Object *payload = rootObject->getObject(payloadField);
   if (!payload || payload->empty())
-    return file.error("'" + payloadField + "' must be a non-empty object");
+    return file.error("[zkc-E120] '" + payloadField +
+                      "' must be a non-empty object");
   return std::move(file);
 }
 

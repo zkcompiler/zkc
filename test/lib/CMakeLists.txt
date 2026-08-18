@@ -5,6 +5,7 @@ add_mlir_library(ZkcTestPasses
   TestArtifactLifecycle.cpp
   TestCompilerCore.cpp
   TestHoleParameters.cpp
+  TestDuplexFraming.cpp
   TestInterpreter.cpp
   TestKzgBatchCore.cpp
   TestPirCompilerProvider.cpp

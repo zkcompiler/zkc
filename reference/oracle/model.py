@@ -237,7 +237,7 @@ class ProtocolVocabulary:
             "protocol vocabulary",
         )
         if document["registry"] != "zkc.protocol_vocabulary":
-            raise Refusal("unsupported ProtocolVocabulary envelope")
+            raise Refusal("[zkc-E120] unsupported ProtocolVocabulary envelope")
 
         self.profiles = {
             name: self._profile(name, body)
@@ -1507,7 +1507,7 @@ def _relation_text(value: Any, where: str) -> str:
 
     if (not isinstance(value, str) or not value
             or any(not 0x20 <= ord(c) <= 0x7E for c in value)):
-        raise Refusal(f"{where} must be non-empty printable ASCII")
+        raise Refusal(f"[zkc-E121] {where} must be non-empty printable ASCII")
     return value
 
 

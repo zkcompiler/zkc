@@ -19,6 +19,7 @@ namespace zkc {
 namespace test {
 void registerTestArtifactLifecyclePass();
 void registerTestCompilerCorePass();
+void registerTestDuplexFramingPass();
 void registerTestHoleParametersPass();
 void registerTestInterpreterPass();
 void registerTestKzgBatchCorePass();
@@ -51,6 +52,7 @@ int main(int argc, char **argv) {
 #ifdef ZKC_ENABLE_TEST_PASSES
   zkc::test::registerTestArtifactLifecyclePass();
   zkc::test::registerTestCompilerCorePass();
+  zkc::test::registerTestDuplexFramingPass();
   zkc::test::registerTestHoleParametersPass();
   zkc::test::registerTestInterpreterPass();
   zkc::test::registerTestKzgBatchCorePass();

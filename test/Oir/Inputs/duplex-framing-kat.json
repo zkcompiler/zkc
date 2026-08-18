@@ -1,0 +1,140 @@
+{
+  "construction": "plonky3_bb31_poseidon2_w16_r8_lenpad",
+  "cases": [
+    {
+      "name": "rate-zeroing-partial-block",
+      "iv": "",
+      "steps": [
+        {
+          "absorb": [
+            "11",
+            "22",
+            "33"
+          ]
+        },
+        {
+          "squeeze": 1
+        }
+      ],
+      "outputs": [
+        "1210286192"
+      ]
+    },
+    {
+      "name": "length-binding-a",
+      "iv": "",
+      "steps": [
+        {
+          "absorb": [
+            "5",
+            "6",
+            "7"
+          ]
+        },
+        {
+          "squeeze": 1
+        }
+      ],
+      "outputs": [
+        "148132822"
+      ]
+    },
+    {
+      "name": "length-binding-b",
+      "iv": "",
+      "steps": [
+        {
+          "absorb": [
+            "5",
+            "6",
+            "7",
+            "0",
+            "0"
+          ]
+        },
+        {
+          "squeeze": 1
+        }
+      ],
+      "outputs": [
+        "708000899"
+      ]
+    },
+    {
+      "name": "lifo-eight",
+      "iv": "",
+      "steps": [
+        {
+          "absorb": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ]
+        },
+        {
+          "squeeze": 8
+        }
+      ],
+      "outputs": [
+        "1638090453",
+        "408318230",
+        "292540408",
+        "524907186",
+        "768508945",
+        "195580818",
+        "1827061661",
+        "754191363"
+      ]
+    },
+    {
+      "name": "iv-short-final-chunk",
+      "iv": "zkc-kat-iv-13",
+      "steps": [
+        {
+          "squeeze": 2
+        }
+      ],
+      "outputs": [
+        "718823129",
+        "1753232761"
+      ]
+    },
+    {
+      "name": "absorb-invalidates-outputs",
+      "iv": "",
+      "steps": [
+        {
+          "absorb": [
+            "42"
+          ]
+        },
+        {
+          "squeeze": 1
+        },
+        {
+          "absorb": [
+            "43"
+          ]
+        },
+        {
+          "squeeze": 1
+        }
+      ],
+      "outputs": [
+        "701475390",
+        "1542568465"
+      ]
+    }
+  ],
+  "distinct": [
+    [
+      "length-binding-a",
+      "length-binding-b"
+    ]
+  ]
+}

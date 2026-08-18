@@ -25,7 +25,7 @@ inline llvm::Error requireEntryName(const RegistryFile &file,
                                     llvm::StringRef name) {
   if (!name.empty() && zkc::encoding::inEncodingDomain(name))
     return llvm::Error::success();
-  return file.error(llvm::Twine(noun) +
+  return file.error("[zkc-E121] " + llvm::Twine(noun) +
                     " names must be non-empty printable ASCII");
 }
 

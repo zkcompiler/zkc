@@ -63,6 +63,42 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("relation-contracts takes no witness")
         sys.stdout.write(model.canon_json(model.relation_contracts_document()))
         return
+    if mode == "duplex-kat":
+        # The duplex framing rule as vectors (vocabularies.md §7): this
+        # leg recomputes every case of the checked-in corpus and the
+        # distinct pairs the length binding exists to separate. The
+        # corpus was minted here, so this run is the freshness guard;
+        # the C++ and Rust legs confirm the same values independently.
+        if len(args) != 1:
+            raise SystemExit("duplex-kat takes the corpus path")
+        from .babybear import Duplex
+
+        corpus = model.load_json(open(args[0], encoding="utf-8").read())
+        first: dict[str, list[str]] = {}
+        for case in corpus["cases"]:
+            duplex = Duplex(case["iv"] if case["iv"] else None)
+            outputs: list[str] = []
+            for step in case["steps"]:
+                if "absorb" in step:
+                    for value in step["absorb"]:
+                        duplex.absorb_word(int(value))
+                else:
+                    for _ in range(step["squeeze"]):
+                        outputs.append(str(duplex.squeeze_word()))
+            if outputs != case["outputs"]:
+                raise SystemExit(
+                    f"duplex framing case {case['name']!r}: this leg "
+                    f"computes {outputs}, the corpus records "
+                    f"{case['outputs']}")
+            first[case["name"]] = outputs
+        for left, right in corpus["distinct"]:
+            if first[left] == first[right]:
+                raise SystemExit(
+                    f"duplex framing distinct pair {left!r}/{right!r} "
+                    "collided: the length binding is not separating them")
+        print(f"duplex framing corpus: {len(corpus['cases'])} cases agree, "
+              f"{len(corpus['distinct'])} distinct pair(s) separate")
+        return
     if mode == "soundness-signature":
         if args:
             raise SystemExit("soundness-signature takes no witness")
