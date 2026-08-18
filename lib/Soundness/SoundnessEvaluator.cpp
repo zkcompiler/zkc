@@ -2463,18 +2463,53 @@ Step<SecurityResult> evaluateRuleBody(ApplicationEnvironment &application) {
                 RuntimeRefusalCode::PremiseMismatch, "apply.body.rounds",
                 "the conclusion occurrence contributes no rounds to compose");
 
-          // The producing occurrence of the premise's own subject, folded out
-          // of the sealed view rather than stored: the view already determines
-          // it, and a second copy would be a second authority for one fact.
-          const auto *premiseSubject = std::get_if<ProtocolClaimSubject>(
-              &premise->second->subject.payload);
+          // The join, stated rather than approximated.  Round-by-round
+          // soundness is defined over a state function on transcripts, and
+          // composing two such judgments is sound when the premise's doomed
+          // state is the conclusion's doomed state at the join.  The premise's
+          // final round names that state; the concluding occurrence consumes
+          // an ordered claim vector.  The hypothesis is that the two are the
+          // same claim.
+          //
+          // The binding's `SubjectRelation` also relates them today, so this
+          // is not a new connection: it moves the invariant from "every
+          // binding author chooses `consumed_claim`" to "the body checks its
+          // own hypothesis", which is what keeps a binding written with
+          // `same_subject` from composing through a positional proxy with no
+          // claim-graph connection at all.
+          if (source->rounds.empty())
+            return refuse<SecurityResult>(
+                RuntimePhase::RuleEvaluation,
+                RuntimeRefusalCode::PremiseMismatch, "apply.body.rounds",
+                "the premise carries no rounds, so it names no state for this "
+                "composition to join");
+          const std::optional<RoundStatePredicate> &joinState =
+              source->rounds.back().statePredicate;
+          if (!joinState)
+            return refuse<SecurityResult>(
+                RuntimePhase::RuleEvaluation,
+                RuntimeRefusalCode::PremiseMismatch, "apply.body.rounds",
+                "the premise's final round names no state predicate, so the "
+                "claim this composition would join on is not stated");
+          if (!llvm::is_contained(later->second.orderedInputs,
+                                  joinState->claimUnsatisfied))
+            return refuse<SecurityResult>(
+                RuntimePhase::RuleEvaluation,
+                RuntimeRefusalCode::PremiseMismatch, "apply.body.rounds",
+                "the claim the premise's final round leaves unsatisfied is not "
+                "consumed by the conclusion's occurrence, so the two round "
+                "sequences argue about different states");
+
+          // The premise's own producing occurrence, for the spine order the
+          // composed error function indexes.  A claim edge constrains
+          // operation order and says nothing about whether the two round
+          // blocks interleave, so this stays a separate fact from the join.
           const SealedReduction *earlier = nullptr;
-          if (premiseSubject)
-            for (const auto &[position, reduction] :
-                 application.sealed.reductionsByTransformerPosition)
-              if (llvm::is_contained(reduction.orderedOutputs,
-                                     premiseSubject->claim))
-                earlier = &reduction;
+          for (const auto &[position, reduction] :
+               application.sealed.reductionsByTransformerPosition)
+            if (llvm::is_contained(reduction.orderedOutputs,
+                                   joinState->claimUnsatisfied))
+              earlier = &reduction;
           if (!earlier || earlier->rounds.empty())
             return refuse<SecurityResult>(
                 RuntimePhase::RuleEvaluation,
