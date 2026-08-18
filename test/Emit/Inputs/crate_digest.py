@@ -49,7 +49,9 @@ def main() -> None:
         if not path.is_file():
             continue
         relative = path.relative_to(root)
-        if EXCLUDED_DIRS.intersection(relative.parts):
+        # Directory components only: a file that happened to be named
+        # `target` is emitter output like any other.
+        if EXCLUDED_DIRS.intersection(relative.parts[:-1]):
             continue
         if relative.name in EXCLUDED_FILES:
             continue

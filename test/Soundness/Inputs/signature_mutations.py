@@ -286,7 +286,11 @@ MUTATIONS: list[tuple[str, object]] = [
     ("a premise pattern no admitted index satisfies",
      lambda d: _set(d, [*TO_SR, "premises", 0, "expected_index", "variant"],
                     "nonexistent")),
-    ("a premise binds a variable the conclusion does not restate",
+    # Renaming the premise's variable leaves the conclusion's bound by
+    # nothing, which is the condition that fires; the premise-side rule
+    # is isolated by the mutation below, where the conclusion states a
+    # value and so has no variable of its own to go unbound.
+    ("a premise renames the variable the conclusion restates",
      lambda d: _set(d, [*TO_SR, "premises", 0, "expected_index",
                         "quantification"], "$r")),
     ("a premise binds a variable while the conclusion states a value",

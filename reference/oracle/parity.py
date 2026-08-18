@@ -83,11 +83,6 @@ def main(argv: list[str] | None = None) -> None:
                                     quantification="adaptive_instance")
         adaptive_conclusion = _replace(rule.conclusion_index,
                                        quantification="adaptive_instance")
-        # The carry itself is schema-independent, so it runs in both
-        # directions rather than being skipped in one: what the schema
-        # decides is whether the index the carry produces is one the
-        # vocabulary admits, which is the same gate the C++ evaluator
-        # applies to an incoming judgment.
         carried = derivation.carry_quantification(
             rule, {port.name: adaptive_premise})
         if carried != adaptive_conclusion:
