@@ -28,4 +28,13 @@
 // WIDE-NEXT: adaptive quantification: carried to fs
 // WIDE: soundness evaluator: PASS
 
+// The twin's leg of the same stress, both directions from the same
+// premise index: the shipped registry reads the adaptive form as
+// unadmitted, and the widened schema carries it into the instantiated
+// conclusion.
+// RUN: %if uv %{ %uv python -m oracle.parity adaptive-carry %zkc-registry-dir/soundness-signature.json | FileCheck %s --check-prefix=TWIN-SHIPPED %}
+// TWIN-SHIPPED: adaptive index: unadmitted, intake refuses
+// RUN: %if uv %{ %uv python -m oracle.parity adaptive-carry %t.widened.json | FileCheck %s --check-prefix=TWIN-WIDE %}
+// TWIN-WIDE: adaptive quantification: carried
+
 module {}

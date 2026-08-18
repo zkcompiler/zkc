@@ -118,6 +118,13 @@ struct SecurityIndexPattern {
 /// rule's premises: a second premise naming the same variable must
 /// agree with the first, so the caller passes one binding for the whole
 /// rule rather than one per premise.
+///
+/// The one shared slot is not keyed by variable name, which is correct
+/// only while a rule can name at most one variable — today guaranteed
+/// because every body kind takes at most one premise, and the
+/// conclusion's variable must be a premise's. The first body kind with
+/// two premises must key this binding by name (both legs), or two
+/// distinct variables would silently constrain each other.
 bool matchSecurityIndex(const SecurityIndexPattern &pattern,
                         const SecurityIndex &index,
                         std::optional<SecurityQuantification> &binding);

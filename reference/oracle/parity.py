@@ -63,6 +63,38 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("relation-contracts takes no witness")
         sys.stdout.write(model.canon_json(model.relation_contracts_document()))
         return
+    if mode == "adaptive-carry":
+        # The adaptivity coordinate on this leg, both directions with
+        # the same premise index, mirroring the C++ evaluator's stress
+        # section. Which direction is expected follows from the loaded
+        # schema, exactly as it does there: the shipped registry admits
+        # only static indices, so the adaptive form must read as
+        # unadmitted; a schema-widened copy admits it, and the carrying
+        # rule must preserve it into the instantiated conclusion.
+        if len(args) != 1:
+            raise SystemExit("adaptive-carry takes the signature path")
+        from dataclasses import replace as _replace
+
+        from . import derive as derivation
+
+        signature = wellformed.load(model.load_json(open(args[0]).read()))
+        rule = signature.rule("zkc.sr.from_rbr")
+        port = rule.premises[0]
+        adaptive_premise = _replace(port.expected_index,
+                                    quantification="adaptive_instance")
+        adaptive_conclusion = _replace(rule.conclusion_index,
+                                       quantification="adaptive_instance")
+        admits = adaptive_conclusion in signature.schemas.security_indices
+        if not admits:
+            print("adaptive index: unadmitted, intake refuses")
+            return
+        carried = derivation.carry_quantification(
+            rule, {port.name: adaptive_premise})
+        if carried != adaptive_conclusion:
+            raise SystemExit("the carried conclusion did not restate the "
+                             "premise's quantification")
+        print("adaptive quantification: carried")
+        return
     if mode == "duplex-kat":
         # The duplex framing rule as vectors (vocabularies.md §7): this
         # leg recomputes every case of the checked-in corpus and the
