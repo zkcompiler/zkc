@@ -194,6 +194,28 @@ struct SealedReduction {
   std::optional<RoundAdjacencyValue> roundAdjacency;
 };
 
+/// One transformer's body extent and whether it commutes.
+///
+/// The extent is the transformer's body in canonical positions: the
+/// messages its contract's rounds declare, together with the challenges
+/// those rounds sample. Both belong, because kernel §4's footprint is the
+/// events a transformer writes *and* the events it reads — a message is an
+/// absorb, a challenge is a squeeze, and a central transformer is one with
+/// neither. Tracking messages alone tracks write-write interference and
+/// misses read-write interference, which is exactly what BIND depends on.
+///
+/// `central` is kernel.md §4's predicate: a transformer whose body contains
+/// no absorbing event and no challenge event "neither writes what the
+/// transcript reads nor reads what it writes", so it commutes, and central
+/// transformers form a symmetric monoidal sub-category of the premonoidal
+/// one. Interchange fails for everything else.
+struct TransformerExtent {
+  std::string instance;
+  uint64_t begin = 0;
+  uint64_t end = 0;
+  bool central = true;
+};
+
 /// Claims are indexed by canonical claim position.  Reductions are keyed by
 /// canonical transformer position, which is not a reduction ordinal.
 struct SealedSoundnessView {
@@ -230,6 +252,21 @@ struct SealedSoundnessView {
   std::map<uint64_t, SealedReduction> reductionsByTransformerPosition;
   std::optional<SealedDuplexFacts> duplex;
 
+  /// Every challenge event of the spine, in canonical position order.
+  /// Read by the artifact judgment, which asks whether a derivation
+  /// accounted for all of them. Projected here rather than taken from the
+  /// duplex facts because those exist only when the sealed kappa names a
+  /// sponge, and an artifact may carry challenges without naming one; what
+  /// rounds a bound must cover is not a fact about the sponge profile.
+  std::vector<uint64_t> challengeEventPositions;
+
+  /// Each transformer's body extent and centrality, in canonical instance
+  /// order. Projected like the anchors and statement labels above are: a
+  /// consumer asking whether two transformers commute needs the footprint,
+  /// and no judgment here reads it. The rule class that will read it is the
+  /// one that composes two claims in parallel, which does not ship yet.
+  std::vector<TransformerExtent> transformerBodies;
+
   /// The seal policy this artifact was sealed under. Every other field
   /// here is geometry a rule reads to price one step; this one is read
   /// by the artifact judgment, which asks whether a derivation covers
@@ -239,56 +276,32 @@ struct SealedSoundnessView {
   std::string policy;
 };
 
-/// One transformer's body extent and whether it commutes.
-///
-/// The extent is the transformer's membership events -- the messages its
-/// contract's rounds declare -- in canonical positions. It deliberately does
-/// not cover the challenges those rounds sample: a challenge reaches a
-/// reduction as a dependency operand rather than as a member, and a
-/// transformer may sample one inside another's block on purpose. Grinding is
-/// exactly that shape, and the adjacency value the adapter builds is what
-/// authenticates and prices the placement.
-///
-/// The extent is a best-effort reading of the kernel's body rather than a
-/// definition of it, and the gap is worth stating: kernel §4 counts a
-/// transformer's challenges as part of its body, while the carrier makes
-/// membership a slot-only fact. Where a transformer owns messages those are
-/// its extent; where it owns none — three shipped contracts declare a
-/// message-free round — its rounds' challenges are the only extent it has.
-/// So a transformer whose challenge sits outside its own message block can
-/// still overlap another without being grouped. Widening every extent to
-/// cover challenges is not the fix: that refuses grinding over FRI, which
-/// interleaves on purpose and has an exact rule.
-///
-/// `central` is kernel.md §4's predicate: a transformer whose body contains
-/// no absorbing event and no challenge event "neither writes what the
-/// transcript reads nor reads what it writes", so it commutes, and central
-/// transformers form a symmetric monoidal sub-category of the premonoidal
-/// one. Interchange fails for everything else, which is why soundness.md
-/// §9.3 must be conservative about interleaved groups.
-struct TransformerExtent {
-  std::string instance;
-  uint64_t begin = 0;
-  uint64_t end = 0;
-  bool central = true;
-};
 
-/// Kernel §4's decomposition decision, computed rather than assumed: an
-/// interleaved group decomposes per-transformer exactly when all but one of
-/// its members is central. Groups are the transitive closure of extent
-/// overlap, not merely overlapping pairs -- two non-central transformers
-/// joined through a central one are one group and must be counted together.
+/// Kernel §4's decomposition question, computed rather than assumed: the
+/// groups are the transitive closure of body overlap, not merely overlapping
+/// pairs -- two non-central transformers joined through a central one are one
+/// group and must be counted together. A group whose members are all but one
+/// central decomposes per-transformer; any other interleaved group does not.
 ///
-/// The admitting direction is unreachable today and is implemented anyway:
-/// `vocabularies.md` requires a reduction contract to declare at least one
-/// round, because "a contract with no interaction rounds states no local
-/// transition to judge or price", so every admitted transformer samples a
-/// challenge and none is central. Writing the kernel's criterion rather than
-/// the constant it currently evaluates to is what keeps this correct if that
-/// vocabulary rule ever admits a bookkeeping transformer; the constant is a
-/// fact about today's vocabulary, the criterion is a fact about the category.
-llvm::Error
-requireDecomposableTransformerGroups(std::vector<TransformerExtent> extents);
+/// This answers a question and refuses nothing, because the answer is a
+/// precondition of **parallel composition** and nothing else. Accumulating a
+/// round-by-round bound over a transcript is a union bound over rounds, and
+/// interleaving does not threaten it: every challenge stays fresh given the
+/// prefix the duplex absorbed, so a per-transformer judgment stays true when
+/// another transformer's events sit between its own. What the tensor needs is
+/// that the group's denotation factors, and that is where "all but one
+/// central" is the condition. No shipped rule composes two claims in
+/// parallel; the first will, and it reads this.
+///
+/// The decomposing direction is unreachable today. `vocabularies.md` requires
+/// a reduction contract to declare at least one round, because "a contract
+/// with no interaction rounds states no local transition to judge or price",
+/// so every admitted transformer samples a challenge and none is central.
+/// The criterion is written rather than the constant it evaluates to: the
+/// constant is a fact about today's vocabulary, the criterion is a fact about
+/// the category.
+std::vector<std::vector<TransformerExtent>>
+groupTransformerBodies(std::vector<TransformerExtent> extents);
 
 /// Whether a derivation covers the artifact rather than one site of it.
 ///
@@ -320,12 +333,34 @@ struct ArtifactJudgment {
   /// so a second entry means the derivation covers one conclusion of an
   /// artifact that has several.
   std::vector<uint64_t> uncoveredClaims;
+  /// Canonical event positions of the challenges no transformer the
+  /// derivation covers owns. A round-by-round bound reaches a protocol by a
+  /// union bound over rounds, so a challenge nobody indexed is a term the
+  /// sum omits; presenting that sum as the artifact's cost prices a protocol
+  /// that is not this one. This is the sentence the round-by-round
+  /// preservation body already says inside its own span, said over the whole
+  /// spine.
+  std::vector<uint64_t> uncoveredChallenges;
+};
+
+/// What of an artifact a derivation reached, walked from its evaluated root.
+///
+/// A reduction occurrence covers its transformer. A path occurrence covers
+/// the producer of the claim it names, which is the same reduction the
+/// preservation body finds when it locates a premise's transcript block. An
+/// assumption covers nothing: `readJudgment` admits an extraction result and
+/// refuses every other shape, so an assumption cannot carry rounds, and the
+/// rounds of any derivation come from applications regardless.
+struct DerivationCoverage {
+  std::set<uint64_t> coveredTransformers;
+  SecurityTrack track = SecurityTrack::Soundness;
 };
 
 /// Judge whether `targetClaim` — the claim a derivation concluded about
 /// — discharges the whole artifact.
 ArtifactJudgment judgeArtifact(const SealedSoundnessView &sealed,
-                               const ClaimRef &targetClaim);
+                               const ClaimRef &targetClaim,
+                               const DerivationCoverage &coverage);
 
 /// Resolve the reduction output named by `site`, including the redundant
 /// owner-claim equality check.

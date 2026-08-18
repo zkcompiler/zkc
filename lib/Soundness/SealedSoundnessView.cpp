@@ -204,14 +204,16 @@ makeConsumedSubject(const SealedSoundnessView &sealed,
 
 } // namespace
 
-llvm::Error
-requireDecomposableTransformerGroups(std::vector<TransformerExtent> extents) {
-  if (extents.size() < 2)
-    return llvm::Error::success();
+std::vector<std::vector<TransformerExtent>>
+groupTransformerBodies(std::vector<TransformerExtent> extents) {
+  std::vector<std::vector<TransformerExtent>> groups;
+  if (extents.empty())
+    return groups;
   // The instance name is part of the key, not decoration: `llvm::sort` is
-  // not stable, so without it two transformers with equal extents would be
-  // named in an unspecified order and the refusal would differ between runs
-  // and between implementations.  The twin sorts by the same triple.
+  // not stable, so without it two transformers with equal bodies would be
+  // listed in an unspecified order and a consumer's answer would differ
+  // between runs and between implementations.  The twin sorts by the same
+  // triple.
   llvm::sort(extents, [](const TransformerExtent &lhs,
                          const TransformerExtent &rhs) {
     return std::tie(lhs.begin, lhs.end, lhs.instance) <
@@ -220,35 +222,32 @@ requireDecomposableTransformerGroups(std::vector<TransformerExtent> extents) {
 
   size_t groupStart = 0;
   uint64_t groupEnd = extents.front().end;
-  auto closeGroup = [&](size_t pastEnd) -> llvm::Error {
-    llvm::SmallVector<llvm::StringRef> nonCentral;
+  auto close = [&](size_t pastEnd) {
+    std::vector<TransformerExtent> members;
     for (size_t index = groupStart; index < pastEnd; ++index)
-      if (!extents[index].central)
-        nonCentral.push_back(extents[index].instance);
-    if (nonCentral.size() < 2)
-      return llvm::Error::success();
-    return llvm::createStringError(
-        "sealed soundness adapter: interleaved reduction bodies '" +
-        nonCentral[0] + "' and '" + nonCentral[1] +
-        "' are both non-central, so the group does not decompose "
-        "per-transformer and requires an exact composite soundness rule");
+      members.push_back(extents[index]);
+    groups.push_back(std::move(members));
   };
 
   for (size_t index = 1; index < extents.size(); ++index) {
+    // A body wholly inside the running group must not pull its end
+    // backwards: overlap is transitive, and the group runs to the furthest
+    // end any member reaches.
     if (extents[index].begin <= groupEnd) {
       groupEnd = std::max(groupEnd, extents[index].end);
       continue;
     }
-    if (llvm::Error error = closeGroup(index))
-      return error;
+    close(index);
     groupStart = index;
     groupEnd = extents[index].end;
   }
-  return closeGroup(extents.size());
+  close(extents.size());
+  return groups;
 }
 
 ArtifactJudgment judgeArtifact(const SealedSoundnessView &sealed,
-                               const ClaimRef &targetClaim) {
+                               const ClaimRef &targetClaim,
+                               const DerivationCoverage &coverage) {
   ArtifactJudgment judgment;
   judgment.policy = sealed.policy;
 
@@ -282,7 +281,43 @@ ArtifactJudgment judgeArtifact(const SealedSoundnessView &sealed,
     judgment.uncoveredClaims.push_back(index);
   }
 
+  // A round-by-round bound reaches the protocol by a union bound over its
+  // rounds, so an artifact-level claim must account for every challenge the
+  // spine squeezes.  A challenge no covered transformer owns is a term the
+  // sum leaves out, and interleaving is not what makes this bite: each
+  // challenge stays fresh given the prefix the duplex absorbed, so the
+  // per-transformer judgments stay true.  What is not true is that their sum
+  // is this artifact's cost.
+  //
+  // The tracks are enumerated rather than defaulted, and the switch has no
+  // `default`: a fourth track is a build error here rather than a silent
+  // exemption.  Completeness accumulates nothing over the transcript, so it
+  // is exempt by decision and not by omission.
+  bool accumulates = false;
+  switch (coverage.track) {
+  case SecurityTrack::Soundness:
+  case SecurityTrack::Knowledge:
+    accumulates = true;
+    break;
+  case SecurityTrack::Completeness:
+    accumulates = false;
+    break;
+  }
+
+  if (accumulates) {
+    std::set<uint64_t> owned;
+    for (const auto &[position, reduction] :
+         sealed.reductionsByTransformerPosition)
+      if (coverage.coveredTransformers.count(position))
+        for (const SealedRoundFact &round : reduction.rounds)
+          owned.insert(round.challengeEventPosition);
+    for (uint64_t challenge : sealed.challengeEventPositions)
+      if (!owned.count(challenge))
+        judgment.uncoveredChallenges.push_back(challenge);
+  }
+
   judgment.discharged = targetIsOurs && judgment.uncoveredClaims.empty() &&
+                        judgment.uncoveredChallenges.empty() &&
                         sealed.policy == "closed_proof";
   return judgment;
 }

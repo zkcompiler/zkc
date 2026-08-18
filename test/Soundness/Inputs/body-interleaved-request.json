@@ -19,7 +19,7 @@
     "target": {
       "subject": {
         "kind": "protocol_claim",
-        "artifact_id": "0e359f5e79807d3e1a68f829c71d31af9518562acdd5f2b2d6e205525378db7a",
+        "artifact_id": "4a96cb33b1fe313237dda9402e9c8c11a65cad5cb572b55de0d1cc0fd560af9b",
         "claim": {
           "claim_index": 2,
           "descriptor_digest": "sha256:7babc219fed621a71815357c359f16fff3e44abe288409f0c435cfdcf1d03331"
@@ -38,7 +38,7 @@
       "kind": "apply",
       "site": {
         "kind": "reduction",
-        "artifact_id": "0e359f5e79807d3e1a68f829c71d31af9518562acdd5f2b2d6e205525378db7a",
+        "artifact_id": "4a96cb33b1fe313237dda9402e9c8c11a65cad5cb572b55de0d1cc0fd560af9b",
         "owner_claim": {
           "claim_index": 2,
           "descriptor_digest": "sha256:7babc219fed621a71815357c359f16fff3e44abe288409f0c435cfdcf1d03331"

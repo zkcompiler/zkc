@@ -1,0 +1,25 @@
+# The shape a message-only extent misses. Two transformers whose message
+# blocks are disjoint and whose bodies interleave: the second's entire body
+# sits inside the first's span, because the first's challenge follows all of
+# it.
+#
+# The derivation succeeds, and should: a round-by-round bound reaches a
+# protocol by a union bound over its rounds, every challenge here stays fresh
+# given the prefix the duplex absorbed, and the judgment is a true statement
+# about the transformer it prices. What the artifact judgment refuses is the
+# step from that to a statement about the artifact, and it refuses it by
+# naming the round nobody indexed.
+#
+# The gate this replaces admitted this artifact outright, and priced one of
+# the two bodies with nothing said about the other.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/Inputs/body-interleaved-open.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/body-interleaved-request.json -o=/dev/null %t/sealed.mlirbc \
+# RUN:   | FileCheck %s
+# CHECK: artifact judgment: not discharged
+# CHECK: belongs to no transformer this derivation covers

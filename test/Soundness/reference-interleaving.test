@@ -1,11 +1,22 @@
-# The reference twin enforces the same theorem boundary as the native
-# soundness adapter, and states the same decision: kernel.md section 4's
-# group criterion rather than a blanket rule, naming the two members whose
-# transcript effect makes the group indecomposable. This is deliberately not
-# a carrier/seal refusal.
+# The reference twin computes the same transformer bodies as the native
+# adapter, over kernel.md section 4's footprint: what a transformer writes and
+# what it reads. Both orderings below are one group with two non-central
+# members, and the second is the case a message-only extent misses -- its
+# message blocks are disjoint while its bodies interleave.
+#
+# Neither refuses. Whether an interleaved group decomposes is the precondition
+# of composing two claims in parallel, and no shipped rule does that; what an
+# artifact-level claim owes is that every round was accounted for, which
+# interleaving-pin.test and body-interleave.test pin.
 #
 # REQUIRES: uv
 # RUN: %uv python %S/Inputs/reference_interleaving.py | FileCheck %s
-# CHECK: interleaved reduction bodies {{.*}} are both non-central
-# CHECK-SAME: does not decompose per-transformer
-# CHECK-SAME: requires an exact composite soundness rule
+# CHECK: interleaved bodies [('opa', 0, 4, False), ('opb', 1, 5, False)]
+# CHECK: interleaved group ['opa', 'opb'] non-central ['opa', 'opb']
+# CHECK: separated bodies [('opa', 0, 5, False), ('opb', 2, 4, False)]
+# CHECK: separated group ['opa', 'opb'] non-central ['opa', 'opb']
+#
+# A transformer owning no message at all still has a body: two shipped
+# contracts declare a message-free round, and under a message-only criterion
+# such a reduction had an empty extent and dropped out of the question.
+# CHECK: message-free bodies [('batch', 5, 5, False)]

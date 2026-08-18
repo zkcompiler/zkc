@@ -798,26 +798,21 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
               if (slot.isAbsorbing())
                 extent.central = false;
             }
-      // Sampling a challenge is exactly what makes a transformer non-central
-      // (kernel.md §4).  Today no admitted contract can avoid one --
+      // A challenge the transformer's rounds sample is part of its body and
+      // not merely a dependency: kernel §4's footprint is what a transformer
+      // writes and what it reads, a message being an absorb and a challenge a
+      // squeeze.  Sampling one is also exactly what makes a transformer
+      // non-central.  Today no admitted contract can avoid one --
       // vocabularies.md requires a non-empty round list, because "a contract
       // with no interaction rounds states no local transition to judge or
-      // price" -- so this is unconditional in practice.  It is written as the
-      // predicate the kernel states rather than as the constant it currently
-      // evaluates to: the constant is a fact about the vocabulary, the
-      // predicate is a fact about the category.
-      if (!owned.rounds.empty())
+      // price" -- so centrality is a constant in practice.  It is written as
+      // the predicate the kernel states rather than as the constant it
+      // currently evaluates to: the constant is a fact about the vocabulary,
+      // the predicate is a fact about the category.
+      for (const SealedRoundFact &round : owned.rounds) {
+        observe(round.challengeEventPosition);
         extent.central = false;
-      // A contract may declare a round with no messages -- three shipped
-      // ones do -- and a reduction all of whose rounds are message-free
-      // owns no membership event at all. Its extent would be empty and it
-      // would drop out of the group analysis silently, which is the wrong
-      // direction for a check whose failure mode is admitting a
-      // composition. Where there are no messages, the challenges the
-      // rounds sample are the only extent the transformer has.
-      if (!seen)
-        for (const SealedRoundFact &round : owned.rounds)
-          observe(round.challengeEventPosition);
+      }
       if (seen)
         transformerExtents.push_back(std::move(extent));
     }
@@ -858,9 +853,32 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
     return adapterError(
         "canonical transformer table does not cover every reduction exactly");
 
-  if (llvm::Error error =
-          requireDecomposableTransformerGroups(std::move(transformerExtents)))
-    return std::move(error);
+  // The bodies are projected, not judged. Whether an interleaved group
+  // decomposes is the precondition of composing two claims in parallel, and
+  // no shipped rule does that; accumulating a bound over a transcript is a
+  // union bound over rounds, which interleaving does not threaten. The
+  // artifact judgment is what asks whether every round was accounted for.
+  llvm::sort(transformerExtents, [](const TransformerExtent &lhs,
+                                    const TransformerExtent &rhs) {
+    return std::tie(lhs.begin, lhs.end, lhs.instance) <
+           std::tie(rhs.begin, rhs.end, rhs.instance);
+  });
+  view.transformerBodies = std::move(transformerExtents);
+
+  // Every squeeze the spine performs, whether or not a transformer owns it.
+  // The artifact judgment reads this to ask whether a derivation accounted
+  // for all of them; the duplex facts carry the same positions but exist
+  // only when the sealed kappa names a sponge, and what rounds a bound must
+  // cover is not a fact about the sponge profile.
+  for (mlir::Operation &op : sealed.getBody().front())
+    if (auto challenge = mlir::dyn_cast<pir::ChalOp>(op)) {
+      auto position = canonicalEventPosition(*canonical, challenge.getVal(),
+                                             "a challenge event");
+      if (!position)
+        return position.takeError();
+      view.challengeEventPositions.push_back(*position);
+    }
+  llvm::sort(view.challengeEventPositions);
 
   auto duplex = buildDuplexFacts(sealed, profiles, *canonical);
   if (!duplex)

@@ -1,16 +1,16 @@
-//===- TransformerGroupTest.cpp - kernel §4's decomposition decision ------===//
+//===- TransformerGroupTest.cpp - kernel §4's grouping question -----------===//
 // An interleaved group decomposes per-transformer exactly when all but one
-// of its members is central (docs/spec/kernel.md §4).  The admitting half of
-// that criterion is unreachable from any admissible artifact -- a reduction
-// contract must declare at least one round, so every admitted transformer
-// samples a challenge and none is central -- which is exactly why it is
-// tested here, at the predicate, rather than through a fixture that cannot
-// be authored.
+// of its members is central (docs/spec/kernel.md §4).  The grouping answers
+// that question and refuses nothing: it is the precondition of composing two
+// claims in parallel, and no shipped rule does that.  The decomposing half is
+// also unreachable from any admissible artifact -- a reduction contract must
+// declare at least one round, so every admitted transformer samples a
+// challenge and none is central -- which is why the criterion is tested here,
+// at the predicate, rather than through a fixture that cannot be authored.
 //===----------------------------------------------------------------------===//
 
 #include "zkc/Soundness/SealedSoundnessView.h"
 
-#include "llvm/Support/Error.h"
 #include "ZkcTest.h"
 
 #include <string>
@@ -31,12 +31,21 @@ TransformerExtent extent(std::string instance, uint64_t begin, uint64_t end,
   return value;
 }
 
-/// The refusal's message, or the empty string when the groups decompose.
+/// The first group that does not decompose, named by its first two
+/// non-central members, or the empty string when every group decomposes.
 std::string decide(std::vector<TransformerExtent> extents) {
-  llvm::Error error = requireDecomposableTransformerGroups(std::move(extents));
-  if (!error)
-    return "";
-  return llvm::toString(std::move(error));
+  for (const std::vector<TransformerExtent> &group :
+       groupTransformerBodies(std::move(extents))) {
+    std::vector<std::string> nonCentral;
+    for (const TransformerExtent &member : group)
+      if (!member.central)
+        nonCentral.push_back(member.instance);
+    if (nonCentral.size() >= 2)
+      return "'" + nonCentral[0] + "' and '" + nonCentral[1] +
+             "' are both non-central, so the group does not decompose "
+             "per-transformer";
+  }
+  return "";
 }
 
 TEST(TransformerGroups, DisjointExtentsDecompose) {

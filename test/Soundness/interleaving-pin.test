@@ -1,23 +1,30 @@
 # Interleaving is structurally valid Open PIR, so sealing keeps accepting this
-# carrier. Security pricing is a separate judgment: without one exact
-# composite rule, derivation must not price the two bodies independently
-# (kernel.md section 9.3).
+# carrier, and pricing one of the two bodies is a true statement about that
+# body: a round-by-round bound reaches a protocol by a union bound over its
+# rounds, and every challenge here stays fresh given the prefix the duplex
+# absorbed. Interleaving does not make the per-transformer judgment false.
 #
-# The refusal is now the decision kernel.md section 4 states rather than a
-# blanket rule: a group decomposes per-transformer exactly when all but one
-# of its members is central, and a transformer that samples a challenge is
-# not. Both bodies here sample, so the group does not decompose and the
-# diagnostic names which two members carry the transcript effect.
+# What it does not license is presenting that judgment as the artifact's. The
+# derivation below prices one of the two transformers and never touches the
+# other, so the challenge the other samples is a round nobody indexed and a
+# term the sum leaves out. The artifact judgment is what says so, and it names
+# the round rather than refusing the derivation that was asked for.
+#
+# This is deliberately not the blanket refusal it replaces. That one ran while
+# the sealed view was built, before any rule was chosen, so it could not admit
+# the composite application kernel.md section 4 tells a derivation to make --
+# grinding over FRI is exactly that shape -- and it was narrow enough, in
+# compensation, to admit the artifact in body-interleave.test.
 #
 # RUN: rm -rf %t && mkdir -p %t
 # RUN: zkc-seal %S/Inputs/interleaved-open.mlir %zkc-seal-full -o %t/sealed.artifacts > /dev/null
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
 
-# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
 # RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
 # RUN:   --request=%S/Inputs/interleaved-a-request.json -o=/dev/null %t/sealed.mlirbc \
-# RUN:   2>&1 | FileCheck %s
-# CHECK: interleaved reduction bodies 'opa' and 'opb' are both non-central
-# CHECK-SAME: does not decompose per-transformer
-# CHECK-SAME: requires an exact composite soundness rule
+# RUN:   | FileCheck %s
+# CHECK: artifact judgment: not discharged
+# CHECK: the challenge at event 4 belongs to no transformer this derivation covers
+# CHECK-SAME: its round is not in the bound
