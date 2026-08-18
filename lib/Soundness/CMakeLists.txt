@@ -20,6 +20,7 @@ add_mlir_library(ZkcSoundness
   LINK_LIBS PUBLIC
   ZkcEncodingCore
   ZkcRegistry
+  ZkcRelation
 )
 
 add_mlir_library(ZkcSoundnessPir

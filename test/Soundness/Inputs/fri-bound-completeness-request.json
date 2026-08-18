@@ -1,0 +1,42 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.completeness.fri@reduction:fri"
+    ],
+    "resolved_parameters": {},
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "670b9ad6272e9088bfbc2ef84cf675d4d9a492a502e5c2b221ae01d3fde9a3f9",
+        "claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+        }
+      },
+      "index": {
+        "notion": "completeness",
+        "track": "completeness",
+        "variant": "",
+        "model": "",
+        "quantification": "static"
+      },
+      "resource_variables": []
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "reduction",
+        "artifact_id": "670b9ad6272e9088bfbc2ef84cf675d4d9a492a502e5c2b221ae01d3fde9a3f9",
+        "owner_claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+        },
+        "transformer_position": 1,
+        "output_index": 0
+      },
+      "binding": "zkc.completeness.fri@reduction:fri",
+      "premises": {}
+    }
+  }
+}

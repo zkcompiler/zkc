@@ -1,0 +1,32 @@
+# The loading discipline every registry shares, refused by identifier.
+# E120 names the document stage — the supplied bytes are not the named
+# registry document — and E121 the name gate every admitted name passes.
+# The identifiers are the conformance surface (versioning.md §3); the
+# prose around them is not. The value-faithful family's own vocabulary
+# is the positive control, so the refusal under test is the envelope's,
+# not the fixture's.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Oir/Inputs/plonky3-fri-vf.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-registry-lint %t/vocab.json > /dev/null
+
+# A document naming a different registry is a different document, not a
+# lenient parse of this one. Driven through zkc-seal because the lint's
+# own dispatch reads the name first; the consumer that asked for a
+# vocabulary is the one whose loader refuses.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['registry']='zkc.something_else'; json.dump(d, open(sys.argv[2],'w'))" %t/vocab.json %t/wrong-name.json
+# RUN: not zkc-seal %t/spine.mlir --protocol-vocabulary=%t/wrong-name.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/refused.artifacts 2>&1 | FileCheck %s --check-prefix=NAME
+# NAME: [zkc-E120] 'registry' must be the string
+
+# A top-level field the format does not declare.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['extra']=1; json.dump(d, open(sys.argv[2],'w'))" %t/vocab.json %t/extra-field.json
+# RUN: not zkc-registry-lint %t/extra-field.json 2>&1 | FileCheck %s --check-prefix=EXTRA
+# EXTRA: [zkc-E120] top level has unknown field
+
+# An admitted name that is empty: the domain predicate is vacuously true
+# on the empty string, which is why emptiness is refused explicitly.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['reduction_contracts']['fri']['parameters']['']='1'; json.dump(d, open(sys.argv[2],'w'))" %t/vocab.json %t/empty-name.json
+# RUN: not zkc-registry-lint %t/empty-name.json 2>&1 | FileCheck %s --check-prefix=EMPTY
+# EMPTY: [zkc-E121] reduction parameter names must be non-empty printable ASCII

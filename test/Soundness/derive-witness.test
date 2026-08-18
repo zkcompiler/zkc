@@ -21,7 +21,7 @@
 # obligation the conclusion inherited on the way to it. Those obligations are
 # what a reader has to accept for the bound to mean anything, which is why they
 # travel with it rather than staying in the rules.
-# WITNESS-DAG: "judgment_digest": "sha256:76fde6da0060d1d64d350b4d89c6bdde109bd52de5fecdd55e50a523b8aa4fbe"
+# WITNESS-DAG: "judgment_digest": "sha256:bec70da274f3bd576465139df5d23e0a869b4394c067a02f31f5d2f2f7b732f2"
 # WITNESS-DAG: "zkc.side.field_order_match"
 # WITNESS-DAG: "zkc.assume.subset_sampling_root_bound"
 # WITNESS-DAG: "zkc.hyp.move_budget_is_query_budget"

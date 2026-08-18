@@ -21,7 +21,37 @@ bool operator!=(const ExactRef &lhs, const ExactRef &rhs) {
 
 bool operator==(const SecurityIndex &lhs, const SecurityIndex &rhs) {
   return lhs.notion == rhs.notion && lhs.track == rhs.track &&
-         lhs.variant == rhs.variant && lhs.model == rhs.model;
+         lhs.variant == rhs.variant && lhs.model == rhs.model &&
+         lhs.quantification == rhs.quantification;
+}
+
+bool matchSecurityIndex(const SecurityIndexPattern &pattern,
+                        const SecurityIndex &index,
+                        std::optional<SecurityQuantification> &binding) {
+  // Every coordinate but the one the variable may cover is compared
+  // exactly, so a pattern can never admit a premise in a track or a
+  // notion it did not name.
+  SecurityIndex expected = pattern.index;
+  if (!pattern.quantificationVariable.empty())
+    expected.quantification = index.quantification;
+  if (expected != index)
+    return false;
+  if (pattern.quantificationVariable.empty())
+    return true;
+  // A rule may name one variable across several premises; the second
+  // occurrence is a constraint, not a rebinding.
+  if (binding && *binding != index.quantification)
+    return false;
+  binding = index.quantification;
+  return true;
+}
+
+SecurityIndex instantiateSecurityIndex(const SecurityIndexPattern &pattern,
+                                       SecurityQuantification binding) {
+  SecurityIndex index = pattern.index;
+  if (!pattern.quantificationVariable.empty())
+    index.quantification = binding;
+  return index;
 }
 
 bool operator!=(const SecurityIndex &lhs, const SecurityIndex &rhs) {
@@ -371,6 +401,12 @@ RuleWfResult checkArtifactProjection(const ArtifactProjection &projection,
         !projection.field.empty() || !inactiveBaseIsDefault())
       return refuse(RuleWfRefusalCode::InvalidReference, location,
                     "malformed reduction-input-count projection");
+    return accepted();
+  case ArtifactProjectionKind::BoundRelationAnchorCount:
+    if (projection.resultSort != ValueSort::Integer ||
+        !projection.field.empty() || !inactiveBaseIsDefault())
+      return refuse(RuleWfRefusalCode::InvalidReference, location,
+                    "malformed bound-relation-anchor-count projection");
     return accepted();
   case ArtifactProjectionKind::ReductionParameter:
     if (!simpleField() || (!isNumeric(projection.resultSort) &&
@@ -1502,7 +1538,12 @@ RuleWfResult requirePort(const RuleEnvironment &env, const std::string &name,
                          const SecurityIndex &index,
                          const std::string &location) {
   auto it = env.premises.find(name);
-  if (it == env.premises.end() || it->second->expectedIndex != index ||
+  // A body reference names a premise by the index it concluded, so a
+  // premise whose quantification is a variable matches whatever the
+  // body asks for on that coordinate alone.
+  std::optional<SecurityQuantification> unused;
+  if (it == env.premises.end() ||
+      !matchSecurityIndex(it->second->expectedIndex, index, unused) ||
       it->second->expectedResult != resultFor(index))
     return refuse(RuleWfRefusalCode::InvalidBodySignature, location,
                   "body premise has the wrong exact index signature");
@@ -1728,6 +1769,11 @@ RuleWfResult checkRuleBindingWellFormed(const SchemaContext &context,
                       "path projection requires a path anchor");
       return accepted();
     }
+    // A fact about the whole artifact rather than one occurrence, so it
+    // is readable from either anchor kind.
+    if (value.artifactProjection.kind ==
+        ArtifactProjectionKind::BoundRelationAnchorCount)
+      return accepted();
     if (binding.anchor.kind != ProtocolAnchorKind::ReductionContract)
       return refuse(RuleWfRefusalCode::InvalidBinding, location,
                     "reduction projection requires a reduction anchor");
@@ -1997,7 +2043,49 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
   if (!validExactRef(rule.ref))
     return refuse(RuleWfRefusalCode::InvalidReference, "rule.ref",
                   "rule reference and source revision must be non-empty");
-  if (!admittedIndex(context, rule.conclusionIndex))
+  // A pattern whose quantification is a variable describes a set of
+  // indices, and its literal quantification field carries no meaning,
+  // so membership degenerates sensibly only for literal patterns. What
+  // a pattern must satisfy is satisfiability: some admitted index
+  // matches it, otherwise it can never be filled and the rule is dead
+  // on arrival.
+  auto admittedPattern = [&](const SecurityIndexPattern &pattern) {
+    if (pattern.quantificationVariable.empty())
+      return admittedIndex(context, pattern.index);
+    return llvm::any_of(context.securityIndices,
+                        [&](const SecurityIndex &candidate) {
+                          std::optional<SecurityQuantification> unused;
+                          return matchSecurityIndex(pattern, candidate, unused);
+                        });
+  };
+  // A conclusion's variable restates what a premise bound; with no
+  // premise naming it there is nothing to restate and the conclusion
+  // denotes no index at all. The instantiated index is checked against
+  // the admitted vocabulary where the conclusion is assembled, since
+  // which index that is depends on the derivation.
+  if (!rule.conclusionIndex.quantificationVariable.empty() &&
+      llvm::none_of(rule.premises, [&](const PremisePort &port) {
+        return port.expectedIndex.quantificationVariable ==
+               rule.conclusionIndex.quantificationVariable;
+      }))
+    return refuse(RuleWfRefusalCode::InvalidIndex, "rule.conclusion_index",
+                  "conclusion index variable is bound by no premise");
+  // The variable is a rule-level device with one name: a premise binds
+  // it and the conclusion restates it. A premise naming a variable the
+  // conclusion does not restate binds a value the conclusion discards,
+  // and a conclusion whose literal is stronger than the discarded value
+  // would then claim more than any premise established. Refusing the
+  // mismatch is also what keeps one binding slot correct: two premises
+  // cannot name two variables.
+  for (const PremisePort &port : rule.premises)
+    if (!port.expectedIndex.quantificationVariable.empty() &&
+        port.expectedIndex.quantificationVariable !=
+            rule.conclusionIndex.quantificationVariable)
+      return refuse(RuleWfRefusalCode::InvalidIndex,
+                    "rule.premise." + port.name,
+                    "premise index variable is not the one the conclusion "
+                    "restates");
+  if (!admittedPattern(rule.conclusionIndex))
     return refuse(RuleWfRefusalCode::InvalidIndex, "rule.conclusion_index",
                   "conclusion index is absent from the admitted vocabulary");
 
@@ -2045,9 +2133,9 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
 
   for (const PremisePort &port : rule.premises) {
     auto subject = context.subjectSchemas.find(port.expectedSubjectSchema);
-    if (!admittedIndex(context, port.expectedIndex) ||
+    if (!admittedPattern(port.expectedIndex) ||
         !validResultSchema(port.expectedResult) ||
-        port.expectedResult != resultFor(port.expectedIndex) ||
+        port.expectedResult != resultFor(port.expectedIndex.index) ||
         subject == context.subjectSchemas.end() ||
         !detail::validSubjectSchema(port.expectedSubjectSchema,
                                     subject->second))
@@ -2185,8 +2273,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
       [&](const auto &body) -> RuleWfResult {
         using Body = std::decay_t<decltype(body)>;
         if constexpr (std::is_same_v<Body, SpecialSoundnessEntry>) {
-          if (!rule.premises.empty() ||
-              rule.conclusionIndex.notion != SecurityNotion::SpecialSoundness)
+          if (!rule.premises.empty() || rule.conclusionIndex.index.notion !=
+                                            SecurityNotion::SpecialSoundness)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "SpecialSoundnessEntry has an invalid index "
                           "signature");
@@ -2194,14 +2282,14 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
                                   "rule.body.coordinates");
         } else if constexpr (std::is_same_v<Body, NativeRoundByRoundEntry>) {
           if (!rule.premises.empty() ||
-              rule.conclusionIndex.notion != SecurityNotion::RoundByRound)
+              rule.conclusionIndex.index.notion != SecurityNotion::RoundByRound)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "NativeRoundByRoundEntry has an invalid index "
                           "signature");
           return checkRounds(env, body.rounds, "rule.body.rounds");
         } else if constexpr (std::is_same_v<Body, ComputationalEntry>) {
           if (!rule.premises.empty() ||
-              rule.conclusionIndex.notion !=
+              rule.conclusionIndex.index.notion !=
                   SecurityNotion::ComputationalSpecialSoundness)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "ComputationalEntry has an invalid index signature");
@@ -2213,22 +2301,23 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
                             "rule.body.failure_bound");
         } else if constexpr (std::is_same_v<Body, CompletenessEntry>) {
           if (!rule.premises.empty() ||
-              rule.conclusionIndex.notion != SecurityNotion::Completeness)
+              rule.conclusionIndex.index.notion != SecurityNotion::Completeness)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "CompletenessEntry has an invalid index signature");
           return checkBound(env, body.bound, {}, "rule.body.bound");
         } else if constexpr (std::is_same_v<Body,
                                             SpecialSoundnessPreservation>) {
           if (rule.premises.size() != 1 ||
-              rule.conclusionIndex.notion !=
+              rule.conclusionIndex.index.notion !=
                   SecurityNotion::ComputationalSpecialSoundness)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "SpecialSoundnessPreservation requires exactly one "
                           "special-soundness premise");
           SecurityIndex expected{SecurityNotion::SpecialSoundness,
-                                 rule.conclusionIndex.track,
+                                 rule.conclusionIndex.index.track,
                                  {},
-                                 {}};
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port =
               requirePort(env, body.sourcePort, expected, "rule.body");
           if (!port.accepted())
@@ -2241,7 +2330,7 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
                             "rule.body.conclusion_failure_bound");
         } else if constexpr (std::is_same_v<Body, RoundByRoundPreservation>) {
           if (rule.premises.size() != 1 ||
-              rule.conclusionIndex.notion != SecurityNotion::RoundByRound)
+              rule.conclusionIndex.index.notion != SecurityNotion::RoundByRound)
             return refuse(
                 RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                 "RoundByRoundPreservation has an invalid index signature");
@@ -2249,19 +2338,20 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
           // cannot shift the notion, and concatenating two round sequences
           // priced under different variants would mean nothing, so the
           // premise index is the conclusion index exactly.
-          RuleWfResult port = requirePort(env, body.sourcePort,
-                                          rule.conclusionIndex, "rule.body");
+          RuleWfResult port = requirePort(
+              env, body.sourcePort, rule.conclusionIndex.index, "rule.body");
           if (!port.accepted())
             return port;
           return checkRounds(env, body.appendedRounds,
                              "rule.body.appended_rounds");
         } else if constexpr (std::is_same_v<Body, RoundScaling>) {
           if (rule.premises.size() != 1 ||
-              rule.conclusionIndex.notion != SecurityNotion::RoundByRound)
+              rule.conclusionIndex.index.notion != SecurityNotion::RoundByRound)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "RoundScaling has an invalid index signature");
-          RuleWfResult port = requirePort(env, body.roundByRoundPort,
-                                          rule.conclusionIndex, "rule.body");
+          RuleWfResult port =
+              requirePort(env, body.roundByRoundPort,
+                          rule.conclusionIndex.index, "rule.body");
           if (!port.accepted())
             return port;
           if (body.selectedRound.kind == RoundSelectorKind::ByRoundIndex) {
@@ -2305,14 +2395,15 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
         } else if constexpr (std::is_same_v<Body,
                                             SpecialSoundnessToRoundByRound>) {
           if (rule.premises.size() != 1 ||
-              rule.conclusionIndex.notion != SecurityNotion::RoundByRound)
+              rule.conclusionIndex.index.notion != SecurityNotion::RoundByRound)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "SpecialSoundnessToRoundByRound has an invalid "
                           "index signature");
           SecurityIndex expected{SecurityNotion::SpecialSoundness,
-                                 rule.conclusionIndex.track,
+                                 rule.conclusionIndex.index.track,
                                  {},
-                                 {}};
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port = requirePort(env, body.specialSoundnessPort,
                                           expected, "rule.body");
           if (!port.accepted())
@@ -2323,15 +2414,16 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
                             "rule.body.per_coordinate_bound");
         } else if constexpr (std::is_same_v<Body,
                                             RoundByRoundToStateRestoration>) {
-          if (rule.premises.size() != 1 ||
-              rule.conclusionIndex.notion != SecurityNotion::StateRestoration)
+          if (rule.premises.size() != 1 || rule.conclusionIndex.index.notion !=
+                                               SecurityNotion::StateRestoration)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "RoundByRoundToStateRestoration has an invalid "
                           "index signature");
           SecurityIndex expected{SecurityNotion::RoundByRound,
-                                 rule.conclusionIndex.track,
-                                 rule.conclusionIndex.variant,
-                                 {}};
+                                 rule.conclusionIndex.index.track,
+                                 rule.conclusionIndex.index.variant,
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port =
               requirePort(env, body.roundByRoundPort, expected, "rule.body");
           if (!port.accepted())
@@ -2360,14 +2452,15 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
           static_assert(
               std::is_same_v<Body, StateRestorationToFiatShamirDuplex>);
           if (rule.premises.size() != 1 ||
-              rule.conclusionIndex.notion != SecurityNotion::FiatShamir)
+              rule.conclusionIndex.index.notion != SecurityNotion::FiatShamir)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "StateRestorationToFiatShamirDuplex has an invalid "
                           "index signature");
           SecurityIndex expected{SecurityNotion::StateRestoration,
-                                 rule.conclusionIndex.track,
-                                 rule.conclusionIndex.variant,
-                                 {}};
+                                 rule.conclusionIndex.index.track,
+                                 rule.conclusionIndex.index.variant,
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port = requirePort(env, body.stateRestorationPort,
                                           expected, "rule.body");
           if (!port.accepted())

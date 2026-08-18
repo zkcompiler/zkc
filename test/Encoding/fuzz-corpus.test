@@ -1,0 +1,19 @@
+// The seeded encoder-differential corpus, as the gate every build runs.
+// The twelve variants and their expected sealed identities are checked
+// in (Inputs/fuzz-corpus.{mlir,ids}); the generator that minted them is
+// the reference twin's fuzz module, and fuzz-roundtrip.test — gated on
+// uv — is what keeps the checked-in corpus equal to what the generator
+// produces today. Splitting it this way is deliberate: the primary
+// encoding gate must run where uv is absent, so the corpus is checked
+// in and the generator becomes what refreshes it.
+//
+// The gates over the corpus:
+//   1. every variant seals (valid-by-construction is real, not assumed);
+//   2. the sealed artifact is parse -> print -> parse stable;
+//   3. the sealed identities equal the pinned ones, in order — encode
+//      determinism against values minted on the other leg.
+// RUN: zkc-opt %pir-seal-full %S/Inputs/fuzz-corpus.mlir -o %t.sealed
+// RUN: zkc-opt %t.sealed -o %t.reprint
+// RUN: diff %t.sealed %t.reprint
+// RUN: grep -o 'id "[0-9a-f]*"' %t.sealed > %t.got.ids
+// RUN: diff %t.got.ids %S/Inputs/fuzz-corpus.ids

@@ -330,6 +330,153 @@ struct TestSoundnessRuntimePass
       return signalPassFailure();
     }
 
+    // The comparison's edges, pinned directly. x against x^2 above is
+    // already the deliberate conservatism — valuationwise true for
+    // x >= 1, coefficientwise refused because the exponents are
+    // different keys. The remaining edges: incomparability is a
+    // negative answer in both directions and never a refusal, and a
+    // game term's identity is its instance AND its resource
+    // substitution, so the same game at a different substitution
+    // dominates nothing.
+    {
+      ClosedBound overX;
+      overX.quantity = resourceQuantity("x");
+      ClosedBound overY;
+      overY.quantity = resourceQuantity("y");
+      auto forward = closedBoundLeq(overX, overY, "test.leq.incomparable");
+      auto backward = closedBoundLeq(overY, overX, "test.leq.incomparable");
+      if (!forward.accepted() || *forward.value || !backward.accepted() ||
+          *backward.value) {
+        module.emitError() << "incomparable bounds did not answer no in "
+                              "both directions";
+        return signalPassFailure();
+      }
+
+      auto gameTerm = [&](int64_t numerator, int64_t denominator,
+                          const ClosedQuantity &tau) {
+        PrimitiveGameTerm term;
+        term.coefficient = fraction(numerator, denominator);
+        term.instance.ref = {"game", "game-revision"};
+        term.resourceSubstitution.emplace("tau", tau);
+        return term;
+      };
+      ClosedBound halfAdvantage;
+      halfAdvantage.primitiveGameTerms.push_back(
+          gameTerm(1, 2, resourceQuantity("t")));
+      ClosedBound fullAdvantage;
+      fullAdvantage.primitiveGameTerms.push_back(
+          gameTerm(1, 1, resourceQuantity("t")));
+      auto dominated =
+          closedBoundLeq(halfAdvantage, fullAdvantage, "test.leq.game");
+      if (!dominated.accepted() || !*dominated.value) {
+        module.emitError() << "a half-coefficient game term was not "
+                              "dominated by the full one";
+        return signalPassFailure();
+      }
+      ClosedBound otherSubstitution;
+      otherSubstitution.primitiveGameTerms.push_back(
+          gameTerm(1, 1, resourceQuantity("t", 1, 2)));
+      auto distinct = closedBoundLeq(halfAdvantage, otherSubstitution,
+                                     "test.leq.game_substitution");
+      if (!distinct.accepted() || *distinct.value) {
+        module.emitError() << "a game term was dominated across a different "
+                              "resource substitution";
+        return signalPassFailure();
+      }
+    }
+
+    // Scaling's edges. A ground zero deletes the game support — the
+    // scaled bound must not remember games at coefficient zero, since
+    // an addend priced away has to vanish rather than linger. A
+    // symbolic scale over anything but a ground quantity would mint a
+    // resource-times-advantage or resource-times-resource product,
+    // which the v0 normal form deliberately lacks; over a ground
+    // quantity it is polynomial multiplication.
+    {
+      ClosedBound priced;
+      priced.quantity = integerQuantity(5);
+      PrimitiveGameTerm term;
+      term.coefficient = Rational::fromInteger(1);
+      term.instance.ref = {"game", "game-revision"};
+      term.resourceSubstitution.emplace("tau", integerQuantity(1));
+      priced.primitiveGameTerms.push_back(term);
+
+      auto zeroed =
+          closedBoundScale(integerQuantity(0), priced, "test.scale.zero");
+      if (!zeroed.accepted() || !zeroed.value->primitiveGameTerms.empty() ||
+          !zeroed.value->quantity.constant.isZero()) {
+        module.emitError()
+            << "scaling by zero left game support or a nonzero quantity";
+        return signalPassFailure();
+      }
+
+      auto symbolicOverGame = closedBoundScale(resourceQuantity("t"), priced,
+                                               "test.scale.symbolic_game");
+      ClosedBound overS;
+      overS.quantity = resourceQuantity("s");
+      auto symbolicOverResource = closedBoundScale(
+          resourceQuantity("t"), overS, "test.scale.symbolic_resource");
+      for (const auto *refused : {&symbolicOverGame, &symbolicOverResource})
+        if (refused->accepted() ||
+            refused->refusal->code !=
+                RuntimeRefusalCode::UnsupportedNormalForm) {
+          module.emitError() << "a symbolic scale left the v0 normal form "
+                                "without refusing";
+          return signalPassFailure();
+        }
+
+      ClosedBound groundThree;
+      groundThree.quantity = integerQuantity(3);
+      auto polynomial = closedBoundScale(resourceQuantity("t"), groundThree,
+                                         "test.scale.polynomial");
+      if (!polynomial.accepted() ||
+          polynomial.value->quantity != resourceQuantity("t", 3)) {
+        module.emitError() << "a symbolic scale over a ground quantity did "
+                              "not multiply exactly";
+        return signalPassFailure();
+      }
+    }
+
+    // Max is admitted only over ground statistical quantities — a
+    // symbolic operand refuses rather than guessing a valuation.
+    {
+      ClosedBound symbolic;
+      symbolic.quantity = resourceQuantity("t");
+      auto refused = closedBoundMaximum({symbolic}, "test.maximum.symbolic");
+      if (refused.accepted() ||
+          refused.refusal->code != RuntimeRefusalCode::UnsupportedNormalForm) {
+        module.emitError()
+            << "a symbolic maximum did not refuse the v0 normal form";
+        return signalPassFailure();
+      }
+    }
+
+    // Specialization reaches both carriers: the quantity's monomials
+    // and the game terms' resource substitutions close under the same
+    // assignment, or the judgment would quantify over a resource its
+    // own game support still names.
+    {
+      ClosedBound symbolic;
+      symbolic.quantity = resourceQuantity("t", 1, 2);
+      PrimitiveGameTerm term;
+      term.coefficient = Rational::fromInteger(1);
+      term.instance.ref = {"game", "game-revision"};
+      term.resourceSubstitution.emplace("tau", resourceQuantity("t"));
+      symbolic.primitiveGameTerms.push_back(term);
+      std::map<std::string, ClosedQuantity, std::less<>> at;
+      at.emplace("t", integerQuantity(3));
+      auto closed = closedBoundSpecialize(symbolic, at, "test.specialize");
+      if (!closed.accepted() || closed.value->quantity != integerQuantity(9) ||
+          closed.value->primitiveGameTerms.size() != 1 ||
+          closed.value->primitiveGameTerms.front().resourceSubstitution.at(
+              "tau") != integerQuantity(3)) {
+        module.emitError() << "specialization did not close the quantity "
+                              "and the game substitution together";
+        return signalPassFailure();
+      }
+    }
+
+    llvm::outs() << "closed-bound algebra edges: exact\n";
     llvm::outs() << "soundness runtime safety: PASS\n";
   }
 };

@@ -20,13 +20,14 @@ parity suites establish — so a judgment about it is a statement both can make.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import Any
 
 from . import model
 from .model import Refusal, canon_json
 from .signature import (
+    QUANTIFICATIONS,
     Binding,
     ExactRef,
     Rule,
@@ -413,12 +414,17 @@ def _assumed_result(node: Any, where: str) -> None:
 def _judgment(node: Any, where: str) -> AssumedJudgment:
     entry = _closed(node, where, ("subject", "index", "result"))
     index = _closed(entry["index"], f"{where} index",
-                    ("notion", "track", "variant", "model"))
+                    ("notion", "track", "variant", "model", "quantification"))
+    # Required, not defaulted: the canonical form is total, and an
+    # assumed judgment states the actual index it holds under, so a
+    # variable has no place here.
+    if index["quantification"] not in QUANTIFICATIONS:
+        raise Refusal(f"{where} index carries an unknown quantification")
     _assumed_result(entry["result"], where)
     return AssumedJudgment(
         _subject(entry["subject"], f"{where} subject"),
         SecurityIndex(index["notion"], index["track"], index["variant"],
-                      index["model"]))
+                      index["model"], index["quantification"]))
 
 
 def _plan(node: Any, where: str, signature: Signature):
@@ -474,7 +480,9 @@ def read_request(document: Any, signature: Signature) -> Request:
     if subject["kind"] != "protocol_claim":
         raise Refusal("a target subject is an exact protocol claim")
     index = _closed(target["index"], "target index",
-                    ("notion", "track", "variant", "model"))
+                    ("notion", "track", "variant", "model", "quantification"))
+    if index["quantification"] not in QUANTIFICATIONS:
+        raise Refusal("target index carries an unknown quantification")
     resources = tuple(
         (item["name"], item["sort"])
         for item in (_closed(entry, "target resource", ("name", "sort"))
@@ -484,7 +492,7 @@ def read_request(document: Any, signature: Signature) -> Request:
         ProtocolClaim(subject["artifact_id"],
                       _claim(subject["claim"], "target claim")),
         SecurityIndex(index["notion"], index["track"], index["variant"],
-                      index["model"]),
+                      index["model"], index["quantification"]),
         resources, _plan(body["plan"], "plan", signature))
 
 
@@ -665,6 +673,45 @@ def _assume(plan: Assume) -> AssumedNode:
                                   (AssumedJudgmentHolds(asserted),)))
 
 
+def carry_quantification(rule: Rule,
+                         supplied: dict[str, "SecurityIndex"]):
+    """Match each premise index and return the instantiated conclusion.
+
+    One binding across all ports: a second premise naming the same
+    variable is a constraint on what the first bound, and the conclusion
+    restates the bound value. Stated once, apart from `_apply`, so the
+    adaptive direction can be exercised against a widened schema without
+    a full derivation — no shipped index is non-static, which would
+    otherwise leave this path running only on the value it produces
+    anyway.
+    """
+    bound_quantification: str | None = None
+    for port in rule.premises:
+        supplied_index = supplied[port.name]
+        expected = port.expected_index
+        if expected.quantification.startswith("$"):
+            value = supplied_index.quantification
+            if bound_quantification is None:
+                bound_quantification = value
+            elif bound_quantification != value:
+                raise Refusal(f"premise '{port.name}' of rule '{rule.id}' "
+                              "binds the quantification variable to a value "
+                              "another premise disagrees with")
+            expected = replace(expected, quantification=value)
+        if supplied_index != expected:
+            raise Refusal(f"premise '{port.name}' of rule '{rule.id}' expects "
+                          f"{port.expected_index.notion} and the child "
+                          f"concludes {supplied_index.notion}")
+    conclusion_index = rule.conclusion_index
+    if conclusion_index.quantification.startswith("$"):
+        if bound_quantification is None:
+            raise Refusal(f"rule '{rule.id}' concludes an index variable no "
+                          "premise bound")
+        conclusion_index = replace(conclusion_index,
+                                   quantification=bound_quantification)
+    return conclusion_index
+
+
 def _apply(signature: Signature, view: SealedView, request: Request,
            plan: Apply) -> AppliedNode:
     binding = next(item for item in signature.bindings
@@ -702,12 +749,11 @@ def _apply(signature: Signature, view: SealedView, request: Request,
         premises[port] = _node(signature, view, request, plan.premises[port])
 
     relations = dict(binding.premise_relations)
+    conclusion_index = carry_quantification(
+        rule, {port.name: premises[port.name].conclusion.index
+               for port in rule.premises})
     for port in rule.premises:
         child = premises[port.name]
-        if child.conclusion.index != port.expected_index:
-            raise Refusal(f"premise '{port.name}' of rule '{rule.id}' expects "
-                          f"{port.expected_index.notion} and the child "
-                          f"concludes {child.conclusion.index.notion}")
         expected = _expected_subject(view, plan.site, subject,
                                      relations[port.name], port.name)
         if child.conclusion.subject != expected:
@@ -731,7 +777,7 @@ def _apply(signature: Signature, view: SealedView, request: Request,
 
     return AppliedNode(
         plan.site, ExactRef(binding.id, binding.revision()), premises,
-        Conclusion(subject, rule.conclusion_index,
+        Conclusion(subject, conclusion_index,
                    tuple((item.name, item.sort) for item in rule.resources),
                    tuple(hypotheses)))
 

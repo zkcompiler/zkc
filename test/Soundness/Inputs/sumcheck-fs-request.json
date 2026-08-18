@@ -31,11 +31,16 @@
         "notion": "fiat_shamir",
         "track": "knowledge",
         "variant": "straightline",
-        "model": "duplex"
+        "model": "duplex",
+        "quantification": "static"
       },
       "resource_variables": [
         {
           "name": "t",
+          "sort": "integer"
+        },
+        {
+          "name": "tau",
           "sort": "integer"
         }
       ]

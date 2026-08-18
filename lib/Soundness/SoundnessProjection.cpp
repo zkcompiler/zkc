@@ -3,6 +3,7 @@
 #include "zkc/Soundness/KernelPredicates.h"
 
 #include "zkc/Family/FriShape.h"
+#include "zkc/Relation/AnchorProjection.h"
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -641,6 +643,37 @@ projectArtifactFact(const SealedSoundnessView &sealed,
                     const ArtifactProjection &projection) {
   if (projection.kind == ArtifactProjectionKind::PathBindingField)
     return projectPathField(sealed, site, projection);
+
+  // A fact about the whole artifact rather than about one occurrence:
+  // how many seal-stage bindings carry the transcript projection of a
+  // claim's declared contract anchor (docs/spec/relations.md §2.8).
+  // Each is 216 bits of a 256-bit identity entering the transcript, and
+  // the count is what scales the collision advantage that prices the
+  // shortfall.
+  if (projection.kind == ArtifactProjectionKind::BoundRelationAnchorCount) {
+    if (projection.resultSort != ValueSort::Integer)
+      return projectionError(
+          "bound-relation-anchor-count projection has the wrong result sort");
+    std::set<std::string> projected;
+    for (const auto &anchors : sealed.claimAnchorsByIndex) {
+      auto anchor = anchors.find("contract");
+      if (anchor == anchors.end())
+        continue;
+      auto value = relation::anchorProjectionValue(anchor->second);
+      if (!value)
+        return value.takeError();
+      projected.insert(std::move(*value));
+    }
+    uint64_t count = 0;
+    for (const auto &[label, value] : sealed.sealBindValues) {
+      (void)label;
+      count += projected.count(value) != 0;
+    }
+    auto result = rationalFromUint64(count);
+    if (!result)
+      return result.takeError();
+    return RuntimeValue::integer(std::move(*result));
+  }
 
   auto reduction = reductionAt(sealed, site);
   if (!reduction)

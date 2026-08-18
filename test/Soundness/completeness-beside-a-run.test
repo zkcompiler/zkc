@@ -26,7 +26,7 @@
 # WITNESS-DAG: "track": "completeness"
 # WITNESS-DAG: "constant": "0"
 # WITNESS-DAG: "qualitative_obligations": []
-# WITNESS-DAG: "judgment_digest": "sha256:a36bd87517193fa222c455d4ed708a7a3df0df47d659ea745039fa5e5cf5e4ba"
+# WITNESS-DAG: "judgment_digest": "sha256:b3733ca50115816c647ee7fcc0c884bc075fccf0a9c79014569a8bef611bf87a"
 
 # RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
 # RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \

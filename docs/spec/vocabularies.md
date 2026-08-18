@@ -476,7 +476,13 @@ transitions are events; alphabets here only name the states.
   four-byte chunks with a short final chunk. That is a zkc extension over the
   upstream challenger, which does neither the rate zeroing nor the length
   binding, so the pinned replay harness — which runs upstream's own
-  construction — does not cover this rule. The
+  construction — does not cover this rule. What does cover it is a vector
+  corpus every implementing leg loads
+  (`test/Oir/Inputs/duplex-framing-kat.json`): one case per sub-rule plus the
+  collision pair the length binding exists to separate, checked by the
+  interpreter, the emitted runtime, and the reference twin against the same
+  pinned values. This paragraph states why the rules are what they are; the
+  corpus states what they compute. The
   `plonky3_bb31_low_bits` mapping is defined only for a target `q = 2^b`,
   where masking low bits equals reduction modulo `q`; every other target
   refuses. An FRI transcript may mix

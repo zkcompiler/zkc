@@ -80,7 +80,7 @@ snd::RuleBound quantityBound(zkc::registry::Rational value) {
 snd::SoundnessRule computationalRule() {
   snd::SoundnessRule rule;
   rule.ref = {"native.computational-entry", kCatalogRevision};
-  rule.conclusionIndex = computationalIndex();
+  rule.conclusionIndex.index = computationalIndex();
   rule.body = snd::ComputationalEntry{oneCoordinate("extraction", 2),
                                       quantityBound(fraction("1", "8"))};
   return rule;
@@ -92,10 +92,10 @@ snd::SoundnessRule preservationRule() {
   snd::PremisePort source;
   source.name = "source_ss";
   source.expectedSubjectSchema = kClaimSchema;
-  source.expectedIndex = specialSoundnessIndex();
+  source.expectedIndex.index = specialSoundnessIndex();
   source.expectedResult = snd::ResultSchema::Extraction;
   rule.premises.push_back(std::move(source));
-  rule.conclusionIndex = computationalIndex();
+  rule.conclusionIndex.index = computationalIndex();
   rule.body = snd::SpecialSoundnessPreservation{
       "source_ss", oneCoordinate("appended", 3),
       quantityBound(fraction("1", "16"))};

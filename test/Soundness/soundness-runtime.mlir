@@ -2,4 +2,5 @@
 
 module {}
 
-// CHECK: soundness runtime safety: PASS
+// CHECK: closed-bound algebra edges: exact
+// CHECK-NEXT: soundness runtime safety: PASS

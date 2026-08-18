@@ -63,6 +63,80 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("relation-contracts takes no witness")
         sys.stdout.write(model.canon_json(model.relation_contracts_document()))
         return
+    if mode == "adaptive-carry":
+        # The adaptivity coordinate on this leg, mirroring the C++
+        # evaluator's stress section. The carry runs either way and the
+        # schema decides only whether the index it produces is admitted:
+        # the shipped registry admits static alone, so the carried index
+        # reads as unadmitted there, and a schema-widened copy admits
+        # it. Reporting which of the two held is the whole result.
+        if len(args) != 1:
+            raise SystemExit("adaptive-carry takes the signature path")
+        from dataclasses import replace as _replace
+
+        from . import derive as derivation
+
+        signature = wellformed.load(model.load_json(open(args[0]).read()))
+        rule = signature.rule("zkc.sr.from_rbr")
+        port = rule.premises[0]
+        adaptive_premise = _replace(port.expected_index,
+                                    quantification="adaptive_instance")
+        adaptive_conclusion = _replace(rule.conclusion_index,
+                                       quantification="adaptive_instance")
+        carried = derivation.carry_quantification(
+            rule, {port.name: adaptive_premise})
+        if carried != adaptive_conclusion:
+            raise SystemExit("the carried conclusion did not restate the "
+                             "premise's quantification")
+        if not wellformed.index_admitted(signature.schemas, carried):
+            print("adaptive index: carried, and unadmitted by the vocabulary")
+            return
+        print("adaptive quantification: carried")
+        return
+    if mode == "duplex-kat":
+        # The duplex framing rule as vectors (vocabularies.md §7): this
+        # leg recomputes every case of the checked-in corpus and the
+        # distinct pairs the length binding exists to separate. The
+        # corpus was minted here, so this run is the freshness guard;
+        # the C++ and Rust legs confirm the same values independently.
+        if len(args) != 1:
+            raise SystemExit("duplex-kat takes the corpus path")
+        from . import babybear
+
+        corpus = model.load_json(open(args[0], encoding="utf-8").read())
+        first: dict[str, list[str]] = {}
+        for case in corpus["cases"]:
+            duplex = babybear.Duplex(case["iv"] if case["iv"] else None)
+            outputs: list[str] = []
+            for step in case["steps"]:
+                if "absorb" in step:
+                    for value in step["absorb"]:
+                        word = int(value)
+                        # The same canonicality bound the other two legs
+                        # apply: reducing here instead would absorb a
+                        # value the corpus does not state.
+                        if not 0 <= word < babybear.P:
+                            raise SystemExit(
+                                f"duplex framing case {case['name']!r} "
+                                "absorbs a non-canonical word")
+                        duplex.absorb_word(word)
+                else:
+                    for _ in range(step["squeeze"]):
+                        outputs.append(str(duplex.squeeze_word()))
+            if outputs != case["outputs"]:
+                raise SystemExit(
+                    f"duplex framing case {case['name']!r}: this leg "
+                    f"computes {outputs}, the corpus records "
+                    f"{case['outputs']}")
+            first[case["name"]] = outputs
+        for left, right in corpus["distinct"]:
+            if first[left] == first[right]:
+                raise SystemExit(
+                    f"duplex framing distinct pair {left!r}/{right!r} "
+                    "collided: the length binding is not separating them")
+        print(f"duplex framing corpus: {len(corpus['cases'])} cases agree, "
+              f"{len(corpus['distinct'])} distinct pair(s) separate")
+        return
     if mode == "soundness-signature":
         if args:
             raise SystemExit("soundness-signature takes no witness")

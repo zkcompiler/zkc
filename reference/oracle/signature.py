@@ -147,6 +147,7 @@ PROJECTION_KINDS = frozenset(
         "reduction_parameter",
         "path_binding_field",
         "contract_round_family_field",
+        "bound_relation_anchor_count",
     }
 )
 AGGREGATES = frozenset({"unique_equal", "count"})
@@ -418,11 +419,19 @@ class SecurityIndex:
     track: str
     variant: str
     model: str
+    # Under which quantification the statement holds. A rule's premise
+    # or conclusion may carry a variable here instead of a value,
+    # spelled with a leading "$", which lets one rule preserve the
+    # coordinate rather than one rule per value. No default: every
+    # reader states the value it read, so a constructor that forgets the
+    # coordinate fails loudly instead of minting a static index.
+    quantification: str
 
     def document(self) -> dict[str, Any]:
         return {
             "model": self.model,
             "notion": self.notion,
+            "quantification": self.quantification,
             "track": self.track,
             "variant": self.variant,
         }
@@ -447,8 +456,13 @@ def _read_typed_names(node: Any, where: str) -> tuple[TypedName, ...]:
     return tuple(declarations)
 
 
-def _read_security_index(node: Any, where: str) -> SecurityIndex:
-    entry = _object(node, where, ("notion", "track", "variant", "model"))
+QUANTIFICATIONS = frozenset({"static", "adaptive_instance", "adaptive_index"})
+
+
+def _read_security_index(node: Any, where: str,
+                         allow_variable: bool = False) -> SecurityIndex:
+    entry = _object(node, where,
+                    ("notion", "track", "variant", "model", "quantification"))
     notion = _member(entry["notion"], NOTIONS, f"{where} notion")
     track = _member(entry["track"], TRACKS, f"{where} track")
     # The completeness notion and track come together or not at all: a
@@ -463,7 +477,16 @@ def _read_security_index(node: Any, where: str) -> SecurityIndex:
             raise Refusal(f"{where} {key} is not a string")
         if any(not 0x20 <= ord(character) <= 0x7E for character in value):
             raise Refusal(f"{where} {key} leaves printable ASCII")
-    return SecurityIndex(notion, track, entry["variant"], entry["model"])
+    quantification = entry["quantification"]
+    if not isinstance(quantification, str):
+        raise Refusal(f"{where} quantification is not a string")
+    # A leading `$` names a variable, which no quantification value
+    # uses, so the grammar tells the two apart without a flag.
+    if not (allow_variable and quantification.startswith("$")):
+        quantification = _member(quantification, QUANTIFICATIONS,
+                                 f"{where} quantification")
+    return SecurityIndex(notion, track, entry["variant"], entry["model"],
+                         quantification)
 
 
 # --------------------------------------------------------------------------
@@ -806,7 +829,7 @@ def _read_round_selector(node: Any, where: str) -> tuple[str, str | int | None]:
 def _read_artifact_projection(node: Any, where: str) -> ArtifactProjection:
     kind = _tag(node, where, PROJECTION_KINDS)
     if kind in ("conclusion_reduction_contract", "contract_round_adjacency",
-                "reduction_input_count"):
+                "reduction_input_count", "bound_relation_anchor_count"):
         entry = _object(node, where, ("kind", "result_sort"))
         return ArtifactProjection(kind, _sort(entry, "result_sort", where))
     if kind in ("reduction_parameter", "path_binding_field"):
@@ -1315,7 +1338,8 @@ def _read_premise(node: Any, where: str) -> PremisePort:
         name=_string(entry, "name", where),
         expected_subject_schema=_string(entry, "expected_subject_schema", where),
         expected_index=_read_security_index(entry["expected_index"],
-                                            f"{where} expected index"),
+                                            f"{where} expected index",
+                                            allow_variable=True),
         expected_result=_member(entry["expected_result"], RESULT_SCHEMAS,
                                 f"{where} expected result"),
         expected_resources=_read_typed_names(entry["expected_resources"],
@@ -1383,7 +1407,8 @@ def _read_rule(identifier: str, node: Any) -> Rule:
                                         "proposition_ref"),
         exact_parameter_pins=tuple(pins),
         conclusion_index=_read_security_index(entry["conclusion_index"],
-                                              f"{where} conclusion index"),
+                                              f"{where} conclusion index",
+                                              allow_variable=True),
         body=_read_body(entry["body"], f"{where} body"),
     )
 

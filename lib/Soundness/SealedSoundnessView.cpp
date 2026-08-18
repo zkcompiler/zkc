@@ -200,6 +200,46 @@ makeConsumedSubject(const SealedSoundnessView &sealed,
 
 } // namespace
 
+ArtifactJudgment judgeArtifact(const SealedSoundnessView &sealed,
+                               const ClaimRef &targetClaim) {
+  ArtifactJudgment judgment;
+  judgment.policy = sealed.policy;
+
+  // A claim some reduction consumes is carried onward by that reduction
+  // rather than left standing, so it is not the artifact's conclusion.
+  std::set<uint64_t> consumed;
+  for (const auto &[position, reduction] :
+       sealed.reductionsByTransformerPosition) {
+    (void)position;
+    for (const ClaimRef &input : reduction.orderedInputs)
+      consumed.insert(input.claimIndex);
+  }
+
+  // The target has to be a claim of this artifact at all: a derivation
+  // about a claim index this artifact does not carry, or about a
+  // descriptor it does not carry at that index, discharges nothing,
+  // however sound each of its steps was.
+  const bool targetIsOurs =
+      targetClaim.claimIndex < sealed.claimsByIndex.size() &&
+      sealed.claimsByIndex[targetClaim.claimIndex] == targetClaim;
+
+  // Covered by the target only when the target really is that claim: a
+  // ref whose index exists but whose descriptor does not would
+  // otherwise excuse the one claim actually left standing, and the
+  // report would name no reason for a judgment that is already
+  // negative.
+  for (uint64_t index = 0; index < sealed.claimsByIndex.size(); ++index) {
+    if (consumed.count(index) ||
+        (targetIsOurs && index == targetClaim.claimIndex))
+      continue;
+    judgment.uncoveredClaims.push_back(index);
+  }
+
+  judgment.discharged = targetIsOurs && judgment.uncoveredClaims.empty() &&
+                        sealed.policy == "closed_proof";
+  return judgment;
+}
+
 llvm::Expected<ClaimRef>
 resolveReductionOutput(const SealedSoundnessView &sealed,
                        const ReductionOccurrence &site) {

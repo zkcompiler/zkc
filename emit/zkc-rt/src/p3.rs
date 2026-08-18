@@ -1172,4 +1172,60 @@ mod tests {
             "the reduce fill consumes the opening fill's handle"
         );
     }
+
+    /// The framing rule held to vectors: the corpus the reference twin
+    /// minted (test/Oir/Inputs/duplex-framing-kat.json) covers rate
+    /// zeroing on a partial block, the length binding, LIFO output
+    /// order, and the IV's short final chunk. The C++ leg runs the same
+    /// corpus in test/Oir/duplex-framing-kat.mlir; a divergence here is
+    /// a transcript fork caught as a failing diff.
+    #[test]
+    fn duplex_framing_corpus() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/Oir/Inputs/duplex-framing-kat.json");
+        let corpus: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {path:?}: {e}")),
+        )
+        .expect("the framing corpus parses");
+
+        let mut first: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        for case in corpus["cases"].as_array().expect("cases") {
+            let name = case["name"].as_str().expect("name");
+            let iv = case["iv"].as_str().expect("iv");
+            let mut duplex = P3Duplex::new(iv);
+            let mut outputs = Vec::new();
+            for step in case["steps"].as_array().expect("steps") {
+                if let Some(absorb) = step.get("absorb") {
+                    let words: Vec<u32> = absorb
+                        .as_array()
+                        .expect("absorb list")
+                        .iter()
+                        .map(|v| v.as_str().expect("decimal").parse().unwrap())
+                        .collect();
+                    duplex.absorb(&words);
+                } else {
+                    let count = step["squeeze"].as_u64().expect("squeeze count");
+                    for _ in 0..count {
+                        outputs.push(duplex.squeeze_element().to_string());
+                    }
+                }
+            }
+            let want: Vec<String> = case["outputs"]
+                .as_array()
+                .expect("outputs")
+                .iter()
+                .map(|v| v.as_str().expect("decimal").to_string())
+                .collect();
+            assert_eq!(outputs, want, "framing case {name:?} diverged");
+            first.insert(name.to_string(), outputs);
+        }
+        for pair in corpus["distinct"].as_array().expect("distinct") {
+            let left = pair[0].as_str().expect("case name");
+            let right = pair[1].as_str().expect("case name");
+            assert_ne!(
+                first[left], first[right],
+                "the length binding is not separating {left:?}/{right:?}"
+            );
+        }
+    }
 }

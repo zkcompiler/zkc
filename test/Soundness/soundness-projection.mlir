@@ -4,6 +4,7 @@ module {}
 
 // CHECK: projection: exact parameter and IID-only challenge count
 // CHECK-NEXT: projection: scalar ChallengeCount refused
+// CHECK-NEXT: projection: bound relation anchors counted exactly
 // CHECK-NEXT: path: selected binding is the sole exact authority
 // CHECK-NEXT: FRI arithmetic: positive and negative cases exact
 // CHECK-NEXT: decider arithmetic: excessive exponents refused

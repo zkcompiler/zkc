@@ -1429,6 +1429,9 @@ Step<SecurityResult> substituteResult(
       if (!bound.accepted())
         return {std::nullopt, bound.refusal};
       output.bound = std::move(*bound.value);
+      // Substitution rewrites quantities; the state predicate names a
+      // claim and travels with the entry from the site that built it.
+      output.statePredicate = round.statePredicate;
       specialized.rounds.push_back(std::move(output));
     }
     return accept(SecurityResult(std::move(specialized)));
@@ -1851,7 +1854,8 @@ resolveResourceSubstitution(const PremisePort &port,
 
 Step<TypedPremiseJudgments>
 resolvePremises(const TypedPremiseJudgments &premises,
-                ApplicationEnvironment &application) {
+                ApplicationEnvironment &application,
+                std::optional<SecurityQuantification> &quantificationBinding) {
   if (premises.size() != application.rule.premises.size())
     return refuse<TypedPremiseJudgments>(
         RuntimePhase::PremiseResolution, RuntimeRefusalCode::PremiseMismatch,
@@ -1872,7 +1876,12 @@ resolvePremises(const TypedPremiseJudgments &premises,
         "apply.premises." + port.name);
     if (!wellFormed.accepted())
       return {std::nullopt, wellFormed.refusal};
-    if (input->second.index != port.expectedIndex ||
+    // One binding across all ports: a second premise naming the same
+    // variable is a constraint on what the first bound, and the
+    // conclusion restates the bound value, so the binding outlives the
+    // loop and is handed back to the caller.
+    if (!matchSecurityIndex(port.expectedIndex, input->second.index,
+                            quantificationBinding) ||
         resultSchemaOf(input->second.result) != port.expectedResult ||
         !declarationsEqual(input->second.resourceVariables,
                            port.expectedResources) ||
@@ -2232,6 +2241,17 @@ resolveCoordinates(const CoordinateSequence &sequence,
   return accept(std::move(result));
 }
 
+/// The state predicate a site's rounds carry. Present at a reduction
+/// occurrence, where the site's owner claim is what the rounds argue;
+/// absent — not defaulted — elsewhere, since a path occurrence consumes
+/// no claim to name.
+std::optional<RoundStatePredicate>
+siteStatePredicate(const ApplicationSite &site) {
+  if (const auto *reduction = std::get_if<ReductionOccurrence>(&site))
+    return RoundStatePredicate{reduction->ownerClaim};
+  return std::nullopt;
+}
+
 Step<std::vector<RoundResultEntry>>
 resolveRounds(const RoundSequence &sequence,
               ApplicationEnvironment &application,
@@ -2259,6 +2279,7 @@ resolveRounds(const RoundSequence &sequence,
       if (!bound.accepted())
         return {std::nullopt, bound.refusal};
       output.bound = std::move(*bound.value);
+      output.statePredicate = siteStatePredicate(application.site);
       result.push_back(std::move(output));
     }
   } else {
@@ -2312,6 +2333,7 @@ resolveRounds(const RoundSequence &sequence,
       if (!bound.accepted())
         return {std::nullopt, bound.refusal};
       output.bound = std::move(*bound.value);
+      output.statePredicate = siteStatePredicate(application.site);
       result.push_back(std::move(output));
     }
   }
@@ -2666,7 +2688,8 @@ Step<SecurityResult> evaluateRuleBody(ApplicationEnvironment &application) {
               return {std::nullopt, bound.refusal};
             result.rounds.push_back({coordinate.label,
                                      *coordinate.challengeSpace,
-                                     std::move(*bound.value)});
+                                     std::move(*bound.value),
+                                     siteStatePredicate(application.site)});
           }
           return accept(SecurityResult(std::move(result)));
         } else if constexpr (std::is_same_v<T,
@@ -2986,7 +3009,9 @@ ApplyOutcome applySoundnessRule(const SoundnessContext &context,
   if (!facts.accepted())
     return {std::nullopt, facts.refusal};
 
-  auto specialized = resolvePremises(premises, application);
+  std::optional<SecurityQuantification> quantificationBinding;
+  auto specialized =
+      resolvePremises(premises, application, quantificationBinding);
   if (!specialized.accepted())
     return {std::nullopt, specialized.refusal};
   for (auto &[port, judgment] : *specialized.value)
@@ -3005,9 +3030,23 @@ ApplyOutcome applySoundnessRule(const SoundnessContext &context,
   if (!result.accepted())
     return {std::nullopt, result.refusal};
 
+  // A conclusion naming a variable restates what the premises bound.
+  // Rule well-formedness guarantees some premise names the variable and
+  // matching a variable port always binds it, so an absent binding here
+  // means an ill-formed signature reached evaluation; refuse rather
+  // than assume.
+  if (!rule->conclusionIndex.quantificationVariable.empty() &&
+      !quantificationBinding)
+    return {
+        std::nullopt,
+        makeRefusal(RuntimePhase::PremiseResolution,
+                    RuntimeRefusalCode::PremiseMismatch, "apply.conclusion",
+                    "conclusion index variable was never bound by a premise")};
   SecurityJudgment conclusion;
   conclusion.subject = application.conclusionSubject;
-  conclusion.index = rule->conclusionIndex;
+  conclusion.index = instantiateSecurityIndex(
+      rule->conclusionIndex,
+      quantificationBinding.value_or(SecurityQuantification::Static));
   conclusion.result = std::move(*result.value);
   conclusion.resourceVariables = rule->resources;
   for (const PremisePort &port : rule->premises) {

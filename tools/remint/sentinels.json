@@ -94,7 +94,7 @@
     {
       "name": "soundness-signature",
       "catches": "Any edit to a rule, a binding, or the schemas. The digest is what names an analysis, so two derivations are comparable exactly when it matches.",
-      "value": "af8b6064037562cb1e1cd8f8283e45eee0db460525d6d5bab8774e6a4dd1bf13",
+      "value": "9b1069894040e0a07a0826740ebb4e303177c1e4c69028828f0c7f88d75ea22d",
       "assurance": "cross_checked_here",
       "native": [
         "{bin}/zkc-registry-lint {repo}/registry/soundness-signature.json | grep -oE '\"digest\":\"sha256:[0-9a-f]{64}\"' | head -1 | grep -oE '[0-9a-f]{64}'"
@@ -149,7 +149,7 @@
     {
       "name": "judgment-sumcheck-fs",
       "catches": "A change to what a derivation concludes, or to the judgment preimage. The reference twin derives the same skeleton (checked by derive-skeleton-sync.test) but does not compute the judgment digest, so this pin is the only thing standing between a changed conclusion and a quiet re-mint.",
-      "value": "76fde6da0060d1d64d350b4d89c6bdde109bd52de5fecdd55e50a523b8aa4fbe",
+      "value": "bec70da274f3bd576465139df5d23e0a869b4394c067a02f31f5d2f2f7b732f2",
       "assurance": "single_leg",
       "single_leg_reason": "The reference computes the derivation skeleton, not the judgment digest; skeleton parity is checked by test/Soundness/derive-skeleton-sync.test.",
       "native": [
@@ -165,7 +165,7 @@
     {
       "name": "judgment-schnorr-completeness",
       "catches": "A change to the completeness judgment beside a run \u2014 the second analysis over one artifact, which must stay a different judgment digest over the same artifact identity.",
-      "value": "a36bd87517193fa222c455d4ed708a7a3df0df47d659ea745039fa5e5cf5e4ba",
+      "value": "b3733ca50115816c647ee7fcc0c884bc075fccf0a9c79014569a8bef611bf87a",
       "assurance": "single_leg",
       "single_leg_reason": "The reference computes the derivation skeleton, not the judgment digest; skeleton parity is checked by test/Soundness/derive-skeleton-sync.test.",
       "native": [

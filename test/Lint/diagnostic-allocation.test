@@ -3,3 +3,29 @@
 # ids the source tree emits must agree. Every live id must have an emitter and
 # a test assertion; reserved ids must not be emitted.
 # RUN: %python %S/Inputs/diagnostic_allocation_lint.py
+
+# The means sentence's own gate. A sentence describes an id's condition
+# set, and the checkable fact is that the set changed: each live id's
+# means_basis digests its emission sites, and a mutated basis — which is
+# what the table looks like after a condition is added without the
+# sentence being re-read — must fail rather than pass in silence. This
+# is the demonstrated failure the basis exists to close: before it, a
+# fifth condition under a four-condition sentence left every gate green.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); \
+# RUN:   r=[e for e in d['ranges'] if e['range']=='E300-E319'][0]; \
+# RUN:   r['means_basis']['E300']='0'*64; json.dump(d, open(sys.argv[2],'w'))" \
+# RUN:   %S/../../registry/diagnostic-allocation.json %t.mutated.json
+# RUN: not %python %S/Inputs/diagnostic_allocation_lint.py %t.mutated.json 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=DRIFT
+# DRIFT: E300's condition set moved
+
+# A live id whose basis is missing entirely is the unminted state, and
+# it refuses rather than defaulting: a basis that appears only sometimes
+# is a gate an author can forget.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); \
+# RUN:   r=[e for e in d['ranges'] if e['range']=='E300-E319'][0]; \
+# RUN:   del r['means_basis']['E300']; json.dump(d, open(sys.argv[2],'w'))" \
+# RUN:   %S/../../registry/diagnostic-allocation.json %t.unminted.json
+# RUN: not %python %S/Inputs/diagnostic_allocation_lint.py %t.unminted.json 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=UNMINTED
+# UNMINTED: E300 is live and means_basis records nothing for it

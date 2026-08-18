@@ -33,3 +33,12 @@
 # RUN: grep "semantic id:" %t/emit.out | sed 's/semantic id: //' > %t/emit-semantic.id
 # RUN: diff %t/emit-semantic.id %t/semantic.id
 # RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml
+
+# The emitter walk's characterization gate: every file the emitter
+# wrote into this crate is digested and diffed against a checked-in
+# pin, so a refactor of the walk is held to the bytes it emits and an
+# intended emitter change re-mints the pin deliberately. The digest
+# script states which files are cargo's rather than the emitter's, and
+# normalizes the one machine-dependent field the manifest carries.
+# RUN: %python %S/Inputs/crate_digest.py %t/crate > %t/crate.sha256
+# RUN: diff %t/crate.sha256 %S/Inputs/plonky3-fri-crate-src.sha256

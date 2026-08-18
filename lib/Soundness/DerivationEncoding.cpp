@@ -85,10 +85,16 @@ Value encodeIndex(const SecurityIndex &index) {
     track = "knowledge";
   else if (index.track == SecurityTrack::Completeness)
     track = "completeness";
+  const char *quantification = "static";
+  if (index.quantification == SecurityQuantification::AdaptiveInstance)
+    quantification = "adaptive_instance";
+  else if (index.quantification == SecurityQuantification::AdaptiveIndex)
+    quantification = "adaptive_index";
   return Object{{"notion", notion},
                 {"track", track},
                 {"variant", index.variant},
-                {"model", index.model}};
+                {"model", index.model},
+                {"quantification", quantification}};
 }
 
 const char *sortName(ValueSort sort) {
@@ -247,11 +253,22 @@ Value encodeResult(const SecurityResult &result) {
   }
   if (const auto *rounds = std::get_if<RoundResult>(&result)) {
     Array entries;
-    for (const RoundResultEntry &round : rounds->rounds)
-      entries.push_back(
-          Object{{"round_index", round.roundIndex},
-                 {"challenge_space", encodeQuantity(round.challengeSpace)},
-                 {"bound", encodeBound(round.bound)}});
+    for (const RoundResultEntry &round : rounds->rounds) {
+      Object entry{{"round_index", round.roundIndex},
+                   {"challenge_space", encodeQuantity(round.challengeSpace)},
+                   {"bound", encodeBound(round.bound)}};
+      // The named state function: doomed exactly when this claim is
+      // unsatisfied. Null where the rounds were built without a claim
+      // to name, so a reader can tell "no claim" from an empty one.
+      entry["state_predicate"] =
+          round.statePredicate
+              ? Value(Object{
+                    {"kind", "claim_unsatisfied"},
+                    {"claim",
+                     encodeClaim(round.statePredicate->claimUnsatisfied)}})
+              : Value(nullptr);
+      entries.push_back(std::move(entry));
+    }
     return Object{{"kind", "round"}, {"rounds", std::move(entries)}};
   }
   const auto &scalar = std::get<ScalarResult>(result);
@@ -467,8 +484,9 @@ Expected<SecurityIndex> readIndex(const Reader &reader, const Object &parent,
   if (!entry)
     return entry.takeError();
   const std::string where = Twine(context + " " + key).str();
-  if (Error err = reader.closed(**entry,
-                                {"notion", "track", "variant", "model"}, where))
+  if (Error err = reader.closed(
+          **entry, {"notion", "track", "variant", "model", "quantification"},
+          where))
     return std::move(err);
   static const std::pair<StringRef, SecurityNotion> notions[] = {
       {"special_soundness", SecurityNotion::SpecialSoundness},
@@ -506,6 +524,21 @@ Expected<SecurityIndex> readIndex(const Reader &reader, const Object &parent,
                                         *trackText + "'");
   index.variant = reader.optionalString(**entry, "variant");
   index.model = reader.optionalString(**entry, "model");
+  // Required, not defaulted: the canonical form is total, and a request
+  // states the actual index it targets or assumes, so a variable has no
+  // place here.
+  auto quantificationText = reader.string(**entry, "quantification", where);
+  if (!quantificationText)
+    return quantificationText.takeError();
+  if (*quantificationText == "static")
+    index.quantification = SecurityQuantification::Static;
+  else if (*quantificationText == "adaptive_instance")
+    index.quantification = SecurityQuantification::AdaptiveInstance;
+  else if (*quantificationText == "adaptive_index")
+    index.quantification = SecurityQuantification::AdaptiveIndex;
+  else
+    return reader.failed<SecurityIndex>(
+        where + " has unknown quantification '" + *quantificationText + "'");
   return index;
 }
 

@@ -1,0 +1,47 @@
+# The completeness track's second entry, over the artifact that needed it.
+#
+# The relation-absorbing variant's emitted prover has no external grader:
+# the absorbed anchor projection changes the transcript upstream
+# implementations do not produce, so its acceptance evidence cannot come
+# from grading against them. `zkc.completeness.fri` is admitted because
+# this consumer exists, not to make the completeness set look complete —
+# the other declared completeness rules keep waiting for consumers of
+# their own.
+#
+# The family input is frigrind with a real contract anchor and one
+# absorbing preamble entry. The preamble adds a seal-stage binding ahead
+# of the protocol and leaves the FRI reduction contract untouched, which
+# is what lets the registry's contract-pinned bindings apply to an
+# absorbing artifact at all.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/Inputs/frigrind-bound.json --emit-vocabulary=%t/vocab.json --emit-spine=%t/spine.mlir
+# RUN: zkc-seal %t/spine.mlir --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/sealed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/sealed.artifacts %t/sealed.mlirbc
+
+# Perfect completeness of the FRI commit/query phases: the honest
+# prover's acceptance-failure bound is 0, and the judgment carries no
+# qualitative obligations — every check the contract adds is an identity
+# for honestly committed data.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/fri-bound-completeness-request.json -o=%t/witness.json %t/sealed.mlirbc
+# RUN: FileCheck %s < %t/witness.json
+# CHECK-DAG: "notion": "completeness"
+# CHECK-DAG: "qualitative_obligations": []
+# CHECK-DAG: "constant": "0"
+
+# The soundness rules bind the same artifact through the same pinned
+# contract: absorbing a relation identity must not orphan an artifact
+# from the analysis that prices it.
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py \
+# RUN:   %S/Inputs/fri-johnson-request.json %t/sealed.artifacts %t/johnson-request.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/johnson-request.json -o=%t/johnson.json %t/sealed.mlirbc
+# RUN: FileCheck %s --check-prefix=JOHNSON < %t/johnson.json
+# JOHNSON: "notion": "round_by_round"

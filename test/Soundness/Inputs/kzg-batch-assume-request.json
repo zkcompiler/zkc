@@ -40,7 +40,8 @@
         "notion": "computational_special_soundness",
         "track": "knowledge",
         "variant": "",
-        "model": ""
+        "model": "",
+        "quantification": "static"
       },
       "resource_variables": [
         {
@@ -92,7 +93,8 @@
               "notion": "special_soundness",
               "track": "knowledge",
               "variant": "",
-              "model": ""
+              "model": "",
+              "quantification": "static"
             },
             "result": {
               "kind": "extraction",

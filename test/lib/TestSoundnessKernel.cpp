@@ -245,9 +245,9 @@ struct TestSoundnessKernelPass
       if (!body || body->sourcePort != "source_ss" || !source ||
           source->expectedSubjectSchema !=
               "zkc.subject.consumed_claim_vector" ||
-          source->expectedIndex.notion !=
+          source->expectedIndex.index.notion !=
               zkc::soundness::SecurityNotion::SpecialSoundness ||
-          source->expectedIndex.track !=
+          source->expectedIndex.index.track !=
               zkc::soundness::SecurityTrack::Knowledge ||
           relation == binding->second.premiseRelations.end() ||
           relation->second.kind !=
@@ -754,12 +754,28 @@ struct TestSoundnessKernelPass
               ? nullptr
               : std::get_if<zkc::soundness::StateRestorationToFiatShamirDuplex>(
                     &rule->second.body);
+      // Three sponge terms from the theorem, plus the collision addend
+      // pricing the 216-bit anchor projection: a named game advantage
+      // scaled by the artifact's bound-relation-anchor count, so it is
+      // exactly zero where no relation identity enters the transcript.
       if (!body ||
           body->localDuplexBound.kind != zkc::soundness::RuleBoundKind::Add ||
-          body->localDuplexBound.operands.size() != 3 ||
+          body->localDuplexBound.operands.size() != 4 ||
           boundReadsPremise(body->localDuplexBound))
         return fail("SR-to-FS did not isolate exactly the three local "
-                    "duplex terms from its premise");
+                    "duplex terms and the collision addend from its premise");
+      const zkc::soundness::RuleBound &collision =
+          body->localDuplexBound.operands.back();
+      if (collision.kind != zkc::soundness::RuleBoundKind::Scale ||
+          collision.quantity.kind != zkc::soundness::QuantityKind::Parameter ||
+          collision.quantity.name != "bound_relation_anchors" ||
+          collision.operands.size() != 1 ||
+          collision.operands.front().kind !=
+              zkc::soundness::RuleBoundKind::PrimitiveAdvantage ||
+          collision.operands.front().game.gameRef !=
+              "zkc.assume.sha256_216_collision")
+        return fail("SR-to-FS collision addend is not the anchor-count-scaled "
+                    "sha256-216 advantage");
       const zkc::soundness::RuleBinding *binding =
           findBindingForRule(*catalog, id);
       const auto *spine =
@@ -1064,9 +1080,9 @@ struct TestSoundnessKernelPass
       return fail("a binding reached a declared rule: " + bindsDeclaredRefusal);
 
     zkc::soundness::SoundnessRule malformed = fri->second;
-    malformed.conclusionIndex.notion =
+    malformed.conclusionIndex.index.notion =
         zkc::soundness::SecurityNotion::FiatShamir;
-    malformed.conclusionIndex.model = "duplex";
+    malformed.conclusionIndex.index.model = "duplex";
     zkc::soundness::RuleWfResult malformedResult =
         zkc::soundness::checkRuleWellFormed(catalog->schemas, malformed);
     if (malformedResult.accepted() ||
@@ -1076,9 +1092,10 @@ struct TestSoundnessKernelPass
 
     zkc::soundness::SchemaContext unknownTrackSchemas = catalog->schemas;
     zkc::soundness::SoundnessRule unknownTrack = fri->second;
-    unknownTrack.conclusionIndex.track =
+    unknownTrack.conclusionIndex.index.track =
         static_cast<zkc::soundness::SecurityTrack>(255);
-    unknownTrackSchemas.securityIndices.push_back(unknownTrack.conclusionIndex);
+    unknownTrackSchemas.securityIndices.push_back(
+        unknownTrack.conclusionIndex.index);
     zkc::soundness::RuleWfResult unknownTrackResult =
         zkc::soundness::checkRuleWellFormed(unknownTrackSchemas, unknownTrack);
     if (unknownTrackResult.accepted() ||
@@ -1301,6 +1318,51 @@ struct TestSoundnessKernelPass
             zkc::soundness::RuleWfRefusalCode::InvalidReference)
       return fail("binding WF admitted an ill-typed path-binding field");
 
+    // The index variable, both halves. Matching shares one binding
+    // across a rule's premises — the second occurrence is a constraint,
+    // not a rebinding — and instantiation substitutes the bound value
+    // into a conclusion that restates the variable.
+    {
+      zkc::soundness::SecurityIndexPattern pattern;
+      pattern.index.notion = zkc::soundness::SecurityNotion::RoundByRound;
+      pattern.index.variant = "standard";
+      pattern.quantificationVariable = "$q";
+      zkc::soundness::SecurityIndex staticIndex = pattern.index;
+      zkc::soundness::SecurityIndex adaptiveIndex = pattern.index;
+      adaptiveIndex.quantification =
+          zkc::soundness::SecurityQuantification::AdaptiveInstance;
+      std::optional<zkc::soundness::SecurityQuantification> binding;
+      if (!zkc::soundness::matchSecurityIndex(pattern, adaptiveIndex, binding))
+        return fail("a variable pattern refused the index it should bind");
+      if (zkc::soundness::matchSecurityIndex(pattern, staticIndex, binding))
+        return fail("a second premise rebound the variable instead of "
+                    "constraining it");
+      if (zkc::soundness::instantiateSecurityIndex(pattern, *binding) !=
+          adaptiveIndex)
+        return fail("instantiation did not substitute the bound value");
+      zkc::soundness::SecurityIndexPattern literal;
+      literal.index = staticIndex;
+      if (zkc::soundness::instantiateSecurityIndex(literal, *binding) !=
+          staticIndex)
+        return fail("instantiation rewrote a literal pattern");
+    }
+
+    // A conclusion's variable restates what a premise bound; a rule
+    // whose premises never name it concludes nothing at all.
+    {
+      auto sigma = catalog->rules.find("zkc.ss.sigma");
+      if (sigma == catalog->rules.end())
+        return fail("the sigma entry rule is missing");
+      zkc::soundness::SoundnessRule unbound = sigma->second;
+      unbound.conclusionIndex.quantificationVariable = "$q";
+      zkc::soundness::RuleWfResult unboundResult =
+          zkc::soundness::checkRuleWellFormed(catalog->schemas, unbound);
+      if (unboundResult.accepted() ||
+          unboundResult.refusal->code !=
+              zkc::soundness::RuleWfRefusalCode::InvalidIndex)
+        return fail("rule WF admitted a conclusion variable no premise binds");
+    }
+
     llvm::outs() << "soundness kernel declaration slice: PASS\n";
     llvm::outs() << "rules: " << declaredRules << " declared, " << admittedRules
                  << " admitted\n";
@@ -1327,6 +1389,8 @@ struct TestSoundnessKernelPass
     llvm::outs() << "declarations carry their own content digests\n";
     llvm::outs() << "receipt overclaim refused: yes\n";
     llvm::outs() << "stray unmatched obligation refused: yes\n";
+    llvm::outs() << "index variable binds once and instantiates: yes\n";
+    llvm::outs() << "unbound conclusion variable refused: yes\n";
     auto digest = zkc::soundness::signatureDigest(*catalog);
     if (!digest)
       return fail(llvm::toString(digest.takeError()));

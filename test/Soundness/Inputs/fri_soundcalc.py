@@ -339,8 +339,35 @@ def fs_coefficients(events):
     return sum(biases), max(biases), F(25) / SIGMA_C
 
 
+def split_collision_addend(bound_node):
+    """The theorem terms of the duplex bound, with the collision addend
+    checked structurally and removed.
+
+    The last operand prices the 216-bit anchor projection
+    (relations.md section 2.8), which is not part of the CO25 theorem:
+    it is a named game advantage scaled by an artifact count, so there
+    is no source formula to recompute it from. What a second reading
+    can check is its shape -- the right game, scaled by exactly the
+    bound-relation-anchor count -- and that removing it leaves the
+    theorem's own terms and nothing else.
+    """
+    operands = list(bound_node["operands"])
+    addend = operands.pop()
+    if addend["kind"] != "scale" or addend["scale"] != {
+        "kind": "parameter", "name": "bound_relation_anchors"
+    }:
+        raise ValueError("the duplex bound's last operand is not the "
+                         "anchor-count-scaled collision addend")
+    game = addend["operands"][0]
+    if (game["kind"] != "primitive_advantage"
+            or game["game"]["ref"] != "zkc.assume.sha256_216_collision"):
+        raise ValueError("the duplex collision addend does not price "
+                         "zkc.assume.sha256_216_collision")
+    return {"kind": "add", "operands": operands}
+
+
 duplex_local = bound(
-    RULES["zkc.fs.duplex"]["body"]["local_duplex_bound"],
+    split_collision_addend(RULES["zkc.fs.duplex"]["body"]["local_duplex_bound"]),
     {
         "alphabet_order": ALPHABET,
         "capacity": CAPACITY,
@@ -359,7 +386,7 @@ check("duplex t^2 coefficient", theorem_quadratic, duplex_local.coefficient(2))
 # the sumcheck squeeze is exact: 2^64 mod 2^61 = 0, so both codec terms vanish
 # and the whole local bound is the quadratic sponge term alone.
 sumcheck_local = bound(
-    RULES["zkc.fs.duplex"]["body"]["local_duplex_bound"],
+    split_collision_addend(RULES["zkc.fs.duplex"]["body"]["local_duplex_bound"]),
     {
         "alphabet_order": ALPHABET,
         "capacity": CAPACITY,

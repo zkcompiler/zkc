@@ -229,7 +229,52 @@ struct SealedSoundnessView {
   std::map<std::string, std::string, std::less<>> sealBindValues;
   std::map<uint64_t, SealedReduction> reductionsByTransformerPosition;
   std::optional<SealedDuplexFacts> duplex;
+
+  /// The seal policy this artifact was sealed under. Every other field
+  /// here is geometry a rule reads to price one step; this one is read
+  /// by the artifact judgment, which asks whether a derivation covers
+  /// the whole artifact rather than what a step costs. Projected rather
+  /// than re-derived, because the seal battery already decided it and a
+  /// second reading is a second chance to disagree.
+  std::string policy;
 };
+
+/// Whether a derivation covers the artifact rather than one site of it.
+///
+/// Every judgment beside this one is about a step: this reduction is
+/// sound under that rule, at this cost. None of them says the thing a
+/// consumer actually wants, which is that the artifact as a whole is
+/// discharged — and `docs/spec/soundness.md` §8.1 already claims a
+/// third party re-checks *the derivation*, a claim about a final
+/// sequent the system did not produce.
+///
+/// The three conditions are not new checks. The seal battery decided
+/// the policy and refused an escaping claim; the claim graph is already
+/// in the sealed view. What is new is stating that they hold together
+/// with a derivation's own coverage, which is why this lives here
+/// rather than in the signature: it is an accounting statement over an
+/// artifact, not a security theorem about a subject, and putting it in
+/// the rule language would have needed four widenings to say something
+/// the rule language is not for.
+struct ArtifactJudgment {
+  /// True when every condition below holds.
+  bool discharged = false;
+  /// The policy the artifact was sealed under. A policy other than
+  /// `closed_proof` is not a defect — it is an artifact that does not
+  /// claim to be closed — so the judgment reports it rather than
+  /// refusing.
+  std::string policy;
+  /// Claims no reduction consumes and the derivation does not target.
+  /// Under `closed_proof` seal admits at most the terminal claim here,
+  /// so a second entry means the derivation covers one conclusion of an
+  /// artifact that has several.
+  std::vector<uint64_t> uncoveredClaims;
+};
+
+/// Judge whether `targetClaim` — the claim a derivation concluded about
+/// — discharges the whole artifact.
+ArtifactJudgment judgeArtifact(const SealedSoundnessView &sealed,
+                               const ClaimRef &targetClaim);
 
 /// Resolve the reduction output named by `site`, including the redundant
 /// owner-claim equality check.

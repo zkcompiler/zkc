@@ -28,11 +28,27 @@ such spelling this pattern learns to accept is one more place the next
 one can hide. Prose mentions are not emissions, but prose does not
 bracket, so nothing needs to distinguish them.
 
+Beside each id's `means` sentence the table records `means_basis`: a
+digest of the id's emission sites (the message opening at each site,
+with multiplicity, canonically ordered). The sentence itself is prose
+and cannot be machine-checked against the code; what can be checked is
+that *the set of conditions changed*, which is exactly when the
+sentence needs re-reading. Adding or removing an emission under an
+existing id moves the digest, and the lint reports the move instead of
+passing in silence; re-minting the digest is the author's statement
+that the sentence was re-read.
+
 Exit 0 on agreement; 1 on any violation; 2 when the allocation itself
 cannot be established (missing or malformed file) — parse
 failure is a failure, never a skip.
+
+Usage: diagnostic_allocation_lint.py [ALLOCATION] [--print-basis]
+The optional path substitutes the allocation table, which is what lets
+a negative test hold a mutated table against the real tree.
+`--print-basis` prints the computed basis map and exits, for minting.
 """
 
+import hashlib
 import json
 import re
 import sys
@@ -50,7 +66,6 @@ TEST_DIR = ROOT / "test"
 # named only here is not exercised by a negative test.
 TEST_EXCLUDE = TEST_DIR / "Lint"
 
-EMISSION = re.compile(r"\[zkc-(E\d{3})\]")
 # A file-level `REQUIRES:`/`UNSUPPORTED:`/`XFAIL:` decides whether the
 # file runs at all; a per-RUN-line `%if` does not, which is the whole
 # distinction the coverage rule needs. Matched anywhere in a line
@@ -79,15 +94,15 @@ def die(message) -> NoReturn:
     sys.exit(2)
 
 
-def load_table():
-    if not ALLOCATION.is_file():
-        die("%s does not exist" % ALLOCATION)
+def load_table(path):
+    if not path.is_file():
+        die("%s does not exist" % path)
     try:
-        table = json.loads(ALLOCATION.read_text(encoding="utf-8"))
+        table = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as err:
-        die("%s does not parse: %s" % (ALLOCATION, err))
+        die("%s does not parse: %s" % (path, err))
     if not isinstance(table, dict) or table.get("schema") != SCHEMA:
-        die("%s is not a %s document" % (ALLOCATION, SCHEMA))
+        die("%s is not a %s document" % (path, SCHEMA))
     return table
 
 
@@ -112,7 +127,7 @@ def parse_ids(entry, key, lo, hi, seen):
 
 
 def validate(table):
-    """Return (live -> sources, reserved, coverage_exempt, twin-mirrored)."""
+    """Return (live -> sources, reserved, coverage_exempt, mirrored, bases)."""
     ranges = table.get("ranges")
     if not isinstance(ranges, list) or not ranges:
         die("the allocation table declares no ranges")
@@ -120,6 +135,7 @@ def validate(table):
     live = {}
     reserved = set()
     mirrored = set()
+    bases = {}
     seen = set()
     for entry in ranges:
         if not isinstance(entry, dict):
@@ -169,6 +185,22 @@ def validate(table):
             if not sentence.strip():
                 die("range %s: %s has an empty sentence"
                     % (entry["range"], ident))
+        # The sentence's gate. A live id's basis pins the emission-site
+        # set its sentence was read against; reserved ids emit nowhere,
+        # so a basis for one is table drift.
+        basis = entry.get("means_basis", {})
+        if not isinstance(basis, dict) or not all(
+                isinstance(v, str) for v in basis.values()):
+            die("range %s: means_basis is not a map from id to digest"
+                % entry["range"])
+        for ident in sorted(set(range_live) - set(basis)):
+            die("range %s: %s is live and means_basis records nothing for "
+                "it" % (entry["range"], ident))
+        for ident in sorted(set(basis) - set(range_live)):
+            die("range %s: means_basis describes %s, which the range does "
+                "not declare live" % (entry["range"], ident))
+        for ident, digest in basis.items():
+            bases[ident] = digest
         # The twin facet is the declared parity surface: exactly which of a
         # range's live ids the reference twin also spells. Both drift
         # directions are checked in main() against reference/oracle/.
@@ -198,12 +230,33 @@ def validate(table):
             die("coverage_exempt names %s, which is not a live id" % ident)
         if not isinstance(reason, str) or not reason.strip():
             die("coverage_exempt for %s carries no reason" % ident)
-    return live, reserved, set(exempt), mirrored
+    return live, reserved, set(exempt), mirrored, bases
+
+
+# The message opening at one emission site: what follows the marker
+# inside the same string literal, on the same line. A helper-bracketed
+# site contributes an empty opening; multiplicity still counts it, so a
+# condition added under such an id moves the basis all the same.
+#
+# The capture stops at a newline as well as at a quote or an escape: a
+# marker with no closing quote on its line — a bracketed mention inside
+# a comment — would otherwise swallow every following line up to the
+# next quote, and the basis would then move whenever any of that
+# unrelated text was edited.
+OPENING = re.compile(r"\[zkc-(E\d{3})\]\s*([^\"\\\n]*)")
+
+
+def basis_digest(openings):
+    """The digest of one id's condition set: its openings, with
+    multiplicity, canonically ordered."""
+    payload = "\n".join(sorted(openings))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def scan_sources():
-    """Return id -> set of emitting files (paths relative to the root)."""
+    """Return (id -> emitting files, id -> list of message openings)."""
     emitted = {}
+    openings = {}
     for top in SOURCE_DIRS:
         base = ROOT / top
         if not base.is_dir():
@@ -212,11 +265,13 @@ def scan_sources():
             if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
-            for match in EMISSION.finditer(text):
+            for match in OPENING.finditer(text):
                 ident = match.group(1)
                 rel = path.relative_to(ROOT).as_posix()
                 emitted.setdefault(ident, set()).add(rel)
-    return emitted
+                openings.setdefault(ident, []).append(
+                    match.group(2).strip())
+    return emitted, openings
 
 
 def scan_tests():
@@ -248,11 +303,32 @@ def scan_tests():
 
 
 def main():
-    live, reserved, exempt, mirrored = validate(load_table())
-    emitted = scan_sources()
+    argv = sys.argv[1:]
+    print_basis = "--print-basis" in argv
+    argv = [a for a in argv if a != "--print-basis"]
+    allocation = Path(argv[0]).resolve() if argv else ALLOCATION
+
+    if print_basis:
+        # Minting mode reads only the tree: it exists to produce the
+        # basis a not-yet-minted table lacks, so it must not require one.
+        emitted, openings = scan_sources()
+        print(json.dumps(
+            {ident: basis_digest(openings[ident])
+             for ident in sorted(emitted)}, indent=2))
+        return
+
+    live, reserved, exempt, mirrored, bases = validate(load_table(allocation))
+    emitted, openings = scan_sources()
     asserted, gatedOnly = scan_tests()
 
     problems = []
+    for ident in sorted(set(live) & set(emitted)):
+        computed = basis_digest(openings[ident])
+        if bases.get(ident) != computed:
+            problems.append(
+                "%s's condition set moved (its emission sites no longer "
+                "match means_basis): re-read its means sentence, then "
+                "re-mint the basis to %s" % (ident, computed))
     for ident in sorted(emitted):
         files = ", ".join(sorted(emitted[ident]))
         if ident in reserved:

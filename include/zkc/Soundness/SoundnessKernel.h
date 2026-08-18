@@ -69,15 +69,69 @@ enum class SecurityNotion {
   Completeness,
 };
 
+/// Under which quantification a security statement holds: whether the
+/// adversary fixes the instance before seeing the parameters, may
+/// choose it after, or may additionally choose which index of a family
+/// it attacks. Three different theorems about one protocol, which is
+/// why this belongs to the index rather than to the subject.
+enum class SecurityQuantification {
+  Static,
+  AdaptiveInstance,
+  AdaptiveIndex,
+};
+
 struct SecurityIndex {
   SecurityNotion notion = SecurityNotion::SpecialSoundness;
   SecurityTrack track = SecurityTrack::Soundness;
   std::string variant;
   std::string model;
+  SecurityQuantification quantification = SecurityQuantification::Static;
 };
 
 bool operator==(const SecurityIndex &lhs, const SecurityIndex &rhs);
 bool operator!=(const SecurityIndex &lhs, const SecurityIndex &rhs);
+
+/// A rule's description of one index, which is the index itself except
+/// that `quantification` may be a variable instead of a value.
+///
+/// A rule with a premise either establishes the quantification or
+/// carries it, and carrying it is not sayable when both sides are
+/// written out in full: ten of the twenty-seven rules have premises, so
+/// preservation without a variable means one rule per value. A premise
+/// naming the variable matches any quantification and binds it; a
+/// conclusion naming it restates whatever the premises bound, so a
+/// conclusion's variable with no premise binding it is refused as
+/// ill-formed. The variable is deliberately confined to this one
+/// coordinate — binding `notion` or `track` would let a rule conclude
+/// in a track its premise never established, which writing indices out
+/// in full is what currently prevents.
+struct SecurityIndexPattern {
+  SecurityIndex index;
+  /// When set, `index.quantification` is ignored: a premise matches
+  /// any quantification and binds it under this name, and the rule's
+  /// conclusion restates the name to carry it.
+  std::string quantificationVariable;
+};
+
+/// Whether `index` satisfies `pattern`, binding the pattern's variable
+/// into `binding` when it has one. The binding is shared across a
+/// rule's premises: a second premise naming the same variable must
+/// agree with the first, so the caller passes one binding for the whole
+/// rule rather than one per premise.
+///
+/// The one shared slot is not keyed by variable name, which is correct
+/// because a rule can name at most one variable: well-formedness
+/// refuses a premise whose variable is not the one its conclusion
+/// restates, so two distinct variables never reach this binding.
+bool matchSecurityIndex(const SecurityIndexPattern &pattern,
+                        const SecurityIndex &index,
+                        std::optional<SecurityQuantification> &binding);
+
+/// The index `pattern` denotes once its variable, if it has one, is
+/// given the value `binding`. A pattern without a variable ignores
+/// `binding` and denotes its index as written.
+SecurityIndex instantiateSecurityIndex(const SecurityIndexPattern &pattern,
+                                       SecurityQuantification binding);
 
 enum class ResultSchema {
   Extraction,
@@ -116,6 +170,13 @@ enum class ArtifactProjectionKind {
   ReductionParameter,
   ContractRoundFamilyField,
   PathBindingField,
+  /// The number of seal-stage bindings whose bound value is the
+  /// transcript projection of a claim's declared contract anchor
+  /// (docs/spec/relations.md §2.8). The projection binds 216 of the
+  /// anchor's 256 bits, so the shortfall is priced as a named
+  /// primitive-game advantage scaled by this count: zero where no
+  /// relation identity enters the transcript, and the addend vanishes.
+  BoundRelationAnchorCount,
 };
 
 enum class ProjectionAggregate { UniqueEqual, Count };
@@ -333,7 +394,7 @@ enum class PremiseResultConstraint {
 struct PremisePort {
   std::string name;
   std::string expectedSubjectSchema;
-  SecurityIndex expectedIndex;
+  SecurityIndexPattern expectedIndex;
   ResultSchema expectedResult = ResultSchema::Extraction;
   std::vector<TypedDeclaration> expectedResources;
   std::set<PremiseResultConstraint> resultConstraints;
@@ -453,7 +514,7 @@ struct SoundnessRule {
   std::vector<MachineConditionTemplate> machineConditions;
   std::vector<ExternalHypothesisTemplate> externalHypotheses;
   std::vector<ExactParameterPin> exactParameterPins;
-  SecurityIndex conclusionIndex;
+  SecurityIndexPattern conclusionIndex;
   RuleBody body;
 };
 

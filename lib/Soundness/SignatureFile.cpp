@@ -189,8 +189,9 @@ Expected<SecurityIndex> readSecurityIndex(const Reader &reader,
   if (!entry)
     return entry.takeError();
   const std::string where = Twine(context + " " + key).str();
-  if (Error err = reader.closed(**entry,
-                                {"notion", "track", "variant", "model"}, where))
+  if (Error err = reader.closed(
+          **entry, {"notion", "track", "variant", "model", "quantification"},
+          where))
     return std::move(err);
 
   static const std::pair<StringRef, SecurityNotion> notions[] = {
@@ -234,7 +235,70 @@ Expected<SecurityIndex> readSecurityIndex(const Reader &reader,
     return model.takeError();
   index.variant = std::move(*variant);
   index.model = std::move(*model);
+
+  // Required, not defaulted. The twin refuses a missing field and the
+  // canonical form is total: a coordinate that appears only sometimes
+  // is a coordinate two readers can disagree about.
+  auto quantificationText = reader.string(**entry, "quantification", where);
+  if (!quantificationText)
+    return quantificationText.takeError();
+  static const std::pair<StringRef, SecurityQuantification> quantifications[] =
+      {
+          {"static", SecurityQuantification::Static},
+          {"adaptive_instance", SecurityQuantification::AdaptiveInstance},
+          {"adaptive_index", SecurityQuantification::AdaptiveIndex},
+      };
+  auto quantification = lookupEnum<SecurityQuantification>(
+      reader, *quantificationText, quantifications, where + " quantification");
+  if (!quantification)
+    return quantification.takeError();
+  index.quantification = *quantification;
   return index;
+}
+
+/// A premise's index, where `quantification` may name a variable
+/// instead of a value. A variable is spelled with a leading `$`, which
+/// no quantification value uses, so the two are told apart by the
+/// grammar rather than by a flag.
+Expected<SecurityIndexPattern> readSecurityIndexPattern(const Reader &reader,
+                                                        const Object &parent,
+                                                        StringRef key,
+                                                        const Twine &context) {
+  auto entry = reader.object(parent, key, context);
+  if (!entry)
+    return entry.takeError();
+  auto text = reader.optionalString(**entry, "quantification",
+                                    Twine(context + " " + key));
+  if (!text)
+    return text.takeError();
+
+  SecurityIndexPattern pattern;
+  if (!text->empty() && text->front() == '$') {
+    pattern.quantificationVariable = *text;
+    // The literal reader would refuse a variable, so hand it a copy
+    // with the variable replaced by a placeholder and let it check
+    // everything else. Matching, instantiation, and the encoder all
+    // ignore the placeholder when the variable is set. Body-law
+    // checking does read it, through the conclusion's index, and gets
+    // the placeholder rather than the variable — which is sound only
+    // because a premise may name no variable but the one its
+    // conclusion restates, so wherever the placeholder is compared the
+    // port carries a variable that absorbs it.
+    Object substituted = **entry;
+    substituted["quantification"] = "static";
+    Object holder;
+    holder[key] = std::move(substituted);
+    auto index = readSecurityIndex(reader, holder, key, context);
+    if (!index)
+      return index.takeError();
+    pattern.index = std::move(*index);
+    return pattern;
+  }
+  auto index = readSecurityIndex(reader, parent, key, context);
+  if (!index)
+    return index.takeError();
+  pattern.index = std::move(*index);
+  return pattern;
 }
 
 Expected<ContractRoundSelector> readRoundSelector(const Reader &reader,
@@ -299,6 +363,8 @@ Expected<ArtifactProjection> readArtifactProjection(const Reader &reader,
       {"contract_round_family_field",
        ArtifactProjectionKind::ContractRoundFamilyField},
       {"path_binding_field", ArtifactProjectionKind::PathBindingField},
+      {"bound_relation_anchor_count",
+       ArtifactProjectionKind::BoundRelationAnchorCount},
   };
   auto kind =
       lookupEnum<ArtifactProjectionKind>(reader, *kindText, kinds, context);
@@ -318,6 +384,7 @@ Expected<ArtifactProjection> readArtifactProjection(const Reader &reader,
   case ArtifactProjectionKind::ConclusionReductionContract:
   case ArtifactProjectionKind::ContractRoundAdjacency:
   case ArtifactProjectionKind::ReductionInputCount:
+  case ArtifactProjectionKind::BoundRelationAnchorCount:
     if (Error err = reader.closed(entry, {"kind", "result_sort"}, context))
       return std::move(err);
     return projection;
@@ -1270,8 +1337,8 @@ readPremises(const Reader &reader, const Object &parent, const Twine &context) {
     if (!schema)
       return schema.takeError();
     port.expectedSubjectSchema = schema->str();
-    auto index = readSecurityIndex(reader, *entry, "expected_index",
-                                   context + " premise");
+    auto index = readSecurityIndexPattern(reader, *entry, "expected_index",
+                                          context + " premise");
     if (!index)
       return index.takeError();
     port.expectedIndex = std::move(*index);
@@ -1467,7 +1534,7 @@ Expected<SoundnessRule> readRule(const Reader &reader, StringRef id,
   }
 
   auto conclusion =
-      readSecurityIndex(reader, entry, "conclusion_index", context);
+      readSecurityIndexPattern(reader, entry, "conclusion_index", context);
   if (!conclusion)
     return conclusion.takeError();
   rule.conclusionIndex = std::move(*conclusion);

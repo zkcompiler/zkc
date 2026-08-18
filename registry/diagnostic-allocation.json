@@ -17,17 +17,31 @@
       }
     },
     {
-      "component": "protocol-vocabulary consumption",
-      "live": [],
+      "component": "registry consumption: the loading discipline every registry shares",
+      "live": [
+        "E120",
+        "E121"
+      ],
+      "means": {
+        "E120": "the supplied bytes are not the named registry document: the encoding domain, the JSON form, the top-level shape, or the registry name refuses",
+        "E121": "a name a registry admits (an entry, or a name inside one) is empty or leaves printable ASCII"
+      },
+      "means_basis": {
+        "E120": "6b726c27d04d79997953eabb50bd8f15e5b42fd0fae75bbc3f79b09de2bd1ed0",
+        "E121": "d752416e929fa5b660584fa0b96006f0659bef74bc4e57063ae4d49cc913dc68"
+      },
       "range": "E120-E129",
       "reserved": [],
       "sources": [
         "include/zkc/Registry/",
-        "lib/Registry/"
+        "lib/Registry/",
+        "reference/oracle/"
       ],
       "twin": {
-        "excluded_reason": "unallocated",
-        "mirrored": []
+        "mirrored": [
+          "E120",
+          "E121"
+        ]
       }
     },
     {
@@ -74,6 +88,27 @@
         "E148": "an OIR artifact's provenance rows are wrong: endpoint kind, counterparty rows, witness labels, or pinned parameters. Broad: this identifier covers several unrelated conditions and is a split candidate (notes/answer-surface-2026-08.md)",
         "E149": "a hole's declaration or the use discipline of its results is wrong. Broad: this identifier covers several unrelated conditions and is a split candidate (notes/answer-surface-2026-08.md)"
       },
+      "means_basis": {
+        "E131": "e1672415bb2b95570a85fa688ffd537c6fd5585ca86865b21c0484993d5108a8",
+        "E132": "4088d8b3f9a4b6d8563fb0b9e5f246ecb91b7772b734317eae6030143df030b1",
+        "E133": "e6cfd9cd59676c1cbb99e5ab6eb4c35d5500c3fb808343bc1c37fb4ef08c560a",
+        "E134": "19f855357cdea245809ee31be7d82919da83d3d4cd59bd3eb0d60f0c2163c2ec",
+        "E135": "cb68319ae612a50faa70cd6714f5051e64540ffc9dd10ab9a3a3be2b03e207bb",
+        "E136": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E137": "3793fb751ee6a56bf354db8e7f31f376d6d646bf7079078a7ef036a2f8f65295",
+        "E138": "2f20e71b14521741fdcac77c83b8248e25ce6dec19572d2f956000674780735d",
+        "E139": "8a8a528c1268cf99e7270e35239a8eb80117ee84e1271d2a43fa00308b1c4a5c",
+        "E140": "2f98386ae58ea2ff6ca1010c693a4a7a1c0f47fb4fa68c0185c9e4623a394b1f",
+        "E141": "ae304a96dbdbdc3dbcb55ccfb7c4ac1bc2f88979dc46d5695407354e952b161d",
+        "E142": "430b48306a2043e15c934ad477e8fa0b41af40303dc0e88120b6a33ce96e52ce",
+        "E143": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E144": "b60db0cd8795da1a3299baadbf7555ee7acfdf2ea135f8ebfd8ea4a176b1c5c3",
+        "E145": "7a611478d50e19e0e539d928bc283e54023c3ed656a2dd5656456384967eaaec",
+        "E146": "955c81eb16aca969219768a2e2dca3efb36c4774acb183bc2f302c0dbe20992f",
+        "E147": "f0d961d06f77e004eecbbf338397b5b35270d0fbc15417f42611f253c4573720",
+        "E148": "8f6b56538b9c6191fca665b5ace9d9f5083b7d3bb1b9109ecab6802b884f0dfc",
+        "E149": "b7c08ef45b1b61a6b2f1c15242c3c2e79f21665d35ebd23942bf9a6b0011e922"
+      },
       "range": "E130-E149",
       "reserved": [],
       "sources": [
@@ -111,6 +146,17 @@
         "E158": "a contract, rule, or route identifier is empty",
         "E159": "a material binding's semantic_ref is not a digest reference"
       },
+      "means_basis": {
+        "E151": "3023ec9f8808dbab96ce7d24bb7b9c81e6a9746fb38f9ec1f537dd2a74d95187",
+        "E152": "b6bd94db9daf42c6db3485fbaf775d7faa2ea4fb930626c15e687b13c8ab3837",
+        "E153": "3b76b11f6a60ad0716f89c7acf181127e24a0dac8351bb961e1281bd51fd6d93",
+        "E154": "97e19ff0dc1d722a77a8640b058c9b0d3b1266cdca78d3cb5843f9cd9ac6dc80",
+        "E155": "1705008a837c1b6c1deb67906724144282f4d82d1ef88adf13e84cbc1471d3e2",
+        "E156": "26c248bf87b53564175f4a340854a5d7573597860efa00750f333a7a8f138b8b",
+        "E157": "80c32db03eec40ec11f52d4984020c8a71c11ac923108163b52a5af0de753127",
+        "E158": "f68f2635a8f1ce97626765818cd810f5021dfd5e0492900fba13a28f9b8ef336",
+        "E159": "d29bbf230923ad86ae239c5199dbb9b9ee5847aa448d8649353740f78be623cf"
+      },
       "range": "E150-E159",
       "reserved": [],
       "sources": [
@@ -130,6 +176,10 @@
       "means": {
         "E161": "a verifier value carries more than one semantic material binding",
         "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity"
+      },
+      "means_basis": {
+        "E161": "8ce9df859e967db7e5ece0df4c7a99f219571b3a9bdeb90e5a85e25e95b806f2",
+        "E162": "09c624212632a7b681ae4f257643a683cef57a5203741afaf23a6e785d71192d"
       },
       "range": "E160-E169",
       "reserved": [],
@@ -153,6 +203,11 @@
         "E171": "a stored PIR artifact's id does not match its canonical encoding",
         "E172": "two claim sources carry identical profile and anchors, so their descriptors collide"
       },
+      "means_basis": {
+        "E170": "0ce85254eb2a0bef0d1f4ef86bce96e0f807e27bdac0ee398b46d3f1cae4b302",
+        "E171": "08d8ff08265db22f7524286a76d8d3b0df465f67acdbee1d9f80eccacb7c333a",
+        "E172": "df453f52476bd19316ea88148e0765ce8d451ef3d47a834effdd8dc879bae4bd"
+      },
       "range": "E170-E179",
       "reserved": [],
       "sources": [
@@ -172,6 +227,10 @@
       "means": {
         "E201": "a terminal route reference does not resolve",
         "E202": "pir-seal was given something other than open pir.protocol roots, or left one unjudged"
+      },
+      "means_basis": {
+        "E201": "6f5e0a68d0ea2230af51e809ece24487b9f71fe1dae6f0936f70c300e5a541a4",
+        "E202": "2cf10434c5838dead4029083bdb0fd9f4e2651fb20fc740c75775047cbbdbe09"
       },
       "range": "E200-E209",
       "reserved": [],
@@ -202,6 +261,14 @@
         "E214": "a statement binding follows a challenge that must be bound to it",
         "E215": "segment starts are not strictly increasing event positions",
         "E216": "a challenge domain repeats another in the same protocol"
+      },
+      "means_basis": {
+        "E211": "a097d93cedbc195b2c2b3bf1666ac2ce707ce4a3b314645401fc3df94d61abb8",
+        "E212": "a10986f7217e226ff588798fd5934207cdb930ebe0a73e61a61c30c1be566ccd",
+        "E213": "ae200ee76af9f021ab968722c50e08ebe983d274923bd94bfdd7ff63ad6d7a5f",
+        "E214": "09f3a2261bcb7ec31031c40b7ad2823fb9f90e9a3f37985b4c66b012975ab978",
+        "E215": "2f9c9057b243a40a7da78e055174cbaf6c5949bffbda9dc545e239feffea8b46",
+        "E216": "59e30a7a11bc230e8028a3175b8632e2fdaae3cb3b2575d3af9e6626ce59ec8e"
       },
       "range": "E210-E219",
       "reserved": [],
@@ -243,6 +310,17 @@
         "E228": "a value leaves the canonical attribute domain: nesting depth, booleans, integer range, non-printable strings, or non-string keys",
         "E229": "kappa cites a construction profile the registry does not supply"
       },
+      "means_basis": {
+        "E221": "d90f70e050e1bdda1c6cefd693fa20df1d11944a5b06978b29841b467553fe14",
+        "E222": "e4513e633023e231ccc9e3edb2cbea380ccc4c33590e6fea8fed4d53fcac0aba",
+        "E223": "534a200025dab5866a6eada9aa636c2f1f5d19167d65dd486894d60749074451",
+        "E224": "94ff0e84ac5d80621b2c23b8c5b71732e529a5c6d1d2d5347e79f647b5e3b9c8",
+        "E225": "534c2904fddad295a6f849ea88fc034e6376a3db0b474eaabcac0bb0c67c3e81",
+        "E226": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "E227": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E228": "6a68061207e26fa489e26e9fdd74fa835415e7c537b8ab12cfa9d9bf649a9885",
+        "E229": "1457abaf0c7828bb4c4ccadc7b130091fb94be7abb20e898fd04c97eefb92148"
+      },
       "range": "E220-E229",
       "reserved": [],
       "sources": [
@@ -278,6 +356,15 @@
         "E238": "a standalone OIR artifact fails admission against the environment supplied",
         "E239": "prover projection lacks a construction route, a kappa constant, or a slot binding it requires"
       },
+      "means_basis": {
+        "E231": "a2db90cd43130d59886bec700b9176ee476a88fa39cf5368c103f9599595feed",
+        "E232": "6f6cb8c02cb0b027c4c83e627aaeef724f0d39297a5af3a930ee52458f0aab8e",
+        "E233": "a065f0d37783df1cfbc4f5f26450866f2f5006aa0008aa32c31408e1f884f3ee",
+        "E234": "54c0ec8405ba4aafe41299bf06ab7fcec2896150d9c386e73f9786fc49288976",
+        "E237": "f7780bf931f425e17011204a0559b39c937bc8e5fadfb7cb1864b2b251cb4e9c",
+        "E238": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E239": "317a237462a4cb1661d37d3c5d8968cf596c201266b179a5ef7ab6f4f7b688bf"
+      },
       "range": "E230-E239",
       "reserved": [],
       "sources": [
@@ -299,12 +386,19 @@
         "E248"
       ],
       "means": {
-        "E241": "retired and dead: it named the version-agreement half of a check that a content-digest pin already decides. The number is never reissued (docs/spec/versioning.md \u00a73)",
+        "E241": "retired and dead: it named the version-agreement half of a check that a content-digest pin already decides. The number is never reissued (docs/spec/versioning.md §3)",
         "E243": "a reduce's dependency arity or a round's challenge realization disagrees with its contract",
         "E244": "a reduce's message occurrences disagree with its contract: missing role, wrong count, duplicate, or non-canonical",
         "E245": "one challenge fills two dependency slots, or is shared by two reductions",
         "E247": "a claim profile is not admitted by the protocol vocabulary",
         "E248": "pir-link ran without a protocol-vocabulary authority"
+      },
+      "means_basis": {
+        "E243": "ee6de5ee2576f84bc578ce2c84f33bda51a124dfaedb6c2c865ee8f30d0f43d3",
+        "E244": "7547f7c44177c9b9c0243315b2423f1b19e3e95277b1d4d300e640a91cb0b4d8",
+        "E245": "5f215318566fc997bdcf070fd54128beec4c8da3196bbbffd87f4fb2cd78c17e",
+        "E247": "009474266b6542ca359e1e6053ef2eb35203f8455bc16ead73f587b5df617ae4",
+        "E248": "d88377835817a958533f4bbbc58df787988f936a58c0d0660fd4dfc13b696636"
       },
       "range": "E240-E249",
       "reserved": [
@@ -359,6 +453,17 @@
         "E307": "a discharge's check roles, terminal rule, or producer pin do not match",
         "E308": "a transparent predicate for a terminal role does not match its rule"
       },
+      "means_basis": {
+        "E300": "7c370d9536d7d0d6a0f7cd7f9826692acd93e4fb05ba46f7b630b879740343d3",
+        "E301": "6a3cf5192354f71615ac51034b3e97c20eda99643fcaf5bbe6d41ad59bd12167",
+        "E302": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E303": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E304": "d088784b7ecb87f1ea17e6f982fa968ffefcc07b79de6ecc548fc00242868da6",
+        "E305": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E306": "94f59a48294d99f8d9b7632cd5a1742670c7735fe37ec7c555aab939b635fdde",
+        "E307": "d088784b7ecb87f1ea17e6f982fa968ffefcc07b79de6ecc548fc00242868da6",
+        "E308": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
       "range": "E300-E319",
       "reserved": [],
       "sources": [
@@ -392,6 +497,17 @@
         "E326": "a reduction's output anchors do not match its contract",
         "E327": "one check justifies more than one reduction, or is selected for two roles",
         "E328": "a material binding is consumed by no reduction or terminal attachment"
+      },
+      "means_basis": {
+        "E320": "538d6440534fa5f615e8a26932792a82a2e4a33a97886e2d815eab8fc216d415",
+        "E321": "7c370d9536d7d0d6a0f7cd7f9826692acd93e4fb05ba46f7b630b879740343d3",
+        "E322": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070",
+        "E323": "79488488398f5f5aed236dd6e9f914599370d04dfe70fda61b8c83bf739b1088",
+        "E324": "636159b35205da4142a43bc02d2849d77d3ac07a0946211585cde15a9c6ff21f",
+        "E325": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E326": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070",
+        "E327": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "E328": "a8604dd3532ffb4bbb0032c0e74888d53a3dd648f35a9c58408e565106312e70"
       },
       "range": "E320-E339",
       "reserved": [],
@@ -439,6 +555,22 @@
         "E412": "a pow_search hole's trial is not the check the verifier performs",
         "E413": "an absorbed value is not canonical for its payload class"
       },
+      "means_basis": {
+        "E400": "e61d97fd854177639d0243fafa289c4fcaf587005a23027b1ee5b6af6bbe0665",
+        "E401": "909fcea989eb79aa9f68360fab30c9599b3d4c62103d3f97866cf243df352625",
+        "E402": "b2e0f143f9d6ca1e102699a2038c210ebf413c3f6265da62ef00cbc54fbe6d5a",
+        "E403": "d01304e4b2f9eebe9cd482e79a513a107d6aebf858b04f391df209fa67b18462",
+        "E404": "b0bedf8786aff62446ee42561356450561047d7bf318f8824fe4d87052b2e938",
+        "E405": "69eeb036ad05029cd6a291ca834e245c0ac33b7b9ab1be0e2d5684beb1e947c7",
+        "E406": "7fe40decdbb758e604bac1d60f9fb4e22a4e719f7b6f6922634fa71ec262effc",
+        "E407": "02dec1c4cedeb539e07c93babed3e6649fda81a8202b2a24dcff557e231956bb",
+        "E408": "6649d46304f4e34a8b303eaf232d0d614ae89ad82434b1a77f303ad3e43e2758",
+        "E409": "140deb5438ddfd0a358bf80f72ab5e5ad883a66f4d4f0871eeda0c4a0d7003f2",
+        "E410": "284eed62cc64264f1a76ea1e0a10a25ff1153b0dfe360a36c389196d2412d7ed",
+        "E411": "863709aa07f859a4e281686890b5efa1047362e3d9f11fee4e76978c15d989b5",
+        "E412": "0ce333fec76d17547dda2b10677dd4b01179949196b46c98f722dee72f278757",
+        "E413": "5e6b9f655c04c1c103351918caea1fb1a9a795df283d531bcf212854f95e0dfb"
+      },
       "range": "E400-E419",
       "reserved": [],
       "sources": [
@@ -467,6 +599,14 @@
         "E705": "an exported claim finds no consumer source with its exact descriptor",
         "E706": "an exported claim matches several consumer sources, so no fact decides which face receives it"
       },
+      "means_basis": {
+        "E701": "15f54c518ae3b46c6283314017bc5f1598ba826362598ab87fb8725f59dd1833",
+        "E702": "63e834c00202545798eb57a62b7de55c8490319cfa27d624465678e612dad786",
+        "E703": "0aabb2c1be8ab25948ab5ac40d55d2f3b4ec314f6263060f19d0c37a4cadc121",
+        "E704": "b9a9590a4cadc327ab9c09a87cdf71e388e53b315a7ffb434f41486e510fd6df",
+        "E705": "6298f414f08b09c102e0fdf58cc6d11af19167f79d372f2d2972d6ad0b4f9daf",
+        "E706": "6298f414f08b09c102e0fdf58cc6d11af19167f79d372f2d2972d6ad0b4f9daf"
+      },
       "range": "E700-E709",
       "reserved": [],
       "sources": [
@@ -489,6 +629,11 @@
         "E801": "a requested or stored artifact id does not match the artifact in hand",
         "E802": "an artifact's producer or version marker is rejected",
         "E803": "an artifact cannot be read, is malformed, or its identity cannot be recomputed before write. Broad: this identifier covers an I/O failure, a malformed document, and an internal ordering error, and is a split candidate (notes/answer-surface-2026-08.md)"
+      },
+      "means_basis": {
+        "E801": "e139695ba4959d9d5d338ceb45aede2ccf4a00bed544ca7d85179516a8cfdda7",
+        "E802": "0cb9780b953d9929188d4046ce29301aeabd398c170904058484236d3a83576e",
+        "E803": "8615e58f3646d59c99ca755cd996bdfcc2065371399a01e8a32fbb699225debf"
       },
       "range": "E800-E809",
       "reserved": [],
@@ -515,6 +660,13 @@
         "E902": "something the invocation names is absent from the environment it supplied",
         "E903": "a file the invocation supplied is not the document that flag takes",
         "E904": "a generator emitted something its own admission refuses, which is a defect in the generator rather than in its input"
+      },
+      "means_basis": {
+        "E900": "9edeffe1b8aa7fded76d0d23d20982e42e6dfa821d009773c6ea73e9c513bf16",
+        "E901": "ae8ddc226395d97d2b00cdc5cdc87a5b265e7f8d9e44d8551d897b3959dcefbb",
+        "E902": "b8bd6884c7d9c97eb54b3c3fb461e3492fb58ff6f0044924f048d0c5a362c576",
+        "E903": "59f3fe3699fc040b0ca13879d54c117d9643aefa939230cdc4f90544c2add123",
+        "E904": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
       },
       "range": "E900-E909",
       "reserved": [],
