@@ -25,6 +25,12 @@ using namespace mlir;
 
 namespace {
 
+/// The BabyBear prime. A corpus word at or above it is refused rather
+/// than reduced: the emitted runtime asserts canonicality on absorb, so
+/// a loader that quietly reduced would make the two legs disagree in
+/// kind — a panic against a different value — instead of in value.
+constexpr uint64_t kBabyBear = 2013265921;
+
 /// One element as the supplier frames it: a big-endian four-byte word.
 void appendElement(llvm::SmallVectorImpl<uint8_t> &out, uint64_t element) {
   out.push_back((element >> 24) & 0xff);
@@ -76,7 +82,11 @@ struct TestDuplexFramingPass
     if (!cases || !distinct)
       return fail("the framing corpus needs 'cases' and 'distinct'");
 
-    std::map<std::string, std::vector<std::string>> outputsByName;
+    // Transparent comparator: the corpus hands out `StringRef`s and
+    // this is the repository's idiom for looking one up without a
+    // temporary `std::string` per probe.
+    std::map<std::string, std::vector<std::string>, std::less<>>
+        outputsByName;
     for (const llvm::json::Value &entry : *cases) {
       const llvm::json::Object *kase = entry.getAsObject();
       std::optional<llvm::StringRef> name =
@@ -99,9 +109,12 @@ struct TestDuplexFramingPass
           llvm::SmallVector<uint8_t> framed;
           for (const llvm::json::Value &element : *absorb) {
             uint64_t word = 0;
-            if (!element.getAsString() ||
-                element.getAsString()->getAsInteger(10, word))
+            std::optional<llvm::StringRef> text = element.getAsString();
+            if (!text || text->getAsInteger(10, word))
               return fail("a framing absorb element is not a decimal string");
+            if (word >= kBabyBear)
+              return fail("a framing absorb element is not canonical for the "
+                          "field");
             appendElement(framed, word);
           }
           duplex->absorb(framed);
@@ -118,8 +131,12 @@ struct TestDuplexFramingPass
       }
 
       std::vector<std::string> want;
-      for (const llvm::json::Value &value : *expected)
-        want.push_back(value.getAsString()->str());
+      for (const llvm::json::Value &value : *expected) {
+        std::optional<llvm::StringRef> text = value.getAsString();
+        if (!text)
+          return fail("a framing case output is not a decimal string");
+        want.push_back(text->str());
+      }
       if (outputs != want)
         return fail("framing case '" + *name +
                     "': this leg disagrees with the corpus");
@@ -132,8 +149,12 @@ struct TestDuplexFramingPass
       const llvm::json::Array *pair = pairValue.getAsArray();
       if (!pair || pair->size() != 2)
         return fail("a distinct entry is not a pair of case names");
-      auto left = outputsByName.find((*pair)[0].getAsString()->str());
-      auto right = outputsByName.find((*pair)[1].getAsString()->str());
+      std::optional<llvm::StringRef> leftName = (*pair)[0].getAsString();
+      std::optional<llvm::StringRef> rightName = (*pair)[1].getAsString();
+      if (!leftName || !rightName)
+        return fail("a distinct pair does not name two cases as strings");
+      auto left = outputsByName.find(*leftName);
+      auto right = outputsByName.find(*rightName);
       if (left == outputsByName.end() || right == outputsByName.end())
         return fail("a distinct pair names an unknown case");
       if (left->second == right->second)

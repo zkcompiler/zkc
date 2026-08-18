@@ -66,7 +66,6 @@ TEST_DIR = ROOT / "test"
 # named only here is not exercised by a negative test.
 TEST_EXCLUDE = TEST_DIR / "Lint"
 
-EMISSION = re.compile(r"\[zkc-(E\d{3})\]")
 # A file-level `REQUIRES:`/`UNSUPPORTED:`/`XFAIL:` decides whether the
 # file runs at all; a per-RUN-line `%if` does not, which is the whole
 # distinction the coverage rule needs. Matched anywhere in a line
@@ -103,7 +102,7 @@ def load_table(path):
     except json.JSONDecodeError as err:
         die("%s does not parse: %s" % (path, err))
     if not isinstance(table, dict) or table.get("schema") != SCHEMA:
-        die("%s is not a %s document" % (ALLOCATION, SCHEMA))
+        die("%s is not a %s document" % (path, SCHEMA))
     return table
 
 
@@ -238,7 +237,13 @@ def validate(table):
 # inside the same string literal, on the same line. A helper-bracketed
 # site contributes an empty opening; multiplicity still counts it, so a
 # condition added under such an id moves the basis all the same.
-OPENING = re.compile(r"\[zkc-(E\d{3})\]\s*([^\"\\]*)")
+#
+# The capture stops at a newline as well as at a quote or an escape: a
+# marker with no closing quote on its line — a bracketed mention inside
+# a comment — would otherwise swallow every following line up to the
+# next quote, and the basis would then move whenever any of that
+# unrelated text was edited.
+OPENING = re.compile(r"\[zkc-(E\d{3})\]\s*([^\"\\\n]*)")
 
 
 def basis_digest(openings):

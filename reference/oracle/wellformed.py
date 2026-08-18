@@ -709,7 +709,7 @@ def _check_projection(projection, where: str) -> None:
 # --------------------------------------------------------------------------
 
 
-def _index_admitted(schemas: SchemaContext, index: SecurityIndex) -> bool:
+def index_admitted(schemas: SchemaContext, index: SecurityIndex) -> bool:
     needs_variant, needs_model = INDEX_SHAPE[index.notion]
     if bool(index.variant) != needs_variant:
         return False
@@ -770,7 +770,18 @@ def check_rule_well_formed(schemas: SchemaContext, rule: Rule) -> None:
                    == conclusion.quantification for port in rule.premises):
             raise Refusal(f"{where} concludes an index variable no premise "
                           "binds")
-    if not _index_admitted(schemas, conclusion):
+    # The variable is a rule-level device with one name: a premise binds
+    # it and the conclusion restates it. A premise naming a variable the
+    # conclusion does not restate binds a value the conclusion discards,
+    # and a conclusion whose literal is stronger than the discarded value
+    # would then claim more than any premise established.
+    for port in rule.premises:
+        if (port.expected_index.quantification.startswith("$")
+                and port.expected_index.quantification
+                != conclusion.quantification):
+            raise Refusal(f"{where} premise '{port.name}' binds an index "
+                          "variable the conclusion does not restate")
+    if not index_admitted(schemas, conclusion):
         raise Refusal(f"{where} concludes an index the vocabulary does not "
                       "admit")
     for item in rule.resources:
@@ -781,7 +792,7 @@ def check_rule_well_formed(schemas: SchemaContext, rule: Rule) -> None:
 
     for port in rule.premises:
         at = f"{where} premise '{port.name}'"
-        if not _index_admitted(schemas, port.expected_index):
+        if not index_admitted(schemas, port.expected_index):
             raise Refusal(f"{at} expects an unadmitted index")
         if port.expected_result != RESULT_OF_NOTION[port.expected_index.notion]:
             raise Refusal(f"{at} expects a result schema its index does not "

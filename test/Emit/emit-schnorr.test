@@ -40,10 +40,11 @@
 # RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/verifier.json --binding %t/broken-binding.json --rt-path %zkc-rt-dir --out %t/refused2 2>&1 | FileCheck --check-prefix=GAP %s
 # GAP: codec class 'scalar' has no implementation in binding
 
-# The emitter walk's characterization gate (the register's DEF-11): the
-# emitted sources for this shape are pinned by digest, so a refactor of
-# the walk is checked to have preserved every byte it emits, and an
-# intended emitter change re-mints the pin deliberately. Cargo.toml is
-# excluded because it embeds the local rt path.
-# RUN: cd %t/crate && sha256sum src/lib.rs tests/conformance.rs > %t/src.sha256
-# RUN: diff %t/src.sha256 %S/Inputs/schnorr-crate-src.sha256
+# The emitter walk's characterization gate: every file the emitter
+# wrote into this crate is digested and diffed against a checked-in
+# pin, so a refactor of the walk is held to the bytes it emits and an
+# intended emitter change re-mints the pin deliberately. The digest
+# script states which files are cargo's rather than the emitter's, and
+# normalizes the one machine-dependent field the manifest carries.
+# RUN: %python %S/Inputs/crate_digest.py %t/crate > %t/crate.sha256
+# RUN: diff %t/crate.sha256 %S/Inputs/schnorr-crate-src.sha256

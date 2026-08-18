@@ -64,13 +64,12 @@ def main(argv: list[str] | None = None) -> None:
         sys.stdout.write(model.canon_json(model.relation_contracts_document()))
         return
     if mode == "adaptive-carry":
-        # The adaptivity coordinate on this leg, both directions with
-        # the same premise index, mirroring the C++ evaluator's stress
-        # section. Which direction is expected follows from the loaded
-        # schema, exactly as it does there: the shipped registry admits
-        # only static indices, so the adaptive form must read as
-        # unadmitted; a schema-widened copy admits it, and the carrying
-        # rule must preserve it into the instantiated conclusion.
+        # The adaptivity coordinate on this leg, mirroring the C++
+        # evaluator's stress section. The carry runs either way and the
+        # schema decides only whether the index it produces is admitted:
+        # the shipped registry admits static alone, so the carried index
+        # reads as unadmitted there, and a schema-widened copy admits
+        # it. Reporting which of the two held is the whole result.
         if len(args) != 1:
             raise SystemExit("adaptive-carry takes the signature path")
         from dataclasses import replace as _replace
@@ -84,15 +83,19 @@ def main(argv: list[str] | None = None) -> None:
                                     quantification="adaptive_instance")
         adaptive_conclusion = _replace(rule.conclusion_index,
                                        quantification="adaptive_instance")
-        admits = adaptive_conclusion in signature.schemas.security_indices
-        if not admits:
-            print("adaptive index: unadmitted, intake refuses")
-            return
+        # The carry itself is schema-independent, so it runs in both
+        # directions rather than being skipped in one: what the schema
+        # decides is whether the index the carry produces is one the
+        # vocabulary admits, which is the same gate the C++ evaluator
+        # applies to an incoming judgment.
         carried = derivation.carry_quantification(
             rule, {port.name: adaptive_premise})
         if carried != adaptive_conclusion:
             raise SystemExit("the carried conclusion did not restate the "
                              "premise's quantification")
+        if not wellformed.index_admitted(signature.schemas, carried):
+            print("adaptive index: carried, and unadmitted by the vocabulary")
+            return
         print("adaptive quantification: carried")
         return
     if mode == "duplex-kat":
@@ -103,6 +106,7 @@ def main(argv: list[str] | None = None) -> None:
         # the C++ and Rust legs confirm the same values independently.
         if len(args) != 1:
             raise SystemExit("duplex-kat takes the corpus path")
+        from . import babybear
         from .babybear import Duplex
 
         corpus = model.load_json(open(args[0], encoding="utf-8").read())
@@ -113,7 +117,15 @@ def main(argv: list[str] | None = None) -> None:
             for step in case["steps"]:
                 if "absorb" in step:
                     for value in step["absorb"]:
-                        duplex.absorb_word(int(value))
+                        word = int(value)
+                        # The same canonicality bound the other two legs
+                        # apply: reducing here instead would absorb a
+                        # value the corpus does not state.
+                        if not 0 <= word < babybear.P:
+                            raise SystemExit(
+                                f"duplex framing case {case['name']!r} "
+                                "absorbs a non-canonical word")
+                        duplex.absorb_word(word)
                 else:
                     for _ in range(step["squeeze"]):
                         outputs.append(str(duplex.squeeze_word()))

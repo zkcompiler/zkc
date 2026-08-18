@@ -18,12 +18,19 @@ def main() -> None:
     with open(source, encoding="utf-8") as handle:
         document = json.load(handle)
     indices = document["schemas"]["security_indices"]
-    adaptive = []
-    for index in indices:
+    # Skipping what is already declared: the vocabulary admits only
+    # static indices today, but the first adaptive one it declares would
+    # otherwise be minted twice here, and the catalog's duplicate check
+    # would fail the widened run for a reason that has nothing to do
+    # with the carry it exists to exercise.
+    present = {tuple(sorted(index.items())) for index in indices}
+    for index in list(indices):
         clone = dict(index)
         clone["quantification"] = "adaptive_instance"
-        adaptive.append(clone)
-    indices.extend(adaptive)
+        if tuple(sorted(clone.items())) in present:
+            continue
+        present.add(tuple(sorted(clone.items())))
+        indices.append(clone)
     with open(target, "w", encoding="utf-8") as handle:
         json.dump(document, handle, indent=2)
         handle.write("\n")

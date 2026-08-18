@@ -286,6 +286,12 @@ MUTATIONS: list[tuple[str, object]] = [
     ("a premise pattern no admitted index satisfies",
      lambda d: _set(d, [*TO_SR, "premises", 0, "expected_index", "variant"],
                     "nonexistent")),
+    ("a premise binds a variable the conclusion does not restate",
+     lambda d: _set(d, [*TO_SR, "premises", 0, "expected_index",
+                        "quantification"], "$r")),
+    ("a premise binds a variable while the conclusion states a value",
+     lambda d: _set(d, [*TO_SR, "conclusion_index", "quantification"],
+                    "static")),
 
     # The completeness notion and track come together or not at all: a
     # judgment that prices honest-prover acceptance must not read as a

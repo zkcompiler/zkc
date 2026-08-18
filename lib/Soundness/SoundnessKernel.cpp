@@ -2070,6 +2070,21 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
       }))
     return refuse(RuleWfRefusalCode::InvalidIndex, "rule.conclusion_index",
                   "conclusion index variable is bound by no premise");
+  // The variable is a rule-level device with one name: a premise binds
+  // it and the conclusion restates it. A premise naming a variable the
+  // conclusion does not restate binds a value the conclusion discards,
+  // and a conclusion whose literal is stronger than the discarded value
+  // would then claim more than any premise established. Refusing the
+  // mismatch is also what keeps one binding slot correct: two premises
+  // cannot name two variables.
+  for (const PremisePort &port : rule.premises)
+    if (!port.expectedIndex.quantificationVariable.empty() &&
+        port.expectedIndex.quantificationVariable !=
+            rule.conclusionIndex.quantificationVariable)
+      return refuse(RuleWfRefusalCode::InvalidIndex,
+                    "rule.premise." + port.name,
+                    "premise index variable is not the one the conclusion "
+                    "restates");
   if (!admittedPattern(rule.conclusionIndex))
     return refuse(RuleWfRefusalCode::InvalidIndex, "rule.conclusion_index",
                   "conclusion index is absent from the admitted vocabulary");
@@ -2301,7 +2316,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
           SecurityIndex expected{SecurityNotion::SpecialSoundness,
                                  rule.conclusionIndex.index.track,
                                  {},
-                                 {}};
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port =
               requirePort(env, body.sourcePort, expected, "rule.body");
           if (!port.accepted())
@@ -2385,7 +2401,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
           SecurityIndex expected{SecurityNotion::SpecialSoundness,
                                  rule.conclusionIndex.index.track,
                                  {},
-                                 {}};
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port = requirePort(env, body.specialSoundnessPort,
                                           expected, "rule.body");
           if (!port.accepted())
@@ -2404,7 +2421,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
           SecurityIndex expected{SecurityNotion::RoundByRound,
                                  rule.conclusionIndex.index.track,
                                  rule.conclusionIndex.index.variant,
-                                 {}};
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port =
               requirePort(env, body.roundByRoundPort, expected, "rule.body");
           if (!port.accepted())
@@ -2440,7 +2458,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
           SecurityIndex expected{SecurityNotion::StateRestoration,
                                  rule.conclusionIndex.index.track,
                                  rule.conclusionIndex.index.variant,
-                                 {}};
+                                 {},
+                                 rule.conclusionIndex.index.quantification};
           RuleWfResult port = requirePort(env, body.stateRestorationPort,
                                           expected, "rule.body");
           if (!port.accepted())
