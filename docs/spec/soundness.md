@@ -271,14 +271,12 @@ conclusion hypotheses
 ```
 
 Here “specialized” means after the premise port's total resource substitution
-has been applied. The rule transform cannot select this set. Removing or
-discharging a hypothesis requires an explicit derivation-layer operation
-whose conclusion states that effect, not a rule: hypothesis discharge is
-structural — it has no theorem to cite and no author to attribute — so it
-belongs to the derivation plan rather than to the signature. A qualitative
-hypothesis has no discharge form at all; only an `AssumedJudgmentHolds`
-marker can be discharged, and only against a derivation of exactly the
-judgment it asserts.
+has been applied. The rule transform cannot select this set. Discharging a
+hypothesis is structural rather than a rule — it has no theorem to cite and
+no author to attribute — so it belongs to the derivation plan of §6, which
+defines no such form at v0. Only an `AssumedJudgmentHolds` marker is
+dischargeable at all, and only against a derivation of exactly the judgment
+it asserts; a qualitative hypothesis has no discharge form.
 
 The truth and faithful encoding of a `SoundnessRule` and `RuleBinding` are
 meta-level antecedents of the kernel interpretation. `RULE_WF` does not prove

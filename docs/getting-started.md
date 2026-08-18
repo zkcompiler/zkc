@@ -118,14 +118,29 @@ expect}]}`; the checked-in examples are under
 
 ## 5. Run the checks
 
+These are what continuous integration runs.
+
 ```sh
+tools/public-tree-guard.sh
+
 cmake --build --preset ci --target check-zkc
 uv run --locked --project reference python -m oracle.model
+uvx ruff check .
+
+cargo test --locked --manifest-path emit/Cargo.toml -p zkc-emit
+cargo test --locked --manifest-path emit/Cargo.toml -p zkc-rt --features toy,plonky3
+cargo clippy --locked --manifest-path emit/Cargo.toml --all-targets --all-features -- -D warnings
+(cd emit && cargo fmt --check)
 ```
 
 The lit suite includes C++/MLIR checks, differential checks against the Python
-reference twin, and Cargo-backed pinned replay checks when Cargo is available.
-The second command runs the reference twin's self-checks directly.
+reference twin, and Cargo-backed pinned replay checks when Cargo is available;
+`oracle.model` runs the twin's self-checks directly. `ruff` reads every Python
+file in the tree, not only the twin's. The Cargo commands cover the emit
+workspace and need Rust, which the compiler itself does not.
+
+Each `--locked` is deliberate: a dependency change lands together with its
+updated lock file, or the check fails.
 
 ## 6. Exercise the persisted PIR handoff
 

@@ -1,6 +1,6 @@
 # Current Status
 
-> **zkc v0 · research snapshot · last verified 2026-08-16**
+> **zkc v0 · research snapshot · last verified 2026-08-19**
 
 zkc can describe and identify proof protocols, derive executable endpoints,
 run selected prover and verifier paths, derive selected soundness and
@@ -109,7 +109,7 @@ specification intentionally include north-star contracts beyond this matrix.
 | Execution and conformance evidence |  | ● |  | C++/Python parity boundaries and a pinned Plonky3 replay. |
 | Evidence admission policy |  |  | ● | — |
 | Wider emission targets and deployment |  |  | ● | — |
-| Recursion and zkVM composition |  |  | ● | — |
+| Recursion and zkVM composition |  | ● |  | The bounded artifact-verification carrier form only: the facts `endpoints.md` §3.1 binds are sealed and canonically encoded, with cross-implementation byte parity on the row and the artifact identity, and both endpoints refuse it at projection. No child artifact is verified and nothing composes; the carrier fixes the shape a later projection, execution, and conformance surface must preserve. |
 | Zero-knowledge analysis |  |  | ● | — |
 
 ## Read next

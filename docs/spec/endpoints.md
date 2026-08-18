@@ -155,10 +155,11 @@ covered parent claim ids
 source-event provenance and failure behavior
 ```
 
-It may eventually be represented by a dedicated operation or by a constrained
-`check_call`, but either form must carry artifact-verification coverage and
-must reach the endpoint decision. Child assumptions, exports, residuals, and
-carried obligations may not disappear at the boundary; they are discharged by
+The carrier form is a dedicated operation rather than a constrained
+`check_call`: artifact verification must carry its own coverage and reach the
+endpoint decision, and an opaque check can do neither (`kernel.md` §1.2
+forbids hiding the effect inside one). Child assumptions, exports,
+residuals, and carried obligations may not disappear at the boundary; they are discharged by
 the child-verifier semantics or lifted into the parent-visible route surface.
 
 An artifact-verification event discharges a parent claim only when its verifier
