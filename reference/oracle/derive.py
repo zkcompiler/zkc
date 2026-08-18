@@ -113,18 +113,38 @@ def transformer_bodies(
                  for index, event in enumerate(protocol["events"])}
     for reduce in protocol.get("reduces", ()):
         contract = vocabulary.reductions.get(reduce.contract)
-        if not contract or not contract.get("rounds"):
+        if not contract:
             continue
+        dep_slots = contract.get("dep_slots") or []
         # Sampling a challenge is what makes a transformer non-central.  No
         # admitted contract can avoid one -- a reduction contract needs a
         # non-empty round list -- so this is unconditional in practice, and is
         # written as the kernel's predicate rather than as the constant it
         # currently evaluates to.
-        for dep in reduce.deps:
-            index = positions.get(dep)
-            if index is not None and isinstance(
+        #
+        # The challenges are the ones the contract's *rounds* use, resolved
+        # role to dependency slot to operand, which is how the other leg
+        # reaches them. Reading every challenge-shaped dependency instead
+        # would agree only while no contract declares one a round does not
+        # use, and the two implementations would then be running different
+        # rules over the same artifact.
+        for round_entry in contract.get("rounds") or []:
+            role = (round_entry.get("challenge_use") or {}).get("role")
+            slots = [index for index, slot in enumerate(dep_slots)
+                     if slot.get("role") == role]
+            if len(slots) != 1 or slots[0] >= len(reduce.deps):
+                raise Refusal(
+                    f"reduction {reduce.label!r} has no single dependency "
+                    f"operand for challenge role {role!r}"
+                )
+            index = positions.get(reduce.deps[slots[0]])
+            if index is None or not isinstance(
                     protocol["events"][index], model.Chal):
-                observe(reduce.label, index, False)
+                raise Refusal(
+                    f"reduction {reduce.label!r} round dependency is not a "
+                    "fresh challenge event"
+                )
+            observe(reduce.label, index, False)
 
     return sorted(
         ((name, extent[0], extent[1], extent[2])

@@ -3145,7 +3145,13 @@ namespace {
 
 void collectCoverage(const SealedSoundnessView &sealed,
                      const EvaluatedDerivation &node,
-                     std::set<uint64_t> &covered) {
+                     std::set<uint64_t> &covered,
+                     std::set<const EvaluatedDerivation *> &visited) {
+  // Equal plan subtrees may be memoized into one shared node, so the
+  // evaluated derivation is a directed acyclic graph rather than a tree.
+  // Walking it as a tree would revisit a shared node once per path to it.
+  if (!visited.insert(&node).second)
+    return;
   const auto *application = std::get_if<EvaluatedApplication>(&node.node);
   // An assumption covers nothing. `readJudgment` admits an extraction result
   // and refuses every other shape, so an assumption cannot carry rounds, and
@@ -3169,7 +3175,7 @@ void collectCoverage(const SealedSoundnessView &sealed,
   for (const auto &[port, premise] : application->premises) {
     (void)port;
     if (premise)
-      collectCoverage(sealed, *premise, covered);
+      collectCoverage(sealed, *premise, covered, visited);
   }
 }
 
@@ -3179,7 +3185,8 @@ DerivationCoverage derivationCoverage(const SealedSoundnessView &sealed,
                                       const DerivationResult &result) {
   DerivationCoverage coverage;
   coverage.track = result.target.index.track;
-  collectCoverage(sealed, result.root, coverage.coveredTransformers);
+  std::set<const EvaluatedDerivation *> visited;
+  collectCoverage(sealed, result.root, coverage.coveredTransformers, visited);
   return coverage;
 }
 
