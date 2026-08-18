@@ -81,3 +81,11 @@
 # RUN: sed 's/"prover_vectors"/"vectors"/' %S/Inputs/schnorr-prove-vectors.json > %t/miscast.json
 # RUN: not cargo run --locked --quiet --manifest-path %zkc-emit-manifest -p zkc-emit -- --doc %t/prover.json --binding %zkc-emit-bindings/toy.json --rt-path %zkc-rt-dir --vectors %t/miscast.json --out %t/refused2 2>&1 | FileCheck --check-prefix=CORPUS %s
 # CORPUS: the vectors file describes the other endpoint
+
+# The emitter walk's characterization gate (the register's DEF-11): the
+# emitted sources for this shape are pinned by digest, so a refactor of
+# the walk is checked to have preserved every byte it emits, and an
+# intended emitter change re-mints the pin deliberately. Cargo.toml is
+# excluded because it embeds the local rt path.
+# RUN: cd %t/prover-crate && sha256sum src/lib.rs tests/conformance.rs > %t/src.sha256
+# RUN: diff %t/src.sha256 %S/Inputs/schnorr-prover-crate-src.sha256

@@ -33,3 +33,11 @@
 # RUN: grep "semantic id:" %t/emit.out | sed 's/semantic id: //' > %t/emit-semantic.id
 # RUN: diff %t/emit-semantic.id %t/semantic.id
 # RUN: cargo test --quiet --manifest-path %t/crate/Cargo.toml
+
+# The emitter walk's characterization gate (the register's DEF-11): the
+# emitted sources for this shape are pinned by digest, so a refactor of
+# the walk is checked to have preserved every byte it emits, and an
+# intended emitter change re-mints the pin deliberately. Cargo.toml is
+# excluded because it embeds the local rt path.
+# RUN: cd %t/crate && sha256sum src/lib.rs tests/conformance.rs > %t/src.sha256
+# RUN: diff %t/src.sha256 %S/Inputs/plonky3-fri-crate-src.sha256
