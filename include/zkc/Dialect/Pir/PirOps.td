@@ -272,6 +272,70 @@ def Pir_CheckOp : Pir_MemberOp<"check", ["getMemberLabel"]> {
   }];
 }
 
+def Pir_ArtifactVerifyOp
+    : Pir_MemberOp<"artifact_verify",
+                   ["getMemberLabel", "getThreadIn", "getThreadOut",
+                    "isAbsorbing"]> {
+  let summary = "bounded verification of an imported artifact";
+  let description = [{
+    A bounded, statically known verification of one child artifact
+    (kernel.md §1.1, endpoints.md §3.1). The child's identity and the facts
+    that fix which proposition its verifier decides are sealed content, so a
+    parent that verifies a child names exactly which child, under which
+    verifier semantics, key, and statement.
+
+    This is a dedicated operation rather than a constrained `check_call`
+    because §3.1's two candidate forms are not equivalent here: a check is
+    non-absorbing and its predicate is opaque to projection, while artifact
+    verification must reach the endpoint decision and be covered by
+    projection as its own protected effect. Kernel §1.2 forbids hiding slot
+    reads, absorptions, challenge introductions, public bindings, artifact
+    verification, and decisions inside an opaque check for exactly that
+    reason.
+
+    Absorption is a vocabulary-declared fact rather than a property of the
+    operation (kernel.md §1.1): whether the child's identity advances the
+    parent's transcript is a per-family decision, carried by `absorbed`.
+
+    `route` names the parent-visible claim route this verification is
+    lifted into. §3.1 requires that a child's assumptions, exports,
+    residuals, and carried obligations are either discharged by the
+    child-verifier semantics or lifted into the parent route surface, and
+    the route is that link: seal refuses a verification naming a route no
+    sink of this artifact carries. The covered claim is not an operand,
+    because a claim is linear and its one consumer is the sink that routes
+    it; a verification that also consumed it would make the parent's claim
+    accounting depend on a contract that is reserved. `child` is the child
+    artifact's content identity; `endpoint`
+    its endpoint kind; `semantics` the verifier-semantics reference;
+    `key` the verifier-key digest or explicit key binding; `statement`
+    the child statement/public-IO digest or binding; `protocol` and
+    `relation_contract` the child's protocol and relation-contract digests;
+    `abi` the child artifact-ABI digest where the artifact has a distinct
+    one. `proof_slots` names the slots in this container the child verifier
+    consumes.
+
+    The contract is reserved (endpoints.md §3.1): this carrier form fixes
+    the facts, and projection refuses until a versioned projection,
+    execution, and conformance surface exist to preserve them. An
+    incomplete form fails closed rather than defaulting a missing fact.
+  }];
+  let arguments = (ins Token:$thread, StringProp:$label, StringProp:$child, StringProp:$endpoint, StringProp:$semantics,
+      StringProp:$key, StringProp:$statement, StringProp:$protocol,
+      StringProp:$relation_contract, StringProp:$route, UnitProp:$unabsorbed,
+      OptionalAttr<StrAttr>:$abi, OptionalAttr<ArrayAttr>:$proof_slots);
+  let results = (outs Token:$out);
+  let assemblyFormat = [{
+    $thread $label `child` $child
+    `endpoint` $endpoint `semantics` $semantics `key` $key
+    `statement` $statement `protocol` $protocol
+    `relation_contract` $relation_contract `route` $route
+    (`abi` $abi^)? (`proof_slots` $proof_slots^)?
+    (`unabsorbed` $unabsorbed^)? attr-dict
+  }];
+  let hasVerifier = 1;
+}
+
 def Pir_EndOp : Pir_MemberOp<"end", ["getThreadIn"]> {
   let summary = "spine terminator: the proof stream is exhausted";
   let description = [{

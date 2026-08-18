@@ -82,6 +82,12 @@ CanonicalIndex canonicalEventIndex(Block &body) {
         .Case<pir::SlotOp>([&](auto op) { record(&operation, op.getVal()); })
         .Case<pir::ChalOp>([&](auto op) { record(&operation, op.getVal()); })
         .Case<pir::CheckOp>([&](auto) { record(&operation); })
+        // A bounded artifact verification is a spine event: it threads the
+        // transcript and must reach the endpoint decision, so it occupies a
+        // canonical event position like any other (kernel.md §1.1).
+        .Case<pir::ArtifactVerifyOp>([&](auto op) {
+          record(&operation, op.getOut());
+        })
         .Default([](Operation *) {});
   return index;
 }
@@ -140,6 +146,10 @@ public:
       } else if (auto check = dyn_cast<pir::CheckOp>(op)) {
         checkEvent[check.getLabel()] =
             checkPosition.lookup(check.getOperation());
+      } else if (auto verify = dyn_cast<pir::ArtifactVerifyOp>(op)) {
+        int64_t position = valEvent.lookup(verify.getOut());
+        if (!slotPos.insert({verify.getLabel(), position}).second)
+          dupLabels.insert(("artifact_verify:" + verify.getLabel()).str());
       }
     }
     if (routes)
@@ -744,6 +754,47 @@ private:
         event.push_back(std::move(modeArray));
       }
       events.push_back(std::move(event));
+    } else if (auto verify = dyn_cast<pir::ArtifactVerifyOp>(op)) {
+      // Every fact endpoints.md §3.1 binds is identity content: two parents
+      // that verify different children, under different verifier semantics,
+      // keys, statements, protocols, or relation contracts are different
+      // protocols, and a digest that did not separate them would let one
+      // stand in for the other.
+      llvm::StringRef abi = verify.getAbi().value_or(llvm::StringRef());
+      if (llvm::Error err = checkStrings(
+              {verify.getChild(), verify.getEndpoint(), verify.getSemantics(),
+               verify.getKey(), verify.getStatement(), verify.getProtocol(),
+               verify.getRelationContract(), verify.getRoute(), abi}))
+        return err;
+      Array slots;
+      if (auto declared = verify.getProofSlots())
+        for (Attribute slot : *declared) {
+          auto label = dyn_cast<StringAttr>(slot);
+          if (!label)
+            return llvm::createStringError(
+                "an artifact verification proof slot is not a label");
+          if (llvm::Error err = checkStrings({label.getValue()}))
+            return err;
+          // Slot labels normalize to canonical event positions, like every
+          // other label the encoder emits: renaming a slot must not move
+          // the identity.  Fail closed rather than defaulting: a label that
+          // resolves to nothing must never alias onto event position 0,
+          // which would give two different protocols one identity.
+          auto proofSlot = slotPos.find(label.getValue());
+          if (proofSlot == slotPos.end())
+            return llvm::createStringError(
+                "an artifact verification names a proof slot that resolves "
+                "to no event");
+          slots.push_back(proofSlot->second);
+        }
+      events.push_back(Array{"artifact_verify", verify.getChild(),
+                             verify.getEndpoint(), verify.getSemantics(),
+                             verify.getKey(), verify.getStatement(),
+                             verify.getProtocol(),
+                             verify.getRelationContract(), verify.getRoute(),
+                             verify.getUnabsorbed() ? 0 : 1,
+                             abi.empty() ? JValue(nullptr) : JValue(abi),
+                             std::move(slots)});
     } else if (auto check = dyn_cast<pir::CheckOp>(op)) {
       if (llvm::Error err = checkStrings({check.getContract()}))
         return err;

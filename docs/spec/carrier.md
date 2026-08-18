@@ -70,6 +70,16 @@ program — is the unit of identity and verification.
   one capability with a canonical count in `2..2^20` and the PIR-admitted
   rule `uniform_independent`. Its codec route is resolved per event
   as `kappa.codecs[payload_class]`; there is no global challenge codec.
+- A `pir.artifact_verify` is the bounded artifact-verification event of
+  `kernel.md` §1.1: a threaded spine event carrying the child identity and
+  the facts that fix which proposition the child's verifier decides
+  (`endpoints.md` §3.1). It is a member op rather than a check because the
+  effect must reach the endpoint decision and be covered by projection as
+  its own protected effect, which an opaque check's predicate cannot be.
+  Absorption is declared per event, as for any other event. The covered
+  claim is not an operand: a claim is linear and its one consumer is the
+  sink that routes it, so the event names the parent route instead, and the
+  route it names must be one the artifact's own sinks carry.
 - Every protocol event declares a write effect on the dialect
   `ProtocolResource`, so non-threaded events (checks) and threaded
   events alike are conservative under generic passes. Defense in

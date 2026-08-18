@@ -1,0 +1,59 @@
+# The join a round-by-round preservation composes over, and the layers that
+# guard it.
+#
+# Round-by-round soundness is defined over a state function on transcripts,
+# so composing two such judgments is sound when the premise's doomed state
+# is the conclusion's doomed state at the join. The premise's final round
+# names that state -- claim_unsatisfied(c) -- and the conclusion's
+# occurrence consumes an ordered claim vector; the hypothesis is that c is
+# in it. The body states that now instead of ordering two spans and
+# trusting the connection to have been made elsewhere.
+#
+# Three layers guard it, and this test pins which one answers, because the
+# answer moved while the check was being written:
+#
+#   1. the binding's `SubjectRelation` -- both shipped preservation
+#      bindings relate their premise by `consumed_claim`;
+#   2. `apply.coverage` -- every produced consumed claim of the occurrence
+#      must be selected by some premise relation, checked per application;
+#   3. the body's own join -- the claim the premise's final round leaves
+#      unsatisfied is consumed here, and a premise that names no state at
+#      all cannot be placed.
+#
+# Layer 3 is not redundant with layer 2 even though layer 2 answers the
+# case below: a premise derived at a path occurrence carries rounds with no
+# state predicate, and the composition must refuse it rather than fall back
+# to the positional proxy. Nothing in the tree builds that derivation yet,
+# which is why the reachable half is pinned here and the rest is a refusal
+# the body owns.
+
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Evidence/Inputs/gkr-width2-depth3.mlir %zkc-seal-full -o %t/chain.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/chain.artifacts %t/chain.mlirbc
+
+# The shipped signature: the chain composes, nine rounds across three
+# layers, each round carrying the claim its occurrence argues about.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/../Evidence/Inputs/gkr-width2-depth3-chain-request.json \
+# RUN:   -o=%t/witness.json %t/chain.mlirbc
+# RUN: FileCheck %s --check-prefix=BOUND < %t/witness.json
+# BOUND: "round_index": "3:2"
+# BOUND-NEXT: "state_predicate"
+# BOUND: "claim_unsatisfied"
+
+# The same signature with one preservation binding relating its premise by
+# `same_subject` instead. The relation is admitted and the signature loads;
+# what refuses is the coverage layer, which is the earlier of the two gates
+# that stand between a loose relation and a composition without a
+# claim-graph connection.
+# RUN: %python %S/Inputs/loosen_preservation_relation.py \
+# RUN:   %zkc-registry-dir/soundness-signature.json %t/loosened.json
+# RUN: not zkc-derive --signature=%t/loosened.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/../Evidence/Inputs/gkr-width2-depth3-chain-request.json \
+# RUN:   -o=/dev/null %t/chain.mlirbc 2>&1 | FileCheck %s --check-prefix=LOOSE
+# LOOSE: coverage_mismatch at apply.coverage
+# LOOSE-SAME: do not follow the claim graph

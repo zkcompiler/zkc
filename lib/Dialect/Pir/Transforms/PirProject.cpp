@@ -703,6 +703,27 @@ public:
             }
             cover(op);
           })
+          .Case<zkc::pir::ArtifactVerifyOp>(
+              [&](zkc::pir::ArtifactVerifyOp op) {
+                // endpoints.md §3.1 reserves the contract: bounded artifact
+                // verification becomes usable only through a versioned
+                // carrier form, projection rule, execution rule, and
+                // conformance surface that preserve every fact it binds.
+                // The carrier form exists; the other three do not, and an
+                // incomplete form fails closed. This refusal is what says
+                // so, rather than the generic missing-rule diagnostic that
+                // would read as an internal gap.
+                op.emitOpError()
+                    << "[zkc-E235] bounded artifact verification '"
+                    << op.getLabel()
+                    << "' is a reserved endpoint contract: the carrier form "
+                       "seals its facts, and projection to endpoint '"
+                    << zkc::pir::endpointKindName(endpointKind)
+                    << "' awaits the versioned projection, execution, and "
+                       "conformance surface that must preserve them "
+                       "(docs/spec/endpoints.md §3.1)";
+                walkOk = false;
+              })
           .Default([&](Operation *op) {
             // Fail closed like the encoder does: a member kind without
             // a projection rule must never be silently erased — that

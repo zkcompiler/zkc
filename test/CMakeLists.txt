@@ -56,6 +56,7 @@ add_custom_target(check-zkc
   COMMAND $<TARGET_FILE:ZkcEncodingTests>
   COMMAND $<TARGET_FILE:ZkcRegistryTests>
   COMMAND $<TARGET_FILE:ZkcRelationTests>
+  COMMAND $<TARGET_FILE:ZkcSoundnessTests>
   DEPENDS ZkcUnitTests
   USES_TERMINAL
 )

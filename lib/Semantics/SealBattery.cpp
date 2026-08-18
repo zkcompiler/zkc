@@ -207,6 +207,17 @@ private:
   StringRef policy;
   std::optional<DictionaryAttr> subjectKappa;
   llvm::StringSet<> sinks;
+  /// The route names this artifact's routed sinks carry. A bounded
+  /// artifact verification must name one of them: endpoints.md §3.1 makes
+  /// the parent route surface the place a child's assumptions, exports and
+  /// residuals are lifted to, so a route no sink mentions has lifted
+  /// nothing.
+  llvm::StringSet<> routeSurface;
+  /// The proof-slot labels this artifact declares, by canonical event
+  /// position, for the artifact verification events that name the slots a
+  /// child verifier consumes. The position is kept because a verification
+  /// may only name material that has already entered the stream.
+  llvm::StringMap<int64_t> slotLabels;
   DictionaryAttr codecs;
   DictionaryAttr constants;
   zkc::pir::ChalOp firstChal;
@@ -448,6 +459,28 @@ private:
           })
           .Case<zkc::pir::ExportOp, zkc::pir::AssumeOp, zkc::pir::ResidualOp>(
               [&](auto op) { domain(op, "route", op.getRoute()); })
+          .Case<zkc::pir::ArtifactVerifyOp>(
+              [&](zkc::pir::ArtifactVerifyOp op) {
+                // Every fact endpoints.md §3.1 binds is identity-bearing:
+                // the child, its endpoint kind and verifier semantics, the
+                // key and statement it decides under, its protocol and
+                // relation contract, and the parent route. All of them
+                // reach the canonical encoding, so all of them are
+                // admitted to the encoding domain here.
+                domain(op, "child artifact", op.getChild());
+                domain(op, "child endpoint kind", op.getEndpoint());
+                domain(op, "verifier semantics", op.getSemantics());
+                domain(op, "verifier key", op.getKey());
+                domain(op, "child statement", op.getStatement());
+                domain(op, "child protocol", op.getProtocol());
+                domain(op, "child relation contract",
+                       op.getRelationContract());
+                domain(op, "route", op.getRoute());
+                if (op.getAbi())
+                  domain(op, "child artifact ABI", *op.getAbi());
+                if (auto slots = op.getProofSlots())
+                  checkAttrDomain(*slots, op, "proof_slots");
+              })
           .Case<zkc::pir::BeginOp, zkc::pir::EndOp>([](auto) {
             // Structural frame; no identity-bearing fields.
           })
@@ -617,6 +650,17 @@ private:
   /// per-reduce battery. Duplicate (instance, role, idx) triples are
   /// caught during collection — one spelling per occurrence.
   void checkSpine(Block &body) {
+    for (Operation &op : body)
+      llvm::TypeSwitch<Operation *>(&op)
+          .Case<zkc::pir::ExportOp, zkc::pir::AssumeOp, zkc::pir::ResidualOp>(
+              [&](auto routed) { routeSurface.insert(routed.getRoute()); })
+          .Case<zkc::pir::SlotOp>([&](zkc::pir::SlotOp slot) {
+            if (auto position = zkc::encoding::canonicalEventPosition(
+                    canonicalEvents, slot.getOperation()))
+              slotLabels[slot.getLabel()] = *position;
+          })
+          .Default([](Operation *) {});
+
     size_t nextSegment = 0;
     auto collectMembership = [&](Operation *op,
                                  std::optional<zkc::pir::Membership> m) {
@@ -719,6 +763,73 @@ private:
               (void)verifyExpr(op, *op.getExpr());
             }
           })
+          .Case<zkc::pir::ArtifactVerifyOp>(
+              [&](zkc::pir::ArtifactVerifyOp op) {
+                // A proof slot the child verifier consumes must be a slot
+                // of this artifact, and it must already have entered the
+                // stream. Left unchecked, the encoder has nothing to
+                // resolve the label to, and a label naming nothing would
+                // have to either alias onto an event position -- giving two
+                // different protocols one identity -- or fail with no
+                // diagnostic an author can act on.
+                //
+                // Each opening below starts with its own words rather than
+                // a shared prefix. The allocation lint digests the opening
+                // of every emission site to catch a condition that moves
+                // between identifiers, and two conditions phrased alike
+                // would be invisible to it.
+                std::optional<int64_t> here =
+                    zkc::encoding::canonicalEventPosition(canonicalEvents,
+                                                          op.getOperation());
+                if (!here)
+                  error(op) << "[zkc-E164] unresolved proof slot: artifact "
+                               "verification '"
+                            << op.getLabel()
+                            << "' has no canonical event position, so no "
+                               "slot can be ordered against it";
+                if (auto slots = op.getProofSlots())
+                  for (Attribute entry : *slots)
+                    if (auto label = dyn_cast<StringAttr>(entry)) {
+                      auto slot = slotLabels.find(label.getValue());
+                      if (slot == slotLabels.end()) {
+                        error(op) << "[zkc-E164] unresolved proof slot '"
+                                  << label.getValue()
+                                  << "': artifact verification '"
+                                  << op.getLabel()
+                                  << "' names it, and it is not a slot of "
+                                     "this artifact";
+                        continue;
+                      }
+                      // The spine is a total order and an event reads what
+                      // precedes it. A verification naming material that
+                      // arrives later would have the child consume a proof
+                      // that is not in the stream yet, which is not a shape
+                      // any projection could realize.
+                      if (here && slot->second > *here)
+                        error(op) << "[zkc-E165] out-of-order proof slot '"
+                                  << label.getValue()
+                                  << "': artifact verification '"
+                                  << op.getLabel()
+                                  << "' names it, and it follows the "
+                                     "verification on the spine";
+                    }
+                // endpoints.md §3.1: child assumptions, exports, residuals,
+                // and carried obligations may not disappear at the boundary;
+                // they are discharged by the child-verifier semantics or
+                // lifted into the parent-visible route surface. The carrier
+                // cannot read the child, so what it enforces is that the
+                // parent names a route at all and that the name is one the
+                // artifact's own route surface carries -- a verification
+                // whose route no sink mentions has lifted nothing.
+                if (!routeSurface.contains(op.getRoute()))
+                  error(op) << "[zkc-E163] artifact verification '"
+                            << op.getLabel() << "' routes through '"
+                            << op.getRoute()
+                            << "', which no sink of this artifact names: a "
+                               "child's assumptions and residuals are lifted "
+                               "into the parent route surface, never dropped "
+                               "at the boundary";
+              })
           .Case<zkc::pir::ReduceOp>([](zkc::pir::ReduceOp) {})
           .Case<zkc::pir::DischargeOp>([&](zkc::pir::DischargeOp op) {
             // TerminalClosureOK resolves the rule, exact role map, selected

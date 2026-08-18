@@ -11,6 +11,7 @@ import copy
 import hashlib
 
 from .model import (
+    artifact_verify,
     REGISTRY,
     Chal,
     Check,
@@ -1575,7 +1576,56 @@ SCHNORR_GRIND = {
     ],
 }
 
+# A parent that verifies one child artifact. The reserved contract binds a
+# fixed fact list (endpoints.md §3.1) and every one of those facts is
+# identity content, so the two encoders must agree on the row byte for byte
+# before any of it can be relied on.
+ARTIFACT_VERIFY = {
+    "policy": "analysis_only_artifact",
+    "kappa": {
+        "codecs": {"rs": "ts_be8", "scalar": "ts_be8"},
+        "iv": "artifact-id",
+        "sponge": "toy_duplex",
+    },
+    "sources": [
+        source(
+            "child_statement",
+            "opaque_relation",
+            {
+                "contract": ref_digest("child.contract"),
+                "statement": ref_digest("child.stmt"),
+            },
+        )
+    ],
+    "events": [
+        bind("x", "rs", "instance"),
+        slot("child_pi", "rs", True, None),
+        artifact_verify(
+            "child_proof",
+            ref_digest("child.artifact"),
+            semantics="zkc.child.verifier.v1",
+            key=ref_digest("child.key"),
+            statement=ref_digest("child.stmt"),
+            protocol=ref_digest("child.protocol"),
+            relation_contract=ref_digest("child.contract"),
+            route="child-verification-not-modeled",
+            proof_slots=("child_pi",),
+        ),
+        check(
+            "parent_binding",
+            "zkc.check.rs-equality",
+            ["x", "child_pi"],
+            expr=["eq", ["in", 0], ["in", 1]],
+        ),
+    ],
+    "reduces": [],
+    "sinks": [
+        route("residual", "child_statement", "child-verification-not-modeled"),
+    ],
+}
+
 PIR_WITNESSES = {
+    "artifact-verify": ARTIFACT_VERIFY,
     "relation-direct": RELATION_DIRECT,
     "relation-residual": RELATION_RESIDUAL,
     "schnorr": SCHNORR,

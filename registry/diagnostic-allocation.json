@@ -125,6 +125,7 @@
     {
       "component": "container verifiers (continued)",
       "live": [
+        "E150",
         "E151",
         "E152",
         "E153",
@@ -136,6 +137,7 @@
         "E159"
       ],
       "means": {
+        "E150": "a bounded artifact verification leaves a fact the reserved contract binds empty, names a child endpoint kind other than 'verifier', or repeats a proof slot",
         "E151": "a membership names a reduce instance the body does not declare",
         "E152": "a membership is incomplete, or an event is a dep operand of the reduce whose message it claims to be",
         "E153": "a reduction does not both consume at least one claim and produce one",
@@ -147,6 +149,7 @@
         "E159": "a material binding's semantic_ref is not a digest reference"
       },
       "means_basis": {
+        "E150": "5507781cba0069e1918570d16074845e0bec1577bf89938587ab6ddefeed0ae8",
         "E151": "3023ec9f8808dbab96ce7d24bb7b9c81e6a9746fb38f9ec1f537dd2a74d95187",
         "E152": "b6bd94db9daf42c6db3485fbaf775d7faa2ea4fb930626c15e687b13c8ab3837",
         "E153": "3b76b11f6a60ad0716f89c7acf181127e24a0dac8351bb961e1281bd51fd6d93",
@@ -171,20 +174,30 @@
       "component": "carrier semantic bindings",
       "live": [
         "E161",
-        "E162"
+        "E162",
+        "E163",
+        "E164",
+        "E165"
       ],
       "means": {
         "E161": "a verifier value carries more than one semantic material binding",
-        "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity"
+        "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity",
+        "E163": "a bounded artifact verification routes through a name no sink of the artifact carries, so the child's lifted obligations reach no parent route surface",
+        "E164": "a bounded artifact verification names a proof slot that is not a slot of the artifact, or has no canonical position to order slots against",
+        "E165": "a bounded artifact verification names a proof slot that follows it on the spine, so the child would consume material not yet in the stream"
       },
       "means_basis": {
         "E161": "8ce9df859e967db7e5ece0df4c7a99f219571b3a9bdeb90e5a85e25e95b806f2",
-        "E162": "09c624212632a7b681ae4f257643a683cef57a5203741afaf23a6e785d71192d"
+        "E162": "09c624212632a7b681ae4f257643a683cef57a5203741afaf23a6e785d71192d",
+        "E163": "b3e32eff52a57eede8b216fbc370acf7f9f90055898957ac65a433e02f1a1fc8",
+        "E164": "fd04dbf17600fa3976787fd10a0c2acd97f4ec058e97dea4a539d562f1520c2a",
+        "E165": "bf6c1c0241b968a4ee9f24a8ecb10d4d54cef948bdbfd76aa435dbe681eadb91"
       },
       "range": "E160-E169",
       "reserved": [],
       "sources": [
-        "lib/Dialect/"
+        "lib/Dialect/",
+        "lib/Semantics/"
       ],
       "twin": {
         "excluded_reason": "carrier bindings judged by message-text parity in the differential suites, not by id",
@@ -343,6 +356,7 @@
         "E232",
         "E233",
         "E234",
+        "E235",
         "E237",
         "E238",
         "E239"
@@ -352,6 +366,7 @@
         "E232": "kappa does not name an axis the projection requires",
         "E233": "no projection rule covers this operation for the requested endpoint",
         "E234": "the projected verifier program is empty",
+        "E235": "a bounded artifact verification reached projection, whose endpoint contract is reserved until a versioned projection, execution, and conformance surface preserve the facts it binds",
         "E237": "projection coverage does not equal the projection obligation",
         "E238": "a standalone OIR artifact fails admission against the environment supplied",
         "E239": "prover projection lacks a construction route, a kappa constant, or a slot binding it requires"
@@ -361,6 +376,7 @@
         "E232": "6f6cb8c02cb0b027c4c83e627aaeef724f0d39297a5af3a930ee52458f0aab8e",
         "E233": "a065f0d37783df1cfbc4f5f26450866f2f5006aa0008aa32c31408e1f884f3ee",
         "E234": "54c0ec8405ba4aafe41299bf06ab7fcec2896150d9c386e73f9786fc49288976",
+        "E235": "521fe7f0e079d37b1f051d93338eee51cc0de7f0e55cff95387c46c7307c1e60",
         "E237": "f7780bf931f425e17011204a0559b39c937bc8e5fadfb7cb1864b2b251cb4e9c",
         "E238": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "E239": "317a237462a4cb1661d37d3c5d8968cf596c201266b179a5ef7ab6f4f7b688bf"
@@ -386,7 +402,7 @@
         "E248"
       ],
       "means": {
-        "E241": "retired and dead: it named the version-agreement half of a check that a content-digest pin already decides. The number is never reissued (docs/spec/versioning.md §3)",
+        "E241": "retired and dead: it named the version-agreement half of a check that a content-digest pin already decides. The number is never reissued (docs/spec/versioning.md \u00a73)",
         "E243": "a reduce's dependency arity or a round's challenge realization disagrees with its contract",
         "E244": "a reduce's message occurrences disagree with its contract: missing role, wrong count, duplicate, or non-canonical",
         "E245": "one challenge fills two dependency slots, or is shared by two reductions",

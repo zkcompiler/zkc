@@ -1,0 +1,24 @@
+# The calculus, frozen: every body kind the signature ships is an instance
+# of one of the five judgment forms docs/spec/soundness.md §5.1 declares.
+#
+# The forms are a chosen partition rather than a discovered necessity --
+# scaling folds into preservation if one prefers four -- and the point of
+# writing them down is the admission rule that comes with them. A new rule
+# is data under entry, preservation, or scaling. A new transformation
+# recipe is the one admitted reason to add a body kind, because a
+# transformation carries the computational content of the theorem it
+# mechanizes, and adding one is a specification event.
+#
+# This gate is what keeps that from being prose. The repository has made
+# the same move twice before, for diagnostic allocation and for the `means`
+# sentences: a rule nobody checks is a rule that drifts.
+
+# RUN: %python %S/Inputs/judgment_forms.py \
+# RUN:   %zkc-registry-dir/soundness-signature.json | FileCheck %s
+
+# CHECK: judgment forms: every body kind is an instance of a declared form
+# CHECK-DAG: entry: 4
+# CHECK-DAG: preservation: 2
+# CHECK-DAG: scaling: 1
+# CHECK-DAG: transformation: 3
+# CHECK-DAG: cut: structural, no body kind
