@@ -213,9 +213,11 @@ private:
   /// residuals are lifted to, so a route no sink mentions has lifted
   /// nothing.
   llvm::StringSet<> routeSurface;
-  /// The proof-slot labels this artifact declares, for the artifact
-  /// verification events that name the slots a child verifier consumes.
-  llvm::StringSet<> slotLabels;
+  /// The proof-slot labels this artifact declares, by canonical event
+  /// position, for the artifact verification events that name the slots a
+  /// child verifier consumes. The position is kept because a verification
+  /// may only name material that has already entered the stream.
+  llvm::StringMap<int64_t> slotLabels;
   DictionaryAttr codecs;
   DictionaryAttr constants;
   zkc::pir::ChalOp firstChal;
@@ -652,8 +654,11 @@ private:
       llvm::TypeSwitch<Operation *>(&op)
           .Case<zkc::pir::ExportOp, zkc::pir::AssumeOp, zkc::pir::ResidualOp>(
               [&](auto routed) { routeSurface.insert(routed.getRoute()); })
-          .Case<zkc::pir::SlotOp>(
-              [&](zkc::pir::SlotOp slot) { slotLabels.insert(slot.getLabel()); })
+          .Case<zkc::pir::SlotOp>([&](zkc::pir::SlotOp slot) {
+            if (auto position = zkc::encoding::canonicalEventPosition(
+                    canonicalEvents, slot.getOperation()))
+              slotLabels[slot.getLabel()] = *position;
+          })
           .Default([](Operation *) {});
 
     size_t nextSegment = 0;
@@ -760,6 +765,54 @@ private:
           })
           .Case<zkc::pir::ArtifactVerifyOp>(
               [&](zkc::pir::ArtifactVerifyOp op) {
+                // A proof slot the child verifier consumes must be a slot
+                // of this artifact, and it must already have entered the
+                // stream. Left unchecked, the encoder has nothing to
+                // resolve the label to, and a label naming nothing would
+                // have to either alias onto an event position -- giving two
+                // different protocols one identity -- or fail with no
+                // diagnostic an author can act on.
+                //
+                // Each opening below starts with its own words rather than
+                // a shared prefix. The allocation lint digests the opening
+                // of every emission site to catch a condition that moves
+                // between identifiers, and two conditions phrased alike
+                // would be invisible to it.
+                std::optional<int64_t> here =
+                    zkc::encoding::canonicalEventPosition(canonicalEvents,
+                                                          op.getOperation());
+                if (!here)
+                  error(op) << "[zkc-E164] unresolved proof slot: artifact "
+                               "verification '"
+                            << op.getLabel()
+                            << "' has no canonical event position, so no "
+                               "slot can be ordered against it";
+                if (auto slots = op.getProofSlots())
+                  for (Attribute entry : *slots)
+                    if (auto label = dyn_cast<StringAttr>(entry)) {
+                      auto slot = slotLabels.find(label.getValue());
+                      if (slot == slotLabels.end()) {
+                        error(op) << "[zkc-E164] unresolved proof slot '"
+                                  << label.getValue()
+                                  << "': artifact verification '"
+                                  << op.getLabel()
+                                  << "' names it, and it is not a slot of "
+                                     "this artifact";
+                        continue;
+                      }
+                      // The spine is a total order and an event reads what
+                      // precedes it. A verification naming material that
+                      // arrives later would have the child consume a proof
+                      // that is not in the stream yet, which is not a shape
+                      // any projection could realize.
+                      if (here && slot->second > *here)
+                        error(op) << "[zkc-E165] out-of-order proof slot '"
+                                  << label.getValue()
+                                  << "': artifact verification '"
+                                  << op.getLabel()
+                                  << "' names it, and it follows the "
+                                     "verification on the spine";
+                    }
                 // endpoints.md §3.1: child assumptions, exports, residuals,
                 // and carried obligations may not disappear at the boundary;
                 // they are discharged by the child-verifier semantics or
@@ -768,21 +821,6 @@ private:
                 // parent names a route at all and that the name is one the
                 // artifact's own route surface carries -- a verification
                 // whose route no sink mentions has lifted nothing.
-                // A proof slot the child verifier consumes must be a slot
-                // of this artifact. Left unchecked, the encoder has nothing
-                // to resolve the label to, and a label naming nothing would
-                // have to either alias onto an event position -- giving two
-                // different protocols one identity -- or fail with no
-                // diagnostic an author can act on.
-                if (auto slots = op.getProofSlots())
-                  for (Attribute entry : *slots)
-                    if (auto label = dyn_cast<StringAttr>(entry))
-                      if (!slotLabels.contains(label.getValue()))
-                        error(op) << "[zkc-E164] artifact verification '"
-                                  << op.getLabel() << "' names proof slot '"
-                                  << label.getValue()
-                                  << "', which is not a slot of this "
-                                     "artifact";
                 if (!routeSurface.contains(op.getRoute()))
                   error(op) << "[zkc-E163] artifact verification '"
                             << op.getLabel() << "' routes through '"
