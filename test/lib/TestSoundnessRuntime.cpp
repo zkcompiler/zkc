@@ -442,8 +442,7 @@ struct TestSoundnessRuntimePass
     {
       ClosedBound symbolic;
       symbolic.quantity = resourceQuantity("t");
-      auto refused =
-          closedBoundMaximum({symbolic}, "test.maximum.symbolic");
+      auto refused = closedBoundMaximum({symbolic}, "test.maximum.symbolic");
       if (refused.accepted() ||
           refused.refusal->code != RuntimeRefusalCode::UnsupportedNormalForm) {
         module.emitError()
@@ -467,11 +466,10 @@ struct TestSoundnessRuntimePass
       std::map<std::string, ClosedQuantity, std::less<>> at;
       at.emplace("t", integerQuantity(3));
       auto closed = closedBoundSpecialize(symbolic, at, "test.specialize");
-      if (!closed.accepted() ||
-          closed.value->quantity != integerQuantity(9) ||
+      if (!closed.accepted() || closed.value->quantity != integerQuantity(9) ||
           closed.value->primitiveGameTerms.size() != 1 ||
-          closed.value->primitiveGameTerms.front()
-                  .resourceSubstitution.at("tau") != integerQuantity(3)) {
+          closed.value->primitiveGameTerms.front().resourceSubstitution.at(
+              "tau") != integerQuantity(3)) {
         module.emitError() << "specialization did not close the quantity "
                               "and the game substitution together";
         return signalPassFailure();

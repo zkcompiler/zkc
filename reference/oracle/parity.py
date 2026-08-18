@@ -107,12 +107,11 @@ def main(argv: list[str] | None = None) -> None:
         if len(args) != 1:
             raise SystemExit("duplex-kat takes the corpus path")
         from . import babybear
-        from .babybear import Duplex
 
         corpus = model.load_json(open(args[0], encoding="utf-8").read())
         first: dict[str, list[str]] = {}
         for case in corpus["cases"]:
-            duplex = Duplex(case["iv"] if case["iv"] else None)
+            duplex = babybear.Duplex(case["iv"] if case["iv"] else None)
             outputs: list[str] = []
             for step in case["steps"]:
                 if "absorb" in step:

@@ -312,19 +312,18 @@ Value encodeSecurityIndex(const SecurityIndex &index) {
   // Written unconditionally rather than elided when static: the
   // canonical form is total, and a field that appears only sometimes is
   // a field two readers can disagree about.
-  return Object{{"notion", securityNotionName(index.notion)},
-                {"track", securityTrackName(index.track)},
-                {"variant", index.variant},
-                {"model", index.model},
-                {"quantification",
-                 securityQuantificationName(index.quantification)}};
+  return Object{
+      {"notion", securityNotionName(index.notion)},
+      {"track", securityTrackName(index.track)},
+      {"variant", index.variant},
+      {"model", index.model},
+      {"quantification", securityQuantificationName(index.quantification)}};
 }
 
 Value encodeSecurityIndexPattern(const SecurityIndexPattern &pattern) {
   Value encoded = encodeSecurityIndex(pattern.index);
   if (!pattern.quantificationVariable.empty())
-    (*encoded.getAsObject())["quantification"] =
-        pattern.quantificationVariable;
+    (*encoded.getAsObject())["quantification"] = pattern.quantificationVariable;
   return encoded;
 }
 
@@ -617,8 +616,7 @@ Value encodePremises(const std::vector<PremisePort> &premises) {
     items.push_back(Object{
         {"name", port.name},
         {"expected_subject_schema", port.expectedSubjectSchema},
-        {"expected_index",
-         encodeSecurityIndexPattern(port.expectedIndex)},
+        {"expected_index", encodeSecurityIndexPattern(port.expectedIndex)},
         {"expected_result", resultSchemaName(port.expectedResult)},
         {"expected_resources", encodeTypedDeclarations(port.expectedResources)},
         {"result_constraints", std::move(constraints)},
@@ -690,18 +688,18 @@ Value encodeRuleDocument(const SoundnessRule &rule) {
     pins.push_back(Object{{"parameter", pin.parameter},
                           {"expected", encodeBindingValue(pin.expected)}});
 
-  return Object{{"id", rule.ref.id},
-                {"status", ruleStatusName(rule.status)},
-                {"parameters", encodeTypedDeclarations(rule.parameters)},
-                {"resources", encodeTypedDeclarations(rule.resources)},
-                {"premises", encodePremises(rule.premises)},
-                {"artifact_facts", encodeTypedDeclarations(rule.artifactFacts)},
-                {"machine_conditions", std::move(conditions)},
-                {"external_hypotheses", std::move(hypotheses)},
-                {"exact_parameter_pins", std::move(pins)},
-                {"conclusion_index",
-                 encodeSecurityIndexPattern(rule.conclusionIndex)},
-                {"body", encodeBody(rule.body)}};
+  return Object{
+      {"id", rule.ref.id},
+      {"status", ruleStatusName(rule.status)},
+      {"parameters", encodeTypedDeclarations(rule.parameters)},
+      {"resources", encodeTypedDeclarations(rule.resources)},
+      {"premises", encodePremises(rule.premises)},
+      {"artifact_facts", encodeTypedDeclarations(rule.artifactFacts)},
+      {"machine_conditions", std::move(conditions)},
+      {"external_hypotheses", std::move(hypotheses)},
+      {"exact_parameter_pins", std::move(pins)},
+      {"conclusion_index", encodeSecurityIndexPattern(rule.conclusionIndex)},
+      {"body", encodeBody(rule.body)}};
 }
 
 Value encodeBindingDocument(const RuleBinding &binding) {

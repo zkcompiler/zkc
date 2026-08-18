@@ -3037,11 +3037,11 @@ ApplyOutcome applySoundnessRule(const SoundnessContext &context,
   // than assume.
   if (!rule->conclusionIndex.quantificationVariable.empty() &&
       !quantificationBinding)
-    return {std::nullopt,
-            makeRefusal(
-                RuntimePhase::PremiseResolution,
-                RuntimeRefusalCode::PremiseMismatch, "apply.conclusion",
-                "conclusion index variable was never bound by a premise")};
+    return {
+        std::nullopt,
+        makeRefusal(RuntimePhase::PremiseResolution,
+                    RuntimeRefusalCode::PremiseMismatch, "apply.conclusion",
+                    "conclusion index variable was never bound by a premise")};
   SecurityJudgment conclusion;
   conclusion.subject = application.conclusionSubject;
   conclusion.index = instantiateSecurityIndex(

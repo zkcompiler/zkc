@@ -577,8 +577,8 @@ struct TestCompilerCorePass
     fsApplication.premises.emplace("source_sr", srPlan);
     derivation.node = std::move(fsApplication);
 
-    snd::DerivationTarget derivationTarget{subject, fsRule.conclusionIndex.index,
-                                           fsRule.resources};
+    snd::DerivationTarget derivationTarget{
+        subject, fsRule.conclusionIndex.index, fsRule.resources};
     snd::DeriveOutcome expected = snd::deriveSoundness(
         *soundnessContext, *view, derivationTarget, derivation);
     if (!expected.accepted())
@@ -951,8 +951,8 @@ struct TestCompilerCorePass
           "decision checker rejected the recomputed no-selection result");
     llvm::outs() << "compiler missing width: no eligible candidate\n";
 
-    snd::DerivationTarget nativeTarget{subject, nativeRule.conclusionIndex.index,
-                                       nativeRule.resources};
+    snd::DerivationTarget nativeTarget{
+        subject, nativeRule.conclusionIndex.index, nativeRule.resources};
     snd::DeriveOutcome nativeExpected = snd::deriveSoundness(
         *soundnessContext, *view, nativeTarget, *nativePlan);
     if (!nativeExpected.accepted())
@@ -1314,8 +1314,8 @@ struct TestCompilerCorePass
     const snd::SecuritySubject sourceSurvivorSubject =
         fakeSourceSubject(fakeClaim(2, "source-survivor"));
     snd::DerivationPlan sourceAPlan = assumedPlan(sourceASubject);
-    snd::DerivationTarget sourceATarget{sourceASubject, fsRule.conclusionIndex.index,
-                                        fsRule.resources};
+    snd::DerivationTarget sourceATarget{
+        sourceASubject, fsRule.conclusionIndex.index, fsRule.resources};
     snd::DeriveOutcome sourceAPreview = snd::deriveSoundness(
         *soundnessContext, fakeSourceView, sourceATarget, sourceAPlan);
     if (!sourceAPreview.accepted())
@@ -1395,8 +1395,8 @@ struct TestCompilerCorePass
     cmp::CompilerRequest unrelatedBaseline = fakeRequest;
     auto &unrelatedSource = std::get<cmp::SourceProjection>(
         unrelatedBaseline.soundnessConstraints.front().baseline.payload);
-    unrelatedSource.sourceTarget = {sourceSurvivorSubject,
-                                    fsRule.conclusionIndex.index, fsRule.resources};
+    unrelatedSource.sourceTarget = {
+        sourceSurvivorSubject, fsRule.conclusionIndex.index, fsRule.resources};
     unrelatedSource.sourceDerivationPlan = assumedPlan(sourceSurvivorSubject);
     unrelatedSource.targetRelation.exactSourceClaimRef =
         fakeClaim(2, "source-survivor");

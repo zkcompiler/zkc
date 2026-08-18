@@ -262,10 +262,10 @@ Value encodeResult(const SecurityResult &result) {
       // to name, so a reader can tell "no claim" from an empty one.
       entry["state_predicate"] =
           round.statePredicate
-              ? Value(Object{{"kind", "claim_unsatisfied"},
-                             {"claim", encodeClaim(
-                                           round.statePredicate
-                                               ->claimUnsatisfied)}})
+              ? Value(Object{
+                    {"kind", "claim_unsatisfied"},
+                    {"claim",
+                     encodeClaim(round.statePredicate->claimUnsatisfied)}})
               : Value(nullptr);
       entries.push_back(std::move(entry));
     }
@@ -537,8 +537,8 @@ Expected<SecurityIndex> readIndex(const Reader &reader, const Object &parent,
   else if (*quantificationText == "adaptive_index")
     index.quantification = SecurityQuantification::AdaptiveIndex;
   else
-    return reader.failed<SecurityIndex>(where + " has unknown quantification '" +
-                                        *quantificationText + "'");
+    return reader.failed<SecurityIndex>(
+        where + " has unknown quantification '" + *quantificationText + "'");
   return index;
 }
 

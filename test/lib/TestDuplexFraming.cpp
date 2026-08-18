@@ -85,8 +85,7 @@ struct TestDuplexFramingPass
     // Transparent comparator: the corpus hands out `StringRef`s and
     // this is the repository's idiom for looking one up without a
     // temporary `std::string` per probe.
-    std::map<std::string, std::vector<std::string>, std::less<>>
-        outputsByName;
+    std::map<std::string, std::vector<std::string>, std::less<>> outputsByName;
     for (const llvm::json::Value &entry : *cases) {
       const llvm::json::Object *kase = entry.getAsObject();
       std::optional<llvm::StringRef> name =

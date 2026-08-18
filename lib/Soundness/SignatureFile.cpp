@@ -277,9 +277,13 @@ Expected<SecurityIndexPattern> readSecurityIndexPattern(const Reader &reader,
     pattern.quantificationVariable = *text;
     // The literal reader would refuse a variable, so hand it a copy
     // with the variable replaced by a placeholder and let it check
-    // everything else. The placeholder is never consulted: every use of
-    // a pattern ignores its literal quantification when the variable is
-    // set, and the encoder writes the variable back out.
+    // everything else. Matching, instantiation, and the encoder all
+    // ignore the placeholder when the variable is set. Body-law
+    // checking does read it, through the conclusion's index, and gets
+    // the placeholder rather than the variable — which is sound only
+    // because a premise may name no variable but the one its
+    // conclusion restates, so wherever the placeholder is compared the
+    // port carries a variable that absorbs it.
     Object substituted = **entry;
     substituted["quantification"] = "static";
     Object holder;

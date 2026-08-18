@@ -406,8 +406,8 @@ struct TestSoundnessEvaluatorPass
     expectedSr.resourceTerms.push_back({*perRound, "t", 1});
     const auto *srResult =
         std::get_if<snd::ScalarResult>(&srEvaluated->conclusion.result);
-    if (srEvaluated->conclusion.index != srRule.conclusionIndex.index || !srResult ||
-        srResult->bound.quantity != expectedSr ||
+    if (srEvaluated->conclusion.index != srRule.conclusionIndex.index ||
+        !srResult || srResult->bound.quantity != expectedSr ||
         !srResult->bound.primitiveGameTerms.empty() ||
         !sameDeclarations(srEvaluated->conclusion.resourceVariables,
                           srRule.resources))
@@ -459,8 +459,7 @@ struct TestSoundnessEvaluatorPass
       adaptiveRbr.index.quantification =
           snd::SecurityQuantification::AdaptiveInstance;
       snd::SecurityIndex adaptiveSr = srRule.conclusionIndex.index;
-      adaptiveSr.quantification =
-          snd::SecurityQuantification::AdaptiveInstance;
+      adaptiveSr.quantification = snd::SecurityQuantification::AdaptiveInstance;
       const bool admitsAdaptive =
           llvm::is_contained(context.schemas().securityIndices, adaptiveSr);
       snd::TypedPremiseJudgments adaptivePremise{{"source_rbr", adaptiveRbr}};

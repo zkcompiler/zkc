@@ -169,8 +169,8 @@ struct TestSoundnessRuleBodiesPass
     expectedPerRound.constant = *expectedBound;
     const snd::SecurityJudgment &rbrConclusion = ssToRbr.applied->conclusion;
     const auto *rounds = std::get_if<snd::RoundResult>(&rbrConclusion.result);
-    if (rbrConclusion.index != ssToRbrRule->second.conclusionIndex.index || !rounds ||
-        rounds->rounds.size() != 1 ||
+    if (rbrConclusion.index != ssToRbrRule->second.conclusionIndex.index ||
+        !rounds || rounds->rounds.size() != 1 ||
         rounds->rounds.front().roundIndex != "0" ||
         rounds->rounds.front().challengeSpace != expectedSpace ||
         rounds->rounds.front().bound.quantity != expectedPerRound ||

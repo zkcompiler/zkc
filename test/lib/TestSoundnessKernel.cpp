@@ -767,8 +767,7 @@ struct TestSoundnessKernelPass
       const zkc::soundness::RuleBound &collision =
           body->localDuplexBound.operands.back();
       if (collision.kind != zkc::soundness::RuleBoundKind::Scale ||
-          collision.quantity.kind !=
-              zkc::soundness::QuantityKind::Parameter ||
+          collision.quantity.kind != zkc::soundness::QuantityKind::Parameter ||
           collision.quantity.name != "bound_relation_anchors" ||
           collision.operands.size() != 1 ||
           collision.operands.front().kind !=
@@ -1095,7 +1094,8 @@ struct TestSoundnessKernelPass
     zkc::soundness::SoundnessRule unknownTrack = fri->second;
     unknownTrack.conclusionIndex.index.track =
         static_cast<zkc::soundness::SecurityTrack>(255);
-    unknownTrackSchemas.securityIndices.push_back(unknownTrack.conclusionIndex.index);
+    unknownTrackSchemas.securityIndices.push_back(
+        unknownTrack.conclusionIndex.index);
     zkc::soundness::RuleWfResult unknownTrackResult =
         zkc::soundness::checkRuleWellFormed(unknownTrackSchemas, unknownTrack);
     if (unknownTrackResult.accepted() ||

@@ -229,7 +229,8 @@ ArtifactJudgment judgeArtifact(const SealedSoundnessView &sealed,
   // report would name no reason for a judgment that is already
   // negative.
   for (uint64_t index = 0; index < sealed.claimsByIndex.size(); ++index) {
-    if (consumed.count(index) || (targetIsOurs && index == targetClaim.claimIndex))
+    if (consumed.count(index) ||
+        (targetIsOurs && index == targetClaim.claimIndex))
       continue;
     judgment.uncoveredClaims.push_back(index);
   }

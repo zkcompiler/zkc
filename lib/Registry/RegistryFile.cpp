@@ -103,8 +103,8 @@ Error RegistryFile::requireEncodingDomain(StringRef json) const {
       inString = true;
     } else if (c == '{' || c == '[') {
       if (++depth > kMaxRegistryDepth)
-        return error("[zkc-E120] nesting exceeds " +
-                     Twine(kMaxRegistryDepth) + " levels");
+        return error("[zkc-E120] nesting exceeds " + Twine(kMaxRegistryDepth) +
+                     " levels");
     } else if (c == '}' || c == ']') {
       if (depth > 0)
         --depth;
@@ -117,8 +117,9 @@ Error RegistryFile::requireEncodingDomain(StringRef json) const {
       // A number token has no interior whitespace, so the preceding
       // character settles whether this is part of one.
       if (index > 0 && (isDigit(json[index - 1]) || json[index - 1] == '.'))
-        return error("[zkc-E120] a numeric value leaves the encoding domain: exact "
-                     "values are decimal integers or decimal strings");
+        return error(
+            "[zkc-E120] a numeric value leaves the encoding domain: exact "
+            "values are decimal integers or decimal strings");
     }
   }
   return Error::success();

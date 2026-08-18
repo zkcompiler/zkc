@@ -2273,8 +2273,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
       [&](const auto &body) -> RuleWfResult {
         using Body = std::decay_t<decltype(body)>;
         if constexpr (std::is_same_v<Body, SpecialSoundnessEntry>) {
-          if (!rule.premises.empty() ||
-              rule.conclusionIndex.index.notion != SecurityNotion::SpecialSoundness)
+          if (!rule.premises.empty() || rule.conclusionIndex.index.notion !=
+                                            SecurityNotion::SpecialSoundness)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "SpecialSoundnessEntry has an invalid index "
                           "signature");
@@ -2338,8 +2338,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
           // cannot shift the notion, and concatenating two round sequences
           // priced under different variants would mean nothing, so the
           // premise index is the conclusion index exactly.
-          RuleWfResult port = requirePort(env, body.sourcePort,
-                                          rule.conclusionIndex.index, "rule.body");
+          RuleWfResult port = requirePort(
+              env, body.sourcePort, rule.conclusionIndex.index, "rule.body");
           if (!port.accepted())
             return port;
           return checkRounds(env, body.appendedRounds,
@@ -2349,8 +2349,9 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
               rule.conclusionIndex.index.notion != SecurityNotion::RoundByRound)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "RoundScaling has an invalid index signature");
-          RuleWfResult port = requirePort(env, body.roundByRoundPort,
-                                          rule.conclusionIndex.index, "rule.body");
+          RuleWfResult port =
+              requirePort(env, body.roundByRoundPort,
+                          rule.conclusionIndex.index, "rule.body");
           if (!port.accepted())
             return port;
           if (body.selectedRound.kind == RoundSelectorKind::ByRoundIndex) {
@@ -2413,8 +2414,8 @@ RuleWfResult checkRuleWellFormed(const SchemaContext &context,
                             "rule.body.per_coordinate_bound");
         } else if constexpr (std::is_same_v<Body,
                                             RoundByRoundToStateRestoration>) {
-          if (rule.premises.size() != 1 ||
-              rule.conclusionIndex.index.notion != SecurityNotion::StateRestoration)
+          if (rule.premises.size() != 1 || rule.conclusionIndex.index.notion !=
+                                               SecurityNotion::StateRestoration)
             return refuse(RuleWfRefusalCode::InvalidBodySignature, "rule.body",
                           "RoundByRoundToStateRestoration has an invalid "
                           "index signature");
