@@ -432,3 +432,43 @@ pir.protocol "bad_slot_count" policy "residual_artifact" {
 }
 
 
+
+// -----
+
+// A bounded artifact verification binds every fact the reserved contract
+// lists; an incomplete form fails closed rather than defaulting one
+// (docs/spec/endpoints.md §3.1).
+pir.protocol "child_without_semantics" policy "residual_artifact" {
+  %relation = pir.instantiate "r" anchors {contract = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"} : !pir.claim<"opaque_relation">
+  %t0 = pir.begin
+  // expected-error @below {{[zkc-E150] a bounded artifact verification leaves 'semantics' empty}}
+  %t1 = pir.artifact_verify %t0 "child" child "sha256:aa" endpoint "verifier" semantics "" key "sha256:bb" statement "sha256:cc" protocol "sha256:dd" relation_contract "sha256:ee" route "child-verified"
+  pir.end %t1
+  pir.residual %relation : !pir.claim<"opaque_relation"> route "child-verified"
+}
+
+// -----
+
+// A parent verifies a child verifier. Any other endpoint kind names
+// something the parent cannot check against.
+pir.protocol "child_is_a_prover" policy "residual_artifact" {
+  %relation = pir.instantiate "r" anchors {contract = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"} : !pir.claim<"opaque_relation">
+  %t0 = pir.begin
+  // expected-error @below {{[zkc-E150] a bounded artifact verification names child endpoint kind 'prover'}}
+  %t1 = pir.artifact_verify %t0 "child" child "sha256:aa" endpoint "prover" semantics "zkc.child.v1" key "sha256:bb" statement "sha256:cc" protocol "sha256:dd" relation_contract "sha256:ee" route "child-verified"
+  pir.end %t1
+  pir.residual %relation : !pir.claim<"opaque_relation"> route "child-verified"
+}
+
+// -----
+
+// The slots the child verifier consumes are a set: a repeat would count one
+// slot twice against the child's proof stream.
+pir.protocol "child_repeats_a_slot" policy "residual_artifact" {
+  %relation = pir.instantiate "r" anchors {contract = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"} : !pir.claim<"opaque_relation">
+  %t0 = pir.begin
+  // expected-error @below {{[zkc-E150] a bounded artifact verification names proof slot 'pi' more than once}}
+  %t1 = pir.artifact_verify %t0 "child" child "sha256:aa" endpoint "verifier" semantics "zkc.child.v1" key "sha256:bb" statement "sha256:cc" protocol "sha256:dd" relation_contract "sha256:ee" route "child-verified" proof_slots ["pi", "pi"]
+  pir.end %t1
+  pir.residual %relation : !pir.claim<"opaque_relation"> route "child-verified"
+}

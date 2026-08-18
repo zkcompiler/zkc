@@ -281,6 +281,69 @@ bool ChalOp::isAbsorbing() { return true; }
 MemberPhase CheckOp::getPhase() { return MemberPhase::SpineEvent; }
 llvm::StringRef CheckOp::getMemberLabel() { return getLabel(); }
 
+MemberPhase ArtifactVerifyOp::getPhase() { return MemberPhase::SpineEvent; }
+llvm::StringRef ArtifactVerifyOp::getMemberLabel() { return getLabel(); }
+Value ArtifactVerifyOp::getThreadIn() { return getThread(); }
+Value ArtifactVerifyOp::getThreadOut() { return getOut(); }
+bool ArtifactVerifyOp::isAbsorbing() { return !getUnabsorbed(); }
+
+LogicalResult ArtifactVerifyOp::verify() {
+  // endpoints.md §3.1 fixes the fact list a bounded artifact verification
+  // must bind, and says an incomplete form fails closed. Every fact below
+  // is required content rather than a defaultable field: a missing child
+  // identity, verifier semantics, key, statement, protocol, or relation
+  // contract would leave the parent naming a proposition nobody can
+  // identify, and the reserved contract exists precisely so that cannot
+  // happen quietly.
+  struct RequiredFact {
+    llvm::StringRef name;
+    llvm::StringRef value;
+  };
+  const RequiredFact required[] = {
+      {"child", getChild()},         {"endpoint", getEndpoint()},
+      {"semantics", getSemantics()}, {"key", getKey()},
+      {"statement", getStatement()}, {"protocol", getProtocol()},
+      {"relation_contract", getRelationContract()},
+      {"route", getRoute()},         {"label", getLabel()},
+  };
+  for (const RequiredFact &fact : required)
+    if (fact.value.empty())
+      return emitOpError() << "[zkc-E150] a bounded artifact verification "
+                              "leaves '"
+                           << fact.name
+                           << "' empty; the reserved contract binds every "
+                              "fact it lists and an incomplete form fails "
+                              "closed (docs/spec/endpoints.md §3.1)";
+
+  // The child's endpoint kind is what the parent verifies against, so it is
+  // a closed vocabulary rather than free text: a parent cannot verify a
+  // child "prover" and mean anything by it.
+  if (getEndpoint() != "verifier")
+    return emitOpError() << "[zkc-E150] a bounded artifact verification "
+                            "names child endpoint kind '"
+                         << getEndpoint()
+                         << "'; only 'verifier' is admitted "
+                            "(docs/spec/endpoints.md §3.1)";
+
+  if (auto slots = getProofSlots()) {
+    llvm::StringSet<> seen;
+    for (Attribute slot : *slots) {
+      auto label = dyn_cast<StringAttr>(slot);
+      if (!label || label.getValue().empty())
+        return emitOpError() << "[zkc-E150] a bounded artifact verification "
+                                "names a proof slot that is not a label";
+      if (!seen.insert(label.getValue()).second)
+        return emitOpError() << "[zkc-E150] a bounded artifact verification "
+                                "names proof slot '"
+                             << label.getValue()
+                             << "' more than once; the slots the child "
+                                "verifier consumes are a set, and a repeat "
+                                "would count one slot twice";
+    }
+  }
+  return success();
+}
+
 MemberPhase EndOp::getPhase() { return MemberPhase::SpineEvent; }
 Value EndOp::getThreadIn() { return getThread(); }
 

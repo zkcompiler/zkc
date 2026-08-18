@@ -1993,6 +1993,29 @@ class Check(NamedTuple):
     expr: list[Any] | None
 
 
+class ArtifactVerify(NamedTuple):
+    """A bounded verification of an imported artifact (endpoints.md §3.1).
+
+    Every field the reserved contract binds is identity content: two
+    parents that verify different children, or the same child under a
+    different key or statement, are different protocols.
+    """
+
+    tag: str
+    label: str
+    child: str
+    endpoint: str
+    semantics: str
+    key: str
+    statement: str
+    protocol: str
+    relation_contract: str
+    route: str
+    absorbed: bool
+    abi: str | None
+    proof_slots: list[str]
+
+
 class Reduce(NamedTuple):
     label: str
     contract: str
@@ -2077,6 +2100,27 @@ def check(
         dict(params or {}),
         dict(semantic_args or {}),
         expr,
+    )
+
+
+def artifact_verify(
+    label: str,
+    child: str,
+    *,
+    endpoint: str = "verifier",
+    semantics: str,
+    key: str,
+    statement: str,
+    protocol: str,
+    relation_contract: str,
+    route: str,
+    absorbed: bool = True,
+    abi: str | None = None,
+    proof_slots: tuple[str, ...] | list[str] = (),
+) -> ArtifactVerify:
+    return ArtifactVerify(
+        "artifact_verify", label, child, endpoint, semantics, key, statement,
+        protocol, relation_contract, route, absorbed, abi, list(proof_slots),
     )
 
 
@@ -3425,6 +3469,26 @@ def canonical_document(
                     event.params,
                     event.semantic_args,
                     event.expr,
+                ]
+            )
+        elif isinstance(event, ArtifactVerify):
+            event_rows.append(
+                [
+                    "artifact_verify",
+                    event.child,
+                    event.endpoint,
+                    event.semantics,
+                    event.key,
+                    event.statement,
+                    event.protocol,
+                    event.relation_contract,
+                    event.route,
+                    1 if event.absorbed else 0,
+                    event.abi,
+                    # Slot labels normalize to canonical event positions,
+                    # like every other label the encoder emits: renaming a
+                    # slot must not move the identity.
+                    [event_pos[label] for label in event.proof_slots],
                 ]
             )
         else:
