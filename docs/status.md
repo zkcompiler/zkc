@@ -109,7 +109,7 @@ specification intentionally include north-star contracts beyond this matrix.
 | Execution and conformance evidence |  | ● |  | C++/Python parity boundaries and a pinned Plonky3 replay. |
 | Evidence admission policy |  |  | ● | — |
 | Wider emission targets and deployment |  |  | ● | — |
-| Recursion and zkVM composition |  | ● |  | The bounded artifact-verification carrier form only: the facts `endpoints.md` §3.1 binds are sealed and canonically encoded, with cross-implementation byte parity on the row and the artifact identity, and both endpoints refuse it at projection. No child artifact is verified and nothing composes; the carrier fixes the shape a later projection, execution, and conformance surface must preserve. |
+| Recursion and zkVM composition |  | ● |  | The bounded artifact-verification carrier form only: eight of the eleven facts `endpoints.md` §3.1 lists are sealed and canonically encoded, with cross-implementation byte parity on the row and the artifact identity, and both endpoints refuse it at projection. The covered parent claim id is carried by the parent route instead, because a claim is linear and its one consumer is the sink that routes it; explicit child assumptions and source-event provenance and failure behaviour are not bound. No child artifact is verified and nothing composes; the carrier fixes the shape a later projection, execution, and conformance surface must preserve. |
 | Zero-knowledge analysis |  |  | ● | — |
 
 ## Read next

@@ -977,6 +977,27 @@ groups as a single composite application (no per-reduction
 decomposition of their soundness contribution) — or refuse to price
 them.
 
+**Two combinations, and only one of them is governed here.** A
+round-by-round bound reaches a protocol by a union bound over its
+rounds, so assembling per-round costs into a protocol cost is an
+**accumulation**, and what an accumulation owes is that every round of
+the transcript it claims is indexed: a squeeze nobody priced is a term
+the sum omits, and presenting that sum prices a protocol that is not
+this one. Interleaving does not threaten an accumulation. BIND (§5.1)
+makes prefix satisfaction precedence plus absorption, so a challenge
+is drawn afresh from whatever the transcript has absorbed, and a
+judgment about one transformer's rounds stays true when another
+transformer's events sit between them.
+
+Composing two reductions of knowledge **in parallel** is the other
+operation, and it is the one this section governs: the tensor requires
+the group's denotation to factor, which is §4's criterion — all but
+one member central. A derivation that only accumulates owes round
+coverage; a rule that tensors owes decomposition. Neither obligation
+stands in for the other, and a structural gate that imposes the second
+where the first applies refuses the composite application this section
+requires.
+
 Three cases remain distinct because their theorem interfaces differ.
 
 **Shared-challenge repetition cannot be priced componentwise by default.** Generic
