@@ -175,17 +175,20 @@
       "live": [
         "E161",
         "E162",
-        "E163"
+        "E163",
+        "E164"
       ],
       "means": {
         "E161": "a verifier value carries more than one semantic material binding",
         "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity",
-        "E163": "a bounded artifact verification routes through a name no sink of the artifact carries, so the child's lifted obligations reach no parent route surface"
+        "E163": "a bounded artifact verification routes through a name no sink of the artifact carries, so the child's lifted obligations reach no parent route surface",
+        "E164": "a bounded artifact verification names a proof slot that is not a slot of the artifact, so the label resolves to no event"
       },
       "means_basis": {
         "E161": "8ce9df859e967db7e5ece0df4c7a99f219571b3a9bdeb90e5a85e25e95b806f2",
         "E162": "09c624212632a7b681ae4f257643a683cef57a5203741afaf23a6e785d71192d",
-        "E163": "b3e32eff52a57eede8b216fbc370acf7f9f90055898957ac65a433e02f1a1fc8"
+        "E163": "b3e32eff52a57eede8b216fbc370acf7f9f90055898957ac65a433e02f1a1fc8",
+        "E164": "b3e32eff52a57eede8b216fbc370acf7f9f90055898957ac65a433e02f1a1fc8"
       },
       "range": "E160-E169",
       "reserved": [],

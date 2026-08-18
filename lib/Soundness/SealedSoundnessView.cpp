@@ -208,9 +208,14 @@ llvm::Error
 requireDecomposableTransformerGroups(std::vector<TransformerExtent> extents) {
   if (extents.size() < 2)
     return llvm::Error::success();
+  // The instance name is part of the key, not decoration: `llvm::sort` is
+  // not stable, so without it two transformers with equal extents would be
+  // named in an unspecified order and the refusal would differ between runs
+  // and between implementations.  The twin sorts by the same triple.
   llvm::sort(extents, [](const TransformerExtent &lhs,
                          const TransformerExtent &rhs) {
-    return std::tie(lhs.begin, lhs.end) < std::tie(rhs.begin, rhs.end);
+    return std::tie(lhs.begin, lhs.end, lhs.instance) <
+           std::tie(rhs.begin, rhs.end, rhs.instance);
   });
 
   size_t groupStart = 0;

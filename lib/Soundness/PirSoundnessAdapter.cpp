@@ -808,6 +808,16 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
       // predicate is a fact about the category.
       if (!owned.rounds.empty())
         extent.central = false;
+      // A contract may declare a round with no messages -- three shipped
+      // ones do -- and a reduction all of whose rounds are message-free
+      // owns no membership event at all. Its extent would be empty and it
+      // would drop out of the group analysis silently, which is the wrong
+      // direction for a check whose failure mode is admitting a
+      // composition. Where there are no messages, the challenges the
+      // rounds sample are the only extent the transformer has.
+      if (!seen)
+        for (const SealedRoundFact &round : owned.rounds)
+          observe(round.challengeEventPosition);
       if (seen)
         transformerExtents.push_back(std::move(extent));
     }

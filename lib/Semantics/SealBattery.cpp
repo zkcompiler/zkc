@@ -213,6 +213,9 @@ private:
   /// residuals are lifted to, so a route no sink mentions has lifted
   /// nothing.
   llvm::StringSet<> routeSurface;
+  /// The proof-slot labels this artifact declares, for the artifact
+  /// verification events that name the slots a child verifier consumes.
+  llvm::StringSet<> slotLabels;
   DictionaryAttr codecs;
   DictionaryAttr constants;
   zkc::pir::ChalOp firstChal;
@@ -649,6 +652,8 @@ private:
       llvm::TypeSwitch<Operation *>(&op)
           .Case<zkc::pir::ExportOp, zkc::pir::AssumeOp, zkc::pir::ResidualOp>(
               [&](auto routed) { routeSurface.insert(routed.getRoute()); })
+          .Case<zkc::pir::SlotOp>(
+              [&](zkc::pir::SlotOp slot) { slotLabels.insert(slot.getLabel()); })
           .Default([](Operation *) {});
 
     size_t nextSegment = 0;
@@ -763,6 +768,21 @@ private:
                 // parent names a route at all and that the name is one the
                 // artifact's own route surface carries -- a verification
                 // whose route no sink mentions has lifted nothing.
+                // A proof slot the child verifier consumes must be a slot
+                // of this artifact. Left unchecked, the encoder has nothing
+                // to resolve the label to, and a label naming nothing would
+                // have to either alias onto an event position -- giving two
+                // different protocols one identity -- or fail with no
+                // diagnostic an author can act on.
+                if (auto slots = op.getProofSlots())
+                  for (Attribute entry : *slots)
+                    if (auto label = dyn_cast<StringAttr>(entry))
+                      if (!slotLabels.contains(label.getValue()))
+                        error(op) << "[zkc-E164] artifact verification '"
+                                  << op.getLabel() << "' names proof slot '"
+                                  << label.getValue()
+                                  << "', which is not a slot of this "
+                                     "artifact";
                 if (!routeSurface.contains(op.getRoute()))
                   error(op) << "[zkc-E163] artifact verification '"
                             << op.getLabel() << "' routes through '"

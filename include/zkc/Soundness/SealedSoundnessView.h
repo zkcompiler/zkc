@@ -249,6 +249,17 @@ struct SealedSoundnessView {
 /// exactly that shape, and the adjacency value the adapter builds is what
 /// authenticates and prices the placement.
 ///
+/// The extent is a best-effort reading of the kernel's body rather than a
+/// definition of it, and the gap is worth stating: kernel §4 counts a
+/// transformer's challenges as part of its body, while the carrier makes
+/// membership a slot-only fact. Where a transformer owns messages those are
+/// its extent; where it owns none — three shipped contracts declare a
+/// message-free round — its rounds' challenges are the only extent it has.
+/// So a transformer whose challenge sits outside its own message block can
+/// still overlap another without being grouped. Widening every extent to
+/// cover challenges is not the fix: that refuses grinding over FRI, which
+/// interleaves on purpose and has an exact rule.
+///
 /// `central` is kernel.md §4's predicate: a transformer whose body contains
 /// no absorbing event and no challenge event "neither writes what the
 /// transcript reads nor reads what it writes", so it commutes, and central

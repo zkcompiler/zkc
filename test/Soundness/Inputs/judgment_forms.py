@@ -79,9 +79,9 @@ def main() -> None:
             )
         used.setdefault(form, set()).add(kind)
 
-    unused = {
-        kind for kinds in FORMS.values() for kind in kinds
-    } - set().union(*used.values()) if used else set()
+    declared = {kind for kinds in FORMS.values() for kind in kinds}
+    exercised = {kind for kinds in used.values() for kind in kinds}
+    unused = declared - exercised
     if unused:
         raise SystemExit(
             "these body kinds are classified but no rule uses them, so the "

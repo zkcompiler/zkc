@@ -777,8 +777,15 @@ private:
             return err;
           // Slot labels normalize to canonical event positions, like every
           // other label the encoder emits: renaming a slot must not move
-          // the identity.
-          slots.push_back(slotPos.lookup(label.getValue()));
+          // the identity.  Fail closed rather than defaulting: a label that
+          // resolves to nothing must never alias onto event position 0,
+          // which would give two different protocols one identity.
+          auto proofSlot = slotPos.find(label.getValue());
+          if (proofSlot == slotPos.end())
+            return llvm::createStringError(
+                "an artifact verification names a proof slot that resolves "
+                "to no event");
+          slots.push_back(proofSlot->second);
         }
       events.push_back(Array{"artifact_verify", verify.getChild(),
                              verify.getEndpoint(), verify.getSemantics(),

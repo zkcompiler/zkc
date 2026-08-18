@@ -97,4 +97,45 @@ TEST(TransformerGroups, SeparateGroupsAreJudgedSeparately) {
             "");
 }
 
+TEST(TransformerGroups, EqualExtentsAreOrderedDeterministically) {
+  // `llvm::sort` is not stable, so the instance name is part of the sort key.
+  // Without it the two members named by the refusal would be whichever the
+  // sort happened to leave first, differing between runs and between the two
+  // implementations.
+  std::string forward =
+      decide({extent("b", 0, 4, false), extent("a", 0, 4, false)});
+  std::string reverse =
+      decide({extent("a", 0, 4, false), extent("b", 0, 4, false)});
+  EXPECT_EQ(forward, reverse);
+  EXPECT_TRUE(forward.find("'a' and 'b'") != std::string::npos);
+}
+
+TEST(TransformerGroups, AGroupNestedInsideAnotherIsOneGroup) {
+  // Containment is overlap: a transformer whose extent sits wholly inside
+  // another's is interleaved with it, and the running group end must not be
+  // pulled backwards by the shorter one.
+  std::string refusal = decide({extent("outer", 0, 20, false),
+                                extent("inner", 5, 6, false),
+                                extent("after", 18, 25, true)});
+  EXPECT_TRUE(refusal.find("are both non-central") != std::string::npos);
+}
+
+TEST(TransformerGroups, AContainedCentralMemberDoesNotSplitTheGroup) {
+  // The same containment shape, but the inner member commutes: the group is
+  // still one group, and it still decomposes.
+  EXPECT_EQ(decide({extent("outer", 0, 20, false), extent("inner", 5, 6, true),
+                    extent("later", 30, 40, false)}),
+            "");
+}
+
+TEST(TransformerGroups, SinglePositionExtentsAreComparable) {
+  // A transformer owning exactly one event has begin == end. Two of them at
+  // the same position cannot arise from slot ownership, but the predicate is
+  // defined over extents rather than over what produced them.
+  EXPECT_EQ(decide({extent("a", 7, 7, false), extent("b", 9, 9, false)}), "");
+  std::string refusal =
+      decide({extent("a", 7, 7, false), extent("b", 7, 7, false)});
+  EXPECT_TRUE(refusal.find("are both non-central") != std::string::npos);
+}
+
 } // namespace
