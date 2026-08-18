@@ -277,6 +277,13 @@ struct SealedSoundnessView {
 };
 
 
+/// The canonical order of transformer bodies: by extent, then by instance.
+/// The instance is part of the key rather than decoration, because
+/// `llvm::sort` is not stable and two transformers with equal bodies would
+/// otherwise be ordered differently between runs and between the two
+/// implementations. The twin sorts by the same triple.
+bool bodyOrderLess(const TransformerExtent &lhs, const TransformerExtent &rhs);
+
 /// Kernel §4's decomposition question, computed rather than assumed: the
 /// groups are the transitive closure of body overlap, not merely overlapping
 /// pairs -- two non-central transformers joined through a central one are one
@@ -312,14 +319,19 @@ groupTransformerBodies(std::vector<TransformerExtent> extents);
 /// third party re-checks *the derivation*, a claim about a final
 /// sequent the system did not produce.
 ///
-/// The three conditions are not new checks. The seal battery decided
-/// the policy and refused an escaping claim; the claim graph is already
-/// in the sealed view. What is new is stating that they hold together
-/// with a derivation's own coverage, which is why this lives here
-/// rather than in the signature: it is an accounting statement over an
-/// artifact, not a security theorem about a subject, and putting it in
-/// the rule language would have needed four widenings to say something
-/// the rule language is not for.
+/// Three of the four conditions are not new checks. The seal battery
+/// decided the policy and refused an escaping claim; the claim graph is
+/// already in the sealed view. What was new is stating that they hold
+/// together with a derivation's own coverage.
+///
+/// The fourth is a check and belongs here for the same reason. A
+/// round-by-round bound reaches a protocol by a union bound over its
+/// rounds, so a challenge no covered transformer owns is a term the sum
+/// omits — and the sum is assembled here rather than by any rule, since
+/// no rule sees more of the artifact than its own subject. It is an
+/// accounting statement over an artifact, not a security theorem about
+/// a subject, and putting it in the rule language would have needed
+/// four widenings to say something the rule language is not for.
 struct ArtifactJudgment {
   /// True when every condition below holds.
   bool discharged = false;

@@ -97,10 +97,12 @@ interleaved = _interleaved()
 def report(name: str, protocol: dict) -> None:
     view = derive.sealed_view(protocol, model.VOCABULARY)
     groups = derive.group_transformer_bodies(list(view.bodies))
-    print(name, "bodies", [(b[0], b[1], b[2], b[3]) for b in view.bodies])
+    print(name, "bodies",
+          [(b.instance, b.begin, b.end, b.central) for b in view.bodies])
     for group in groups:
-        non_central = [member[0] for member in group if not member[3]]
-        print(name, "group", [member[0] for member in group],
+        non_central = [member.instance for member in group
+                       if not member.central]
+        print(name, "group", [member.instance for member in group],
               "non-central", non_central)
 
 

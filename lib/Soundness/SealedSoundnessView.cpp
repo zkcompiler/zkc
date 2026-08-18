@@ -204,21 +204,18 @@ makeConsumedSubject(const SealedSoundnessView &sealed,
 
 } // namespace
 
+bool bodyOrderLess(const TransformerExtent &lhs,
+                   const TransformerExtent &rhs) {
+  return std::tie(lhs.begin, lhs.end, lhs.instance) <
+         std::tie(rhs.begin, rhs.end, rhs.instance);
+}
+
 std::vector<std::vector<TransformerExtent>>
 groupTransformerBodies(std::vector<TransformerExtent> extents) {
   std::vector<std::vector<TransformerExtent>> groups;
   if (extents.empty())
     return groups;
-  // The instance name is part of the key, not decoration: `llvm::sort` is
-  // not stable, so without it two transformers with equal bodies would be
-  // listed in an unspecified order and a consumer's answer would differ
-  // between runs and between implementations.  The twin sorts by the same
-  // triple.
-  llvm::sort(extents, [](const TransformerExtent &lhs,
-                         const TransformerExtent &rhs) {
-    return std::tie(lhs.begin, lhs.end, lhs.instance) <
-           std::tie(rhs.begin, rhs.end, rhs.instance);
-  });
+  llvm::sort(extents, bodyOrderLess);
 
   size_t groupStart = 0;
   uint64_t groupEnd = extents.front().end;

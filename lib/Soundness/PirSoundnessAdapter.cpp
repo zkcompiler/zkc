@@ -858,11 +858,7 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
   // no shipped rule does that; accumulating a bound over a transcript is a
   // union bound over rounds, which interleaving does not threaten. The
   // artifact judgment is what asks whether every round was accounted for.
-  llvm::sort(transformerExtents, [](const TransformerExtent &lhs,
-                                    const TransformerExtent &rhs) {
-    return std::tie(lhs.begin, lhs.end, lhs.instance) <
-           std::tie(rhs.begin, rhs.end, rhs.instance);
-  });
+  llvm::sort(transformerExtents, bodyOrderLess);
   view.transformerBodies = std::move(transformerExtents);
 
   // Every squeeze the spine performs, whether or not a transformer owns it.

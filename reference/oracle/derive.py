@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import model
 from .model import Refusal, canon_json
@@ -72,12 +72,21 @@ class SealedView:
     #: Each transformer's body extent and centrality, projected rather than
     #: judged.  No judgment here reads it; the rule class that will is the one
     #: composing two claims in parallel, which does not ship yet.
-    bodies: tuple[tuple[str, int, int, bool], ...] = ()
+    bodies: tuple[TransformerBody, ...] = ()
+
+
+class TransformerBody(NamedTuple):
+    """One transformer's body extent and whether it commutes."""
+
+    instance: str
+    begin: int
+    end: int
+    central: bool
 
 
 def transformer_bodies(
         protocol: dict[str, Any],
-        vocabulary: model.ProtocolVocabulary) -> list[tuple[str, int, int, bool]]:
+        vocabulary: model.ProtocolVocabulary) -> list[TransformerBody]:
     """Each transformer's body extent and centrality (kernel.md section 4).
 
     The body is what a transformer writes and what it reads: the messages its
@@ -147,15 +156,14 @@ def transformer_bodies(
             observe(reduce.label, index, False)
 
     return sorted(
-        ((name, extent[0], extent[1], extent[2])
+        (TransformerBody(name, extent[0], extent[1], extent[2])
          for name, extent in extents.items()),
-        key=lambda item: (item[1], item[2], item[0]),
+        key=lambda body: (body.begin, body.end, body.instance),
     )
 
 
 def group_transformer_bodies(
-        bodies: list[tuple[str, int, int, bool]]
-) -> list[list[tuple[str, int, int, bool]]]:
+        bodies: list[TransformerBody]) -> list[list[TransformerBody]]:
     """Group bodies by transitive overlap.
 
     A group whose members are all but one central decomposes per-transformer;
@@ -169,18 +177,18 @@ def group_transformer_bodies(
 
     if not bodies:
         return []
-    groups: list[list[tuple[str, int, int, bool]]] = []
+    groups: list[list[TransformerBody]] = []
     start = 0
-    end = bodies[0][2]
+    end = bodies[0].end
     for index in range(1, len(bodies)):
         # Containment is overlap, and the group runs to the furthest end any
         # member reaches: a shorter body inside it must not pull the end back.
-        if bodies[index][1] <= end:
-            end = max(end, bodies[index][2])
+        if bodies[index].begin <= end:
+            end = max(end, bodies[index].end)
             continue
         groups.append(list(bodies[start:index]))
         start = index
-        end = bodies[index][2]
+        end = bodies[index].end
     groups.append(list(bodies[start:]))
     return groups
 
