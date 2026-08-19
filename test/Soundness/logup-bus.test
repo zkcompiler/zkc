@@ -87,3 +87,35 @@
 # RUN:   | FileCheck %s --check-prefix=BARE
 # BARE: invalid_payload at apply.parameters.lookups
 # BARE-SAME: declares no committed content
+
+# A role whose own members disagree about how much they hold.
+#
+# No shipped contract reaches this: every role in both takes exactly one
+# member, so two of them cannot disagree. But a role taking several is a
+# shape the vocabulary permits any author to write, and then the rule reading
+# that role has two numbers and no reason to prefer either. The projection
+# refuses instead of choosing — the guarantee that survived from reading one
+# arity for the whole reduction — and it is tested here rather than left for
+# the first contract that widens a role to discover.
+#
+# The contract and the binding that anchors it are both widened, because a
+# role's count is contract content and the binding pins the contract's digest.
+# The digest is read out of the sealed artifact rather than recomputed, since
+# the artifact is where it is authoritative.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); [m.update(count={'exact':2}) for r in d['reduction_contracts']['logup_bus']['rounds'] for m in r['messages'] if m['role']=='queries']; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/wide.vocab.json
+# RUN: zkc-opt -pir-seal='protocol-vocabulary=%t/wide.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/Inputs/logup-role-widened.mlir -o %t/wide.sealed.mlir
+# RUN: %python -c "import json,re,sys; digest=re.search(r'logup_bus = \"(sha256:[0-9a-f]+)\"', open(sys.argv[1]).read()).group(1); s=json.load(open(sys.argv[2])); [v['anchor']['ref'].__setitem__('source_revision', digest) for v in s['bindings'].values() if v.get('anchor',{}).get('ref',{}).get('id')=='logup_bus']; json.dump(s, open(sys.argv[3],'w'))" %t/wide.sealed.mlir %zkc-registry-dir/soundness-signature.json %t/wide.sig.json
+# RUN: zkc-seal %S/Inputs/logup-role-widened.mlir \
+# RUN:   --protocol-vocabulary=%t/wide.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/wide.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/wide.artifacts %t/wide.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/wide.artifacts %t/wide.req.json
+# RUN: not zkc-derive --signature=%t/wide.sig.json \
+# RUN:   --protocol-vocabulary=%t/wide.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/wide.req.json -o=/dev/null %t/wide.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=WIDE
+# WIDE: invalid_payload at apply.parameters.lookups
+# WIDE-SAME: declares more than one arity
+
