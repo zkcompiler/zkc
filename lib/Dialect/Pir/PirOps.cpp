@@ -325,6 +325,21 @@ LogicalResult ArtifactVerifyOp::verify() {
                          << "'; only 'verifier' is admitted "
                             "(docs/spec/endpoints.md §3.1)";
 
+  // The ABI is the one fact §3.1 makes conditional -- "when the artifact has
+  // a distinct ABI" -- so its absence is a form the contract admits. An
+  // *empty* ABI is not that form: it says the artifact has a distinct one and
+  // then declines to name it, and because the encoder writes an absent ABI as
+  // null it would take the same identity as the artifact that has none. A
+  // missing fact defaults, which is what §3.1 says an incomplete form must
+  // never do.
+  if (getAbi() && getAbi()->empty())
+    return emitOpError() << "[zkc-E150] a bounded artifact verification "
+                            "declares an empty child artifact ABI; the fact "
+                            "is omitted where the child has no distinct ABI "
+                            "and named where it has one, and an empty one "
+                            "would take the identity of the first "
+                            "(docs/spec/endpoints.md §3.1)";
+
   if (auto slots = getProofSlots()) {
     llvm::StringSet<> seen;
     for (Attribute slot : *slots) {

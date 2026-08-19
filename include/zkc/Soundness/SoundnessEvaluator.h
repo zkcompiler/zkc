@@ -196,6 +196,13 @@ DeriveOutcome deriveSoundness(const SoundnessContext &context,
                               const DerivationTarget &target,
                               const DerivationPlan &plan);
 
+/// What of an artifact an evaluated derivation reached, for the artifact
+/// judgment to weigh against the spine. See `DerivationCoverage`: reduction
+/// occurrences cover their transformer, path occurrences cover the producer
+/// of the claim they name, and assumptions cover nothing.
+DerivationCoverage derivationCoverage(const SealedSoundnessView &sealed,
+                                      const DerivationResult &result);
+
 } // namespace zkc::soundness
 
 #endif // ZKC_SOUNDNESS_SOUNDNESSEVALUATOR_H

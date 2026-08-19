@@ -128,6 +128,14 @@ int main(int argc, char **argv) {
                      << claim.descriptorDigest << "\n";
       }
     }
+    // The bodies the sealed view projects. A consumer asking whether two
+    // transformers commute needs the footprint, and no judgment here reads
+    // it, so this is where it becomes visible -- and where the two
+    // implementations are compared on it.
+    for (const snd::TransformerExtent &body : view->transformerBodies)
+      llvm::outs() << "transformer body: " << body.instance << " events "
+                   << body.begin << ".." << body.end
+                   << (body.central ? " central" : " non-central") << "\n";
     return 0;
   }
 
@@ -212,14 +220,19 @@ int main(int argc, char **argv) {
   // thing is discharged, and until now nothing said it.
   if (const auto *protocolClaim = std::get_if<snd::ProtocolClaimSubject>(
           &request.target.subject.payload)) {
-    snd::ArtifactJudgment artifact =
-        snd::judgeArtifact(*view, protocolClaim->claim);
+    snd::ArtifactJudgment artifact = snd::judgeArtifact(
+        *view, protocolClaim->claim,
+        snd::derivationCoverage(*view, *outcome.result));
     llvm::outs() << "artifact judgment: "
                  << (artifact.discharged ? "discharged" : "not discharged")
                  << " (policy " << artifact.policy << ")\n";
     for (uint64_t index : artifact.uncoveredClaims)
       llvm::outs() << "artifact judgment: claim " << index
                    << " is neither consumed nor the derivation's target\n";
+    for (uint64_t position : artifact.uncoveredChallenges)
+      llvm::outs() << "artifact judgment: the challenge at event " << position
+                   << " belongs to no transformer this derivation covers, so "
+                      "its round is not in the bound\n";
   }
 
   auto witness = snd::encodeWitness(view->artifactId, *signatureDigest, request,

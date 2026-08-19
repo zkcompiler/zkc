@@ -20,12 +20,11 @@
 #      unsatisfied is consumed here, and a premise that names no state at
 #      all cannot be placed.
 #
-# Layer 3 is not redundant with layer 2 even though layer 2 answers the
-# case below: a premise derived at a path occurrence carries rounds with no
-# state predicate, and the composition must refuse it rather than fall back
-# to the positional proxy. Nothing in the tree builds that derivation yet,
-# which is why the reachable half is pinned here and the rest is a refusal
-# the body owns.
+# Layer 3 is not redundant with layer 2: a premise derived at a path
+# occurrence carries rounds with no state predicate, because a path
+# occurrence consumes no claim to name, and the composition must refuse it
+# rather than fall back to the positional proxy it replaced. Both are
+# pinned below.
 
 # RUN: rm -rf %t && mkdir -p %t
 # RUN: zkc-seal %S/../Evidence/Inputs/gkr-width2-depth3.mlir %zkc-seal-full -o %t/chain.artifacts > /dev/null
@@ -57,3 +56,23 @@
 # RUN:   -o=/dev/null %t/chain.mlirbc 2>&1 | FileCheck %s --check-prefix=LOOSE
 # LOOSE: coverage_mismatch at apply.coverage
 # LOOSE-SAME: do not follow the claim graph
+
+# Layer 3, which the body owns alone. The premise here is the same chain
+# link derived at a path occurrence instead of at its reduction: the ladder
+# hop from special soundness, over an assumed extraction judgment about the
+# same claim. Rounds built at a path occurrence carry no state predicate, so
+# there is no claim for the join to be about, and the body refuses rather
+# than ordering two spans and trusting the connection to have been made
+# elsewhere.
+#
+# Coverage does not answer this one. The path application concludes about
+# the claim the occurrence consumes, so the relation is satisfied and the
+# derivation reaches the body.
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%S/Inputs/gkr-path-premise-request.json \
+# RUN:   -o=/dev/null %t/chain.mlirbc 2>&1 | FileCheck %s --check-prefix=PATH
+# PATH: premise_mismatch at apply.body.rounds
+# PATH-SAME: names no state predicate
+# PATH-SAME: the claim this composition would join on is not stated

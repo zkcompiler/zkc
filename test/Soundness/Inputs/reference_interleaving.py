@@ -1,22 +1,26 @@
-"""Exercise the reference soundness-pricing interleaving boundary.
+"""Exercise the reference transformer-body grouping.
 
-The refusal must fire on the production path — ``derive.sealed_view`` — not
-on a helper called directly, so dropping the integration point cannot leave
-this test green. The de-interleaved twin of the same protocol must pass,
-proving the witness is otherwise valid and the refusal is specifically about
-interleaving.
+The bodies must come off the production path — ``derive.sealed_view`` —
+rather than from a helper called directly, so dropping the integration point
+cannot leave this test green.
+
+The second ordering is the one that matters. Its message blocks do not
+overlap, so a criterion counting messages alone reports two separate groups
+and licenses pricing each transformer on its own; its bodies do interleave,
+because the first transformer's challenge follows the whole of the second's
+body. Kernel section 4's footprint is what a transformer writes and what it
+reads, and under it the two orderings are the same group.
 """
 
 import copy
 
-from oracle import derive, model
-from oracle.model import Refusal
+from oracle import derive, model, witnesses
 
 
 def _interleaved() -> dict:
     """The twin of test/Soundness/Inputs/interleaved-open.mlir: two evalopen
     bodies genuinely interleaved in the spine (A's first message, B's first,
-    A's second, B's second), which sealing accepts and pricing must refuse."""
+    A's second, B's second), which sealing accepts."""
     anchors_a = {
         "commitment": "sha256:50feaa7e90906c60034b0db9b872015920f5"
                       "2bf543de7873fd102adbae1b9a7f",
@@ -89,18 +93,31 @@ def _interleaved() -> dict:
 
 interleaved = _interleaved()
 
-# Fixture guard: the de-interleaved twin (A's body contiguous, then B's) must
-# pass the same production entry, so the refusal below is about interleaving
-# and nothing else.
-contiguous = copy.deepcopy(interleaved)
-events = contiguous["events"]
-contiguous["events"] = [events[0], events[2], events[1], events[3],
-                        events[4], events[5]]
-derive.sealed_view(contiguous, model.VOCABULARY)
 
-try:
-    derive.sealed_view(interleaved, model.VOCABULARY)
-except Refusal as error:
-    print(error)
-else:
-    raise AssertionError("reference soundness pricing admitted interleaving")
+def report(name: str, protocol: dict) -> None:
+    view = derive.sealed_view(protocol, model.VOCABULARY)
+    groups = derive.group_transformer_bodies(list(view.bodies))
+    print(name, "bodies",
+          [(b.instance, b.begin, b.end, b.central) for b in view.bodies])
+    for group in groups:
+        non_central = [member.instance for member in group
+                       if not member.central]
+        print(name, "group", [member.instance for member in group],
+              "non-central", non_central)
+
+
+report("interleaved", interleaved)
+
+# The same two transformers with each body's messages contiguous. Message
+# extents no longer overlap; the bodies still do.
+separated = copy.deepcopy(interleaved)
+events = separated["events"]
+separated["events"] = [events[0], events[2], events[1], events[3],
+                       events[5], events[4]]
+report("separated", separated)
+
+# A transformer that owns no message at all still has a body. Two shipped
+# contracts declare a message-free round, and a reduction all of whose rounds
+# are message-free would have had an empty extent under a message-only
+# criterion and dropped out of the question entirely.
+report("message-free", witnesses.KZG_BATCH)

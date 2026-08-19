@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import model
 from .model import Refusal, canon_json
@@ -69,77 +69,128 @@ class SealedView:
     artifact_id: str
     claims: tuple[ClaimRef, ...]
     reductions: dict[int, SealedReduction]
+    #: Each transformer's body extent and centrality, projected rather than
+    #: judged.  No judgment here reads it; the rule class that will is the one
+    #: composing two claims in parallel, which does not ship yet.
+    bodies: tuple[TransformerBody, ...] = ()
 
 
-def _refuse_undecomposable_transformer_groups(
+class TransformerBody(NamedTuple):
+    """One transformer's body extent and whether it commutes."""
+
+    instance: str
+    begin: int
+    end: int
+    central: bool
+
+
+def transformer_bodies(
         protocol: dict[str, Any],
-        vocabulary: model.ProtocolVocabulary) -> None:
-    """Apply kernel.md section 4's decomposition decision.
+        vocabulary: model.ProtocolVocabulary) -> list[TransformerBody]:
+    """Each transformer's body extent and centrality (kernel.md section 4).
 
-    An interleaved group decomposes per-transformer exactly when all but one
-    of its members is central, where a central transformer's body contains no
-    absorbing event and no challenge event and therefore commutes.  The
-    extent covers a transformer's message members only: a challenge reaches a
-    reduction as a dependency rather than as a member, and grinding samples
-    one inside the block of the reduction it protects on purpose.
+    The body is what a transformer writes and what it reads: the messages its
+    contract's rounds declare, together with the challenges those rounds
+    sample.  A message is an absorb and a challenge is a squeeze, and a
+    central transformer is one with neither, so counting messages alone would
+    track write-write interference and miss read-write interference -- which
+    is what BIND depends on.
+
+    Sorted by (begin, end, instance).  The instance is part of the key because
+    the other implementation sorts an unstable sort by the same triple, and
+    without it two transformers with equal bodies would be ordered differently
+    between the two.
     """
 
     extents: dict[str, list[Any]] = {}
-    for position, event in enumerate(protocol["events"]):
-        if not isinstance(event, model.Slot) or event.membership is None:
-            continue
-        instance = event.membership[0]
+
+    def observe(instance: str, position: int, central: bool) -> None:
         extent = extents.get(instance)
         if extent is None:
-            extents[instance] = [position, position, not event.absorbed]
-            continue
-        extent[1] = position
-        if event.absorbed:
+            extents[instance] = [position, position, central]
+            return
+        extent[0] = min(extent[0], position)
+        extent[1] = max(extent[1], position)
+        if not central:
             extent[2] = False
 
-    # Sampling a challenge is what makes a transformer non-central.  No
-    # admitted contract can avoid one today -- a reduction contract needs a
-    # non-empty round list -- so this is unconditional in practice, and is
-    # written as the kernel's predicate rather than as the constant it
-    # currently evaluates to.
+    for position, event in enumerate(protocol["events"]):
+        if isinstance(event, model.Slot) and event.membership is not None:
+            observe(event.membership[0], position, not event.absorbed)
+
+    positions = {event.label: index
+                 for index, event in enumerate(protocol["events"])}
     for reduce in protocol.get("reduces", ()):
         contract = vocabulary.reductions.get(reduce.contract)
-        if contract and contract.get("rounds") and reduce.label in extents:
-            extents[reduce.label][2] = False
-
-    ordered = sorted(
-        ((name, extent) for name, extent in extents.items()),
-        key=lambda item: (item[1][0], item[1][1], item[0]),
-    )
-    if len(ordered) < 2:
-        return
-
-    group_start = 0
-    group_end = ordered[0][1][1]
-
-    def close(past_end: int) -> None:
-        non_central = [
-            name for name, extent in ordered[group_start:past_end]
-            if not extent[2]
-        ]
-        if len(non_central) < 2:
-            return
-        raise Refusal(
-            f"interleaved reduction bodies {non_central[0]!r} and "
-            f"{non_central[1]!r} are both non-central, so the group does not "
-            "decompose per-transformer and requires an exact composite "
-            "soundness rule"
-        )
-
-    for index in range(1, len(ordered)):
-        begin, end, _ = ordered[index][1]
-        if begin <= group_end:
-            group_end = max(group_end, end)
+        if not contract:
             continue
-        close(index)
-        group_start = index
-        group_end = end
-    close(len(ordered))
+        dep_slots = contract.get("dep_slots") or []
+        # Sampling a challenge is what makes a transformer non-central.  No
+        # admitted contract can avoid one -- a reduction contract needs a
+        # non-empty round list -- so this is unconditional in practice, and is
+        # written as the kernel's predicate rather than as the constant it
+        # currently evaluates to.
+        #
+        # The challenges are the ones the contract's *rounds* use, resolved
+        # role to dependency slot to operand, which is how the other leg
+        # reaches them. Reading every challenge-shaped dependency instead
+        # would agree only while no contract declares one a round does not
+        # use, and the two implementations would then be running different
+        # rules over the same artifact.
+        for round_entry in contract.get("rounds") or []:
+            role = (round_entry.get("challenge_use") or {}).get("role")
+            slots = [index for index, slot in enumerate(dep_slots)
+                     if slot.get("role") == role]
+            if len(slots) != 1 or slots[0] >= len(reduce.deps):
+                raise Refusal(
+                    f"reduction {reduce.label!r} has no single dependency "
+                    f"operand for challenge role {role!r}"
+                )
+            index = positions.get(reduce.deps[slots[0]])
+            if index is None or not isinstance(
+                    protocol["events"][index], model.Chal):
+                raise Refusal(
+                    f"reduction {reduce.label!r} round dependency is not a "
+                    "fresh challenge event"
+                )
+            observe(reduce.label, index, False)
+
+    return sorted(
+        (TransformerBody(name, extent[0], extent[1], extent[2])
+         for name, extent in extents.items()),
+        key=lambda body: (body.begin, body.end, body.instance),
+    )
+
+
+def group_transformer_bodies(
+        bodies: list[TransformerBody]) -> list[list[TransformerBody]]:
+    """Group bodies by transitive overlap.
+
+    A group whose members are all but one central decomposes per-transformer;
+    any other interleaved group does not.  This answers a question and refuses
+    nothing: the answer is the precondition of composing two claims in
+    parallel and of nothing else.  Accumulating a round-by-round bound over a
+    transcript is a union bound over rounds, which interleaving does not
+    threaten, because every challenge stays fresh given the prefix the duplex
+    absorbed.
+    """
+
+    if not bodies:
+        return []
+    groups: list[list[TransformerBody]] = []
+    start = 0
+    end = bodies[0].end
+    for index in range(1, len(bodies)):
+        # Containment is overlap, and the group runs to the furthest end any
+        # member reaches: a shorter body inside it must not pull the end back.
+        if bodies[index].begin <= end:
+            end = max(end, bodies[index].end)
+            continue
+        groups.append(list(bodies[start:index]))
+        start = index
+        end = bodies[index].end
+    groups.append(list(bodies[start:]))
+    return groups
 
 
 def sealed_view(protocol: dict[str, Any],
@@ -152,7 +203,6 @@ def sealed_view(protocol: dict[str, Any],
     structure is the selected binding's business.
     """
     model.validate_protocol(protocol, vocabulary)
-    _refuse_undecomposable_transformer_groups(protocol, vocabulary)
     # A site names a CANONICAL position, not an authored one: sources are
     # ordered by profile and canonical anchors, and reduces topologically.
     # Reading the authored order here would agree with the carrier only when
@@ -192,7 +242,8 @@ def sealed_view(protocol: dict[str, Any],
             tuple(ref_of[label] for label, _ in reduce.produced))
 
     return SealedView(
-        model.compute_id(protocol, vocabulary), tuple(claims), reductions
+        model.compute_id(protocol, vocabulary), tuple(claims), reductions,
+        tuple(transformer_bodies(protocol, vocabulary)),
     )
 
 

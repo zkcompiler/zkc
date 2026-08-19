@@ -1,0 +1,45 @@
+# The transformer bodies the sealed view projects, compared between the two
+# implementations.
+#
+# A body is what a transformer writes and what it reads: the messages its
+# contract's rounds declare, together with the challenges those rounds
+# sample. Kernel section 4 defines a central transformer as one with neither,
+# so counting messages alone would track write-write interference and miss
+# read-write interference, which is what BIND depends on.
+#
+# No judgment reads this. It is projected like the claim anchors and the
+# statement labels beside it, for a consumer asking whether two transformers
+# commute -- the rule class that composes two claims in parallel is the one
+# that will, and it does not ship. Which is exactly why it is compared here:
+# a projection nobody reads is a projection that drifts, and the two
+# implementations have now disagreed three times about what a body is.
+#
+# The first artifact carries a transformer that owns no message at all. Two
+# shipped contracts declare a message-free round, and under a message-only
+# criterion such a reduction had an empty extent and left the question
+# entirely.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/kzg-after.mlir %zkc-seal-full -o %t/batch.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/batch.artifacts %t/batch.mlirbc
+# RUN: zkc-derive --describe --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   %t/batch.mlirbc | grep "transformer body" > %t/batch.bodies
+# RUN: FileCheck %s --check-prefix=BATCH < %t/batch.bodies
+# BATCH: transformer body: batch events 5..5 non-central
+# RUN: %if uv %{ %uv python -m oracle.parity bodies kzg-batch > %t/batch.oracle %}
+# RUN: %if uv %{ diff %t/batch.bodies %t/batch.oracle %}
+
+# Three transformers whose bodies are disjoint blocks, so the chain says what
+# a body's extent is when nothing interleaves.
+# RUN: zkc-seal %S/../Evidence/Inputs/gkr-width2-depth3.mlir %zkc-seal-full -o %t/chain.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/chain.artifacts %t/chain.mlirbc
+# RUN: zkc-derive --describe --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   %t/chain.mlirbc | grep "transformer body" > %t/chain.bodies
+# RUN: FileCheck %s --check-prefix=CHAIN < %t/chain.bodies
+# CHAIN-COUNT-3: transformer body: {{.*}} non-central
+# RUN: %if uv %{ %uv python -m oracle.parity bodies gkr-width2-depth3 > %t/chain.oracle %}
+# RUN: %if uv %{ diff %t/chain.bodies %t/chain.oracle %}

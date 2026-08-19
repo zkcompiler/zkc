@@ -3141,4 +3141,53 @@ DeriveOutcome deriveSoundness(const SoundnessContext &context,
   return {std::move(result), std::nullopt};
 }
 
+namespace {
+
+void collectCoverage(const SealedSoundnessView &sealed,
+                     const EvaluatedDerivation &node,
+                     std::set<uint64_t> &covered,
+                     std::set<const EvaluatedDerivation *> &visited) {
+  // Equal plan subtrees may be memoized into one shared node, so the
+  // evaluated derivation is a directed acyclic graph rather than a tree.
+  // Walking it as a tree would revisit a shared node once per path to it.
+  if (!visited.insert(&node).second)
+    return;
+  const auto *application = std::get_if<EvaluatedApplication>(&node.node);
+  // An assumption covers nothing. `readJudgment` admits an extraction result
+  // and refuses every other shape, so an assumption cannot carry rounds, and
+  // the rounds of any derivation come from applications regardless.
+  if (!application)
+    return;
+  if (const auto *reduction =
+          std::get_if<ReductionOccurrence>(&application->site)) {
+    covered.insert(reduction->transformerPosition);
+  } else if (const auto *path =
+                 std::get_if<PathOccurrence>(&application->site)) {
+    // A path occurrence names a claim rather than a site, so what it covers
+    // is the reduction that produced the claim -- the same reduction the
+    // round-by-round preservation body finds when it locates a premise's
+    // transcript block. A source claim has no producer and covers nothing.
+    for (const auto &[position, candidate] :
+         sealed.reductionsByTransformerPosition)
+      if (llvm::is_contained(candidate.orderedOutputs, path->claim))
+        covered.insert(position);
+  }
+  for (const auto &[port, premise] : application->premises) {
+    (void)port;
+    if (premise)
+      collectCoverage(sealed, *premise, covered, visited);
+  }
+}
+
+} // namespace
+
+DerivationCoverage derivationCoverage(const SealedSoundnessView &sealed,
+                                      const DerivationResult &result) {
+  DerivationCoverage coverage;
+  coverage.track = result.target.index.track;
+  std::set<const EvaluatedDerivation *> visited;
+  collectCoverage(sealed, result.root, coverage.coveredTransformers, visited);
+  return coverage;
+}
+
 } // namespace zkc::soundness
