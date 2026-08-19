@@ -1,0 +1,46 @@
+# A counted squeeze's bias is priced per draw.
+#
+# The adapter multiplies a challenge's statistical distance by its vector
+# count, and no configuration in the tree could observe that factor until this
+# one: the counted challenges the families emit sample a power-of-two space
+# out of a power-of-two squeeze domain, where the distance is zero, and every
+# challenge with a nonzero distance elsewhere is scalar. A wrong factor there
+# would have priced every future counted squeeze with nothing turning red.
+#
+# The fixture is the shipped Fiat-Shamir sumcheck with one challenge added:
+# three draws of a seven-value space through an eight-symbol squeeze. Both
+# codec-bias facts move, and the differential against the unmodified artifact
+# is what isolates the count -- the sumcheck's own rounds are common to both,
+# so what the subtraction leaves is exactly this challenge's contribution.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/sumcheck-fs.mlir %zkc-seal-full -o %t/plain.artifacts > /dev/null
+# RUN: zkc-seal %S/Inputs/sumcheck-fs-counted.mlir %zkc-seal-full -o %t/counted.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/plain.artifacts %t/plain.mlirbc
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/counted.artifacts %t/counted.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/sumcheck-fs-request.json %t/plain.artifacts %t/plain.req.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/sumcheck-fs-request.json %t/counted.artifacts %t/counted.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/plain.req.json -o=%t/plain.out.json %t/plain.mlirbc > /dev/null
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/counted.req.json -o=%t/counted.out.json %t/counted.mlirbc \
+# RUN:   | FileCheck %s --check-prefix=UNOWNED
+
+# The added challenge belongs to no reduction, so the artifact-global bias
+# facts see it while no rule prices its round. The two accountings disagree
+# about scope on purpose; the judgment is where that becomes visible.
+# UNOWNED: belongs to no transformer this derivation covers
+
+# Both bias facts move by exactly three draws of this challenge's distance:
+# the sum in the constant, the max in the linear coefficient. The expected
+# value comes from the reference twin's own derivation of the per-draw
+# distance, so the factor is checked against a number this leg did not
+# compute.
+# RUN: %if uv %{ %uv python -m oracle.parity construction-bias toy_duplex ts_be8 7 > %t/per-draw.json %}
+# RUN: %if uv %{ %python %S/Inputs/counted_bias_delta.py %t/plain.out.json %t/counted.out.json %t/per-draw.json 3 | FileCheck %s --check-prefix=DELTA %}
+# DELTA: constant moved by 3 draws: yes
+# DELTA-NEXT: linear coefficient moved by 3 draws: yes

@@ -80,7 +80,10 @@ duplexAt(const SealedSoundnessView &sealed, const ApplicationSite &site) {
   (void)subject;
   if (!sealed.duplex)
     return projectionError(
-        "the authenticated path has no sealed duplex construction facts");
+        "the authenticated path has no sealed duplex construction facts: " +
+        (sealed.duplexAbsence.empty()
+             ? std::string("the artifact declares no reason")
+             : sealed.duplexAbsence));
   return &*sealed.duplex;
 }
 
