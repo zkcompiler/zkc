@@ -31,6 +31,12 @@
     "symbols": 8
    }
   },
+  "ts_be32": {
+   "squeeze": {
+    "kind": "mod_reduce",
+    "symbols": 32
+   }
+  },
   "fr_be32": {
    "squeeze": {
     "kind": "mod_reduce",

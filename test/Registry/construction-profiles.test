@@ -6,7 +6,7 @@
 // price. The squeeze-kind vocabulary is closed at admission; the bias FORMULA
 // for a squeeze shape lives with the pricing walk, never here.
 //
-// CHECK: {"codecs":{"bls_g1_be48":{},"fr_be32":{"squeeze":{"kind":"mod_reduce","symbols":32}},"plonky3_bb31_digest8":{},"plonky3_bb31_ext4_tuple":{"squeeze":{"kind":"tuple_bijection","symbols":4}},"plonky3_bb31_low_bits":{"squeeze":{"kind":"mod_reduce","symbols":1}},"plonky3_bb31_word":{},"tg_be8":{"squeeze":{"kind":"mod_reduce","symbols":8}},"ts_be8":{"squeeze":{"kind":"mod_reduce","symbols":8}}},"sponges":{"plonky3_bb31_poseidon2_w16_r8_lenpad":{"alphabet_order":"2013265921","capacity":8,"rate":8},"toy_duplex":{"alphabet_order":"256","capacity":32,"rate":32}}}
+// CHECK: {"codecs":{"bls_g1_be48":{},"fr_be32":{"squeeze":{"kind":"mod_reduce","symbols":32}},"plonky3_bb31_digest8":{},"plonky3_bb31_ext4_tuple":{"squeeze":{"kind":"tuple_bijection","symbols":4}},"plonky3_bb31_low_bits":{"squeeze":{"kind":"mod_reduce","symbols":1}},"plonky3_bb31_word":{},"tg_be8":{"squeeze":{"kind":"mod_reduce","symbols":8}},"ts_be32":{"squeeze":{"kind":"mod_reduce","symbols":32}},"ts_be8":{"squeeze":{"kind":"mod_reduce","symbols":8}}},"sponges":{"plonky3_bb31_poseidon2_w16_r8_lenpad":{"alphabet_order":"2013265921","capacity":8,"rate":8},"toy_duplex":{"alphabet_order":"256","capacity":32,"rate":32}}}
 
 // Fail-closed admission: an unknown squeeze derivation, a degenerate
 // alphabet, and an unknown entry field are refused where entries load.

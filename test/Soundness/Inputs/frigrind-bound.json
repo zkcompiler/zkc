@@ -14,7 +14,7 @@
    "pow_value": "ts_be8",
    "query_index": "ts_be8",
    "rs": "ts_be8",
-   "ext_field": "ts_be8"
+   "ext_field": "ts_be32"
   }
  },
  "anchors": {

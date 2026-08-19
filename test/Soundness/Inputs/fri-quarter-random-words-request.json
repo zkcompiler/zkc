@@ -22,7 +22,7 @@
     "target": {
       "subject": {
         "kind": "protocol_claim",
-        "artifact_id": "aadbab6dccab8845ec015f9a18d96a4506383aedae67b94fd585dda9aa49124a",
+        "artifact_id": "94f649572e32da6c0f80e5ab4314029daefbdbfa50ae76095dc35f94debe4e5e",
         "claim": {
           "claim_index": 1,
           "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
@@ -41,7 +41,7 @@
       "kind": "apply",
       "site": {
         "kind": "reduction",
-        "artifact_id": "aadbab6dccab8845ec015f9a18d96a4506383aedae67b94fd585dda9aa49124a",
+        "artifact_id": "94f649572e32da6c0f80e5ab4314029daefbdbfa50ae76095dc35f94debe4e5e",
         "owner_claim": {
           "claim_index": 1,
           "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"

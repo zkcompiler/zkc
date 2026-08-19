@@ -15,9 +15,9 @@
     "sponge": "toy_duplex",
     "iv": "artifact-id",
     "codecs": {
-      "query_index": "fr_be32",
+      "query_index": "ts_be8",
       "rs": "ts_be8",
-      "ext_field": "fr_be32"
+      "ext_field": "ts_be32"
     }
   },
   "anchors": {
