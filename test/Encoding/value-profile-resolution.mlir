@@ -17,3 +17,13 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
   pir.end %t1
   pir.residual %relation : !pir.claim<"opaque_relation"> route "unmodeled"
 }
+
+// A commitment is not an element of the class its content is drawn from, so
+// it satisfies no operand slot. Without this a value profile spelled like a
+// payload class would stand in for one element of it: the check compares a
+// declared class against the value's, and a profile name is not a class.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/value-profile-as-operand.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=OPERAND
+// OPERAND: [zkc-E302] operand sequence has 0 valid layouts
+// OPERAND-SAME: operand of value profile 'logup_column_1024' is a commitment
+// OPERAND-SAME: an operand slot declares a payload class rather than one

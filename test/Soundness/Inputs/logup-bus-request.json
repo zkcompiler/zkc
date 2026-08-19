@@ -4,7 +4,14 @@
     "selected_bindings": [
       "zkc.rbr.logup@reduction:logup_bus"
     ],
-    "resolved_parameters": {},
+    "resolved_parameters": {
+      "zkc.rbr.logup@reduction:logup_bus": {
+        "field_order": {
+          "sort": "integer",
+          "value": "2305843009213693951"
+        }
+      }
+    },
     "target": {
       "subject": {
         "kind": "protocol_claim",

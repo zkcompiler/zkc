@@ -11,9 +11,16 @@ using namespace zkc::registry;
 namespace zkc {
 namespace semantics {
 
+/// Whether a value satisfies a declared operand class.
+///
+/// A profiled value carries a commitment, not an element of the class its
+/// content is drawn from, so it matches no concrete class: `bareClass()` is
+/// empty for one and an operand slot never declares an empty class. Reading
+/// the profile name here instead would let a profile spelled like a class
+/// stand in for one element of it.
 static bool classMatches(Value value, llvm::StringRef expected) {
   return expected == "*" ||
-         cast<zkc::pir::ValType>(value.getType()).getValueClass() == expected;
+         cast<zkc::pir::ValType>(value.getType()).bareClass() == expected;
 }
 
 uint64_t checkOperandUnits(Value value) {

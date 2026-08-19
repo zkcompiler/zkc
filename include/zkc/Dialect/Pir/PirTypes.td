@@ -42,18 +42,32 @@ def Pir_ValType : Pir_Type<"Val", "val"> {
     fixes arity, class, and route the way a claim profile fixes anchor
     names, so no-predicate-semantics holds by construction.
   }];
-  let parameters = (ins StringRefParameter<"value class">:$valueClass,
+  let parameters = (ins StringRefParameter<"payload class or profile id">
+                            :$classOrProfile,
                         DefaultValuedParameter<"bool", "false">:$profiled);
   // Hand-written, because the marker is a keyword's presence rather than a
   // parameter's value and the optional-group form would parse a literal
   // boolean. The two spellings are `<"class">` and `<profile "name">`.
   let hasCustomAssemblyFormat = 1;
   let extraClassDeclaration = [{
-    /// The payload class this value carries, for a bare-class value. A
-    /// profiled value's class comes from its profile, so consumers that key
-    /// the codec map resolve the vocabulary first.
+    /// The payload class this value carries, or empty when it carries a
+    /// profile instead.
+    ///
+    /// A commitment is not an element of the class its content is drawn
+    /// from: a value committing to a thousand scalars answers "no" to "are
+    /// you a scalar", and every site asking that question must get that
+    /// answer rather than a profile name that happens to spell a class.
+    /// The parameter is named `classOrProfile` so that a site reading it
+    /// raw is visibly reading two things at once.
     llvm::StringRef bareClass() const {
-      return getProfiled() ? llvm::StringRef() : getValueClass();
+      return getProfiled() ? llvm::StringRef() : getClassOrProfile();
+    }
+
+    /// The value profile this value names, or empty when it carries a bare
+    /// payload class. A consumer that means to resolve the profile reads
+    /// this, so the two readings never share a spelling.
+    llvm::StringRef profileName() const {
+      return getProfiled() ? getClassOrProfile() : llvm::StringRef();
     }
   }];
 }

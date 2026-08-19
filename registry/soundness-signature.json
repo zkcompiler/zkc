@@ -4437,17 +4437,23 @@
             "sort": "integer"
           },
           {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S6": [
+          {
             "artifact_projection": {
-              "aggregate": "unique_equal",
-              "field": "ChallengeSpace",
-              "kind": "contract_round_family_field",
-              "result_sort": "integer",
-              "round_selector": {
-                "kind": "round_kind",
-                "round_kind": "bus"
-              }
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
             },
             "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
             "sort": "integer"
           }
         ]
@@ -4475,17 +4481,8 @@
             "sort": "subject"
           },
           {
-            "artifact_projection": {
-              "aggregate": "unique_equal",
-              "field": "ChallengeSpace",
-              "kind": "contract_round_family_field",
-              "result_sort": "integer",
-              "round_selector": {
-                "kind": "round_kind",
-                "round_kind": "bus"
-              }
-            },
-            "kind": "sealed_artifact_projection",
+            "kind": "resolved_parameter",
+            "reference": "field_order",
             "sort": "integer"
           }
         ],
@@ -4495,17 +4492,8 @@
             "sort": "subject"
           },
           {
-            "artifact_projection": {
-              "aggregate": "unique_equal",
-              "field": "ChallengeSpace",
-              "kind": "contract_round_family_field",
-              "result_sort": "integer",
-              "round_selector": {
-                "kind": "round_kind",
-                "round_kind": "bus"
-              }
-            },
-            "kind": "sealed_artifact_projection",
+            "kind": "resolved_parameter",
+            "reference": "field_order",
             "sort": "integer"
           }
         ]
@@ -4513,17 +4501,8 @@
       "id": "zkc.rbr.logup@reduction:logup_bus",
       "parameter_bindings": {
         "field_order": {
-          "artifact_projection": {
-            "aggregate": "unique_equal",
-            "field": "ChallengeSpace",
-            "kind": "contract_round_family_field",
-            "result_sort": "integer",
-            "round_selector": {
-              "kind": "round_kind",
-              "round_kind": "bus"
-            }
-          },
-          "kind": "sealed_artifact_projection",
+          "kind": "resolved_parameter",
+          "reference": "field_order",
           "sort": "integer"
         },
         "lookups": {
@@ -8495,6 +8474,14 @@
           ],
           "predicate_ref": "zkc.side.lookup_fits_characteristic",
           "slot": "S2"
+        },
+        {
+          "argument_types": [
+            "reduction_contract",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.space_embeds",
+          "slot": "S6"
         }
       ],
       "parameters": [

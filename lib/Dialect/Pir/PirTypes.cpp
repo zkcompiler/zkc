@@ -29,7 +29,7 @@ void zkc::pir::ValType::print(mlir::AsmPrinter &printer) const {
   printer << "<";
   if (getProfiled())
     printer << "profile ";
-  printer << "\"" << getValueClass() << "\">";
+  printer << "\"" << getClassOrProfile() << "\">";
 }
 
 void zkc::pir::PirDialect::registerTypes() {

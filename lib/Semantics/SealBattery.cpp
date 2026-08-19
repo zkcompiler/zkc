@@ -45,8 +45,8 @@ zkc::pir::ProtocolVocabularyCitations zkc::pir::collectCitedProtocolVocabulary(
     // under a fixed artifact id.
     for (Value value : op.getResults())
       if (auto val = dyn_cast<zkc::pir::ValType>(value.getType()))
-        if (val.getProfiled())
-          citations.valueProfiles.push_back(val.getValueClass());
+        if (!val.profileName().empty())
+          citations.valueProfiles.push_back(val.profileName());
     if (auto check = dyn_cast<zkc::pir::CheckOp>(&op))
       citations.checkContracts.push_back(check.getContract());
     else if (auto reduce = dyn_cast<zkc::pir::ReduceOp>(&op))
@@ -1154,14 +1154,12 @@ bool zkc::pir::verifyResolvedVocab(
   // The same "present exactly when cited" discipline for value profiles:
   // a table that carries one nobody names, or omits one somebody does, is a
   // table that does not describe this artifact.
-  llvm::SmallVector<llvm::StringRef> citedValueProfiles;
-  llvm::StringSet<> seenValueProfile;
-  for (Operation &op : body)
-    for (Value value : op.getResults())
-      if (auto val = dyn_cast<zkc::pir::ValType>(value.getType()))
-        if (val.getProfiled() &&
-            seenValueProfile.insert(val.getValueClass()).second)
-          citedValueProfiles.push_back(val.getValueClass());
+  // The citation walk is the one above, not a second copy: two walks over
+  // the same body drift the moment a profiled value can appear anywhere the
+  // second one does not look, and the seal would then write one set while
+  // the recheck verified another.
+  llvm::ArrayRef<llvm::StringRef> citedValueProfiles =
+      protocolCitations.valueProfiles;
   const bool hasValueProfileSection =
       vocab->getNamed("value_profiles").has_value();
   if (hasValueProfileSection != !citedValueProfiles.empty())

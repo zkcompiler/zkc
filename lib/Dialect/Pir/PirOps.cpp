@@ -199,8 +199,11 @@ verifyChallengeCapability(ChallengeCapabilityOpInterface capability) {
     return op->emitOpError()
            << "[zkc-E145] challenge capability must identify one exact SSA "
               "result owned by the implementing operation";
+  // A sampled challenge is never a commitment, so a profiled value cannot
+  // be a challenge capability's value: `bareClass()` is empty for one and no
+  // capability declares an empty payload class.
   auto type = dyn_cast<ValType>(value.getType());
-  if (!type || type.getValueClass() != payloadClass)
+  if (!type || type.bareClass() != payloadClass)
     return op->emitOpError()
            << "[zkc-E145] challenge capability value must have type "
               "!pir.val<\""

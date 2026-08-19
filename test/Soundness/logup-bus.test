@@ -65,14 +65,21 @@
 # UNDERSTATED: condition_failed at apply.conditions.S1
 
 # The lemma's own hypothesis, as a test. Multiplicities are field elements,
-# so the entries must stay below the characteristic; overflowing them is the
-# known soundness failure of the whole approach, not an edge case. The same
-# protocol over a field too small for its table refuses at the condition
-# rather than pricing a protocol the theorem does not cover.
-# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693951\"','space \"1024\"').replace('logup.beta','logup.beta.tiny'))" %S/../Encoding/logup-bus.mlir > %t/tiny.mlir
+# so the number of entries must stay below the characteristic; overflowing
+# them is the known soundness failure of the whole approach, not an edge
+# case. The same protocol over a field too small for its table refuses at the
+# condition rather than pricing a protocol the theorem does not cover.
+#
+# The field is the one the derivation states, not the size of a sampling set:
+# a challenge space is how many values are drawn from, and reading it as a
+# characteristic would be true only for a prime field sampled whole. That is
+# what the two hypotheses above carry, and it is why this leg shrinks the
+# declared field rather than the space.
+# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693951\"','space \"1031\"').replace('logup.beta','logup.beta.tiny'))" %S/../Encoding/logup-bus.mlir > %t/tiny.mlir
 # RUN: zkc-seal %t/tiny.mlir %zkc-seal-full -o %t/tiny.artifacts > /dev/null
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/tiny.artifacts %t/tiny.mlirbc
-# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/tiny.artifacts %t/tiny.req.json
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['derivation']['resolved_parameters']['zkc.rbr.logup@reduction:logup_bus']['field_order']={'sort':'integer','value':'1031'}; json.dump(d, open(sys.argv[2],'w'))" %S/Inputs/logup-bus-request.json %t/tiny.base.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %t/tiny.base.json %t/tiny.artifacts %t/tiny.req.json
 # RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
 # RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
@@ -92,3 +99,14 @@
 # RUN:   --request=%t/fs.req.json -o=/dev/null %t/bus.mlirbc | FileCheck %s --check-prefix=COMPILED
 # COMPILED: artifact judgment
 # COMPILED-NOT: belongs to no transformer
+
+# The structural half of the derivation, on both implementations. Every other
+# soundness family carries this line; the bounds themselves are C++-only, and
+# the shared surface is the plan the two legs walk to reach them.
+# RUN: %if uv %{ zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/bus.req.json --skeleton -o=%t/zkc.skeleton.json %t/bus.mlirbc %}
+# RUN: %if uv %{ %uv python -m oracle.parity derive-skeleton logup-bus \
+# RUN:   %t/bus.req.json > %t/oracle.skeleton.json %}
+# RUN: %if uv %{ diff %t/zkc.skeleton.json %t/oracle.skeleton.json %}

@@ -3283,17 +3283,19 @@ def validate_protocol(
                 # Fail-closed resolution: an unresolved profile name is
                 # refused rather than read as a payload class nobody
                 # declared, which is what one namespace would have done.
+                if event.count != "1":
+                    raise Refusal(
+                        "[zkc-E167] a profiled slot carries one commitment, "
+                        f"so slot {event.label!r} cannot also be counted: a "
+                        "vector of commitments is a shape no value profile "
+                        "states"
+                    )
                 profile = vocabulary.value_profiles.get(event.payload_class)
                 if profile is None:
                     raise Refusal(
                         f"[zkc-E166] slot {event.label!r} names value profile "
                         f"{event.payload_class!r}, which the sealed "
                         "vocabulary does not declare"
-                    )
-                if event.count != "1":
-                    raise Refusal(
-                        f"[zkc-E167] a profiled slot carries one commitment, "
-                        f"so slot {event.label!r} cannot also be counted"
                     )
             if event.absorbed:
                 absorbed.add(event.label)
@@ -3615,6 +3617,13 @@ def canonical_document(
             # A counted slot is its own event family, and so is a profiled
             # one: the scalar family keeps its exact historical encoding.
             if event.profiled:
+                if event.count != "1":
+                    raise Refusal(
+                        "[zkc-E167] a profiled slot carries one commitment, "
+                        f"so slot {event.label!r} cannot also be counted: a "
+                        "vector of commitments is a shape no value profile "
+                        "states"
+                    )
                 row = [
                     "slot_profiled",
                     event.payload_class,
@@ -4614,6 +4623,48 @@ def _self_test() -> None:
         ok("[zkc-E165]" in str(error), "a proof slot precedes its verification")
     else:
         raise AssertionError("a verification naming a later slot was accepted")
+
+    # The value profile's own refusals. Both are declared twin-mirrored, and
+    # the allocation lint is satisfied by the identifier appearing in this
+    # source -- so without these the declaration would be true of the text and
+    # false of the behaviour.
+    def profiled_slot_refuses(reason: str, note: str, **replacements: Any) -> None:
+        mutated = copy.deepcopy(witnesses.LOGUP_BUS)
+        index = next(position
+                     for position, event in enumerate(mutated["events"])
+                     if isinstance(event, Slot) and event.profiled)
+        mutated["events"][index] = mutated["events"][index]._replace(
+            **replacements)
+        try:
+            validate_protocol(mutated, VOCABULARY)
+        except Refusal as error:
+            ok(reason in str(error), note)
+        else:
+            raise AssertionError(f"profiled slot accepted: {note}")
+
+    profiled_slot_refuses("[zkc-E166]",
+                          "a value profile resolves or the seal refuses",
+                          payload_class="no_such_profile")
+    profiled_slot_refuses("[zkc-E167]",
+                          "a profiled slot carries one commitment",
+                          count="4")
+
+    # The encode path fails closed on its own: it does not run validation, and
+    # it is the conformance oracle for the encoding function, so a counted
+    # profiled slot must not quietly encode as a scalar one.
+    counted = copy.deepcopy(witnesses.LOGUP_BUS)
+    counted_index = next(position
+                         for position, event in enumerate(counted["events"])
+                         if isinstance(event, Slot) and event.profiled)
+    counted["events"][counted_index] = counted["events"][
+        counted_index]._replace(count="4")
+    try:
+        canonical_encoding(counted, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E167]" in str(error),
+           "the encoder refuses a counted commitment without validation")
+    else:
+        raise AssertionError("a counted profiled slot encoded")
 
     print(f"oracle: {checks} checks ok")
 

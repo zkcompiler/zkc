@@ -245,10 +245,22 @@ private:
       SmallVector<OperandView> layouts;
       zkc::semantics::solveCheckLayout(*contract, check.getInputs(), layouts);
       if (layouts.size() != 1) {
-        error(check, "[zkc-E302]")
-            << "operand sequence has " << layouts.size()
-            << " valid layouts under check contract '" << check.getContract()
-            << "' (exactly one is required)";
+        auto refusal = error(check, "[zkc-E302]");
+        refusal << "operand sequence has " << layouts.size()
+                << " valid layouts under check contract '"
+                << check.getContract() << "' (exactly one is required)";
+        // A commitment among the operands is the likeliest reason a layout
+        // count came out zero, and it is the one an author cannot see from
+        // the count alone: a value profile names what stands behind a
+        // commitment, and no operand slot declares a commitment.
+        for (mlir::Value input : check.getInputs())
+          if (auto val = mlir::dyn_cast<zkc::pir::ValType>(input.getType()))
+            if (!val.profileName().empty()) {
+              refusal << "; operand of value profile '" << val.profileName()
+                      << "' is a commitment, and an operand slot declares a "
+                         "payload class rather than one";
+              break;
+            }
         continue;
       }
       CheckView view{check, std::move(layouts.front()), nullptr};

@@ -168,9 +168,11 @@ private:
                               std::move(*descriptor), std::move(*bytes)};
   }
 
+  /// A profiled value carries a commitment rather than an element of a
+  /// class, so it matches no concrete class; `bareClass()` is empty for one.
   static bool classMatches(Value value, StringRef expected) {
     auto type = dyn_cast<ValType>(value.getType());
-    return type && (expected == "*" || type.getValueClass() == expected);
+    return type && (expected == "*" || type.bareClass() == expected);
   }
 
   static bool sourceMatches(Value value, VocabularyDepSource expected) {
@@ -372,7 +374,7 @@ private:
       for (auto [index, slot] : llvm::enumerate(contract.depSlots)) {
         Value dependency = reduce.getDeps()[index];
         auto type = dyn_cast<ValType>(dependency.getType());
-        if (!type || type.getValueClass() != slot.payloadClass ||
+        if (!type || type.bareClass() != slot.payloadClass ||
             !sourceMatches(dependency, slot.source)) {
           dependencyError() << "dependency " << index
                             << " does not match role '" << slot.role << "'";
