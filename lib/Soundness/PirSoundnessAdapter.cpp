@@ -508,7 +508,6 @@ buildCodecFact(pir::SealedOp sealed, pir::ChalOp challenge,
     value.toString(text, 10, /*Signed=*/false);
     return std::string(text);
   };
-  const std::string symbols = std::to_string(codec->squeezeSymbols);
 
   registry::Rational bias;
   if (codecKind == CodecKind::TupleBijection) {
@@ -517,7 +516,8 @@ buildCodecFact(pir::SealedOp sealed, pir::ChalOp challenge,
     if (q != n) {
       absence = unmodelable(
           challenge, "it samples " + decimal(q) + " through codec '" +
-                         codecName + "', whose " + symbols +
+                         codecName + "', whose " +
+                         std::to_string(codec->squeezeSymbols) +
                          " alphabet symbols biject with " + decimal(n) +
                          " exactly");
       return std::optional<BuiltCodecFact>();
@@ -526,7 +526,9 @@ buildCodecFact(pir::SealedOp sealed, pir::ChalOp challenge,
     if (q.ugt(n)) {
       absence = unmodelable(challenge, "it samples " + decimal(q) +
                                            " through codec '" + codecName +
-                                           "', whose " + symbols +
+                                           "', whose " +
+                                           std::to_string(
+                                               codec->squeezeSymbols) +
                                            " squeeze symbols frame only " +
                                            decimal(n));
       return std::optional<BuiltCodecFact>();
