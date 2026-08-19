@@ -53,12 +53,19 @@
 # half the content they carry: the profile is sealed either way, so what
 # refuses is the condition tying it to the spine, and without that condition
 # the bound would have been priced at half the degree it owes.
-# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('logup_column_1024','logup_column_512'))" %S/../Encoding/logup-bus.mlir > %t/understated.mlir
-# RUN: zkc-seal %t/understated.mlir %zkc-seal-full -o %t/under.artifacts > /dev/null
+#
+# The understated profile is generated rather than shipped. A profile no
+# protocol names would otherwise ride in the registry's digest authority for
+# the life of the project to serve one negative leg.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_column_1024']['arity_log2']=9; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/understated.vocab.json
+# RUN: zkc-seal %S/../Encoding/logup-bus.mlir \
+# RUN:   --protocol-vocabulary=%t/understated.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/under.artifacts > /dev/null
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/under.artifacts %t/under.mlirbc
 # RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/under.artifacts %t/under.req.json
 # RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
-# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --protocol-vocabulary=%t/understated.vocab.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
 # RUN:   --request=%t/under.req.json -o=/dev/null %t/under.mlirbc 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=UNDERSTATED

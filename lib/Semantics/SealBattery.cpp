@@ -1002,9 +1002,10 @@ bool zkc::pir::verifyResolvedVocab(
     return ok;
   }
 
-  // The five core sections are mandatory; hole_contracts appears
-  // exactly when construction routes cite at least one contract, so a
-  // protocol without routes keeps its exact table shape and bytes.
+  // Five sections are mandatory. Two are present exactly when cited --
+  // hole_contracts when construction routes name one, value_profiles when a
+  // value names one -- so a protocol citing neither keeps its exact table
+  // shape and bytes.
   static constexpr StringLiteral sections[] = {
       "claim_profiles",        "check_contracts", "reduction_contracts",
       "terminal_rules",        "construction_profiles",
@@ -1136,8 +1137,8 @@ bool zkc::pir::verifyResolvedVocab(
                 });
 
   // Hole contracts are cited by the construction routes riding on the
-  // container, not by body ops; the same exact-citation discipline
-  // applies to the sixth section when it exists.
+  // container, not by body ops; the same exact-citation discipline applies to
+  // every conditional section.
   SmallVector<StringRef> citedHoles;
   if (Operation *container = body.getParentOp())
     if (auto routes = container->getAttrOfType<DictionaryAttr>("routes"))

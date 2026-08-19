@@ -258,7 +258,8 @@ public:
           "container carries no resolved-vocabulary table: the seal "
           "stamps cited semantic-vocabulary content digests "
           "before anything is encoded");
-    // The table is a closed set of five sections. Anything else in it
+    // The table is a closed set: four sections always, and two more that
+    // appear exactly when something cites them. Anything else in it
     // would ride into identity unseen by any judgment (the judges
     // verify only the known sections), so reject an unknown section
     // here at the identity function itself, fail-closed like every
@@ -287,8 +288,8 @@ public:
         return llvm::createStringError(
             "resolved-vocabulary table has an unknown section '" + name.str() +
             "': only claim_profiles, check_contracts, reduction_contracts, "
-            "terminal_rules, construction_profiles, and hole_contracts are "
-            "identity content");
+            "terminal_rules, construction_profiles, hole_contracts, and "
+            "value_profiles are identity content");
       if (!isa<DictionaryAttr>(section.getValue()))
         return llvm::createStringError("resolved-vocabulary section '" +
                                        name.str() + "' must be a dictionary");

@@ -855,8 +855,11 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
                 return adapterError(
                     "a profiled message member names a value profile the "
                     "sealed vocabulary does not declare");
-              llvm::APInt arity =
-                  llvm::APInt(profile->arityLog2 + 2, 1).shl(profile->arityLog2);
+              // One bit for the value and one for the shift's headroom, so
+              // 2^64 -- the declared bound -- is exact rather than wrapping.
+              llvm::APInt arity(static_cast<unsigned>(profile->arityLog2) + 2,
+                                1);
+              arity = arity.shl(static_cast<unsigned>(profile->arityLog2));
               llvm::SmallString<32> text;
               arity.toString(text, 10, /*Signed=*/false);
               arities.insert(std::string(text));

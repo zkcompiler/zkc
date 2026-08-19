@@ -48,3 +48,14 @@ pir.sealed "empty-hole-citation" id "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   %t0 = pir.begin
   pir.end %t0
 }
+
+// -----
+
+// The same discipline for the other conditional section: a table claiming
+// authority over value profiles when no value names one.
+// expected-error @below {{[zkc-E248] resolved-vocabulary table carries value_profiles exactly when a value names a profile}}
+pir.sealed "empty-value-profile-citation" id "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    vocab {check_contracts = {}, claim_profiles = {}, construction_profiles = {}, reduction_contracts = {}, terminal_rules = {}, value_profiles = {}} {
+  %t0 = pir.begin
+  pir.end %t0
+}

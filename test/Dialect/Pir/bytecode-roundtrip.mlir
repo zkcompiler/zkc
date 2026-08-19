@@ -17,8 +17,12 @@ pir.protocol "bytecode_v4" kappa {codecs = {scalar = "ts_be8", tg = "tg_be8"}} {
   %t2, %a = pir.slot %t1 "a" : "tg" in "sigma" as "a"
   %t3, %ch = pir.chal %t2 deps(%x, %a : !pir.val<"tg">, !pir.val<"tg">) "c" : "scalar" domain "sigma.c" space "2305843009213693952"
   %t4, %z = pir.slot %t3 "z" : "scalar"
+  // A value profile is identity-bearing: it selects a different encoded row
+  // family, so a bytecode path that dropped the marker would turn a
+  // commitment into an element of a class and move the artifact's id.
+  %t4p, %committed = pir.slot %t4 "committed" : profile "logup_column_1024"
   pir.check "equation" contract "zkc.check.schnorr-equation" (%x, %a, %ch, %z : !pir.val<"tg">, !pir.val<"tg">, !pir.val<"scalar">, !pir.val<"scalar">) expr ["eq", ["g_exp", ["const", "g"], ["in", 3]], ["g_mul", ["in", 1], ["g_exp", ["in", 0], ["in", 2]]]]
-  pir.end %t4
+  pir.end %t4p
   %evaluation = pir.reduce "sigma" contract "sigma" (%relation : !pir.claim<"opaque_relation">) deps(%ch : !pir.val<"scalar">) checks {equation = "equation"} anchors [{}] -> !pir.claim<"schnorr_evaluation">
   pir.material_bind %x to "sha256:043a718774c572bd8a25adbeb1bfcd5c0256ae11cecf9f9c3f925d0e52beaf89" : !pir.val<"tg">
   pir.discharge %evaluation : !pir.claim<"schnorr_evaluation"> rule "zkc.terminal.schnorr-evaluation" checks {equation = "equation"}

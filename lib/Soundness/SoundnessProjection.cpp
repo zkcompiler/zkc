@@ -713,10 +713,11 @@ projectArtifactFact(const SealedSoundnessView &sealed,
     return reduction.takeError();
 
   switch (projection.kind) {
-  // Both are answered before the reduction is resolved above.
+  // Both are facts about the whole artifact and are answered above, before
+  // a reduction is resolved.
   case ArtifactProjectionKind::BoundRelationAnchorCount:
   case ArtifactProjectionKind::CommittedArity:
-    return projectionError("projection kind is answered earlier");
+    break;
   case ArtifactProjectionKind::ConclusionReductionContract: {
     if (projection.resultSort != ValueSort::ReductionContract)
       return projectionError(

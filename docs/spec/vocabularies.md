@@ -81,14 +81,15 @@ declared because it is proof-ABI identity.
 
 The protocol-semantic vocabulary is one cross-admitted envelope,
 `zkc.protocol_vocabulary`, containing `predicate_specs`,
-`claim_profiles`, `check_contracts`, `hole_contracts`,
+`claim_profiles`, `value_profiles`, `check_contracts`, `hole_contracts`,
 `reduction_contracts`, and `terminal_rules`. These sections are
 not independently loadable authorities: admission succeeds only after all
 cross-references and content pins resolve together. The sealed artifact carries
 exactly the transitive cited subset in its flat `vocab.claim_profiles`,
 `vocab.check_contracts`, `vocab.reduction_contracts`, and
 `vocab.terminal_rules` sections, plus `vocab.hole_contracts` exactly when
-construction routes cite at least one hole. Those sections are the sole digest
+construction routes cite at least one hole and `vocab.value_profiles` exactly
+when a value names a profile. Those sections are the sole digest
 authority for these entries (kernel §8; carrier §6–7). Predicate-spec
 preimages are re-admitted transitively through pinned CheckContracts rather
 than duplicated into the artifact.

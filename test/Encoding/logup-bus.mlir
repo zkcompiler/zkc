@@ -32,10 +32,18 @@
 // A profiled slot is its own event family: it carries the profile name where
 // the scalar family carries a payload class, so no row outside this protocol
 // moves and the two cannot be confused by a reader of the encoding.
-// ROW: "slot_profiled"
-// ROW-SAME: "logup_column_1024"
-// ROW: "slot_profiled"
-// ROW-SAME: "logup_column_1024"
+//
+// The rows are asserted whole. The canonical document is one line, so a
+// partial match would be satisfied by the profile name appearing anywhere
+// later on it — including inside the vocabulary table below — and would hold
+// while a membership index, an absorbed flag, or a whole row family moved.
+// ROW: "events":{{\[\[}}"slot_profiled","logup_column_1024",1,[1,"cols",0]],["slot_profiled","logup_column_1024",1,[1,"cols",1]],["slot_profiled","logup_column_1024",1,[1,"cols",2]],["chal",
+// ROW-SAME: "slot_profiled","logup_column_1024",1,[1,"helper",0]
+//
+// And the profile is cited in the sealed table, which is what makes the
+// artifact's identity commit to the arity a rule later prices from. Without
+// this line nothing in the ungated path asserts the central new invariant.
+// ROW-SAME: "value_profiles":{"logup_column_1024":"sha256:
 
 pir.protocol "logup_bus" kappa {codecs = {query_index = "ts_be8", scalar = "ts_be8"}, constants = {one = {class = "scalar", value = "1"}}, iv = "artifact-id", sponge = "toy_duplex"} policy "analysis_only_artifact" {
   %relation = pir.instantiate "air" anchors {contract = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"} : !pir.claim<"opaque_relation">

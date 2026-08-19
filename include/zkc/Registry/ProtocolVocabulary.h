@@ -26,7 +26,9 @@ struct ClaimProfile {
 };
 
 /// What a value commits to, for a value whose type names a profile rather
-/// than a bare payload class (docs/spec/carrier.md §3).
+/// than a bare payload class: the schema is docs/spec/carrier.md §7, and
+/// what a profiled value is — a commitment rather than an element of the
+/// class its content is drawn from — is §3.
 ///
 /// The claim type has resolved a descriptor profile since the beginning; the
 /// value type carried one string, and every mechanism that needed to state
@@ -48,10 +50,20 @@ struct ValueProfile {
   /// Where the committed content comes from. `prover_message` is material
   /// the prover chose; `relation_derived` is derived from the relation the
   /// artifact is about; `preprocessed` is fixed before any statement.
+  ///
+  /// Only `prover_message` has a carrier that can express it: a profile
+  /// belongs to a slot, and a slot is prover material. The other two are
+  /// admitted so the relation commitment and the preprocessed index arrive
+  /// as values of this field rather than as sibling mechanisms; until a
+  /// statement-side value can carry a profile, declaring one of them says
+  /// something the artifact cannot mean.
   std::string origin;
   int64_t arityLog2 = 0;
-  /// The construction that realizes the commitment, named rather than
-  /// evaluated -- the kernel authenticates it structurally.
+  /// The construction that realizes the commitment. Carried into the
+  /// profile's content digest, so two artifacts naming different routes are
+  /// different protocols -- and checked against nothing else: no registry
+  /// resolves a route name today, so this records what the author declared
+  /// rather than authenticating it.
   std::string bindingRoute;
   std::string digest;
 
@@ -427,14 +439,15 @@ struct TerminalRule {
 };
 
 /// One closed, cross-admitted protocol vocabulary. Admission proceeds in
-/// dependency order (profiles, predicate specs, check contracts, hole
-/// contracts, reduction contracts, terminal rules), so an
+/// dependency order (claim profiles, value profiles, predicate specs, check
+/// contracts, hole contracts, reduction contracts, terminal rules), so an
 /// unresolved reference is never retained for a later caller to interpret.
 ///
 /// File format:
 /// {
 ///   "registry": "zkc.protocol_vocabulary",
 ///   "claim_profiles": {...},
+///   "value_profiles": {...},
 ///   "predicate_specs": {"sha256:<content digest>": {...}},
 ///   "check_contracts": {...},
 ///   "hole_contracts": {...},
