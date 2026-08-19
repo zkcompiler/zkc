@@ -1644,6 +1644,7 @@ LOGUP_BUS = {
     "policy": "analysis_only_artifact",
     "kappa": {
         "codecs": {"query_index": "ts_be8", "scalar": "ts_be8"},
+        "constants": {"one": {"class": "scalar", "value": "1"}},
         "iv": "artifact-id",
         "sponge": "toy_duplex",
     },
@@ -1666,16 +1667,22 @@ LOGUP_BUS = {
              profiled=True),
         slot("mult", "logup_column_1024", True, ("bus", "cols", 2),
              profiled=True),
-        chal("beta", "scalar", "logup.beta", "2305843009213693952",
+        chal("beta", "scalar", "logup.beta", "2305843009213693951",
              ["values", "table", "mult"]),
         slot("helper", "logup_column_1024", True, ("bus", "helper", 0),
              profiled=True),
         chal("idx", "query_index", "logup.idx", "1024", ["helper"]),
+        slot("value_at", "scalar", True, None),
+        slot("helper_at", "scalar", True, None),
+        check("row", "zkc.check.logup-row", ["helper_at", "beta", "value_at"],
+              expr=["eq", ["f_mul", ["in", 0],
+                           ["f_add", ["in", 1], ["f_neg", ["in", 2]]]],
+                    ["const", "one"]]),
     ],
     "reduces": [
         reduce_row(
             "bus", "logup_bus", ["air"], ["beta", "idx"],
-            [("inclusion", "logup_inclusion")],
+            [("inclusion", "logup_inclusion")], checks={"row": "row"},
             anchors=[{"multiplicities": LOGUP_MULT, "table": LOGUP_TABLE,
                       "values": LOGUP_VALUES}],
         )

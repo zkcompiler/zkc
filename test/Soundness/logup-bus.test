@@ -29,17 +29,22 @@
 # polynomial of degree at most table plus lookups, so a false inclusion
 # survives a uniform point with probability at most that over the field.
 # Both counts are the committed arity read off the value profile — in this
-# shape the table and the looked-up column are columns of one trace — and
-# the field order is the bus challenge's own space. Nothing here was
+# shape the table and the looked-up column are columns of one trace, so one
+# arity answers both — and the order is the bus challenge's own space, which
+# the rule may read as the field's characteristic only because it carries
+# the hypothesis that the field is prime of that order. Nothing here was
 # supplied beside the artifact.
 # BOUND: "zkc.hyp.logup_multiplicities_honest"
-# BOUND: "constant": "1/1125899906842624"
+# BOUND: "constant": "2048/2305843009213693951"
 
-# The opening round is one index into committed content, which is what a
-# spot check is worth without a low-degree test. It is priced rather than
-# assumed away, and a production lookup composes this bus with polynomial
-# machinery that this row does not model.
-# BOUND: "constant": "1023/1024"
+# The opening round establishes nothing, and is priced at nothing. Its check
+# constrains an opened value against the sampled point, but no opening proof
+# binds that value to the commitment it claims to come from -- the profile's
+# binding route is a name this kernel carries without evaluating. A round
+# that establishes nothing cannot rescue a doomed prover either, so its error
+# is zero, and the claim leaves as a residual for a protocol that can open a
+# commitment.
+# BOUND: "constant": "0"
 
 # The honest-multiplicity hypothesis rides beside the numbers, carried rather
 # than established: it is pinned above, where the witness states it.
@@ -64,7 +69,7 @@
 # known soundness failure of the whole approach, not an edge case. The same
 # protocol over a field too small for its table refuses at the condition
 # rather than pricing a protocol the theorem does not cover.
-# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693952\"','space \"1024\"').replace('logup.beta','logup.beta.tiny'))" %S/../Encoding/logup-bus.mlir > %t/tiny.mlir
+# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693951\"','space \"1024\"').replace('logup.beta','logup.beta.tiny'))" %S/../Encoding/logup-bus.mlir > %t/tiny.mlir
 # RUN: zkc-seal %t/tiny.mlir %zkc-seal-full -o %t/tiny.artifacts > /dev/null
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/tiny.artifacts %t/tiny.mlirbc
 # RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/tiny.artifacts %t/tiny.req.json

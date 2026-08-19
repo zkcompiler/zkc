@@ -582,7 +582,7 @@ public:
                 return;
               }
               auto write = zkc::oir::WriteOp::create(
-                  builder, loc, stream, v, op.getLabel(), op.getPayloadClass(),
+                  builder, loc, stream, v, op.getLabel(), materialClass(op),
                   op.getCount(), src(op));
               stream = write.getOut();
               slotValueByLabel[op.getLabel()] = v;
@@ -596,7 +596,7 @@ public:
             }
             auto read = zkc::oir::ReadOp::create(builder, loc, stream,
                                                  op.getLabel(),
-                                                 op.getPayloadClass(),
+                                                 materialClass(op),
                                                  op.getCount(), src(op));
             stream = read.getOut();
             vals[op.getVal()] = read.getVal();
@@ -858,6 +858,26 @@ public:
 
 private:
   zkc::pir::EndpointKind endpointKind;
+  /// The payload class a slot's material actually travels under.
+  ///
+  /// A profiled slot names a value profile, not a class, and the class is the
+  /// profile's element class. Emitting the profile name here would name a
+  /// codec the emitted program does not have: seal admitted a codec for the
+  /// element class, so a realized endpoint asking for the profile name asks
+  /// for one nobody declared.
+  llvm::StringRef materialClass(zkc::pir::SlotOp op) const {
+    if (!op.getProfiled())
+      return op.getPayloadClass();
+    const zkc::registry::ValueProfile *profile =
+        environment.protocolVocabulary().lookupValueProfile(
+            op.getPayloadClass());
+    // Seal resolved this already; an unresolved profile cannot reach
+    // projection, and returning the profile name would be the bug this
+    // exists to prevent.
+    assert(profile && "seal admits only resolved value profiles");
+    return profile->elementClass;
+  }
+
   const zkc::registry::ProtocolEnvironment &environment;
 };
 

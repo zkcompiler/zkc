@@ -201,6 +201,11 @@ struct SealedReduction {
   /// registry-free by construction, and a rule that reads a profile fact
   /// must read it from sealed structure.
   std::vector<registry::Rational> committedArity;
+  /// Whether any message member of this reduction declares no content at
+  /// all. A rule that prices in a committed arity may not read one from a
+  /// reduction where some commitment says nothing: the number it would get
+  /// is whatever the members that happen to be profiled said.
+  bool committedArityIncomplete = false;
 };
 
 /// One transformer's body extent and whether it commutes.

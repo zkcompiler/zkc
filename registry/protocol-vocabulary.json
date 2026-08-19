@@ -823,6 +823,37 @@
           }
         }
       ]
+    },
+    "zkc.check.logup-row": {
+      "mode": "transparent",
+      "predicate": {
+        "format": "zkc-transparent-expression"
+      },
+      "parameters": [],
+      "semantic_parameters": [],
+      "operands": [
+        {
+          "role": "helper",
+          "class": "scalar",
+          "multiplicity": {
+            "exact": 1
+          }
+        },
+        {
+          "role": "bus",
+          "class": "scalar",
+          "multiplicity": {
+            "exact": 1
+          }
+        },
+        {
+          "role": "value",
+          "class": "scalar",
+          "multiplicity": {
+            "exact": 1
+          }
+        }
+      ]
     }
   },
   "hole_contracts": {
@@ -3541,7 +3572,50 @@
         }
       ],
       "parameters": {},
-      "checks": {},
+      "checks": {
+        "row": {
+          "contract": "zkc.check.logup-row",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "f_mul",
+              [
+                "role",
+                "helper"
+              ],
+              [
+                "f_add",
+                [
+                  "role",
+                  "bus"
+                ],
+                [
+                  "f_neg",
+                  [
+                    "role",
+                    "value"
+                  ]
+                ]
+              ]
+            ],
+            [
+              "const",
+              "one"
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "beta"
+              },
+              "target_role": "bus"
+            }
+          ]
+        }
+      },
       "constraints": [],
       "outputs": [
         {

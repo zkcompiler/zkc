@@ -8,6 +8,7 @@
 #include "zkc/Registry/RegistryBase.h"
 #include "zkc/Registry/RegistryFile.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <set>
@@ -112,13 +113,18 @@ digestRule(const TerminalRule &rule,
                                    json::Value(std::move(preimage)));
 }
 
-/// The admitted origins. Chunk-by-chunk growth of this set is the point of
-/// naming it: `relation_derived` and `preprocessed` are the shapes the
-/// relation commitment and the preprocessed index become, so they arrive as
-/// values of one field rather than as three sibling mechanisms.
+/// The admitted origins, in one place: the refusal names the same list the
+/// predicate tests, so the two cannot disagree about what is admitted.
+///
+/// Naming the set is the point. A relation-derived commitment and a
+/// preprocessed index are the same object with different provenance, so they
+/// arrive as values of one field rather than as sibling mechanisms each
+/// minting its own shape.
+constexpr llvm::StringLiteral kValueOrigins[] = {
+    "preprocessed", "prover_message", "relation_derived"};
+
 bool admittedOrigin(StringRef origin) {
-  return origin == "prover_message" || origin == "relation_derived" ||
-         origin == "preprocessed";
+  return llvm::is_contained(kValueOrigins, origin);
 }
 
 Expected<ValueProfile> parseValueProfile(const RegistryFile &file, StringRef id,
@@ -143,9 +149,8 @@ Expected<ValueProfile> parseValueProfile(const RegistryFile &file, StringRef id,
           file.requireStringField(*object, "origin", where, profile.origin))
     return std::move(e);
   if (!admittedOrigin(profile.origin))
-    return error("names origin '" + profile.origin +
-                 "', which is not one of prover_message, relation_derived, "
-                 "preprocessed");
+    return error("names origin '" + profile.origin + "', which is not one of " +
+                 llvm::join(llvm::ArrayRef(kValueOrigins), ", "));
   if (Error e = file.requireStringField(*object, "binding_route", where,
                                         profile.bindingRoute))
     return std::move(e);

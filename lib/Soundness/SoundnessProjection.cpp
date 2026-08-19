@@ -692,6 +692,11 @@ projectArtifactFact(const SealedSoundnessView &sealed,
     // arities would leave the rule to choose, and a rule that chooses which
     // number to price with is a rule whose bound is not determined by the
     // artifact.
+    if ((*owner)->committedArityIncomplete)
+      return projectionError(
+          "this reduction has a message member that declares no committed "
+          "content, so the arity its other members declare is not the "
+          "arity of what it commits to");
     if ((*owner)->committedArity.empty())
       return projectionError(
           "this reduction's messages carry no committed value profile, so "

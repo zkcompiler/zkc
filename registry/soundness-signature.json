@@ -4391,7 +4391,7 @@
         "kind": "reduction_contract",
         "ref": {
           "id": "logup_bus",
-          "source_revision": "sha256:0a408f5e9a255c69bc7093b664ebec31d66cac3f15a9dccbf304fc2ced0e22b9"
+          "source_revision": "sha256:50b16eb1df4070a10001a035828eac2b70cc95e6f61833fbcf230f2b6e047685"
         }
       },
       "condition_argument_bindings": {
@@ -4467,6 +4467,46 @@
           {
             "kind": "conclusion_subject",
             "sort": "subject"
+          }
+        ],
+        "S4": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpace",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "bus"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S5": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpace",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "bus"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
           }
         ]
       },
@@ -8383,28 +8423,8 @@
               "bound": {
                 "kind": "quantity",
                 "quantity": {
-                  "kind": "div",
-                  "operands": [
-                    {
-                      "kind": "sub",
-                      "operands": [
-                        {
-                          "case_name": "open",
-                          "field": "challenge_space",
-                          "kind": "contract_round_fact"
-                        },
-                        {
-                          "kind": "rational_literal",
-                          "literal": "1"
-                        }
-                      ]
-                    },
-                    {
-                      "case_name": "open",
-                      "field": "challenge_space",
-                      "kind": "contract_round_fact"
-                    }
-                  ]
+                  "kind": "rational_literal",
+                  "literal": "0"
                 }
               },
               "case_name": "open",
@@ -8439,6 +8459,22 @@
           ],
           "proposition_ref": "zkc.hyp.logup_multiplicities_honest",
           "slot": "S3"
+        },
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.side.field_order_match",
+          "slot": "S4"
+        },
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.side.prime_field_order",
+          "slot": "S5"
         }
       ],
       "id": "zkc.rbr.logup",
@@ -9699,6 +9735,16 @@
         ],
         "ref": {
           "id": "zkc.side.field_order_match",
+          "source_revision": "zkc.soundness.proposition"
+        }
+      },
+      "zkc.side.prime_field_order": {
+        "argument_types": [
+          "subject",
+          "integer"
+        ],
+        "ref": {
+          "id": "zkc.side.prime_field_order",
           "source_revision": "zkc.soundness.proposition"
         }
       }

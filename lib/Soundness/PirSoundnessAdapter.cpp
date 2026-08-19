@@ -835,8 +835,20 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
           for (const auto &occurrence : role.getValue())
             for (mlir::Operation *member : occurrence.second) {
               auto slot = mlir::dyn_cast<pir::SlotOp>(member);
-              if (!slot || !slot.getProfiled())
+              if (!slot)
                 continue;
+              // A member that declares nothing must not be silently passed
+              // over. Skipping it would let a reduction profile one column
+              // and leave the rest undeclared, and the arity a rule prices
+              // with would then be whatever the one profiled member said --
+              // a lookup whose looked-up columns state no size at all would
+              // be priced from its helper. The empty string records "this
+              // reduction has a member with no declared content", which the
+              // projection refuses on rather than averaging over.
+              if (!slot.getProfiled()) {
+                arities.insert(std::string());
+                continue;
+              }
               const registry::ValueProfile *profile =
                   vocabulary.lookupValueProfile(slot.getPayloadClass());
               if (!profile)
@@ -849,12 +861,27 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
               arity.toString(text, 10, /*Signed=*/false);
               arities.insert(std::string(text));
             }
+      // Sorted numerically rather than by decimal text, so the order is the
+      // one a reader expects and a tie cannot depend on digit count.
+      llvm::SmallVector<registry::Rational> exactArities;
       for (const std::string &text : arities) {
+        if (text.empty()) {
+          // An undeclared member. Recorded as a value the projection cannot
+          // read, so a mixed reduction refuses instead of quietly pricing
+          // from the members that happen to declare something.
+          owned.committedArityIncomplete = true;
+          continue;
+        }
         auto exact = registry::Rational::fromDecimal(text);
         if (!exact)
           return exact.takeError();
-        owned.committedArity.push_back(std::move(*exact));
+        exactArities.push_back(std::move(*exact));
       }
+      llvm::sort(exactArities, [](const registry::Rational &lhs,
+                                  const registry::Rational &rhs) {
+        return lhs.compare(rhs) < 0;
+      });
+      owned.committedArity.assign(exactArities.begin(), exactArities.end());
     }
 
     // The transformer's body extent, in canonical event positions.
