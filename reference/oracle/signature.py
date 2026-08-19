@@ -148,6 +148,7 @@ PROJECTION_KINDS = frozenset(
         "path_binding_field",
         "contract_round_family_field",
         "bound_relation_anchor_count",
+        "committed_arity",
     }
 )
 AGGREGATES = frozenset({"unique_equal", "count"})
@@ -829,7 +830,8 @@ def _read_round_selector(node: Any, where: str) -> tuple[str, str | int | None]:
 def _read_artifact_projection(node: Any, where: str) -> ArtifactProjection:
     kind = _tag(node, where, PROJECTION_KINDS)
     if kind in ("conclusion_reduction_contract", "contract_round_adjacency",
-                "reduction_input_count", "bound_relation_anchor_count"):
+                "reduction_input_count", "bound_relation_anchor_count",
+                "committed_arity"):
         entry = _object(node, where, ("kind", "result_sort"))
         return ArtifactProjection(kind, _sort(entry, "result_sort", where))
     if kind in ("reduction_parameter", "path_binding_field"):

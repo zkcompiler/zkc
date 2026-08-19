@@ -3568,6 +3568,12 @@
     }
   },
   "value_profiles": {
+    "logup_column_512": {
+      "arity_log2": 9,
+      "binding_route": "zkc.commit.toy-vector",
+      "element_class": "scalar",
+      "origin": "prover_message"
+    },
     "logup_column_1024": {
       "arity_log2": 10,
       "binding_route": "zkc.commit.toy-vector",

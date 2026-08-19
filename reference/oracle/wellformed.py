@@ -127,6 +127,13 @@ MACHINE_DECIDERS = {
     "duplex_spine": ("zkc.side.duplex_spine", ("path_transition",)),
     "codec_bias_declared": ("zkc.side.codec_bias_declared",
                             ("path_transition",)),
+    # The declared committed arity is the one the spine realizes, and the
+    # lemma's own characteristic hypothesis. Both keep a value profile's
+    # arity from being a producer annotation a bound is priced from.
+    "committed_arity_opens": ("zkc.side.committed_arity_opens",
+                              ("integer", "integer")),
+    "lookup_fits_characteristic": ("zkc.side.lookup_fits_characteristic",
+                                   ("integer", "integer", "integer")),
 }
 
 MACHINE_DECIDER_REVISION = "zkc.soundness"
@@ -681,6 +688,9 @@ def _check_projection(projection, where: str) -> None:
     elif kind == "bound_relation_anchor_count":
         if projection.result_sort != "integer":
             raise Refusal(f"{where} does not produce an integer count")
+    elif kind == "committed_arity":
+        if projection.result_sort != "integer":
+            raise Refusal(f"{where} does not produce an integer arity")
     elif kind == "reduction_parameter":
         if projection.result_sort not in ("integer", "rational", "string",
                                           "boolean"):

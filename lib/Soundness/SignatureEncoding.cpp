@@ -197,6 +197,8 @@ const char *artifactProjectionKindName(ArtifactProjectionKind kind) {
     return "path_binding_field";
   case ArtifactProjectionKind::BoundRelationAnchorCount:
     return "bound_relation_anchor_count";
+  case ArtifactProjectionKind::CommittedArity:
+    return "committed_arity";
   }
   return "unknown";
 }
@@ -247,6 +249,10 @@ const char *machineDeciderKindName(MachineDeciderKind kind) {
     return "same_point";
   case MachineDeciderKind::BatchAfterMaterial:
     return "batch_after_material";
+  case MachineDeciderKind::CommittedArityOpens:
+    return "committed_arity_opens";
+  case MachineDeciderKind::LookupFitsCharacteristic:
+    return "lookup_fits_characteristic";
   case MachineDeciderKind::FriShape:
     return "fri_shape";
   case MachineDeciderKind::JohnsonFoldParam:
@@ -348,6 +354,7 @@ Value encodeArtifactProjection(const ArtifactProjection &projection) {
   case ArtifactProjectionKind::ContractRoundAdjacency:
   case ArtifactProjectionKind::ReductionInputCount:
   case ArtifactProjectionKind::BoundRelationAnchorCount:
+  case ArtifactProjectionKind::CommittedArity:
     break;
   case ArtifactProjectionKind::ReductionParameter:
   case ArtifactProjectionKind::PathBindingField:

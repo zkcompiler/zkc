@@ -174,6 +174,12 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
   switch (kind) {
   case MachineDeciderKind::OneMessageRole:
     return {"zkc.side.one_message_role", {ValueSort::ReductionContract}};
+  case MachineDeciderKind::CommittedArityOpens:
+    return {"zkc.side.committed_arity_opens",
+            {ValueSort::Integer, ValueSort::Integer}};
+  case MachineDeciderKind::LookupFitsCharacteristic:
+    return {"zkc.side.lookup_fits_characteristic",
+            {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer}};
   case MachineDeciderKind::SpaceEmbeds:
     return {"zkc.side.space_embeds",
             {ValueSort::ReductionContract, ValueSort::Integer}};
@@ -407,6 +413,12 @@ RuleWfResult checkArtifactProjection(const ArtifactProjection &projection,
         !projection.field.empty() || !inactiveBaseIsDefault())
       return refuse(RuleWfRefusalCode::InvalidReference, location,
                     "malformed bound-relation-anchor-count projection");
+    return accepted();
+  case ArtifactProjectionKind::CommittedArity:
+    if (projection.resultSort != ValueSort::Integer ||
+        !projection.field.empty() || !inactiveBaseIsDefault())
+      return refuse(RuleWfRefusalCode::InvalidReference, location,
+                    "malformed committed-arity projection");
     return accepted();
   case ArtifactProjectionKind::ReductionParameter:
     if (!simpleField() || (!isNumeric(projection.resultSort) &&

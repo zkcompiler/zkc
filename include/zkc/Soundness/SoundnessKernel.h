@@ -177,6 +177,18 @@ enum class ArtifactProjectionKind {
   /// primitive-game advantage scaled by this count: zero where no
   /// relation identity enters the transcript, and the addend vanishes.
   BoundRelationAnchorCount,
+  /// How much content stands behind the commitments a reduction's own
+  /// messages carry: the arity its value profiles declare, which must be
+  /// one value across them.
+  ///
+  /// A rule that reads this owes a condition tying it back to sealed
+  /// structure. The commitment root occupies one slot whatever it commits
+  /// to, so a declared arity has no structural counterpart on its own, and
+  /// an understated one would understate a bound that grows in it —
+  /// `kernel.md` §9.1's "verified by use" forbids exactly that. Being in
+  /// the type is what makes it sealed; the rule's own condition is what
+  /// makes it checked.
+  CommittedArity,
 };
 
 enum class ProjectionAggregate { UniqueEqual, Count };
@@ -584,6 +596,23 @@ enum class MachineDeciderKind {
   PowAdjacent,
   DuplexSpine,
   CodecBiasDeclared,
+  /// The declared committed arity is the one the spine realizes: an opening
+  /// challenge's space equals it exactly.
+  ///
+  /// This is what keeps a value profile's arity from being a producer
+  /// annotation. A commitment root occupies one slot whatever it commits to,
+  /// so nothing in the spine contradicts an understated arity on its own —
+  /// and the LogUp error grows in it, so understating it understates the
+  /// bound. An opening discipline is the structural counterpart: a challenge
+  /// that indexes into the committed content can only range over what is
+  /// there.
+  CommittedArityOpens,
+  /// The lemma's own hypothesis: multiplicities are field elements, so the
+  /// number of entries must stay below the characteristic. Overflowing
+  /// multiplicities are the known soundness failure of the whole approach
+  /// (Haböck, ePrint 2022/1530, Lemma 5), so a rule without this prices a
+  /// protocol the theorem does not cover.
+  LookupFitsCharacteristic,
 };
 
 struct MachineDeciderDefinition {

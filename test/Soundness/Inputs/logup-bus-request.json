@@ -1,0 +1,42 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.logup@reduction:logup_bus"
+    ],
+    "resolved_parameters": {},
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:38a50577f412112467245977e04ae779d9732f110ab39ea3c6ffcaeec12e3d9e"
+        }
+      },
+      "index": {
+        "notion": "round_by_round",
+        "track": "soundness",
+        "variant": "standard",
+        "model": "",
+        "quantification": "static"
+      },
+      "resource_variables": []
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "reduction",
+        "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "owner_claim": {
+          "claim_index": 1,
+          "descriptor_digest": "sha256:38a50577f412112467245977e04ae779d9732f110ab39ea3c6ffcaeec12e3d9e"
+        },
+        "transformer_position": 1,
+        "output_index": 0
+      },
+      "binding": "zkc.rbr.logup@reduction:logup_bus",
+      "premises": {}
+    }
+  }
+}

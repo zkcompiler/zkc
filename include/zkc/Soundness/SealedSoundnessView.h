@@ -192,6 +192,15 @@ struct SealedReduction {
   std::vector<SealedRoundFact> rounds;
   std::map<std::string, uint64_t, std::less<>> selectedCheckEventPositions;
   std::optional<RoundAdjacencyValue> roundAdjacency;
+  /// How much content stands behind each commitment this reduction's message
+  /// members carry, in canonical order and deduplicated: `2^arity_log2` of
+  /// every value profile they name. Empty where the reduction's messages are
+  /// bare-class values, which is every shipped family but one.
+  ///
+  /// Projected rather than left in the vocabulary because the sealed view is
+  /// registry-free by construction, and a rule that reads a profile fact
+  /// must read it from sealed structure.
+  std::vector<registry::Rational> committedArity;
 };
 
 /// One transformer's body extent and whether it commutes.

@@ -536,7 +536,10 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::JohnsonFoldParam:
     return {ValueSort::Integer};
   case MachineDeciderKind::SpaceCoversBatch:
+  case MachineDeciderKind::CommittedArityOpens:
     return {ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::LookupFitsCharacteristic:
+    return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::UdrDomainFloor:
     return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::FriShape:
@@ -678,11 +681,37 @@ projectArtifactFact(const SealedSoundnessView &sealed,
     return RuntimeValue::integer(std::move(*result));
   }
 
+  if (projection.kind == ArtifactProjectionKind::CommittedArity) {
+    if (projection.resultSort != ValueSort::Integer)
+      return projectionError("committed-arity projection has the wrong "
+                             "result sort");
+    auto owner = reductionAt(sealed, site);
+    if (!owner)
+      return owner.takeError();
+    // One value across the reduction's commitments, or none to read. Two
+    // arities would leave the rule to choose, and a rule that chooses which
+    // number to price with is a rule whose bound is not determined by the
+    // artifact.
+    if ((*owner)->committedArity.empty())
+      return projectionError(
+          "this reduction's messages carry no committed value profile, so "
+          "there is no arity to read");
+    if ((*owner)->committedArity.size() != 1)
+      return projectionError(
+          "this reduction's commitments declare more than one arity, so the "
+          "one a bound would price is not determined");
+    return RuntimeValue::integer((*owner)->committedArity.front());
+  }
+
   auto reduction = reductionAt(sealed, site);
   if (!reduction)
     return reduction.takeError();
 
   switch (projection.kind) {
+  // Both are answered before the reduction is resolved above.
+  case ArtifactProjectionKind::BoundRelationAnchorCount:
+  case ArtifactProjectionKind::CommittedArity:
+    return projectionError("projection kind is answered earlier");
   case ArtifactProjectionKind::ConclusionReductionContract: {
     if (projection.resultSort != ValueSort::ReductionContract)
       return projectionError(
@@ -867,6 +896,17 @@ evaluateMachineDecider(MachineDeciderKind kind,
       }
     }
     return true;
+  }
+  case MachineDeciderKind::CommittedArityOpens:
+    // Equality, not coverage: a challenge ranging over less than the
+    // committed content would leave part of it unopenable, and one ranging
+    // over more would index past it.
+    return number(arguments[0]).compare(number(arguments[1])) == 0;
+  case MachineDeciderKind::LookupFitsCharacteristic: {
+    // table + lookups < characteristic, over the exact integers the rest of
+    // this algebra travels in.
+    auto total = number(arguments[0]).add(number(arguments[1]));
+    return total.compare(number(arguments[2])) < 0;
   }
   case MachineDeciderKind::FriShape: {
     // The declared shape must be the realized one. The equation itself

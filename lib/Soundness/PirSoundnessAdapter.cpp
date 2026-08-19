@@ -823,6 +823,40 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
       owned.rounds.push_back(std::move(*fact));
     }
 
+    // What the reduction's own commitments stand for. A profiled message
+    // member names a value profile; the profile says how much content is
+    // behind it, and a rule that prices in that number reads it here rather
+    // than from a producer's annotation.
+    {
+      std::set<std::string> arities;
+      auto instanceRoles = protocolFacts.memberships().find(reduce.getLabel());
+      if (instanceRoles != protocolFacts.memberships().end())
+        for (const auto &role : instanceRoles->second)
+          for (const auto &occurrence : role.getValue())
+            for (mlir::Operation *member : occurrence.second) {
+              auto slot = mlir::dyn_cast<pir::SlotOp>(member);
+              if (!slot || !slot.getProfiled())
+                continue;
+              const registry::ValueProfile *profile =
+                  vocabulary.lookupValueProfile(slot.getPayloadClass());
+              if (!profile)
+                return adapterError(
+                    "a profiled message member names a value profile the "
+                    "sealed vocabulary does not declare");
+              llvm::APInt arity =
+                  llvm::APInt(profile->arityLog2 + 2, 1).shl(profile->arityLog2);
+              llvm::SmallString<32> text;
+              arity.toString(text, 10, /*Signed=*/false);
+              arities.insert(std::string(text));
+            }
+      for (const std::string &text : arities) {
+        auto exact = registry::Rational::fromDecimal(text);
+        if (!exact)
+          return exact.takeError();
+        owned.committedArity.push_back(std::move(*exact));
+      }
+    }
+
     // The transformer's body extent, in canonical event positions.
     {
       TransformerExtent extent;

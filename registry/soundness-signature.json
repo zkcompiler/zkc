@@ -761,6 +761,32 @@
         }
       ]
     },
+    "zkc.rbr.logup": {
+      "citations": [
+        "Haboeck, Multivariate lookups based on logarithmic derivatives, ePrint 2022/1530, Lemma 5 (set inclusion): over a field of characteristic p > N, the multiset inclusion holds exactly when the fractional sums agree in the rational function field",
+        "Schwartz--Zippel root counting at the sampled bus point: clearing denominators leaves a polynomial identity of degree at most table + lookups, so a false inclusion survives a uniform beta with probability at most (table + lookups) / |F|"
+      ],
+      "formalization_absence": {
+        "demand": "docs/formalization.md#entry-theorems",
+        "repository": "https://github.com/Verified-zkEVM/ArkLib",
+        "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+        "wanted": "the logarithmic-derivative set-inclusion lemma and the (n + m)/|F| bound for one sampled bus point"
+      },
+      "loss_display": "eps_bus = (table + lookups) / |F|; eps_open = 1 - 1/arity",
+      "notes": "This row prices two rounds of the exact bus contract pinned above and nothing else. The bus round is the logarithmic-derivative argument at one sampled point; its bound grows in the table arity, which is read from the committed value's profile and tied to the spine by the opening challenge's space rather than declared beside it. The opening round is a single index into committed content, which is what a spot check is worth without a low-degree test: it is priced honestly rather than assumed away, and a production lookup composes this bus with polynomial machinery that this row does not model. The characteristic condition is the lemma's own hypothesis and is checked, not assumed: overflowing multiplicities are the known soundness failure of the approach. The honest-multiplicity hypothesis is carried as an obligation, not established here.",
+      "statement_basis": [
+        {
+          "anchor": "Lemma 5, set inclusion via logarithmic derivatives",
+          "revision": "2022/1530",
+          "source": "haboeck:multivariate-lookups-2022"
+        },
+        {
+          "anchor": "root-counting lemma",
+          "revision": "n/a",
+          "source": "folklore:schwartz-zippel"
+        }
+      ]
+    },
     "zkc.rbr.ordered_rlc": {
       "citations": [
         "Schwartz--Zippel root counting; the distinct-point KZG equation-batching instance is ePrint 2024/398, Lemma 5",
@@ -4358,6 +4384,127 @@
         }
       },
       "rule": "zkc.rbr.grinding",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
+    "zkc.rbr.logup@reduction:logup_bus": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "logup_bus",
+          "source_revision": "sha256:0a408f5e9a255c69bc7093b664ebec31d66cac3f15a9dccbf304fc2ced0e22b9"
+        }
+      },
+      "condition_argument_bindings": {
+        "S1": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpace",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "open"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S2": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "aggregate": "unique_equal",
+              "field": "ChallengeSpace",
+              "kind": "contract_round_family_field",
+              "result_sort": "integer",
+              "round_selector": {
+                "kind": "round_kind",
+                "round_kind": "bus"
+              }
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
+      "hypothesis_argument_bindings": {
+        "S3": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ]
+      },
+      "id": "zkc.rbr.logup@reduction:logup_bus",
+      "parameter_bindings": {
+        "field_order": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeSpace",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "bus"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "lookups": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "table": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        }
+      },
+      "premise_relations": {},
+      "rule": "zkc.rbr.logup",
       "subject_schema": "zkc.subject.protocol_claim"
     },
     "zkc.rbr.ordered_rlc@reduction:kzg_equation_rlc": {
@@ -8182,6 +8329,156 @@
       "resources": [],
       "status": "admitted"
     },
+    "zkc.rbr.logup": {
+      "artifact_facts": [
+        {
+          "name": "contract",
+          "sort": "reduction_contract"
+        }
+      ],
+      "body": {
+        "kind": "native_round_by_round_entry",
+        "rounds": {
+          "cases": [
+            {
+              "bound": {
+                "kind": "quantity",
+                "quantity": {
+                  "kind": "div",
+                  "operands": [
+                    {
+                      "kind": "add",
+                      "operands": [
+                        {
+                          "kind": "parameter",
+                          "name": "table"
+                        },
+                        {
+                          "kind": "parameter",
+                          "name": "lookups"
+                        }
+                      ]
+                    },
+                    {
+                      "case_name": "bus",
+                      "field": "challenge_space",
+                      "kind": "contract_round_fact"
+                    }
+                  ]
+                }
+              },
+              "case_name": "bus",
+              "challenge_space": {
+                "case_name": "bus",
+                "field": "challenge_space",
+                "kind": "contract_round_fact"
+              },
+              "index_projection": "round_index",
+              "selector": {
+                "kind": "round_kind",
+                "round_kind": "bus"
+              }
+            },
+            {
+              "bound": {
+                "kind": "quantity",
+                "quantity": {
+                  "kind": "div",
+                  "operands": [
+                    {
+                      "kind": "sub",
+                      "operands": [
+                        {
+                          "case_name": "open",
+                          "field": "challenge_space",
+                          "kind": "contract_round_fact"
+                        },
+                        {
+                          "kind": "rational_literal",
+                          "literal": "1"
+                        }
+                      ]
+                    },
+                    {
+                      "case_name": "open",
+                      "field": "challenge_space",
+                      "kind": "contract_round_fact"
+                    }
+                  ]
+                }
+              },
+              "case_name": "open",
+              "challenge_space": {
+                "case_name": "open",
+                "field": "challenge_space",
+                "kind": "contract_round_fact"
+              },
+              "index_projection": "round_index",
+              "selector": {
+                "kind": "round_kind",
+                "round_kind": "open"
+              }
+            }
+          ],
+          "contract_fact_port": "contract",
+          "kind": "contract"
+        }
+      },
+      "conclusion_index": {
+        "model": "",
+        "notion": "round_by_round",
+        "quantification": "static",
+        "track": "soundness",
+        "variant": "standard"
+      },
+      "exact_parameter_pins": [],
+      "external_hypotheses": [
+        {
+          "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.logup_multiplicities_honest",
+          "slot": "S3"
+        }
+      ],
+      "id": "zkc.rbr.logup",
+      "machine_conditions": [
+        {
+          "argument_types": [
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.committed_arity_opens",
+          "slot": "S1"
+        },
+        {
+          "argument_types": [
+            "integer",
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.lookup_fits_characteristic",
+          "slot": "S2"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "table",
+          "sort": "integer"
+        },
+        {
+          "name": "lookups",
+          "sort": "integer"
+        },
+        {
+          "name": "field_order",
+          "sort": "integer"
+        }
+      ],
+      "premises": [],
+      "resources": [],
+      "status": "admitted"
+    },
     "zkc.rbr.ordered_rlc": {
       "artifact_facts": [
         {
@@ -8865,6 +9162,17 @@
           "source_revision": "zkc.soundness"
         }
       },
+      "zkc.side.committed_arity_opens": {
+        "argument_types": [
+          "integer",
+          "integer"
+        ],
+        "kind": "committed_arity_opens",
+        "ref": {
+          "id": "zkc.side.committed_arity_opens",
+          "source_revision": "zkc.soundness"
+        }
+      },
       "zkc.side.duplex_spine": {
         "argument_types": [
           "path_transition"
@@ -8942,6 +9250,18 @@
         "kind": "johnson_slack",
         "ref": {
           "id": "zkc.side.johnson_slack",
+          "source_revision": "zkc.soundness"
+        }
+      },
+      "zkc.side.lookup_fits_characteristic": {
+        "argument_types": [
+          "integer",
+          "integer",
+          "integer"
+        ],
+        "kind": "lookup_fits_characteristic",
+        "ref": {
+          "id": "zkc.side.lookup_fits_characteristic",
           "source_revision": "zkc.soundness"
         }
       },
@@ -9288,6 +9608,15 @@
         "ref": {
           "id": "zkc.hyp.injective_absorb_encoding",
           "source_revision": "zkc.soundness.proposition"
+        }
+      },
+      "zkc.hyp.logup_multiplicities_honest": {
+        "argument_types": [
+          "subject"
+        ],
+        "ref": {
+          "id": "zkc.hyp.logup_multiplicities_honest",
+          "source_revision": "zkc.soundness"
         }
       },
       "zkc.hyp.move_budget_is_query_budget": {

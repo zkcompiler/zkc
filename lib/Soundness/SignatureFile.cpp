@@ -365,6 +365,7 @@ Expected<ArtifactProjection> readArtifactProjection(const Reader &reader,
       {"path_binding_field", ArtifactProjectionKind::PathBindingField},
       {"bound_relation_anchor_count",
        ArtifactProjectionKind::BoundRelationAnchorCount},
+      {"committed_arity", ArtifactProjectionKind::CommittedArity},
   };
   auto kind =
       lookupEnum<ArtifactProjectionKind>(reader, *kindText, kinds, context);
@@ -385,6 +386,7 @@ Expected<ArtifactProjection> readArtifactProjection(const Reader &reader,
   case ArtifactProjectionKind::ContractRoundAdjacency:
   case ArtifactProjectionKind::ReductionInputCount:
   case ArtifactProjectionKind::BoundRelationAnchorCount:
+  case ArtifactProjectionKind::CommittedArity:
     if (Error err = reader.closed(entry, {"kind", "result_sort"}, context))
       return std::move(err);
     return projection;
@@ -1890,6 +1892,9 @@ Expected<SchemaContext> readSchemas(const Reader &reader,
       {"same_point", MachineDeciderKind::SamePoint},
       {"batch_after_material", MachineDeciderKind::BatchAfterMaterial},
       {"fri_shape", MachineDeciderKind::FriShape},
+      {"committed_arity_opens", MachineDeciderKind::CommittedArityOpens},
+      {"lookup_fits_characteristic",
+       MachineDeciderKind::LookupFitsCharacteristic},
       {"johnson_fold_param", MachineDeciderKind::JohnsonFoldParam},
       {"johnson_slack", MachineDeciderKind::JohnsonSlack},
       {"johnson_multiplicity", MachineDeciderKind::JohnsonMultiplicity},

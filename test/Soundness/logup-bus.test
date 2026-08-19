@@ -1,0 +1,60 @@
+# The first rule that reads what a value commits to.
+#
+# A lookup's soundness error grows in the size of the table, so a rule that
+# prices it needs that size — and until now a commitment was a value of some
+# payload class, with nothing in the type to ask. The four mechanisms that
+# reconstructed what a commitment binds on the rule side were all working
+# around that. Here the profile says it and the rule reads it.
+#
+# What keeps the number honest is not that it is written down. A commitment
+# root occupies one slot whatever stands behind it, so a declared arity has
+# no structural contradiction on its own, and understating it understates
+# every bound priced from it — which `kernel.md` §9.1 forbids. The opening
+# round is the counterpart: a challenge that indexes into committed content
+# can only range over what is there, so the rule ties its own number back to
+# the spine.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/logup-bus.mlir %zkc-seal-full -o %t/bus.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/bus.artifacts %t/bus.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/bus.artifacts %t/bus.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/bus.req.json -o=%t/bus.out.json %t/bus.mlirbc > /dev/null
+# RUN: FileCheck %s --check-prefix=BOUND < %t/bus.out.json
+
+# The bus round is the logarithmic-derivative argument at one sampled point
+# (Haböck, ePrint 2022/1530, Lemma 5): clearing denominators leaves a
+# polynomial of degree at most table plus lookups, so a false inclusion
+# survives a uniform point with probability at most that over the field.
+# Both counts are the committed arity read off the value profile — in this
+# shape the table and the looked-up column are columns of one trace — and
+# the field order is the bus challenge's own space. Nothing here was
+# supplied beside the artifact.
+# BOUND: "zkc.hyp.logup_multiplicities_honest"
+# BOUND: "constant": "1/1125899906842624"
+
+# The opening round is one index into committed content, which is what a
+# spot check is worth without a low-degree test. It is priced rather than
+# assumed away, and a production lookup composes this bus with polynomial
+# machinery that this row does not model.
+# BOUND: "constant": "1023/1024"
+
+# The honest-multiplicity hypothesis rides beside the numbers, carried rather
+# than established: it is pinned above, where the witness states it.
+
+# The necessity argument, as a test. The same protocol whose columns declare
+# half the content they carry: the profile is sealed either way, so what
+# refuses is the condition tying it to the spine, and without that condition
+# the bound would have been priced at half the degree it owes.
+# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('logup_column_1024','logup_column_512'))" %S/../Encoding/logup-bus.mlir > %t/understated.mlir
+# RUN: zkc-seal %t/understated.mlir %zkc-seal-full -o %t/under.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/under.artifacts %t/under.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/under.artifacts %t/under.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/under.req.json -o=/dev/null %t/under.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=UNDERSTATED
+# UNDERSTATED: condition_failed at apply.conditions.S1
