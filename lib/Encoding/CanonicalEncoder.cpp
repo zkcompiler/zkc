@@ -717,6 +717,14 @@ private:
       // §6's additive discipline). The families are distinguished by head
       // rather than by arity, because the optional route below is already
       // pushed additively and two optional tails would collide.
+      // The profiled family carries no count, so a counted one would encode
+      // as a scalar commitment. The op verifier refuses that shape at parse,
+      // and this refuses it again: the encoder is fail-closed on its own
+      // input, because it is the identity function and not a second reader
+      // of someone else's guarantee.
+      if (slot.getProfiled() && slot.getCount() != "1")
+        return llvm::createStringError(
+            "a profiled slot carries one commitment and cannot be counted");
       Array slotRow =
           slot.getProfiled()
               ? Array{"slot_profiled", slot.getPayloadClass(),
