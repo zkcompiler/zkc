@@ -387,10 +387,13 @@ private:
     }
 
     llvm::StringMap<uint64_t> expectedMessages;
+    llvm::StringMap<VocabularyDepSource> expectedSource;
     for (const VocabularyRound &round : contract.rounds)
-      for (const VocabularyMessageRole &message : round.messages)
+      for (const VocabularyMessageRole &message : round.messages) {
         expectedMessages[message.role] =
             message.multiplicity.resolve(reduce.getClaims().size());
+        expectedSource[message.role] = message.source;
+      }
     auto instance = messages.find(reduce.getLabel());
     if (instance != messages.end())
       for (const auto &role : instance->second)
@@ -423,6 +426,24 @@ private:
           if (!occurrences->count(index))
             membershipError() << "message role '" << expected.getKey()
                               << "' has a non-canonical occurrence set";
+      // Who fills the role, checked against who the contract says fills it.
+      // The event kind is the carrier's statement of provenance and the
+      // contract's `source` is the vocabulary's; a protocol where they
+      // disagree has two answers to who chose the content.
+      if (occurrences) {
+        bool wantsBind =
+            expectedSource.lookup(expected.getKey()) ==
+            VocabularyDepSource::PublicBind;
+        for (const auto &entry : *occurrences) {
+          bool isBind = mlir::isa<zkc::pir::BindOp>(entry.second.operation);
+          if (isBind != wantsBind)
+            membershipError()
+                << "message role '" << expected.getKey() << "' is filled by "
+                << (isBind ? "a public binding" : "a prover message")
+                << " and the contract declares it filled by "
+                << (wantsBind ? "a public binding" : "a prover message");
+        }
+      }
     }
 
     if (reduce.getDeps().size() == contract.depSlots.size()) {

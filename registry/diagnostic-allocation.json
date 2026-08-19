@@ -424,14 +424,14 @@
       "means": {
         "E241": "retired and dead: it named the version-agreement half of a check that a content-digest pin already decides. The number is never reissued (docs/spec/versioning.md \u00a73)",
         "E243": "a reduce's dependency arity or a round's challenge realization disagrees with its contract",
-        "E244": "a reduce's message occurrences disagree with its contract: missing role, wrong count, duplicate, or non-canonical",
+        "E244": "a reduce's message occurrences disagree with its contract: missing role, wrong count, duplicate, non-canonical, or filled by an event kind the role does not name",
         "E245": "one challenge fills two dependency slots, or is shared by two reductions",
         "E247": "a claim profile is not admitted by the protocol vocabulary",
         "E248": "pir-link ran without a protocol-vocabulary authority"
       },
       "means_basis": {
         "E243": "ee6de5ee2576f84bc578ce2c84f33bda51a124dfaedb6c2c865ee8f30d0f43d3",
-        "E244": "7547f7c44177c9b9c0243315b2423f1b19e3e95277b1d4d300e640a91cb0b4d8",
+        "E244": "9f91844b0e4a87a16faee81e0c01e2450893e9c3ca3196d02fb37991b533a019",
         "E245": "5f215318566fc997bdcf070fd54128beec4c8da3196bbbffd87f4fb2cd78c17e",
         "E247": "009474266b6542ca359e1e6053ef2eb35203f8455bc16ead73f587b5df617ae4",
         "E248": "d88377835817a958533f4bbbc58df787988f936a58c0d0660fd4dfc13b696636"

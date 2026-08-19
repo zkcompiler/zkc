@@ -220,9 +220,23 @@ struct MessageMultiplicity {
   llvm::json::Value toCanonicalJson() const;
 };
 
+enum class VocabularyDepSource {
+  Any,
+  PublicBind,
+  ProverSlot,
+  ChallengeCapability,
+};
+
 struct VocabularyMessageRole {
   std::string role;
   MessageMultiplicity multiplicity;
+  /// Which transcript event fills this role.  A round's messages are prover
+  /// material by default; a role whose content the statement fixes — a
+  /// preprocessed table is the canonical case — is filled by a public
+  /// binding instead, and says so, because a reader of the contract cannot
+  /// otherwise tell who chose the content.  Only `ProverSlot` and
+  /// `PublicBind` are admitted here (docs/spec/vocabularies.md).
+  VocabularyDepSource source = VocabularyDepSource::ProverSlot;
 };
 
 /// One priced use of a transcript-derived challenge capability.  The role
@@ -251,13 +265,6 @@ struct VocabularyRound {
 /// the named carrier capability.  This axis is orthogonal to challenge use:
 /// rounds, not this enum, identify the dependencies whose sample spaces enter
 /// theorem pricing.
-enum class VocabularyDepSource {
-  Any,
-  PublicBind,
-  ProverSlot,
-  ChallengeCapability,
-};
-
 struct VocabularyDepSlot {
   std::string role;
   VocabularyDepSource source = VocabularyDepSource::Any;

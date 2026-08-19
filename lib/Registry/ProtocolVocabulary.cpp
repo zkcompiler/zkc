@@ -1203,8 +1203,8 @@ Expected<ReductionContract> parseReductionContract(
           (Twine(context) + " message " + Twine(messageIndex)).str();
       if (!message)
         return file.error(messageContext + " must be an object");
-      if (Error e = file.requireClosedFields(*message, {"role", "count"},
-                                             messageContext))
+      if (Error e = file.requireClosedFields(
+              *message, {"role", "count", "source"}, messageContext))
         return std::move(e);
       VocabularyMessageRole role;
       if (Error e = file.requireStringField(*message, "role", messageContext,
@@ -1223,6 +1223,21 @@ Expected<ReductionContract> parseReductionContract(
       if (!roles.insert(role.role).second)
         return error("role '" + role.role + "' is declared twice");
       role.multiplicity = *multiplicity;
+      // Absent is the prover-message default, so every contract written
+      // before this field keeps its meaning; the two other dep sources name
+      // things a round message cannot be.
+      if (const json::Value *source = message->get("source")) {
+        auto text = source->getAsString();
+        if (!text)
+          return file.error(messageContext + " 'source' must be a string");
+        if (*text == "prover_slot")
+          role.source = VocabularyDepSource::ProverSlot;
+        else if (*text == "public_bind")
+          role.source = VocabularyDepSource::PublicBind;
+        else
+          return file.error(messageContext +
+                            " 'source' must be prover_slot or public_bind");
+      }
       parsed.messages.push_back(std::move(role));
     }
     contract.rounds.push_back(std::move(parsed));
@@ -2403,10 +2418,16 @@ json::Value ReductionContract::toCanonicalJson() const {
   }
   for (const VocabularyRound &round : rounds) {
     json::Array messages;
-    for (const VocabularyMessageRole &message : round.messages)
-      messages.push_back(
-          json::Object{{"count", message.multiplicity.toCanonicalJson()},
-                       {"role", message.role}});
+    for (const VocabularyMessageRole &message : round.messages) {
+      json::Object body{{"count", message.multiplicity.toCanonicalJson()},
+                        {"role", message.role}};
+      // Emitted only when it is not the default, so every contract written
+      // before the field keeps its exact digest (docs/spec/versioning.md's
+      // additive discipline).
+      if (message.source == VocabularyDepSource::PublicBind)
+        body["source"] = "public_bind";
+      messages.push_back(std::move(body));
+    }
     json::Object body{{"challenge_use", round.challengeUse.toCanonicalJson()},
                       {"messages", std::move(messages)}};
     if (!round.kind.empty())

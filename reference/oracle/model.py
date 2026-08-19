@@ -1108,7 +1108,8 @@ class ProtocolVocabulary:
             for message in round_["messages"]:
                 if (
                     not isinstance(message, dict)
-                    or set(message) != {"role", "count"}
+                    or set(message) - {"role", "count", "source"}
+                    or not {"role", "count"} <= set(message)
                     or not isinstance(message["role"], str)
                     or not message["role"]
                     or message["role"] in dep_roles
@@ -1135,9 +1136,22 @@ class ProtocolVocabulary:
                 else:
                     raise Refusal(f"{where} has malformed tagged message count")
                 message_counts[message["role"]] = normalized_count
-                messages.append(
-                    {"count": normalized_count, "role": message["role"]}
-                )
+                normalized_message = {
+                    "count": normalized_count,
+                    "role": message["role"],
+                }
+                # Absent is the prover-message default, so a contract written
+                # before this field keeps its digest; the field is emitted
+                # only when it says something else.
+                if "source" in message:
+                    if message["source"] not in ("prover_slot", "public_bind"):
+                        raise Refusal(
+                            f"{where} message source must be prover_slot or "
+                            "public_bind"
+                        )
+                    if message["source"] == "public_bind":
+                        normalized_message["source"] = "public_bind"
+                messages.append(normalized_message)
             normalized_round = {
                 "challenge_use": normalized_challenge_use,
                 "messages": messages,
@@ -2971,9 +2985,11 @@ def _validate_contract_shape(
     positions = {event.label: index for index, event in enumerate(event_sequence)}
     claim_profiles = {entry.label: entry.profile for entry in protocol["sources"]}
 
-    membership: dict[str, dict[str, dict[int, Slot]]] = {}
+    # A contract role is filled by whatever carries the material: a slot for
+    # prover messages, a public binding for content the statement fixes.
+    membership: dict[str, dict[str, dict[int, Slot | Bind]]] = {}
     for event in event_sequence:
-        if not isinstance(event, Slot) or event.membership is None:
+        if not isinstance(event, (Slot, Bind)) or event.membership is None:
             continue
         instance, role, index = event.membership
         occurrences = membership.setdefault(instance, {}).setdefault(role, {})
@@ -3041,6 +3057,11 @@ def _validate_contract_shape(
             for round_ in contract["rounds"]
             for message in round_["messages"]
         }
+        declared_sources = {
+            message["role"]: message.get("source", "prover_slot")
+            for round_ in contract["rounds"]
+            for message in round_["messages"]
+        }
         bound_messages = membership.get(reduce.label, {})
         for role in bound_messages:
             if role not in declared_messages:
@@ -3054,7 +3075,12 @@ def _validate_contract_shape(
             # slot occurrence contributes its declared count and a value
             # is never split — the check-operand segmentation rule
             # (docs/spec/vocabularies.md), applied to round messages.
-            units = sum(int(slot.count) for slot in occurrences.values())
+            # A public binding is one unit: its content is the sequence the
+            # profile declares, which no count multiplies.
+            units = sum(
+                1 if isinstance(member, Bind) else int(member.count)
+                for member in occurrences.values()
+            )
             if units != count:
                 raise Refusal(
                     f"[zkc-E244] message role {role!r} needs {count} "
@@ -3065,6 +3091,23 @@ def _validate_contract_shape(
                     f"[zkc-E244] message role {role!r} has a non-canonical "
                     f"occurrence set {sorted(occurrences)}"
                 )
+            # Who fills the role, against who the contract says fills it.
+            # The event kind is the carrier's statement of provenance and
+            # the contract's source is the vocabulary's; a protocol where
+            # they disagree has two answers to who chose the content.
+            wants_bind = declared_sources[role] == "public_bind"
+            for occurrence in occurrences.values():
+                if isinstance(occurrence, Bind) != wants_bind:
+                    filled = ("a public binding"
+                              if isinstance(occurrence, Bind)
+                              else "a prover message")
+                    declared = ("a public binding" if wants_bind
+                                else "a prover message")
+                    raise Refusal(
+                        f"[zkc-E244] message role {role!r} is filled by "
+                        f"{filled} and the contract declares it filled by "
+                        f"{declared}"
+                    )
 
         prior_challenges: list[tuple[str, Chal]] = []
         covered_roles: list[str] = []
