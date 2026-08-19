@@ -89,3 +89,29 @@
 # RUN:   --request=%t/tiny.req.json -o=/dev/null %t/tiny.mlirbc 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=OVERFLOW
 # OVERFLOW: condition_failed at apply.conditions.S2
+
+# The compiled judgment, over an artifact whose table is a public binding.
+# The Fiat-Shamir path is infrastructure rather than a per-family
+# construction, so a family that did not exist when it landed compiles
+# through it unchanged — and a seal-stage profiled binding absorbs a
+# seal-time constant, which is material the duplex already models. Round
+# coverage sees this reduction's challenge owned, so nothing is left out of
+# the bound.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); p=d['derivation']['plan']; c=d['derivation']['target']['subject']['claim']; a=d['derivation']['target']['subject']['artifact_id']; sr={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','premises':{'source_rbr':p}}; d['derivation']['plan']={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard','premises':{'source_sr':sr}}; d['derivation']['selected_bindings'] += ['zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard']; d['derivation']['target']['index']={'notion':'fiat_shamir','track':'soundness','variant':'standard','model':'duplex','quantification':'static'}; d['derivation']['target']['resource_variables']=[{'name':'t','sort':'integer'},{'name':'tau','sort':'integer'}]; json.dump(d, open(sys.argv[2],'w'))" %t/rc.req.json %t/fs.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/fs.req.json -o=/dev/null %t/rc.mlirbc | FileCheck %s --check-prefix=COMPILED
+# COMPILED: artifact judgment
+# COMPILED-NOT: belongs to no transformer
+
+# The structural half of the derivation, on both implementations. The bounds
+# themselves are C++-only; the shared surface is the plan the two legs walk
+# to reach them.
+# RUN: %if uv %{ zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.req.json --skeleton -o=%t/zkc.skeleton.json %t/rc.mlirbc %}
+# RUN: %if uv %{ %uv python -m oracle.parity derive-skeleton logup-range-check \
+# RUN:   %t/rc.req.json > %t/oracle.skeleton.json %}
+# RUN: %if uv %{ diff %t/zkc.skeleton.json %t/oracle.skeleton.json %}
