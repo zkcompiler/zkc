@@ -114,3 +114,26 @@
 # NARROW-SAME: challenge 'fold' is not a duplex squeeze this analysis can model
 # NARROW-SAME: it samples 340282366762482138490186164457219031041 through codec 'ts_be8'
 # NARROW-SAME: whose 8 squeeze symbols frame only 18446744073709551616
+
+# The display beside the exact witness. Each term is shown at its own ceiling
+# rather than summed, because t and tau are the adversary's resources and a
+# single number would need values for them that no rule supplied. The game
+# advantage has no ceiling to show at all -- it is an assumption, scaled by a
+# count this artifact carries -- so it is named instead of rounded.
+# RUN: zkc-derive --headline --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/b.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/b.req.json -o=%t/b.headline.json %t/b.mlirbc | FileCheck %s --check-prefix=HEADLINE
+# HEADLINE: headline term constant: <= 2^-159
+# HEADLINE-NEXT: headline term t: <= 2^-22
+# HEADLINE-NEXT: headline term t^2: <= 2^-251
+# HEADLINE-NEXT: headline term zkc.assume.sha256_216_collision: 1 x its advantage
+# HEADLINE-NEXT: headline obligation: zkc.hyp.smooth_subgroup_fri_domain
+
+# The display never decides whether the witness exists: the same run writes
+# the exact witness, and it is the witness the checker re-derives from.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/b.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/b.headline.json %t/b.mlirbc | FileCheck %s --check-prefix=REDERIVES
+# REDERIVES: zkc-derive: witness re-derives

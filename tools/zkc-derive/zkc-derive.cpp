@@ -281,6 +281,19 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // Writing the exact witness is the tool's product, and every path below
+  // reaches it: a display that returned early would let --headline decide
+  // whether the witness exists.
+  auto finish = [&]() -> int {
+    std::error_code error;
+    llvm::ToolOutputFile out(outputFilename, error, llvm::sys::fs::OF_Text);
+    if (error)
+      return fail("cannot write '" + outputFilename + "': " + error.message());
+    out.os() << llvm::formatv("{0:2}", *witness) << "\n";
+    out.keep();
+    return 0;
+  };
+
   // The display view: presentation of the exact witness, never a
   // judgment of its own. Each round's loss is shown as a power-of-two
   // ceiling (epsilon rounds up, so the shown exponent never overstates
@@ -294,9 +307,82 @@ int main(int argc, char **argv) {
         conclusion ? conclusion->getObject("result") : nullptr;
     const llvm::json::Array *rounds =
         result ? result->getArray("rounds") : nullptr;
-    if (!rounds)
-      return fail("--headline displays round-by-round results; this "
-                  "witness concludes in a different notion");
+    // A compiled conclusion is one bound over the whole transcript rather
+    // than a round sequence, and it is the judgment a reader of this tool
+    // came for. Each term is shown at its own ceiling instead of being
+    // summed: t and tau are the adversary's resources, so a single number
+    // would need values for them that no rule supplied.
+    const llvm::json::Object *scalar =
+        rounds ? nullptr : (result ? result->getObject("bound") : nullptr);
+    // A completeness judgment also concludes in one bound, and displaying it
+    // beside the soundness ones would let an honest-prover failure rate read
+    // as an adversary's advantage. The track is what separates them, so it is
+    // what this reads -- the shape does not.
+    const llvm::json::Object *index = conclusion->getObject("index");
+    llvm::StringRef track = index ? *index->getString("track") : "";
+    const bool security = track == "soundness" || track == "knowledge";
+    if (!security)
+      return fail("--headline displays a security bound; this witness "
+                  "concludes on the " +
+                  track + " track");
+    if (!rounds && !scalar)
+      return fail("--headline displays a bound; this witness carries no "
+                  "round sequence and no scalar bound");
+    if (scalar) {
+      const llvm::json::Object *quantity = scalar->getObject("quantity");
+      auto show = [&](llvm::StringRef term, llvm::StringRef constant) -> bool {
+        auto [num, den] = constant.split('/');
+        auto value = den.empty()
+                         ? zkc::registry::Rational::fromDecimal(num)
+                         : zkc::registry::Rational::fromDecimalPair(num, den);
+        if (!value) {
+          llvm::consumeError(value.takeError());
+          return false;
+        }
+        if (value->isZero())
+          return true;
+        auto ceiling = value->ceilLog2();
+        if (!ceiling) {
+          llvm::consumeError(ceiling.takeError());
+          return false;
+        }
+        llvm::outs() << "headline term " << term << ": <= 2^" << *ceiling
+                     << "\n";
+        return true;
+      };
+      if (!show("constant", *quantity->getString("constant")))
+        return fail("--headline cannot display this witness's constant term");
+      if (const llvm::json::Array *terms =
+              quantity->getArray("resource_terms"))
+        for (const llvm::json::Value &entry : *terms) {
+          const llvm::json::Object *term = entry.getAsObject();
+          llvm::StringRef name = *term->getString("resource");
+          int64_t exponent = *term->getInteger("exponent");
+          std::string label =
+              exponent == 1 ? name.str()
+                            : (name + "^" + llvm::Twine(exponent)).str();
+          if (!show(label, *term->getString("coefficient")))
+            return fail("--headline cannot display this witness's " + label +
+                        " term");
+        }
+      // A game advantage has no numeric ceiling to show: it is an assumption
+      // the bound rests on, scaled by a count this artifact carries.
+      if (const llvm::json::Array *games =
+              scalar->getArray("primitive_game_terms"))
+        for (const llvm::json::Value &entry : *games) {
+          const llvm::json::Object *game = entry.getAsObject();
+          llvm::outs() << "headline term " << *game->getObject("game")
+                                                  ->getString("id")
+                       << ": " << *game->getString("coefficient")
+                       << " x its advantage\n";
+        }
+      if (const llvm::json::Array *obligations =
+              conclusion->getArray("qualitative_obligations"))
+        for (const llvm::json::Value &entry : *obligations)
+          llvm::outs() << "headline obligation: " << *entry.getAsString()
+                       << "\n";
+      return finish();
+    }
     std::optional<int64_t> weakest;
     for (const llvm::json::Value &entry : *rounds) {
       const llvm::json::Object *round = entry.getAsObject();
@@ -337,11 +423,5 @@ int main(int argc, char **argv) {
         llvm::outs() << "headline obligation: " << *entry.getAsString() << "\n";
   }
 
-  std::error_code error;
-  llvm::ToolOutputFile out(outputFilename, error, llvm::sys::fs::OF_Text);
-  if (error)
-    return fail("cannot write '" + outputFilename + "': " + error.message());
-  out.os() << llvm::formatv("{0:2}", *witness) << "\n";
-  out.keep();
-  return 0;
+  return finish();
 }
