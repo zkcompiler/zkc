@@ -7,8 +7,8 @@
 // prevent. So the resolution is explicit, and it fails closed.
 
 // RUN: not zkc-opt %pir-seal-full %s 2>&1 | FileCheck %s
-// CHECK: [zkc-E166] slot 'cols' names value profile 'no_such_profile'
-// CHECK-SAME: which the sealed vocabulary does not declare
+// CHECK: [zkc-E166] value profile 'no_such_profile', named by slot 'cols'
+// CHECK-SAME: is not declared by the sealed vocabulary
 
 pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv = "artifact-id", sponge = "toy_duplex"} policy "analysis_only_artifact" {
   %relation = pir.instantiate "air" anchors {contract = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"} : !pir.claim<"opaque_relation">
@@ -38,3 +38,16 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // RUN:   | FileCheck %s --check-prefix=NOCODEC
 // NOCODEC: [zkc-E221] payload class 'no_such_class' has no codec in kappa.codecs
 // NOCODEC-SAME: it is the element class of value profile 'uncodeced'
+
+// A profile's `origin` says who chose the content; the event carrying it
+// says the same thing in the carrier's own terms — a slot is prover
+// material, a public binding is material the statement fixes. They are one
+// fact with two spellings, so an artifact whose profile claims one
+// provenance while its transcript shows another is refused rather than
+// sealed with the disagreement inside it.
+// RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); [p.update(origin='preprocessed') for p in d['value_profiles'].values()]; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t.origin.json
+// RUN: not zkc-opt -pir-seal='protocol-vocabulary=%t.origin.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/logup-bus.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=SEAT
+// SEAT: [zkc-E169] value profile 'logup_column_1024' declares origin 'preprocessed'
+// SEAT-SAME: does not belong on slot 'values'
+// SEAT-SAME: that seat carries content of origin 'prover_message'

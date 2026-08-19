@@ -657,15 +657,31 @@ private:
   /// fail-closed on purpose: an unresolved name is refused here rather than
   /// read as a payload class nobody declared, which is what a single
   /// namespace for the two would have done.
-  void requireValueProfile(zkc::pir::SlotOp op) {
+  /// A value profile's `origin` says who chose the content; the event
+  /// carrying it says the same thing in the carrier's own terms — a slot is
+  /// prover material, a bind is material the statement fixes. One fact with
+  /// two spellings must agree, or an artifact declares a provenance its
+  /// transcript contradicts (docs/spec/vocabularies.md). `seat` names the
+  /// event in the diagnostic; `admitted` is the origin that belongs on it.
+  template <typename OpT>
+  void requireValueProfile(OpT op, llvm::StringRef seat,
+                           llvm::StringRef admitted) {
     const zkc::registry::ValueProfile *profile =
         vocabulary.lookupValueProfile(op.getPayloadClass());
     if (!profile) {
-      error(op) << "[zkc-E166] slot '" << op.getLabel()
-                << "' names value profile '" << op.getPayloadClass()
-                << "', which the sealed vocabulary does not declare";
+      error(op) << "[zkc-E166] value profile '" << op.getPayloadClass()
+                << "', named by " << seat << " '" << op.getLabel()
+                << "', is not declared by the sealed vocabulary";
       return;
     }
+    if (profile->origin != admitted)
+      error(op) << "[zkc-E169] value profile '" << op.getPayloadClass()
+                << "' declares origin '" << profile->origin
+                << "', which does not belong on " << seat << " '"
+                << op.getLabel() << "': that seat carries content of origin '"
+                << admitted
+                << "', and the event a value enters on is the carrier's own "
+                   "statement of who chose it";
     requireCodec(op, profile->elementClass, op.getPayloadClass());
   }
 
@@ -726,7 +742,10 @@ private:
         collectMembership(&op, member.getMembership());
       llvm::TypeSwitch<Operation *>(&op)
           .Case<zkc::pir::BindOp>([&](zkc::pir::BindOp op) {
-            requireCodec(op, op.getPayloadClass());
+            if (op.getProfiled())
+              requireValueProfile(op, "binding", "preprocessed");
+            else
+              requireCodec(op, op.getPayloadClass());
             // A seal-stage binding is a constant and must say which; an
             // instance-stage binding is a runtime input and must not.
             bool sealStage = op.getStage() == zkc::pir::Stage::Seal;
@@ -753,7 +772,7 @@ private:
           })
           .Case<zkc::pir::SlotOp>([&](zkc::pir::SlotOp op) {
             if (op.getProfiled())
-              requireValueProfile(op);
+              requireValueProfile(op, "slot", "prover_message");
             else
               requireCodec(op, op.getPayloadClass());
             if (op.getUnabsorbed() && !firstUnabsorbed)

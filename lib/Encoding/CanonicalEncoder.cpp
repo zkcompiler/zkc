@@ -684,6 +684,23 @@ private:
         op);
   }
 
+  /// A contract role's occupant is encoded the same way whoever fills it:
+  /// the owning transformer's position, the role, and the occurrence index.
+  llvm::Expected<JValue> encodeMembership(std::optional<pir::Membership> m) {
+    if (!m)
+      return JValue(nullptr);
+    if (llvm::Error err = checkStrings({m->role}))
+      return std::move(err);
+    // Fail closed like every other encoder path: a dangling instance must
+    // never alias onto transformer position 0.
+    pir::ReduceOp owner = reduceByLabel.lookup(m->instance);
+    if (!owner)
+      return llvm::createStringError(
+          "membership instance does not resolve to a reduce");
+    return JValue(Array{reduceTransformer.lookup(owner.getOperation()),
+                        m->role, m->idx});
+  }
+
   llvm::Error encodeEvent(Operation *op) {
     if (auto bind = dyn_cast<pir::BindOp>(op)) {
       if (llvm::Error err = checkStrings(
@@ -692,25 +709,28 @@ private:
       JValue value = nullptr;
       if (bind.getValue())
         value = *bind.getValue();
-      events.push_back(Array{"bind", bind.getPayloadClass(),
-                             stringifyStage(bind.getStage()),
-                             std::move(value)});
+      // A profiled binding is its own event family, exactly as a profiled
+      // slot is: it carries the profile name where the scalar family carries
+      // a payload class, and its membership beside it, so no row outside the
+      // protocols that use one moves (docs/spec/carrier.md §6).
+      if (bind.getProfiled()) {
+        auto membership = encodeMembership(bind.getMembership());
+        if (!membership)
+          return membership.takeError();
+        events.push_back(Array{"bind_profiled", bind.getPayloadClass(),
+                               stringifyStage(bind.getStage()),
+                               std::move(value), std::move(*membership)});
+      } else {
+        events.push_back(Array{"bind", bind.getPayloadClass(),
+                               stringifyStage(bind.getStage()),
+                               std::move(value)});
+      }
     } else if (auto slot = dyn_cast<pir::SlotOp>(op)) {
       if (llvm::Error err = checkStrings({slot.getPayloadClass()}))
         return err;
-      JValue membership = nullptr;
-      if (auto m = slot.getMembership()) {
-        if (llvm::Error err = checkStrings({m->role}))
-          return err;
-        // Fail closed like every other encoder path: a dangling
-        // instance must never alias onto transformer position 0.
-        pir::ReduceOp owner = reduceByLabel.lookup(m->instance);
-        if (!owner)
-          return llvm::createStringError(
-              "membership instance does not resolve to a reduce");
-        membership = Array{reduceTransformer.lookup(owner.getOperation()),
-                           m->role, m->idx};
-      }
+      auto membership = encodeMembership(slot.getMembership());
+      if (!membership)
+        return membership.takeError();
       // A counted slot is its own event family, and so is a profiled one:
       // the scalar family's rows keep their exact historical encoding, so
       // no identity outside the new protocols moves (docs/spec/carrier.md
@@ -728,12 +748,12 @@ private:
       Array slotRow =
           slot.getProfiled()
               ? Array{"slot_profiled", slot.getPayloadClass(),
-                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)}
+                      slot.getUnabsorbed() ? 0 : 1, std::move(*membership)}
           : slot.getCount() == "1"
               ? Array{"slot", slot.getPayloadClass(),
-                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)}
+                      slot.getUnabsorbed() ? 0 : 1, std::move(*membership)}
               : Array{"slot_vec", slot.getPayloadClass(), slot.getCount(),
-                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)};
+                      slot.getUnabsorbed() ? 0 : 1, std::move(*membership)};
       // The construction-route binding is identity content, emitted
       // additively with its references normalized to positions, so an
       // unbound slot encodes exactly as before and renaming stays

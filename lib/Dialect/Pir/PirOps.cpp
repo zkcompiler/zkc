@@ -41,7 +41,7 @@ BindOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          SmallVectorImpl<Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(getThreadType(ctx));
   inferredReturnTypes.push_back(
-      ValType::get(ctx, adaptor.getPayloadClass(), /*profiled=*/false));
+      ValType::get(ctx, adaptor.getPayloadClass(), adaptor.getProfiled()));
   return success();
 }
 
@@ -220,7 +220,7 @@ verifyChallengeCapability(ChallengeCapabilityOpInterface capability) {
 /// Membership from a slot's instance/role/idx props: absent only when
 /// all three are unset, so a half-set shape is visible to the verifier
 /// (zkc-E152) instead of silently reading as "no membership".
-static std::optional<Membership> membershipOf(SlotOp op) {
+template <typename OpT> static std::optional<Membership> membershipOf(OpT op) {
   if (!op.getInstance() && !op.getRole() && op.getIdx() == 0)
     return std::nullopt;
   return Membership{op.getInstance().value_or(llvm::StringRef()),
@@ -286,7 +286,14 @@ llvm::StringRef SlotOp::getMemberLabel() { return getLabel(); }
 Value SlotOp::getThreadIn() { return getThread(); }
 Value SlotOp::getThreadOut() { return getOut(); }
 bool SlotOp::isAbsorbing() { return !getUnabsorbed(); }
+Value SlotOp::getMemberValue() { return getVal(); }
 std::optional<Membership> SlotOp::getMembership() {
+  return membershipOf(*this);
+}
+
+Value BindOp::getMemberValue() { return getVal(); }
+
+std::optional<Membership> BindOp::getMembership() {
   return membershipOf(*this);
 }
 

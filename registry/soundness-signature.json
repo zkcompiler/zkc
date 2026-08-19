@@ -268,7 +268,7 @@
       ]
     },
     "zkc.hyp.commitment_binds_declared_arity": {
-      "notes": "discharged at: the binding route the value profile names, once that construction is compiled. No fact of the sealed spine implies it. A commitment root occupies one transcript slot whatever stands behind it, and an opening challenge ranging over the declared length is satisfiable by a prover who committed to more, so overstatement is caught and understatement is not - and understatement is the direction that understates the bound.",
+      "notes": "Two obligations travel together here: the commitment determines its content at all, and that content has the declared length. Both are used - a sampling argument over the committed sequences needs them fixed before the challenge, and a bound that grows in the length needs the length. Discharged at the seat the profile origin names: a binding route (a commitment construction opening relation) for prover-committed content, an anchor preimage for preprocessed content. No fact of the sealed spine implies either. A commitment root occupies one transcript slot whatever stands behind it, so a prover who committed to more than the profile declares is consistent with every spine fact, and understatement is the direction that understates the bound.",
       "statement": "each commitment described by one of the subject's value profiles binds a sequence of exactly the declared length, under that profile's binding route"
     },
     "zkc.hyp.logup_multiplicities_honest": {
@@ -280,7 +280,7 @@
           "source": "eprint:2022/1530"
         }
       ],
-      "statement": "the committed multiplicity column holds, for each table entry, the number of looked-up values equal to it, as a field element rather than a count wrapped modulo the characteristic"
+      "statement": "the committed multiplicity column holds, for each table entry, the number of looked-up values equal to it divided by the number of table entries equal to it, as a field element rather than a count wrapped modulo the characteristic"
     },
     "zkc.hyp.codec_validated_opening": {
       "notes": "discharged at: carrier codec validation",

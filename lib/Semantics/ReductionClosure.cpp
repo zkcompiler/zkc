@@ -122,10 +122,14 @@ private:
         checksByLabel[check.getLabel()] = check;
       } else if (auto binding = dyn_cast<MaterialBindOp>(operation)) {
         bindingsByValue[binding.getValue()] = binding;
-      } else if (auto slot = dyn_cast<SlotOp>(operation)) {
-        if (auto membership = slot.getMembership())
-          messages[membership->instance][membership->role][membership->idx] = {
-              slot.getVal(), slot.getOperation()};
+      } else if (auto member =
+                     dyn_cast<ProtocolMemberOpInterface>(operation)) {
+        // A role is filled by whatever carries the material: a slot for
+        // prover messages, a bind for statement-fixed content.
+        if (auto membership = member.getMembership())
+          if (Value carried = member.getMemberValue())
+            messages[membership->instance][membership->role][membership->idx] =
+                {carried, member.getOperation()};
       }
     }
 

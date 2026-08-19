@@ -182,7 +182,8 @@
         "E164",
         "E165",
         "E166",
-        "E167"
+        "E167",
+        "E169"
       ],
       "means": {
         "E161": "a verifier value carries more than one semantic material binding",
@@ -191,7 +192,8 @@
         "E164": "a bounded artifact verification names a proof slot that is not a slot of the artifact, or has no canonical position to order slots against",
         "E165": "a bounded artifact verification names a proof slot that follows it on the spine, so the child would consume material not yet in the stream",
         "E166": "a slot names a value profile the sealed vocabulary does not declare",
-        "E167": "a profiled slot is also counted, and a vector of commitments is a shape no value profile states"
+        "E167": "a profiled slot is also counted, and a vector of commitments is a shape no value profile states",
+        "E169": "a value profile's declared origin does not belong on the transcript event carrying it: prover material enters as a slot, statement-fixed material as a public binding"
       },
       "means_basis": {
         "E161": "8ce9df859e967db7e5ece0df4c7a99f219571b3a9bdeb90e5a85e25e95b806f2",
@@ -199,8 +201,9 @@
         "E163": "af3dc93e5309591d87c134be2468fedbbf9e9f7567a342976b5a65afaf5555cf",
         "E164": "ee85c8d24a33b956615f961fe23fb69c94f14d42ffd7f9d14b4e6a4f5fd64731",
         "E165": "cbf872087e75bf1489b9d5055423569d3784e8be01efb38cf849c1cc7e580bc7",
-        "E166": "ef835758e0fa90f1f7dcf15690a234baa2c19abf084af645e062c0ef5b7c4437",
-        "E167": "a3ca1418dfdf5f8f36f1f1d37d8a4fcd3777f97814c2bc0d72f8da759e653ae7"
+        "E166": "d88960e143c25babee23d872872b7ad766f96b0beb640897d24502f9b937063d",
+        "E167": "a3ca1418dfdf5f8f36f1f1d37d8a4fcd3777f97814c2bc0d72f8da759e653ae7",
+        "E169": "a60f615a9547c3361701f8c5e796b5d5f62c56e333bfee7415fa6e7f561caacd"
       },
       "range": "E160-E169",
       "reserved": [],
@@ -216,7 +219,8 @@
           "E164",
           "E165",
           "E166",
-          "E167"
+          "E167",
+          "E169"
         ]
       }
     },

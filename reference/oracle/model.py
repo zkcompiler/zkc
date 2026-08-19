@@ -2014,6 +2014,11 @@ class Bind(NamedTuple):
     payload_class: str
     stage: str
     value: str | None
+    membership: tuple[str, str, int] | None = None
+    #: When set, ``payload_class`` names a value profile rather than a payload
+    #: class: the bound material is a sequence of the profile's declared
+    #: length, entering the transcript as a public binding.
+    profiled: bool = False
 
 
 class Slot(NamedTuple):
@@ -2106,8 +2111,18 @@ def source(label: str, profile: str, anchors: dict[str, str]) -> Source:
     return Source(label, profile, dict(anchors))
 
 
-def bind(label: str, payload_class: str, stage: str, value: str | None = None) -> Bind:
-    return Bind("bind", label, payload_class, stage, value)
+def bind(
+    label: str,
+    payload_class: str,
+    stage: str,
+    value: str | None = None,
+    membership: tuple[str, str, int] | tuple[str, str] | None = None,
+    profiled: bool = False,
+) -> Bind:
+    if membership is not None and len(membership) == 2:
+        membership = (membership[0], membership[1], 0)
+    return Bind("bind", label, payload_class, stage, value, membership,
+                profiled)
 
 
 def slot(
@@ -3118,6 +3133,33 @@ def _validate_contract_shape(
             claim_profiles[label] = profile
 
 
+def _resolve_value_profile(vocabulary, event, seat: str, admitted: str):
+    """Resolve a profiled event's profile, fail-closed, and check its seat.
+
+    Fail-closed resolution: an unresolved profile name is refused rather than
+    read as a payload class nobody declared, which is what one namespace
+    would have done.  The origin check is the second half of the same
+    reading: a profile's ``origin`` says who chose the content and the event
+    carrying it says the same thing in the carrier's own terms, so the two
+    must agree or the artifact declares a provenance its transcript denies.
+    """
+    profile = vocabulary.value_profiles.get(event.payload_class)
+    if profile is None:
+        raise Refusal(
+            f"[zkc-E166] value profile {event.payload_class!r}, named by "
+            f"{seat} {event.label!r}, is not declared by the sealed vocabulary"
+        )
+    if profile["origin"] != admitted:
+        raise Refusal(
+            f"[zkc-E169] value profile {event.payload_class!r} declares "
+            f"origin {profile['origin']!r}, which does not belong on {seat} "
+            f"{event.label!r}: that seat carries content of origin "
+            f"{admitted!r}, and the event a value enters on is the carrier's "
+            "own statement of who chose it"
+        )
+    return profile
+
+
 def _validate_artifact_verify(
     event: ArtifactVerify, position: int, protocol: dict[str, Any]
 ) -> None:
@@ -3277,12 +3319,12 @@ def validate_protocol(
                     f"[zkc-E214] statement binding {event.label!r} follows "
                     f"challenge {first_challenge!r} in its segment"
                 )
+            if event.profiled:
+                _resolve_value_profile(vocabulary, event, "binding",
+                                       "preprocessed")
             absorbed.add(event.label)
         elif isinstance(event, Slot):
             if event.profiled:
-                # Fail-closed resolution: an unresolved profile name is
-                # refused rather than read as a payload class nobody
-                # declared, which is what one namespace would have done.
                 if event.count != "1":
                     raise Refusal(
                         "[zkc-E167] a profiled slot carries one commitment, "
@@ -3290,13 +3332,8 @@ def validate_protocol(
                         "vector of commitments is a shape no value profile "
                         "states"
                     )
-                profile = vocabulary.value_profiles.get(event.payload_class)
-                if profile is None:
-                    raise Refusal(
-                        f"[zkc-E166] slot {event.label!r} names value profile "
-                        f"{event.payload_class!r}, which the sealed "
-                        "vocabulary does not declare"
-                    )
+                _resolve_value_profile(vocabulary, event, "slot",
+                                       "prover_message")
             if event.absorbed:
                 absorbed.add(event.label)
             elif first_unabsorbed is None:
@@ -3606,9 +3643,27 @@ def canonical_document(
     event_rows = []
     for event in events:
         if isinstance(event, Bind):
-            event_rows.append(
-                ["bind", event.payload_class, event.stage, event.value]
-            )
+            # A profiled binding is its own event family, exactly as a
+            # profiled slot is: the profile name where the scalar family
+            # carries a payload class, and its membership beside it.
+            if event.profiled:
+                membership = None
+                if event.membership is not None:
+                    instance, role, index = event.membership
+                    membership = [transformer_pos[instance], role, index]
+                event_rows.append(
+                    [
+                        "bind_profiled",
+                        event.payload_class,
+                        event.stage,
+                        event.value,
+                        membership,
+                    ]
+                )
+            else:
+                event_rows.append(
+                    ["bind", event.payload_class, event.stage, event.value]
+                )
         elif isinstance(event, Slot):
             membership = None
             if event.membership is not None:
