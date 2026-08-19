@@ -130,7 +130,7 @@ MACHINE_DECIDERS = {
     # The declared committed arity is the one the spine realizes, and the
     # lemma's own characteristic hypothesis. Both keep a value profile's
     # arity from being a producer annotation a bound is priced from.
-    "committed_arity_opens": ("zkc.side.committed_arity_opens",
+    "multiplicities_match_table": ("zkc.side.multiplicities_match_table",
                               ("integer", "integer")),
     "lookup_fits_characteristic": ("zkc.side.lookup_fits_characteristic",
                                    ("integer", "integer", "integer")),

@@ -766,10 +766,16 @@ class ArtifactProjection:
     field: str | None = None
     round_selector: tuple[str, str | int | None] | None = None
     aggregate: str | None = None
+    #: Which message role a committed-arity projection reads.  Absent reads
+    #: the whole reduction, which is the reading every binding written before
+    #: roles could be selected has.
+    member_role: str | None = None
 
     def document(self) -> dict[str, Any]:
         document: dict[str, Any] = {"kind": self.kind,
                                     "result_sort": self.result_sort}
+        if self.member_role is not None:
+            document["member_role"] = self.member_role
         if self.field is not None:
             document["field"] = self.field
         if self.round_selector is not None:
@@ -830,10 +836,18 @@ def _read_round_selector(node: Any, where: str) -> tuple[str, str | int | None]:
 def _read_artifact_projection(node: Any, where: str) -> ArtifactProjection:
     kind = _tag(node, where, PROJECTION_KINDS)
     if kind in ("conclusion_reduction_contract", "contract_round_adjacency",
-                "reduction_input_count", "bound_relation_anchor_count",
-                "committed_arity"):
+                "reduction_input_count", "bound_relation_anchor_count"):
         entry = _object(node, where, ("kind", "result_sort"))
         return ArtifactProjection(kind, _sort(entry, "result_sort", where))
+    if kind == "committed_arity":
+        entry = _object(node, where, ("kind", "result_sort"), ("member_role",))
+        role = entry.get("member_role")
+        if role is not None and (not isinstance(role, str) or not role):
+            raise Refusal(f"{where} member_role must be a non-empty string: "
+                          "absent is how a projection reads the whole "
+                          "reduction")
+        return ArtifactProjection(kind, _sort(entry, "result_sort", where),
+                                  member_role=role)
     if kind in ("reduction_parameter", "path_binding_field"):
         entry = _object(node, where, ("kind", "result_sort", "field"))
         return ArtifactProjection(kind, _sort(entry, "result_sort", where),

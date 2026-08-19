@@ -1640,66 +1640,81 @@ LOGUP_TABLE = ("sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a"
 LOGUP_MULT = ("sha256:5b1a0eb6f9c0b5b2fc4a9c9f6a0e4b4d3f1"
               "c6a8e2d7b0c9a5e3f8d1b7c4a2e60")
 
-LOGUP_BUS = {
-    "policy": "analysis_only_artifact",
-    "kappa": {
-        "codecs": {"query_index": "ts_be8", "scalar": "ts_be8"},
-        "constants": {"one": {"class": "scalar", "value": "1"}},
-        "iv": "artifact-id",
-        "sponge": "toy_duplex",
-    },
-    "sources": [
-        source(
-            "air",
-            "opaque_relation",
-            {
-                "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae"
-                            "41e4649b934ca495991b7852b855",
-                "statement": "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842"
-                             "fefde3503dfd74d6919a109cdb47",
-            },
-        )
-    ],
-    "events": [
-        slot("values", "logup_column_1024", True, ("bus", "cols", 0),
-             profiled=True),
-        slot("table", "logup_column_1024", True, ("bus", "cols", 1),
-             profiled=True),
-        slot("mult", "logup_column_1024", True, ("bus", "cols", 2),
-             profiled=True),
-        chal("beta", "scalar", "logup.beta", "2305843009213693951",
-             ["values", "table", "mult"]),
-        slot("helper", "logup_column_1024", True, ("bus", "helper", 0),
-             profiled=True),
-        chal("idx", "query_index", "logup.idx", "1024", ["helper"]),
-        slot("value_at", "scalar", True, None),
-        slot("helper_at", "scalar", True, None),
-        check("row", "zkc.check.logup-row", ["helper_at", "beta", "value_at"],
-              expr=["eq", ["f_mul", ["in", 0],
-                           ["f_add", ["in", 1], ["f_neg", ["in", 2]]]],
-                    ["const", "one"]]),
-    ],
-    "reduces": [
-        reduce_row(
-            "bus", "logup_bus", ["air"], ["beta", "idx"],
-            [("inclusion", "logup_inclusion")], checks={"row": "row"},
-            anchors=[{"multiplicities": LOGUP_MULT, "table": LOGUP_TABLE,
-                      "values": LOGUP_VALUES}],
-        )
-    ],
-    "material_bindings": [
-        material("values", LOGUP_VALUES),
-        material("table", LOGUP_TABLE),
-        material("mult", LOGUP_MULT),
-    ],
-    "sinks": [
-        route("residual", "inclusion", "logup-constraints-not-modeled"),
-    ],
+LOGUP_ANCHORS = {
+    "multiplicities": LOGUP_MULT,
+    "queries": LOGUP_VALUES,
+    "table": LOGUP_TABLE,
 }
+
+
+def _logup(events, contract):
+    return {
+        "policy": "analysis_only_artifact",
+        "kappa": {
+            "codecs": {"scalar": "ts_be8"},
+            "iv": "artifact-id",
+            "sponge": "toy_duplex",
+        },
+        "sources": [source("inclusion", "logup_inclusion", LOGUP_ANCHORS)],
+        "events": events,
+        "reduces": [
+            reduce_row(
+                "bus", contract, ["inclusion"], ["beta"],
+                [("identity", "logup_identity")],
+                anchors=[dict(LOGUP_ANCHORS)],
+            )
+        ],
+        "material_bindings": [
+            material("table", LOGUP_TABLE),
+            material("queries", LOGUP_VALUES),
+            material("mult", LOGUP_MULT),
+        ],
+        "sinks": [
+            route("residual", "identity",
+                  "logup-identity-discharge-not-modeled"),
+        ],
+    }
+
+
+BETA = chal("beta", "scalar", "logup.beta", "2305843009213693951", [])
+
+# The range check: a table the statement fixes, entering as a public binding
+# because every later challenge must be bound to it, and a query column four
+# times its length.  The two sides are read by role, which is what lets them
+# differ at all.
+LOGUP_RANGE_CHECK = _logup(
+    [
+        bind("table", "logup_table", "seal", LOGUP_TABLE,
+             ("bus", "table", 0), profiled=True),
+        slot("queries", "logup_queries", True, ("bus", "queries", 0),
+             profiled=True),
+        slot("mult", "logup_multiplicities", True,
+             ("bus", "multiplicities", 0), profiled=True),
+        BETA,
+    ],
+    "logup_range_check",
+)
+
+# The ad-hoc lookup, where the prover supplies the table as well: the same
+# three roles filled by prover messages, which is the other direction of the
+# origin rule.
+LOGUP_BUS = _logup(
+    [
+        slot("table", "logup_committed_column", True, ("bus", "table", 0),
+             profiled=True),
+        slot("queries", "logup_committed_column", True,
+             ("bus", "queries", 0), profiled=True),
+        slot("mult", "logup_committed_column", True,
+             ("bus", "multiplicities", 0), profiled=True),
+        BETA,
+    ],
+    "logup_bus",
+)
 
 
 PIR_WITNESSES = {
     "logup-bus": LOGUP_BUS,
+    "logup-range-check": LOGUP_RANGE_CHECK,
     "artifact-verify": ARTIFACT_VERIFY,
     "relation-direct": RELATION_DIRECT,
     "relation-residual": RELATION_RESIDUAL,

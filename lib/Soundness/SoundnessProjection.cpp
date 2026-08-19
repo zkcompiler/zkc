@@ -536,7 +536,7 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::JohnsonFoldParam:
     return {ValueSort::Integer};
   case MachineDeciderKind::SpaceCoversBatch:
-  case MachineDeciderKind::CommittedArityOpens:
+  case MachineDeciderKind::MultiplicitiesMatchTable:
     return {ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::LookupFitsCharacteristic:
     return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
@@ -692,20 +692,43 @@ projectArtifactFact(const SealedSoundnessView &sealed,
     // arities would leave the rule to choose, and a rule that chooses which
     // number to price with is a rule whose bound is not determined by the
     // artifact.
-    if ((*owner)->committedArityIncomplete)
+    // Without a role the reading is the whole reduction's, as it was before
+    // roles could be selected: every profiled member must agree. With one it
+    // is that role's members, which is what lets a table and a query column
+    // of different lengths both be priced.
+    llvm::SmallVector<const soundness::CommittedArityByRole *> selected;
+    for (const soundness::CommittedArityByRole &entry :
+         (*owner)->committedArityByRole)
+      if (projection.memberRole.empty() || entry.role == projection.memberRole)
+        selected.push_back(&entry);
+    if (!projection.memberRole.empty() && selected.empty())
+      return projectionError("this reduction has no message role '" +
+                             projection.memberRole +
+                             "', so there is no arity to read for it");
+    bool incomplete = false;
+    std::set<std::string> distinct;
+    for (const soundness::CommittedArityByRole *entry : selected) {
+      incomplete |= entry->incomplete;
+      for (const registry::Rational &arity : entry->arities)
+        distinct.insert(arity.str());
+    }
+    if (incomplete)
       return projectionError(
-          "this reduction has a message member that declares no committed "
-          "content, so the arity its other members declare is not the "
-          "arity of what it commits to");
-    if ((*owner)->committedArity.empty())
+          "a member of what this projection reads declares no committed "
+          "content, so the arity its other members declare is not the arity "
+          "of what it commits to");
+    if (distinct.empty())
       return projectionError(
-          "this reduction's messages carry no committed value profile, so "
+          "what this projection reads carries no committed value profile, so "
           "there is no arity to read");
-    if ((*owner)->committedArity.size() != 1)
+    if (distinct.size() != 1)
       return projectionError(
-          "this reduction's commitments declare more than one arity, so the "
+          "what this projection reads declares more than one arity, so the "
           "one a bound would price is not determined");
-    return RuntimeValue::integer((*owner)->committedArity.front());
+    for (const soundness::CommittedArityByRole *entry : selected)
+      if (!entry->arities.empty())
+        return RuntimeValue::integer(entry->arities.front());
+    return projectionError("committed arity has no value to return");
   }
 
   auto reduction = reductionAt(sealed, site);
@@ -903,16 +926,24 @@ evaluateMachineDecider(MachineDeciderKind kind,
     }
     return true;
   }
-  case MachineDeciderKind::CommittedArityOpens:
-    // Equality, not coverage: a challenge ranging over less than the
-    // committed content would leave part of it unopenable, and one ranging
-    // over more would index past it.
+  case MachineDeciderKind::MultiplicitiesMatchTable:
+    // The multiplicity sequence is indexed by the table: Lemma 5's witness
+    // has one field element per table entry, so a multiplicity column of a
+    // different length is not the object the theorem quantifies over.
+    // Equality, not coverage, for that reason.
     return number(arguments[0]).compare(number(arguments[1])) == 0;
   case MachineDeciderKind::LookupFitsCharacteristic: {
-    // table + lookups < characteristic, over the exact integers the rest of
-    // this algebra travels in.
-    auto total = number(arguments[0]).add(number(arguments[1]));
-    return total.compare(number(arguments[2])) < 0;
+    // max(table, lookups) < characteristic. The theorem is stated for
+    // sequences of one common length N under char > N; the unequal case
+    // reduces to it by padding the shorter side, which leaves the common
+    // length at the larger of the two. Both sides need it: the lookup-side
+    // multiplicities must be nonzero as field elements and the table-side
+    // ones must be invertible, since the honest witness normalizes by them.
+    const auto &table = number(arguments[0]);
+    const auto &lookups = number(arguments[1]);
+    const auto &characteristic = number(arguments[2]);
+    const auto &larger = table.compare(lookups) < 0 ? lookups : table;
+    return larger.compare(characteristic) < 0;
   }
   case MachineDeciderKind::FriShape: {
     // The declared shape must be the realized one. The equation itself

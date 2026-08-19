@@ -174,8 +174,8 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
   switch (kind) {
   case MachineDeciderKind::OneMessageRole:
     return {"zkc.side.one_message_role", {ValueSort::ReductionContract}};
-  case MachineDeciderKind::CommittedArityOpens:
-    return {"zkc.side.committed_arity_opens",
+  case MachineDeciderKind::MultiplicitiesMatchTable:
+    return {"zkc.side.multiplicities_match_table",
             {ValueSort::Integer, ValueSort::Integer}};
   case MachineDeciderKind::LookupFitsCharacteristic:
     return {"zkc.side.lookup_fits_characteristic",

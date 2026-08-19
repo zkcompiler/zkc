@@ -245,12 +245,19 @@ buildRoundFact(pir::ReduceOp reduce,
       if (members.size() != 1)
         return adapterError("a contract round message role has duplicate "
                             "sealed occurrence indices");
-      auto slot = mlir::dyn_cast<pir::SlotOp>(members.front());
-      if (!slot)
-        return adapterError("a contract round message membership is not a "
-                            "prover-message slot");
-      messageFact.payloadClassesByOccurrence.push_back(
-          slot.getPayloadClass().str());
+      // A role is filled by whatever carries the material: a slot for prover
+      // messages, a public binding for content the statement fixes. Which of
+      // the two a role admits is the contract's own declaration, checked
+      // against the spine at seal, so the projection reads either.
+      llvm::StringRef payloadClass;
+      if (auto slot = mlir::dyn_cast<pir::SlotOp>(members.front()))
+        payloadClass = slot.getPayloadClass();
+      else if (auto bind = mlir::dyn_cast<pir::BindOp>(members.front()))
+        payloadClass = bind.getPayloadClass();
+      else
+        return adapterError("a contract round message membership is neither a "
+                            "prover message nor a public binding");
+      messageFact.payloadClassesByOccurrence.push_back(payloadClass.str());
     }
     if (occurrences->second.size() != multiplicity)
       return adapterError("a contract round message role has extra sealed "
@@ -823,34 +830,41 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
       owned.rounds.push_back(std::move(*fact));
     }
 
-    // What the reduction's own commitments stand for. A profiled message
-    // member names a value profile; the profile says how much content is
-    // behind it, and a rule that prices in that number reads it here rather
-    // than from a producer's annotation.
+    // What the reduction's own commitments stand for. A profiled member
+    // names a value profile; the profile says how much content is behind it,
+    // and a rule that prices in that number reads it here rather than from a
+    // producer's annotation. Collected per role, because which commitment is
+    // the table and which is the looked-up column is a fact the contract
+    // already states, and a lookup whose two sides differ in length has two
+    // numbers to price from.
     {
-      std::set<std::string> arities;
       auto instanceRoles = protocolFacts.memberships().find(reduce.getLabel());
       if (instanceRoles != protocolFacts.memberships().end())
-        for (const auto &role : instanceRoles->second)
+        for (const auto &role : instanceRoles->second) {
+          std::set<std::string> arities;
           for (const auto &occurrence : role.getValue())
             for (mlir::Operation *member : occurrence.second) {
-              auto slot = mlir::dyn_cast<pir::SlotOp>(member);
-              if (!slot)
-                continue;
               // A member that declares nothing must not be silently passed
               // over. Skipping it would let a reduction profile one column
-              // and leave the rest undeclared, and the arity a rule prices
-              // with would then be whatever the one profiled member said --
-              // a lookup whose looked-up columns state no size at all would
-              // be priced from its helper. The empty string records "this
-              // reduction has a member with no declared content", which the
-              // projection refuses on rather than averaging over.
-              if (!slot.getProfiled()) {
+              // and leave another undeclared, and the arity a rule prices
+              // with would then be whatever the profiled member said. The
+              // empty string records "this role has a member with no
+              // declared content", which the projection refuses on rather
+              // than averaging over.
+              llvm::StringRef profileName;
+              if (auto slot = mlir::dyn_cast<pir::SlotOp>(member)) {
+                if (slot.getProfiled())
+                  profileName = slot.getPayloadClass();
+              } else if (auto bind = mlir::dyn_cast<pir::BindOp>(member)) {
+                if (bind.getProfiled())
+                  profileName = bind.getPayloadClass();
+              }
+              if (profileName.empty()) {
                 arities.insert(std::string());
                 continue;
               }
               const registry::ValueProfile *profile =
-                  vocabulary.lookupValueProfile(slot.getPayloadClass());
+                  vocabulary.lookupValueProfile(profileName);
               if (!profile)
                 return adapterError(
                     "a profiled message member names a value profile the "
@@ -864,27 +878,35 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
               arity.toString(text, 10, /*Signed=*/false);
               arities.insert(std::string(text));
             }
-      // Sorted numerically rather than by decimal text, so the order is the
-      // one a reader expects and a tie cannot depend on digit count.
-      llvm::SmallVector<registry::Rational> exactArities;
-      for (const std::string &text : arities) {
-        if (text.empty()) {
-          // An undeclared member. Recorded as a value the projection cannot
-          // read, so a mixed reduction refuses instead of quietly pricing
-          // from the members that happen to declare something.
-          owned.committedArityIncomplete = true;
-          continue;
+          // Sorted numerically rather than by decimal text, so the order is
+          // the one a reader expects and a tie cannot depend on digit count.
+          llvm::SmallVector<registry::Rational> exactArities;
+          bool incomplete = false;
+          for (const std::string &text : arities) {
+            if (text.empty()) {
+              incomplete = true;
+              continue;
+            }
+            auto exact = registry::Rational::fromDecimal(text);
+            if (!exact)
+              return exact.takeError();
+            exactArities.push_back(std::move(*exact));
+          }
+          llvm::sort(exactArities, [](const registry::Rational &lhs,
+                                      const registry::Rational &rhs) {
+            return lhs.compare(rhs) < 0;
+          });
+          CommittedArityByRole entry;
+          entry.role = role.getKey().str();
+          entry.incomplete = incomplete;
+          entry.arities.assign(exactArities.begin(), exactArities.end());
+          owned.committedArityByRole.push_back(std::move(entry));
         }
-        auto exact = registry::Rational::fromDecimal(text);
-        if (!exact)
-          return exact.takeError();
-        exactArities.push_back(std::move(*exact));
-      }
-      llvm::sort(exactArities, [](const registry::Rational &lhs,
-                                  const registry::Rational &rhs) {
-        return lhs.compare(rhs) < 0;
-      });
-      owned.committedArity.assign(exactArities.begin(), exactArities.end());
+      llvm::sort(owned.committedArityByRole,
+                 [](const CommittedArityByRole &lhs,
+                    const CommittedArityByRole &rhs) {
+                   return lhs.role < rhs.role;
+                 });
     }
 
     // The transformer's body extent, in canonical event positions.

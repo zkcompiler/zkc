@@ -12,4 +12,4 @@
 # The digest is spelled out here as well, because a diff of two implementations
 # that drifted together would still pass.
 # RUN: FileCheck %s < %t.zkc
-# CHECK: "digest":"sha256:da465655ed95dc97ac43a2258e0a8fa6fe35d550950cd16a10f364a204e0c70a"
+# CHECK: "digest":"sha256:b0048c2360afca5e42a9ec2781931bb8aa4fa8b69b06d283e115136f3198ba7d"

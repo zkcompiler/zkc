@@ -25,7 +25,7 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // RUN: not zkc-opt %pir-seal-full %S/Inputs/value-profile-as-operand.mlir 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=OPERAND
 // OPERAND: [zkc-E302] operand sequence has 0 valid layouts
-// OPERAND-SAME: operand of value profile 'logup_column_1024' is a commitment
+// OPERAND-SAME: operand of value profile 'logup_committed_column' is a commitment
 // OPERAND-SAME: an operand slot declares a payload class rather than one
 
 // A codec refusal names where the class came from. The class a profiled
@@ -33,7 +33,7 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // author never wrote down, so quoting it alone would leave them to guess the
 // connection.
 // RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['uncodeced']={'arity_log2':10,'binding_route':'zkc.commit.toy-vector','element_class':'no_such_class','origin':'prover_message'}; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t.vocab.json
-// RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('logup_column_1024','uncodeced'))" %S/logup-bus.mlir > %t.uncodeced.mlir
+// RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('logup_committed_column','uncodeced'))" %S/logup-bus.mlir > %t.uncodeced.mlir
 // RUN: not zkc-opt -pir-seal='protocol-vocabulary=%t.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t.uncodeced.mlir 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NOCODEC
 // NOCODEC: [zkc-E221] payload class 'no_such_class' has no codec in kappa.codecs
@@ -44,10 +44,28 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // material, a public binding is material the statement fixes. They are one
 // fact with two spellings, so an artifact whose profile claims one
 // provenance while its transcript shows another is refused rather than
-// sealed with the disagreement inside it.
-// RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); [p.update(origin='preprocessed') for p in d['value_profiles'].values()]; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t.origin.json
-// RUN: not zkc-opt -pir-seal='protocol-vocabulary=%t.origin.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/logup-bus.mlir 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=SEAT
-// SEAT: [zkc-E169] value profile 'logup_column_1024' declares origin 'preprocessed'
-// SEAT-SAME: does not belong on slot 'values'
-// SEAT-SAME: that seat carries content of origin 'prover_message'
+// sealed with the disagreement inside it. Both directions are exercised,
+// because a family with only one seat could not tell whether the seal checks
+// the agreement or merely the spelling it happens to see.
+// RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_committed_column']['origin']='preprocessed'; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t.slot.json
+// RUN: not zkc-opt -pir-seal='protocol-vocabulary=%t.slot.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/logup-bus.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=SLOTSEAT
+// SLOTSEAT: [zkc-E169] value profile 'logup_committed_column' declares origin 'preprocessed'
+// SLOTSEAT-SAME: does not belong on slot 'table'
+// SLOTSEAT-SAME: that seat carries content of origin 'prover_message'
+
+// RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_table']['origin']='prover_message'; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t.bind.json
+// RUN: not zkc-opt -pir-seal='protocol-vocabulary=%t.bind.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/logup-range-check.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=BINDSEAT
+// BINDSEAT: [zkc-E169] value profile 'logup_table' declares origin 'prover_message'
+// BINDSEAT-SAME: does not belong on binding 'table'
+// BINDSEAT-SAME: that seat carries content of origin 'preprocessed'
+
+// And the contract states the same fact from its own side: a role whose
+// source is a public binding admits no prover message, and the converse.
+// A protocol where the two disagree has two answers to who chose the content.
+// RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); [m.pop('source',None) for r in d['reduction_contracts']['logup_range_check']['rounds'] for m in r['messages']]; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t.source.json
+// RUN: not zkc-opt -pir-seal='protocol-vocabulary=%t.source.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/logup-range-check.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=SOURCE
+// SOURCE: [zkc-E244] message role 'table' is filled by a public binding
+// SOURCE-SAME: contract declares it filled by a prover message

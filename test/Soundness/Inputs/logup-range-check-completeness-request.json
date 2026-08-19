@@ -2,10 +2,10 @@
   "registry": "zkc.derivation_request",
   "derivation": {
     "selected_bindings": [
-      "zkc.rbr.logup@reduction:logup_bus"
+      "zkc.completeness.logup@reduction:logup_range_check"
     ],
     "resolved_parameters": {
-      "zkc.rbr.logup@reduction:logup_bus": {
+      "zkc.completeness.logup@reduction:logup_range_check": {
         "field_order": {
           "sort": "integer",
           "value": "2305843009213693951"
@@ -22,9 +22,9 @@
         }
       },
       "index": {
-        "notion": "round_by_round",
-        "track": "soundness",
-        "variant": "standard",
+        "notion": "completeness",
+        "track": "completeness",
+        "variant": "",
         "model": "",
         "quantification": "static"
       },
@@ -42,7 +42,7 @@
         "transformer_position": 1,
         "output_index": 0
       },
-      "binding": "zkc.rbr.logup@reduction:logup_bus",
+      "binding": "zkc.completeness.logup@reduction:logup_range_check",
       "premises": {}
     }
   }

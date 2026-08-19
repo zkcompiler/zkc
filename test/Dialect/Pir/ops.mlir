@@ -18,8 +18,8 @@ pir.protocol "schnorr" kappa {codecs = {scalar = "ts_be8", tg = "tg_be8"}} {
   // A value profile prints as it parses. The keyword is the marker, so a
   // class literally named `profile` and a profiled value cannot be confused
   // by a reader or by a round trip.
-  // CHECK-NEXT: %[[TP:.+]], %{{.+}} = pir.slot %[[T2]] "committed" : profile "logup_column_1024"
-  %tp, %committed = pir.slot %t2 "committed" : profile "logup_column_1024"
+  // CHECK-NEXT: %[[TP:.+]], %{{.+}} = pir.slot %[[T2]] "committed" : profile "logup_committed_column"
+  %tp, %committed = pir.slot %t2 "committed" : profile "logup_committed_column"
   // CHECK-NEXT: %[[T3:.+]], %[[CH:.+]] = pir.chal %[[TP]] deps(%[[X]], %[[A]] : !pir.val<"tg">, !pir.val<"tg">) "c" : "scalar" domain "schnorr.c" space "2305843009213693952"
   %t3, %ch = pir.chal %tp deps(%x, %a : !pir.val<"tg">, !pir.val<"tg">) "c" : "scalar" domain "schnorr.c" space "2305843009213693952"
   // CHECK-NEXT: %[[T4:.+]], %[[Z:.+]] = pir.slot %[[T3]] "resp_z" : "scalar"

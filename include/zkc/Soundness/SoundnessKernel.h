@@ -201,6 +201,10 @@ struct ArtifactProjection {
   uint64_t inputIndex = 0;
   ContractRoundSelector roundSelector;
   ProjectionAggregate aggregate = ProjectionAggregate::UniqueEqual;
+  /// Which message role a committed-arity projection reads. Empty reads the
+  /// whole reduction, which is what a rule wants when one number answers for
+  /// every commitment it prices.
+  std::string memberRole;
 };
 
 enum class BindingValueKind {
@@ -606,7 +610,7 @@ enum class MachineDeciderKind {
   /// bound. An opening discipline is the structural counterpart: a challenge
   /// that indexes into the committed content can only range over what is
   /// there.
-  CommittedArityOpens,
+  MultiplicitiesMatchTable,
   /// The lemma's own hypothesis: multiplicities are field elements, so the
   /// number of entries must stay below the characteristic. Overflowing
   /// multiplicities are the known soundness failure of the whole approach

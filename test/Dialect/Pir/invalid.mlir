@@ -470,7 +470,7 @@ pir.protocol "profiled_slot_is_counted" policy "residual_artifact" {
   %relation = pir.instantiate "r" anchors {contract = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"} : !pir.claim<"opaque_relation">
   %t0 = pir.begin
   // expected-error @below {{[zkc-E167] a profiled slot carries one commitment}}
-  %t1, %v = pir.slot %t0 "cols" : profile "logup_column_1024" count "4"
+  %t1, %v = pir.slot %t0 "cols" : profile "logup_committed_column" count "4"
   pir.end %t1
   pir.residual %relation : !pir.claim<"opaque_relation"> route "unmodeled"
 }

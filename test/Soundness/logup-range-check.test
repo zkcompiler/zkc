@@ -1,0 +1,91 @@
+# The first rule that reads two committed arities, and the first family whose
+# table the statement fixes.
+#
+# A lookup's soundness error grows in the sizes of both columns, and the two
+# are different numbers: a range check is a small table with many queries.
+# Reading one arity for the whole reduction could only ever price the equal
+# case, so the projection selects by message role and the contract's roles are
+# what say which commitment is which.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/logup-range-check.mlir %zkc-seal-full -o %t/rc.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/rc.artifacts %t/rc.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/rc.artifacts %t/rc.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.req.json -o=%t/rc.out.json %t/rc.mlirbc
+# RUN: FileCheck %s --check-prefix=BOUND < %t/rc.out.json
+
+# What the judgment rests on and does not establish. The declared arity is
+# carried rather than grounded, because no arrangement of transcript events
+# separates an honest declaration from a consistent understatement; for a
+# preprocessed table that obligation is owed to the anchor's preimage and for
+# a committed column to its binding route.
+# BOUND: "zkc.hyp.commitment_binds_declared_arity"
+
+# Two hundred and fifty-six table entries and a thousand and twenty-four
+# looked-up values. Clearing denominators at the sampled point leaves a
+# polynomial in which every term omits one of the table + lookups linear
+# factors, so the degree — and the count of points a false inclusion can hide
+# at — is one less than their sum (Haböck, ePrint 2022/1530, Lemma 5 with
+# Schwartz-Zippel). The number is asserted exactly: an off-by-one here is a
+# bound that claims more than the theorem gives.
+# BOUND: "constant": "1279/2305843009213693951"
+
+# The honest prover's own failure set, priced on its own track. It is the
+# points where a denominator vanishes — at most one per table entry and one
+# per looked-up value — so it is counted as a set and comes out one larger
+# than the soundness bound over the same two numbers. The asymmetry is real
+# and both numbers are pinned so neither can drift onto the other.
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-completeness-request.json %t/rc.artifacts %t/rc.comp.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.comp.json -o=%t/rc.comp.out.json %t/rc.mlirbc
+# RUN: FileCheck %s --check-prefix=COMPLETE < %t/rc.comp.out.json
+# COMPLETE: "track": "completeness"
+# COMPLETE: "constant": "1280/2305843009213693951"
+
+# The multiplicity column is indexed by the table, so a declaration that
+# disagrees with the table's is not the object the lemma quantifies over.
+# This is the structural condition of the rule: where the artifact does fix a
+# relation between two declared arities, the rule checks it.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_multiplicities']['arity_log2']=7; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/mult.vocab.json
+# RUN: zkc-seal %S/../Encoding/logup-range-check.mlir \
+# RUN:   --protocol-vocabulary=%t/mult.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/mult.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/mult.artifacts %t/mult.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/mult.artifacts %t/mult.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/mult.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/mult.req.json -o=/dev/null %t/mult.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=MULT
+# MULT: condition_failed at apply.conditions.S1
+
+# The lemma's own hypothesis. Its proof needs the multiplicities to be
+# non-zero as field elements on the lookup side and invertible on the table
+# side, and it is stated for sequences of one common length; the unequal case
+# reduces to it by padding the shorter side, which leaves the common length at
+# the larger of the two. So the condition is on the larger, and a field too
+# small for it refuses rather than pricing a protocol the theorem does not
+# cover.
+# The field is the one the derivation states, not the size of a sampling set:
+# a challenge space is how many values are drawn from, and reading it as a
+# characteristic would be true only for a prime field sampled whole. That is
+# what the two field hypotheses carry, and it is why this leg shrinks the
+# space alongside the declared field — a space that does not embed in the
+# field is refused first, by a different condition.
+# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693951\"','space \"257\"'))" %S/../Encoding/logup-range-check.mlir > %t/tiny.mlir
+# RUN: zkc-seal %t/tiny.mlir %zkc-seal-full -o %t/tiny.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/tiny.artifacts %t/tiny.mlirbc
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['derivation']['resolved_parameters']['zkc.rbr.logup@reduction:logup_range_check']['field_order']={'sort':'integer','value':'257'}; json.dump(d, open(sys.argv[2],'w'))" %S/Inputs/logup-range-check-request.json %t/tiny.base.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %t/tiny.base.json %t/tiny.artifacts %t/tiny.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/tiny.req.json -o=/dev/null %t/tiny.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=OVERFLOW
+# OVERFLOW: condition_failed at apply.conditions.S2

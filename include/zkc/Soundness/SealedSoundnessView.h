@@ -170,6 +170,20 @@ struct SealedDuplexFacts {
 
 bool operator==(const SealedDuplexFacts &lhs, const SealedDuplexFacts &rhs);
 
+/// The declared content of one message role's commitments.
+struct CommittedArityByRole {
+  std::string role;
+  /// `2^arity_log2` of every value profile the role's members name, sorted
+  /// and deduplicated. More than one entry means the role's members disagree
+  /// about how much they hold, which no rule may price through.
+  std::vector<registry::Rational> arities;
+  /// Whether any member filling this role declares no content at all. A rule
+  /// that prices in a committed arity may not read one from a role where a
+  /// member says nothing: the number it would get is whatever the members
+  /// that happen to be profiled said.
+  bool incomplete = false;
+};
+
 /// The owned, theorem-independent reduction facts needed for occurrence and
 /// consumed-subject resolution.  The exact contract reference authenticates
 /// the structural protocol occurrence; a RuleBinding selected by APPLY
@@ -192,21 +206,19 @@ struct SealedReduction {
   std::vector<SealedRoundFact> rounds;
   std::map<std::string, uint64_t, std::less<>> selectedCheckEventPositions;
   std::optional<RoundAdjacencyValue> roundAdjacency;
-  /// How much content stands behind each commitment this reduction's message
-  /// members carry, in canonical order and deduplicated: `2^arity_log2` of
-  /// every value profile they name. Empty where the reduction's messages are
-  /// bare-class values, which is every shipped family but one.
+  /// How much content stands behind the commitments filling each of this
+  /// reduction's message roles, by role in canonical order.
   ///
   /// Projected rather than left in the vocabulary because the sealed view is
   /// registry-free by construction, and a rule that reads a profile fact
-  /// must read it from sealed structure.
-  std::vector<registry::Rational> committedArity;
-  /// Whether any message member of this reduction declares no content at
-  /// all. A rule that prices in a committed arity may not read one from a
-  /// reduction where some commitment says nothing: the number it would get
-  /// is whatever the members that happen to be profiled said.
-  bool committedArityIncomplete = false;
+  /// must read it from sealed structure. Kept per role because which
+  /// commitment holds which side of a relation is a fact the contract
+  /// already states: a lookup over a table and a query column of different
+  /// lengths has two numbers to price from, and pooling them would leave the
+  /// rule to choose.
+  std::vector<CommittedArityByRole> committedArityByRole;
 };
+
 
 /// One transformer's body extent and whether it commutes.
 ///

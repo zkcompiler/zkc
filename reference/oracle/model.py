@@ -2470,7 +2470,9 @@ def terminal_closure(
 
     messages: dict[str, dict[str, dict[int, str]]] = {}
     for event in events:
-        if isinstance(event, Slot) and event.membership:
+        # A role is filled by whatever carries the material: a slot for
+        # prover messages, a public binding for statement-fixed content.
+        if isinstance(event, (Slot, Bind)) and event.membership:
             instance, role, index = event.membership
             messages.setdefault(instance, {}).setdefault(role, {})[index] = event.label
 
@@ -2713,7 +2715,7 @@ def reduction_closure(
 
     messages: dict[str, dict[str, dict[int, str]]] = {}
     for event in events:
-        if not isinstance(event, Slot) or event.membership is None:
+        if not isinstance(event, (Slot, Bind)) or event.membership is None:
             continue
         instance, role, index = event.membership
         occurrences = messages.setdefault(instance, {}).setdefault(role, {})
@@ -3165,7 +3167,12 @@ def _validate_contract_shape(
                             f"[zkc-E213] round message {role!r} must precede "
                             f"challenge {challenge_role!r}"
                         )
-                    if not occurrence.absorbed:
+                    # Absorption is an event property: a public binding
+                    # always absorbs, a slot unless it is marked unabsorbed
+                    # (docs/spec/kernel.md section 1.1).
+                    absorbed = (True if isinstance(occurrence, Bind)
+                                else occurrence.absorbed)
+                    if not absorbed:
                         raise Refusal(
                             f"[zkc-E213] round message {role!r} is not absorbed "
                             f"before challenge {challenge_role!r}"
@@ -3483,7 +3490,7 @@ def resolved_vocabulary(
     # move under a fixed artifact id.
     value_profiles = sorted({
         event.payload_class for event in protocol["events"]
-        if isinstance(event, Slot) and event.profiled
+        if isinstance(event, (Slot, Bind)) and event.profiled
     })
     if value_profiles:
         table["value_profiles"] = {

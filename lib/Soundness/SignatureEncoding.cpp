@@ -249,8 +249,8 @@ const char *machineDeciderKindName(MachineDeciderKind kind) {
     return "same_point";
   case MachineDeciderKind::BatchAfterMaterial:
     return "batch_after_material";
-  case MachineDeciderKind::CommittedArityOpens:
-    return "committed_arity_opens";
+  case MachineDeciderKind::MultiplicitiesMatchTable:
+    return "multiplicities_match_table";
   case MachineDeciderKind::LookupFitsCharacteristic:
     return "lookup_fits_characteristic";
   case MachineDeciderKind::FriShape:
@@ -354,7 +354,12 @@ Value encodeArtifactProjection(const ArtifactProjection &projection) {
   case ArtifactProjectionKind::ContractRoundAdjacency:
   case ArtifactProjectionKind::ReductionInputCount:
   case ArtifactProjectionKind::BoundRelationAnchorCount:
+    break;
   case ArtifactProjectionKind::CommittedArity:
+    // Emitted only when a role is selected, so a binding that reads the
+    // whole reduction keeps the digest it had before roles existed.
+    if (!projection.memberRole.empty())
+      document["member_role"] = projection.memberRole;
     break;
   case ArtifactProjectionKind::ReductionParameter:
   case ArtifactProjectionKind::PathBindingField:

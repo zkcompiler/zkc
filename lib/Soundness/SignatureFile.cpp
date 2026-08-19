@@ -386,10 +386,27 @@ Expected<ArtifactProjection> readArtifactProjection(const Reader &reader,
   case ArtifactProjectionKind::ContractRoundAdjacency:
   case ArtifactProjectionKind::ReductionInputCount:
   case ArtifactProjectionKind::BoundRelationAnchorCount:
-  case ArtifactProjectionKind::CommittedArity:
     if (Error err = reader.closed(entry, {"kind", "result_sort"}, context))
       return std::move(err);
     return projection;
+  case ArtifactProjectionKind::CommittedArity: {
+    // The role is optional: absent reads the whole reduction, which is the
+    // reading every binding written before roles could be selected has.
+    if (Error err = reader.closed(
+            entry, {"kind", "result_sort", "member_role"}, context))
+      return std::move(err);
+    if (entry.get("member_role")) {
+      auto role = reader.string(entry, "member_role", context);
+      if (!role)
+        return role.takeError();
+      if (role->empty())
+        return reader.fail(context +
+                            " member_role must not be empty: absent is how a "
+                            "projection reads the whole reduction");
+      projection.memberRole = role->str();
+    }
+    return projection;
+  }
   case ArtifactProjectionKind::ReductionParameter:
   case ArtifactProjectionKind::PathBindingField: {
     if (Error err =
@@ -1892,7 +1909,7 @@ Expected<SchemaContext> readSchemas(const Reader &reader,
       {"same_point", MachineDeciderKind::SamePoint},
       {"batch_after_material", MachineDeciderKind::BatchAfterMaterial},
       {"fri_shape", MachineDeciderKind::FriShape},
-      {"committed_arity_opens", MachineDeciderKind::CommittedArityOpens},
+      {"multiplicities_match_table", MachineDeciderKind::MultiplicitiesMatchTable},
       {"lookup_fits_characteristic",
        MachineDeciderKind::LookupFitsCharacteristic},
       {"johnson_fold_param", MachineDeciderKind::JohnsonFoldParam},

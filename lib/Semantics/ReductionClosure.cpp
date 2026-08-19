@@ -500,11 +500,15 @@ private:
                 continue;
               for (const auto &occurrence : role->second) {
                 Operation *messageOp = occurrence.second.operation;
-                auto slot = cast<SlotOp>(messageOp);
+                // Absorption is an event property, asked of the event: a
+                // public binding always absorbs, a slot does unless it is
+                // marked unabsorbed (docs/spec/kernel.md §1.1).
+                auto member = cast<zkc::pir::ProtocolMemberOpInterface>(
+                    messageOp);
                 if (positions.lookup(messageOp) > challengePosition)
                   prefixError() << "message role '" << message.role
                                 << "' is committed after its challenge";
-                else if (slot.getUnabsorbed())
+                else if (!member.isAbsorbing())
                   prefixError() << "message role '" << message.role
                                 << "' is not absorbed before its challenge";
               }

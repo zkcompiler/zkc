@@ -1,18 +1,9 @@
-# The first rule that reads what a value commits to.
+# The ad-hoc lookup, where the prover supplies the table as well as the values
+# looked up in it.
 #
-# A lookup's soundness error grows in the size of the table, so a rule that
-# prices it needs that size — and until now a commitment was a value of some
-# payload class, with nothing in the type to ask. The four mechanisms that
-# reconstructed what a commitment binds on the rule side were all working
-# around that. Here the profile says it and the rule reads it.
-#
-# What keeps the number honest is not that it is written down. A commitment
-# root occupies one slot whatever stands behind it, so a declared arity has
-# no structural contradiction on its own, and understating it understates
-# every bound priced from it — which `kernel.md` §9.1 forbids. The opening
-# round is the counterpart: a challenge that indexes into committed content
-# can only range over what is there, so the rule ties its own number back to
-# the spine.
+# Its job beside the range check is the equal-length case and the other
+# direction of the origin rule: three prover messages rather than a public
+# binding and two, so a seal that only ever saw one seat could not pass both.
 #
 # RUN: rm -rf %t && mkdir -p %t
 # RUN: zkc-seal %S/../Encoding/logup-bus.mlir %zkc-seal-full -o %t/bus.artifacts > /dev/null
@@ -21,134 +12,61 @@
 # RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
 # RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --request=%t/bus.req.json -o=%t/bus.out.json %t/bus.mlirbc > /dev/null
+# RUN:   --request=%t/bus.req.json -o=%t/bus.out.json %t/bus.mlirbc | FileCheck %s --check-prefix=JUDGED
+# JUDGED: artifact judgment: not discharged (policy analysis_only_artifact)
 # RUN: FileCheck %s --check-prefix=BOUND < %t/bus.out.json
 
-# The bus round is the logarithmic-derivative argument at one sampled point
-# (Haböck, ePrint 2022/1530, Lemma 5): clearing denominators leaves a
-# polynomial of degree at most table plus lookups, so a false inclusion
-# survives a uniform point with probability at most that over the field.
-# Both counts are the committed arity read off the value profile — in this
-# shape the table and the looked-up column are columns of one trace, so one
-# arity answers both — and the order is the bus challenge's own space, which
-# the rule may read as the field's characteristic only because it carries
-# the hypothesis that the field is prime of that order. Nothing here was
-# supplied beside the artifact.
-# BOUND: "zkc.hyp.logup_multiplicities_honest"
-#
-# And the arity itself is carried as an obligation, because no fact of the
-# spine implies it. A commitment root occupies one transcript slot whatever
-# stands behind it, so a prover who committed to more than the profile
-# declares still answers every opening challenge in the declared range: the
-# machine condition below catches a declaration inconsistent with the spine,
-# and understatement is consistent with it. Understatement is also the
-# direction that shrinks this bound, so the assumption is stated where a
-# reader of the judgment meets it rather than left for one who reads the
-# rule.
-# BOUND: "zkc.hyp.commitment_binds_declared_arity"
-# BOUND: "constant": "2048/2305843009213693951"
+# Both columns hold two hundred and fifty-six entries, so the degree of the
+# cleared identity is five hundred and eleven and not five hundred and twelve:
+# every term omits one of the linear factors. Reading the same arity twice is
+# correct here and is not the projection reading one number for the whole
+# reduction — it is two role-selected reads that happen to agree, which is
+# what the range check beside this one demonstrates by disagreeing.
+# BOUND: "constant": "511/2305843009213693951"
 
-# The opening round establishes nothing, and is priced at nothing. Its check
-# constrains an opened value against the sampled point, but no opening proof
-# binds that value to the commitment it claims to come from -- the profile's
-# binding route is the name of the construction that would, and this kernel
-# carries it without evaluating. That is what the obligation above is owed
-# to. A round that establishes nothing cannot rescue a doomed prover either,
-# so its error is zero, and the claim leaves as a residual for a protocol
-# that can open a commitment.
-# BOUND: "constant": "0"
+# The claim that leaves is the identity at the sampled point, not the
+# inclusion: the inclusion is what this reduction consumes, and the passage
+# between the two is the whole of what one sampled challenge buys. Discharging
+# the identity — helper columns, a running sum, and the quotient machinery
+# that checks them — is the next protocol's statement, and leaves here as a
+# residual rather than as a check this artifact cannot support.
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/logup-bus.mlir | FileCheck %s --check-prefix=ROUTE
+# ROUTE: pir.residual
+# ROUTE-SAME: "logup_identity"
+# ROUTE-SAME: logup-identity-discharge-not-modeled
 
-# The honest-multiplicity hypothesis rides beside the numbers, carried rather
-# than established: it is pinned above, where the witness states it.
-
-# The necessity argument, as a test. The same protocol whose columns declare
-# half the content they carry: the profile is sealed either way, so what
-# refuses is the condition tying it to the spine, and without that condition
-# the bound would have been priced at half the degree it owes.
-#
-# The understated profile is generated rather than shipped. A profile no
-# protocol names would otherwise ride in the registry's digest authority for
-# the life of the project to serve one negative leg.
-# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_column_1024']['arity_log2']=9; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/understated.vocab.json
+# The declared arity, understated consistently on both sides. Nothing refuses:
+# a prover who committed to more than the profile declares answers every
+# challenge honestly, and the bound simply comes out smaller. That is why the
+# arity is carried as an obligation rather than checked, and this leg is the
+# demonstration that no condition could take its place.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_committed_column']['arity_log2']=7; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/under.vocab.json
 # RUN: zkc-seal %S/../Encoding/logup-bus.mlir \
-# RUN:   --protocol-vocabulary=%t/understated.vocab.json \
+# RUN:   --protocol-vocabulary=%t/under.vocab.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
 # RUN:   -o %t/under.artifacts > /dev/null
 # RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/under.artifacts %t/under.mlirbc
 # RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/under.artifacts %t/under.req.json
-# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
-# RUN:   --protocol-vocabulary=%t/understated.vocab.json \
-# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --request=%t/under.req.json -o=/dev/null %t/under.mlirbc 2>&1 \
-# RUN:   | FileCheck %s --check-prefix=UNDERSTATED
-# UNDERSTATED: condition_failed at apply.conditions.S1
-
-# And the limit of that condition, which is why the arity is also carried as
-# a hypothesis. Understate the profile and the opening space together and
-# nothing refuses: the two agree, so the condition is satisfied, and the
-# bound is priced at half the degree the lemma charges. A prover who
-# committed to a thousand and twenty-four columns and declared five hundred
-# and twelve answers every challenge in the declared range honestly, so no
-# arrangement of transcript events separates the two cases -- only the
-# commitment construction can, which is what the obligation names.
-# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_column_1024']['arity_log2']=9; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/consistent.vocab.json
-# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"1024\"','space \"512\"'))" %S/../Encoding/logup-bus.mlir > %t/consistent.mlir
-# RUN: zkc-seal %t/consistent.mlir \
-# RUN:   --protocol-vocabulary=%t/consistent.vocab.json \
-# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   -o %t/cons.artifacts > /dev/null
-# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/cons.artifacts %t/cons.mlirbc
-# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/cons.artifacts %t/cons.req.json
 # RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
-# RUN:   --protocol-vocabulary=%t/consistent.vocab.json \
+# RUN:   --protocol-vocabulary=%t/under.vocab.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --request=%t/cons.req.json -o=%t/cons.out.json %t/cons.mlirbc
-# RUN: FileCheck %s --check-prefix=CONSISTENT < %t/cons.out.json
-# CONSISTENT: "constant": "1024/2305843009213693951"
+# RUN:   --request=%t/under.req.json -o=%t/under.out.json %t/under.mlirbc
+# RUN: FileCheck %s --check-prefix=UNDERSTATED < %t/under.out.json
+# UNDERSTATED: "constant": "255/2305843009213693951"
 
-# The lemma's own hypothesis, as a test. Multiplicities are field elements,
-# so the number of entries must stay below the characteristic; overflowing
-# them is the known soundness failure of the whole approach, not an edge
-# case. The same protocol over a field too small for its table refuses at the
-# condition rather than pricing a protocol the theorem does not cover.
-#
-# The field is the one the derivation states, not the size of a sampling set:
-# a challenge space is how many values are drawn from, and reading it as a
-# characteristic would be true only for a prime field sampled whole. That is
-# what the two hypotheses above carry, and it is why this leg shrinks the
-# declared field rather than the space.
-# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693951\"','space \"1031\"').replace('logup.beta','logup.beta.tiny'))" %S/../Encoding/logup-bus.mlir > %t/tiny.mlir
-# RUN: zkc-seal %t/tiny.mlir %zkc-seal-full -o %t/tiny.artifacts > /dev/null
-# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/tiny.artifacts %t/tiny.mlirbc
-# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['derivation']['resolved_parameters']['zkc.rbr.logup@reduction:logup_bus']['field_order']={'sort':'integer','value':'1031'}; json.dump(d, open(sys.argv[2],'w'))" %S/Inputs/logup-bus-request.json %t/tiny.base.json
-# RUN: %python %S/../Evidence/Inputs/retarget_request.py %t/tiny.base.json %t/tiny.artifacts %t/tiny.req.json
-# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
-# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
-# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --request=%t/tiny.req.json -o=/dev/null %t/tiny.mlirbc 2>&1 \
-# RUN:   | FileCheck %s --check-prefix=OVERFLOW
-# OVERFLOW: condition_failed at apply.conditions.S2
-
-# And the compiled judgment, on the family's first day. The Fiat-Shamir path
-# is infrastructure rather than a per-family construction, so a family that
-# did not exist when it landed compiles through it unchanged — and the round
-# coverage sees both of this reduction's challenges owned, so nothing is left
-# out of the bound.
-# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); p=d['derivation']['plan']; c=d['derivation']['target']['subject']['claim']; a=d['derivation']['target']['subject']['artifact_id']; sr={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','premises':{'source_rbr':p}}; d['derivation']['plan']={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard','premises':{'source_sr':sr}}; d['derivation']['selected_bindings'] += ['zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard']; d['derivation']['target']['index']={'notion':'fiat_shamir','track':'soundness','variant':'standard','model':'duplex','quantification':'static'}; d['derivation']['target']['resource_variables']=[{'name':'t','sort':'integer'},{'name':'tau','sort':'integer'}]; json.dump(d, open(sys.argv[2],'w'))" %t/bus.req.json %t/fs.req.json
+# Role selection, demonstrated by moving one role and nothing else. Give the
+# query column a profile of a different size and the bound moves from five
+# hundred and eleven to a thousand two hundred and seventy-nine, because the
+# rule reads the two sides separately. Reading one arity for the whole
+# reduction could not produce this: it would refuse the artifact outright for
+# declaring two.
+# RUN: %python -c "import sys; t=open(sys.argv[1]).read(); t=t.replace('\"queries\" : profile \"logup_committed_column\"','\"queries\" : profile \"logup_queries\"'); t=t.replace('%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<profile \"logup_committed_column\">','%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<profile \"logup_queries\">'); sys.stdout.write(t)" %S/../Encoding/logup-bus.mlir > %t/mixed.mlir
+# RUN: zkc-seal %t/mixed.mlir %zkc-seal-full -o %t/mixed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/mixed.artifacts %t/mixed.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/mixed.artifacts %t/mixed.req.json
 # RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
 # RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --request=%t/fs.req.json -o=/dev/null %t/bus.mlirbc | FileCheck %s --check-prefix=COMPILED
-# COMPILED: artifact judgment
-# COMPILED-NOT: belongs to no transformer
-
-# The structural half of the derivation, on both implementations. Every other
-# soundness family carries this line; the bounds themselves are C++-only, and
-# the shared surface is the plan the two legs walk to reach them.
-# RUN: %if uv %{ zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
-# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
-# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --request=%t/bus.req.json --skeleton -o=%t/zkc.skeleton.json %t/bus.mlirbc %}
-# RUN: %if uv %{ %uv python -m oracle.parity derive-skeleton logup-bus \
-# RUN:   %t/bus.req.json > %t/oracle.skeleton.json %}
-# RUN: %if uv %{ diff %t/zkc.skeleton.json %t/oracle.skeleton.json %}
+# RUN:   --request=%t/mixed.req.json -o=%t/mixed.out.json %t/mixed.mlirbc
+# RUN: FileCheck %s --check-prefix=MIXED < %t/mixed.out.json
+# MIXED: "constant": "1279/2305843009213693951"
