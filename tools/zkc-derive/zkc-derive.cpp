@@ -339,8 +339,14 @@ int main(int argc, char **argv) {
           llvm::consumeError(value.takeError());
           return false;
         }
-        if (value->isZero())
+        // A zero term is shown rather than skipped: omitting it would read
+        // the same as a term the display could not render, and the constant
+        // here is the codec bias -- whether it is zero is the fact a reader
+        // comparing two configurations is after.
+        if (value->isZero()) {
+          llvm::outs() << "headline term " << term << ": 0\n";
           return true;
+        }
         auto ceiling = value->ceilLog2();
         if (!ceiling) {
           llvm::consumeError(ceiling.takeError());

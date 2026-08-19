@@ -44,3 +44,14 @@
 # RUN: %if uv %{ %python %S/Inputs/counted_bias_delta.py %t/plain.out.json %t/counted.out.json %t/per-draw.json 3 | FileCheck %s --check-prefix=DELTA %}
 # DELTA: constant moved by 3 draws: yes
 # DELTA-NEXT: linear coefficient moved by 3 draws: yes
+
+# The bias in the display, which is where a reader meets it. The unmodified
+# artifact's constant is zero -- its challenge space divides the squeeze
+# domain exactly -- and zero is shown rather than omitted, because an omitted
+# line and a zero line would read alike and whether the bias is zero is the
+# fact a reader comparing two configurations is after.
+# RUN: zkc-derive --headline --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/plain.req.json -o=/dev/null %t/plain.mlirbc | FileCheck %s --check-prefix=ZERO
+# ZERO: headline term constant: 0

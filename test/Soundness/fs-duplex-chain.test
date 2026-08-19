@@ -137,3 +137,32 @@
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
 # RUN:   --check=%t/b.headline.json %t/b.mlirbc | FileCheck %s --check-prefix=REDERIVES
 # REDERIVES: zkc-derive: witness re-derives
+
+# The other way an artifact carries no duplex: the kappa's sponge axis is
+# optional and nothing ties a challenge to one, so a protocol may declare an
+# interactive shape and decline to say what would compile it. Sealing accepts
+# that; the compilation says which of the two facts is missing.
+# RUN: zkc-seal %S/Inputs/sumcheck-no-sponge.mlir %zkc-seal-full -o %t/nosponge.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/nosponge.artifacts %t/nosponge.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/sumcheck-fs-request.json %t/nosponge.artifacts %t/nosponge.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/nosponge.req.json -o=/dev/null %t/nosponge.mlirbc 2>&1 | FileCheck %s --check-prefix=NOSPONGE
+# NOSPONGE: the sealed kappa names no sponge, so the artifact declares no duplex to squeeze from
+
+# And the bijection branch, whose arithmetic is different: an exact
+# coordinate tuple is a uniform draw only for the target it bijects with, so
+# a wider field is unsupported rather than silently reduced.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['kappa']['codecs']['ext_field']='plonky3_bb31_ext4_tuple'; json.dump(d, open(sys.argv[2],'w'))" %S/../Family/Inputs/frigrind.json %t/bijection.json
+# RUN: zkc-family %t/bijection.json --emit-vocabulary=%t/j.vocab.json --emit-spine=%t/j.mlir
+# RUN: zkc-seal %t/j.mlir --protocol-vocabulary=%t/j.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/j.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/j.artifacts %t/j.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/fri-fs-chain-request.json %t/j.artifacts %t/j.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/j.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/j.req.json -o=/dev/null %t/j.mlirbc 2>&1 | FileCheck %s --check-prefix=BIJECTION
+# BIJECTION: whose 4 alphabet symbols biject with 4294967296 exactly
