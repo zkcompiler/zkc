@@ -27,3 +27,14 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // OPERAND: [zkc-E302] operand sequence has 0 valid layouts
 // OPERAND-SAME: operand of value profile 'logup_column_1024' is a commitment
 // OPERAND-SAME: an operand slot declares a payload class rather than one
+
+// A codec refusal names where the class came from. The class a profiled
+// slot's material travels under is the profile's element class, which the
+// author never wrote down, so quoting it alone would leave them to guess the
+// connection.
+// RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['uncodeced']={'arity_log2':10,'binding_route':'zkc.commit.toy-vector','element_class':'no_such_class','origin':'prover_message'}; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t.vocab.json
+// RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('logup_column_1024','uncodeced'))" %S/logup-bus.mlir > %t.uncodeced.mlir
+// RUN: not zkc-opt -pir-seal='protocol-vocabulary=%t.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %t.uncodeced.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=NOCODEC
+// NOCODEC: [zkc-E221] payload class 'no_such_class' has no codec in kappa.codecs
+// NOCODEC-SAME: it is the element class of value profile 'uncodeced'

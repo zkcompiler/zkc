@@ -637,10 +637,19 @@ private:
     segmentStarts.assign(segments->begin(), segments->end());
   }
 
-  void requireCodec(Operation *op, StringRef payloadClass) {
-    if (!codecs || !codecs.getNamed(payloadClass))
-      error(op) << "[zkc-E221] payload class '" << payloadClass
-                << "' has no codec in kappa.codecs";
+  /// `via` names where the class came from when the author did not write it
+  /// directly: a profiled slot names a profile, and the class its material
+  /// travels under is the profile's. A refusal quoting a string that appears
+  /// nowhere in the source leaves the author to guess the connection.
+  void requireCodec(Operation *op, StringRef payloadClass,
+                    StringRef via = StringRef()) {
+    if (codecs && codecs.getNamed(payloadClass))
+      return;
+    auto refusal = error(op);
+    refusal << "[zkc-E221] payload class '" << payloadClass
+            << "' has no codec in kappa.codecs";
+    if (!via.empty())
+      refusal << "; it is the element class of value profile '" << via << "'";
   }
 
   /// A profiled slot names a `value_profiles` entry, and the codec its
@@ -657,7 +666,7 @@ private:
                 << "', which the sealed vocabulary does not declare";
       return;
     }
-    requireCodec(op, profile->elementClass);
+    requireCodec(op, profile->elementClass, op.getPayloadClass());
   }
 
   /// Recheck only: the single sealed vocabulary table must be the exact cited
