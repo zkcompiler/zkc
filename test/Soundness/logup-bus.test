@@ -70,3 +70,20 @@
 # RUN:   --request=%t/mixed.req.json -o=%t/mixed.out.json %t/mixed.mlirbc
 # RUN: FileCheck %s --check-prefix=MIXED < %t/mixed.out.json
 # MIXED: "constant": "1279/2305843009213693951"
+
+# A role filled by a value that declares nothing. Passing over it silently
+# would let a reduction profile one column and leave another bare, and the
+# arity a bound is priced from would be whatever the profiled members
+# happened to say. The refusal names the parameter, so an author sees which
+# side of the lookup is undeclared rather than that something is.
+# RUN: %python -c "import sys; t=open(sys.argv[1]).read(); t=t.replace('\"queries\" : profile \"logup_committed_column\"','\"queries\" : \"scalar\"'); t=t.replace('%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<profile \"logup_committed_column\">','%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<\"scalar\">'); sys.stdout.write(t)" %S/../Encoding/logup-bus.mlir > %t/bare.mlir
+# RUN: zkc-seal %t/bare.mlir %zkc-seal-full -o %t/bare.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/bare.artifacts %t/bare.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/bare.artifacts %t/bare.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/bare.req.json -o=/dev/null %t/bare.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=BARE
+# BARE: invalid_payload at apply.parameters.lookups
+# BARE-SAME: declares no committed content
