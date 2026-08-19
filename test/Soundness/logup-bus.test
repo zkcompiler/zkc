@@ -58,3 +58,32 @@
 # RUN:   --request=%t/under.req.json -o=/dev/null %t/under.mlirbc 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=UNDERSTATED
 # UNDERSTATED: condition_failed at apply.conditions.S1
+
+# The lemma's own hypothesis, as a test. Multiplicities are field elements,
+# so the entries must stay below the characteristic; overflowing them is the
+# known soundness failure of the whole approach, not an edge case. The same
+# protocol over a field too small for its table refuses at the condition
+# rather than pricing a protocol the theorem does not cover.
+# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693952\"','space \"1024\"').replace('logup.beta','logup.beta.tiny'))" %S/../Encoding/logup-bus.mlir > %t/tiny.mlir
+# RUN: zkc-seal %t/tiny.mlir %zkc-seal-full -o %t/tiny.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/tiny.artifacts %t/tiny.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/tiny.artifacts %t/tiny.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/tiny.req.json -o=/dev/null %t/tiny.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=OVERFLOW
+# OVERFLOW: condition_failed at apply.conditions.S2
+
+# And the compiled judgment, on the family's first day. The Fiat-Shamir path
+# is infrastructure rather than a per-family construction, so a family that
+# did not exist when it landed compiles through it unchanged — and the round
+# coverage sees both of this reduction's challenges owned, so nothing is left
+# out of the bound.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); p=d['derivation']['plan']; c=d['derivation']['target']['subject']['claim']; a=d['derivation']['target']['subject']['artifact_id']; sr={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','premises':{'source_rbr':p}}; d['derivation']['plan']={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard','premises':{'source_sr':sr}}; d['derivation']['selected_bindings'] += ['zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard']; d['derivation']['target']['index']={'notion':'fiat_shamir','track':'soundness','variant':'standard','model':'duplex','quantification':'static'}; d['derivation']['target']['resource_variables']=[{'name':'t','sort':'integer'},{'name':'tau','sort':'integer'}]; json.dump(d, open(sys.argv[2],'w'))" %t/bus.req.json %t/fs.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/fs.req.json -o=/dev/null %t/bus.mlirbc | FileCheck %s --check-prefix=COMPILED
+# COMPILED: artifact judgment
+# COMPILED-NOT: belongs to no transformer
