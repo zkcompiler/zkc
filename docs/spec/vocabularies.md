@@ -155,6 +155,28 @@ additive only when existing constructors and judgments already express it.
 Scope, free parameters, required interfaces, or a wildcard profile are absent;
 adding any is a versioned format decision.
 
+### 3.1 Value profiles
+
+`value_profiles` names what stands behind a commitment. Each entry fixes
+`element_class` (the payload class its content is drawn from, and the codec
+key its material travels under), `arity_log2` (how many elements, as a power
+of two), `origin`, and `binding_route` (the construction that realizes the
+commitment, and the seat where its declared content is discharged).
+
+`origin` is one of `prover_message`, `preprocessed`, or `relation_derived`,
+and it must agree with the transcript event carrying the value: prover
+material enters on a slot, statement-fixed material on a public binding.
+The arity is a power of two because the sequences these describe are trace
+columns; a protocol with fewer entries pads, and prices at the declared
+size, which overstates a soundness bound rather than understating it. There
+is no zero-length value: a commitment to nothing is not a commitment.
+
+A message role of a reduction contract may name its `source` — `prover_slot`
+or `public_bind`, the former being the default and the reading of every
+contract written without the field. The role's source and the profile's
+origin are checked against each other and against the spine, so a protocol
+cannot give two answers to who chose a role's content.
+
 ## 4. Transformer vocabulary
 
 - **Source kinds**: neutral claim instantiation through `pir.instantiate` is

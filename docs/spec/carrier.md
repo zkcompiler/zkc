@@ -82,13 +82,29 @@ program — is the unit of identity and verification.
   fixes arity, class, and route the way a claim profile fixes anchor names,
   so no-predicate-semantics holds by construction.
 
-  A fact a rule reads off a value profile is a declaration until something
-  ties it to structure. A rule that prices in one owes a condition doing
-  so — the arity is the case that exists, and its tie is that an opening
-  challenge ranges over exactly the declared content. That condition
-  catches an inconsistent declaration; grounding the declaration in the
-  realized commitment needs an opening proof, which the carrier does not
-  yet state.
+  A fact a rule reads off a value profile is a declaration, and a rule that
+  prices in one owes a condition tying it to whatever structure the artifact
+  does fix. Where two declared facts stand in a relation the protocol
+  determines — a multiplicity sequence indexed by a table, so one arity is
+  the other — that relation is a condition of the rule, and an artifact
+  whose declarations disagree is refused. Where no such relation exists, a
+  lone commitment's declared content against its realized content, **no
+  arrangement of transcript events can supply one**: a commitment root
+  occupies one transcript slot whatever stands behind it, so a prover who
+  committed to more than the profile declares is consistent with every
+  spine fact, and understatement is the direction that understates a bound.
+  That is carried as an obligation of the judgment rather than checked, and
+  it is discharged at the seat the profile's origin names — an opening
+  relation of the binding route for committed content, the anchor's
+  preimage for preprocessed content.
+
+  A profile's `origin` says who chose the content, and the event carrying it
+  says the same thing in the carrier's terms: prover material enters on a
+  `pir.slot`, and content the statement fixes enters on a `pir.bind`, which
+  absorbs and so binds every later challenge to it. The two spellings must
+  agree. A reduction contract states the same fact a third time, by naming
+  the source of each message role, so a rule reading a role knows which
+  event kind fills it without inspecting the spine.
 
 - A `pir.chal` is a protocol-neutral **challenge capability**, not a value of
   a distinguished `chal` class. It names the semantic class of each sample,
