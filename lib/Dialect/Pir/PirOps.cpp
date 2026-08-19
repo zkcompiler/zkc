@@ -40,7 +40,8 @@ BindOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          BindOp::Adaptor adaptor,
                          SmallVectorImpl<Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(getThreadType(ctx));
-  inferredReturnTypes.push_back(ValType::get(ctx, adaptor.getPayloadClass()));
+  inferredReturnTypes.push_back(
+      ValType::get(ctx, adaptor.getPayloadClass(), /*profiled=*/false));
   return success();
 }
 
@@ -49,11 +50,24 @@ SlotOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          SlotOp::Adaptor adaptor,
                          SmallVectorImpl<Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(getThreadType(ctx));
-  inferredReturnTypes.push_back(ValType::get(ctx, adaptor.getPayloadClass()));
+  // The marker travels from the operation into the type it infers, so a
+  // reader of the value cannot mistake a profile name for a payload class
+  // without resolving the vocabulary.
+  inferredReturnTypes.push_back(
+      ValType::get(ctx, adaptor.getPayloadClass(), adaptor.getProfiled()));
   return success();
 }
 
 LogicalResult SlotOp::verify() {
+  // A profiled slot's material is one commitment. A counted one would be a
+  // vector of them, which no profile shape describes and no consumer wants
+  // yet; the two are refused together rather than encoded into a form the
+  // vocabulary cannot read back.
+  if (getProfiled() && getCount() != "1")
+    return emitOpError()
+           << "[zkc-E167] a profiled slot carries one commitment, so it "
+              "cannot also be counted: a vector of commitments is a shape "
+              "no value profile states (docs/spec/carrier.md §3)";
   std::optional<uint64_t> parsed = zkc::challenge::parseCount(getCount());
   if (!parsed)
     return emitOpError()
@@ -72,7 +86,8 @@ ChalOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          ChalOp::Adaptor adaptor,
                          SmallVectorImpl<Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(getThreadType(ctx));
-  inferredReturnTypes.push_back(ValType::get(ctx, adaptor.getPayloadClass()));
+  inferredReturnTypes.push_back(
+      ValType::get(ctx, adaptor.getPayloadClass(), /*profiled=*/false));
   return success();
 }
 

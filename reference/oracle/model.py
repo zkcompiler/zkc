@@ -1526,6 +1526,7 @@ class ProtocolVocabulary:
             "hole_contracts": self.hole_contract_digests,
             "reduction_contracts": self.reduction_digests,
             "terminal_rules": self.rule_digests,
+            "value_profiles": self.value_profile_digests,
         }
         try:
             return tables[section][name]
@@ -2023,6 +2024,10 @@ class Slot(NamedTuple):
     membership: tuple[str, str, int] | None
     binding: str | None = None
     count: str = "1"
+    #: When set, ``payload_class`` names a value profile rather than a payload
+    #: class: the slot's material is a commitment, and the profile states what
+    #: stands behind it.
+    profiled: bool = False
 
 
 class Chal(NamedTuple):
@@ -2112,6 +2117,7 @@ def slot(
     membership: tuple[str, str, int] | tuple[str, str] | None = None,
     binding: str | None = None,
     count: str = "1",
+    profiled: bool = False,
 ) -> Slot:
     if membership is not None and len(membership) == 2:
         membership = (membership[0], membership[1], 0)
@@ -2120,7 +2126,8 @@ def slot(
     # codec width are constants of the sealed instance, so the framing
     # stays injective (docs/spec/kernel.md section 1.1).
     return Slot(
-        "slot", label, payload_class, absorbed, membership, binding, count
+        "slot", label, payload_class, absorbed, membership, binding, count,
+        profiled
     )
 
 
@@ -3272,6 +3279,22 @@ def validate_protocol(
                 )
             absorbed.add(event.label)
         elif isinstance(event, Slot):
+            if event.profiled:
+                # Fail-closed resolution: an unresolved profile name is
+                # refused rather than read as a payload class nobody
+                # declared, which is what one namespace would have done.
+                profile = vocabulary.value_profiles.get(event.payload_class)
+                if profile is None:
+                    raise Refusal(
+                        f"[zkc-E166] slot {event.label!r} names value profile "
+                        f"{event.payload_class!r}, which the sealed "
+                        "vocabulary does not declare"
+                    )
+                if event.count != "1":
+                    raise Refusal(
+                        f"[zkc-E167] a profiled slot carries one commitment, "
+                        f"so slot {event.label!r} cannot also be counted"
+                    )
             if event.absorbed:
                 absorbed.add(event.label)
             elif first_unabsorbed is None:
@@ -3372,7 +3395,21 @@ def resolved_vocabulary(
             name: construction_digest(name) for name in sorted(construction)
         },
     }
-    # Hole contracts are cited by construction routes; the sixth section
+    # A profiled value cites its profile, and the section exists exactly when
+    # one does -- the hole-contract discipline. Without it the identity would
+    # not commit to what the profile says, and an arity a rule reads could
+    # move under a fixed artifact id.
+    value_profiles = sorted({
+        event.payload_class for event in protocol["events"]
+        if isinstance(event, Slot) and event.profiled
+    })
+    if value_profiles:
+        table["value_profiles"] = {
+            name: vocabulary.digest_for("value_profiles", name)
+            for name in value_profiles
+        }
+
+    # Hole contracts are cited by construction routes; the section
     # exists exactly when at least one contract is cited, so a protocol
     # without routes keeps its exact table shape and bytes.
     routes = protocol.get("routes")
@@ -3575,9 +3612,16 @@ def canonical_document(
             if event.membership is not None:
                 instance, role, index = event.membership
                 membership = [transformer_pos[instance], role, index]
-            # A counted slot is its own event family: the scalar family
-            # keeps its exact historical encoding.
-            if event.count == "1":
+            # A counted slot is its own event family, and so is a profiled
+            # one: the scalar family keeps its exact historical encoding.
+            if event.profiled:
+                row = [
+                    "slot_profiled",
+                    event.payload_class,
+                    1 if event.absorbed else 0,
+                    membership,
+                ]
+            elif event.count == "1":
                 row = [
                     "slot",
                     event.payload_class,

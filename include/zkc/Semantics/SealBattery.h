@@ -54,6 +54,10 @@ struct ProtocolVocabularyCitations {
   llvm::SmallVector<llvm::StringRef> checkContracts;
   llvm::SmallVector<llvm::StringRef> reductionContracts;
   llvm::SmallVector<llvm::StringRef> terminalRules;
+  /// Value profiles the protocol's profiled values name. Present in the
+  /// resolved table exactly when one is cited, the way hole contracts are,
+  /// so a protocol with no profiled value keeps its exact table bytes.
+  llvm::SmallVector<llvm::StringRef> valueProfiles;
 };
 
 ProtocolVocabularyCitations collectCitedProtocolVocabulary(

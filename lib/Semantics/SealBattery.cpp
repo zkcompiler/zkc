@@ -39,6 +39,14 @@ zkc::pir::ProtocolVocabularyCitations zkc::pir::collectCitedProtocolVocabulary(
     for (Value value : op.getResults())
       if (auto claim = dyn_cast<zkc::pir::ClaimType>(value.getType()))
         citations.claimProfiles.push_back(claim.getProfile());
+    // A profiled value cites its profile the way a claim cites its
+    // descriptor profile. Without this the artifact's identity would not
+    // commit to what the profile says, and an arity a rule reads could move
+    // under a fixed artifact id.
+    for (Value value : op.getResults())
+      if (auto val = dyn_cast<zkc::pir::ValType>(value.getType()))
+        if (val.getProfiled())
+          citations.valueProfiles.push_back(val.getValueClass());
     if (auto check = dyn_cast<zkc::pir::CheckOp>(&op))
       citations.checkContracts.push_back(check.getContract());
     else if (auto reduce = dyn_cast<zkc::pir::ReduceOp>(&op))
@@ -81,6 +89,7 @@ zkc::pir::ProtocolVocabularyCitations zkc::pir::collectCitedProtocolVocabulary(
   normalize(citations.checkContracts);
   normalize(citations.reductionContracts);
   normalize(citations.terminalRules);
+  normalize(citations.valueProfiles);
   return citations;
 }
 
@@ -634,6 +643,23 @@ private:
                 << "' has no codec in kappa.codecs";
   }
 
+  /// A profiled slot names a `value_profiles` entry, and the codec its
+  /// material travels under is the profile's element class. Resolution is
+  /// fail-closed on purpose: an unresolved name is refused here rather than
+  /// read as a payload class nobody declared, which is what a single
+  /// namespace for the two would have done.
+  void requireValueProfile(zkc::pir::SlotOp op) {
+    const zkc::registry::ValueProfile *profile =
+        vocabulary.lookupValueProfile(op.getPayloadClass());
+    if (!profile) {
+      error(op) << "[zkc-E166] slot '" << op.getLabel()
+                << "' names value profile '" << op.getPayloadClass()
+                << "', which the sealed vocabulary does not declare";
+      return;
+    }
+    requireCodec(op, profile->elementClass);
+  }
+
   /// Recheck only: the single sealed vocabulary table must be the exact cited
   /// subset of every loaded authority. No operation-local digest participates.
   void checkVocab(Operation *container, std::optional<DictionaryAttr> vocab,
@@ -717,7 +743,10 @@ private:
                            "segment's first challenge";
           })
           .Case<zkc::pir::SlotOp>([&](zkc::pir::SlotOp op) {
-            requireCodec(op, op.getPayloadClass());
+            if (op.getProfiled())
+              requireValueProfile(op);
+            else
+              requireCodec(op, op.getPayloadClass());
             if (op.getUnabsorbed() && !firstUnabsorbed)
               firstUnabsorbed = op;
           })
@@ -977,14 +1006,21 @@ bool zkc::pir::verifyResolvedVocab(
   // exactly when construction routes cite at least one contract, so a
   // protocol without routes keeps its exact table shape and bytes.
   static constexpr StringLiteral sections[] = {
-      "claim_profiles", "check_contracts",       "reduction_contracts",
-      "terminal_rules", "construction_profiles", "hole_contracts"};
-  bool hasHoleSection = vocab->getNamed("hole_contracts").has_value();
-  if (vocab->size() != (hasHoleSection ? 6u : 5u))
+      "claim_profiles",        "check_contracts", "reduction_contracts",
+      "terminal_rules",        "construction_profiles",
+      "hole_contracts",        "value_profiles"};
+  const bool hasHoleSection = vocab->getNamed("hole_contracts").has_value();
+  size_t expected = 5;
+  if (hasHoleSection)
+    ++expected;
+  if (vocab->getNamed("value_profiles"))
+    ++expected;
+  if (vocab->size() != expected)
     fail("resolved-vocabulary table must contain exactly claim_profiles, "
          "check_contracts, reduction_contracts, terminal_rules, "
          "and construction_profiles, plus hole_contracts only when routes "
-         "cite hole contracts");
+         "cite hole contracts and value_profiles only when a value names a "
+         "profile");
   for (NamedAttribute section : *vocab) {
     StringRef name = section.getName().getValue();
     if (!llvm::is_contained(sections, name))
@@ -1115,6 +1151,31 @@ bool zkc::pir::verifyResolvedVocab(
               if (seenHole.insert(id.getValue()).second)
                 citedHoles.push_back(id.getValue());
       }
+  // The same "present exactly when cited" discipline for value profiles:
+  // a table that carries one nobody names, or omits one somebody does, is a
+  // table that does not describe this artifact.
+  llvm::SmallVector<llvm::StringRef> citedValueProfiles;
+  llvm::StringSet<> seenValueProfile;
+  for (Operation &op : body)
+    for (Value value : op.getResults())
+      if (auto val = dyn_cast<zkc::pir::ValType>(value.getType()))
+        if (val.getProfiled() &&
+            seenValueProfile.insert(val.getValueClass()).second)
+          citedValueProfiles.push_back(val.getValueClass());
+  const bool hasValueProfileSection =
+      vocab->getNamed("value_profiles").has_value();
+  if (hasValueProfileSection != !citedValueProfiles.empty())
+    fail("resolved-vocabulary table carries value_profiles exactly when a "
+         "value names a profile");
+  if (hasValueProfileSection || !citedValueProfiles.empty())
+    verifySection(
+        "value_profiles", citedValueProfiles,
+        [&](StringRef id) -> std::optional<StringRef> {
+          const auto *entry = protocolVocabulary.lookupValueProfile(id);
+          return entry ? std::optional<StringRef>(entry->contentDigest())
+                       : std::nullopt;
+        });
+
   if (hasHoleSection != !citedHoles.empty())
     fail("resolved-vocabulary table carries hole_contracts exactly when "
          "routes cite hole contracts");

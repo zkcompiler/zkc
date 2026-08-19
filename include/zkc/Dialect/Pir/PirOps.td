@@ -163,7 +163,11 @@ def Pir_SlotOp
     authentication paths are the canonical case); by the kernel's default
     rule an unabsorbed slot may not precede any challenge — the
     generalized Frozen-Heart condition, checked at seal (kernel.md §5.2).
-    `binding` is the slot's construction route
+    With `profile`, `payload_class` names a `value_profiles` entry instead
+    of a payload class: the slot's material is a commitment, and the profile
+    states what stands behind it. The result type carries the marker, so a
+    consumer reading the class resolves the vocabulary first and cannot mistake
+    a profile name for a class. `binding` is the slot's construction route
     (docs/spec/endpoints.md §6.2): what supplies the written
     value on the prover endpoint — "<instance>.<result-index>" for a
     hole-instance output, "bind:<name>" for a statement echo, or
@@ -178,11 +182,12 @@ def Pir_SlotOp
       StringProp:$payload_class,
       DefaultValuedProp<StringProp, "\"1\"">:$count, UnitProp:$unabsorbed,
       OptionalProp<StringProp>:$instance, OptionalProp<StringProp>:$role,
-      DefaultValuedProp<I64Prop, "0">:$idx, OptionalAttr<StrAttr>:$binding);
+      DefaultValuedProp<I64Prop, "0">:$idx, OptionalAttr<StrAttr>:$binding,
+      UnitProp:$profiled);
   let results = (outs Token:$out, Pir_ValType:$val);
   let assemblyFormat = [{
-    $thread $label `:` $payload_class (`count` $count^)?
-    (`unabsorbed` $unabsorbed^)?
+    $thread $label `:` (`profile` $profiled^)? $payload_class
+    (`count` $count^)? (`unabsorbed` $unabsorbed^)?
     (`in` $instance^)? (`as` $role^)? (`idx` $idx^)?
     (`binding` $binding^)? attr-dict
   }];

@@ -27,9 +27,35 @@ def Pir_ValType : Pir_Type<"Val", "val"> {
     docs/spec/kernel.md §5) are val operands: SSA dominance makes "depends
     on a later event" unrepresentable, and the seal pass checks
     absorption on top.
+
+    A value may name a **profile** instead of a bare class:
+    `!pir.val<profile "table">` resolves a `value_profiles` entry in the
+    sealed vocabulary, which supplies the element class and states what the
+    value commits to — origin, arity, and binding route. The claim type has
+    resolved a descriptor profile from the start; this is the same treatment
+    for the other type, and today's bare class is the degenerate case rather
+    than a separate thing. The marker is explicit so an unresolved profile
+    name is a refusal instead of a class nobody declared: one namespace
+    would fail open on a typo.
+
+    The kernel never reads what a profiled value commits to. The profile
+    fixes arity, class, and route the way a claim profile fixes anchor
+    names, so no-predicate-semantics holds by construction.
   }];
-  let parameters = (ins StringRefParameter<"value class">:$valueClass);
-  let assemblyFormat = "`<` $valueClass `>`";
+  let parameters = (ins StringRefParameter<"value class">:$valueClass,
+                        DefaultValuedParameter<"bool", "false">:$profiled);
+  // Hand-written, because the marker is a keyword's presence rather than a
+  // parameter's value and the optional-group form would parse a literal
+  // boolean. The two spellings are `<"class">` and `<profile "name">`.
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDeclaration = [{
+    /// The payload class this value carries, for a bare-class value. A
+    /// profiled value's class comes from its profile, so consumers that key
+    /// the codec map resolve the vocabulary first.
+    llvm::StringRef bareClass() const {
+      return getProfiled() ? llvm::StringRef() : getValueClass();
+    }
+  }];
 }
 
 def Pir_ClaimType : Pir_Type<"Claim", "claim"> {

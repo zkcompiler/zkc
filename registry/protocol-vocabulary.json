@@ -95,6 +95,14 @@
       "anchors": [
         "statement"
       ]
+    },
+    "logup_inclusion": {
+      "kind": "lookup",
+      "anchors": [
+        "table",
+        "values",
+        "multiplicities"
+      ]
     }
   },
   "predicate_specs": {
@@ -3485,9 +3493,88 @@
           }
         }
       ]
+    },
+    "logup_bus": {
+      "consumes": [
+        "opaque_relation"
+      ],
+      "dep_slots": [
+        {
+          "role": "beta",
+          "source": "challenge_capability",
+          "class": "scalar"
+        },
+        {
+          "role": "idx",
+          "source": "challenge_capability",
+          "class": "query_index"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "beta"
+          },
+          "messages": [
+            {
+              "role": "cols",
+              "count": {
+                "exact": 3
+              }
+            }
+          ],
+          "kind": "bus"
+        },
+        {
+          "challenge_use": {
+            "role": "idx"
+          },
+          "messages": [
+            {
+              "role": "helper",
+              "count": {
+                "exact": 1
+              }
+            }
+          ],
+          "kind": "open"
+        }
+      ],
+      "parameters": {},
+      "checks": {},
+      "constraints": [],
+      "outputs": [
+        {
+          "profile": "logup_inclusion",
+          "anchors": {
+            "table": {
+              "kind": "message",
+              "role": "cols",
+              "occurrence": 1
+            },
+            "values": {
+              "kind": "message",
+              "role": "cols",
+              "occurrence": 0
+            },
+            "multiplicities": {
+              "kind": "message",
+              "role": "cols",
+              "occurrence": 2
+            }
+          }
+        }
+      ]
     }
   },
-  "value_profiles": {},
+  "value_profiles": {
+    "logup_column_1024": {
+      "arity_log2": 10,
+      "binding_route": "zkc.commit.toy-vector",
+      "element_class": "scalar",
+      "origin": "prover_message"
+    }
+  },
   "terminal_rules": {
     "zkc.terminal.relation-direct": {
       "claim_profile": "opaque_relation",

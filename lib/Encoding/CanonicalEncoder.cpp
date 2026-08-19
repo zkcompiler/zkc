@@ -266,18 +266,24 @@ public:
     // determines transcript bytes; no section names a security analysis,
     // because an analysis is derived about a sealed protocol rather than
     // carried inside it.
-    bool hasHoleSection = vocab.getNamed("hole_contracts").has_value();
-    if (vocab.size() != (hasHoleSection ? 6u : 5u))
+    size_t expected = 5;
+    if (vocab.getNamed("hole_contracts"))
+      ++expected;
+    if (vocab.getNamed("value_profiles"))
+      ++expected;
+    if (vocab.size() != expected)
       return llvm::createStringError(
           "resolved-vocabulary table must contain exactly claim_profiles, "
           "check_contracts, reduction_contracts, terminal_rules, "
           "and construction_profiles, plus hole_contracts only when routes "
-          "cite hole contracts");
+          "cite hole contracts and value_profiles only when a value names a "
+          "profile");
     for (NamedAttribute section : vocab) {
       StringRef name = section.getName().getValue();
       if (name != "claim_profiles" && name != "check_contracts" &&
           name != "reduction_contracts" && name != "terminal_rules" &&
-          name != "construction_profiles" && name != "hole_contracts")
+          name != "construction_profiles" && name != "hole_contracts" &&
+          name != "value_profiles")
         return llvm::createStringError(
             "resolved-vocabulary table has an unknown section '" + name.str() +
             "': only claim_profiles, check_contracts, reduction_contracts, "
@@ -704,12 +710,17 @@ private:
         membership = Array{reduceTransformer.lookup(owner.getOperation()),
                            m->role, m->idx};
       }
-      // A counted slot is its own event family: the scalar family's
-      // rows keep their exact historical encoding, so no identity
-      // outside the counted-row protocols moves (docs/spec/carrier.md
-      // §6's additive discipline).
+      // A counted slot is its own event family, and so is a profiled one:
+      // the scalar family's rows keep their exact historical encoding, so
+      // no identity outside the new protocols moves (docs/spec/carrier.md
+      // §6's additive discipline). The families are distinguished by head
+      // rather than by arity, because the optional route below is already
+      // pushed additively and two optional tails would collide.
       Array slotRow =
-          slot.getCount() == "1"
+          slot.getProfiled()
+              ? Array{"slot_profiled", slot.getPayloadClass(),
+                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)}
+          : slot.getCount() == "1"
               ? Array{"slot", slot.getPayloadClass(),
                       slot.getUnabsorbed() ? 0 : 1, std::move(membership)}
               : Array{"slot_vec", slot.getPayloadClass(), slot.getCount(),

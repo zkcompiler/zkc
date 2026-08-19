@@ -68,7 +68,7 @@
     {
       "name": "protocol-vocabulary",
       "catches": "Any edit to the admitted vocabulary, which is the sole artifact digest authority. The value is the digest of the normalized document, so an entry added, removed, or re-keyed moves it.",
-      "value": "6f7dd314259fe26da8f6454ff983db2d981a47943fa56c8af21dc83cac2bd7e7",
+      "value": "68aecd872e09ba1ba759b8c4d5dbf761c336b4ae9e7983362ace6de2b8c0c599",
       "assurance": "cross_checked_here",
       "native": [
         "{bin}/zkc-registry-lint {repo}/registry/protocol-vocabulary.json | sha256sum | cut -d' ' -f1"
@@ -110,7 +110,7 @@
     {
       "name": "compiler-configuration-semantics",
       "catches": "A change to what the compiler treats as its semantic configuration: the preimage a transform's authority is resolved against.",
-      "value": "707b116dcb55a13f1b6da41812d58cf8f887f01b5d78752b4ede14fbcf6dcf7b",
+      "value": "d6c89b7e6de0414a4e1222c0665abba6b4d21c91a6c1c43d171acbb0f267fb2a",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [
@@ -123,7 +123,7 @@
     {
       "name": "compiler-configuration-family",
       "catches": "A change to the transform-family configuration the compiler resolves against.",
-      "value": "2c7705f23ebf4e0375cd1a1adef78c94f64b74a398781c60a762b950b35f1fb0",
+      "value": "6cef0c1a7decd460c9a541a87832354eab67ed9c1a3d1ad7a19ca3ec8833f84c",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [
@@ -136,7 +136,7 @@
     {
       "name": "compiler-configuration-domain",
       "catches": "A change to the transform-domain configuration the compiler resolves against.",
-      "value": "f661443a391df9ee5b192fd1cec8690d9847bc559e9fabf03442a2e21c39577e",
+      "value": "fc8e4478e46f4255588c195f7f677e86aa63d0b3aa6a7061d38f19809aae2265",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [

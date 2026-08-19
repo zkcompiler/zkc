@@ -1624,7 +1624,75 @@ ARTIFACT_VERIFY = {
     ],
 }
 
+# The first protocol whose values carry profiles. What the profile states —
+# a thousand and twenty-four committed scalars under a named binding route —
+# is what a bare payload class could not say, and what every mechanism that
+# reconstructed a commitment's content on the rule side was working around.
+#
+# The transcript order is forced: the helper column depends on the bus
+# challenge, and a round's messages precede that round's challenge, so the
+# helper is a second round whose challenge indexes into the committed columns
+# at exactly the profile's arity.
+LOGUP_VALUES = ("sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a"
+                "9c4f1b7d3e5082a6c9f4b1d7e30528")
+LOGUP_TABLE = ("sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a"
+               "4c2e0f9d7b5638a1c4e2f0d9b7563")
+LOGUP_MULT = ("sha256:5b1a0eb6f9c0b5b2fc4a9c9f6a0e4b4d3f1"
+              "c6a8e2d7b0c9a5e3f8d1b7c4a2e60")
+
+LOGUP_BUS = {
+    "policy": "analysis_only_artifact",
+    "kappa": {
+        "codecs": {"query_index": "ts_be8", "scalar": "ts_be8"},
+        "iv": "artifact-id",
+        "sponge": "toy_duplex",
+    },
+    "sources": [
+        source(
+            "air",
+            "opaque_relation",
+            {
+                "contract": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae"
+                            "41e4649b934ca495991b7852b855",
+                "statement": "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842"
+                             "fefde3503dfd74d6919a109cdb47",
+            },
+        )
+    ],
+    "events": [
+        slot("values", "logup_column_1024", True, ("bus", "cols", 0),
+             profiled=True),
+        slot("table", "logup_column_1024", True, ("bus", "cols", 1),
+             profiled=True),
+        slot("mult", "logup_column_1024", True, ("bus", "cols", 2),
+             profiled=True),
+        chal("beta", "scalar", "logup.beta", "2305843009213693952",
+             ["values", "table", "mult"]),
+        slot("helper", "logup_column_1024", True, ("bus", "helper", 0),
+             profiled=True),
+        chal("idx", "query_index", "logup.idx", "1024", ["helper"]),
+    ],
+    "reduces": [
+        reduce_row(
+            "bus", "logup_bus", ["air"], ["beta", "idx"],
+            [("inclusion", "logup_inclusion")],
+            anchors=[{"multiplicities": LOGUP_MULT, "table": LOGUP_TABLE,
+                      "values": LOGUP_VALUES}],
+        )
+    ],
+    "material_bindings": [
+        material("values", LOGUP_VALUES),
+        material("table", LOGUP_TABLE),
+        material("mult", LOGUP_MULT),
+    ],
+    "sinks": [
+        route("residual", "inclusion", "logup-constraints-not-modeled"),
+    ],
+}
+
+
 PIR_WITNESSES = {
+    "logup-bus": LOGUP_BUS,
     "artifact-verify": ARTIFACT_VERIFY,
     "relation-direct": RELATION_DIRECT,
     "relation-residual": RELATION_RESIDUAL,
