@@ -267,6 +267,14 @@
         }
       ]
     },
+    "zkc.hyp.commitment_binds_declared_arity": {
+      "notes": "discharged at: the binding route the value profile names, once that construction is compiled. No fact of the sealed spine implies it. A commitment root occupies one transcript slot whatever stands behind it, and an opening challenge ranging over the declared length is satisfiable by a prover who committed to more, so overstatement is caught and understatement is not - and understatement is the direction that understates the bound.",
+      "statement": "each commitment described by one of the subject's value profiles binds a sequence of exactly the declared length, under that profile's binding route"
+    },
+    "zkc.hyp.logup_multiplicities_honest": {
+      "notes": "discharged at: the constraint system the bus reduces to, which this artifact routes out as a residual. Haboeck, ePrint 2022/1530, Lemma 5.",
+      "statement": "the committed multiplicity column holds, for each table entry, the number of looked-up values equal to it, as a field element rather than a count wrapped modulo the characteristic"
+    },
     "zkc.hyp.codec_validated_opening": {
       "notes": "discharged at: carrier codec validation",
       "statement": "well-formed transcripts: z, fbar in F (codec validation)"
@@ -4496,6 +4504,12 @@
             "reference": "field_order",
             "sort": "integer"
           }
+        ],
+        "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
         ]
       },
       "id": "zkc.rbr.logup@reduction:logup_bus",
@@ -8441,6 +8455,13 @@
         },
         {
           "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.commitment_binds_declared_arity",
+          "slot": "S7"
+        },
+        {
+          "argument_types": [
             "subject",
             "integer"
           ],
@@ -9594,6 +9615,15 @@
         "ref": {
           "id": "zkc.hyp.codec_validated_opening",
           "source_revision": "zkc.soundness.proposition"
+        }
+      },
+      "zkc.hyp.commitment_binds_declared_arity": {
+        "argument_types": [
+          "subject"
+        ],
+        "ref": {
+          "id": "zkc.hyp.commitment_binds_declared_arity",
+          "source_revision": "zkc.soundness"
         }
       },
       "zkc.hyp.fiat_shamir_profile_required": {

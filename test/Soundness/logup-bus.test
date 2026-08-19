@@ -35,15 +35,27 @@
 # the hypothesis that the field is prime of that order. Nothing here was
 # supplied beside the artifact.
 # BOUND: "zkc.hyp.logup_multiplicities_honest"
+#
+# And the arity itself is carried as an obligation, because no fact of the
+# spine implies it. A commitment root occupies one transcript slot whatever
+# stands behind it, so a prover who committed to more than the profile
+# declares still answers every opening challenge in the declared range: the
+# machine condition below catches a declaration inconsistent with the spine,
+# and understatement is consistent with it. Understatement is also the
+# direction that shrinks this bound, so the assumption is stated where a
+# reader of the judgment meets it rather than left for one who reads the
+# rule.
+# BOUND: "zkc.hyp.commitment_binds_declared_arity"
 # BOUND: "constant": "2048/2305843009213693951"
 
 # The opening round establishes nothing, and is priced at nothing. Its check
 # constrains an opened value against the sampled point, but no opening proof
 # binds that value to the commitment it claims to come from -- the profile's
-# binding route is a name this kernel carries without evaluating. A round
-# that establishes nothing cannot rescue a doomed prover either, so its error
-# is zero, and the claim leaves as a residual for a protocol that can open a
-# commitment.
+# binding route is the name of the construction that would, and this kernel
+# carries it without evaluating. That is what the obligation above is owed
+# to. A round that establishes nothing cannot rescue a doomed prover either,
+# so its error is zero, and the claim leaves as a residual for a protocol
+# that can open a commitment.
 # BOUND: "constant": "0"
 
 # The honest-multiplicity hypothesis rides beside the numbers, carried rather
