@@ -1,0 +1,108 @@
+{
+  "registry": "zkc.derivation_request",
+  "derivation": {
+    "selected_bindings": [
+      "zkc.rbr.fri.johnson@reduction:fri",
+      "zkc.rbr.grinding@reduction:grinding",
+      "zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard",
+      "zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard"
+    ],
+    "resolved_parameters": {
+      "zkc.rbr.fri.johnson@reduction:fri": {
+        "fri_domain": {
+          "sort": "fri_domain_instance",
+          "value": {
+            "id": "toy.fri.domain.rs1024",
+            "source_revision": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      }
+    },
+    "target": {
+      "subject": {
+        "kind": "protocol_claim",
+        "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+        }
+      },
+      "index": {
+        "notion": "fiat_shamir",
+        "track": "soundness",
+        "variant": "standard",
+        "model": "duplex",
+        "quantification": "static"
+      },
+      "resource_variables": [
+        {
+          "name": "t",
+          "sort": "integer"
+        },
+        {
+          "name": "tau",
+          "sort": "integer"
+        }
+      ]
+    },
+    "plan": {
+      "kind": "apply",
+      "site": {
+        "kind": "path",
+        "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+        "claim": {
+          "claim_index": 2,
+          "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+        }
+      },
+      "binding": "zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard",
+      "premises": {
+        "source_sr": {
+          "kind": "apply",
+          "site": {
+            "kind": "path",
+            "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "claim": {
+              "claim_index": 2,
+              "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+            }
+          },
+          "binding": "zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard",
+          "premises": {
+            "source_rbr": {
+              "kind": "apply",
+              "site": {
+                "kind": "reduction",
+                "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+                "owner_claim": {
+                  "claim_index": 2,
+                  "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+                },
+                "transformer_position": 2,
+                "output_index": 0
+              },
+              "binding": "zkc.rbr.grinding@reduction:grinding",
+              "premises": {
+                "source_rbr": {
+                  "kind": "apply",
+                  "site": {
+                    "kind": "reduction",
+                    "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+                    "owner_claim": {
+                      "claim_index": 1,
+                      "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
+                    },
+                    "transformer_position": 1,
+                    "output_index": 0
+                  },
+                  "binding": "zkc.rbr.fri.johnson@reduction:fri",
+                  "premises": {}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

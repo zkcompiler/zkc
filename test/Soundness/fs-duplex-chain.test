@@ -1,0 +1,168 @@
+# The Fiat-Shamir path, end to end over a real family artifact.
+#
+# Six FRI rows priced interactively and none of them compiled: until now the
+# duplex hop refused over every family artifact, because one challenge the
+# analysis could not model withdraws the whole artifact's construction facts
+# and the toy families declared an eight-symbol squeeze for a field twice that
+# wide. The codec is the full toy rate now, and the chain runs: the FRI row,
+# the grinding row that scales it, state restoration, and the duplex
+# compilation.
+#
+# What the bound says is worth reading, because every term is checked below
+# against an independent computation rather than transcribed:
+#
+#   eps(t, tau) <= codec_bias_sum + t * (weakest round + codec_bias_max)
+#                                 + 25 t^2 / alphabet^capacity
+#                                 + anchors * Adv_sha256_216(tau)
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-family %S/../Family/Inputs/frigrind.json --emit-vocabulary=%t/g.vocab.json --emit-spine=%t/g.mlir
+# RUN: zkc-seal %t/g.mlir --protocol-vocabulary=%t/g.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/g.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/g.artifacts %t/g.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/fri-fs-chain-request.json %t/g.artifacts %t/g.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/g.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/g.req.json -o=%t/g.out.json %t/g.mlirbc | FileCheck %s --check-prefix=JUDGED
+# The chain covers both transformers, so no round is left out of the bound.
+# JUDGED: artifact judgment: not discharged (policy analysis_only_artifact)
+# JUDGED-NOT: belongs to no transformer
+
+# The constant is the fold challenge's exact statistical distance, the square
+# term is the theorem's collision term at this sponge's capacity, and the
+# assumptions ride beside them.
+# RUN: FileCheck %s --check-prefix=BOUND < %t/g.out.json
+# BOUND: "zkc.hyp.ideal_unsalted_sponge"
+# BOUND-NEXT: "zkc.assume.ideal_permutation"
+# BOUND: "constant": "13479973310036188409363726773394746941105421952539244381732184522747/9850501544511622572691607278506282604286081916882033699385021821555686243125381743989439894479956863994338784313344"
+# BOUND: "coefficient": "25/115792089237316195423570985008687907853269984665640564039457584007913129639936"
+
+# The same constant, derived independently by the reference twin from the
+# codec profile alone. The two legs agree on the number, not on a formula
+# either of them wrote down twice.
+# RUN: %if uv %{ %uv python -m oracle.parity construction-bias toy_duplex ts_be32 340282366762482138490186164457219031041 | FileCheck %s --check-prefix=TWIN %}
+# TWIN: "bias_denominator":"9850501544511622572691607278506282604286081916882033699385021821555686243125381743989439894479956863994338784313344"
+# TWIN-SAME: "bias_numerator":"13479973310036188409363726773394746941105421952539244381732184522747"
+
+# The count-one direction of the anchor addend, which had never been derived
+# end to end: the same artifact with one seal-stage binding carrying a
+# relation anchor's transcript projection. The theorem terms do not move --
+# the artifact is the same protocol -- and the collision game appears scaled
+# by exactly the one anchor the transcript carries.
+# RUN: zkc-family %S/Inputs/frigrind-bound.json --emit-vocabulary=%t/b.vocab.json --emit-spine=%t/b.mlir
+# RUN: zkc-seal %t/b.mlir --protocol-vocabulary=%t/b.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/b.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/b.artifacts %t/b.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/fri-fs-chain-request.json %t/b.artifacts %t/b.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/b.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/b.req.json -o=%t/b.out.json %t/b.mlirbc > /dev/null
+# RUN: FileCheck %s --check-prefix=ANCHORED < %t/b.out.json
+# ANCHORED: "coefficient": "1"
+# ANCHORED-NEXT: "game"
+# ANCHORED-NEXT: "id": "zkc.assume.sha256_216_collision"
+
+# The same compilation with the grinding row left out. Its conclusion is a
+# true statement about the FRI occurrence, and presenting it as the
+# artifact's is what the judgment refuses: the proof-of-work round belongs to
+# a transformer this derivation never touched, so its cost is not in the sum.
+# A reader comparing exponents would not catch that.
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/fri-fs-frij-only-request.json %t/g.artifacts %t/g.partial.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/g.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/g.partial.json -o=/dev/null %t/g.mlirbc | FileCheck %s --check-prefix=PARTIAL
+# PARTIAL: the challenge at event 4 belongs to no transformer this derivation covers
+# PARTIAL-SAME: its round is not in the bound
+
+# The same request over the family with no grinding at all: there the FRI
+# occurrence is the whole protocol, every round is covered, and the same
+# compilation is a statement about the artifact.
+# RUN: zkc-family %S/../Family/Inputs/frifs.json --emit-vocabulary=%t/f.vocab.json --emit-spine=%t/f.mlir
+# RUN: zkc-seal %t/f.mlir --protocol-vocabulary=%t/f.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/f.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/f.artifacts %t/f.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/fri-fs-frij-only-request.json %t/f.artifacts %t/f.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/f.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/f.req.json -o=/dev/null %t/f.mlirbc | FileCheck %s --check-prefix=GRINDFREE
+# GRINDFREE: artifact judgment
+# GRINDFREE-NOT: belongs to no transformer
+
+# A challenge the analysis cannot model names itself. The whole artifact's
+# construction facts are withdrawn by one squeeze that cannot frame its
+# sample space, which is right, and an author who is told only that the facts
+# are absent has to guess which challenge to change.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['kappa']['codecs']['ext_field']='ts_be8'; json.dump(d, open(sys.argv[2],'w'))" %S/../Family/Inputs/frigrind.json %t/narrow.json
+# RUN: zkc-family %t/narrow.json --emit-vocabulary=%t/n.vocab.json --emit-spine=%t/n.mlir
+# RUN: zkc-seal %t/n.mlir --protocol-vocabulary=%t/n.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/n.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/n.artifacts %t/n.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/fri-fs-chain-request.json %t/n.artifacts %t/n.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/n.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/n.req.json -o=/dev/null %t/n.mlirbc 2>&1 | FileCheck %s --check-prefix=NARROW
+# NARROW: no sealed duplex construction facts
+# NARROW-SAME: challenge 'fold' is not a duplex squeeze this analysis can model
+# NARROW-SAME: it samples 340282366762482138490186164457219031041 through codec 'ts_be8'
+# NARROW-SAME: whose 8 squeeze symbols frame only 18446744073709551616
+
+# The display beside the exact witness. Each term is shown at its own ceiling
+# rather than summed, because t and tau are the adversary's resources and a
+# single number would need values for them that no rule supplied. The game
+# advantage has no ceiling to show at all -- it is an assumption, scaled by a
+# count this artifact carries -- so it is named instead of rounded.
+# RUN: zkc-derive --headline --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/b.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/b.req.json -o=%t/b.headline.json %t/b.mlirbc | FileCheck %s --check-prefix=HEADLINE
+# HEADLINE: headline term constant: <= 2^-159
+# HEADLINE-NEXT: headline term t: <= 2^-22
+# HEADLINE-NEXT: headline term t^2: <= 2^-251
+# HEADLINE-NEXT: headline term zkc.assume.sha256_216_collision: 1 x its advantage
+# HEADLINE-NEXT: headline obligation: zkc.hyp.smooth_subgroup_fri_domain
+
+# The display never decides whether the witness exists: the same run writes
+# the exact witness, and it is the witness the checker re-derives from.
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/b.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --check=%t/b.headline.json %t/b.mlirbc | FileCheck %s --check-prefix=REDERIVES
+# REDERIVES: zkc-derive: witness re-derives
+
+# The other way an artifact carries no duplex: the kappa's sponge axis is
+# optional and nothing ties a challenge to one, so a protocol may declare an
+# interactive shape and decline to say what would compile it. Sealing accepts
+# that; the compilation says which of the two facts is missing.
+# RUN: zkc-seal %S/Inputs/sumcheck-no-sponge.mlir %zkc-seal-full -o %t/nosponge.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/nosponge.artifacts %t/nosponge.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/sumcheck-fs-request.json %t/nosponge.artifacts %t/nosponge.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/nosponge.req.json -o=/dev/null %t/nosponge.mlirbc 2>&1 | FileCheck %s --check-prefix=NOSPONGE
+# NOSPONGE: the sealed kappa names no sponge, so the artifact declares no duplex to squeeze from
+
+# And the bijection branch, whose arithmetic is different: an exact
+# coordinate tuple is a uniform draw only for the target it bijects with, so
+# a wider field is unsupported rather than silently reduced.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['kappa']['codecs']['ext_field']='plonky3_bb31_ext4_tuple'; json.dump(d, open(sys.argv[2],'w'))" %S/../Family/Inputs/frigrind.json %t/bijection.json
+# RUN: zkc-family %t/bijection.json --emit-vocabulary=%t/j.vocab.json --emit-spine=%t/j.mlir
+# RUN: zkc-seal %t/j.mlir --protocol-vocabulary=%t/j.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/j.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/j.artifacts %t/j.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/fri-fs-chain-request.json %t/j.artifacts %t/j.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/j.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/j.req.json -o=/dev/null %t/j.mlirbc 2>&1 | FileCheck %s --check-prefix=BIJECTION
+# BIJECTION: whose 4 alphabet symbols biject with 4294967296 exactly

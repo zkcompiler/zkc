@@ -260,6 +260,15 @@ struct SealedSoundnessView {
   /// rounds a bound must cover is not a fact about the sponge profile.
   std::vector<uint64_t> challengeEventPositions;
 
+  /// Why this artifact carries no duplex construction facts, empty when it
+  /// carries them. A Fiat-Shamir hop needs every squeeze modelled, and one
+  /// challenge whose codec cannot frame its sample space withdraws the facts
+  /// for the whole artifact -- correctly, since a bound that skipped it would
+  /// price a transcript the protocol does not have. Without this the author
+  /// reads only that the facts are absent, and the one challenge responsible
+  /// is exactly what they need to change.
+  std::string duplexAbsence;
+
   /// Each transformer's body extent and centrality, in canonical instance
   /// order. Projected like the anchors and statement labels above are: a
   /// consumer asking whether two transformers commute needs the footprint,

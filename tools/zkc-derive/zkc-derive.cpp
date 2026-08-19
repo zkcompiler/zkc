@@ -281,6 +281,19 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // Writing the exact witness is the tool's product, and every path below
+  // reaches it: a display that returned early would let --headline decide
+  // whether the witness exists.
+  auto finish = [&]() -> int {
+    std::error_code error;
+    llvm::ToolOutputFile out(outputFilename, error, llvm::sys::fs::OF_Text);
+    if (error)
+      return fail("cannot write '" + outputFilename + "': " + error.message());
+    out.os() << llvm::formatv("{0:2}", *witness) << "\n";
+    out.keep();
+    return 0;
+  };
+
   // The display view: presentation of the exact witness, never a
   // judgment of its own. Each round's loss is shown as a power-of-two
   // ceiling (epsilon rounds up, so the shown exponent never overstates
@@ -294,54 +307,133 @@ int main(int argc, char **argv) {
         conclusion ? conclusion->getObject("result") : nullptr;
     const llvm::json::Array *rounds =
         result ? result->getArray("rounds") : nullptr;
-    if (!rounds)
-      return fail("--headline displays round-by-round results; this "
-                  "witness concludes in a different notion");
-    std::optional<int64_t> weakest;
-    for (const llvm::json::Value &entry : *rounds) {
-      const llvm::json::Object *round = entry.getAsObject();
-      llvm::StringRef index = *round->getString("round_index");
-      const llvm::json::Object *quantity =
-          round->getObject("bound")->getObject("quantity");
-      if (const llvm::json::Array *terms = quantity->getArray("resource_terms"))
-        if (!terms->empty())
-          return fail("--headline displays constant bounds; this witness's "
-                      "round " +
-                      llvm::Twine(index) +
-                      " carries resource terms the display would drop");
-      llvm::StringRef constant = *quantity->getString("constant");
-      auto [num, den] = constant.split('/');
+    // A compiled conclusion is one bound over the whole transcript rather
+    // than a round sequence, and it is the judgment a reader of this tool
+    // came for.
+    const llvm::json::Object *scalar =
+        rounds ? nullptr : (result ? result->getObject("bound") : nullptr);
+
+    // A completeness judgment concludes in the same shape as a compiled
+    // soundness one, so displaying them alike would let an honest prover's
+    // failure rate read as an adversary's advantage. The track is what
+    // separates them; the shape does not.
+    const llvm::json::Object *conclusionIndex = conclusion->getObject("index");
+    llvm::StringRef track =
+        conclusionIndex ? *conclusionIndex->getString("track") : "";
+    if (track != "soundness" && track != "knowledge")
+      return fail("--headline displays a security bound; this witness "
+                  "concludes on the " +
+                  track + " track");
+    if (!rounds && !scalar)
+      return fail("--headline displays a bound; this witness carries no "
+                  "round sequence and no scalar bound");
+
+    // Every displayed number is one exact rational rounded up, so the shown
+    // exponent never overstates security. Zero is a value, not an absence:
+    // skipping it would read the same as a term this could not render.
+    auto ceiling =
+        [](llvm::StringRef exact) -> std::optional<std::optional<int64_t>> {
+      auto [num, den] = exact.split('/');
       auto value = den.empty()
                        ? zkc::registry::Rational::fromDecimal(num)
                        : zkc::registry::Rational::fromDecimalPair(num, den);
-      if (!value)
-        return failError(value.takeError());
-      if (value->isZero()) {
-        llvm::outs() << "headline round " << index << ": eps = 0\n";
-        continue;
+      if (!value) {
+        llvm::consumeError(value.takeError());
+        return std::nullopt;
       }
-      auto ceiling = value->ceilLog2();
-      if (!ceiling)
-        return failError(ceiling.takeError());
-      llvm::outs() << "headline round " << index << ": eps <= 2^" << *ceiling
-                   << "\n";
-      if (!weakest || *ceiling > *weakest)
-        weakest = *ceiling;
+      if (value->isZero())
+        return std::optional<int64_t>();
+      auto rounded = value->ceilLog2();
+      if (!rounded) {
+        llvm::consumeError(rounded.takeError());
+        return std::nullopt;
+      }
+      return std::optional<int64_t>(*rounded);
+    };
+
+    if (scalar) {
+      // Each term is shown at its own ceiling rather than summed: t and tau
+      // are the adversary's resources, and one number would need values for
+      // them that no rule supplied.
+      const llvm::json::Object *quantity = scalar->getObject("quantity");
+      auto term = [&](const llvm::Twine &name, llvm::StringRef exact) -> bool {
+        auto shown = ceiling(exact);
+        if (!shown)
+          return false;
+        llvm::outs() << "headline term " << name << ": ";
+        if (*shown)
+          llvm::outs() << "<= 2^" << **shown << "\n";
+        else
+          llvm::outs() << "0\n";
+        return true;
+      };
+      if (!term("constant", *quantity->getString("constant")))
+        return fail("--headline cannot display this witness's constant term");
+      if (const llvm::json::Array *terms = quantity->getArray("resource_terms"))
+        for (const llvm::json::Value &entry : *terms) {
+          const llvm::json::Object *resource = entry.getAsObject();
+          llvm::StringRef name = *resource->getString("resource");
+          int64_t exponent = *resource->getInteger("exponent");
+          llvm::Twine label = exponent == 1
+                                  ? llvm::Twine(name)
+                                  : name + "^" + llvm::Twine(exponent);
+          if (!term(label, *resource->getString("coefficient")))
+            return fail("--headline cannot display this witness's " +
+                        label.str() + " term");
+        }
+      // A game advantage has no ceiling to show: it is an assumption the
+      // bound rests on, scaled by a count this artifact carries.
+      if (const llvm::json::Array *games =
+              scalar->getArray("primitive_game_terms"))
+        for (const llvm::json::Value &entry : *games) {
+          const llvm::json::Object *game = entry.getAsObject();
+          llvm::outs() << "headline term "
+                       << *game->getObject("game")->getString("id") << ": "
+                       << *game->getString("coefficient")
+                       << " x its advantage\n";
+        }
+    } else {
+      // A round sequence is displayed round by round, and the headline is
+      // the weakest of them.
+      std::optional<int64_t> weakest;
+      for (const llvm::json::Value &entry : *rounds) {
+        const llvm::json::Object *round = entry.getAsObject();
+        llvm::StringRef position = *round->getString("round_index");
+        const llvm::json::Object *quantity =
+            round->getObject("bound")->getObject("quantity");
+        if (const llvm::json::Array *terms =
+                quantity->getArray("resource_terms"))
+          if (!terms->empty())
+            return fail("--headline displays constant bounds; this witness's "
+                        "round " +
+                        llvm::Twine(position) +
+                        " carries resource terms the display would drop");
+        auto shown = ceiling(*quantity->getString("constant"));
+        if (!shown)
+          return fail("--headline cannot display this witness's round " +
+                      llvm::Twine(position));
+        if (!*shown) {
+          llvm::outs() << "headline round " << position << ": eps = 0\n";
+          continue;
+        }
+        llvm::outs() << "headline round " << position << ": eps <= 2^"
+                     << **shown << "\n";
+        if (!weakest || **shown > *weakest)
+          weakest = **shown;
+      }
+      if (weakest)
+        llvm::outs() << "headline: the weakest round loses at most 2^"
+                     << *weakest << " per attempt\n";
     }
-    if (weakest)
-      llvm::outs() << "headline: the weakest round loses at most 2^" << *weakest
-                   << " per attempt\n";
+
+    // The obligations ride beside the number either way: a bound without its
+    // assumptions is not this tool's product.
     if (const llvm::json::Array *obligations =
             conclusion->getArray("qualitative_obligations"))
       for (const llvm::json::Value &entry : *obligations)
-        llvm::outs() << "headline obligation: " << *entry.getAsString() << "\n";
+        llvm::outs() << "headline obligation: " << *entry.getAsString()
+                     << "\n";
   }
 
-  std::error_code error;
-  llvm::ToolOutputFile out(outputFilename, error, llvm::sys::fs::OF_Text);
-  if (error)
-    return fail("cannot write '" + outputFilename + "': " + error.message());
-  out.os() << llvm::formatv("{0:2}", *witness) << "\n";
-  out.keep();
-  return 0;
+  return finish();
 }

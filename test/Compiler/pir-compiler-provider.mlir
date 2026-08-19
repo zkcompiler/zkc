@@ -24,9 +24,9 @@
 // through ProtocolEnvironment::compilerConfiguration) is identity-bearing.
 // These values change exactly when a registry entry or the preimage
 // construction changes; update them consciously in the same change.
-// ONE-NEXT: configured semantics ref: sha256:02074641cfa1344a14acac7872e751a816ce09e62e446e56bd0e1441c1a40ea0
-// ONE-NEXT: configured family ref: sha256:f4ec54603a924195e661cb4d7ce88ba25a0db23c34a3b28fc295a471b71e7372
-// ONE-NEXT: configured domain ref: sha256:8ccb40f9b901767307175a9115f312a0254a100d3056a1b1092a9f391636c63f
+// ONE-NEXT: configured semantics ref: sha256:309cadbf3a4066558fcd453ccccc3db812f4a4400f6147e1f894afdb58ff426a
+// ONE-NEXT: configured family ref: sha256:0cda9f5c1e04acd011c39b466559cc84cc6f69748f90f75080dd0876b708bb2e
+// ONE-NEXT: configured domain ref: sha256:006fcbab95cc137de0d4f0ad738decdb3212794bc56608dfc306a523bbb91fce
 // ONE-NEXT: PIR compiler admission: full environment exact
 // ONE: PIR compiler one-group: identity + EB/DB + ARSDH
 // ONE-NEXT: PIR compiler soundness: shared DERIVE, typed ceiling exact

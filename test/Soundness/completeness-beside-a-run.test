@@ -34,15 +34,17 @@
 # RUN:   --check=%t/witness.json %t/sealed.mlirbc | FileCheck --check-prefix=AGREES %s
 # AGREES: zkc-derive: witness re-derives
 
-# The headline display is a round-by-round presentation; a witness that
-# concludes in any other shape is refused rather than misdisplayed, so
-# the completeness judgment can never surface as a soundness headline.
+# The headline display is a security-bound presentation, and a completeness
+# judgment concludes in the same shape as a compiled soundness one -- one
+# bound rather than a round sequence. What separates them is the track, which
+# is what the display reads, so an honest-prover failure rate can never
+# surface as an adversary's advantage.
 # RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
 # RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
 # RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
 # RUN:   --request=%S/Inputs/schnorr-completeness-request.json -o=%t/refused.json --headline %t/sealed.mlirbc 2>&1 \
 # RUN:   | FileCheck --check-prefix=NOROUNDS %s
-# NOROUNDS: --headline displays round-by-round results; this witness concludes in a different notion
+# NOROUNDS: --headline displays a security bound; this witness concludes on the completeness track
 
 # The run beside it: both endpoint projections of the same sealed artifact
 # complete a prove/verify round trip in-tree, so "the honest prover's proof

@@ -8,7 +8,7 @@
     "target": {
       "subject": {
         "kind": "protocol_claim",
-        "artifact_id": "670b9ad6272e9088bfbc2ef84cf675d4d9a492a502e5c2b221ae01d3fde9a3f9",
+        "artifact_id": "91f615a9b1964ed138978c6d64f661231692dda7b54d161dc94cb8e7968ba68f",
         "claim": {
           "claim_index": 1,
           "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"
@@ -27,7 +27,7 @@
       "kind": "apply",
       "site": {
         "kind": "reduction",
-        "artifact_id": "670b9ad6272e9088bfbc2ef84cf675d4d9a492a502e5c2b221ae01d3fde9a3f9",
+        "artifact_id": "91f615a9b1964ed138978c6d64f661231692dda7b54d161dc94cb8e7968ba68f",
         "owner_claim": {
           "claim_index": 1,
           "descriptor_digest": "sha256:410ea2e309a484075ac174fd318c26ac8145e10301ae5a133a329166b7349413"

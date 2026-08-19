@@ -439,23 +439,44 @@ struct BuiltCodecFact {
   registry::Rational contribution;
 };
 
+/// Why one challenge cannot be modelled as a duplex squeeze, in the author's
+/// terms.  Every early return below withdraws the whole artifact's duplex
+/// facts, and a reader who only learns they are absent has to guess which of
+/// the artifact's challenges to look at.
+std::string unmodelable(pir::ChalOp challenge, const llvm::Twine &because) {
+  return ("challenge '" + challenge.getLabel() + "' is not a duplex squeeze " +
+          "this analysis can model: " + because)
+      .str();
+}
+
 llvm::Expected<std::optional<BuiltCodecFact>>
 buildCodecFact(pir::SealedOp sealed, pir::ChalOp challenge,
                const registry::SpongeProfile &sponge,
                const registry::ConstructionProfileRegistry &profiles,
-               const encoding::CanonicalIndex &canonical) {
+               const encoding::CanonicalIndex &canonical,
+               std::string &absence) {
   llvm::StringRef codecName =
       pir::kappaCodecName(sealed.getKappa(), challenge.getPayloadClass());
   const registry::CodecProfile *codec = profiles.lookupCodec(codecName);
-  if (codecName.empty() || !codec || !codec->squeezes())
+  if (codecName.empty() || !codec || !codec->squeezes()) {
+    absence = unmodelable(
+        challenge, "its payload class '" + challenge.getPayloadClass() +
+                       "' routes through codec '" + codecName +
+                       "', which declares no squeeze");
     return std::optional<BuiltCodecFact>();
+  }
   CodecKind codecKind;
   if (codec->squeezeKind == "mod_reduce")
     codecKind = CodecKind::ModReduce;
   else if (codec->squeezeKind == "tuple_bijection")
     codecKind = CodecKind::TupleBijection;
-  else
+  else {
+    absence = unmodelable(challenge, "codec '" + codecName +
+                                         "' declares squeeze kind '" +
+                                         codec->squeezeKind +
+                                         "', which has no bias formula here");
     return std::optional<BuiltCodecFact>();
+  }
   if (!encoding::isSha256Ref(codec->digest) || codec->squeezeSymbols <= 0)
     return adapterError("a squeeze codec has no exact admitted profile");
 
@@ -482,13 +503,36 @@ buildCodecFact(pir::SealedOp sealed, pir::ChalOp challenge,
   if (q.isZero())
     return adapterError("a challenge has an empty sample space");
 
+  auto decimal = [](const llvm::APInt &value) {
+    llvm::SmallString<80> text;
+    value.toString(text, 10, /*Signed=*/false);
+    return std::string(text);
+  };
+
   registry::Rational bias;
   if (codecKind == CodecKind::TupleBijection) {
-    if (q != n)
+    // A coordinate tuple is a uniform draw only for the target it bijects
+    // with; a different target is unsupported, never silently reduced.
+    if (q != n) {
+      absence = unmodelable(
+          challenge, "it samples " + decimal(q) + " through codec '" +
+                         codecName + "', whose " +
+                         std::to_string(codec->squeezeSymbols) +
+                         " alphabet symbols biject with " + decimal(n) +
+                         " exactly");
       return std::optional<BuiltCodecFact>();
+    }
   } else {
-    if (q.ugt(n))
+    if (q.ugt(n)) {
+      absence = unmodelable(challenge, "it samples " + decimal(q) +
+                                           " through codec '" + codecName +
+                                           "', whose " +
+                                           std::to_string(
+                                               codec->squeezeSymbols) +
+                                           " squeeze symbols frame only " +
+                                           decimal(n));
       return std::optional<BuiltCodecFact>();
+    }
     llvm::APInt remainder = n.urem(q);
     if (!remainder.isZero()) {
       unsigned wide = 2 * common;
@@ -541,10 +585,14 @@ buildCodecFact(pir::SealedOp sealed, pir::ChalOp challenge,
 llvm::Expected<std::optional<SealedDuplexFacts>>
 buildDuplexFacts(pir::SealedOp sealed,
                  const registry::ConstructionProfileRegistry &profiles,
-                 const encoding::CanonicalIndex &canonical) {
+                 const encoding::CanonicalIndex &canonical,
+                 std::string &absence) {
   llvm::StringRef spongeName = pir::kappaSpongeName(sealed.getKappa());
-  if (spongeName.empty())
+  if (spongeName.empty()) {
+    absence = "the sealed kappa names no sponge, so the artifact declares no "
+              "duplex to squeeze from";
     return std::optional<SealedDuplexFacts>();
+  }
   const registry::SpongeProfile *sponge = profiles.lookup(spongeName);
   if (!sponge)
     return adapterError("the sealed kappa names no loaded sponge profile");
@@ -574,10 +622,13 @@ buildDuplexFacts(pir::SealedOp sealed,
     auto challenge = mlir::dyn_cast<pir::ChalOp>(operation);
     if (!challenge)
       continue;
-    auto built =
-        buildCodecFact(sealed, challenge, *sponge, profiles, canonical);
+    auto built = buildCodecFact(sealed, challenge, *sponge, profiles, canonical,
+                                absence);
     if (!built)
       return built.takeError();
+    // One challenge the analysis cannot model withdraws the facts for the
+    // whole artifact: a bound assembled from the rest would price a
+    // transcript with a squeeze missing from it.
     if (!*built)
       return std::optional<SealedDuplexFacts>();
     if (result.challenges.empty() ||
@@ -876,10 +927,13 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
     }
   llvm::sort(view.challengeEventPositions);
 
-  auto duplex = buildDuplexFacts(sealed, profiles, *canonical);
+  auto duplex =
+      buildDuplexFacts(sealed, profiles, *canonical, view.duplexAbsence);
   if (!duplex)
     return duplex.takeError();
   view.duplex = std::move(*duplex);
+  if (view.duplex)
+    view.duplexAbsence.clear();
 
   return view;
 }
