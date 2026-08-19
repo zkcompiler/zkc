@@ -112,6 +112,60 @@ digestRule(const TerminalRule &rule,
                                    json::Value(std::move(preimage)));
 }
 
+/// The admitted origins. Chunk-by-chunk growth of this set is the point of
+/// naming it: `relation_derived` and `preprocessed` are the shapes the
+/// relation commitment and the preprocessed index become, so they arrive as
+/// values of one field rather than as three sibling mechanisms.
+bool admittedOrigin(StringRef origin) {
+  return origin == "prover_message" || origin == "relation_derived" ||
+         origin == "preprocessed";
+}
+
+Expected<ValueProfile> parseValueProfile(const RegistryFile &file, StringRef id,
+                                         const json::Value &value) {
+  auto error = [&](const Twine &message) {
+    return file.error("value profile '" + id + "' " + message);
+  };
+  const json::Object *object = value.getAsObject();
+  if (!object)
+    return error("must map to an object");
+  const std::string where = ("value profile '" + id + "'").str();
+  if (Error e = file.requireClosedFields(
+          *object, {"element_class", "origin", "arity_log2", "binding_route"},
+          where))
+    return std::move(e);
+
+  ValueProfile profile;
+  if (Error e = file.requireStringField(*object, "element_class", where,
+                                        profile.elementClass))
+    return std::move(e);
+  if (Error e =
+          file.requireStringField(*object, "origin", where, profile.origin))
+    return std::move(e);
+  if (!admittedOrigin(profile.origin))
+    return error("names origin '" + profile.origin +
+                 "', which is not one of prover_message, relation_derived, "
+                 "preprocessed");
+  if (Error e = file.requireStringField(*object, "binding_route", where,
+                                        profile.bindingRoute))
+    return std::move(e);
+  const json::Value *arity = object->get("arity_log2");
+  std::optional<int64_t> arityValue = arity ? arity->getAsInteger() : std::nullopt;
+  // Bounded on both sides: a negative arity is not a count, and the bound
+  // keeps `2^arity` inside the exact integer domain every quantity here
+  // travels in.
+  if (!arityValue || *arityValue < 0 || *arityValue > 64)
+    return error("needs an 'arity_log2' integer in 0..64");
+  profile.arityLog2 = *arityValue;
+
+  auto digest = RegistryFile::digestEntry("zkc/value-profile\n",
+                                          profile.toCanonicalJson());
+  if (!digest)
+    return digest.takeError();
+  profile.digest = std::move(*digest);
+  return profile;
+}
+
 Expected<ClaimProfile> parseProfile(const RegistryFile &file, StringRef id,
                                     const json::Value &value) {
   auto error = [&](const Twine &message) {
@@ -2089,6 +2143,13 @@ json::Value ClaimProfile::toCanonicalJson() const {
   return json::Object{{"anchors", json::Array(anchors)}, {"kind", kind}};
 }
 
+json::Value ValueProfile::toCanonicalJson() const {
+  return json::Object{{"arity_log2", arityLog2},
+                      {"binding_route", bindingRoute},
+                      {"element_class", elementClass},
+                      {"origin", origin}};
+}
+
 json::Value OperandMultiplicity::toCanonicalJson() const {
   switch (kind) {
   case OperandMultiplicityKind::Exact:
@@ -2472,7 +2533,7 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
   auto file = RegistryFile::parse(
       json, sourceName, "zkc.protocol_vocabulary", "claim_profiles",
       {"predicate_specs", "check_contracts", "hole_contracts",
-       "reduction_contracts", "terminal_rules"});
+       "reduction_contracts", "terminal_rules", "value_profiles"});
   if (!file)
     return file.takeError();
   const json::Object *predicateSpecs = file->extra("predicate_specs");
@@ -2480,6 +2541,7 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
   const json::Object *holeContracts = file->extra("hole_contracts");
   const json::Object *reductionContracts = file->extra("reduction_contracts");
   const json::Object *rules = file->extra("terminal_rules");
+  const json::Object *valueProfiles = file->extra("value_profiles");
   if (!predicateSpecs)
     return file->error("'predicate_specs' must be an object");
   if (!contracts)
@@ -2490,12 +2552,20 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
     return file->error("'reduction_contracts' must be an object");
   if (!rules)
     return file->error("'terminal_rules' must be an object");
+  if (!valueProfiles)
+    return file->error("'value_profiles' must be an object");
 
   ProtocolVocabulary vocabulary;
   if (Error e = parseEntries(*file, "claim profile", file->payload(),
                              vocabulary.profiles_,
                              [&](StringRef id, const json::Value &value) {
                                return parseProfile(*file, id, value);
+                             }))
+    return std::move(e);
+  if (Error e = parseEntries(*file, "value profile", *valueProfiles,
+                             vocabulary.valueProfiles_,
+                             [&](StringRef id, const json::Value &value) {
+                               return parseValueProfile(*file, id, value);
                              }))
     return std::move(e);
   if (Error e = parseEntries(*file, "predicate spec", *predicateSpecs,
@@ -2548,6 +2618,11 @@ const ClaimProfile *ProtocolVocabulary::lookupProfile(StringRef id) const {
   return lookup(profiles_, id);
 }
 
+const ValueProfile *
+ProtocolVocabulary::lookupValueProfile(StringRef id) const {
+  return lookup(valueProfiles_, id);
+}
+
 
 const CheckContract *
 ProtocolVocabulary::lookupCheckContract(StringRef id) const {
@@ -2569,9 +2644,11 @@ const TerminalRule *ProtocolVocabulary::lookupRule(StringRef id) const {
 
 json::Value ProtocolVocabulary::toCanonicalJson() const {
   json::Object profileJson, predicateSpecJson, checkContractJson,
-      holeContractJson, reductionContractJson, ruleJson;
+      holeContractJson, reductionContractJson, ruleJson, valueProfileJson;
   for (const auto &[id, profile] : profiles_)
     profileJson[id] = profile.toCanonicalJson();
+  for (const auto &[id, profile] : valueProfiles_)
+    valueProfileJson[id] = profile.toCanonicalJson();
   for (const auto &[digest, spec] : predicateSpecs_)
     predicateSpecJson[digest] = spec.toCanonicalJson();
   for (const auto &[id, contract] : checkContracts_)
@@ -2588,5 +2665,6 @@ json::Value ProtocolVocabulary::toCanonicalJson() const {
                       {"predicate_specs", std::move(predicateSpecJson)},
                       {"reduction_contracts", std::move(reductionContractJson)},
                       {"registry", "zkc.protocol_vocabulary"},
-                      {"terminal_rules", std::move(ruleJson)}};
+                      {"terminal_rules", std::move(ruleJson)},
+                      {"value_profiles", std::move(valueProfileJson)}};
 }

@@ -233,6 +233,7 @@ class ProtocolVocabulary:
                 "hole_contracts",
                 "reduction_contracts",
                 "terminal_rules",
+                "value_profiles",
             },
             "protocol vocabulary",
         )
@@ -242,6 +243,10 @@ class ProtocolVocabulary:
         self.profiles = {
             name: self._profile(name, body)
             for name, body in document["claim_profiles"].items()
+        }
+        self.value_profiles = {
+            name: self._value_profile(name, body)
+            for name, body in document["value_profiles"].items()
         }
         self.predicate_specs = {
             digest: self._predicate_spec(digest, body)
@@ -276,6 +281,10 @@ class ProtocolVocabulary:
         self.profile_digests = {
             name: tagged_digest("zkc/claim-profile\n", body)
             for name, body in self.profiles.items()
+        }
+        self.value_profile_digests = {
+            name: tagged_digest("zkc/value-profile\n", body)
+            for name, body in self.value_profiles.items()
         }
         self.hole_contract_digests = {
             name: tagged_digest("zkc/hole-contract\n", body)
@@ -348,6 +357,7 @@ class ProtocolVocabulary:
             "reduction_contracts": self.reductions,
             "registry": "zkc.protocol_vocabulary",
             "terminal_rules": self.rules,
+            "value_profiles": self.value_profiles,
         }
 
     @classmethod
@@ -368,6 +378,48 @@ class ProtocolVocabulary:
         if len(set(value)) != len(value):
             raise Refusal(f"{where} contains duplicates")
         return sorted(value) if sort else list(value)
+
+    #: Origins a value profile may declare. The relation-derived and
+    #: preprocessed shapes are what the relation commitment and the
+    #: preprocessed index become, so they are values of one field rather than
+    #: three sibling mechanisms.
+    _VALUE_ORIGINS = frozenset(
+        {"prover_message", "relation_derived", "preprocessed"})
+
+    def _value_profile(self, name: str, body: Any) -> dict[str, Any]:
+        """What a value commits to, where the value type names a profile.
+
+        The claim type resolved a descriptor profile from the beginning and
+        the value type carried one string; this is the same treatment for the
+        other type. The profile fixes arity, element class and binding route
+        while nothing here reads committed data, so the no-predicate-semantics
+        rule holds by construction rather than by care.
+        """
+
+        if not isinstance(body, dict):
+            raise Refusal(f"value profile {name!r} must be an object")
+        _closed(body, {"element_class", "origin", "arity_log2",
+                       "binding_route"}, f"value profile {name!r}")
+        for field in ("element_class", "origin", "binding_route"):
+            if not isinstance(body[field], str) or not body[field]:
+                raise Refusal(f"value profile {name!r} has no {field}")
+        if body["origin"] not in self._VALUE_ORIGINS:
+            raise Refusal(
+                f"value profile {name!r} names origin {body['origin']!r}, "
+                "which is not one of " + ", ".join(sorted(self._VALUE_ORIGINS))
+            )
+        arity = body["arity_log2"]
+        # Bounded on both sides: a negative arity is not a count, and the
+        # bound keeps 2^arity inside the exact integer domain.
+        if type(arity) is not int or not 0 <= arity <= 64:
+            raise Refusal(
+                f"value profile {name!r} needs an 'arity_log2' in 0..64")
+        return {
+            "arity_log2": arity,
+            "binding_route": body["binding_route"],
+            "element_class": body["element_class"],
+            "origin": body["origin"],
+        }
 
     def _profile(self, name: str, body: Any) -> dict[str, Any]:
         if not isinstance(body, dict):

@@ -25,6 +25,40 @@ struct ClaimProfile {
   llvm::json::Value toCanonicalJson() const;
 };
 
+/// What a value commits to, for a value whose type names a profile rather
+/// than a bare payload class (docs/spec/carrier.md §3).
+///
+/// The claim type has resolved a descriptor profile since the beginning; the
+/// value type carried one string, and every mechanism that needed to state
+/// what a commitment binds had to reconstruct it on the rule side. This is
+/// that type given the treatment the other one already had, and the anchor
+/// precedent carries over exactly: the profile fixes the arity, the element
+/// class and the binding route, and the kernel never reads the committed
+/// data. No-predicate-semantics is preserved by construction.
+///
+/// `arityLog2` is the base-two logarithm of how many elements stand behind
+/// the commitment. It is a rule-readable fact rather than a producer
+/// annotation, which is the point: the logup error `(n+m)/|F|` increases in
+/// the table arity, so a declared arity could understate a bound, and
+/// `kernel.md` §9.1 forbids exactly that. A rule that reads it owes a
+/// condition tying it back to sealed structure.
+struct ValueProfile {
+  /// The payload class of one element, which is what keys `kappa.codecs`.
+  std::string elementClass;
+  /// Where the committed content comes from. `prover_message` is material
+  /// the prover chose; `relation_derived` is derived from the relation the
+  /// artifact is about; `preprocessed` is fixed before any statement.
+  std::string origin;
+  int64_t arityLog2 = 0;
+  /// The construction that realizes the commitment, named rather than
+  /// evaluated -- the kernel authenticates it structurally.
+  std::string bindingRoute;
+  std::string digest;
+
+  llvm::StringRef contentDigest() const { return digest; }
+  llvm::json::Value toCanonicalJson() const;
+};
+
 enum class CheckMode { Opaque, Transparent };
 
 enum class CheckPredicateFormat {
@@ -414,6 +448,7 @@ public:
                                                   llvm::StringRef sourceName);
 
   const ClaimProfile *lookupProfile(llvm::StringRef id) const;
+  const ValueProfile *lookupValueProfile(llvm::StringRef id) const;
   const CheckContract *lookupCheckContract(llvm::StringRef id) const;
   const HoleContract *lookupHoleContract(llvm::StringRef id) const;
   const ReductionContract *lookupReductionContract(llvm::StringRef id) const;
@@ -421,6 +456,10 @@ public:
 
   const std::map<std::string, ClaimProfile, std::less<>> &profiles() const {
     return profiles_;
+  }
+  const std::map<std::string, ValueProfile, std::less<>> &
+  valueProfiles() const {
+    return valueProfiles_;
   }
   const std::map<std::string, CheckPredicateSpec, std::less<>> &
   predicateSpecs() const {
@@ -449,6 +488,7 @@ public:
 
 private:
   std::map<std::string, ClaimProfile, std::less<>> profiles_;
+  std::map<std::string, ValueProfile, std::less<>> valueProfiles_;
   std::map<std::string, CheckPredicateSpec, std::less<>> predicateSpecs_;
   std::map<std::string, CheckContract, std::less<>> checkContracts_;
   std::map<std::string, HoleContract, std::less<>> holeContracts_;

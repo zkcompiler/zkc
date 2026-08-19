@@ -3487,6 +3487,7 @@
       ]
     }
   },
+  "value_profiles": {},
   "terminal_rules": {
     "zkc.terminal.relation-direct": {
       "claim_profile": "opaque_relation",
