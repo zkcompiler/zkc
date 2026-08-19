@@ -1,0 +1,33 @@
+# A hypothesis is the one obligation nobody decides. A machine condition has
+# an evaluator, so a reader who wants its meaning reads the code; a
+# hypothesis is named in the judgment and handed to the reader, and a name
+# with no sentence behind it cannot be discharged by anyone.
+#
+# This is a lint rather than a loader refusal because the signature's
+# annotations are not in its canonical document: the digest pins which
+# obligations a judgment carries and not what they mean, so two
+# implementations can agree on a signature and disagree on what it asks for.
+# RUN: %python %S/Inputs/hypothesis_meaning_lint.py | FileCheck %s
+# CHECK: {{^([0-9]+)/\1 carried hypotheses state what discharging them takes}}
+
+# The gate's own evidence. A carried hypothesis whose annotation is deleted
+# is the state this lint exists to catch, and it must fail rather than pass
+# in silence — this is the defect that reached the tree once already.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); \
+# RUN:   del d['annotations']['zkc.hyp.logup_multiplicities_honest']; \
+# RUN:   json.dump(d, open(sys.argv[2],'w'))" \
+# RUN:   %zkc-registry-dir/soundness-signature.json %t.stripped.json
+# RUN: not %python %S/Inputs/hypothesis_meaning_lint.py %t.stripped.json 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=STRIPPED
+# STRIPPED: zkc.hyp.logup_multiplicities_honest is carried by a rule and annotated nowhere
+
+# And an annotation with no declaration behind it, which is the same drift
+# from the other side: a sentence kept after the proposition it described
+# was renamed reads as coverage and is not.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); \
+# RUN:   d['annotations']['zkc.hyp.no_such_proposition']={'statement':'x'}; \
+# RUN:   json.dump(d, open(sys.argv[2],'w'))" \
+# RUN:   %zkc-registry-dir/soundness-signature.json %t.orphan.json
+# RUN: not %python %S/Inputs/hypothesis_meaning_lint.py %t.orphan.json 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=ORPHAN
+# ORPHAN: zkc.hyp.no_such_proposition is annotated and declared nowhere

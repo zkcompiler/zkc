@@ -94,7 +94,7 @@
     {
       "name": "soundness-signature",
       "catches": "Any edit to a rule, a binding, or the schemas. The digest is what names an analysis, so two derivations are comparable exactly when it matches.",
-      "value": "eb20fac633b569ef41133dbdf4b95067535a9a733336692f2376d7012bec7ae6",
+      "value": "da465655ed95dc97ac43a2258e0a8fa6fe35d550950cd16a10f364a204e0c70a",
       "assurance": "cross_checked_here",
       "native": [
         "{bin}/zkc-registry-lint {repo}/registry/soundness-signature.json | grep -oE '\"digest\":\"sha256:[0-9a-f]{64}\"' | head -1 | grep -oE '[0-9a-f]{64}'"

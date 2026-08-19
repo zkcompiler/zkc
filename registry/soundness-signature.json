@@ -272,7 +272,14 @@
       "statement": "each commitment described by one of the subject's value profiles binds a sequence of exactly the declared length, under that profile's binding route"
     },
     "zkc.hyp.logup_multiplicities_honest": {
-      "notes": "discharged at: the constraint system the bus reduces to, which this artifact routes out as a residual. Haboeck, ePrint 2022/1530, Lemma 5.",
+      "notes": "discharged at: the constraint system the bus reduces to, which this artifact routes out as a residual.",
+      "statement_basis": [
+        {
+          "anchor": "Lemma 5 (set inclusion), the multiplicity hypothesis",
+          "revision": "2022-11-08",
+          "source": "eprint:2022/1530"
+        }
+      ],
       "statement": "the committed multiplicity column holds, for each table entry, the number of looked-up values equal to it, as a field element rather than a count wrapped modulo the characteristic"
     },
     "zkc.hyp.codec_validated_opening": {
@@ -8455,13 +8462,6 @@
         },
         {
           "argument_types": [
-            "subject"
-          ],
-          "proposition_ref": "zkc.hyp.commitment_binds_declared_arity",
-          "slot": "S7"
-        },
-        {
-          "argument_types": [
             "subject",
             "integer"
           ],
@@ -8475,6 +8475,13 @@
           ],
           "proposition_ref": "zkc.side.prime_field_order",
           "slot": "S5"
+        },
+        {
+          "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.commitment_binds_declared_arity",
+          "slot": "S7"
         }
       ],
       "id": "zkc.rbr.logup",
