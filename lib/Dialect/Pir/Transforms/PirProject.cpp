@@ -557,7 +557,7 @@ public:
                           ? stmtArgs[argIdx++]
                           : zkc::oir::ConstantOp::create(
                                 builder, loc, *op.getValue(),
-                                op.getPayloadClass(), src(op))
+                                materialClass(op), src(op))
                                 .getVal();
             sponge =
                 zkc::oir::AbsorbOp::create(builder, loc, sponge, v, src(op))
@@ -860,12 +860,12 @@ private:
   zkc::pir::EndpointKind endpointKind;
   /// The payload class a slot's material actually travels under.
   ///
-  /// A profiled slot names a value profile, not a class, and the class is the
-  /// profile's element class. Emitting the profile name here would name a
+  /// A profiled value names a value profile, not a class, and the class is
+  /// the profile's element class. Emitting the profile name here would name a
   /// codec the emitted program does not have: seal admitted a codec for the
   /// element class, so a realized endpoint asking for the profile name asks
-  /// for one nobody declared.
-  llvm::StringRef materialClass(zkc::pir::SlotOp op) const {
+  /// for one nobody declared. Both seats a profile can sit on answer this.
+  template <typename OpT> llvm::StringRef materialClass(OpT op) const {
     if (!op.getProfiled())
       return op.getPayloadClass();
     const zkc::registry::ValueProfile *profile =

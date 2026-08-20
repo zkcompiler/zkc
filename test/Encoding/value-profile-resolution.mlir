@@ -1,4 +1,5 @@
-// A value profile resolves in the sealed vocabulary or the seal refuses.
+// A value profile resolves in the sealed vocabulary or the seal refuses,
+// on either seat a profile can sit on.
 //
 // The marker on the type is what makes this possible. A single namespace,
 // where a string is a profile when the registry happens to resolve it and a

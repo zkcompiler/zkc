@@ -24,13 +24,20 @@ def main(argv: list[str]) -> int:
     path = Path(argv[1]) if len(argv) > 1 else DEFAULT
     signature = json.loads(path.read_text())
     annotations = signature["annotations"]
-    declared = signature["schemas"]["propositions"]
+    # A carried proposition is declared in one of two blocks: propositions
+    # for the ones nobody decides, machine deciders for the ones an evaluator
+    # does. Both can be carried out to a reader through an external-hypothesis
+    # slot, and a name in either is declared.
+    declared = dict(signature["schemas"]["propositions"])
+    declared.update(signature["schemas"]["machine_deciders"])
 
+    # Every proposition a rule carries out to the reader, whatever its name
+    # begins with. Filtering on one prefix would leave the same defect in the
+    # neighbouring namespaces, which is how it reached the tree twice.
     carried = sorted({
         slot["proposition_ref"]
         for rule in signature["rules"].values()
         for slot in rule.get("external_hypotheses", [])
-        if slot["proposition_ref"].startswith("zkc.hyp.")
     })
 
     failures = []
@@ -46,13 +53,13 @@ def main(argv: list[str]) -> int:
             failures.append(f"{name} has an annotation that states no meaning")
 
     for name in sorted(annotations):
-        if name.startswith("zkc.hyp.") and name not in declared:
+        if name.startswith(("zkc.hyp.", "zkc.side.")) and name not in declared:
             failures.append(f"{name} is annotated and declared nowhere")
 
     for line in failures:
         print(line)
     print(f"{len(carried) - len([f for f in failures if 'carried' in f or 'states no meaning' in f])}"
-          f"/{len(carried)} carried hypotheses state what discharging them takes")
+          f"/{len(carried)} carried propositions state what discharging them takes")
     return 1 if failures else 0
 
 

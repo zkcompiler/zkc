@@ -949,15 +949,23 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
         for (const auto &role : instanceRoles->second)
           for (const auto &occurrence : role.getValue())
             for (mlir::Operation *member : occurrence.second) {
-              auto slot = mlir::dyn_cast<pir::SlotOp>(member);
-              if (!slot)
-                continue;
+              // A role is filled by whatever carries the material, so the
+              // body extent covers both seats: skipping a bound member would
+              // leave a role the contract declares outside the body its own
+              // rounds define, and two protocols differing only in which seat
+              // fills a role would get different extents.
+              auto carrier =
+                  mlir::dyn_cast<pir::ProtocolMemberOpInterface>(member);
+              if (!carrier || !carrier.getMemberValue())
+                return adapterError(
+                    "a contract round message membership carries no value");
               auto position = canonicalEventPosition(
-                  *canonical, slot.getVal(), "a reduction message member");
+                  *canonical, carrier.getMemberValue(),
+                  "a reduction message member");
               if (!position)
                 return position.takeError();
               observe(*position);
-              if (slot.isAbsorbing())
+              if (carrier.isAbsorbing())
                 extent.central = false;
             }
       // A challenge the transformer's rounds sample is part of its body and

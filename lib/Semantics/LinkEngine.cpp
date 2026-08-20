@@ -164,7 +164,14 @@ void prefixNames(Operation *original, Operation *clone, StringRef prefix,
   llvm::TypeSwitch<Operation *>(clone)
       .Case<pir::InstantiateOp>(
           [&](auto op) { op.setLabel(prefixed(op.getLabel())); })
-      .Case<pir::BindOp>([&](auto op) { op.setLabel(prefixed(op.getLabel())); })
+      .Case<pir::BindOp>([&](auto op) {
+              op.setLabel(prefixed(op.getLabel()));
+              // A binding fills a contract role the same way a slot does, so
+              // its membership instance is a reduce label and is renamed with
+              // the rest of them.
+              if (op.getInstance())
+                op.setInstance(prefixed(*op.getInstance()));
+            })
       .Case<pir::SlotOp>([&](auto op) {
         op.setLabel(prefixed(op.getLabel()));
         if (op.getInstance())

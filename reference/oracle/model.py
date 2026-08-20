@@ -2401,8 +2401,13 @@ def terminal_closure(
 
     events: list[Any] = protocol["events"]
     reduces: list[Reduce] = protocol.get("reduces", [])
+    # A profiled value is a commitment, not an element of the class its
+    # content is drawn from, so it answers no to every "is this of class C"
+    # question — operand slots, dependency slots and challenge capabilities
+    # alike. Reading the profile name here instead would let a profile
+    # spelled like a class stand in for one element of it.
     value_classes = {
-        event.label: event.payload_class
+        event.label: ("" if event.profiled else event.payload_class)
         for event in events
         if isinstance(event, (Bind, Slot))
     }
@@ -2473,6 +2478,13 @@ def terminal_closure(
             raise Refusal("material binding target is not a sha256 reference")
         if binding.value in binding_by_value:
             raise Refusal(f"value {binding.value!r} has two material bindings")
+        # One accounting for both spellings of a material reference.
+        if self_material_ref_of(protocol, binding.semantic_ref):
+            raise Refusal(
+                f"[zkc-E162] semantic_ref {binding.semantic_ref!r} is already "
+                "bound to another verifier value: material references are "
+                "reverse-injective"
+            )
         if binding.semantic_ref in value_by_reference:
             raise Refusal("semantic material reference has two local producers")
         binding_by_value[binding.value] = binding.semantic_ref
@@ -2680,8 +2692,13 @@ def reduction_closure(
 
     events: list[Any] = protocol["events"]
     event_positions = {event.label: index for index, event in enumerate(events)}
+    # A profiled value is a commitment, not an element of the class its
+    # content is drawn from, so it answers no to every "is this of class C"
+    # question — operand slots, dependency slots and challenge capabilities
+    # alike. Reading the profile name here instead would let a profile
+    # spelled like a class stand in for one element of it.
     value_classes = {
-        event.label: event.payload_class
+        event.label: ("" if event.profiled else event.payload_class)
         for event in events
         if isinstance(event, (Bind, Slot))
     }
@@ -2758,6 +2775,15 @@ def reduction_closure(
             raise Refusal(
                 f"[zkc-E161] value {binding_entry.value!r} carries its own "
                 "material reference and may not also have a material binding"
+            )
+        # A profiled seal-stage binding absorbs a material reference too, so
+        # the two spellings share one accounting: distinct producers may not
+        # assert one reference however it is written.
+        if self_material_ref_of(protocol, binding_entry.semantic_ref):
+            raise Refusal(
+                f"[zkc-E162] semantic_ref {binding_entry.semantic_ref!r} is "
+                "already bound to another verifier value: material "
+                "references are reverse-injective"
             )
         if binding_entry.semantic_ref in value_by_reference:
             raise Refusal("semantic material reference has two local producers")
@@ -3251,6 +3277,13 @@ def _resolve_value_profile(vocabulary, event, seat: str, admitted: str):
             "own statement of who chose it"
         )
     return profile
+
+
+def self_material_ref_of(protocol, reference: str) -> bool:
+    """Whether a profiled seal-stage binding already absorbs this reference."""
+    return any(isinstance(event, Bind) and event.profiled
+               and event.stage == "seal" and event.value == reference
+               for event in protocol["events"])
 
 
 def _validate_artifact_verify(
@@ -4847,6 +4880,21 @@ def _self_test() -> None:
         "[zkc-E152]",
         "a binding carries membership only when it is profiled",
         profiled=False, payload_class="scalar")
+
+    alias = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+    table_ref = next(event.value for event in alias["events"]
+                     if isinstance(event, Bind) and event.profiled)
+    alias["material_bindings"] = [
+        binding._replace(semantic_ref=table_ref)
+        if binding.value == "queries" else binding
+        for binding in alias["material_bindings"]]
+    try:
+        reduction_closure(alias, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E162]" in str(error),
+           "one material reference names one value, however it is spelled")
+    else:
+        raise AssertionError("two values naming one material were accepted")
 
     twice = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
     twice["material_bindings"] = list(twice["material_bindings"]) + [

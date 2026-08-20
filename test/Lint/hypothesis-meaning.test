@@ -1,4 +1,4 @@
-# A hypothesis is the one obligation nobody decides. A machine condition has
+# A carried proposition is the one obligation nobody decides here. A machine condition has
 # an evaluator, so a reader who wants its meaning reads the code; a
 # hypothesis is named in the judgment and handed to the reader, and a name
 # with no sentence behind it cannot be discharged by anyone.
@@ -8,7 +8,7 @@
 # obligations a judgment carries and not what they mean, so two
 # implementations can agree on a signature and disagree on what it asks for.
 # RUN: %python %S/Inputs/hypothesis_meaning_lint.py | FileCheck %s
-# CHECK: {{^([0-9]+)/\1 carried hypotheses state what discharging them takes}}
+# CHECK: {{^([0-9]+)/\1 carried propositions state what discharging them takes}}
 
 # The gate's own evidence. A carried hypothesis whose annotation is deleted
 # is the state this lint exists to catch, and it must fail rather than pass

@@ -117,20 +117,19 @@
 # RUN: %if uv %{ diff %t/zkc.skeleton.json %t/oracle.skeleton.json %}
 
 # A bound prices a passage from what the reduction consumes to what it
-# produces. If the consumed claim is anchored to material the round never
-# saw, the two statements are about different objects and no theorem relates
-# them — the passage's probability is one, whatever the bound says. Produced
-# anchors have been constructor-derived and checked all along; this is the
-# same discipline on the side the artifact declares.
-# RUN: zkc-seal %S/Inputs/logup-unanchored-inclusion.mlir %zkc-seal-full -o %t/loose.artifacts > /dev/null
-# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/loose.artifacts %t/loose.mlirbc
-# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/loose.artifacts %t/loose.req.json
-# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
-# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
-# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
-# RUN:   --request=%t/loose.req.json -o=/dev/null %t/loose.mlirbc 2>&1 \
+# produces, so the two must be about the same objects. The contract states
+# that directly: each consumed anchor must equal the material filling the
+# role of the same name, which is what the produced anchors have been
+# constructor-derived from all along. An artifact whose inclusion is about
+# columns the round never saw is refused at seal, before any rule reads it.
+# RUN: not zkc-opt %pir-seal-full %S/Inputs/logup-unanchored-inclusion.mlir 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=LOOSE
-# LOOSE: condition_failed at apply.conditions.S8
+# LOOSE: [zkc-E325] an admitted material-identity constraint does not hold
+#
+# The rule keeps its own floor beneath that: `consumed_anchors_precede_challenge`
+# requires every consumed anchor to be material the round saw, for any contract
+# that declares no such constraint. Both contracts here declare them, so the
+# seal refusal is what an author meets.
 
 # The completeness track carries the same conditions, because the honest
 # prover's witness needs them. Lemma 5's forward direction — the one that
@@ -145,4 +144,25 @@
 # RUN:   --request=%t/mult.comp.json -o=/dev/null %t/mult.mlirbc 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=COMPMULT
 # COMPMULT: condition_failed at apply.conditions.S3
+
+# The condition that keeps a commitment from being priced as a field element,
+# in the family where it is the only thing standing there. A value profile may
+# be named anything an author likes — including exactly what a payload class
+# is called — so a condition comparing the member's declared string against a
+# class must be able to tell a profile from a class. Reading the string alone
+# bought an evaluation-opening round of commitments a bound of one over the
+# field, for values each standing for a million field elements.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['opening_commitment']={'arity_log2':20,'binding_route':'zkc.commit.toy-vector','element_class':'scalar','origin':'prover_message'}; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/oc.vocab.json
+# RUN: zkc-seal %S/Inputs/evalopen-profiled-member.mlir \
+# RUN:   --protocol-vocabulary=%t/oc.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/oc.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/oc.artifacts %t/oc.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/interleaved-a-request.json %t/oc.artifacts %t/oc.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/oc.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/oc.req.json -o=/dev/null %t/oc.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=COMMITMENT
+# COMMITMENT: condition_failed at apply.conditions.S4
 

@@ -193,13 +193,13 @@
         "E163": "a bounded artifact verification routes through a name no sink of the artifact carries, so the child's lifted obligations reach no parent route surface",
         "E164": "a bounded artifact verification names a proof slot that is not a slot of the artifact, or has no canonical position to order slots against",
         "E165": "a bounded artifact verification names a proof slot that follows it on the spine, so the child would consume material not yet in the stream",
-        "E166": "a slot names a value profile the sealed vocabulary does not declare",
+        "E166": "a slot or a public binding names a value profile the sealed vocabulary does not declare",
         "E167": "a profiled slot is also counted, and a vector of commitments is a shape no value profile states",
         "E169": "a value profile's declared origin does not belong on the transcript event carrying it: prover material enters as a slot, statement-fixed material as a public binding, and preprocessed content on a binding that carries its value at seal"
       },
       "means_basis": {
         "E161": "eaf8b01d43e2ff2d3041b8f1cab5830fa54cd43e9876396b81363dd51393d859",
-        "E162": "5f2aa7a7dec9893097fe85b53ca903890742773f769fe03d8691cc1e88422fcc",
+        "E162": "45d2883ea12ef2a747df48c4ef45555387e1dfb776f4c43aa79869fc604192c6",
         "E163": "af3dc93e5309591d87c134be2468fedbbf9e9f7567a342976b5a65afaf5555cf",
         "E164": "ee85c8d24a33b956615f961fe23fb69c94f14d42ffd7f9d14b4e6a4f5fd64731",
         "E165": "cbf872087e75bf1489b9d5055423569d3784e8be01efb38cf849c1cc7e580bc7",

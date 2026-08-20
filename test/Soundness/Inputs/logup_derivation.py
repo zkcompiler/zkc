@@ -146,9 +146,15 @@ def main() -> int:
 
         # Against the judgments themselves, when the caller hands them over:
         # the numbers a derivation actually produced, not the numbers the
-        # signature's text implies.
+        # signature's text implies. A judgment is matched to the contract its
+        # own binding names — accepting it because it equals *some* contract's
+        # number would let a bound belonging to a smaller instance pass as
+        # re-derived for a larger one.
         for path in sys.argv[1:]:
             document = json.loads(Path(path).read_text())
+            binding = document["derivation"]["plan"]["binding"]
+            if not binding.endswith(f"@reduction:{contract}"):
+                continue
             conclusion = document["conclusion"]
             if conclusion["index"]["track"] == "completeness":
                 actual = conclusion["result"]["bound"]["quantity"]["constant"]
@@ -158,10 +164,11 @@ def main() -> int:
                 actual = rounds[0]["bound"]["quantity"]["constant"]
                 wanted = expected_soundness
             if Fraction(actual) != wanted:
-                # Each judgment belongs to one contract; a mismatch against
-                # the other one is not a finding.
-                continue
-            print(f"{Path(path).name}: {actual} re-derived from the lemma")
+                failures.append(
+                    f"{Path(path).name}: reports {actual} where {contract} "
+                    f"re-derives {wanted.numerator}/{wanted.denominator}")
+            else:
+                print(f"{Path(path).name}: {actual} re-derived from the lemma")
             checked.add(path)
 
         print(f"{contract}: soundness {expected_soundness.numerator}/"
@@ -174,7 +181,7 @@ def main() -> int:
     for path in sys.argv[1:]:
         if path not in checked:
             failures.append(
-                f"{path}: no re-derived bound equals the one it reports")
+                f"{path}: names no contract this file re-derives")
     for line in failures:
         print(line)
     if failures:

@@ -2085,7 +2085,44 @@
       ],
       "parameters": {},
       "checks": {},
-      "constraints": [],
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "multiplicities"
+          },
+          "right": {
+            "anchor": "multiplicities",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "queries"
+          },
+          "right": {
+            "anchor": "queries",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "table"
+          },
+          "right": {
+            "anchor": "table",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        }
+      ],
       "outputs": [
         {
           "profile": "logup_identity",
@@ -2151,7 +2188,44 @@
       ],
       "parameters": {},
       "checks": {},
-      "constraints": [],
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "multiplicities"
+          },
+          "right": {
+            "anchor": "multiplicities",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "queries"
+          },
+          "right": {
+            "anchor": "queries",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "table"
+          },
+          "right": {
+            "anchor": "table",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        }
+      ],
       "outputs": [
         {
           "profile": "logup_identity",

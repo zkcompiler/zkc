@@ -8,7 +8,8 @@
       "statement": "x <-$ F; ck = ([x^0..x^n]_1, [1,x]_2); win: output S subset F with |S| = n+1 and [g]_1 != [0]_1, [phi]_1 = [g(x)/Z_S(x)]_1 where Z_S(X) = prod_{s in S}(X - s)"
     },
     "zkc.assume.constraint_count_matches_relation": {
-      "notes": "The integer supplied as the constraint count is the number of constraints of the relation the subject claim's anchors name. zkc cannot check this: the relation enters as digests and is never read, so no machine decider can compare the count against the matrices. A reader who accepts a bound derived through this rule accepts this correspondence on the author's word."
+      "notes": "The integer supplied as the constraint count is the number of constraints of the relation the subject claim's anchors name. zkc cannot check this: the relation enters as digests and is never read, so no machine decider can compare the count against the matrices. A reader who accepts a bound derived through this rule accepts this correspondence on the author's word.",
+      "statement": "the integer supplied as the constraint count is the number of constraints of the relation the subject claim's anchors name"
     },
     "zkc.assume.ideal_permutation": {
       "citations": [
@@ -978,6 +979,18 @@
         }
       ]
     },
+    "zkc.side.algebra_match": {
+      "notes": "Discharged at: the algebra the construction profile names, read against the payload classes the contract declares. Carried rather than decided because the pairing's group assignment is a property of the suite, not of the spine.",
+      "statement": "the commitment, proof and evaluation classes the contract declares are the groups and scalar field of one pairing suite, in the roles that suite assigns them"
+    },
+    "zkc.side.consumed_anchors_precede_challenge": {
+      "notes": "Decided from the artifact: each consumed claim's anchors are resolved to the transcript events that carry them, and compared against the round's challenge position.",
+      "statement": "every anchor of every claim this reduction consumes names transcript material that entered before the round's challenge"
+    },
+    "zkc.side.degrees_within_srs": {
+      "notes": "Discharged at: the structured reference string the suite pins. The artifact names commitments by digest and never reads what they commit to, so no decider can compare a degree against the string's length.",
+      "statement": "every polynomial the reduction opens has degree at most the highest power the pinned structured reference string supports"
+    },
     "zkc.side.field_order_match": {
       "notes": "discharged at: caller, when the resolved parameter is supplied",
       "statement": "the payload class the contract's challenge slots name is the field of the stated order; the artifact authenticates the class and the declared challenge space per round, and not the order"
@@ -985,6 +998,10 @@
     "zkc.side.multiplicities_match_table": {
       "notes": "Decided from the artifact: the two committed arities are read off the value profiles of the members filling the two roles.",
       "statement": "the multiplicity column holds one field element per table entry, so its committed arity equals the table's"
+    },
+    "zkc.side.prime_field_order": {
+      "notes": "Discharged at: the caller who states the field order. Nothing in a sealed artifact names a field  --  a payload class keys a codec and a challenge space counts a sampling set  --  so the order arrives as a stated parameter and its primality with it.",
+      "statement": "the stated field order is prime, so it is the characteristic of the field the protocol's arithmetic is over and a condition on the characteristic may be read against it"
     },
     "zkc.sr.from_rbr": {
       "citations": [
@@ -1068,10 +1085,6 @@
           "source": "cds94"
         }
       ]
-    },
-    "zkc.side.consumed_anchors_precede_challenge": {
-      "notes": "Decided from the artifact: each consumed claim's anchors are resolved to the transcript events that carry them, and compared against the round's challenge position.",
-      "statement": "every anchor of every claim this reduction consumes names transcript material that entered before the round's challenge"
     }
   },
   "bindings": {
@@ -1097,7 +1110,7 @@
         "kind": "reduction_contract",
         "ref": {
           "id": "logup_bus",
-          "source_revision": "sha256:db5749c941ab01e10e24a5c4576c448a4064652ec25173166fd2130835c777b9"
+          "source_revision": "sha256:604063974e992994e02ab53e8781905986528c863f397c7dca137660b1b19bf4"
         }
       },
       "condition_argument_bindings": {
@@ -1206,6 +1219,12 @@
           }
         ],
         "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ],
+        "S8": [
           {
             "kind": "conclusion_subject",
             "sort": "subject"
@@ -1261,7 +1280,7 @@
         "kind": "reduction_contract",
         "ref": {
           "id": "logup_range_check",
-          "source_revision": "sha256:6ce737eca29591848db189307f6b6c7c8f4481873c5594fad2818c1d45c7f348"
+          "source_revision": "sha256:56d78f183fd5e8be49aec6093dd96f6a189250b0009479d497c8d3536c6e8ef1"
         }
       },
       "condition_argument_bindings": {
@@ -1370,6 +1389,12 @@
           }
         ],
         "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ],
+        "S8": [
           {
             "kind": "conclusion_subject",
             "sort": "subject"
@@ -4765,7 +4790,7 @@
         "kind": "reduction_contract",
         "ref": {
           "id": "logup_bus",
-          "source_revision": "sha256:db5749c941ab01e10e24a5c4576c448a4064652ec25173166fd2130835c777b9"
+          "source_revision": "sha256:604063974e992994e02ab53e8781905986528c863f397c7dca137660b1b19bf4"
         }
       },
       "condition_argument_bindings": {
@@ -4915,7 +4940,7 @@
         "kind": "reduction_contract",
         "ref": {
           "id": "logup_range_check",
-          "source_revision": "sha256:6ce737eca29591848db189307f6b6c7c8f4481873c5594fad2818c1d45c7f348"
+          "source_revision": "sha256:56d78f183fd5e8be49aec6093dd96f6a189250b0009479d497c8d3536c6e8ef1"
         }
       },
       "condition_argument_bindings": {
@@ -5939,6 +5964,13 @@
           ],
           "proposition_ref": "zkc.hyp.logup_multiplicities_honest",
           "slot": "S7"
+        },
+        {
+          "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.commitment_binds_declared_arity",
+          "slot": "S8"
         }
       ],
       "id": "zkc.completeness.logup",

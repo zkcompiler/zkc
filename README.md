@@ -93,9 +93,10 @@ Roadmap.
 - Soundness signature: `zkc.soundness_signature`
 
 A registry is named by its `registry` string and carries no version field
-(`docs/spec/versioning.md`). The protocol vocabulary jointly admits six source
-sections: `predicate_specs`, `claim_profiles`, `check_contracts`,
-`hole_contracts`, `reduction_contracts`, and `terminal_rules`. Unknown fields,
+(`docs/spec/versioning.md`). The protocol vocabulary jointly admits seven
+source sections: `predicate_specs`, `claim_profiles`, `value_profiles`,
+`check_contracts`, `hole_contracts`, `reduction_contracts`, and
+`terminal_rules`. Unknown fields,
 constructors, or unresolved content references refuse.
 
 ## Build and check
