@@ -531,15 +531,6 @@ private:
           // would be a second one for one value.
           boundValues.insert(bind.getVal());
         }
-        // Membership on a binding is carried by the profiled row alone; the
-        // scalar row has no place for it and would leave two artifacts that
-        // fill a role differently sharing one identity.
-        if (!bind.getProfiled() && bind.getMembership())
-          return op->emitOpError()
-                 << "[zkc-E152] a binding carries reduction membership only "
-                    "when it is profiled: the encoding of a bare binding has "
-                    "no place for a role, so its identity would not determine "
-                    "which role it fills";
       }
       if (auto slot = dyn_cast<SlotOp>(op)) {
         if (failed(reserveClass(op, slot.getPayloadClass())))

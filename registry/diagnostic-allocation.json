@@ -139,7 +139,7 @@
       "means": {
         "E150": "a bounded artifact verification leaves a fact the reserved contract binds empty, names a child endpoint kind other than 'verifier', declares an empty child artifact ABI, or repeats a proof slot",
         "E151": "a membership names a reduce instance the body does not declare",
-        "E152": "a membership is incomplete, an event is a dep operand of the reduce whose message it claims to be, or a binding carries membership without a profile the encoding can record it under",
+        "E152": "a membership is incomplete, or an event is a dep operand of the reduce whose message it claims to be",
         "E153": "a reduction does not both consume at least one claim and produce one",
         "E154": "a challenge dependency set names one value twice",
         "E155": "one check is selected for more than one role of the same owner",
@@ -151,7 +151,7 @@
       "means_basis": {
         "E150": "a040b26a80ebd02a593f2830ea997a23d46d9a3a1d4a389d2e45f05343c37ee9",
         "E151": "3023ec9f8808dbab96ce7d24bb7b9c81e6a9746fb38f9ec1f537dd2a74d95187",
-        "E152": "d312e886292ec44d014f74d5ac682f97134777de871dc9613dc144af40213d61",
+        "E152": "b6bd94db9daf42c6db3485fbaf775d7faa2ea4fb930626c15e687b13c8ab3837",
         "E153": "3b76b11f6a60ad0716f89c7acf181127e24a0dac8351bb961e1281bd51fd6d93",
         "E154": "97e19ff0dc1d722a77a8640b058c9b0d3b1266cdca78d3cb5843f9cd9ac6dc80",
         "E155": "1705008a837c1b6c1deb67906724144282f4d82d1ef88adf13e84cbc1471d3e2",
@@ -170,7 +170,6 @@
         "excluded_reason": "the rest of the range is MLIR op/container grammar the twin's input representation cannot spell; E150 is mirrored because the bounded artifact verification is a spine event the twin does spell",
         "mirrored": [
           "E150",
-          "E152",
           "E159"
         ]
       }

@@ -711,20 +711,21 @@ private:
         value = *bind.getValue();
       // A profiled binding is its own event family, exactly as a profiled
       // slot is: it carries the profile name where the scalar family carries
-      // a payload class, and its membership beside it, so no row outside the
-      // protocols that use one moves (docs/spec/carrier.md §6).
-      if (bind.getProfiled()) {
+      // a payload class, so a reader knows which namespace the string is in.
+      // Membership is appended by either family when the binding fills a
+      // contract role — a binding row has no other optional tail, so arity
+      // says whether one is there and a binding that fills no role encodes
+      // exactly as it always did (docs/spec/carrier.md §6).
+      Array row{bind.getProfiled() ? "bind_profiled" : "bind",
+                bind.getPayloadClass(), stringifyStage(bind.getStage()),
+                std::move(value)};
+      if (bind.getMembership()) {
         auto membership = encodeMembership(bind.getMembership());
         if (!membership)
           return membership.takeError();
-        events.push_back(Array{"bind_profiled", bind.getPayloadClass(),
-                               stringifyStage(bind.getStage()),
-                               std::move(value), std::move(*membership)});
-      } else {
-        events.push_back(Array{"bind", bind.getPayloadClass(),
-                               stringifyStage(bind.getStage()),
-                               std::move(value)});
+        row.push_back(std::move(*membership));
       }
+      events.push_back(std::move(row));
     } else if (auto slot = dyn_cast<pir::SlotOp>(op)) {
       if (llvm::Error err = checkStrings({slot.getPayloadClass()}))
         return err;

@@ -100,13 +100,21 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // ALIAS: [zkc-E162] semantic_ref
 // ALIAS-SAME: reverse-injective
 
-// A binding fills a contract role only when it is profiled. The scalar
-// binding row carries no membership, so two artifacts that fill roles
-// differently would encode alike and share one identity; the role is refused
-// where the encoding cannot carry it rather than dropped where it cannot.
-// RUN: not zkc-opt %pir-seal-full %S/Inputs/bare-bind-with-membership.mlir 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=BAREROLE
-// BAREROLE: [zkc-E152] a binding carries reduction membership only when it is profiled
+// A role is filled by whatever carries the material, and a binding needs no
+// profile to carry a scalar the statement fixes. What identity must record is
+// which role it fills: a binding row has no other optional tail, so the role
+// is appended when there is one and a binding that fills none encodes exactly
+// as it always did. Two artifacts differing only in which role a binding
+// fills are two artifacts.
+// RUN: zkc-opt %pir-seal-full %S/Inputs/bare-bind-with-membership.mlir -o %t.role.mlir
+// RUN: zkc-translate --canonical %t.role.mlir | FileCheck %s --check-prefix=BAREROLE
+// BAREROLE: {{\[\[}}"bind","scalar","seal","sha256:3f2a
+// BAREROLE-SAME: [1,"table",0]]
+//
+// RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace(' in \"bus\" as \"table\"',''))" %t.role.mlir > %t.norole.mlir
+// RUN: zkc-translate --id %t.role.mlir > %t.role.id
+// RUN: zkc-translate --id %t.norole.mlir > %t.norole.id
+// RUN: not diff %t.role.id %t.norole.id
 
 // The seat is only half the carrier's statement of who chose the content;
 // the stage is the other half. Preprocessed content is fixed before any

@@ -3466,13 +3466,6 @@ def validate_protocol(
                             "material references are reverse-injective"
                         )
                     profiled_bind_refs.add(event.value)
-            elif event.membership is not None:
-                # The scalar binding row has no place for a role, so an
-                # identity would not determine which role it fills.
-                raise Refusal(
-                    f"[zkc-E152] binding {event.label!r} carries reduction "
-                    "membership without a profile"
-                )
             absorbed.add(event.label)
         elif isinstance(event, Slot):
             if event.profiled:
@@ -3797,24 +3790,15 @@ def canonical_document(
             # A profiled binding is its own event family, exactly as a
             # profiled slot is: the profile name where the scalar family
             # carries a payload class, and its membership beside it.
-            if event.profiled:
-                membership = None
-                if event.membership is not None:
-                    instance, role, index = event.membership
-                    membership = [transformer_pos[instance], role, index]
-                event_rows.append(
-                    [
-                        "bind_profiled",
-                        event.payload_class,
-                        event.stage,
-                        event.value,
-                        membership,
-                    ]
-                )
-            else:
-                event_rows.append(
-                    ["bind", event.payload_class, event.stage, event.value]
-                )
+            # Membership is appended by either family when the binding fills
+            # a contract role; a binding row has no other optional tail, so a
+            # binding that fills no role encodes exactly as it always did.
+            row = ["bind_profiled" if event.profiled else "bind",
+                   event.payload_class, event.stage, event.value]
+            if event.membership is not None:
+                instance, role, index = event.membership
+                row.append([transformer_pos[instance], role, index])
+            event_rows.append(row)
         elif isinstance(event, Slot):
             membership = None
             if event.membership is not None:
@@ -4876,11 +4860,6 @@ def _self_test() -> None:
         "[zkc-E159]",
         "a profiled binding's absorbed value is a material reference",
         value="")
-    profiled_bind_refuses(
-        "[zkc-E152]",
-        "a binding carries membership only when it is profiled",
-        profiled=False, payload_class="scalar")
-
     alias = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
     table_ref = next(event.value for event in alias["events"]
                      if isinstance(event, Bind) and event.profiled)
