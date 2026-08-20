@@ -258,7 +258,7 @@ public:
           "container carries no resolved-vocabulary table: the seal "
           "stamps cited semantic-vocabulary content digests "
           "before anything is encoded");
-    // The table is a closed set: four sections always, and two more that
+    // The table is a closed set: five sections always, and two more that
     // appear exactly when something cites them. Anything else in it
     // would ride into identity unseen by any judgment (the judges
     // verify only the known sections), so reject an unknown section

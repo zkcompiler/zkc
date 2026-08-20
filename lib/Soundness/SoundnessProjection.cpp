@@ -539,7 +539,6 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::MultiplicitiesMatchTable:
     return {ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::LookupFitsCharacteristic:
-    return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::UdrDomainFloor:
     return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::FriShape:
@@ -688,14 +687,12 @@ projectArtifactFact(const SealedSoundnessView &sealed,
     auto owner = reductionAt(sealed, site);
     if (!owner)
       return owner.takeError();
-    // One value across the reduction's commitments, or none to read. Two
-    // arities would leave the rule to choose, and a rule that chooses which
-    // number to price with is a rule whose bound is not determined by the
-    // artifact.
     // Without a role the reading is the whole reduction's, as it was before
     // roles could be selected: every profiled member must agree. With one it
     // is that role's members, which is what lets a table and a query column
-    // of different lengths both be priced.
+    // of different lengths both be priced. Either way exactly one arity must
+    // survive: two would leave the rule to choose, and a rule that chooses
+    // which number to price with has a bound the artifact does not determine.
     llvm::SmallVector<const soundness::CommittedArityByRole *> selected;
     for (const soundness::CommittedArityByRole &entry :
          (*owner)->committedArityByRole)
@@ -725,10 +722,12 @@ projectArtifactFact(const SealedSoundnessView &sealed,
       return projectionError(
           "what this projection reads declares more than one arity, so the "
           "one a bound would price is not determined");
-    for (const soundness::CommittedArityByRole *entry : selected)
-      if (!entry->arities.empty())
-        return RuntimeValue::integer(entry->arities.front());
-    return projectionError("committed arity has no value to return");
+    // `distinct` holds exactly one decimal, and it came from one of the
+    // selected roles, so reading it back is the whole of what is left.
+    auto exact = registry::Rational::fromDecimal(*distinct.begin());
+    if (!exact)
+      return exact.takeError();
+    return RuntimeValue::integer(std::move(*exact));
   }
 
   auto reduction = reductionAt(sealed, site);
