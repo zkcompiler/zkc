@@ -934,6 +934,21 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
                  });
     }
 
+    // Which consumed anchors the contract ties to a message role. The seal
+    // checks the ties hold; a rule that prices a passage between the consumed
+    // and produced claims requires that every anchor has one.
+    for (const registry::MaterialConstraint &constraint : contract->constraints) {
+      auto tied = [&](const registry::MaterialExpr &anchorSide,
+                      const registry::MaterialExpr &roleSide) {
+        if (anchorSide.kind != registry::MaterialExprKind::InputAnchors ||
+            roleSide.kind != registry::MaterialExprKind::Messages)
+          return;
+        owned.constrainedInputAnchors.insert(anchorSide.name);
+      };
+      tied(constraint.left, constraint.right);
+      tied(constraint.right, constraint.left);
+    }
+
     // The transformer's body extent, in canonical event positions.
     {
       TransformerExtent extent;

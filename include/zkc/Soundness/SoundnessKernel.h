@@ -621,7 +621,7 @@ enum class MachineDeciderKind {
   /// one, whatever the bound says. Produced anchors are constructor-derived
   /// and checked against the spine already; this is the same discipline on
   /// the side the artifact declares.
-  ConsumedAnchorsPrecedeChallenge,
+  ConsumedAnchorsAreRoundMaterial,
   /// The lemma's own hypothesis: multiplicities are field elements, so the
   /// number of entries must stay below the characteristic. Overflowing
   /// multiplicities are the known soundness failure of the whole approach

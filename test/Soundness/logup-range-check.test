@@ -126,10 +126,27 @@
 # RUN:   | FileCheck %s --check-prefix=LOOSE
 # LOOSE: [zkc-E325] an admitted material-identity constraint does not hold
 #
-# The rule keeps its own floor beneath that: `consumed_anchors_precede_challenge`
-# requires every consumed anchor to be material the round saw, for any contract
-# that declares no such constraint. Both contracts here declare them, so the
-# seal refusal is what an author meets.
+# The tie is stated in three places, each saying what it knows. The rule
+# requires that every consumed anchor has one, because a bound between two
+# claims about different objects prices nothing. The contract says which role
+# each anchor is tied to, because that correspondence is its own naming. The
+# seal checks the tie holds of this artifact. Drop the contract's half and the
+# rule refuses rather than pricing a passage the contract never constrained.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['reduction_contracts']['logup_range_check']['constraints']=[]; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/untied.vocab.json
+# RUN: zkc-seal %S/../Encoding/logup-range-check.mlir \
+# RUN:   --protocol-vocabulary=%t/untied.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/untied.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/untied.artifacts %t/untied.mlirbc
+# RUN: zkc-opt -pir-seal='protocol-vocabulary=%t/untied.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/../Encoding/logup-range-check.mlir -o %t/untied.sealed.mlir
+# RUN: %python -c "import json,re,sys; digest=re.search(r'logup_range_check = \"(sha256:[0-9a-f]+)\"', open(sys.argv[1]).read()).group(1); s=json.load(open(sys.argv[2])); [v['anchor']['ref'].__setitem__('source_revision', digest) for v in s['bindings'].values() if v.get('anchor',{}).get('ref',{}).get('id')=='logup_range_check']; json.dump(s, open(sys.argv[3],'w'))" %t/untied.sealed.mlir %zkc-registry-dir/soundness-signature.json %t/untied.sig.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/untied.artifacts %t/untied.req.json
+# RUN: not zkc-derive --signature=%t/untied.sig.json \
+# RUN:   --protocol-vocabulary=%t/untied.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/untied.req.json -o=/dev/null %t/untied.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=UNTIED
+# UNTIED: condition_failed at apply.conditions.S8
 
 # The completeness track carries the same conditions, because the honest
 # prover's witness needs them. Lemma 5's forward direction — the one that

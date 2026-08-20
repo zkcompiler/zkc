@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <memory>
 #include <optional>
 #include <string>
@@ -124,6 +125,16 @@ struct ReductionContractValue {
   std::vector<std::map<std::string, uint64_t, std::less<>>>
       orderedInputAnchorEventPositions;
   std::map<std::string, ExactScalarValue, std::less<>> parameters;
+  /// The consumed-claim anchor names the contract ties to a message role by
+  /// an admitted material-identity constraint.
+  ///
+  /// Which anchor corresponds to which role is contract knowledge — a rule
+  /// binds many contracts and cannot know their naming. So the layering is:
+  /// a rule states that every consumed anchor must be tied to something the
+  /// round saw, the contract states what to, and the seal checks the tie
+  /// holds of the artifact (zkc-E325). This carries the middle fact up to
+  /// where the rule can require the first.
+  std::set<std::string, std::less<>> constrainedInputAnchors;
   std::vector<ReductionContractRoundValue> rounds;
 };
 

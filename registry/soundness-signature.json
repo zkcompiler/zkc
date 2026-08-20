@@ -983,9 +983,9 @@
       "notes": "Discharged at: the algebra the construction profile names, read against the payload classes the contract declares. Carried rather than decided because the pairing's group assignment is a property of the suite, not of the spine.",
       "statement": "the commitment, proof and evaluation classes the contract declares are the groups and scalar field of one pairing suite, in the roles that suite assigns them"
     },
-    "zkc.side.consumed_anchors_precede_challenge": {
-      "notes": "Decided from the artifact: each consumed claim's anchors are resolved to the transcript events that carry them, and compared against the round's challenge position.",
-      "statement": "every anchor of every claim this reduction consumes names transcript material that entered before the round's challenge"
+    "zkc.side.consumed_anchors_are_round_material": {
+      "notes": "Decided from the artifact's contract: which consumed anchor corresponds to which message role is contract knowledge, so the rule requires only that every anchor has a tie and the contract says what to. That the tie holds of this artifact is a seal judgment (zkc-E325), checked before any rule reads it.",
+      "statement": "every anchor of every claim this reduction consumes is tied by its contract to a message role of the round, so the claim it consumes and the claim it produces are about the same material"
     },
     "zkc.side.degrees_within_srs": {
       "notes": "Discharged at: the structured reference string the suite pins. The artifact names commitments by digest and never reads what they commit to, so no decider can compare a degree against the string's length.",
@@ -6004,7 +6004,7 @@
           "argument_types": [
             "reduction_contract"
           ],
-          "predicate_ref": "zkc.side.consumed_anchors_precede_challenge",
+          "predicate_ref": "zkc.side.consumed_anchors_are_round_material",
           "slot": "S6"
         }
       ],
@@ -9167,7 +9167,7 @@
           "argument_types": [
             "reduction_contract"
           ],
-          "predicate_ref": "zkc.side.consumed_anchors_precede_challenge",
+          "predicate_ref": "zkc.side.consumed_anchors_are_round_material",
           "slot": "S8"
         }
       ],
@@ -9872,13 +9872,13 @@
           "source_revision": "zkc.soundness"
         }
       },
-      "zkc.side.consumed_anchors_precede_challenge": {
+      "zkc.side.consumed_anchors_are_round_material": {
         "argument_types": [
           "reduction_contract"
         ],
-        "kind": "consumed_anchors_precede_challenge",
+        "kind": "consumed_anchors_are_round_material",
         "ref": {
-          "id": "zkc.side.consumed_anchors_precede_challenge",
+          "id": "zkc.side.consumed_anchors_are_round_material",
           "source_revision": "zkc.soundness"
         }
       },

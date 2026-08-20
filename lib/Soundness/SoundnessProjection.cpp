@@ -127,6 +127,7 @@ makeReductionContract(const SealedReduction &sealed) {
   result.orderedInputAnchors = sealed.orderedInputAnchors;
   result.orderedInputAnchorEventPositions =
       sealed.orderedInputAnchorEventPositions;
+  result.constrainedInputAnchors = sealed.constrainedInputAnchors;
 
   for (const auto &[name, atom] : sealed.parameters) {
     auto copied = copyParameterAtom(atom);
@@ -538,7 +539,7 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::SpaceCoversBatch:
   case MachineDeciderKind::MultiplicitiesMatchTable:
     return {ValueSort::Integer, ValueSort::Integer};
-  case MachineDeciderKind::ConsumedAnchorsPrecedeChallenge:
+  case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial:
     return {ValueSort::ReductionContract};
   case MachineDeciderKind::LookupFitsCharacteristic:
   case MachineDeciderKind::UdrDomainFloor:
@@ -936,29 +937,25 @@ evaluateMachineDecider(MachineDeciderKind kind,
     }
     return true;
   }
-  case MachineDeciderKind::ConsumedAnchorsPrecedeChallenge: {
+  case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial: {
     const ReductionContractValue &value = contract(arguments[0]);
-    // Every consumed claim must resolve, carry at least one anchor, and have
-    // each of them be material the round saw. An unanchored claim would pass
-    // vacuously, so an empty anchor set refuses.
+    // A bound prices a passage from what the reduction consumes to what it
+    // produces, so the two must be about the same objects. Which consumed
+    // anchor is which role is contract knowledge, so the rule requires only
+    // that the contract ties every one of them, and the seal has already
+    // checked the ties hold of this artifact (zkc-E325). An unanchored claim
+    // would satisfy that vacuously, so an empty anchor set refuses.
     if (value.orderedInputAnchors.size() != value.inputCount ||
-        value.orderedInputAnchorEventPositions.size() != value.inputCount ||
-        value.inputCount == 0 || value.rounds.empty())
+        value.inputCount == 0)
       return false;
-    uint64_t challengePosition = value.rounds.front().challengeEventPosition;
     for (size_t input = 0; input < value.inputCount; ++input) {
       const auto &anchors = value.orderedInputAnchors[input];
-      const auto &positions = value.orderedInputAnchorEventPositions[input];
       if (anchors.empty())
         return false;
-      for (const auto &anchor : anchors) {
-        if (anchor.second.empty())
+      for (const auto &anchor : anchors)
+        if (anchor.second.empty() ||
+            !value.constrainedInputAnchors.count(anchor.first))
           return false;
-        auto position = positions.find(anchor.first);
-        if (position == positions.end() ||
-            position->second >= challengePosition)
-          return false;
-      }
     }
     return true;
   }

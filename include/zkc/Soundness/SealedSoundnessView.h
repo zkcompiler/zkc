@@ -225,6 +225,11 @@ struct SealedReduction {
   /// lengths has two numbers to price from, and pooling them would leave the
   /// rule to choose.
   std::vector<CommittedArityByRole> committedArityByRole;
+  /// The consumed-claim anchor names this reduction's contract ties to a
+  /// message role by an admitted material-identity constraint. The seal has
+  /// checked each tie holds of this artifact; this records which anchors
+  /// were tied, so a rule can require that all of them were.
+  std::set<std::string, std::less<>> constrainedInputAnchors;
 };
 
 
