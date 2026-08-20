@@ -841,11 +841,10 @@ def _read_artifact_projection(node: Any, where: str) -> ArtifactProjection:
         return ArtifactProjection(kind, _sort(entry, "result_sort", where))
     if kind == "committed_arity":
         entry = _object(node, where, ("kind", "result_sort"), ("member_role",))
-        role = entry.get("member_role")
-        if role is not None and (not isinstance(role, str) or not role):
-            raise Refusal(f"{where} member_role must be a non-empty string: "
-                          "absent is how a projection reads the whole "
-                          "reduction")
+        # Present-and-null is not absent: absence is the whole-reduction
+        # reading, so a null would silently become the other semantics.
+        role = (_string(entry, "member_role", where)
+                if "member_role" in entry else None)
         return ArtifactProjection(kind, _sort(entry, "result_sort", where),
                                   member_role=role)
     if kind in ("reduction_parameter", "path_binding_field"):

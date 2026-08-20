@@ -663,9 +663,20 @@ private:
   /// two spellings must agree, or an artifact declares a provenance its
   /// transcript contradicts (docs/spec/vocabularies.md). `seat` names the
   /// event in the diagnostic; `admitted` is the origin that belongs on it.
-  template <typename OpT>
-  void requireValueProfile(OpT op, llvm::StringRef seat,
+  void requireValueProfile(zkc::pir::SlotOp op, llvm::StringRef seat,
                            llvm::StringRef admitted) {
+    resolveValueProfile(op, seat, admitted, /*sealStage=*/true);
+  }
+
+  void requireValueProfile(zkc::pir::BindOp op, llvm::StringRef seat,
+                           llvm::StringRef admitted) {
+    resolveValueProfile(op, seat, admitted,
+                        op.getStage() == zkc::pir::Stage::Seal);
+  }
+
+  template <typename OpT>
+  void resolveValueProfile(OpT op, llvm::StringRef seat,
+                           llvm::StringRef admitted, bool sealStage) {
     const zkc::registry::ValueProfile *profile =
         vocabulary.lookupValueProfile(op.getPayloadClass());
     if (!profile) {
@@ -674,6 +685,17 @@ private:
                 << "', is not declared by the sealed vocabulary";
       return;
     }
+    // Preprocessed content is fixed before any statement, and an
+    // instance-stage binding carries a value that arrives per statement — so
+    // the seat is only half the answer and the stage is the other half. The
+    // hypothesis that discharges a preprocessed arity names the anchor's
+    // preimage, which an instance-stage binding does not have at seal.
+    if (admitted == "preprocessed" && !sealStage)
+      error(op) << "[zkc-E169] value profile '" << op.getPayloadClass()
+                << "' declares origin 'preprocessed', which is content fixed "
+                   "before any statement, so it does not belong on an "
+                   "instance-stage binding: the stage is half of the "
+                   "carrier's statement of who chose the content";
     if (profile->origin != admitted)
       error(op) << "[zkc-E169] value profile '" << op.getPayloadClass()
                 << "' declares origin '" << profile->origin

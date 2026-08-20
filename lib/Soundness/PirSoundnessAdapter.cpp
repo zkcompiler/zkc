@@ -250,14 +250,19 @@ buildRoundFact(pir::ReduceOp reduce,
       // the two a role admits is the contract's own declaration, checked
       // against the spine at seal, so the projection reads either.
       llvm::StringRef payloadClass;
-      if (auto slot = mlir::dyn_cast<pir::SlotOp>(members.front()))
+      bool profiled = false;
+      if (auto slot = mlir::dyn_cast<pir::SlotOp>(members.front())) {
         payloadClass = slot.getPayloadClass();
-      else if (auto bind = mlir::dyn_cast<pir::BindOp>(members.front()))
+        profiled = slot.getProfiled();
+      } else if (auto bind = mlir::dyn_cast<pir::BindOp>(members.front())) {
         payloadClass = bind.getPayloadClass();
-      else
+        profiled = bind.getProfiled();
+      } else {
         return adapterError("a contract round message membership is neither a "
                             "prover message nor a public binding");
+      }
       messageFact.payloadClassesByOccurrence.push_back(payloadClass.str());
+      messageFact.profiledByOccurrence.push_back(profiled);
     }
     if (occurrences->second.size() != multiplicity)
       return adapterError("a contract round message role has extra sealed "
@@ -724,6 +729,26 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
 
   llvm::StringMap<pir::CheckOp> checksByLabel;
   llvm::StringMap<uint64_t> materialEventPositions;
+  // A profiled seal-stage binding absorbs the digest of the content its
+  // profile describes, so it is a material reference the same way a semantic
+  // binding is, and the events it names must be findable the same way.
+  for (mlir::Operation &operation : sealed.getBody().front()) {
+    auto bind = mlir::dyn_cast<pir::BindOp>(operation);
+    if (!bind || !bind.getProfiled() || bind.getStage() != pir::Stage::Seal)
+      continue;
+    llvm::StringRef reference = bind.getValue().value_or(llvm::StringRef());
+    if (reference.empty())
+      continue;
+    auto position = canonicalEventPosition(*canonical, bind.getVal(),
+                                           "a profiled public binding");
+    if (!position)
+      return position.takeError();
+    view.boundMaterialRefs.insert(reference.str());
+    view.boundMaterialLabels[reference.str()] = bind.getLabel().str();
+    if (!materialEventPositions.try_emplace(reference, *position).second)
+      return adapterError(
+          "one semantic material reference names more than one event");
+  }
   for (mlir::Operation &operation : sealed.getBody().front()) {
     auto check = mlir::dyn_cast<pir::CheckOp>(operation);
     if (check && !checksByLabel.try_emplace(check.getLabel(), check).second)

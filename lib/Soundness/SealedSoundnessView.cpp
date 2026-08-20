@@ -58,7 +58,8 @@ bool optionalRationalEqual(const std::optional<registry::Rational> &lhs,
 bool operator==(const SealedMessageRoleFact &lhs,
                 const SealedMessageRoleFact &rhs) {
   return lhs.role == rhs.role &&
-         lhs.payloadClassesByOccurrence == rhs.payloadClassesByOccurrence;
+         lhs.payloadClassesByOccurrence == rhs.payloadClassesByOccurrence &&
+         lhs.profiledByOccurrence == rhs.profiledByOccurrence;
 }
 
 bool operator==(const SealedRoundFact &lhs, const SealedRoundFact &rhs) {

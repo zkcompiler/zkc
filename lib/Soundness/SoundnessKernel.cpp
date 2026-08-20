@@ -177,6 +177,9 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
   case MachineDeciderKind::MultiplicitiesMatchTable:
     return {"zkc.side.multiplicities_match_table",
             {ValueSort::Integer, ValueSort::Integer}};
+  case MachineDeciderKind::ConsumedAnchorsPrecedeChallenge:
+    return {"zkc.side.consumed_anchors_precede_challenge",
+            {ValueSort::ReductionContract}};
   case MachineDeciderKind::LookupFitsCharacteristic:
     return {"zkc.side.lookup_fits_characteristic",
             {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer}};

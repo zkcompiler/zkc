@@ -1068,6 +1068,10 @@
           "source": "cds94"
         }
       ]
+    },
+    "zkc.side.consumed_anchors_precede_challenge": {
+      "notes": "Decided from the artifact: each consumed claim's anchors are resolved to the transcript events that carry them, and compared against the round's challenge position.",
+      "statement": "every anchor of every claim this reduction consumes names transcript material that entered before the round's challenge"
     }
   },
   "bindings": {
@@ -1096,8 +1100,88 @@
           "source_revision": "sha256:db5749c941ab01e10e24a5c4576c448a4064652ec25173166fd2130835c777b9"
         }
       },
-      "condition_argument_bindings": {},
-      "fact_bindings": {},
+      "condition_argument_bindings": {
+        "S3": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "multiplicities",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S4": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "queries",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S5": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S6": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
       "hypothesis_argument_bindings": {
         "S1": [
           {
@@ -1119,6 +1203,12 @@
             "kind": "resolved_parameter",
             "reference": "field_order",
             "sort": "integer"
+          }
+        ],
+        "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
           }
         ]
       },
@@ -1174,8 +1264,88 @@
           "source_revision": "sha256:6ce737eca29591848db189307f6b6c7c8f4481873c5594fad2818c1d45c7f348"
         }
       },
-      "condition_argument_bindings": {},
-      "fact_bindings": {},
+      "condition_argument_bindings": {
+        "S3": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "multiplicities",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S4": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "queries",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S5": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S6": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
       "hypothesis_argument_bindings": {
         "S1": [
           {
@@ -1197,6 +1367,12 @@
             "kind": "resolved_parameter",
             "reference": "field_order",
             "sort": "integer"
+          }
+        ],
+        "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
           }
         ]
       },
@@ -4652,6 +4828,16 @@
             "reference": "field_order",
             "sort": "integer"
           }
+        ],
+        "S8": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
         ]
       },
       "fact_bindings": {
@@ -4665,12 +4851,6 @@
         }
       },
       "hypothesis_argument_bindings": {
-        "S3": [
-          {
-            "kind": "conclusion_subject",
-            "sort": "subject"
-          }
-        ],
         "S4": [
           {
             "kind": "conclusion_subject",
@@ -4798,6 +4978,16 @@
             "reference": "field_order",
             "sort": "integer"
           }
+        ],
+        "S8": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
         ]
       },
       "fact_bindings": {
@@ -4811,12 +5001,6 @@
         }
       },
       "hypothesis_argument_bindings": {
-        "S3": [
-          {
-            "kind": "conclusion_subject",
-            "sort": "subject"
-          }
-        ],
         "S4": [
           {
             "kind": "conclusion_subject",
@@ -5690,7 +5874,12 @@
       "status": "admitted"
     },
     "zkc.completeness.logup": {
-      "artifact_facts": [],
+      "artifact_facts": [
+        {
+          "name": "contract",
+          "sort": "reduction_contract"
+        }
+      ],
       "body": {
         "bound": {
           "kind": "quantity",
@@ -5743,10 +5932,50 @@
           ],
           "proposition_ref": "zkc.side.prime_field_order",
           "slot": "S2"
+        },
+        {
+          "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.logup_multiplicities_honest",
+          "slot": "S7"
         }
       ],
       "id": "zkc.completeness.logup",
-      "machine_conditions": [],
+      "machine_conditions": [
+        {
+          "argument_types": [
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.multiplicities_match_table",
+          "slot": "S3"
+        },
+        {
+          "argument_types": [
+            "integer",
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.lookup_fits_characteristic",
+          "slot": "S4"
+        },
+        {
+          "argument_types": [
+            "reduction_contract",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.space_embeds",
+          "slot": "S5"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.consumed_anchors_precede_challenge",
+          "slot": "S6"
+        }
+      ],
       "parameters": [
         {
           "name": "table",
@@ -8853,13 +9082,6 @@
       "external_hypotheses": [
         {
           "argument_types": [
-            "subject"
-          ],
-          "proposition_ref": "zkc.hyp.logup_multiplicities_honest",
-          "slot": "S3"
-        },
-        {
-          "argument_types": [
             "subject",
             "integer"
           ],
@@ -8908,6 +9130,13 @@
           ],
           "predicate_ref": "zkc.side.space_embeds",
           "slot": "S6"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.consumed_anchors_precede_challenge",
+          "slot": "S8"
         }
       ],
       "parameters": [
@@ -9608,6 +9837,16 @@
         "kind": "codec_bias_declared",
         "ref": {
           "id": "zkc.side.codec_bias_declared",
+          "source_revision": "zkc.soundness"
+        }
+      },
+      "zkc.side.consumed_anchors_precede_challenge": {
+        "argument_types": [
+          "reduction_contract"
+        ],
+        "kind": "consumed_anchors_precede_challenge",
+        "ref": {
+          "id": "zkc.side.consumed_anchors_precede_challenge",
           "source_revision": "zkc.soundness"
         }
       },

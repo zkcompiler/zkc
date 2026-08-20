@@ -195,7 +195,7 @@
         "E165": "a bounded artifact verification names a proof slot that follows it on the spine, so the child would consume material not yet in the stream",
         "E166": "a slot names a value profile the sealed vocabulary does not declare",
         "E167": "a profiled slot is also counted, and a vector of commitments is a shape no value profile states",
-        "E169": "a value profile's declared origin does not belong on the transcript event carrying it: prover material enters as a slot, statement-fixed material as a public binding"
+        "E169": "a value profile's declared origin does not belong on the transcript event carrying it: prover material enters as a slot, statement-fixed material as a public binding, and preprocessed content on a binding that carries its value at seal"
       },
       "means_basis": {
         "E161": "eaf8b01d43e2ff2d3041b8f1cab5830fa54cd43e9876396b81363dd51393d859",
@@ -205,7 +205,7 @@
         "E165": "cbf872087e75bf1489b9d5055423569d3784e8be01efb38cf849c1cc7e580bc7",
         "E166": "d88960e143c25babee23d872872b7ad766f96b0beb640897d24502f9b937063d",
         "E167": "a3ca1418dfdf5f8f36f1f1d37d8a4fcd3777f97814c2bc0d72f8da759e653ae7",
-        "E169": "a60f615a9547c3361701f8c5e796b5d5f62c56e333bfee7415fa6e7f561caacd"
+        "E169": "ba81460134ab51b0cdb0f84a7b20ec2484a19759745c2a5add8a00a583d2b199"
       },
       "range": "E160-E169",
       "reserved": [],

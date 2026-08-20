@@ -115,3 +115,34 @@
 # RUN: %if uv %{ %uv python -m oracle.parity derive-skeleton logup-range-check \
 # RUN:   %t/rc.req.json > %t/oracle.skeleton.json %}
 # RUN: %if uv %{ diff %t/zkc.skeleton.json %t/oracle.skeleton.json %}
+
+# A bound prices a passage from what the reduction consumes to what it
+# produces. If the consumed claim is anchored to material the round never
+# saw, the two statements are about different objects and no theorem relates
+# them — the passage's probability is one, whatever the bound says. Produced
+# anchors have been constructor-derived and checked all along; this is the
+# same discipline on the side the artifact declares.
+# RUN: zkc-seal %S/Inputs/logup-unanchored-inclusion.mlir %zkc-seal-full -o %t/loose.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/loose.artifacts %t/loose.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/loose.artifacts %t/loose.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/loose.req.json -o=/dev/null %t/loose.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=LOOSE
+# LOOSE: condition_failed at apply.conditions.S8
+
+# The completeness track carries the same conditions, because the honest
+# prover's witness needs them. Lemma 5's forward direction — the one that
+# produces multiplicities — normalizes by the table-side count, so it is the
+# completeness leg that needs those counts invertible; and a witness indexed
+# by a table of one length is not a witness for a table of another. An
+# artifact the soundness track refuses must not be priced here either.
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-completeness-request.json %t/mult.artifacts %t/mult.comp.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/mult.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/mult.comp.json -o=/dev/null %t/mult.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=COMPMULT
+# COMPMULT: condition_failed at apply.conditions.S3
+

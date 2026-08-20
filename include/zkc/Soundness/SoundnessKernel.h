@@ -611,6 +611,17 @@ enum class MachineDeciderKind {
   /// as an external hypothesis instead (see the value-profile discussion in
   /// docs/spec/carrier.md §3).
   MultiplicitiesMatchTable,
+  /// Every anchor of every consumed claim names transcript material that
+  /// entered before the round's challenge.
+  ///
+  /// A reduction's bound prices a passage from what its consumed claim says
+  /// to what its produced claim says. If the consumed claim is anchored to
+  /// material the round never saw, the two statements are about different
+  /// objects and no theorem relates them — the transition's probability is
+  /// one, whatever the bound says. Produced anchors are constructor-derived
+  /// and checked against the spine already; this is the same discipline on
+  /// the side the artifact declares.
+  ConsumedAnchorsPrecedeChallenge,
   /// The lemma's own hypothesis: multiplicities are field elements, so the
   /// number of entries must stay below the characteristic. Overflowing
   /// multiplicities are the known soundness failure of the whole approach

@@ -80,6 +80,14 @@ enum class ChallengeSampling { Uniform, UniformIndependent };
 struct SealedMessageRoleFact {
   std::string role;
   std::vector<std::string> payloadClassesByOccurrence;
+  /// Whether each occurrence carries a value profile rather than a payload
+  /// class. A profiled member's string is a profile name, and a profile may
+  /// be named anything a vocabulary author likes — including exactly what a
+  /// payload class is called. A condition that compares the string against a
+  /// class must therefore be able to tell the two apart, or a profile named
+  /// after a class answers "yes" to "is this an element of that class" for a
+  /// value that is a commitment to many of them.
+  std::vector<bool> profiledByOccurrence;
 };
 
 bool operator==(const SealedMessageRoleFact &lhs,

@@ -401,8 +401,18 @@ class ProtocolVocabulary:
         _closed(body, {"element_class", "origin", "arity_log2",
                        "binding_route"}, f"value profile {name!r}")
         for field in ("element_class", "origin", "binding_route"):
-            if not isinstance(body[field], str) or not body[field]:
+            value = body[field]
+            if not isinstance(value, str) or not value:
                 raise Refusal(f"value profile {name!r} has no {field}")
+            # Non-empty printable ASCII, like every other registry string: a
+            # value outside the encoding domain cannot round-trip the
+            # canonical form, and the enforced domain is what the parity
+            # argument rests on (docs/spec/kernel.md section 3).
+            if not all(0x20 <= ord(char) <= 0x7E for char in value):
+                raise Refusal(
+                    f"value profile {name!r} needs a non-empty "
+                    f"printable-ASCII {field!r}"
+                )
         if body["origin"] not in self._VALUE_ORIGINS:
             raise Refusal(
                 f"value profile {name!r} names origin {body['origin']!r}, "
@@ -3221,6 +3231,16 @@ def _resolve_value_profile(vocabulary, event, seat: str, admitted: str):
         raise Refusal(
             f"[zkc-E166] value profile {event.payload_class!r}, named by "
             f"{seat} {event.label!r}, is not declared by the sealed vocabulary"
+        )
+    # Preprocessed content is fixed before any statement, and an
+    # instance-stage binding's value arrives per statement, so the seat is
+    # only half the answer and the stage is the other half.
+    if admitted == "preprocessed" and getattr(event, "stage", "seal") != "seal":
+        raise Refusal(
+            f"[zkc-E169] value profile {event.payload_class!r} declares origin "
+            "'preprocessed', which is content fixed before any statement, so "
+            f"it does not belong on an instance-stage {seat}: the stage is "
+            "half of the carrier's statement of who chose the content"
         )
     if profile["origin"] != admitted:
         raise Refusal(

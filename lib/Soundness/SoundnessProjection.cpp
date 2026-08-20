@@ -538,6 +538,8 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::SpaceCoversBatch:
   case MachineDeciderKind::MultiplicitiesMatchTable:
     return {ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::ConsumedAnchorsPrecedeChallenge:
+    return {ValueSort::ReductionContract};
   case MachineDeciderKind::LookupFitsCharacteristic:
   case MachineDeciderKind::UdrDomainFloor:
     return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
@@ -864,6 +866,15 @@ evaluateMachineDecider(MachineDeciderKind kind,
          contract(arguments[0]).rounds)
       for (const SealedMessageRoleFact &message : round.messages) {
         sawMessage = true;
+        // A profiled member is a commitment, not an element of the class its
+        // content is drawn from, so it answers no however its profile is
+        // named. Reading the string alone would let a profile called after a
+        // payload class stand in for one element of it — the substitution
+        // the marked type exists to make impossible, and which the check and
+        // dependency sites already refuse.
+        if (llvm::any_of(message.profiledByOccurrence,
+                         [](bool profiled) { return profiled; }))
+          return false;
         if (!llvm::all_of(message.payloadClassesByOccurrence,
                           [&](const std::string &payloadClass) {
                             return payloadClass == fieldClass;
@@ -919,6 +930,32 @@ evaluateMachineDecider(MachineDeciderKind kind,
         auto position = positions.find(name.str());
         if (anchor == anchors.end() || anchor->second.empty() ||
             position == positions.end() ||
+            position->second >= challengePosition)
+          return false;
+      }
+    }
+    return true;
+  }
+  case MachineDeciderKind::ConsumedAnchorsPrecedeChallenge: {
+    const ReductionContractValue &value = contract(arguments[0]);
+    // Every consumed claim must resolve, carry at least one anchor, and have
+    // each of them be material the round saw. An unanchored claim would pass
+    // vacuously, so an empty anchor set refuses.
+    if (value.orderedInputAnchors.size() != value.inputCount ||
+        value.orderedInputAnchorEventPositions.size() != value.inputCount ||
+        value.inputCount == 0 || value.rounds.empty())
+      return false;
+    uint64_t challengePosition = value.rounds.front().challengeEventPosition;
+    for (size_t input = 0; input < value.inputCount; ++input) {
+      const auto &anchors = value.orderedInputAnchors[input];
+      const auto &positions = value.orderedInputAnchorEventPositions[input];
+      if (anchors.empty())
+        return false;
+      for (const auto &anchor : anchors) {
+        if (anchor.second.empty())
+          return false;
+        auto position = positions.find(anchor.first);
+        if (position == positions.end() ||
             position->second >= challengePosition)
           return false;
       }

@@ -113,6 +113,8 @@ The admitted closed set is deliberately small:
 |---|---|---|
 | `opaque_relation` | relation | `contract`, `statement` |
 | `single_opening` | opening | `commitment`, `point`, `value` |
+| `logup_inclusion` | lookup | `multiplicities`, `queries`, `table` |
+| `logup_identity` | fractional_identity | `multiplicities`, `queries`, `table` |
 | `batch_opening` | opening | `members`, `point` |
 | `opening_value_rlc` | opening | `coefficient`, `members` |
 | `kzg_verification_equation` | verification equation | `material` |
@@ -154,6 +156,20 @@ values, and coefficients with those whole records, and sets
 additive only when existing constructors and judgments already express it.
 Scope, free parameters, required interfaces, or a wildcard profile are absent;
 adding any is a versioned format decision.
+
+A `lookup` claim asserts that the sequence behind `queries` is contained, as
+a set, in the sequence behind `table`, with `multiplicities` naming how often
+each table entry is drawn.
+
+A `fractional_identity` claim asserts that the sums of reciprocals over those
+same sequences are **defined and equal** at the challenge the reduction
+producing it sampled. Definedness is part of the assertion, not a side
+remark: the reciprocals have poles at the negated entries, and a claim that
+omitted definedness would be vacuously satisfiable there. Locating the poles
+inside the claim is what lets a soundness bound count only the roots of the
+cleared identity while a completeness bound counts the poles themselves —
+the two tracks then differ by exactly the number of poles, which is why the
+same protocol's two bounds are not equal.
 
 ### 3.1 Value profiles
 

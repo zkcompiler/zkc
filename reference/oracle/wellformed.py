@@ -131,6 +131,11 @@ MACHINE_DECIDERS = {
     # indexed by its table -- and the lemma's own characteristic hypothesis.
     # Neither ties a declared arity to what was committed; that gap is an
     # external hypothesis, not a machine condition.
+    # Every anchor of every consumed claim names transcript material the
+    # round saw: without it a bound prices a passage between two statements
+    # about different objects.
+    "consumed_anchors_precede_challenge": (
+        "zkc.side.consumed_anchors_precede_challenge", ("reduction_contract",)),
     "multiplicities_match_table": ("zkc.side.multiplicities_match_table",
                               ("integer", "integer")),
     "lookup_fits_characteristic": ("zkc.side.lookup_fits_characteristic",

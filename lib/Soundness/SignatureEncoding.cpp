@@ -251,6 +251,8 @@ const char *machineDeciderKindName(MachineDeciderKind kind) {
     return "batch_after_material";
   case MachineDeciderKind::MultiplicitiesMatchTable:
     return "multiplicities_match_table";
+  case MachineDeciderKind::ConsumedAnchorsPrecedeChallenge:
+    return "consumed_anchors_precede_challenge";
   case MachineDeciderKind::LookupFitsCharacteristic:
     return "lookup_fits_characteristic";
   case MachineDeciderKind::FriShape:

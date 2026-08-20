@@ -107,3 +107,20 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // RUN:   | FileCheck %s --check-prefix=BAREROLE
 // BAREROLE: [zkc-E152] a binding carries reduction membership only when it is profiled
 
+// The seat is only half the carrier's statement of who chose the content;
+// the stage is the other half. Preprocessed content is fixed before any
+// statement, so it does not ride a binding whose value arrives per statement
+// — and the seat the arity hypothesis names for discharging it, the anchor's
+// preimage, is not in an instance-stage transcript at all.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/preprocessed-at-instance-stage.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=STAGE
+// STAGE: [zkc-E169] value profile 'logup_table' declares origin 'preprocessed'
+// STAGE-SAME: does not belong on an instance-stage binding
+
+// And the fourth direction of the contract's own statement: a role the
+// contract says a public binding fills, filled by a prover message.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/bind-role-filled-by-slot.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=SLOTROLE
+// SLOTROLE: [zkc-E244] message role 'table' is filled by a prover message
+// SLOTROLE-SAME: contract declares it filled by a public binding
+
