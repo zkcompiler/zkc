@@ -2723,6 +2723,18 @@ def reduction_closure(
             raise Refusal(f"reduction message {instance}.{role}[{index}] is duplicated")
         occurrences[index] = event.label
 
+    def self_material_ref(label: str) -> str | None:
+        """The material reference a value carries in itself, or None.
+
+        A profiled seal-stage binding absorbs the digest of the content its
+        profile describes, so that digest is the value's own reference.
+        """
+        event = next((e for e in events
+                      if isinstance(e, Bind) and e.label == label), None)
+        if event is None or not event.profiled or event.stage != "seal":
+            return None
+        return event.value
+
     binding_by_value: dict[str, str] = {}
     value_by_reference: dict[str, str] = {}
     for binding_entry in protocol.get("material_bindings", []):
@@ -2788,6 +2800,12 @@ def reduction_closure(
             return result
 
         def binding(value: str) -> str:
+            # A value that carries its own material reference is read from
+            # itself; a material binding on it would be a second spelling of
+            # one fact, and stays unconsumed so the seal refuses it.
+            own = self_material_ref(value)
+            if own is not None:
+                return own
             try:
                 result = binding_by_value[value]
             except KeyError:

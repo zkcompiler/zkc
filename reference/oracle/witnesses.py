@@ -1664,10 +1664,17 @@ def _logup(events, contract):
                 anchors=[dict(LOGUP_ANCHORS)],
             )
         ],
+        # The table is bound only where it is a prover message. A profiled
+        # seal-stage binding absorbs its digest and so carries its own
+        # material reference; a material binding on it would be one fact
+        # spelled twice (docs/spec/carrier.md section 4).
         "material_bindings": [
-            material("table", LOGUP_TABLE),
-            material("queries", LOGUP_VALUES),
-            material("mult", LOGUP_MULT),
+            material(label, ref)
+            for label, ref in (("table", LOGUP_TABLE),
+                               ("queries", LOGUP_VALUES),
+                               ("mult", LOGUP_MULT))
+            if not any(event.tag == "bind" and event.label == label
+                       for event in events)
         ],
         "sinks": [
             route("residual", "identity",

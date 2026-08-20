@@ -69,3 +69,14 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // RUN:   | FileCheck %s --check-prefix=SOURCE
 // SOURCE: [zkc-E244] message role 'table' is filled by a public binding
 // SOURCE-SAME: contract declares it filled by a prover message
+
+// A profiled seal-stage binding absorbs the digest of the content its profile
+// describes, so the value carries its own material reference. Spelling it
+// again as a material binding would be one fact in two places, and two places
+// can disagree — the transcript would absorb one digest while the claim's
+// anchor named another. The second spelling is not checked for agreement; it
+// is refused, because nothing consumes it.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/profiled-bind-bound-twice.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=TWICE
+// TWICE: [zkc-E328] material binding is not consumed
+

@@ -23,6 +23,15 @@ static bool classMatches(Value value, llvm::StringRef expected) {
          cast<zkc::pir::ValType>(value.getType()).bareClass() == expected;
 }
 
+llvm::StringRef selfMaterialRef(Value value) {
+  auto bind = dyn_cast_or_null<zkc::pir::BindOp>(value.getDefiningOp());
+  if (!bind || !bind.getProfiled() || bind.getStage() != zkc::pir::Stage::Seal)
+    return {};
+  // An instance-stage binding has no value at seal time and so carries no
+  // reference; the seal-stage form is the one whose value is the digest.
+  return bind.getValue().value_or(llvm::StringRef());
+}
+
 uint64_t checkOperandUnits(Value value) {
   Operation *producer = value.getDefiningOp();
   if (auto slot = dyn_cast_or_null<zkc::pir::SlotOp>(producer))

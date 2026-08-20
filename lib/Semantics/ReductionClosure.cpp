@@ -632,6 +632,12 @@ private:
   }
 
   std::optional<std::string> binding(Value value, Operation *at) {
+    // A value that carries its own material reference is read from
+    // itself; a material binding on it would be a second spelling of one
+    // fact, and stays unconsumed so the seal refuses it (zkc-E328).
+    if (llvm::StringRef self = zkc::semantics::selfMaterialRef(value);
+        !self.empty())
+      return self.str();
     auto found = bindingsByValue.find(value);
     if (found == bindingsByValue.end()) {
       error(at, "[zkc-E324]")
