@@ -78,5 +78,32 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // is refused, because nothing consumes it.
 // RUN: not zkc-opt %pir-seal-full %S/Inputs/profiled-bind-bound-twice.mlir 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=TWICE
-// TWICE: [zkc-E328] material binding is not consumed
+// TWICE: [zkc-E161] a verifier value may have at most one semantic material binding
+
+// The value a profiled seal-stage binding absorbs is a material reference, so
+// it answers to the rules every other one does. An empty value is not one:
+// the transcript would absorb nothing in the table's place while a material
+// binding grounded the anchor elsewhere, which is the drift the reference
+// living in the value exists to prevent.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/profiled-bind-empty-value.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=EMPTY
+// EMPTY: [zkc-E159] a profiled seal-stage binding absorbs the digest
+
+// And no two verifier values may name one material. Pointing the query
+// column's binding at the table's digest would have a thousand-scalar prover
+// column and a preprocessed table claim the same content — the refusal that
+// guards material bindings, now guarding the reference a binding carries in
+// itself.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/profiled-bind-aliases-material.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=ALIAS
+// ALIAS: [zkc-E162] semantic_ref
+// ALIAS-SAME: reverse-injective
+
+// A binding fills a contract role only when it is profiled. The scalar
+// binding row carries no membership, so two artifacts that fill roles
+// differently would encode alike and share one identity; the role is refused
+// where the encoding cannot carry it rather than dropped where it cannot.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/bare-bind-with-membership.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=BAREROLE
+// BAREROLE: [zkc-E152] a binding carries reduction membership only when it is profiled
 

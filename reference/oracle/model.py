@@ -2733,7 +2733,7 @@ def reduction_closure(
                       if isinstance(e, Bind) and e.label == label), None)
         if event is None or not event.profiled or event.stage != "seal":
             return None
-        return event.value
+        return event.value or None
 
     binding_by_value: dict[str, str] = {}
     value_by_reference: dict[str, str] = {}
@@ -2744,6 +2744,11 @@ def reduction_closure(
             raise Refusal("material binding target is not a sha256 reference")
         if binding_entry.value in binding_by_value:
             raise Refusal(f"value {binding_entry.value!r} has two material bindings")
+        if self_material_ref(binding_entry.value) is not None:
+            raise Refusal(
+                f"[zkc-E161] value {binding_entry.value!r} carries its own "
+                "material reference and may not also have a material binding"
+            )
         if binding_entry.semantic_ref in value_by_reference:
             raise Refusal("semantic material reference has two local producers")
         binding_by_value[binding_entry.value] = binding_entry.semantic_ref
@@ -3370,6 +3375,7 @@ def validate_protocol(
         previous = start
 
     absorbed: set[str] = set()
+    profiled_bind_refs: set[str] = set()
     first_unabsorbed: str | None = None
     first_challenge: str | None = None
     next_segment = 0
@@ -3390,6 +3396,30 @@ def validate_protocol(
             if event.profiled:
                 _resolve_value_profile(vocabulary, event, "binding",
                                        "preprocessed")
+                # A profiled seal-stage binding absorbs the digest of the
+                # content its profile describes, so its value is a material
+                # reference and answers to the rules every other one does.
+                if event.stage == "seal":
+                    if not is_sha256_ref(event.value or ""):
+                        raise Refusal(
+                            "[zkc-E159] a profiled seal-stage binding absorbs "
+                            "the digest of what its profile describes, so "
+                            f"binding {event.label!r} needs a sha256 reference"
+                        )
+                    if event.value in profiled_bind_refs:
+                        raise Refusal(
+                            f"[zkc-E162] semantic_ref {event.value!r} is "
+                            "already bound to another verifier value: "
+                            "material references are reverse-injective"
+                        )
+                    profiled_bind_refs.add(event.value)
+            elif event.membership is not None:
+                # The scalar binding row has no place for a role, so an
+                # identity would not determine which role it fills.
+                raise Refusal(
+                    f"[zkc-E152] binding {event.label!r} carries reduction "
+                    "membership without a profile"
+                )
             absorbed.add(event.label)
         elif isinstance(event, Slot):
             if event.profiled:
@@ -4771,6 +4801,43 @@ def _self_test() -> None:
     profiled_slot_refuses("[zkc-E167]",
                           "a profiled slot carries one commitment",
                           count="4")
+
+    # A profiled seal-stage binding absorbs the digest of what its profile
+    # describes, so its value is a material reference and answers to the rules
+    # every other one does.
+    def profiled_bind_refuses(reason: str, note: str, **replacements: Any) -> None:
+        mutated = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+        index = next(position
+                     for position, event in enumerate(mutated["events"])
+                     if isinstance(event, Bind) and event.profiled)
+        mutated["events"][index] = mutated["events"][index]._replace(
+            **replacements)
+        try:
+            validate_protocol(mutated, VOCABULARY)
+        except Refusal as error:
+            ok(reason in str(error), note)
+        else:
+            raise AssertionError(f"profiled binding accepted: {note}")
+
+    profiled_bind_refuses(
+        "[zkc-E159]",
+        "a profiled binding's absorbed value is a material reference",
+        value="")
+    profiled_bind_refuses(
+        "[zkc-E152]",
+        "a binding carries membership only when it is profiled",
+        profiled=False, payload_class="scalar")
+
+    twice = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+    twice["material_bindings"] = list(twice["material_bindings"]) + [
+        witnesses.material("table", witnesses.LOGUP_TABLE)]
+    try:
+        reduction_closure(twice, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E161]" in str(error),
+           "a value carrying its own reference takes no material binding")
+    else:
+        raise AssertionError("a doubly-referenced value was accepted")
 
     # The encode path fails closed on its own: it does not run validation, and
     # it is the conformance oracle for the encoding function, so a counted

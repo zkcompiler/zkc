@@ -139,26 +139,26 @@
       "means": {
         "E150": "a bounded artifact verification leaves a fact the reserved contract binds empty, names a child endpoint kind other than 'verifier', declares an empty child artifact ABI, or repeats a proof slot",
         "E151": "a membership names a reduce instance the body does not declare",
-        "E152": "a membership is incomplete, or an event is a dep operand of the reduce whose message it claims to be",
+        "E152": "a membership is incomplete, an event is a dep operand of the reduce whose message it claims to be, or a binding carries membership without a profile the encoding can record it under",
         "E153": "a reduction does not both consume at least one claim and produce one",
         "E154": "a challenge dependency set names one value twice",
         "E155": "one check is selected for more than one role of the same owner",
         "E156": "an anchor value is not a digest reference",
         "E157": "a reduction produces other than exactly one claim, or a terminal binds no check role",
         "E158": "a contract, rule, or route identifier is empty",
-        "E159": "a material binding's semantic_ref is not a digest reference"
+        "E159": "a material reference is not a digest reference: a material binding's semantic_ref, or the value a profiled seal-stage binding absorbs"
       },
       "means_basis": {
         "E150": "a040b26a80ebd02a593f2830ea997a23d46d9a3a1d4a389d2e45f05343c37ee9",
         "E151": "3023ec9f8808dbab96ce7d24bb7b9c81e6a9746fb38f9ec1f537dd2a74d95187",
-        "E152": "b6bd94db9daf42c6db3485fbaf775d7faa2ea4fb930626c15e687b13c8ab3837",
+        "E152": "d312e886292ec44d014f74d5ac682f97134777de871dc9613dc144af40213d61",
         "E153": "3b76b11f6a60ad0716f89c7acf181127e24a0dac8351bb961e1281bd51fd6d93",
         "E154": "97e19ff0dc1d722a77a8640b058c9b0d3b1266cdca78d3cb5843f9cd9ac6dc80",
         "E155": "1705008a837c1b6c1deb67906724144282f4d82d1ef88adf13e84cbc1471d3e2",
         "E156": "26c248bf87b53564175f4a340854a5d7573597860efa00750f333a7a8f138b8b",
         "E157": "80c32db03eec40ec11f52d4984020c8a71c11ac923108163b52a5af0de753127",
         "E158": "f68f2635a8f1ce97626765818cd810f5021dfd5e0492900fba13a28f9b8ef336",
-        "E159": "d29bbf230923ad86ae239c5199dbb9b9ee5847aa448d8649353740f78be623cf"
+        "E159": "1ba7bac9c1fa08d5ffa291a9ac7cf5e67af8b86765c7185e862ee5d08e1e8a03"
       },
       "range": "E150-E159",
       "reserved": [],
@@ -169,7 +169,9 @@
       "twin": {
         "excluded_reason": "the rest of the range is MLIR op/container grammar the twin's input representation cannot spell; E150 is mirrored because the bounded artifact verification is a spine event the twin does spell",
         "mirrored": [
-          "E150"
+          "E150",
+          "E152",
+          "E159"
         ]
       }
     },
@@ -186,8 +188,8 @@
         "E169"
       ],
       "means": {
-        "E161": "a verifier value carries more than one semantic material binding",
-        "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity",
+        "E161": "a verifier value carries more than one material reference: two bindings, or a binding on a value that already carries its own",
+        "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity, whether it is spelled as a material binding or absorbed by a profiled binding",
         "E163": "a bounded artifact verification routes through a name no sink of the artifact carries, so the child's lifted obligations reach no parent route surface",
         "E164": "a bounded artifact verification names a proof slot that is not a slot of the artifact, or has no canonical position to order slots against",
         "E165": "a bounded artifact verification names a proof slot that follows it on the spine, so the child would consume material not yet in the stream",
@@ -196,8 +198,8 @@
         "E169": "a value profile's declared origin does not belong on the transcript event carrying it: prover material enters as a slot, statement-fixed material as a public binding"
       },
       "means_basis": {
-        "E161": "8ce9df859e967db7e5ece0df4c7a99f219571b3a9bdeb90e5a85e25e95b806f2",
-        "E162": "09c624212632a7b681ae4f257643a683cef57a5203741afaf23a6e785d71192d",
+        "E161": "eaf8b01d43e2ff2d3041b8f1cab5830fa54cd43e9876396b81363dd51393d859",
+        "E162": "5f2aa7a7dec9893097fe85b53ca903890742773f769fe03d8691cc1e88422fcc",
         "E163": "af3dc93e5309591d87c134be2468fedbbf9e9f7567a342976b5a65afaf5555cf",
         "E164": "ee85c8d24a33b956615f961fe23fb69c94f14d42ffd7f9d14b4e6a4f5fd64731",
         "E165": "cbf872087e75bf1489b9d5055423569d3784e8be01efb38cf849c1cc7e580bc7",
@@ -215,6 +217,8 @@
       "twin": {
         "excluded_reason": "the rest of the range is judged by message-text parity in the differential suites rather than by id; the bounded artifact verification's obligations are mirrored by id because the twin enforces them itself",
         "mirrored": [
+          "E161",
+          "E162",
           "E163",
           "E164",
           "E165",

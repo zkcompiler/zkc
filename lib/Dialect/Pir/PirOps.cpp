@@ -511,6 +511,35 @@ private:
       if (auto bind = dyn_cast<BindOp>(op)) {
         if (failed(reserveClass(op, bind.getPayloadClass())))
           return failure();
+        // A profiled binding absorbs the digest of the content its profile
+        // describes, so its value is a material reference and answers to the
+        // rules every other one does: it must have reference shape, and no
+        // two verifier values may name one material.
+        if (bind.getProfiled() && bind.getStage() == Stage::Seal) {
+          StringRef value = bind.getValue().value_or(StringRef());
+          if (!zkc::encoding::isSha256Ref(value))
+            return op->emitOpError()
+                   << "[zkc-E159] a profiled seal-stage binding absorbs the "
+                      "digest of what its profile describes, so its value "
+                   << zkc::encoding::kSha256RefMessage;
+          if (!boundSemanticRefs.insert(value).second)
+            return op->emitOpError()
+                   << "[zkc-E162] semantic_ref '" << value
+                   << "' is already bound to another verifier value: material "
+                      "references are reverse-injective";
+          // The value already has its reference, so a material binding on it
+          // would be a second one for one value.
+          boundValues.insert(bind.getVal());
+        }
+        // Membership on a binding is carried by the profiled row alone; the
+        // scalar row has no place for it and would leave two artifacts that
+        // fill a role differently sharing one identity.
+        if (!bind.getProfiled() && bind.getMembership())
+          return op->emitOpError()
+                 << "[zkc-E152] a binding carries reduction membership only "
+                    "when it is profiled: the encoding of a bare binding has "
+                    "no place for a role, so its identity would not determine "
+                    "which role it fills";
       }
       if (auto slot = dyn_cast<SlotOp>(op)) {
         if (failed(reserveClass(op, slot.getPayloadClass())))
