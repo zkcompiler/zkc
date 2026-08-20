@@ -7,9 +7,9 @@ meets a name with no sentence behind it has no way to discharge it. That
 asymmetry is why this lint covers hypotheses and not conditions.
 
 The signature's annotations are not in its canonical document, so a loader
-cannot refuse this and the digest does not cover it (deferred register,
-DEF-20 records the same shape for diagnostic sentences). A lint is what is
-available, and it is what the diagnostic allocation already uses.
+cannot refuse this and the digest does not cover it. A lint is what is
+available, and it is what the diagnostic allocation already uses for the
+same shape of claim about its own sentences.
 """
 
 import json

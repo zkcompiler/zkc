@@ -600,16 +600,16 @@ enum class MachineDeciderKind {
   PowAdjacent,
   DuplexSpine,
   CodecBiasDeclared,
-  /// The declared committed arity is the one the spine realizes: an opening
-  /// challenge's space equals it exactly.
+  /// The multiplicity sequence is indexed by the table, so its committed
+  /// arity equals the table's.
   ///
-  /// This is what keeps a value profile's arity from being a producer
-  /// annotation. A commitment root occupies one slot whatever it commits to,
-  /// so nothing in the spine contradicts an understated arity on its own —
-  /// and the LogUp error grows in it, so understating it understates the
-  /// bound. An opening discipline is the structural counterpart: a challenge
-  /// that indexes into the committed content can only range over what is
-  /// there.
+  /// This is the one arity relation the artifact fixes, and the reason it is
+  /// checkable: Lemma 5's witness has one field element per table entry, so a
+  /// multiplicity column of another length is not the object the theorem
+  /// quantifies over. It is not a tie between a declaration and what was
+  /// committed — no such tie exists in a transcript, and that gap is carried
+  /// as an external hypothesis instead (see the value-profile discussion in
+  /// docs/spec/carrier.md §3).
   MultiplicitiesMatchTable,
   /// The lemma's own hypothesis: multiplicities are field elements, so the
   /// number of entries must stay below the characteristic. Overflowing

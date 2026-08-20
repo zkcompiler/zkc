@@ -127,9 +127,10 @@ MACHINE_DECIDERS = {
     "duplex_spine": ("zkc.side.duplex_spine", ("path_transition",)),
     "codec_bias_declared": ("zkc.side.codec_bias_declared",
                             ("path_transition",)),
-    # The declared committed arity is the one the spine realizes, and the
-    # lemma's own characteristic hypothesis. Both keep a value profile's
-    # arity from being a producer annotation a bound is priced from.
+    # The one arity relation the artifact fixes -- a multiplicity column is
+    # indexed by its table -- and the lemma's own characteristic hypothesis.
+    # Neither ties a declared arity to what was committed; that gap is an
+    # external hypothesis, not a machine condition.
     "multiplicities_match_table": ("zkc.side.multiplicities_match_table",
                               ("integer", "integer")),
     "lookup_fits_characteristic": ("zkc.side.lookup_fits_characteristic",
