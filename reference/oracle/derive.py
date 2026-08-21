@@ -115,8 +115,14 @@ def transformer_bodies(
             extent[2] = False
 
     for position, event in enumerate(protocol["events"]):
+        # A role is filled by whatever carries the material, so the body
+        # extent covers both seats: two protocols differing only in which
+        # seat fills a role would otherwise get different extents. A public
+        # binding always absorbs.
         if isinstance(event, model.Slot) and event.membership is not None:
             observe(event.membership[0], position, not event.absorbed)
+        elif isinstance(event, model.Bind) and event.membership is not None:
+            observe(event.membership[0], position, False)
 
     positions = {event.label: index
                  for index, event in enumerate(protocol["events"])}

@@ -11,9 +11,32 @@ using namespace zkc::registry;
 namespace zkc {
 namespace semantics {
 
+/// Whether a value satisfies a declared operand class.
+///
+/// A profiled value carries a commitment, not an element of the class its
+/// content is drawn from, so it matches no concrete class: `bareClass()` is
+/// empty for one and an operand slot never declares an empty class. Reading
+/// the profile name here instead would let a profile spelled like a class
+/// stand in for one element of it.
 static bool classMatches(Value value, llvm::StringRef expected) {
   return expected == "*" ||
-         cast<zkc::pir::ValType>(value.getType()).getValueClass() == expected;
+         cast<zkc::pir::ValType>(value.getType()).bareClass() == expected;
+}
+
+llvm::StringRef selfMaterialRef(Value value) {
+  auto bind = dyn_cast_or_null<zkc::pir::BindOp>(value.getDefiningOp());
+  if (!bind || bind.getStage() != zkc::pir::Stage::Seal)
+    return {};
+  // A binding that carries a profile absorbs the digest of what the profile
+  // describes; a binding that fills a contract role absorbs the reference of
+  // the material the role claims. Either way the value is the reference, and
+  // resolving it through a material binding as well would let the transcript
+  // hold one thing while the claim named another.
+  if (!bind.getProfiled() && !bind.getMembership())
+    return {};
+  // An instance-stage binding has no value at seal time and so carries no
+  // reference; the seal-stage form is the one whose value is the digest.
+  return bind.getValue().value_or(llvm::StringRef());
 }
 
 uint64_t checkOperandUnits(Value value) {

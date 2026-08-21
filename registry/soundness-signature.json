@@ -8,7 +8,8 @@
       "statement": "x <-$ F; ck = ([x^0..x^n]_1, [1,x]_2); win: output S subset F with |S| = n+1 and [g]_1 != [0]_1, [phi]_1 = [g(x)/Z_S(x)]_1 where Z_S(X) = prod_{s in S}(X - s)"
     },
     "zkc.assume.constraint_count_matches_relation": {
-      "notes": "The integer supplied as the constraint count is the number of constraints of the relation the subject claim's anchors name. zkc cannot check this: the relation enters as digests and is never read, so no machine decider can compare the count against the matrices. A reader who accepts a bound derived through this rule accepts this correspondence on the author's word."
+      "notes": "The integer supplied as the constraint count is the number of constraints of the relation the subject claim's anchors name. zkc cannot check this: the relation enters as digests and is never read, so no machine decider can compare the count against the matrices. A reader who accepts a bound derived through this rule accepts this correspondence on the author's word.",
+      "statement": "the integer supplied as the constraint count is the number of constraints of the relation the subject claim's anchors name"
     },
     "zkc.assume.ideal_permutation": {
       "citations": [
@@ -137,6 +138,27 @@
           "anchor": "Sec. 4",
           "revision": "ICALP 2018",
           "source": "bbhr:fast-reed-solomon-iopp"
+        }
+      ]
+    },
+    "zkc.completeness.logup": {
+      "citations": [
+        "Haboeck, Multivariate lookups based on logarithmic derivatives, ePrint 2022/1530, Lemma 5 (set inclusion). An honest prover holding a true inclusion and the lemma's multiplicities satisfies the fractional identity as an identity of rational functions, so the only way its instance at the sampled point fails is that the instance is undefined.",
+        "The failure set is exactly the poles: beta in the negated table entries or the negated looked-up values makes a denominator vanish, and the produced claim asserts the sums are defined as well as equal. There are at most table + lookups such points, counted as a set rather than as the degree of a polynomial, which is why this bound is one larger than the soundness bound over the same quantities."
+      ],
+      "formalization_absence": {
+        "demand": "docs/formalization.md#entry-theorems",
+        "repository": "https://github.com/Verified-zkEVM/ArkLib",
+        "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+        "wanted": "a completeness statement for the logarithmic-derivative lookup argument: that the honest prover's fractional identity holds wherever it is defined, and that its poles are exactly the negated table and query entries"
+      },
+      "loss_display": "completeness error; the honest prover's failure probability over the bus challenge",
+      "notes": "The completeness of the protocol that discharges the produced identity claim is that protocol's own statement, exactly as its soundness is; this rule prices only the reduction it names.",
+      "statement_basis": [
+        {
+          "anchor": "Lemma 5 (set inclusion)",
+          "revision": "2022-11-08",
+          "source": "eprint:2022/1530"
         }
       ]
     },
@@ -271,6 +293,10 @@
       "notes": "discharged at: carrier codec validation",
       "statement": "well-formed transcripts: z, fbar in F (codec validation)"
     },
+    "zkc.hyp.commitment_binds_declared_arity": {
+      "notes": "Two obligations travel together here: the commitment determines its content at all, and that content has the declared length. Both are used - a sampling argument over the committed sequences needs them fixed before the challenge, and a bound that grows in the length needs the length. Discharged at the seat the profile origin names: a binding route (a commitment construction opening relation) for prover-committed content, an anchor preimage for preprocessed content. No fact of the sealed spine implies either. A commitment root occupies one transcript slot whatever stands behind it, so a prover who committed to more than the profile declares is consistent with every spine fact, and understatement is the direction that understates the bound.",
+      "statement": "each commitment described by one of the subject's value profiles binds a sequence of exactly the declared length, under that profile's binding route"
+    },
     "zkc.hyp.fiat_shamir_profile_required": {
       "notes": "discharged at: seal policy / FS construction profile",
       "statement": "interactive completeness degrades to 2^-z: admissible only under an FS construction profile"
@@ -296,6 +322,17 @@
     "zkc.hyp.injective_absorb_encoding": {
       "notes": "discharged at: construction-profile admission (the carrier's framing-injectivity property test is the toy discharge)",
       "statement": "absorb encoding maps are injective per payload class (prefix-free tag-byte framing)"
+    },
+    "zkc.hyp.logup_multiplicities_honest": {
+      "notes": "discharged at: the constraint system the bus reduces to, which this artifact routes out as a residual.",
+      "statement_basis": [
+        {
+          "anchor": "Lemma 5 (set inclusion), the multiplicity hypothesis",
+          "revision": "2022-11-08",
+          "source": "eprint:2022/1530"
+        }
+      ],
+      "statement": "the committed multiplicity column holds, for each table entry, the number of looked-up values equal to it divided by the number of table entries equal to it, as a field element rather than a count wrapped modulo the characteristic"
     },
     "zkc.hyp.move_budget_is_query_budget": {
       "notes": "discharged at: row admission (Chiesa-Orru eprint 2025/536 Eq. 58, Defs 3.12-3.13)",
@@ -761,6 +798,34 @@
         }
       ]
     },
+    "zkc.rbr.logup": {
+      "citations": [
+        "Haboeck, Multivariate lookups based on logarithmic derivatives, ePrint 2022/1530, Lemma 5 (set inclusion): over a field of characteristic p > N, two sequences of common length N satisfy the fractional-sum identity in F(X) exactly when the one is set-included in the other, with the honest multiplicities being the lookup-side count divided by the table-side count. Sequences of unequal length reduce to this by padding the shorter side with a repeated table entry, which leaves the common length at the larger of the two -- hence the machine condition on max(table, lookups) rather than on either alone.",
+        "Schwartz--Zippel root counting at the sampled bus point: clearing denominators leaves a polynomial identity in which every term omits one of the table + lookups linear factors, so its degree is at most table + lookups - 1 and a false inclusion survives a uniform point with at most that probability.",
+        "The points where a denominator vanishes are not an escape: the produced claim asserts the fractional sums are defined as well as equal, so a vanishing beta makes the claim false rather than vacuous, and no adversary gains by steering the transcript to one. The same points are the honest prover's whole failure set, which the completeness rule prices.",
+        "The inclusion is of sets, with multiples removed, and duplicate table entries are absorbed by the normalized multiplicities; no distinctness condition is checked because the lemma requires none."
+      ],
+      "formalization_absence": {
+        "demand": "docs/formalization.md#entry-theorems",
+        "repository": "https://github.com/Verified-zkEVM/ArkLib",
+        "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+        "wanted": "the logarithmic-derivative set-inclusion lemma and the (n + m)/|F| bound for one sampled bus point"
+      },
+      "loss_display": "eps_bus = (table + lookups - 1) / the bus round's challenge space",
+      "notes": "This row prices one round of the exact bus contract pinned above and nothing else: the logarithmic-derivative argument instantiated at one sampled point. Its bound grows in the sizes of both committed sides, and the two are read separately by message role from the value profiles of the commitments that carry them, so a table and a query column of different lengths each state their own number. What the multiplicity condition establishes is that the multiplicity column is indexed by the table, which is the one arity relation the artifact fixes; that a declared arity is the arity of what was actually committed is carried as an obligation, because a prover who committed to more answers every challenge in the declared range honestly and no arrangement of transcript events separates the two. The claim that leaves is the identity at the sampled point, not the inclusion the reduction consumes; discharging it belongs to the constraint system this reduces to, which the artifact routes out as a residual.",
+      "statement_basis": [
+        {
+          "anchor": "Lemma 5, set inclusion via logarithmic derivatives",
+          "revision": "2022/1530",
+          "source": "haboeck:multivariate-lookups-2022"
+        },
+        {
+          "anchor": "root-counting lemma",
+          "revision": "n/a",
+          "source": "folklore:schwartz-zippel"
+        }
+      ]
+    },
     "zkc.rbr.ordered_rlc": {
       "citations": [
         "Schwartz--Zippel root counting; the distinct-point KZG equation-batching instance is ePrint 2024/398, Lemma 5",
@@ -914,9 +979,33 @@
         }
       ]
     },
+    "zkc.side.algebra_match": {
+      "notes": "Discharged at: the algebra the construction profile names, read against the payload classes the contract declares. Carried rather than decided because the pairing's group assignment is a property of the suite, not of the spine.",
+      "statement": "the commitment, proof and evaluation classes the contract declares are the groups and scalar field of one pairing suite, in the roles that suite assigns them"
+    },
+    "zkc.side.consumed_anchors_are_round_material": {
+      "notes": "Decided from the artifact's contract: which consumed anchor corresponds to which message role is contract knowledge, so the rule requires only that every anchor has a tie and the contract says what to. That the tie holds of this artifact is a seal judgment (zkc-E325), checked before any rule reads it.",
+      "statement": "every anchor of every claim this reduction consumes is tied by its contract to a message role of the round, no two to the same role, and every role whose commitments declare a size is named by one of them"
+    },
+    "zkc.side.degrees_within_srs": {
+      "notes": "Discharged at: the structured reference string the suite pins. The artifact names commitments by digest and never reads what they commit to, so no decider can compare a degree against the string's length.",
+      "statement": "every polynomial the reduction opens has degree at most the highest power the pinned structured reference string supports"
+    },
     "zkc.side.field_order_match": {
       "notes": "discharged at: caller, when the resolved parameter is supplied",
       "statement": "the payload class the contract's challenge slots name is the field of the stated order; the artifact authenticates the class and the declared challenge space per round, and not the order"
+    },
+    "zkc.side.multiplicities_match_table": {
+      "notes": "Decided from the artifact: the two committed arities are read off the value profiles of the members filling the two roles.",
+      "statement": "the multiplicity column holds one field element per table entry, so its committed arity equals the table's"
+    },
+    "zkc.side.prime_field_order": {
+      "notes": "Discharged at: the caller who states the field order. Nothing in a sealed artifact names a field  --  a payload class keys a codec and a challenge space counts a sampling set  --  so the order arrives as a stated parameter and its primality with it.",
+      "statement": "the stated field order is prime, so it is the characteristic of the field the protocol's arithmetic is over and a condition on the characteristic may be read against it"
+    },
+    "zkc.side.single_round": {
+      "notes": "Decided from the artifact's contract. A contract-cased entry instantiates its bound once per matching round, while a projection reading the whole reduction resolves once; without this a rule whose numerator comes from the reduction prices the first round's quantities against every round's challenge space.",
+      "statement": "the contract this reduction realizes declares exactly one round, which is the one the rule's bound describes"
     },
     "zkc.sr.from_rbr": {
       "citations": [
@@ -1018,6 +1107,366 @@
       "parameter_bindings": {},
       "premise_relations": {},
       "rule": "zkc.completeness.fri",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
+    "zkc.completeness.logup@reduction:logup_bus": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "logup_bus",
+          "source_revision": "sha256:604063974e992994e02ab53e8781905986528c863f397c7dca137660b1b19bf4"
+        }
+      },
+      "condition_argument_bindings": {
+        "S3": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "multiplicities",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S4": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "queries",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S5": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S6": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ],
+        "S9": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
+      "hypothesis_argument_bindings": {
+        "S1": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S2": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ],
+        "S8": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ]
+      },
+      "id": "zkc.completeness.logup@reduction:logup_bus",
+      "parameter_bindings": {
+        "field_order": {
+          "kind": "resolved_parameter",
+          "reference": "field_order",
+          "sort": "integer"
+        },
+        "lookups": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "queries",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "space": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeSpace",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "bus"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "table": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "table",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        }
+      },
+      "premise_relations": {},
+      "rule": "zkc.completeness.logup",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
+    "zkc.completeness.logup@reduction:logup_range_check": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "logup_range_check",
+          "source_revision": "sha256:56d78f183fd5e8be49aec6093dd96f6a189250b0009479d497c8d3536c6e8ef1"
+        }
+      },
+      "condition_argument_bindings": {
+        "S3": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "multiplicities",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S4": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "queries",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S5": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S6": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ],
+        "S9": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
+      "hypothesis_argument_bindings": {
+        "S1": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S2": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ],
+        "S8": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ]
+      },
+      "id": "zkc.completeness.logup@reduction:logup_range_check",
+      "parameter_bindings": {
+        "field_order": {
+          "kind": "resolved_parameter",
+          "reference": "field_order",
+          "sort": "integer"
+        },
+        "lookups": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "queries",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "space": {
+          "artifact_projection": {
+            "aggregate": "unique_equal",
+            "field": "ChallengeSpace",
+            "kind": "contract_round_family_field",
+            "result_sort": "integer",
+            "round_selector": {
+              "kind": "round_kind",
+              "round_kind": "bus"
+            }
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "table": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "table",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        }
+      },
+      "premise_relations": {},
+      "rule": "zkc.completeness.logup",
       "subject_schema": "zkc.subject.protocol_claim"
     },
     "zkc.completeness.sigma@reduction:sigma": {
@@ -4360,6 +4809,326 @@
       "rule": "zkc.rbr.grinding",
       "subject_schema": "zkc.subject.protocol_claim"
     },
+    "zkc.rbr.logup@reduction:logup_bus": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "logup_bus",
+          "source_revision": "sha256:604063974e992994e02ab53e8781905986528c863f397c7dca137660b1b19bf4"
+        }
+      },
+      "condition_argument_bindings": {
+        "S1": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "multiplicities",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S2": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "queries",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S6": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S8": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ],
+        "S9": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
+      "hypothesis_argument_bindings": {
+        "S4": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S5": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ]
+      },
+      "id": "zkc.rbr.logup@reduction:logup_bus",
+      "parameter_bindings": {
+        "field_order": {
+          "kind": "resolved_parameter",
+          "reference": "field_order",
+          "sort": "integer"
+        },
+        "lookups": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "queries",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "table": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "table",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        }
+      },
+      "premise_relations": {},
+      "rule": "zkc.rbr.logup",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
+    "zkc.rbr.logup@reduction:logup_range_check": {
+      "anchor": {
+        "kind": "reduction_contract",
+        "ref": {
+          "id": "logup_range_check",
+          "source_revision": "sha256:56d78f183fd5e8be49aec6093dd96f6a189250b0009479d497c8d3536c6e8ef1"
+        }
+      },
+      "condition_argument_bindings": {
+        "S1": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "multiplicities",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          }
+        ],
+        "S2": [
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "table",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "artifact_projection": {
+              "kind": "committed_arity",
+              "member_role": "queries",
+              "result_sort": "integer"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "integer"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S6": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S8": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ],
+        "S9": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ]
+      },
+      "fact_bindings": {
+        "contract": {
+          "artifact_projection": {
+            "kind": "conclusion_reduction_contract",
+            "result_sort": "reduction_contract"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "reduction_contract"
+        }
+      },
+      "hypothesis_argument_bindings": {
+        "S4": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S5": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          },
+          {
+            "kind": "resolved_parameter",
+            "reference": "field_order",
+            "sort": "integer"
+          }
+        ],
+        "S7": [
+          {
+            "kind": "conclusion_subject",
+            "sort": "subject"
+          }
+        ]
+      },
+      "id": "zkc.rbr.logup@reduction:logup_range_check",
+      "parameter_bindings": {
+        "field_order": {
+          "kind": "resolved_parameter",
+          "reference": "field_order",
+          "sort": "integer"
+        },
+        "lookups": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "queries",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        },
+        "table": {
+          "artifact_projection": {
+            "kind": "committed_arity",
+            "member_role": "table",
+            "result_sort": "integer"
+          },
+          "kind": "sealed_artifact_projection",
+          "sort": "integer"
+        }
+      },
+      "premise_relations": {},
+      "rule": "zkc.rbr.logup",
+      "subject_schema": "zkc.subject.protocol_claim"
+    },
     "zkc.rbr.ordered_rlc@reduction:kzg_equation_rlc": {
       "anchor": {
         "kind": "reduction_contract",
@@ -5169,6 +5938,145 @@
       "id": "zkc.completeness.fri",
       "machine_conditions": [],
       "parameters": [],
+      "premises": [],
+      "resources": [],
+      "status": "admitted"
+    },
+    "zkc.completeness.logup": {
+      "artifact_facts": [
+        {
+          "name": "contract",
+          "sort": "reduction_contract"
+        }
+      ],
+      "body": {
+        "bound": {
+          "kind": "quantity",
+          "quantity": {
+            "kind": "div",
+            "operands": [
+              {
+                "kind": "add",
+                "operands": [
+                  {
+                    "kind": "parameter",
+                    "name": "table"
+                  },
+                  {
+                    "kind": "parameter",
+                    "name": "lookups"
+                  }
+                ]
+              },
+              {
+                "kind": "parameter",
+                "name": "space"
+              }
+            ]
+          }
+        },
+        "kind": "completeness_entry"
+      },
+      "conclusion_index": {
+        "model": "",
+        "notion": "completeness",
+        "quantification": "static",
+        "track": "completeness",
+        "variant": ""
+      },
+      "exact_parameter_pins": [],
+      "external_hypotheses": [
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.side.field_order_match",
+          "slot": "S1"
+        },
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.side.prime_field_order",
+          "slot": "S2"
+        },
+        {
+          "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.logup_multiplicities_honest",
+          "slot": "S7"
+        },
+        {
+          "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.commitment_binds_declared_arity",
+          "slot": "S8"
+        }
+      ],
+      "id": "zkc.completeness.logup",
+      "machine_conditions": [
+        {
+          "argument_types": [
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.multiplicities_match_table",
+          "slot": "S3"
+        },
+        {
+          "argument_types": [
+            "integer",
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.lookup_fits_characteristic",
+          "slot": "S4"
+        },
+        {
+          "argument_types": [
+            "reduction_contract",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.space_embeds",
+          "slot": "S5"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.consumed_anchors_are_round_material",
+          "slot": "S6"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.single_round",
+          "slot": "S9"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "table",
+          "sort": "integer"
+        },
+        {
+          "name": "lookups",
+          "sort": "integer"
+        },
+        {
+          "name": "space",
+          "sort": "integer"
+        },
+        {
+          "name": "field_order",
+          "sort": "integer"
+        }
+      ],
       "premises": [],
       "resources": [],
       "status": "admitted"
@@ -8182,6 +9090,163 @@
       "resources": [],
       "status": "admitted"
     },
+    "zkc.rbr.logup": {
+      "artifact_facts": [
+        {
+          "name": "contract",
+          "sort": "reduction_contract"
+        }
+      ],
+      "body": {
+        "kind": "native_round_by_round_entry",
+        "rounds": {
+          "cases": [
+            {
+              "bound": {
+                "kind": "quantity",
+                "quantity": {
+                  "kind": "div",
+                  "operands": [
+                    {
+                      "kind": "sub",
+                      "operands": [
+                        {
+                          "kind": "add",
+                          "operands": [
+                            {
+                              "kind": "parameter",
+                              "name": "table"
+                            },
+                            {
+                              "kind": "parameter",
+                              "name": "lookups"
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "rational_literal",
+                          "literal": "1"
+                        }
+                      ]
+                    },
+                    {
+                      "case_name": "bus",
+                      "field": "challenge_space",
+                      "kind": "contract_round_fact"
+                    }
+                  ]
+                }
+              },
+              "case_name": "bus",
+              "challenge_space": {
+                "case_name": "bus",
+                "field": "challenge_space",
+                "kind": "contract_round_fact"
+              },
+              "index_projection": "round_index",
+              "selector": {
+                "kind": "round_kind",
+                "round_kind": "bus"
+              }
+            }
+          ],
+          "contract_fact_port": "contract",
+          "kind": "contract"
+        }
+      },
+      "conclusion_index": {
+        "model": "",
+        "notion": "round_by_round",
+        "quantification": "static",
+        "track": "soundness",
+        "variant": "standard"
+      },
+      "exact_parameter_pins": [],
+      "external_hypotheses": [
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.side.field_order_match",
+          "slot": "S4"
+        },
+        {
+          "argument_types": [
+            "subject",
+            "integer"
+          ],
+          "proposition_ref": "zkc.side.prime_field_order",
+          "slot": "S5"
+        },
+        {
+          "argument_types": [
+            "subject"
+          ],
+          "proposition_ref": "zkc.hyp.commitment_binds_declared_arity",
+          "slot": "S7"
+        }
+      ],
+      "id": "zkc.rbr.logup",
+      "machine_conditions": [
+        {
+          "argument_types": [
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.multiplicities_match_table",
+          "slot": "S1"
+        },
+        {
+          "argument_types": [
+            "integer",
+            "integer",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.lookup_fits_characteristic",
+          "slot": "S2"
+        },
+        {
+          "argument_types": [
+            "reduction_contract",
+            "integer"
+          ],
+          "predicate_ref": "zkc.side.space_embeds",
+          "slot": "S6"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.consumed_anchors_are_round_material",
+          "slot": "S8"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.single_round",
+          "slot": "S9"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "table",
+          "sort": "integer"
+        },
+        {
+          "name": "lookups",
+          "sort": "integer"
+        },
+        {
+          "name": "field_order",
+          "sort": "integer"
+        }
+      ],
+      "premises": [],
+      "resources": [],
+      "status": "admitted"
+    },
     "zkc.rbr.ordered_rlc": {
       "artifact_facts": [
         {
@@ -8865,6 +9930,16 @@
           "source_revision": "zkc.soundness"
         }
       },
+      "zkc.side.consumed_anchors_are_round_material": {
+        "argument_types": [
+          "reduction_contract"
+        ],
+        "kind": "consumed_anchors_are_round_material",
+        "ref": {
+          "id": "zkc.side.consumed_anchors_are_round_material",
+          "source_revision": "zkc.soundness"
+        }
+      },
       "zkc.side.duplex_spine": {
         "argument_types": [
           "path_transition"
@@ -8945,6 +10020,29 @@
           "source_revision": "zkc.soundness"
         }
       },
+      "zkc.side.lookup_fits_characteristic": {
+        "argument_types": [
+          "integer",
+          "integer",
+          "integer"
+        ],
+        "kind": "lookup_fits_characteristic",
+        "ref": {
+          "id": "zkc.side.lookup_fits_characteristic",
+          "source_revision": "zkc.soundness"
+        }
+      },
+      "zkc.side.multiplicities_match_table": {
+        "argument_types": [
+          "integer",
+          "integer"
+        ],
+        "kind": "multiplicities_match_table",
+        "ref": {
+          "id": "zkc.side.multiplicities_match_table",
+          "source_revision": "zkc.soundness"
+        }
+      },
       "zkc.side.one_message_role": {
         "argument_types": [
           "reduction_contract"
@@ -8994,6 +10092,16 @@
         "kind": "same_point",
         "ref": {
           "id": "zkc.side.same_point",
+          "source_revision": "zkc.soundness"
+        }
+      },
+      "zkc.side.single_round": {
+        "argument_types": [
+          "reduction_contract"
+        ],
+        "kind": "single_round",
+        "ref": {
+          "id": "zkc.side.single_round",
           "source_revision": "zkc.soundness"
         }
       },
@@ -9253,6 +10361,15 @@
           "source_revision": "zkc.soundness.proposition"
         }
       },
+      "zkc.hyp.commitment_binds_declared_arity": {
+        "argument_types": [
+          "subject"
+        ],
+        "ref": {
+          "id": "zkc.hyp.commitment_binds_declared_arity",
+          "source_revision": "zkc.soundness"
+        }
+      },
       "zkc.hyp.fiat_shamir_profile_required": {
         "argument_types": [
           "subject"
@@ -9288,6 +10405,15 @@
         "ref": {
           "id": "zkc.hyp.injective_absorb_encoding",
           "source_revision": "zkc.soundness.proposition"
+        }
+      },
+      "zkc.hyp.logup_multiplicities_honest": {
+        "argument_types": [
+          "subject"
+        ],
+        "ref": {
+          "id": "zkc.hyp.logup_multiplicities_honest",
+          "source_revision": "zkc.soundness"
         }
       },
       "zkc.hyp.move_budget_is_query_budget": {
@@ -9370,6 +10496,16 @@
         ],
         "ref": {
           "id": "zkc.side.field_order_match",
+          "source_revision": "zkc.soundness.proposition"
+        }
+      },
+      "zkc.side.prime_field_order": {
+        "argument_types": [
+          "subject",
+          "integer"
+        ],
+        "ref": {
+          "id": "zkc.side.prime_field_order",
           "source_revision": "zkc.soundness.proposition"
         }
       }

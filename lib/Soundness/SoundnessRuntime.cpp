@@ -1421,7 +1421,10 @@ bool operator==(const ReductionContractValue &lhs,
          lhs.orderedInputAnchors == rhs.orderedInputAnchors &&
          lhs.orderedInputAnchorEventPositions ==
              rhs.orderedInputAnchorEventPositions &&
-         lhs.parameters == rhs.parameters && lhs.rounds == rhs.rounds;
+         lhs.parameters == rhs.parameters &&
+         lhs.constrainedInputAnchors == rhs.constrainedInputAnchors &&
+         lhs.committedArityByRole == rhs.committedArityByRole &&
+         lhs.rounds == rhs.rounds;
 }
 
 bool operator!=(const ReductionContractValue &lhs,

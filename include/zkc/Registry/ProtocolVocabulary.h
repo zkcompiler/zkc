@@ -25,6 +25,52 @@ struct ClaimProfile {
   llvm::json::Value toCanonicalJson() const;
 };
 
+/// What a value commits to, for a value whose type names a profile rather
+/// than a bare payload class: the schema is docs/spec/carrier.md §7, and
+/// what a profiled value is — a commitment rather than an element of the
+/// class its content is drawn from — is §3.
+///
+/// The claim type has resolved a descriptor profile since the beginning; the
+/// value type carried one string, and every mechanism that needed to state
+/// what a commitment binds had to reconstruct it on the rule side. This is
+/// that type given the treatment the other one already had, and the anchor
+/// precedent carries over exactly: the profile fixes the arity, the element
+/// class and the binding route, and the kernel never reads the committed
+/// data. No-predicate-semantics is preserved by construction.
+///
+/// `arityLog2` is the base-two logarithm of how many elements stand behind
+/// the commitment. It is a rule-readable fact rather than a producer
+/// annotation, which is the point: the logup error `(n+m)/|F|` increases in
+/// the table arity, so a declared arity could understate a bound, and
+/// `kernel.md` §9.1 forbids exactly that. A rule that reads it owes a
+/// condition tying it back to sealed structure.
+struct ValueProfile {
+  /// The payload class of one element, which is what keys `kappa.codecs`.
+  std::string elementClass;
+  /// Where the committed content comes from. `prover_message` is material
+  /// the prover chose; `relation_derived` is derived from the relation the
+  /// artifact is about; `preprocessed` is fixed before any statement.
+  ///
+  /// Only `prover_message` has a carrier that can express it: a profile
+  /// belongs to a slot, and a slot is prover material. The other two are
+  /// admitted so the relation commitment and the preprocessed index arrive
+  /// as values of this field rather than as sibling mechanisms; until a
+  /// statement-side value can carry a profile, declaring one of them says
+  /// something the artifact cannot mean.
+  std::string origin;
+  int64_t arityLog2 = 0;
+  /// The construction that realizes the commitment. Carried into the
+  /// profile's content digest, so two artifacts naming different routes are
+  /// different protocols -- and checked against nothing else: no registry
+  /// resolves a route name today, so this records what the author declared
+  /// rather than authenticating it.
+  std::string bindingRoute;
+  std::string digest;
+
+  llvm::StringRef contentDigest() const { return digest; }
+  llvm::json::Value toCanonicalJson() const;
+};
+
 enum class CheckMode { Opaque, Transparent };
 
 enum class CheckPredicateFormat {
@@ -174,9 +220,23 @@ struct MessageMultiplicity {
   llvm::json::Value toCanonicalJson() const;
 };
 
+enum class VocabularyDepSource {
+  Any,
+  PublicBind,
+  ProverSlot,
+  ChallengeCapability,
+};
+
 struct VocabularyMessageRole {
   std::string role;
   MessageMultiplicity multiplicity;
+  /// Which transcript event fills this role.  A round's messages are prover
+  /// material by default; a role whose content the statement fixes — a
+  /// preprocessed table is the canonical case — is filled by a public
+  /// binding instead, and says so, because a reader of the contract cannot
+  /// otherwise tell who chose the content.  Only `ProverSlot` and
+  /// `PublicBind` are admitted here (docs/spec/vocabularies.md).
+  VocabularyDepSource source = VocabularyDepSource::ProverSlot;
 };
 
 /// One priced use of a transcript-derived challenge capability.  The role
@@ -205,13 +265,6 @@ struct VocabularyRound {
 /// the named carrier capability.  This axis is orthogonal to challenge use:
 /// rounds, not this enum, identify the dependencies whose sample spaces enter
 /// theorem pricing.
-enum class VocabularyDepSource {
-  Any,
-  PublicBind,
-  ProverSlot,
-  ChallengeCapability,
-};
-
 struct VocabularyDepSlot {
   std::string role;
   VocabularyDepSource source = VocabularyDepSource::Any;
@@ -393,14 +446,15 @@ struct TerminalRule {
 };
 
 /// One closed, cross-admitted protocol vocabulary. Admission proceeds in
-/// dependency order (profiles, predicate specs, check contracts, hole
-/// contracts, reduction contracts, terminal rules), so an
+/// dependency order (claim profiles, value profiles, predicate specs, check
+/// contracts, hole contracts, reduction contracts, terminal rules), so an
 /// unresolved reference is never retained for a later caller to interpret.
 ///
 /// File format:
 /// {
 ///   "registry": "zkc.protocol_vocabulary",
 ///   "claim_profiles": {...},
+///   "value_profiles": {...},
 ///   "predicate_specs": {"sha256:<content digest>": {...}},
 ///   "check_contracts": {...},
 ///   "hole_contracts": {...},
@@ -414,6 +468,7 @@ public:
                                                   llvm::StringRef sourceName);
 
   const ClaimProfile *lookupProfile(llvm::StringRef id) const;
+  const ValueProfile *lookupValueProfile(llvm::StringRef id) const;
   const CheckContract *lookupCheckContract(llvm::StringRef id) const;
   const HoleContract *lookupHoleContract(llvm::StringRef id) const;
   const ReductionContract *lookupReductionContract(llvm::StringRef id) const;
@@ -421,6 +476,10 @@ public:
 
   const std::map<std::string, ClaimProfile, std::less<>> &profiles() const {
     return profiles_;
+  }
+  const std::map<std::string, ValueProfile, std::less<>> &
+  valueProfiles() const {
+    return valueProfiles_;
   }
   const std::map<std::string, CheckPredicateSpec, std::less<>> &
   predicateSpecs() const {
@@ -449,6 +508,7 @@ public:
 
 private:
   std::map<std::string, ClaimProfile, std::less<>> profiles_;
+  std::map<std::string, ValueProfile, std::less<>> valueProfiles_;
   std::map<std::string, CheckPredicateSpec, std::less<>> predicateSpecs_;
   std::map<std::string, CheckContract, std::less<>> checkContracts_;
   std::map<std::string, HoleContract, std::less<>> holeContracts_;

@@ -85,10 +85,14 @@ private:
         checksByLabel[check.getLabel()] = check;
       else if (auto binding = dyn_cast<MaterialBindOp>(operation))
         bindingsByValue[binding.getValue()] = binding;
-      else if (auto slot = dyn_cast<SlotOp>(operation)) {
-        if (auto membership = slot.getMembership())
-          messages[membership->instance][membership->role][membership->idx] =
-              slot.getVal();
+      else if (auto member =
+                   dyn_cast<ProtocolMemberOpInterface>(operation)) {
+        // A role is filled by whatever carries the material: a slot for
+        // prover messages, a bind for statement-fixed content.
+        if (auto membership = member.getMembership())
+          if (Value carried = member.getMemberValue())
+            messages[membership->instance][membership->role][membership->idx] =
+                carried;
       }
     }
   }
@@ -245,10 +249,22 @@ private:
       SmallVector<OperandView> layouts;
       zkc::semantics::solveCheckLayout(*contract, check.getInputs(), layouts);
       if (layouts.size() != 1) {
-        error(check, "[zkc-E302]")
-            << "operand sequence has " << layouts.size()
-            << " valid layouts under check contract '" << check.getContract()
-            << "' (exactly one is required)";
+        auto refusal = error(check, "[zkc-E302]");
+        refusal << "operand sequence has " << layouts.size()
+                << " valid layouts under check contract '"
+                << check.getContract() << "' (exactly one is required)";
+        // A commitment among the operands is the likeliest reason a layout
+        // count came out zero, and it is the one an author cannot see from
+        // the count alone: a value profile names what stands behind a
+        // commitment, and no operand slot declares a commitment.
+        for (mlir::Value input : check.getInputs())
+          if (auto val = mlir::dyn_cast<zkc::pir::ValType>(input.getType()))
+            if (!val.profileName().empty()) {
+              refusal << "; operand of value profile '" << val.profileName()
+                      << "' is a commitment, and an operand slot declares a "
+                         "payload class rather than one";
+              break;
+            }
         continue;
       }
       CheckView view{check, std::move(layouts.front()), nullptr};
@@ -344,6 +360,12 @@ private:
   }
 
   StringRef binding(Value value, Operation *at) {
+    // A value that carries its own material reference is read from
+    // itself; a material binding on it would be a second spelling of one
+    // fact, and stays unconsumed so the seal refuses it (zkc-E328).
+    if (llvm::StringRef self = zkc::semantics::selfMaterialRef(value);
+        !self.empty())
+      return self;
     auto found = bindingsByValue.find(value);
     if (found == bindingsByValue.end()) {
       error(at, "[zkc-E305]") << "selected check operand has no material binding";

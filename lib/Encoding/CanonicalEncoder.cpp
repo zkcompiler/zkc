@@ -258,7 +258,8 @@ public:
           "container carries no resolved-vocabulary table: the seal "
           "stamps cited semantic-vocabulary content digests "
           "before anything is encoded");
-    // The table is a closed set of five sections. Anything else in it
+    // The table is a closed set: five sections always, and two more that
+    // appear exactly when something cites them. Anything else in it
     // would ride into identity unseen by any judgment (the judges
     // verify only the known sections), so reject an unknown section
     // here at the identity function itself, fail-closed like every
@@ -266,23 +267,29 @@ public:
     // determines transcript bytes; no section names a security analysis,
     // because an analysis is derived about a sealed protocol rather than
     // carried inside it.
-    bool hasHoleSection = vocab.getNamed("hole_contracts").has_value();
-    if (vocab.size() != (hasHoleSection ? 6u : 5u))
+    size_t expected = 5;
+    if (vocab.getNamed("hole_contracts"))
+      ++expected;
+    if (vocab.getNamed("value_profiles"))
+      ++expected;
+    if (vocab.size() != expected)
       return llvm::createStringError(
           "resolved-vocabulary table must contain exactly claim_profiles, "
           "check_contracts, reduction_contracts, terminal_rules, "
           "and construction_profiles, plus hole_contracts only when routes "
-          "cite hole contracts");
+          "cite hole contracts and value_profiles only when a value names a "
+          "profile");
     for (NamedAttribute section : vocab) {
       StringRef name = section.getName().getValue();
       if (name != "claim_profiles" && name != "check_contracts" &&
           name != "reduction_contracts" && name != "terminal_rules" &&
-          name != "construction_profiles" && name != "hole_contracts")
+          name != "construction_profiles" && name != "hole_contracts" &&
+          name != "value_profiles")
         return llvm::createStringError(
             "resolved-vocabulary table has an unknown section '" + name.str() +
             "': only claim_profiles, check_contracts, reduction_contracts, "
-            "terminal_rules, construction_profiles, and hole_contracts are "
-            "identity content");
+            "terminal_rules, construction_profiles, hole_contracts, and "
+            "value_profiles are identity content");
       if (!isa<DictionaryAttr>(section.getValue()))
         return llvm::createStringError("resolved-vocabulary section '" +
                                        name.str() + "' must be a dictionary");
@@ -677,6 +684,23 @@ private:
         op);
   }
 
+  /// A contract role's occupant is encoded the same way whoever fills it:
+  /// the owning transformer's position, the role, and the occurrence index.
+  llvm::Expected<JValue> encodeMembership(std::optional<pir::Membership> m) {
+    if (!m)
+      return JValue(nullptr);
+    if (llvm::Error err = checkStrings({m->role}))
+      return std::move(err);
+    // Fail closed like every other encoder path: a dangling instance must
+    // never alias onto transformer position 0.
+    pir::ReduceOp owner = reduceByLabel.lookup(m->instance);
+    if (!owner)
+      return llvm::createStringError(
+          "membership instance does not resolve to a reduce");
+    return JValue(Array{reduceTransformer.lookup(owner.getOperation()),
+                        m->role, m->idx});
+  }
+
   llvm::Error encodeEvent(Operation *op) {
     if (auto bind = dyn_cast<pir::BindOp>(op)) {
       if (llvm::Error err = checkStrings(
@@ -685,35 +709,52 @@ private:
       JValue value = nullptr;
       if (bind.getValue())
         value = *bind.getValue();
-      events.push_back(Array{"bind", bind.getPayloadClass(),
-                             stringifyStage(bind.getStage()),
-                             std::move(value)});
+      // A profiled binding is its own event family, exactly as a profiled
+      // slot is: it carries the profile name where the scalar family carries
+      // a payload class, so a reader knows which namespace the string is in.
+      // Membership is appended by either family when the binding fills a
+      // contract role — a binding row has no other optional tail, so arity
+      // says whether one is there and a binding that fills no role encodes
+      // exactly as it always did (docs/spec/carrier.md §6).
+      Array row{bind.getProfiled() ? "bind_profiled" : "bind",
+                bind.getPayloadClass(), stringifyStage(bind.getStage()),
+                std::move(value)};
+      if (bind.getMembership()) {
+        auto membership = encodeMembership(bind.getMembership());
+        if (!membership)
+          return membership.takeError();
+        row.push_back(std::move(*membership));
+      }
+      events.push_back(std::move(row));
     } else if (auto slot = dyn_cast<pir::SlotOp>(op)) {
       if (llvm::Error err = checkStrings({slot.getPayloadClass()}))
         return err;
-      JValue membership = nullptr;
-      if (auto m = slot.getMembership()) {
-        if (llvm::Error err = checkStrings({m->role}))
-          return err;
-        // Fail closed like every other encoder path: a dangling
-        // instance must never alias onto transformer position 0.
-        pir::ReduceOp owner = reduceByLabel.lookup(m->instance);
-        if (!owner)
-          return llvm::createStringError(
-              "membership instance does not resolve to a reduce");
-        membership = Array{reduceTransformer.lookup(owner.getOperation()),
-                           m->role, m->idx};
-      }
-      // A counted slot is its own event family: the scalar family's
-      // rows keep their exact historical encoding, so no identity
-      // outside the counted-row protocols moves (docs/spec/carrier.md
-      // §6's additive discipline).
+      auto membership = encodeMembership(slot.getMembership());
+      if (!membership)
+        return membership.takeError();
+      // A counted slot is its own event family, and so is a profiled one:
+      // the scalar family's rows keep their exact historical encoding, so
+      // no identity outside the new protocols moves (docs/spec/carrier.md
+      // §6's additive discipline). The families are distinguished by head
+      // rather than by arity, because the optional route below is already
+      // pushed additively and two optional tails would collide.
+      // The profiled family carries no count, so a counted one would encode
+      // as a scalar commitment. The op verifier refuses that shape at parse,
+      // and this refuses it again: the encoder is fail-closed on its own
+      // input, because it is the identity function and not a second reader
+      // of someone else's guarantee.
+      if (slot.getProfiled() && slot.getCount() != "1")
+        return llvm::createStringError(
+            "a profiled slot carries one commitment and cannot be counted");
       Array slotRow =
-          slot.getCount() == "1"
+          slot.getProfiled()
+              ? Array{"slot_profiled", slot.getPayloadClass(),
+                      slot.getUnabsorbed() ? 0 : 1, std::move(*membership)}
+          : slot.getCount() == "1"
               ? Array{"slot", slot.getPayloadClass(),
-                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)}
+                      slot.getUnabsorbed() ? 0 : 1, std::move(*membership)}
               : Array{"slot_vec", slot.getPayloadClass(), slot.getCount(),
-                      slot.getUnabsorbed() ? 0 : 1, std::move(membership)};
+                      slot.getUnabsorbed() ? 0 : 1, std::move(*membership)};
       // The construction-route binding is identity content, emitted
       // additively with its references normalized to positions, so an
       // unbound slot encodes exactly as before and renaming stays

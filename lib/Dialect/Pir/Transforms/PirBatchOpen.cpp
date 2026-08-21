@@ -181,9 +181,11 @@ static bool hasExactMaterialBinding(Block &body, Value value,
   return matches == 1;
 }
 
+/// A profiled value carries a commitment, not an element of the class the
+/// batching convention expects, so it is not one of these.
 static bool hasValueClass(Value value, llvm::StringRef expected) {
   auto type = dyn_cast<zkc::pir::ValType>(value.getType());
-  return type && type.getValueClass() == expected;
+  return type && type.bareClass() == expected;
 }
 
 /// A shape outside the exact convention is declined.  Malformed canonical

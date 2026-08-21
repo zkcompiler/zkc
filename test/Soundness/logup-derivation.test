@@ -1,0 +1,41 @@
+# The second reading of a source, for the lookup rows.
+#
+# Every bound the lookup rules declare is recomputed here from Haböck's Lemma 5
+# over exact fractions, by arithmetic this file's script owns, and compared
+# against the judgments the derivation actually produced. Two implementations
+# of one reading can share a misreading; a second reading of the source cannot
+# be talked into one. `soundcalc.test` does the same for the FRI rows, and its
+# history — a rate-convention misreading that understated a bound by up to
+# 2.8x — is why both exist.
+#
+# What it independently derives rather than transcribes: that the cleared
+# identity's degree is one less than the sum of the two column lengths, that
+# the honest prover's failure set is a set of poles and therefore one larger,
+# and that the characteristic hypothesis binds the larger of the two sides
+# because the unequal case reduces to the lemma's equal-length statement by
+# padding the shorter one.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/logup-range-check.mlir %zkc-seal-full -o %t/rc.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/rc.artifacts %t/rc.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/rc.artifacts %t/rc.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.req.json -o=%t/rc.out.json %t/rc.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-completeness-request.json %t/rc.artifacts %t/rc.comp.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.comp.req.json -o=%t/rc.comp.json %t/rc.mlirbc
+# RUN: zkc-seal %S/../Encoding/logup-bus.mlir %zkc-seal-full -o %t/bus.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/bus.artifacts %t/bus.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/bus.artifacts %t/bus.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/bus.req.json -o=%t/bus.out.json %t/bus.mlirbc
+#
+# RUN: %python %S/Inputs/logup_derivation.py %t/rc.out.json %t/rc.comp.json %t/bus.out.json \
+# RUN:   | FileCheck %s
+# CHECK: logup: every theorem-derived bound matches the declared bound

@@ -1,0 +1,121 @@
+# The ad-hoc lookup, where the prover supplies the table as well as the values
+# looked up in it.
+#
+# Its job beside the range check is the equal-length case and the other
+# direction of the origin rule: three prover messages rather than a public
+# binding and two, so a seal that only ever saw one seat could not pass both.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/logup-bus.mlir %zkc-seal-full -o %t/bus.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/bus.artifacts %t/bus.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/bus.artifacts %t/bus.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/bus.req.json -o=%t/bus.out.json %t/bus.mlirbc | FileCheck %s --check-prefix=JUDGED
+# JUDGED: artifact judgment: not discharged (policy analysis_only_artifact)
+# RUN: FileCheck %s --check-prefix=BOUND < %t/bus.out.json
+
+# Both columns hold two hundred and fifty-six entries, so the degree of the
+# cleared identity is five hundred and eleven and not five hundred and twelve:
+# every term omits one of the linear factors. Reading the same arity twice is
+# correct here and is not the projection reading one number for the whole
+# reduction — it is two role-selected reads that happen to agree, which is
+# what the range check beside this one demonstrates by disagreeing.
+# BOUND: "constant": "511/2305843009213693951"
+
+# The claim that leaves is the identity at the sampled point, not the
+# inclusion: the inclusion is what this reduction consumes, and the passage
+# between the two is the whole of what one sampled challenge buys. Discharging
+# the identity — helper columns, a running sum, and the quotient machinery
+# that checks them — is the next protocol's statement, and leaves here as a
+# residual rather than as a check this artifact cannot support.
+# RUN: zkc-opt %pir-seal-full %S/../Encoding/logup-bus.mlir | FileCheck %s --check-prefix=ROUTE
+# ROUTE: pir.residual
+# ROUTE-SAME: "logup_identity"
+# ROUTE-SAME: logup-identity-discharge-not-modeled
+
+# The declared arity, understated consistently on both sides. Nothing refuses:
+# a prover who committed to more than the profile declares answers every
+# challenge honestly, and the bound simply comes out smaller. That is why the
+# arity is carried as an obligation rather than checked, and this leg is the
+# demonstration that no condition could take its place.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_committed_column']['arity_log2']=7; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/under.vocab.json
+# RUN: zkc-seal %S/../Encoding/logup-bus.mlir \
+# RUN:   --protocol-vocabulary=%t/under.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/under.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/under.artifacts %t/under.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/under.artifacts %t/under.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/under.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/under.req.json -o=%t/under.out.json %t/under.mlirbc
+# RUN: FileCheck %s --check-prefix=UNDERSTATED < %t/under.out.json
+# UNDERSTATED: "constant": "255/2305843009213693951"
+
+# Role selection, demonstrated by moving one role and nothing else. Give the
+# query column a profile of a different size and the bound moves from five
+# hundred and eleven to a thousand two hundred and seventy-nine, because the
+# rule reads the two sides separately. Reading one arity for the whole
+# reduction could not produce this: it would refuse the artifact outright for
+# declaring two.
+# RUN: %python -c "import sys; t=open(sys.argv[1]).read(); t=t.replace('\"queries\" : profile \"logup_committed_column\"','\"queries\" : profile \"logup_queries\"'); t=t.replace('%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<profile \"logup_committed_column\">','%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<profile \"logup_queries\">'); sys.stdout.write(t)" %S/../Encoding/logup-bus.mlir > %t/mixed.mlir
+# RUN: zkc-seal %t/mixed.mlir %zkc-seal-full -o %t/mixed.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/mixed.artifacts %t/mixed.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/mixed.artifacts %t/mixed.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/mixed.req.json -o=%t/mixed.out.json %t/mixed.mlirbc
+# RUN: FileCheck %s --check-prefix=MIXED < %t/mixed.out.json
+# MIXED: "constant": "1279/2305843009213693951"
+
+# A role filled by a value that declares nothing. Passing over it silently
+# would let a reduction profile one column and leave another bare, and the
+# arity a bound is priced from would be whatever the profiled members
+# happened to say. The refusal names the parameter, so an author sees which
+# side of the lookup is undeclared rather than that something is.
+# RUN: %python -c "import sys; t=open(sys.argv[1]).read(); t=t.replace('\"queries\" : profile \"logup_committed_column\"','\"queries\" : \"scalar\"'); t=t.replace('%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<profile \"logup_committed_column\">','%queries to \"sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528\" : !pir.val<\"scalar\">'); sys.stdout.write(t)" %S/../Encoding/logup-bus.mlir > %t/bare.mlir
+# RUN: zkc-seal %t/bare.mlir %zkc-seal-full -o %t/bare.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/bare.artifacts %t/bare.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/bare.artifacts %t/bare.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/bare.req.json -o=/dev/null %t/bare.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=BARE
+# BARE: invalid_payload at apply.parameters.lookups
+# BARE-SAME: declares no committed content
+
+# A role whose own members disagree about how much they hold.
+#
+# No shipped contract reaches this: every role in both takes exactly one
+# member, so two of them cannot disagree. But a role taking several is a
+# shape the vocabulary permits any author to write, and then the rule reading
+# that role has two numbers and no reason to prefer either. The projection
+# refuses instead of choosing — the guarantee that survived from reading one
+# arity for the whole reduction — and it is tested here rather than left for
+# the first contract that widens a role to discover.
+#
+# The contract and the binding that anchors it are both widened, because a
+# role's count is contract content and the binding pins the contract's digest.
+# The digest is read out of the sealed artifact rather than recomputed, since
+# the artifact is where it is authoritative.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); c=d['reduction_contracts']['logup_bus']; [m.update(count={'exact':2}) for r in c['rounds'] for m in r['messages'] if m['role']=='queries']; c['constraints']=[k for k in c['constraints'] if k['left']['role']!='queries']; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/wide.vocab.json
+# RUN: zkc-opt -pir-seal='protocol-vocabulary=%t/wide.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/Inputs/logup-role-widened.mlir -o %t/wide.sealed.mlir
+# RUN: %python -c "import json,re,sys; digest=re.search(r'logup_bus = \"(sha256:[0-9a-f]+)\"', open(sys.argv[1]).read()).group(1); s=json.load(open(sys.argv[2])); [v['anchor']['ref'].__setitem__('source_revision', digest) for v in s['bindings'].values() if v.get('anchor',{}).get('ref',{}).get('id')=='logup_bus']; json.dump(s, open(sys.argv[3],'w'))" %t/wide.sealed.mlir %zkc-registry-dir/soundness-signature.json %t/wide.sig.json
+# RUN: zkc-seal %S/Inputs/logup-role-widened.mlir \
+# RUN:   --protocol-vocabulary=%t/wide.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/wide.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/wide.artifacts %t/wide.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-bus-request.json %t/wide.artifacts %t/wide.req.json
+# RUN: not zkc-derive --signature=%t/wide.sig.json \
+# RUN:   --protocol-vocabulary=%t/wide.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/wide.req.json -o=/dev/null %t/wide.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=WIDE
+# WIDE: invalid_payload at apply.parameters.lookups
+# WIDE-SAME: declares more than one arity
+

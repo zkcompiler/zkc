@@ -28,7 +28,7 @@
       },
       "means_basis": {
         "E120": "6b726c27d04d79997953eabb50bd8f15e5b42fd0fae75bbc3f79b09de2bd1ed0",
-        "E121": "d752416e929fa5b660584fa0b96006f0659bef74bc4e57063ae4d49cc913dc68"
+        "E121": "a31bd755f85e2ea652749d0759f191109858680d8cabd6344ad698b5548332eb"
       },
       "range": "E120-E129",
       "reserved": [],
@@ -146,7 +146,7 @@
         "E156": "an anchor value is not a digest reference",
         "E157": "a reduction produces other than exactly one claim, or a terminal binds no check role",
         "E158": "a contract, rule, or route identifier is empty",
-        "E159": "a material binding's semantic_ref is not a digest reference"
+        "E159": "a material reference is not a digest reference: a material binding's semantic_ref, or the value a seal-stage binding absorbs when it carries a profile or fills a contract role"
       },
       "means_basis": {
         "E150": "a040b26a80ebd02a593f2830ea997a23d46d9a3a1d4a389d2e45f05343c37ee9",
@@ -158,7 +158,7 @@
         "E156": "26c248bf87b53564175f4a340854a5d7573597860efa00750f333a7a8f138b8b",
         "E157": "80c32db03eec40ec11f52d4984020c8a71c11ac923108163b52a5af0de753127",
         "E158": "f68f2635a8f1ce97626765818cd810f5021dfd5e0492900fba13a28f9b8ef336",
-        "E159": "d29bbf230923ad86ae239c5199dbb9b9ee5847aa448d8649353740f78be623cf"
+        "E159": "7d9e3ff2e23b9b1983eb7d8d1116cce66439ccbafdd492cdf6809effd8293339"
       },
       "range": "E150-E159",
       "reserved": [],
@@ -169,7 +169,8 @@
       "twin": {
         "excluded_reason": "the rest of the range is MLIR op/container grammar the twin's input representation cannot spell; E150 is mirrored because the bounded artifact verification is a spine event the twin does spell",
         "mirrored": [
-          "E150"
+          "E150",
+          "E159"
         ]
       }
     },
@@ -180,21 +181,30 @@
         "E162",
         "E163",
         "E164",
-        "E165"
+        "E165",
+        "E166",
+        "E167",
+        "E169"
       ],
       "means": {
-        "E161": "a verifier value carries more than one semantic material binding",
-        "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity",
+        "E161": "a verifier value carries more than one material reference: two bindings, or a binding on a value that already carries its own",
+        "E162": "one semantic_ref is bound to two verifier values, against reverse injectivity, whether it is spelled as a material binding or absorbed by a profiled binding",
         "E163": "a bounded artifact verification routes through a name no sink of the artifact carries, so the child's lifted obligations reach no parent route surface",
         "E164": "a bounded artifact verification names a proof slot that is not a slot of the artifact, or has no canonical position to order slots against",
-        "E165": "a bounded artifact verification names a proof slot that follows it on the spine, so the child would consume material not yet in the stream"
+        "E165": "a bounded artifact verification names a proof slot that follows it on the spine, so the child would consume material not yet in the stream",
+        "E166": "a slot or a public binding names a value profile the sealed vocabulary does not declare",
+        "E167": "a profiled slot is also counted, and a vector of commitments is a shape no value profile states",
+        "E169": "a value profile's declared origin does not belong on the transcript event carrying it: prover material enters as a slot, statement-fixed material as a public binding, and preprocessed content on a binding that carries its value at seal"
       },
       "means_basis": {
-        "E161": "8ce9df859e967db7e5ece0df4c7a99f219571b3a9bdeb90e5a85e25e95b806f2",
-        "E162": "09c624212632a7b681ae4f257643a683cef57a5203741afaf23a6e785d71192d",
+        "E161": "b2541f18dce301a14e407900c02f320d3ec8e3c5e996faa4d622f46dc481534e",
+        "E162": "45d2883ea12ef2a747df48c4ef45555387e1dfb776f4c43aa79869fc604192c6",
         "E163": "af3dc93e5309591d87c134be2468fedbbf9e9f7567a342976b5a65afaf5555cf",
         "E164": "ee85c8d24a33b956615f961fe23fb69c94f14d42ffd7f9d14b4e6a4f5fd64731",
-        "E165": "cbf872087e75bf1489b9d5055423569d3784e8be01efb38cf849c1cc7e580bc7"
+        "E165": "cbf872087e75bf1489b9d5055423569d3784e8be01efb38cf849c1cc7e580bc7",
+        "E166": "d88960e143c25babee23d872872b7ad766f96b0beb640897d24502f9b937063d",
+        "E167": "a3ca1418dfdf5f8f36f1f1d37d8a4fcd3777f97814c2bc0d72f8da759e653ae7",
+        "E169": "ba81460134ab51b0cdb0f84a7b20ec2484a19759745c2a5add8a00a583d2b199"
       },
       "range": "E160-E169",
       "reserved": [],
@@ -206,9 +216,14 @@
       "twin": {
         "excluded_reason": "the rest of the range is judged by message-text parity in the differential suites rather than by id; the bounded artifact verification's obligations are mirrored by id because the twin enforces them itself",
         "mirrored": [
+          "E161",
+          "E162",
           "E163",
           "E164",
-          "E165"
+          "E165",
+          "E166",
+          "E167",
+          "E169"
         ]
       }
     },
@@ -327,7 +342,7 @@
         "E224": "a seal policy name is not one the vocabulary admits",
         "E225": "a kappa axis or constant is malformed, or the axis is not one kappa declares",
         "E226": "a check's transparent expression is outside the grammar, or its presence disagrees with the contract's mode",
-        "E227": "a material binding's stage disagrees with whether it carries an explicit value",
+        "E227": "a public binding's stage disagrees with whether it carries an explicit value, or it fills a contract role without a value to name that role's material with",
         "E228": "a value leaves the canonical attribute domain: nesting depth, booleans, integer range, non-printable strings, or non-string keys",
         "E229": "kappa cites a construction profile the registry does not supply"
       },
@@ -338,7 +353,7 @@
         "E224": "94ff0e84ac5d80621b2c23b8c5b71732e529a5c6d1d2d5347e79f647b5e3b9c8",
         "E225": "534c2904fddad295a6f849ea88fc034e6376a3db0b474eaabcac0bb0c67c3e81",
         "E226": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-        "E227": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E227": "11e8e52e1641531ab77d8fbd11cd5de53ec6d8e6714819563d30c0415073a3b6",
         "E228": "6a68061207e26fa489e26e9fdd74fa835415e7c537b8ab12cfa9d9bf649a9885",
         "E229": "1457abaf0c7828bb4c4ccadc7b130091fb94be7abb20e898fd04c97eefb92148"
       },
@@ -353,6 +368,7 @@
       "twin": {
         "excluded_reason": "WF/encoding-domain judged by message-text parity in the differential suites, not by id",
         "mirrored": [
+          "E227",
           "E228"
         ]
       }
@@ -412,14 +428,14 @@
       "means": {
         "E241": "retired and dead: it named the version-agreement half of a check that a content-digest pin already decides. The number is never reissued (docs/spec/versioning.md \u00a73)",
         "E243": "a reduce's dependency arity or a round's challenge realization disagrees with its contract",
-        "E244": "a reduce's message occurrences disagree with its contract: missing role, wrong count, duplicate, or non-canonical",
+        "E244": "a reduce's message occurrences disagree with its contract: missing role, wrong count, duplicate, non-canonical, or filled by an event kind the role does not name",
         "E245": "one challenge fills two dependency slots, or is shared by two reductions",
         "E247": "a claim profile is not admitted by the protocol vocabulary",
         "E248": "pir-link ran without a protocol-vocabulary authority"
       },
       "means_basis": {
         "E243": "ee6de5ee2576f84bc578ce2c84f33bda51a124dfaedb6c2c865ee8f30d0f43d3",
-        "E244": "7547f7c44177c9b9c0243315b2423f1b19e3e95277b1d4d300e640a91cb0b4d8",
+        "E244": "9f91844b0e4a87a16faee81e0c01e2450893e9c3ca3196d02fb37991b533a019",
         "E245": "5f215318566fc997bdcf070fd54128beec4c8da3196bbbffd87f4fb2cd78c17e",
         "E247": "009474266b6542ca359e1e6053ef2eb35203f8455bc16ead73f587b5df617ae4",
         "E248": "d88377835817a958533f4bbbc58df787988f936a58c0d0660fd4dfc13b696636"

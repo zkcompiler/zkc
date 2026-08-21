@@ -174,6 +174,17 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
   switch (kind) {
   case MachineDeciderKind::OneMessageRole:
     return {"zkc.side.one_message_role", {ValueSort::ReductionContract}};
+  case MachineDeciderKind::MultiplicitiesMatchTable:
+    return {"zkc.side.multiplicities_match_table",
+            {ValueSort::Integer, ValueSort::Integer}};
+  case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial:
+    return {"zkc.side.consumed_anchors_are_round_material",
+            {ValueSort::ReductionContract}};
+  case MachineDeciderKind::SingleRound:
+    return {"zkc.side.single_round", {ValueSort::ReductionContract}};
+  case MachineDeciderKind::LookupFitsCharacteristic:
+    return {"zkc.side.lookup_fits_characteristic",
+            {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer}};
   case MachineDeciderKind::SpaceEmbeds:
     return {"zkc.side.space_embeds",
             {ValueSort::ReductionContract, ValueSort::Integer}};
@@ -407,6 +418,12 @@ RuleWfResult checkArtifactProjection(const ArtifactProjection &projection,
         !projection.field.empty() || !inactiveBaseIsDefault())
       return refuse(RuleWfRefusalCode::InvalidReference, location,
                     "malformed bound-relation-anchor-count projection");
+    return accepted();
+  case ArtifactProjectionKind::CommittedArity:
+    if (projection.resultSort != ValueSort::Integer ||
+        !projection.field.empty() || !inactiveBaseIsDefault())
+      return refuse(RuleWfRefusalCode::InvalidReference, location,
+                    "malformed committed-arity projection");
     return accepted();
   case ArtifactProjectionKind::ReductionParameter:
     if (!simpleField() || (!isNumeric(projection.resultSort) &&

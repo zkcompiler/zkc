@@ -377,6 +377,16 @@ struct TestSoundnessKernelPass
              {DeciderKind::DuplexSpine, {Sort::PathTransition}}},
             {"zkc.side.codec_bias_declared",
              {DeciderKind::CodecBiasDeclared, {Sort::PathTransition}}},
+            {"zkc.side.multiplicities_match_table",
+             {DeciderKind::MultiplicitiesMatchTable, {Sort::Integer, Sort::Integer}}},
+            {"zkc.side.consumed_anchors_are_round_material",
+             {DeciderKind::ConsumedAnchorsAreRoundMaterial,
+              {Sort::ReductionContract}}},
+            {"zkc.side.single_round",
+             {DeciderKind::SingleRound, {Sort::ReductionContract}}},
+            {"zkc.side.lookup_fits_characteristic",
+             {DeciderKind::LookupFitsCharacteristic,
+              {Sort::Integer, Sort::Integer, Sort::Integer}}},
         };
     if (catalog->schemas.machineDeciders.size() != expectedDeciders.size())
       return fail("the closed machine-decider set changed");

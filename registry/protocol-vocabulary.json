@@ -1,21 +1,6 @@
 {
   "registry": "zkc.protocol_vocabulary",
   "claim_profiles": {
-    "opaque_relation": {
-      "kind": "relation",
-      "anchors": [
-        "contract",
-        "statement"
-      ]
-    },
-    "single_opening": {
-      "kind": "opening",
-      "anchors": [
-        "commitment",
-        "point",
-        "value"
-      ]
-    },
     "batch_opening": {
       "kind": "opening",
       "anchors": [
@@ -23,8 +8,20 @@
         "point"
       ]
     },
-    "opening_value_rlc": {
-      "kind": "opening",
+    "dleq_evaluation": {
+      "kind": "evaluation",
+      "anchors": [
+        "statement"
+      ]
+    },
+    "fri_query_consistent": {
+      "kind": "evaluation",
+      "anchors": [
+        "statement"
+      ]
+    },
+    "kzg_equation_rlc": {
+      "kind": "verification_equation",
       "anchors": [
         "coefficient",
         "members"
@@ -36,11 +33,20 @@
         "material"
       ]
     },
-    "kzg_equation_rlc": {
-      "kind": "verification_equation",
+    "logup_identity": {
+      "kind": "fractional_identity",
       "anchors": [
-        "coefficient",
-        "members"
+        "multiplicities",
+        "queries",
+        "table"
+      ]
+    },
+    "logup_inclusion": {
+      "kind": "lookup",
+      "anchors": [
+        "multiplicities",
+        "queries",
+        "table"
       ]
     },
     "mle_evaluation": {
@@ -51,31 +57,21 @@
         "value"
       ]
     },
-    "sumcheck_evaluation": {
-      "kind": "evaluation",
+    "opaque_relation": {
+      "kind": "relation",
       "anchors": [
+        "contract",
         "statement"
       ]
     },
-    "schnorr_evaluation": {
-      "kind": "evaluation",
+    "opening_value_rlc": {
+      "kind": "opening",
       "anchors": [
-        "statement"
-      ]
-    },
-    "dleq_evaluation": {
-      "kind": "evaluation",
-      "anchors": [
-        "statement"
+        "coefficient",
+        "members"
       ]
     },
     "or_evaluation": {
-      "kind": "evaluation",
-      "anchors": [
-        "statement"
-      ]
-    },
-    "fri_query_consistent": {
       "kind": "evaluation",
       "anchors": [
         "statement"
@@ -91,6 +87,26 @@
       ]
     },
     "r1cs_batched_sum": {
+      "kind": "evaluation",
+      "anchors": [
+        "statement"
+      ]
+    },
+    "schnorr_evaluation": {
+      "kind": "evaluation",
+      "anchors": [
+        "statement"
+      ]
+    },
+    "single_opening": {
+      "kind": "opening",
+      "anchors": [
+        "commitment",
+        "point",
+        "value"
+      ]
+    },
+    "sumcheck_evaluation": {
       "kind": "evaluation",
       "anchors": [
         "statement"
@@ -902,385 +918,6 @@
     }
   },
   "reduction_contracts": {
-    "sumcheck": {
-      "consumes": [
-        "opaque_relation"
-      ],
-      "dep_slots": [
-        {
-          "role": "c1",
-          "source": "challenge_capability",
-          "class": "scalar"
-        },
-        {
-          "role": "c2",
-          "source": "challenge_capability",
-          "class": "scalar"
-        }
-      ],
-      "rounds": [
-        {
-          "challenge_use": {
-            "role": "c1"
-          },
-          "messages": [
-            {
-              "role": "g1",
-              "count": {
-                "exact": 3
-              }
-            }
-          ]
-        },
-        {
-          "challenge_use": {
-            "role": "c2"
-          },
-          "messages": [
-            {
-              "role": "g2",
-              "count": {
-                "exact": 3
-              }
-            }
-          ]
-        }
-      ],
-      "parameters": {},
-      "checks": {
-        "round1": {
-          "contract": "zkc.check.sumcheck-round1",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "f_add",
-              [
-                "f_add",
-                [
-                  "f_add",
-                  [
-                    "role",
-                    "g0"
-                  ],
-                  [
-                    "role",
-                    "g0"
-                  ]
-                ],
-                [
-                  "role",
-                  "g1"
-                ]
-              ],
-              [
-                "role",
-                "g2"
-              ]
-            ],
-            [
-              "role",
-              "claimed_sum"
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "material_ref_equality",
-              "source": {
-                "kind": "input_anchor",
-                "input": 0,
-                "anchor": "statement"
-              },
-              "target_role": "claimed_sum"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g1",
-                "occurrence": 0
-              },
-              "target_role": "g0"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g1",
-                "occurrence": 1
-              },
-              "target_role": "g1"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g1",
-                "occurrence": 2
-              },
-              "target_role": "g2"
-            }
-          ]
-        },
-        "round2": {
-          "contract": "zkc.check.sumcheck-round2",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "f_add",
-              [
-                "f_add",
-                [
-                  "f_add",
-                  [
-                    "role",
-                    "g0"
-                  ],
-                  [
-                    "role",
-                    "g0"
-                  ]
-                ],
-                [
-                  "role",
-                  "g1"
-                ]
-              ],
-              [
-                "role",
-                "g2"
-              ]
-            ],
-            [
-              "f_add",
-              [
-                "role",
-                "prior_g0"
-              ],
-              [
-                "f_add",
-                [
-                  "f_mul",
-                  [
-                    "role",
-                    "prior_g1"
-                  ],
-                  [
-                    "role",
-                    "prior_challenge"
-                  ]
-                ],
-                [
-                  "f_mul",
-                  [
-                    "role",
-                    "prior_g2"
-                  ],
-                  [
-                    "f_mul",
-                    [
-                      "role",
-                      "prior_challenge"
-                    ],
-                    [
-                      "role",
-                      "prior_challenge"
-                    ]
-                  ]
-                ]
-              ]
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g1",
-                "occurrence": 0
-              },
-              "target_role": "prior_g0"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g1",
-                "occurrence": 1
-              },
-              "target_role": "prior_g1"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g1",
-                "occurrence": 2
-              },
-              "target_role": "prior_g2"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "c1"
-              },
-              "target_role": "prior_challenge"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g2",
-                "occurrence": 0
-              },
-              "target_role": "g0"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g2",
-                "occurrence": 1
-              },
-              "target_role": "g1"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g2",
-                "occurrence": 2
-              },
-              "target_role": "g2"
-            }
-          ]
-        },
-        "final": {
-          "contract": "zkc.check.sumcheck-final",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "f_add",
-              [
-                "role",
-                "g0"
-              ],
-              [
-                "f_add",
-                [
-                  "f_mul",
-                  [
-                    "role",
-                    "g1"
-                  ],
-                  [
-                    "role",
-                    "x2"
-                  ]
-                ],
-                [
-                  "f_mul",
-                  [
-                    "role",
-                    "g2"
-                  ],
-                  [
-                    "f_mul",
-                    [
-                      "role",
-                      "x2"
-                    ],
-                    [
-                      "role",
-                      "x2"
-                    ]
-                  ]
-                ]
-              ]
-            ],
-            [
-              "f_add",
-              [
-                "f_mul",
-                [
-                  "role",
-                  "x1"
-                ],
-                [
-                  "role",
-                  "x2"
-                ]
-              ],
-              [
-                "role",
-                "x1"
-              ]
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g2",
-                "occurrence": 0
-              },
-              "target_role": "g0"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g2",
-                "occurrence": 1
-              },
-              "target_role": "g1"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g2",
-                "occurrence": 2
-              },
-              "target_role": "g2"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "c1"
-              },
-              "target_role": "x1"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "c2"
-              },
-              "target_role": "x2"
-            }
-          ]
-        }
-      },
-      "constraints": [],
-      "outputs": [
-        {
-          "profile": "sumcheck_evaluation",
-          "anchors": {
-            "statement": {
-              "kind": "input_anchor",
-              "input": 0,
-              "anchor": "statement"
-            }
-          }
-        }
-      ]
-    },
     "evalopen": {
       "consumes": [
         "sumcheck_evaluation"
@@ -1332,67 +969,59 @@
         }
       ]
     },
-    "sigma": {
+    "fri": {
       "consumes": [
         "opaque_relation"
       ],
       "dep_slots": [
         {
-          "role": "c",
+          "role": "fold",
           "source": "challenge_capability",
-          "class": "scalar"
+          "class": "ext_field"
+        },
+        {
+          "role": "query",
+          "source": "challenge_capability",
+          "class": "query_index"
         }
       ],
       "rounds": [
         {
           "challenge_use": {
-            "role": "c"
+            "role": "fold"
+          },
+          "messages": [],
+          "kind": "fold"
+        },
+        {
+          "challenge_use": {
+            "role": "query"
           },
           "messages": [
             {
-              "role": "a",
+              "role": "g",
               "count": {
                 "exact": 1
               }
             }
-          ]
+          ],
+          "kind": "query"
         }
       ],
       "parameters": {},
       "checks": {
-        "equation": {
-          "contract": "zkc.check.schnorr-equation",
+        "consistency": {
+          "contract": "zkc.check.rs-equality",
           "parameters": {},
           "transparent_predicate": [
             "eq",
             [
-              "g_exp",
-              [
-                "const",
-                "g"
-              ],
-              [
-                "role",
-                "response"
-              ]
+              "role",
+              "lhs"
             ],
             [
-              "g_mul",
-              [
-                "role",
-                "commitment"
-              ],
-              [
-                "g_exp",
-                [
-                  "role",
-                  "statement"
-                ],
-                [
-                  "role",
-                  "challenge"
-                ]
-              ]
+              "role",
+              "rhs"
             ]
           ],
           "attachments": [
@@ -1403,24 +1032,16 @@
                 "input": 0,
                 "anchor": "statement"
               },
-              "target_role": "statement"
+              "target_role": "lhs"
             },
             {
               "kind": "value_identity",
               "source": {
                 "kind": "message",
-                "role": "a",
+                "role": "g",
                 "occurrence": 0
               },
-              "target_role": "commitment"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "c"
-              },
-              "target_role": "challenge"
+              "target_role": "rhs"
             }
           ]
         }
@@ -1428,709 +1049,12 @@
       "constraints": [],
       "outputs": [
         {
-          "profile": "schnorr_evaluation",
+          "profile": "fri_query_consistent",
           "anchors": {
             "statement": {
               "kind": "input_anchor",
               "input": 0,
               "anchor": "statement"
-            }
-          }
-        }
-      ]
-    },
-    "sigma_dleq": {
-      "consumes": [
-        "opaque_relation"
-      ],
-      "dep_slots": [
-        {
-          "role": "c",
-          "source": "challenge_capability",
-          "class": "scalar"
-        },
-        {
-          "role": "response",
-          "source": "prover_slot",
-          "class": "scalar"
-        }
-      ],
-      "rounds": [
-        {
-          "challenge_use": {
-            "role": "c"
-          },
-          "messages": [
-            {
-              "role": "a",
-              "count": {
-                "exact": 2
-              }
-            }
-          ]
-        }
-      ],
-      "parameters": {
-        "left_statement": "material_ref",
-        "right_statement": "material_ref"
-      },
-      "checks": {
-        "left_equation": {
-          "contract": "zkc.check.schnorr-equation",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "g_exp",
-              [
-                "const",
-                "g"
-              ],
-              [
-                "role",
-                "response"
-              ]
-            ],
-            [
-              "g_mul",
-              [
-                "role",
-                "commitment"
-              ],
-              [
-                "g_exp",
-                [
-                  "role",
-                  "statement"
-                ],
-                [
-                  "role",
-                  "challenge"
-                ]
-              ]
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "material_ref_equality",
-              "source": {
-                "kind": "parameter_ref",
-                "name": "left_statement"
-              },
-              "target_role": "statement"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "a",
-                "occurrence": 0
-              },
-              "target_role": "commitment"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "c"
-              },
-              "target_role": "challenge"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "response"
-              },
-              "target_role": "response"
-            }
-          ]
-        },
-        "right_equation": {
-          "contract": "zkc.check.schnorr-equation",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "g_exp",
-              [
-                "const",
-                "h"
-              ],
-              [
-                "role",
-                "response"
-              ]
-            ],
-            [
-              "g_mul",
-              [
-                "role",
-                "commitment"
-              ],
-              [
-                "g_exp",
-                [
-                  "role",
-                  "statement"
-                ],
-                [
-                  "role",
-                  "challenge"
-                ]
-              ]
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "material_ref_equality",
-              "source": {
-                "kind": "parameter_ref",
-                "name": "right_statement"
-              },
-              "target_role": "statement"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "a",
-                "occurrence": 1
-              },
-              "target_role": "commitment"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "c"
-              },
-              "target_role": "challenge"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "response"
-              },
-              "target_role": "response"
-            }
-          ]
-        }
-      },
-      "constraints": [
-        {
-          "kind": "equal",
-          "left": {
-            "kind": "input_anchor",
-            "input": 0,
-            "anchor": "statement"
-          },
-          "right": {
-            "kind": "construct",
-            "tag": "zkc.statement.dleq",
-            "args": [
-              {
-                "kind": "parameter_ref",
-                "name": "left_statement"
-              },
-              {
-                "kind": "parameter_ref",
-                "name": "right_statement"
-              }
-            ]
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "profile": "dleq_evaluation",
-          "anchors": {
-            "statement": {
-              "kind": "input_anchor",
-              "input": 0,
-              "anchor": "statement"
-            }
-          }
-        }
-      ]
-    },
-    "sigma_or": {
-      "consumes": [
-        "opaque_relation"
-      ],
-      "dep_slots": [
-        {
-          "role": "c",
-          "source": "challenge_capability",
-          "class": "scalar"
-        },
-        {
-          "role": "left_share",
-          "source": "prover_slot",
-          "class": "scalar"
-        },
-        {
-          "role": "right_share",
-          "source": "prover_slot",
-          "class": "scalar"
-        }
-      ],
-      "rounds": [
-        {
-          "challenge_use": {
-            "role": "c"
-          },
-          "messages": [
-            {
-              "role": "a",
-              "count": {
-                "exact": 2
-              }
-            }
-          ]
-        }
-      ],
-      "parameters": {
-        "left_statement": "material_ref",
-        "right_statement": "material_ref"
-      },
-      "checks": {
-        "left_equation": {
-          "contract": "zkc.check.sigma-equation-scalar-challenge",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "g_exp",
-              [
-                "const",
-                "g"
-              ],
-              [
-                "role",
-                "response"
-              ]
-            ],
-            [
-              "g_mul",
-              [
-                "role",
-                "commitment"
-              ],
-              [
-                "g_exp",
-                [
-                  "role",
-                  "statement"
-                ],
-                [
-                  "role",
-                  "challenge_share"
-                ]
-              ]
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "material_ref_equality",
-              "source": {
-                "kind": "parameter_ref",
-                "name": "left_statement"
-              },
-              "target_role": "statement"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "a",
-                "occurrence": 0
-              },
-              "target_role": "commitment"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "left_share"
-              },
-              "target_role": "challenge_share"
-            }
-          ]
-        },
-        "right_equation": {
-          "contract": "zkc.check.sigma-equation-scalar-challenge",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "g_exp",
-              [
-                "const",
-                "g"
-              ],
-              [
-                "role",
-                "response"
-              ]
-            ],
-            [
-              "g_mul",
-              [
-                "role",
-                "commitment"
-              ],
-              [
-                "g_exp",
-                [
-                  "role",
-                  "statement"
-                ],
-                [
-                  "role",
-                  "challenge_share"
-                ]
-              ]
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "material_ref_equality",
-              "source": {
-                "kind": "parameter_ref",
-                "name": "right_statement"
-              },
-              "target_role": "statement"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "a",
-                "occurrence": 1
-              },
-              "target_role": "commitment"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "right_share"
-              },
-              "target_role": "challenge_share"
-            }
-          ]
-        },
-        "challenge_split": {
-          "contract": "zkc.check.scalar-split",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "f_add",
-              [
-                "role",
-                "left_share"
-              ],
-              [
-                "role",
-                "right_share"
-              ]
-            ],
-            [
-              "role",
-              "challenge"
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "left_share"
-              },
-              "target_role": "left_share"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "right_share"
-              },
-              "target_role": "right_share"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "c"
-              },
-              "target_role": "challenge"
-            }
-          ]
-        }
-      },
-      "constraints": [
-        {
-          "kind": "equal",
-          "left": {
-            "kind": "input_anchor",
-            "input": 0,
-            "anchor": "statement"
-          },
-          "right": {
-            "kind": "construct",
-            "tag": "zkc.statement.or",
-            "args": [
-              {
-                "kind": "parameter_ref",
-                "name": "left_statement"
-              },
-              {
-                "kind": "parameter_ref",
-                "name": "right_statement"
-              }
-            ]
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "profile": "or_evaluation",
-          "anchors": {
-            "statement": {
-              "kind": "input_anchor",
-              "input": 0,
-              "anchor": "statement"
-            }
-          }
-        }
-      ]
-    },
-    "kzg_batch": {
-      "consumes": [
-        {
-          "profile": "single_opening",
-          "min": 2
-        }
-      ],
-      "dep_slots": [
-        {
-          "role": "gamma",
-          "source": "challenge_capability",
-          "class": "fr"
-        }
-      ],
-      "rounds": [
-        {
-          "challenge_use": {
-            "role": "gamma"
-          },
-          "messages": []
-        }
-      ],
-      "parameters": {},
-      "checks": {
-        "opening": {
-          "contract": "zkc.check.kzg-batch-opening",
-          "parameters": {
-            "suite": "bls12-381"
-          },
-          "attachments": [
-            {
-              "kind": "material_ref_vector_equality",
-              "source": {
-                "kind": "input_anchors",
-                "anchor": "commitment",
-                "order": "canonical_unique"
-              },
-              "target_role": "commitment"
-            },
-            {
-              "kind": "common_material_ref_equality",
-              "source": {
-                "kind": "input_anchors",
-                "anchor": "point",
-                "order": "canonical_unique"
-              },
-              "target_role": "point"
-            },
-            {
-              "kind": "material_ref_vector_equality",
-              "source": {
-                "kind": "input_anchors",
-                "anchor": "value",
-                "order": "canonical_unique"
-              },
-              "target_role": "value"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "dependency",
-                "role": "gamma"
-              },
-              "target_role": "batch_challenge"
-            }
-          ]
-        }
-      },
-      "constraints": [],
-      "outputs": [
-        {
-          "profile": "batch_opening",
-          "anchors": {
-            "members": {
-              "kind": "construct",
-              "tag": "zkc.opening-batch.members",
-              "args": [
-                {
-                  "kind": "input_descriptors",
-                  "order": "canonical_unique"
-                }
-              ]
-            },
-            "point": {
-              "kind": "input_anchor",
-              "input": 0,
-              "anchor": "point"
-            }
-          }
-        }
-      ]
-    },
-    "opening_value_rlc": {
-      "consumes": [
-        {
-          "profile": "single_opening",
-          "min": 2
-        }
-      ],
-      "dep_slots": [
-        {
-          "role": "alpha",
-          "source": "challenge_capability",
-          "class": "ext_field"
-        }
-      ],
-      "rounds": [
-        {
-          "challenge_use": {
-            "role": "alpha"
-          },
-          "kind": "ordered_rlc",
-          "messages": [
-            {
-              "role": "values",
-              "count": {
-                "same_as": "consumed_claims"
-              }
-            }
-          ]
-        }
-      ],
-      "parameters": {},
-      "checks": {},
-      "constraints": [
-        {
-          "kind": "equal",
-          "left": {
-            "kind": "messages",
-            "role": "values"
-          },
-          "right": {
-            "kind": "input_anchors",
-            "anchor": "value",
-            "order": "operand"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "profile": "opening_value_rlc",
-          "anchors": {
-            "coefficient": {
-              "kind": "dependency",
-              "role": "alpha"
-            },
-            "members": {
-              "kind": "construct",
-              "tag": "zkc.opening-value-rlc.members",
-              "args": [
-                {
-                  "kind": "input_descriptors",
-                  "order": "operand"
-                }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    "kzg_equation_rlc": {
-      "consumes": [
-        {
-          "profile": "kzg_verification_equation",
-          "min": 2
-        }
-      ],
-      "dep_slots": [
-        {
-          "role": "u",
-          "source": "challenge_capability",
-          "class": "fr"
-        }
-      ],
-      "rounds": [
-        {
-          "challenge_use": {
-            "role": "u"
-          },
-          "kind": "ordered_rlc",
-          "messages": [
-            {
-              "role": "equations",
-              "count": {
-                "same_as": "consumed_claims"
-              }
-            }
-          ]
-        }
-      ],
-      "parameters": {},
-      "checks": {},
-      "constraints": [
-        {
-          "kind": "equal",
-          "left": {
-            "kind": "messages",
-            "role": "equations"
-          },
-          "right": {
-            "kind": "input_anchors",
-            "anchor": "material",
-            "order": "operand"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "profile": "kzg_equation_rlc",
-          "anchors": {
-            "coefficient": {
-              "kind": "dependency",
-              "role": "u"
-            },
-            "members": {
-              "kind": "construct",
-              "tag": "zkc.kzg-verification-equation-rlc.members",
-              "args": [
-                {
-                  "kind": "input_descriptors",
-                  "order": "operand"
-                }
-              ]
             }
           }
         }
@@ -2804,97 +1728,6 @@
         }
       ]
     },
-    "fri": {
-      "consumes": [
-        "opaque_relation"
-      ],
-      "dep_slots": [
-        {
-          "role": "fold",
-          "source": "challenge_capability",
-          "class": "ext_field"
-        },
-        {
-          "role": "query",
-          "source": "challenge_capability",
-          "class": "query_index"
-        }
-      ],
-      "rounds": [
-        {
-          "challenge_use": {
-            "role": "fold"
-          },
-          "messages": [],
-          "kind": "fold"
-        },
-        {
-          "challenge_use": {
-            "role": "query"
-          },
-          "messages": [
-            {
-              "role": "g",
-              "count": {
-                "exact": 1
-              }
-            }
-          ],
-          "kind": "query"
-        }
-      ],
-      "parameters": {},
-      "checks": {
-        "consistency": {
-          "contract": "zkc.check.rs-equality",
-          "parameters": {},
-          "transparent_predicate": [
-            "eq",
-            [
-              "role",
-              "lhs"
-            ],
-            [
-              "role",
-              "rhs"
-            ]
-          ],
-          "attachments": [
-            {
-              "kind": "material_ref_equality",
-              "source": {
-                "kind": "input_anchor",
-                "input": 0,
-                "anchor": "statement"
-              },
-              "target_role": "lhs"
-            },
-            {
-              "kind": "value_identity",
-              "source": {
-                "kind": "message",
-                "role": "g",
-                "occurrence": 0
-              },
-              "target_role": "rhs"
-            }
-          ]
-        }
-      },
-      "constraints": [],
-      "outputs": [
-        {
-          "profile": "fri_query_consistent",
-          "anchors": {
-            "statement": {
-              "kind": "input_anchor",
-              "input": 0,
-              "anchor": "statement"
-            }
-          }
-        }
-      ]
-    },
     "grinding": {
       "consumes": [
         "fri_query_consistent"
@@ -3046,6 +1879,439 @@
               "kind": "input_anchor",
               "input": 0,
               "anchor": "statement"
+            }
+          }
+        }
+      ]
+    },
+    "kzg_batch": {
+      "consumes": [
+        {
+          "profile": "single_opening",
+          "min": 2
+        }
+      ],
+      "dep_slots": [
+        {
+          "role": "gamma",
+          "source": "challenge_capability",
+          "class": "fr"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "gamma"
+          },
+          "messages": []
+        }
+      ],
+      "parameters": {},
+      "checks": {
+        "opening": {
+          "contract": "zkc.check.kzg-batch-opening",
+          "parameters": {
+            "suite": "bls12-381"
+          },
+          "attachments": [
+            {
+              "kind": "material_ref_vector_equality",
+              "source": {
+                "kind": "input_anchors",
+                "anchor": "commitment",
+                "order": "canonical_unique"
+              },
+              "target_role": "commitment"
+            },
+            {
+              "kind": "common_material_ref_equality",
+              "source": {
+                "kind": "input_anchors",
+                "anchor": "point",
+                "order": "canonical_unique"
+              },
+              "target_role": "point"
+            },
+            {
+              "kind": "material_ref_vector_equality",
+              "source": {
+                "kind": "input_anchors",
+                "anchor": "value",
+                "order": "canonical_unique"
+              },
+              "target_role": "value"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "gamma"
+              },
+              "target_role": "batch_challenge"
+            }
+          ]
+        }
+      },
+      "constraints": [],
+      "outputs": [
+        {
+          "profile": "batch_opening",
+          "anchors": {
+            "members": {
+              "kind": "construct",
+              "tag": "zkc.opening-batch.members",
+              "args": [
+                {
+                  "kind": "input_descriptors",
+                  "order": "canonical_unique"
+                }
+              ]
+            },
+            "point": {
+              "kind": "input_anchor",
+              "input": 0,
+              "anchor": "point"
+            }
+          }
+        }
+      ]
+    },
+    "kzg_equation_rlc": {
+      "consumes": [
+        {
+          "profile": "kzg_verification_equation",
+          "min": 2
+        }
+      ],
+      "dep_slots": [
+        {
+          "role": "u",
+          "source": "challenge_capability",
+          "class": "fr"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "u"
+          },
+          "kind": "ordered_rlc",
+          "messages": [
+            {
+              "role": "equations",
+              "count": {
+                "same_as": "consumed_claims"
+              }
+            }
+          ]
+        }
+      ],
+      "parameters": {},
+      "checks": {},
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "equations"
+          },
+          "right": {
+            "kind": "input_anchors",
+            "anchor": "material",
+            "order": "operand"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "profile": "kzg_equation_rlc",
+          "anchors": {
+            "coefficient": {
+              "kind": "dependency",
+              "role": "u"
+            },
+            "members": {
+              "kind": "construct",
+              "tag": "zkc.kzg-verification-equation-rlc.members",
+              "args": [
+                {
+                  "kind": "input_descriptors",
+                  "order": "operand"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "logup_bus": {
+      "consumes": [
+        "logup_inclusion"
+      ],
+      "dep_slots": [
+        {
+          "role": "beta",
+          "source": "challenge_capability",
+          "class": "scalar"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "beta"
+          },
+          "messages": [
+            {
+              "role": "queries",
+              "count": {
+                "exact": 1
+              }
+            },
+            {
+              "role": "table",
+              "count": {
+                "exact": 1
+              }
+            },
+            {
+              "role": "multiplicities",
+              "count": {
+                "exact": 1
+              }
+            }
+          ],
+          "kind": "bus"
+        }
+      ],
+      "parameters": {},
+      "checks": {},
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "multiplicities"
+          },
+          "right": {
+            "anchor": "multiplicities",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "queries"
+          },
+          "right": {
+            "anchor": "queries",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "table"
+          },
+          "right": {
+            "anchor": "table",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "profile": "logup_identity",
+          "anchors": {
+            "multiplicities": {
+              "kind": "message",
+              "occurrence": 0,
+              "role": "multiplicities"
+            },
+            "queries": {
+              "kind": "message",
+              "occurrence": 0,
+              "role": "queries"
+            },
+            "table": {
+              "kind": "message",
+              "occurrence": 0,
+              "role": "table"
+            }
+          }
+        }
+      ]
+    },
+    "logup_range_check": {
+      "consumes": [
+        "logup_inclusion"
+      ],
+      "dep_slots": [
+        {
+          "role": "beta",
+          "source": "challenge_capability",
+          "class": "scalar"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "beta"
+          },
+          "messages": [
+            {
+              "role": "queries",
+              "count": {
+                "exact": 1
+              }
+            },
+            {
+              "role": "table",
+              "count": {
+                "exact": 1
+              },
+              "source": "public_bind"
+            },
+            {
+              "role": "multiplicities",
+              "count": {
+                "exact": 1
+              }
+            }
+          ],
+          "kind": "bus"
+        }
+      ],
+      "parameters": {},
+      "checks": {},
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "multiplicities"
+          },
+          "right": {
+            "anchor": "multiplicities",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "queries"
+          },
+          "right": {
+            "anchor": "queries",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        },
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "table"
+          },
+          "right": {
+            "anchor": "table",
+            "kind": "input_anchors",
+            "order": "operand"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "profile": "logup_identity",
+          "anchors": {
+            "multiplicities": {
+              "kind": "message",
+              "occurrence": 0,
+              "role": "multiplicities"
+            },
+            "queries": {
+              "kind": "message",
+              "occurrence": 0,
+              "role": "queries"
+            },
+            "table": {
+              "kind": "message",
+              "occurrence": 0,
+              "role": "table"
+            }
+          }
+        }
+      ]
+    },
+    "opening_value_rlc": {
+      "consumes": [
+        {
+          "profile": "single_opening",
+          "min": 2
+        }
+      ],
+      "dep_slots": [
+        {
+          "role": "alpha",
+          "source": "challenge_capability",
+          "class": "ext_field"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "alpha"
+          },
+          "kind": "ordered_rlc",
+          "messages": [
+            {
+              "role": "values",
+              "count": {
+                "same_as": "consumed_claims"
+              }
+            }
+          ]
+        }
+      ],
+      "parameters": {},
+      "checks": {},
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "messages",
+            "role": "values"
+          },
+          "right": {
+            "kind": "input_anchors",
+            "anchor": "value",
+            "order": "operand"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "profile": "opening_value_rlc",
+          "anchors": {
+            "coefficient": {
+              "kind": "dependency",
+              "role": "alpha"
+            },
+            "members": {
+              "kind": "construct",
+              "tag": "zkc.opening-value-rlc.members",
+              "args": [
+                {
+                  "kind": "input_descriptors",
+                  "order": "operand"
+                }
+              ]
             }
           }
         }
@@ -3485,6 +2751,987 @@
           }
         }
       ]
+    },
+    "sigma": {
+      "consumes": [
+        "opaque_relation"
+      ],
+      "dep_slots": [
+        {
+          "role": "c",
+          "source": "challenge_capability",
+          "class": "scalar"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "c"
+          },
+          "messages": [
+            {
+              "role": "a",
+              "count": {
+                "exact": 1
+              }
+            }
+          ]
+        }
+      ],
+      "parameters": {},
+      "checks": {
+        "equation": {
+          "contract": "zkc.check.schnorr-equation",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "g_exp",
+              [
+                "const",
+                "g"
+              ],
+              [
+                "role",
+                "response"
+              ]
+            ],
+            [
+              "g_mul",
+              [
+                "role",
+                "commitment"
+              ],
+              [
+                "g_exp",
+                [
+                  "role",
+                  "statement"
+                ],
+                [
+                  "role",
+                  "challenge"
+                ]
+              ]
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "material_ref_equality",
+              "source": {
+                "kind": "input_anchor",
+                "input": 0,
+                "anchor": "statement"
+              },
+              "target_role": "statement"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "a",
+                "occurrence": 0
+              },
+              "target_role": "commitment"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "c"
+              },
+              "target_role": "challenge"
+            }
+          ]
+        }
+      },
+      "constraints": [],
+      "outputs": [
+        {
+          "profile": "schnorr_evaluation",
+          "anchors": {
+            "statement": {
+              "kind": "input_anchor",
+              "input": 0,
+              "anchor": "statement"
+            }
+          }
+        }
+      ]
+    },
+    "sigma_dleq": {
+      "consumes": [
+        "opaque_relation"
+      ],
+      "dep_slots": [
+        {
+          "role": "c",
+          "source": "challenge_capability",
+          "class": "scalar"
+        },
+        {
+          "role": "response",
+          "source": "prover_slot",
+          "class": "scalar"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "c"
+          },
+          "messages": [
+            {
+              "role": "a",
+              "count": {
+                "exact": 2
+              }
+            }
+          ]
+        }
+      ],
+      "parameters": {
+        "left_statement": "material_ref",
+        "right_statement": "material_ref"
+      },
+      "checks": {
+        "left_equation": {
+          "contract": "zkc.check.schnorr-equation",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "g_exp",
+              [
+                "const",
+                "g"
+              ],
+              [
+                "role",
+                "response"
+              ]
+            ],
+            [
+              "g_mul",
+              [
+                "role",
+                "commitment"
+              ],
+              [
+                "g_exp",
+                [
+                  "role",
+                  "statement"
+                ],
+                [
+                  "role",
+                  "challenge"
+                ]
+              ]
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "material_ref_equality",
+              "source": {
+                "kind": "parameter_ref",
+                "name": "left_statement"
+              },
+              "target_role": "statement"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "a",
+                "occurrence": 0
+              },
+              "target_role": "commitment"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "c"
+              },
+              "target_role": "challenge"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "response"
+              },
+              "target_role": "response"
+            }
+          ]
+        },
+        "right_equation": {
+          "contract": "zkc.check.schnorr-equation",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "g_exp",
+              [
+                "const",
+                "h"
+              ],
+              [
+                "role",
+                "response"
+              ]
+            ],
+            [
+              "g_mul",
+              [
+                "role",
+                "commitment"
+              ],
+              [
+                "g_exp",
+                [
+                  "role",
+                  "statement"
+                ],
+                [
+                  "role",
+                  "challenge"
+                ]
+              ]
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "material_ref_equality",
+              "source": {
+                "kind": "parameter_ref",
+                "name": "right_statement"
+              },
+              "target_role": "statement"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "a",
+                "occurrence": 1
+              },
+              "target_role": "commitment"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "c"
+              },
+              "target_role": "challenge"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "response"
+              },
+              "target_role": "response"
+            }
+          ]
+        }
+      },
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "input_anchor",
+            "input": 0,
+            "anchor": "statement"
+          },
+          "right": {
+            "kind": "construct",
+            "tag": "zkc.statement.dleq",
+            "args": [
+              {
+                "kind": "parameter_ref",
+                "name": "left_statement"
+              },
+              {
+                "kind": "parameter_ref",
+                "name": "right_statement"
+              }
+            ]
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "profile": "dleq_evaluation",
+          "anchors": {
+            "statement": {
+              "kind": "input_anchor",
+              "input": 0,
+              "anchor": "statement"
+            }
+          }
+        }
+      ]
+    },
+    "sigma_or": {
+      "consumes": [
+        "opaque_relation"
+      ],
+      "dep_slots": [
+        {
+          "role": "c",
+          "source": "challenge_capability",
+          "class": "scalar"
+        },
+        {
+          "role": "left_share",
+          "source": "prover_slot",
+          "class": "scalar"
+        },
+        {
+          "role": "right_share",
+          "source": "prover_slot",
+          "class": "scalar"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "c"
+          },
+          "messages": [
+            {
+              "role": "a",
+              "count": {
+                "exact": 2
+              }
+            }
+          ]
+        }
+      ],
+      "parameters": {
+        "left_statement": "material_ref",
+        "right_statement": "material_ref"
+      },
+      "checks": {
+        "left_equation": {
+          "contract": "zkc.check.sigma-equation-scalar-challenge",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "g_exp",
+              [
+                "const",
+                "g"
+              ],
+              [
+                "role",
+                "response"
+              ]
+            ],
+            [
+              "g_mul",
+              [
+                "role",
+                "commitment"
+              ],
+              [
+                "g_exp",
+                [
+                  "role",
+                  "statement"
+                ],
+                [
+                  "role",
+                  "challenge_share"
+                ]
+              ]
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "material_ref_equality",
+              "source": {
+                "kind": "parameter_ref",
+                "name": "left_statement"
+              },
+              "target_role": "statement"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "a",
+                "occurrence": 0
+              },
+              "target_role": "commitment"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "left_share"
+              },
+              "target_role": "challenge_share"
+            }
+          ]
+        },
+        "right_equation": {
+          "contract": "zkc.check.sigma-equation-scalar-challenge",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "g_exp",
+              [
+                "const",
+                "g"
+              ],
+              [
+                "role",
+                "response"
+              ]
+            ],
+            [
+              "g_mul",
+              [
+                "role",
+                "commitment"
+              ],
+              [
+                "g_exp",
+                [
+                  "role",
+                  "statement"
+                ],
+                [
+                  "role",
+                  "challenge_share"
+                ]
+              ]
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "material_ref_equality",
+              "source": {
+                "kind": "parameter_ref",
+                "name": "right_statement"
+              },
+              "target_role": "statement"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "a",
+                "occurrence": 1
+              },
+              "target_role": "commitment"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "right_share"
+              },
+              "target_role": "challenge_share"
+            }
+          ]
+        },
+        "challenge_split": {
+          "contract": "zkc.check.scalar-split",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "f_add",
+              [
+                "role",
+                "left_share"
+              ],
+              [
+                "role",
+                "right_share"
+              ]
+            ],
+            [
+              "role",
+              "challenge"
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "left_share"
+              },
+              "target_role": "left_share"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "right_share"
+              },
+              "target_role": "right_share"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "c"
+              },
+              "target_role": "challenge"
+            }
+          ]
+        }
+      },
+      "constraints": [
+        {
+          "kind": "equal",
+          "left": {
+            "kind": "input_anchor",
+            "input": 0,
+            "anchor": "statement"
+          },
+          "right": {
+            "kind": "construct",
+            "tag": "zkc.statement.or",
+            "args": [
+              {
+                "kind": "parameter_ref",
+                "name": "left_statement"
+              },
+              {
+                "kind": "parameter_ref",
+                "name": "right_statement"
+              }
+            ]
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "profile": "or_evaluation",
+          "anchors": {
+            "statement": {
+              "kind": "input_anchor",
+              "input": 0,
+              "anchor": "statement"
+            }
+          }
+        }
+      ]
+    },
+    "sumcheck": {
+      "consumes": [
+        "opaque_relation"
+      ],
+      "dep_slots": [
+        {
+          "role": "c1",
+          "source": "challenge_capability",
+          "class": "scalar"
+        },
+        {
+          "role": "c2",
+          "source": "challenge_capability",
+          "class": "scalar"
+        }
+      ],
+      "rounds": [
+        {
+          "challenge_use": {
+            "role": "c1"
+          },
+          "messages": [
+            {
+              "role": "g1",
+              "count": {
+                "exact": 3
+              }
+            }
+          ]
+        },
+        {
+          "challenge_use": {
+            "role": "c2"
+          },
+          "messages": [
+            {
+              "role": "g2",
+              "count": {
+                "exact": 3
+              }
+            }
+          ]
+        }
+      ],
+      "parameters": {},
+      "checks": {
+        "round1": {
+          "contract": "zkc.check.sumcheck-round1",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "f_add",
+              [
+                "f_add",
+                [
+                  "f_add",
+                  [
+                    "role",
+                    "g0"
+                  ],
+                  [
+                    "role",
+                    "g0"
+                  ]
+                ],
+                [
+                  "role",
+                  "g1"
+                ]
+              ],
+              [
+                "role",
+                "g2"
+              ]
+            ],
+            [
+              "role",
+              "claimed_sum"
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "material_ref_equality",
+              "source": {
+                "kind": "input_anchor",
+                "input": 0,
+                "anchor": "statement"
+              },
+              "target_role": "claimed_sum"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g1",
+                "occurrence": 0
+              },
+              "target_role": "g0"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g1",
+                "occurrence": 1
+              },
+              "target_role": "g1"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g1",
+                "occurrence": 2
+              },
+              "target_role": "g2"
+            }
+          ]
+        },
+        "round2": {
+          "contract": "zkc.check.sumcheck-round2",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "f_add",
+              [
+                "f_add",
+                [
+                  "f_add",
+                  [
+                    "role",
+                    "g0"
+                  ],
+                  [
+                    "role",
+                    "g0"
+                  ]
+                ],
+                [
+                  "role",
+                  "g1"
+                ]
+              ],
+              [
+                "role",
+                "g2"
+              ]
+            ],
+            [
+              "f_add",
+              [
+                "role",
+                "prior_g0"
+              ],
+              [
+                "f_add",
+                [
+                  "f_mul",
+                  [
+                    "role",
+                    "prior_g1"
+                  ],
+                  [
+                    "role",
+                    "prior_challenge"
+                  ]
+                ],
+                [
+                  "f_mul",
+                  [
+                    "role",
+                    "prior_g2"
+                  ],
+                  [
+                    "f_mul",
+                    [
+                      "role",
+                      "prior_challenge"
+                    ],
+                    [
+                      "role",
+                      "prior_challenge"
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g1",
+                "occurrence": 0
+              },
+              "target_role": "prior_g0"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g1",
+                "occurrence": 1
+              },
+              "target_role": "prior_g1"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g1",
+                "occurrence": 2
+              },
+              "target_role": "prior_g2"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "c1"
+              },
+              "target_role": "prior_challenge"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g2",
+                "occurrence": 0
+              },
+              "target_role": "g0"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g2",
+                "occurrence": 1
+              },
+              "target_role": "g1"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g2",
+                "occurrence": 2
+              },
+              "target_role": "g2"
+            }
+          ]
+        },
+        "final": {
+          "contract": "zkc.check.sumcheck-final",
+          "parameters": {},
+          "transparent_predicate": [
+            "eq",
+            [
+              "f_add",
+              [
+                "role",
+                "g0"
+              ],
+              [
+                "f_add",
+                [
+                  "f_mul",
+                  [
+                    "role",
+                    "g1"
+                  ],
+                  [
+                    "role",
+                    "x2"
+                  ]
+                ],
+                [
+                  "f_mul",
+                  [
+                    "role",
+                    "g2"
+                  ],
+                  [
+                    "f_mul",
+                    [
+                      "role",
+                      "x2"
+                    ],
+                    [
+                      "role",
+                      "x2"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            [
+              "f_add",
+              [
+                "f_mul",
+                [
+                  "role",
+                  "x1"
+                ],
+                [
+                  "role",
+                  "x2"
+                ]
+              ],
+              [
+                "role",
+                "x1"
+              ]
+            ]
+          ],
+          "attachments": [
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g2",
+                "occurrence": 0
+              },
+              "target_role": "g0"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g2",
+                "occurrence": 1
+              },
+              "target_role": "g1"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "message",
+                "role": "g2",
+                "occurrence": 2
+              },
+              "target_role": "g2"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "c1"
+              },
+              "target_role": "x1"
+            },
+            {
+              "kind": "value_identity",
+              "source": {
+                "kind": "dependency",
+                "role": "c2"
+              },
+              "target_role": "x2"
+            }
+          ]
+        }
+      },
+      "constraints": [],
+      "outputs": [
+        {
+          "profile": "sumcheck_evaluation",
+          "anchors": {
+            "statement": {
+              "kind": "input_anchor",
+              "input": 0,
+              "anchor": "statement"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "value_profiles": {
+    "logup_committed_column": {
+      "arity_log2": 8,
+      "binding_route": "zkc.commit.toy-vector",
+      "element_class": "scalar",
+      "origin": "prover_message"
+    },
+    "logup_multiplicities": {
+      "arity_log2": 8,
+      "binding_route": "zkc.commit.toy-vector",
+      "element_class": "scalar",
+      "origin": "prover_message"
+    },
+    "logup_queries": {
+      "arity_log2": 10,
+      "binding_route": "zkc.commit.toy-vector",
+      "element_class": "scalar",
+      "origin": "prover_message"
+    },
+    "logup_table": {
+      "arity_log2": 8,
+      "binding_route": "zkc.anchor.preimage",
+      "element_class": "scalar",
+      "origin": "preprocessed"
     }
   },
   "terminal_rules": {

@@ -80,6 +80,14 @@ enum class ChallengeSampling { Uniform, UniformIndependent };
 struct SealedMessageRoleFact {
   std::string role;
   std::vector<std::string> payloadClassesByOccurrence;
+  /// Whether each occurrence carries a value profile rather than a payload
+  /// class. A profiled member's string is a profile name, and a profile may
+  /// be named anything a vocabulary author likes — including exactly what a
+  /// payload class is called. A condition that compares the string against a
+  /// class must therefore be able to tell the two apart, or a profile named
+  /// after a class answers "yes" to "is this an element of that class" for a
+  /// value that is a commitment to many of them.
+  std::vector<bool> profiledByOccurrence;
 };
 
 bool operator==(const SealedMessageRoleFact &lhs,
@@ -170,6 +178,31 @@ struct SealedDuplexFacts {
 
 bool operator==(const SealedDuplexFacts &lhs, const SealedDuplexFacts &rhs);
 
+/// The declared content of one message role's commitments.
+struct CommittedArityByRole {
+  std::string role;
+  /// `2^arity_log2` of every value profile the role's members name, sorted
+  /// and deduplicated. More than one entry means the role's members disagree
+  /// about how much they hold, which no rule may price through.
+  std::vector<registry::Rational> arities;
+  /// Whether any member filling this role declares no content at all. A rule
+  /// that prices in a committed arity may not read one from a role where a
+  /// member says nothing: the number it would get is whatever the members
+  /// that happen to be profiled said.
+  bool incomplete = false;
+
+  friend bool operator==(const CommittedArityByRole &lhs,
+                         const CommittedArityByRole &rhs) {
+    if (lhs.role != rhs.role || lhs.incomplete != rhs.incomplete ||
+        lhs.arities.size() != rhs.arities.size())
+      return false;
+    for (size_t index = 0; index < lhs.arities.size(); ++index)
+      if (lhs.arities[index].compare(rhs.arities[index]) != 0)
+        return false;
+    return true;
+  }
+};
+
 /// The owned, theorem-independent reduction facts needed for occurrence and
 /// consumed-subject resolution.  The exact contract reference authenticates
 /// the structural protocol occurrence; a RuleBinding selected by APPLY
@@ -192,7 +225,25 @@ struct SealedReduction {
   std::vector<SealedRoundFact> rounds;
   std::map<std::string, uint64_t, std::less<>> selectedCheckEventPositions;
   std::optional<RoundAdjacencyValue> roundAdjacency;
+  /// How much content stands behind the commitments filling each of this
+  /// reduction's message roles, by role in canonical order.
+  ///
+  /// Projected rather than left in the vocabulary because the sealed view is
+  /// registry-free by construction, and a rule that reads a profile fact
+  /// must read it from sealed structure. Kept per role because which
+  /// commitment holds which side of a relation is a fact the contract
+  /// already states: a lookup over a table and a query column of different
+  /// lengths has two numbers to price from, and pooling them would leave the
+  /// rule to choose.
+  std::vector<CommittedArityByRole> committedArityByRole;
+  /// Each consumed-claim anchor this reduction's contract ties to a message
+  /// role by an admitted material-identity constraint, and the role it is
+  /// tied to. The seal has checked each tie holds of this artifact; this
+  /// records the correspondence, so a rule can require that every anchor has
+  /// one and that no two share a role.
+  std::map<std::string, std::string, std::less<>> constrainedInputAnchors;
 };
+
 
 /// One transformer's body extent and whether it commutes.
 ///

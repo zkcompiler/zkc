@@ -122,10 +122,14 @@ private:
         checksByLabel[check.getLabel()] = check;
       } else if (auto binding = dyn_cast<MaterialBindOp>(operation)) {
         bindingsByValue[binding.getValue()] = binding;
-      } else if (auto slot = dyn_cast<SlotOp>(operation)) {
-        if (auto membership = slot.getMembership())
-          messages[membership->instance][membership->role][membership->idx] = {
-              slot.getVal(), slot.getOperation()};
+      } else if (auto member =
+                     dyn_cast<ProtocolMemberOpInterface>(operation)) {
+        // A role is filled by whatever carries the material: a slot for
+        // prover messages, a bind for statement-fixed content.
+        if (auto membership = member.getMembership())
+          if (Value carried = member.getMemberValue())
+            messages[membership->instance][membership->role][membership->idx] =
+                {carried, member.getOperation()};
       }
     }
 
@@ -168,9 +172,11 @@ private:
                               std::move(*descriptor), std::move(*bytes)};
   }
 
+  /// A profiled value carries a commitment rather than an element of a
+  /// class, so it matches no concrete class; `bareClass()` is empty for one.
   static bool classMatches(Value value, StringRef expected) {
     auto type = dyn_cast<ValType>(value.getType());
-    return type && (expected == "*" || type.getValueClass() == expected);
+    return type && (expected == "*" || type.bareClass() == expected);
   }
 
   static bool sourceMatches(Value value, VocabularyDepSource expected) {
@@ -372,7 +378,7 @@ private:
       for (auto [index, slot] : llvm::enumerate(contract.depSlots)) {
         Value dependency = reduce.getDeps()[index];
         auto type = dyn_cast<ValType>(dependency.getType());
-        if (!type || type.getValueClass() != slot.payloadClass ||
+        if (!type || type.bareClass() != slot.payloadClass ||
             !sourceMatches(dependency, slot.source)) {
           dependencyError() << "dependency " << index
                             << " does not match role '" << slot.role << "'";
@@ -381,10 +387,13 @@ private:
     }
 
     llvm::StringMap<uint64_t> expectedMessages;
+    llvm::StringMap<VocabularyDepSource> expectedSource;
     for (const VocabularyRound &round : contract.rounds)
-      for (const VocabularyMessageRole &message : round.messages)
+      for (const VocabularyMessageRole &message : round.messages) {
         expectedMessages[message.role] =
             message.multiplicity.resolve(reduce.getClaims().size());
+        expectedSource[message.role] = message.source;
+      }
     auto instance = messages.find(reduce.getLabel());
     if (instance != messages.end())
       for (const auto &role : instance->second)
@@ -417,6 +426,24 @@ private:
           if (!occurrences->count(index))
             membershipError() << "message role '" << expected.getKey()
                               << "' has a non-canonical occurrence set";
+      // Who fills the role, checked against who the contract says fills it.
+      // The event kind is the carrier's statement of provenance and the
+      // contract's `source` is the vocabulary's; a protocol where they
+      // disagree has two answers to who chose the content.
+      if (occurrences) {
+        bool wantsBind =
+            expectedSource.lookup(expected.getKey()) ==
+            VocabularyDepSource::PublicBind;
+        for (const auto &entry : *occurrences) {
+          bool isBind = mlir::isa<zkc::pir::BindOp>(entry.second.operation);
+          if (isBind != wantsBind)
+            membershipError()
+                << "message role '" << expected.getKey() << "' is filled by "
+                << (isBind ? "a public binding" : "a prover message")
+                << " and the contract declares it filled by "
+                << (wantsBind ? "a public binding" : "a prover message");
+        }
+      }
     }
 
     if (reduce.getDeps().size() == contract.depSlots.size()) {
@@ -473,11 +500,15 @@ private:
                 continue;
               for (const auto &occurrence : role->second) {
                 Operation *messageOp = occurrence.second.operation;
-                auto slot = cast<SlotOp>(messageOp);
+                // Absorption is an event property, asked of the event: a
+                // public binding always absorbs, a slot does unless it is
+                // marked unabsorbed (docs/spec/kernel.md §1.1).
+                auto member = cast<zkc::pir::ProtocolMemberOpInterface>(
+                    messageOp);
                 if (positions.lookup(messageOp) > challengePosition)
                   prefixError() << "message role '" << message.role
                                 << "' is committed after its challenge";
-                else if (slot.getUnabsorbed())
+                else if (!member.isAbsorbing())
                   prefixError() << "message role '" << message.role
                                 << "' is not absorbed before its challenge";
               }
@@ -601,6 +632,12 @@ private:
   }
 
   std::optional<std::string> binding(Value value, Operation *at) {
+    // A value that carries its own material reference is read from
+    // itself; a material binding on it would be a second spelling of one
+    // fact, and stays unconsumed so the seal refuses it (zkc-E328).
+    if (llvm::StringRef self = zkc::semantics::selfMaterialRef(value);
+        !self.empty())
+      return self.str();
     auto found = bindingsByValue.find(value);
     if (found == bindingsByValue.end()) {
       error(at, "[zkc-E324]")

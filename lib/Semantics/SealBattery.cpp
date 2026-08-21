@@ -39,6 +39,14 @@ zkc::pir::ProtocolVocabularyCitations zkc::pir::collectCitedProtocolVocabulary(
     for (Value value : op.getResults())
       if (auto claim = dyn_cast<zkc::pir::ClaimType>(value.getType()))
         citations.claimProfiles.push_back(claim.getProfile());
+    // A profiled value cites its profile the way a claim cites its
+    // descriptor profile. Without this the artifact's identity would not
+    // commit to what the profile says, and an arity a rule reads could move
+    // under a fixed artifact id.
+    for (Value value : op.getResults())
+      if (auto val = dyn_cast<zkc::pir::ValType>(value.getType()))
+        if (!val.profileName().empty())
+          citations.valueProfiles.push_back(val.profileName());
     if (auto check = dyn_cast<zkc::pir::CheckOp>(&op))
       citations.checkContracts.push_back(check.getContract());
     else if (auto reduce = dyn_cast<zkc::pir::ReduceOp>(&op))
@@ -81,6 +89,7 @@ zkc::pir::ProtocolVocabularyCitations zkc::pir::collectCitedProtocolVocabulary(
   normalize(citations.checkContracts);
   normalize(citations.reductionContracts);
   normalize(citations.terminalRules);
+  normalize(citations.valueProfiles);
   return citations;
 }
 
@@ -628,10 +637,74 @@ private:
     segmentStarts.assign(segments->begin(), segments->end());
   }
 
-  void requireCodec(Operation *op, StringRef payloadClass) {
-    if (!codecs || !codecs.getNamed(payloadClass))
-      error(op) << "[zkc-E221] payload class '" << payloadClass
-                << "' has no codec in kappa.codecs";
+  /// `via` names where the class came from when the author did not write it
+  /// directly: a profiled slot names a profile, and the class its material
+  /// travels under is the profile's. A refusal quoting a string that appears
+  /// nowhere in the source leaves the author to guess the connection.
+  void requireCodec(Operation *op, StringRef payloadClass,
+                    StringRef via = StringRef()) {
+    if (codecs && codecs.getNamed(payloadClass))
+      return;
+    auto refusal = error(op);
+    refusal << "[zkc-E221] payload class '" << payloadClass
+            << "' has no codec in kappa.codecs";
+    if (!via.empty())
+      refusal << "; it is the element class of value profile '" << via << "'";
+  }
+
+  /// A profiled slot names a `value_profiles` entry, and the codec its
+  /// material travels under is the profile's element class. Resolution is
+  /// fail-closed on purpose: an unresolved name is refused here rather than
+  /// read as a payload class nobody declared, which is what a single
+  /// namespace for the two would have done.
+  /// A value profile's `origin` says who chose the content; the event
+  /// carrying it says the same thing in the carrier's own terms — a slot is
+  /// prover material, a bind is material the statement fixes. One fact with
+  /// two spellings must agree, or an artifact declares a provenance its
+  /// transcript contradicts (docs/spec/vocabularies.md). `seat` names the
+  /// event in the diagnostic; `admitted` is the origin that belongs on it.
+  void requireValueProfile(zkc::pir::SlotOp op, llvm::StringRef seat,
+                           llvm::StringRef admitted) {
+    resolveValueProfile(op, seat, admitted, /*sealStage=*/true);
+  }
+
+  void requireValueProfile(zkc::pir::BindOp op, llvm::StringRef seat,
+                           llvm::StringRef admitted) {
+    resolveValueProfile(op, seat, admitted,
+                        op.getStage() == zkc::pir::Stage::Seal);
+  }
+
+  template <typename OpT>
+  void resolveValueProfile(OpT op, llvm::StringRef seat,
+                           llvm::StringRef admitted, bool sealStage) {
+    const zkc::registry::ValueProfile *profile =
+        vocabulary.lookupValueProfile(op.getPayloadClass());
+    if (!profile) {
+      error(op) << "[zkc-E166] value profile '" << op.getPayloadClass()
+                << "', named by " << seat << " '" << op.getLabel()
+                << "', is not declared by the sealed vocabulary";
+      return;
+    }
+    // Preprocessed content is fixed before any statement, and an
+    // instance-stage binding carries a value that arrives per statement — so
+    // the seat is only half the answer and the stage is the other half. The
+    // hypothesis that discharges a preprocessed arity names the anchor's
+    // preimage, which an instance-stage binding does not have at seal.
+    if (admitted == "preprocessed" && !sealStage)
+      error(op) << "[zkc-E169] value profile '" << op.getPayloadClass()
+                << "' declares origin 'preprocessed', which is content fixed "
+                   "before any statement, so it does not belong on an "
+                   "instance-stage binding: the stage is half of the "
+                   "carrier's statement of who chose the content";
+    if (profile->origin != admitted)
+      error(op) << "[zkc-E169] value profile '" << op.getPayloadClass()
+                << "' declares origin '" << profile->origin
+                << "', which does not belong on " << seat << " '"
+                << op.getLabel() << "': that seat carries content of origin '"
+                << admitted
+                << "', and the event a value enters on is the carrier's own "
+                   "statement of who chose it";
+    requireCodec(op, profile->elementClass, op.getPayloadClass());
   }
 
   /// Recheck only: the single sealed vocabulary table must be the exact cited
@@ -691,7 +764,10 @@ private:
         collectMembership(&op, member.getMembership());
       llvm::TypeSwitch<Operation *>(&op)
           .Case<zkc::pir::BindOp>([&](zkc::pir::BindOp op) {
-            requireCodec(op, op.getPayloadClass());
+            if (op.getProfiled())
+              requireValueProfile(op, "binding", "preprocessed");
+            else
+              requireCodec(op, op.getPayloadClass());
             // A seal-stage binding is a constant and must say which; an
             // instance-stage binding is a runtime input and must not.
             bool sealStage = op.getStage() == zkc::pir::Stage::Seal;
@@ -700,6 +776,16 @@ private:
                         << "-stage binding must "
                         << (sealStage ? "carry" : "not carry")
                         << " an explicit value";
+            // A binding that fills a contract role names the material that
+            // role claims, and names it with its absorbed value. An
+            // instance-stage binding has no value at seal, so it can name
+            // nothing and the role's material would rest on a separate
+            // declaration the transcript never sees.
+            if (op.getMembership() && !sealStage)
+              error(op) << "[zkc-E227] a binding that fills a contract role "
+                           "names that role's material with its absorbed "
+                           "value, which an instance-stage binding has none "
+                           "to do";
             // The statement-binding default (kernel.md §5.3): the FS
             // theorems hash the statement under every challenge, so
             // every public binding precedes the first one. A scoped
@@ -717,7 +803,10 @@ private:
                            "segment's first challenge";
           })
           .Case<zkc::pir::SlotOp>([&](zkc::pir::SlotOp op) {
-            requireCodec(op, op.getPayloadClass());
+            if (op.getProfiled())
+              requireValueProfile(op, "slot", "prover_message");
+            else
+              requireCodec(op, op.getPayloadClass());
             if (op.getUnabsorbed() && !firstUnabsorbed)
               firstUnabsorbed = op;
           })
@@ -973,18 +1062,26 @@ bool zkc::pir::verifyResolvedVocab(
     return ok;
   }
 
-  // The five core sections are mandatory; hole_contracts appears
-  // exactly when construction routes cite at least one contract, so a
-  // protocol without routes keeps its exact table shape and bytes.
+  // Five sections are mandatory. Two are present exactly when cited --
+  // hole_contracts when construction routes name one, value_profiles when a
+  // value names one -- so a protocol citing neither keeps its exact table
+  // shape and bytes.
   static constexpr StringLiteral sections[] = {
-      "claim_profiles", "check_contracts",       "reduction_contracts",
-      "terminal_rules", "construction_profiles", "hole_contracts"};
-  bool hasHoleSection = vocab->getNamed("hole_contracts").has_value();
-  if (vocab->size() != (hasHoleSection ? 6u : 5u))
+      "claim_profiles",        "check_contracts", "reduction_contracts",
+      "terminal_rules",        "construction_profiles",
+      "hole_contracts",        "value_profiles"};
+  const bool hasHoleSection = vocab->getNamed("hole_contracts").has_value();
+  size_t expected = 5;
+  if (hasHoleSection)
+    ++expected;
+  if (vocab->getNamed("value_profiles"))
+    ++expected;
+  if (vocab->size() != expected)
     fail("resolved-vocabulary table must contain exactly claim_profiles, "
          "check_contracts, reduction_contracts, terminal_rules, "
          "and construction_profiles, plus hole_contracts only when routes "
-         "cite hole contracts");
+         "cite hole contracts and value_profiles only when a value names a "
+         "profile");
   for (NamedAttribute section : *vocab) {
     StringRef name = section.getName().getValue();
     if (!llvm::is_contained(sections, name))
@@ -1100,8 +1197,8 @@ bool zkc::pir::verifyResolvedVocab(
                 });
 
   // Hole contracts are cited by the construction routes riding on the
-  // container, not by body ops; the same exact-citation discipline
-  // applies to the sixth section when it exists.
+  // container, not by body ops; the same exact-citation discipline applies to
+  // every conditional section.
   SmallVector<StringRef> citedHoles;
   if (Operation *container = body.getParentOp())
     if (auto routes = container->getAttrOfType<DictionaryAttr>("routes"))
@@ -1115,6 +1212,29 @@ bool zkc::pir::verifyResolvedVocab(
               if (seenHole.insert(id.getValue()).second)
                 citedHoles.push_back(id.getValue());
       }
+  // The same "present exactly when cited" discipline for value profiles:
+  // a table that carries one nobody names, or omits one somebody does, is a
+  // table that does not describe this artifact.
+  // The citation walk is the one above, not a second copy: two walks over
+  // the same body drift the moment a profiled value can appear anywhere the
+  // second one does not look, and the seal would then write one set while
+  // the recheck verified another.
+  llvm::ArrayRef<llvm::StringRef> citedValueProfiles =
+      protocolCitations.valueProfiles;
+  const bool hasValueProfileSection =
+      vocab->getNamed("value_profiles").has_value();
+  if (hasValueProfileSection != !citedValueProfiles.empty())
+    fail("resolved-vocabulary table carries value_profiles exactly when a "
+         "value names a profile");
+  if (hasValueProfileSection || !citedValueProfiles.empty())
+    verifySection(
+        "value_profiles", citedValueProfiles,
+        [&](StringRef id) -> std::optional<StringRef> {
+          const auto *entry = protocolVocabulary.lookupValueProfile(id);
+          return entry ? std::optional<StringRef>(entry->contentDigest())
+                       : std::nullopt;
+        });
+
   if (hasHoleSection != !citedHoles.empty())
     fail("resolved-vocabulary table carries hole_contracts exactly when "
          "routes cite hole contracts");
