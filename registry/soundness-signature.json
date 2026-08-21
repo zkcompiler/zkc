@@ -985,7 +985,7 @@
     },
     "zkc.side.consumed_anchors_are_round_material": {
       "notes": "Decided from the artifact's contract: which consumed anchor corresponds to which message role is contract knowledge, so the rule requires only that every anchor has a tie and the contract says what to. That the tie holds of this artifact is a seal judgment (zkc-E325), checked before any rule reads it.",
-      "statement": "every anchor of every claim this reduction consumes is tied by its contract to a message role of the round, so the claim it consumes and the claim it produces are about the same material"
+      "statement": "every anchor of every claim this reduction consumes is tied by its contract to a message role of the round, no two to the same role, and every role whose commitments declare a size is named by one of them"
     },
     "zkc.side.degrees_within_srs": {
       "notes": "Discharged at: the structured reference string the suite pins. The artifact names commitments by digest and never reads what they commit to, so no decider can compare a degree against the string's length.",
@@ -1002,6 +1002,10 @@
     "zkc.side.prime_field_order": {
       "notes": "Discharged at: the caller who states the field order. Nothing in a sealed artifact names a field  --  a payload class keys a codec and a challenge space counts a sampling set  --  so the order arrives as a stated parameter and its primality with it.",
       "statement": "the stated field order is prime, so it is the characteristic of the field the protocol's arithmetic is over and a condition on the characteristic may be read against it"
+    },
+    "zkc.side.single_round": {
+      "notes": "Decided from the artifact's contract. A contract-cased entry instantiates its bound once per matching round, while a projection reading the whole reduction resolves once; without this a rule whose numerator comes from the reduction prices the first round's quantities against every round's challenge space.",
+      "statement": "the contract this reduction realizes declares exactly one round, which is the one the rule's bound describes"
     },
     "zkc.sr.from_rbr": {
       "citations": [
@@ -1183,6 +1187,16 @@
             "kind": "sealed_artifact_projection",
             "sort": "reduction_contract"
           }
+        ],
+        "S9": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
         ]
       },
       "fact_bindings": {
@@ -1345,6 +1359,16 @@
           }
         ],
         "S6": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ],
+        "S9": [
           {
             "artifact_projection": {
               "kind": "conclusion_reduction_contract",
@@ -4863,6 +4887,16 @@
             "kind": "sealed_artifact_projection",
             "sort": "reduction_contract"
           }
+        ],
+        "S9": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
         ]
       },
       "fact_bindings": {
@@ -5005,6 +5039,16 @@
           }
         ],
         "S8": [
+          {
+            "artifact_projection": {
+              "kind": "conclusion_reduction_contract",
+              "result_sort": "reduction_contract"
+            },
+            "kind": "sealed_artifact_projection",
+            "sort": "reduction_contract"
+          }
+        ],
+        "S9": [
           {
             "artifact_projection": {
               "kind": "conclusion_reduction_contract",
@@ -6006,6 +6050,13 @@
           ],
           "predicate_ref": "zkc.side.consumed_anchors_are_round_material",
           "slot": "S6"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.single_round",
+          "slot": "S9"
         }
       ],
       "parameters": [
@@ -9169,6 +9220,13 @@
           ],
           "predicate_ref": "zkc.side.consumed_anchors_are_round_material",
           "slot": "S8"
+        },
+        {
+          "argument_types": [
+            "reduction_contract"
+          ],
+          "predicate_ref": "zkc.side.single_round",
+          "slot": "S9"
         }
       ],
       "parameters": [
@@ -10034,6 +10092,16 @@
         "kind": "same_point",
         "ref": {
           "id": "zkc.side.same_point",
+          "source_revision": "zkc.soundness"
+        }
+      },
+      "zkc.side.single_round": {
+        "argument_types": [
+          "reduction_contract"
+        ],
+        "kind": "single_round",
+        "ref": {
+          "id": "zkc.side.single_round",
           "source_revision": "zkc.soundness"
         }
       },

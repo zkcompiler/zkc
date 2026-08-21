@@ -13,6 +13,7 @@ import hashlib
 from .model import (
     artifact_verify,
     REGISTRY,
+    Bind,
     Chal,
     Check,
     Discharge,
@@ -1673,7 +1674,9 @@ def _logup(events, contract):
             for label, ref in (("table", LOGUP_TABLE),
                                ("queries", LOGUP_VALUES),
                                ("mult", LOGUP_MULT))
-            if not any(event.tag == "bind" and event.label == label
+            if not any(getattr(event, "profiled", False)
+                       and getattr(event, "stage", None) == "seal"
+                       and event.label == label
                        for event in events)
         ],
         "sinks": [
@@ -1719,9 +1722,31 @@ LOGUP_BUS = _logup(
 )
 
 
+# A role filled by a binding that carries no profile: the statement fixes a
+# scalar, and identity must still record which role it fills.
+LOGUP_BARE_TABLE = _logup(
+    [
+        bind("table", "scalar", "seal", LOGUP_TABLE, ("bus", "table", 0)),
+        slot("queries", "logup_queries", True, ("bus", "queries", 0),
+             profiled=True),
+        slot("mult", "logup_multiplicities", True,
+             ("bus", "multiplicities", 0), profiled=True),
+        BETA,
+    ],
+    "logup_range_check",
+)
+# The table's binding fills a role, so its absorbed value is the material
+# reference and a material binding on it would be that fact spelled twice.
+LOGUP_BARE_TABLE["material_bindings"] = [
+    material("queries", LOGUP_VALUES),
+    material("mult", LOGUP_MULT),
+]
+
+
 PIR_WITNESSES = {
     "logup-bus": LOGUP_BUS,
     "logup-range-check": LOGUP_RANGE_CHECK,
+    "logup-bare-table": LOGUP_BARE_TABLE,
     "artifact-verify": ARTIFACT_VERIFY,
     "relation-direct": RELATION_DIRECT,
     "relation-residual": RELATION_RESIDUAL,
@@ -1779,7 +1804,7 @@ def rename_protocol(protocol: dict, prefix: str) -> dict:
             event = event._replace(deps=[renamed(label) for label in event.deps])
         elif isinstance(event, Check):
             event = event._replace(inputs=[renamed(label) for label in event.inputs])
-        elif isinstance(event, Slot) and event.membership:
+        elif isinstance(event, (Slot, Bind)) and event.membership:
             instance, role, index = event.membership
             event = event._replace(membership=(renamed(instance), role, index))
         renamed_events.append(event)

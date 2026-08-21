@@ -253,6 +253,8 @@ const char *machineDeciderKindName(MachineDeciderKind kind) {
     return "multiplicities_match_table";
   case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial:
     return "consumed_anchors_are_round_material";
+  case MachineDeciderKind::SingleRound:
+    return "single_round";
   case MachineDeciderKind::LookupFitsCharacteristic:
     return "lookup_fits_characteristic";
   case MachineDeciderKind::FriShape:

@@ -88,7 +88,7 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // living in the value exists to prevent.
 // RUN: not zkc-opt %pir-seal-full %S/Inputs/profiled-bind-empty-value.mlir 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=EMPTY
-// EMPTY: [zkc-E159] a profiled seal-stage binding absorbs the digest
+// EMPTY: [zkc-E159] a seal-stage binding that carries a profile or fills a contract role
 
 // And no two verifier values may name one material. Pointing the query
 // column's binding at the table's digest would have a thousand-scalar prover
@@ -107,9 +107,21 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // as it always did. Two artifacts differing only in which role a binding
 // fills are two artifacts.
 // RUN: zkc-opt %pir-seal-full %S/Inputs/bare-bind-with-membership.mlir -o %t.role.mlir
-// RUN: zkc-translate --canonical %t.role.mlir | FileCheck %s --check-prefix=BAREROLE
-// BAREROLE: {{\[\[}}"bind","scalar","seal","sha256:3f2a
-// BAREROLE-SAME: [1,"table",0]]
+// RUN: zkc-translate --canonical %t.role.mlir -o %t.role.zkc
+// RUN: FileCheck %s --check-prefix=BAREROLE < %t.role.zkc
+//
+// The row is asserted whole. The canonical document is one line, so a partial
+// match would be satisfied by the tail appearing anywhere later on it — and
+// what this pins is that the membership is in the binding's own row.
+// BAREROLE: "events":{{\[\[}}"bind","scalar","seal","sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a4c2e0f9d7b5638a1c4e2f0d9b7563",[1,"table",0]],["slot_profiled",
+//
+// And both implementations agree on it, which is what makes the row a
+// specification rather than one encoder's habit.
+// RUN: %if uv %{ %uv python -m oracle.parity encode logup-bare-table > %t.role.oracle %}
+// RUN: %if uv %{ diff %t.role.zkc %t.role.oracle %}
+// RUN: %if uv %{ zkc-translate --id %t.role.mlir -o %t.role.id %}
+// RUN: %if uv %{ %uv python -m oracle.parity id logup-bare-table > %t.role.id.oracle %}
+// RUN: %if uv %{ diff %t.role.id %t.role.id.oracle %}
 //
 // RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace(' in \"bus\" as \"table\"',''))" %t.role.mlir > %t.norole.mlir
 // RUN: zkc-translate --id %t.role.mlir > %t.role.id
@@ -132,4 +144,19 @@ pir.protocol "unresolved_value_profile" kappa {codecs = {scalar = "ts_be8"}, iv 
 // RUN:   | FileCheck %s --check-prefix=SLOTROLE
 // SLOTROLE: [zkc-E244] message role 'table' is filled by a prover message
 // SLOTROLE-SAME: contract declares it filled by a public binding
+
+// A binding names the material its role claims with the value it absorbs.
+// That is the same rule the profiled seat carries, at the seat that needed
+// it: without it the transcript holds one reference while the claim names
+// another, and the challenge is bound to neither the table nor anything the
+// claim mentions.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/bare-bind-role-drift.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=ROLEDRIFT
+// ROLEDRIFT: [zkc-E161] a verifier value may have at most one semantic material binding
+
+// And it must have a value to name it with. An instance-stage binding's
+// arrives per statement, so at seal it names nothing.
+// RUN: not zkc-opt %pir-seal-full %S/Inputs/bare-bind-role-at-instance.mlir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=ROLESTAGE
+// ROLESTAGE: [zkc-E227] a binding that fills a contract role names that role's material
 

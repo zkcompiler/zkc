@@ -128,6 +128,7 @@ makeReductionContract(const SealedReduction &sealed) {
   result.orderedInputAnchorEventPositions =
       sealed.orderedInputAnchorEventPositions;
   result.constrainedInputAnchors = sealed.constrainedInputAnchors;
+  result.committedArityByRole = sealed.committedArityByRole;
 
   for (const auto &[name, atom] : sealed.parameters) {
     auto copied = copyParameterAtom(atom);
@@ -540,6 +541,7 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::MultiplicitiesMatchTable:
     return {ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial:
+  case MachineDeciderKind::SingleRound:
     return {ValueSort::ReductionContract};
   case MachineDeciderKind::LookupFitsCharacteristic:
   case MachineDeciderKind::UdrDomainFloor:
@@ -937,8 +939,12 @@ evaluateMachineDecider(MachineDeciderKind kind,
     }
     return true;
   }
+  case MachineDeciderKind::SingleRound:
+    return contract(arguments[0]).rounds.size() == 1;
   case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial: {
     const ReductionContractValue &value = contract(arguments[0]);
+    const std::vector<soundness::CommittedArityByRole> &arities =
+        value.committedArityByRole;
     // A bound prices a passage from what the reduction consumes to what it
     // produces, so the two must be about the same objects. Which consumed
     // anchor is which role is contract knowledge, so the rule requires only
@@ -952,9 +958,22 @@ evaluateMachineDecider(MachineDeciderKind kind,
       const auto &anchors = value.orderedInputAnchors[input];
       if (anchors.empty())
         return false;
-      for (const auto &anchor : anchors)
-        if (anchor.second.empty() ||
-            !value.constrainedInputAnchors.count(anchor.first))
+      // Every anchor tied, and no two tied to one role: pointing them all at
+      // a single role would satisfy "all tied" while leaving the consumed
+      // claim about one column and the produced one about three.
+      std::set<std::string> roles;
+      for (const auto &anchor : anchors) {
+        auto tie = value.constrainedInputAnchors.find(anchor.first);
+        if (anchor.second.empty() || tie == value.constrainedInputAnchors.end())
+          return false;
+        if (!roles.insert(tie->second).second)
+          return false;
+      }
+      // And every role whose commitments declare a size is named by one of
+      // them. A bound priced from a role the consumed claim does not mention
+      // prices a passage from a statement that says nothing about it.
+      for (const soundness::CommittedArityByRole &entry : arities)
+        if (!entry.arities.empty() && !roles.count(entry.role))
           return false;
     }
     return true;

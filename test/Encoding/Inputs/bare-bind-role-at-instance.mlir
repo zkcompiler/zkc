@@ -1,16 +1,16 @@
-// A binding that fills a contract role without carrying a profile.
+// A role-filling binding whose value arrives per statement.
 //
-// Driven by value-profile-resolution.mlir. A role is filled by whatever
-// carries the material, and a binding needs no profile to carry a scalar the
-// statement fixes. What the identity must record is which role it fills, so
-// two artifacts differing only in that are two artifacts.
+// Driven by value-profile-resolution.mlir. The value is how a binding names
+// the material its role claims; an instance-stage binding has none at seal,
+// so the role's material would rest on a declaration the transcript never
+// sees.
 pir.protocol "logup_range_check" kappa {codecs = {scalar = "ts_be8"}, iv = "artifact-id", sponge = "toy_duplex"} policy "analysis_only_artifact" {
   %inclusion = pir.instantiate "inclusion" anchors {multiplicities = "sha256:5b1a0eb6f9c0b5b2fc4a9c9f6a0e4b4d3f1c6a8e2d7b0c9a5e3f8d1b7c4a2e60", queries = "sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528", table = "sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a4c2e0f9d7b5638a1c4e2f0d9b7563"} : !pir.claim<"logup_inclusion">
   %t0 = pir.begin
   // The table the statement fixes. A public binding absorbs, so the challenge
   // below is bound to the table's content — a table sampled after the
   // challenge would be the weak Fiat-Shamir shape (docs/spec/kernel.md §5.2).
-  %t1, %table = pir.bind %t0 "table" : "scalar" stage seal = "sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a4c2e0f9d7b5638a1c4e2f0d9b7563" in "bus" as "table"
+  %t1, %table = pir.bind %t0 "table" : "scalar" stage instance in "bus" as "table"
   // The looked-up column and the multiplicities the prover commits. The
   // multiplicity sequence is indexed by the table, so its declared arity is
   // the table's and a machine condition of the rule requires exactly that.

@@ -134,7 +134,10 @@ struct ReductionContractValue {
   /// round saw, the contract states what to, and the seal checks the tie
   /// holds of the artifact (zkc-E325). This carries the middle fact up to
   /// where the rule can require the first.
-  std::set<std::string, std::less<>> constrainedInputAnchors;
+  std::map<std::string, std::string, std::less<>> constrainedInputAnchors;
+  /// The declared content of each message role's commitments, so a condition
+  /// can ask which roles a bound could be priced from.
+  std::vector<CommittedArityByRole> committedArityByRole;
   std::vector<ReductionContractRoundValue> rounds;
 };
 

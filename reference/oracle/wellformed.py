@@ -136,6 +136,9 @@ MACHINE_DECIDERS = {
     # statements about different objects.
     "consumed_anchors_are_round_material": (
         "zkc.side.consumed_anchors_are_round_material", ("reduction_contract",)),
+    # A bound instantiated per round whose quantities come from the whole
+    # reduction prices the first round's numbers against every round.
+    "single_round": ("zkc.side.single_round", ("reduction_contract",)),
     "multiplicities_match_table": ("zkc.side.multiplicities_match_table",
                               ("integer", "integer")),
     "lookup_fits_characteristic": ("zkc.side.lookup_fits_characteristic",

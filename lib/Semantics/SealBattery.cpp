@@ -776,6 +776,16 @@ private:
                         << "-stage binding must "
                         << (sealStage ? "carry" : "not carry")
                         << " an explicit value";
+            // A binding that fills a contract role names the material that
+            // role claims, and names it with its absorbed value. An
+            // instance-stage binding has no value at seal, so it can name
+            // nothing and the role's material would rest on a separate
+            // declaration the transcript never sees.
+            if (op.getMembership() && !sealStage)
+              error(op) << "[zkc-E227] a binding that fills a contract role "
+                           "names that role's material with its absorbed "
+                           "value, which an instance-stage binding has none "
+                           "to do";
             // The statement-binding default (kernel.md §5.3): the FS
             // theorems hash the statement under every challenge, so
             // every public binding precedes the first one. A scoped

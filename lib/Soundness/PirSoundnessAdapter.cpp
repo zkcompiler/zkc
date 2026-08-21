@@ -938,15 +938,35 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
     // checks the ties hold; a rule that prices a passage between the consumed
     // and produced claims requires that every anchor has one.
     for (const registry::MaterialConstraint &constraint : contract->constraints) {
-      auto tied = [&](const registry::MaterialExpr &anchorSide,
-                      const registry::MaterialExpr &roleSide) {
-        if (anchorSide.kind != registry::MaterialExprKind::InputAnchors ||
-            roleSide.kind != registry::MaterialExprKind::Messages)
-          return;
-        owned.constrainedInputAnchors.insert(anchorSide.name);
+      // Both spellings tie the same fact: the plural forms compare whole
+      // vectors, the singular ones pin one occurrence to one input, which is
+      // strictly stronger. A rule reading the tie must not care which an
+      // author wrote.
+      auto anchorName = [](const registry::MaterialExpr &side) {
+        return side.kind == registry::MaterialExprKind::InputAnchors ||
+                       side.kind == registry::MaterialExprKind::InputAnchor
+                   ? side.name
+                   : std::string();
       };
-      tied(constraint.left, constraint.right);
-      tied(constraint.right, constraint.left);
+      auto roleName = [](const registry::MaterialExpr &side) {
+        return side.kind == registry::MaterialExprKind::Messages ||
+                       side.kind == registry::MaterialExprKind::Message
+                   ? side.name
+                   : std::string();
+      };
+      // Which role an anchor is tied to is the fact a rule needs, not merely
+      // that it is tied to something: every anchor pointed at one role would
+      // satisfy "all tied" while leaving the two claims about different
+      // material.
+      for (auto [anchorSide, roleSide] :
+           {std::pair{&constraint.left, &constraint.right},
+            std::pair{&constraint.right, &constraint.left}}) {
+        std::string anchor = anchorName(*anchorSide);
+        std::string role = roleName(*roleSide);
+        if (!anchor.empty() && !role.empty())
+          owned.constrainedInputAnchors.emplace(std::move(anchor),
+                                                std::move(role));
+      }
     }
 
     // The transformer's body extent, in canonical event positions.

@@ -382,6 +382,8 @@ struct TestSoundnessKernelPass
             {"zkc.side.consumed_anchors_are_round_material",
              {DeciderKind::ConsumedAnchorsAreRoundMaterial,
               {Sort::ReductionContract}}},
+            {"zkc.side.single_round",
+             {DeciderKind::SingleRound, {Sort::ReductionContract}}},
             {"zkc.side.lookup_fits_characteristic",
              {DeciderKind::LookupFitsCharacteristic,
               {Sort::Integer, Sort::Integer, Sort::Integer}}},

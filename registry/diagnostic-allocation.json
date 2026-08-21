@@ -28,7 +28,7 @@
       },
       "means_basis": {
         "E120": "6b726c27d04d79997953eabb50bd8f15e5b42fd0fae75bbc3f79b09de2bd1ed0",
-        "E121": "d752416e929fa5b660584fa0b96006f0659bef74bc4e57063ae4d49cc913dc68"
+        "E121": "a31bd755f85e2ea652749d0759f191109858680d8cabd6344ad698b5548332eb"
       },
       "range": "E120-E129",
       "reserved": [],
@@ -146,7 +146,7 @@
         "E156": "an anchor value is not a digest reference",
         "E157": "a reduction produces other than exactly one claim, or a terminal binds no check role",
         "E158": "a contract, rule, or route identifier is empty",
-        "E159": "a material reference is not a digest reference: a material binding's semantic_ref, or the value a profiled seal-stage binding absorbs"
+        "E159": "a material reference is not a digest reference: a material binding's semantic_ref, or the value a seal-stage binding absorbs when it carries a profile or fills a contract role"
       },
       "means_basis": {
         "E150": "a040b26a80ebd02a593f2830ea997a23d46d9a3a1d4a389d2e45f05343c37ee9",
@@ -158,7 +158,7 @@
         "E156": "26c248bf87b53564175f4a340854a5d7573597860efa00750f333a7a8f138b8b",
         "E157": "80c32db03eec40ec11f52d4984020c8a71c11ac923108163b52a5af0de753127",
         "E158": "f68f2635a8f1ce97626765818cd810f5021dfd5e0492900fba13a28f9b8ef336",
-        "E159": "1ba7bac9c1fa08d5ffa291a9ac7cf5e67af8b86765c7185e862ee5d08e1e8a03"
+        "E159": "7d9e3ff2e23b9b1983eb7d8d1116cce66439ccbafdd492cdf6809effd8293339"
       },
       "range": "E150-E159",
       "reserved": [],
@@ -197,7 +197,7 @@
         "E169": "a value profile's declared origin does not belong on the transcript event carrying it: prover material enters as a slot, statement-fixed material as a public binding, and preprocessed content on a binding that carries its value at seal"
       },
       "means_basis": {
-        "E161": "eaf8b01d43e2ff2d3041b8f1cab5830fa54cd43e9876396b81363dd51393d859",
+        "E161": "b2541f18dce301a14e407900c02f320d3ec8e3c5e996faa4d622f46dc481534e",
         "E162": "45d2883ea12ef2a747df48c4ef45555387e1dfb776f4c43aa79869fc604192c6",
         "E163": "af3dc93e5309591d87c134be2468fedbbf9e9f7567a342976b5a65afaf5555cf",
         "E164": "ee85c8d24a33b956615f961fe23fb69c94f14d42ffd7f9d14b4e6a4f5fd64731",
@@ -342,7 +342,7 @@
         "E224": "a seal policy name is not one the vocabulary admits",
         "E225": "a kappa axis or constant is malformed, or the axis is not one kappa declares",
         "E226": "a check's transparent expression is outside the grammar, or its presence disagrees with the contract's mode",
-        "E227": "a material binding's stage disagrees with whether it carries an explicit value",
+        "E227": "a public binding's stage disagrees with whether it carries an explicit value, or it fills a contract role without a value to name that role's material with",
         "E228": "a value leaves the canonical attribute domain: nesting depth, booleans, integer range, non-printable strings, or non-string keys",
         "E229": "kappa cites a construction profile the registry does not supply"
       },
@@ -353,7 +353,7 @@
         "E224": "94ff0e84ac5d80621b2c23b8c5b71732e529a5c6d1d2d5347e79f647b5e3b9c8",
         "E225": "534c2904fddad295a6f849ea88fc034e6376a3db0b474eaabcac0bb0c67c3e81",
         "E226": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-        "E227": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "E227": "11e8e52e1641531ab77d8fbd11cd5de53ec6d8e6714819563d30c0415073a3b6",
         "E228": "6a68061207e26fa489e26e9fdd74fa835415e7c537b8ab12cfa9d9bf649a9885",
         "E229": "1457abaf0c7828bb4c4ccadc7b130091fb94be7abb20e898fd04c97eefb92148"
       },
@@ -368,6 +368,7 @@
       "twin": {
         "excluded_reason": "WF/encoding-domain judged by message-text parity in the differential suites, not by id",
         "mirrored": [
+          "E227",
           "E228"
         ]
       }

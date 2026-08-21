@@ -180,6 +180,8 @@ CanonicalMachineDecider canonicalMachineDecider(MachineDeciderKind kind) {
   case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial:
     return {"zkc.side.consumed_anchors_are_round_material",
             {ValueSort::ReductionContract}};
+  case MachineDeciderKind::SingleRound:
+    return {"zkc.side.single_round", {ValueSort::ReductionContract}};
   case MachineDeciderKind::LookupFitsCharacteristic:
     return {"zkc.side.lookup_fits_characteristic",
             {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer}};

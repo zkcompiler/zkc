@@ -64,9 +64,10 @@ class Pir_MemberOp<string mnemonic, list<string> overridden = [],
                          extraTraits)>;
 
 // The spine-event override set: labeled, threaded, absorption-aware.
-// Membership is a slot-only fact (carrier.md §4): message roles name
-// prover messages, and other event kinds gain membership only with a
-// consumer — until then the shape is unrepresentable, not rejected.
+// Membership is carried by whatever fills a contract role (carrier.md §4):
+// a slot for prover material, a public binding for content the statement
+// fixes. A further event kind gains it only with a consumer and with a place
+// in its encoded row for the role.
 defvar Pir_SpineEventMethods = ["getMemberLabel", "getThreadIn", "getThreadOut",
                                 "isAbsorbing"];
 

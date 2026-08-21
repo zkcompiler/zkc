@@ -1,9 +1,10 @@
-// A binding that fills a contract role without carrying a profile.
+// A role-filling binding that absorbs one reference while its claim names
+// another.
 //
-// Driven by value-profile-resolution.mlir. A role is filled by whatever
-// carries the material, and a binding needs no profile to carry a scalar the
-// statement fixes. What the identity must record is which role it fills, so
-// two artifacts differing only in that are two artifacts.
+// Driven by value-profile-resolution.mlir. A binding that fills a contract
+// role names that role's material with the value it absorbs, so a material
+// binding on it would be that fact spelled twice — and the transcript would
+// hold one thing while the claim named the other.
 pir.protocol "logup_range_check" kappa {codecs = {scalar = "ts_be8"}, iv = "artifact-id", sponge = "toy_duplex"} policy "analysis_only_artifact" {
   %inclusion = pir.instantiate "inclusion" anchors {multiplicities = "sha256:5b1a0eb6f9c0b5b2fc4a9c9f6a0e4b4d3f1c6a8e2d7b0c9a5e3f8d1b7c4a2e60", queries = "sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528", table = "sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a4c2e0f9d7b5638a1c4e2f0d9b7563"} : !pir.claim<"logup_inclusion">
   %t0 = pir.begin
@@ -27,6 +28,7 @@ pir.protocol "logup_range_check" kappa {codecs = {scalar = "ts_be8"}, iv = "arti
   // profiled seal-stage binding absorbs the digest itself, so the value
   // already carries its own reference and a material binding on it would be
   // that fact spelled twice (docs/spec/carrier.md §4).
+  pir.material_bind %table to "sha256:0000000000000000000000000000000000000000000000000000000000000000" : !pir.val<"scalar">
   pir.material_bind %queries to "sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a9c4f1b7d3e5082a6c9f4b1d7e30528" : !pir.val<profile "logup_queries">
   pir.material_bind %mult to "sha256:5b1a0eb6f9c0b5b2fc4a9c9f6a0e4b4d3f1c6a8e2d7b0c9a5e3f8d1b7c4a2e60" : !pir.val<profile "logup_multiplicities">
   // The identity at the sampled point is what leaves. Discharging it is the

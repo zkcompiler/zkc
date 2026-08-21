@@ -190,6 +190,17 @@ struct CommittedArityByRole {
   /// member says nothing: the number it would get is whatever the members
   /// that happen to be profiled said.
   bool incomplete = false;
+
+  friend bool operator==(const CommittedArityByRole &lhs,
+                         const CommittedArityByRole &rhs) {
+    if (lhs.role != rhs.role || lhs.incomplete != rhs.incomplete ||
+        lhs.arities.size() != rhs.arities.size())
+      return false;
+    for (size_t index = 0; index < lhs.arities.size(); ++index)
+      if (lhs.arities[index].compare(rhs.arities[index]) != 0)
+        return false;
+    return true;
+  }
 };
 
 /// The owned, theorem-independent reduction facts needed for occurrence and
@@ -225,11 +236,12 @@ struct SealedReduction {
   /// lengths has two numbers to price from, and pooling them would leave the
   /// rule to choose.
   std::vector<CommittedArityByRole> committedArityByRole;
-  /// The consumed-claim anchor names this reduction's contract ties to a
-  /// message role by an admitted material-identity constraint. The seal has
-  /// checked each tie holds of this artifact; this records which anchors
-  /// were tied, so a rule can require that all of them were.
-  std::set<std::string, std::less<>> constrainedInputAnchors;
+  /// Each consumed-claim anchor this reduction's contract ties to a message
+  /// role by an admitted material-identity constraint, and the role it is
+  /// tied to. The seal has checked each tie holds of this artifact; this
+  /// records the correspondence, so a rule can require that every anchor has
+  /// one and that no two share a role.
+  std::map<std::string, std::string, std::less<>> constrainedInputAnchors;
 };
 
 

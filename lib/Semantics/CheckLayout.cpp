@@ -25,7 +25,14 @@ static bool classMatches(Value value, llvm::StringRef expected) {
 
 llvm::StringRef selfMaterialRef(Value value) {
   auto bind = dyn_cast_or_null<zkc::pir::BindOp>(value.getDefiningOp());
-  if (!bind || !bind.getProfiled() || bind.getStage() != zkc::pir::Stage::Seal)
+  if (!bind || bind.getStage() != zkc::pir::Stage::Seal)
+    return {};
+  // A binding that carries a profile absorbs the digest of what the profile
+  // describes; a binding that fills a contract role absorbs the reference of
+  // the material the role claims. Either way the value is the reference, and
+  // resolving it through a material binding as well would let the transcript
+  // hold one thing while the claim named another.
+  if (!bind.getProfiled() && !bind.getMembership())
     return {};
   // An instance-stage binding has no value at seal time and so carries no
   // reference; the seal-stage form is the one whose value is the digest.

@@ -515,12 +515,14 @@ private:
         // describes, so its value is a material reference and answers to the
         // rules every other one does: it must have reference shape, and no
         // two verifier values may name one material.
-        if (bind.getProfiled() && bind.getStage() == Stage::Seal) {
+        if ((bind.getProfiled() || bind.getMembership()) &&
+            bind.getStage() == Stage::Seal) {
           StringRef value = bind.getValue().value_or(StringRef());
           if (!zkc::encoding::isSha256Ref(value))
             return op->emitOpError()
-                   << "[zkc-E159] a profiled seal-stage binding absorbs the "
-                      "digest of what its profile describes, so its value "
+                   << "[zkc-E159] a seal-stage binding that carries a "
+                      "profile or fills a contract role absorbs the reference "
+                      "of the material it names, so its value "
                    << zkc::encoding::kSha256RefMessage;
           if (!boundSemanticRefs.insert(value).second)
             return op->emitOpError()

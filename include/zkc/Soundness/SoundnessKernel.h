@@ -622,6 +622,16 @@ enum class MachineDeciderKind {
   /// and checked against the spine already; this is the same discipline on
   /// the side the artifact declares.
   ConsumedAnchorsAreRoundMaterial,
+  /// The contract declares exactly one round.
+  ///
+  /// A contract-cased entry instantiates its bound once per matching round,
+  /// but a projection that reads the whole reduction — a committed arity by
+  /// role, say — resolves once. A rule whose numerator comes from the
+  /// reduction and whose denominator comes from the round therefore prices
+  /// the first round's quantities against every round's challenge space. A
+  /// rule that models one sampled point requires the contract to declare
+  /// one; a protocol with two is two arguments and wants a rule that says so.
+  SingleRound,
   /// The lemma's own hypothesis: multiplicities are field elements, so the
   /// number of entries must stay below the characteristic. Overflowing
   /// multiplicities are the known soundness failure of the whole approach

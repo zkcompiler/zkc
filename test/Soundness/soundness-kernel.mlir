@@ -25,6 +25,6 @@
 // The analysis is named by this digest: it covers the schemas, the rules and
 // the bindings, and nothing else. Correcting a citation must not make an
 // artifact's analysis a different analysis.
-// CHECK-NEXT: signature digest: sha256:d9f45b1d4faa6404a00207fe96bebe6263b212ee40f14bb6d7c4b83461cb1509
+// CHECK-NEXT: signature digest: sha256:c4ff9ed79292e97efc79bee80fdb80c58f9f5625194a83b3b25cd974019eb482
 
 module {}

@@ -244,6 +244,13 @@ class ProtocolVocabulary:
             name: self._profile(name, body)
             for name, body in document["claim_profiles"].items()
         }
+        for name in document["value_profiles"]:
+            if not isinstance(name, str) or not name or not all(
+                    0x20 <= ord(char) <= 0x7E for char in name):
+                raise Refusal(
+                    "[zkc-E121] value profile names must be non-empty "
+                    "printable ASCII"
+                )
         self.value_profiles = {
             name: self._value_profile(name, body)
             for name, body in document["value_profiles"].items()
@@ -2758,7 +2765,13 @@ def reduction_closure(
         """
         event = next((e for e in events
                       if isinstance(e, Bind) and e.label == label), None)
-        if event is None or not event.profiled or event.stage != "seal":
+        # A binding that carries a profile absorbs the digest of what the
+        # profile describes; a binding that fills a contract role absorbs the
+        # reference of the material the role claims. Either way the value is
+        # the reference.
+        if event is None or event.stage != "seal":
+            return None
+        if not event.profiled and event.membership is None:
             return None
         return event.value or None
 
@@ -3089,7 +3102,11 @@ def _validate_contract_shape(
             if event is None:
                 raise Refusal(f"reduce {reduce.label!r} has unknown dependency")
             if isinstance(event, (Bind, Slot, Chal)):
-                actual_class = event.payload_class
+                # A profiled value is a commitment, not an element of the
+                # class its content is drawn from, so it satisfies no
+                # dependency slot however its profile is named.
+                actual_class = ("" if getattr(event, "profiled", False)
+                                else event.payload_class)
             else:
                 raise Refusal(
                     f"reduce {reduce.label!r} dependency {label!r} is not a value"
@@ -3279,6 +3296,20 @@ def _resolve_value_profile(vocabulary, event, seat: str, admitted: str):
     return profile
 
 
+def _material_class(event, vocabulary) -> str:
+    """The payload class a value's material travels under.
+
+    A profiled value names a value profile, not a class, and the class is the
+    profile's element class. Emitting the profile name would name a codec the
+    emitted program does not have: the seal admitted one for the element
+    class.
+    """
+    if not getattr(event, "profiled", False):
+        return event.payload_class
+    return vocabulary.value_profiles[event.payload_class]["element_class"]
+
+
+
 def self_material_ref_of(protocol, reference: str) -> bool:
     """Whether a profiled seal-stage binding already absorbs this reference."""
     return any(isinstance(event, Bind) and event.profiled
@@ -3446,12 +3477,19 @@ def validate_protocol(
                     f"[zkc-E214] statement binding {event.label!r} follows "
                     f"challenge {first_challenge!r} in its segment"
                 )
+            if event.membership is not None and event.stage != "seal":
+                raise Refusal(
+                    f"[zkc-E227] binding {event.label!r} fills a contract role "
+                    "and carries the reference of the material that role "
+                    "claims, which an instance-stage binding has no value to "
+                    "hold"
+                )
             if event.profiled:
                 _resolve_value_profile(vocabulary, event, "binding",
                                        "preprocessed")
-                # A profiled seal-stage binding absorbs the digest of the
-                # content its profile describes, so its value is a material
-                # reference and answers to the rules every other one does.
+            if event.profiled or event.membership is not None:
+                # The absorbed value is a material reference and answers to
+                # the rules every other one does.
                 if event.stage == "seal":
                     if not is_sha256_ref(event.value or ""):
                         raise Refusal(
@@ -4038,7 +4076,7 @@ def project(
             else:
                 value = [
                     "r",
-                    emit(["const", event.value, event.payload_class, src]),
+                    emit(["const", event.value, _material_class(event, vocabulary), src]),
                     0,
                 ]
             sponge = ["r", emit(["absorb", sponge, value, src]), 0]
@@ -4046,7 +4084,7 @@ def project(
         elif isinstance(event, Slot):
             if event.count == "1":
                 row = emit(
-                    ["read", stream, event.label, event.payload_class, src]
+                    ["read", stream, event.label, _material_class(event, vocabulary), src]
                 )
             else:
                 row = emit(
@@ -4054,7 +4092,7 @@ def project(
                         "read_vec",
                         stream,
                         event.label,
-                        event.payload_class,
+                        _material_class(event, vocabulary),
                         event.count,
                         src,
                     ]
@@ -4071,7 +4109,7 @@ def project(
                     "squeeze",
                     sponge,
                     event.label,
-                    event.payload_class,
+                    _material_class(event, vocabulary),
                     count,
                     event.domain,
                     rule,
@@ -4151,7 +4189,7 @@ def project(
     if missing:
         raise Refusal(f"OIR realization is incomplete: {missing}")
     entry = [
-        ["val", event.payload_class]
+        ["val", _material_class(event, vocabulary)]
         for event in protocol["events"]
         if isinstance(event, Bind) and event.stage == "instance"
     ] + [["stream"]]
@@ -4317,7 +4355,7 @@ def _project_prover(
             else:
                 value = [
                     "r",
-                    emit(["const", event.value, event.payload_class, src]),
+                    emit(["const", event.value, _material_class(event, vocabulary), src]),
                     0,
                 ]
             sponge = ["r", emit(["absorb", sponge, value, src]), 0]
@@ -4331,7 +4369,7 @@ def _project_prover(
                         stream,
                         value,
                         event.label,
-                        event.payload_class,
+                        _material_class(event, vocabulary),
                         src,
                     ]
                 )
@@ -4342,7 +4380,7 @@ def _project_prover(
                         stream,
                         value,
                         event.label,
-                        event.payload_class,
+                        _material_class(event, vocabulary),
                         event.count,
                         src,
                     ]
@@ -4359,7 +4397,7 @@ def _project_prover(
                     "squeeze",
                     sponge,
                     event.label,
-                    event.payload_class,
+                    _material_class(event, vocabulary),
                     count,
                     event.domain,
                     rule,
@@ -4397,7 +4435,7 @@ def _project_prover(
 
     entry = (
         [
-            ["val", event.payload_class]
+            ["val", _material_class(event, vocabulary)]
             for event in protocol["events"]
             if isinstance(event, Bind) and event.stage == "instance"
         ]
@@ -4860,6 +4898,46 @@ def _self_test() -> None:
         "[zkc-E159]",
         "a profiled binding's absorbed value is a material reference",
         value="")
+    # A binding fills a contract role whether or not it carries a profile,
+    # and identity records which role: the row appends the membership when
+    # there is one, so two artifacts differing only in it are two artifacts.
+    role_shapes = {}
+    for label, membership in (("norole", None), ("table", ("bus", "table", 0)),
+                              ("second", ("bus", "table", 1))):
+        shaped = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+        shaped["events"][0] = shaped["events"][0]._replace(
+            membership=membership)
+        role_shapes[label] = canonical_encoding(shaped, VOCABULARY)
+    ok(len(set(role_shapes.values())) == 3,
+       "a binding's role is identity content")
+    ok(json.loads(role_shapes["norole"])["events"][0][-1]
+       == "sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a4c2e0f9d7b5638a1c4e2f0d9b7563",
+       "a binding filling no role encodes with no membership tail")
+
+    # A binding names the material its role claims with the value it
+    # absorbs: at seal, and once.
+    stage_shift = copy.deepcopy(witnesses.LOGUP_BARE_TABLE)
+    stage_shift["events"][0] = stage_shift["events"][0]._replace(
+        stage="instance", value=None)
+    try:
+        validate_protocol(stage_shift, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E227]" in str(error),
+           "a role-filling binding names its material at seal")
+    else:
+        raise AssertionError("an instance-stage role binding was accepted")
+
+    role_drift = copy.deepcopy(witnesses.LOGUP_BARE_TABLE)
+    role_drift["material_bindings"] = list(role_drift["material_bindings"]) + [
+        witnesses.material("table", witnesses.LOGUP_TABLE)]
+    try:
+        reduction_closure(role_drift, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E161]" in str(error),
+           "a role-filling binding names its material once")
+    else:
+        raise AssertionError("a doubly-named role binding was accepted")
+
     alias = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
     table_ref = next(event.value for event in alias["events"]
                      if isinstance(event, Bind) and event.profiled)

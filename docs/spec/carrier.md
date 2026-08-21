@@ -187,12 +187,16 @@ program — is the unit of identity and verification.
   a body **slot** references its owning instance with three
   structured props — `instance` (the reduce's label), `role` (contract
   role name), `idx` (occurrence for declared-multiplicity roles).
-  Membership is a slot-only fact: message roles name prover messages; checks
-  remain ordinary non-absorbing spine events and are owned by the reduction's
-  explicit `checks` map (and, where admitted, by its exact output discharge);
-  other event kinds gain membership only with a
-  consumer — until then the shape is unrepresentable rather than
-  rejected. **The
+  Membership is carried by whatever fills a role — a slot for prover
+  material, a public binding for content the statement fixes, which is what a
+  contract's `source` on a message role names (docs/spec/vocabularies.md §3).
+  Checks remain ordinary non-absorbing spine events and are owned by the
+  reduction's explicit `checks` map (and, where admitted, by its exact output
+  discharge); a challenge reaches a round through its contract's
+  `challenge_use` rather than through membership. Any further event kind
+  gains membership only with a consumer, and with a place in its row for the
+  role: an identity that does not record which role an event fills does not
+  determine the protocol. **The
   round number stays out of the IR**: role + contract reach the round
   through the registry's role→round assignment — the single
   declaration that also prices ε_i (kernel §5.2); an IR-carried
@@ -347,7 +351,8 @@ structured channel.
   The PIR event rows, which §6 fixed only by description, are exactly:
 
   ```text
-  ["bind",          payload_class, stage, value_or_null]
+  ["bind",          payload_class, stage, value_or_null, membership?]
+  ["bind_profiled", value_profile, stage, value_or_null, membership?]
   ["slot",          payload_class, absorbed, membership_or_null]
   ["slot_vec",      payload_class, count, absorbed, membership_or_null]
   ["slot_profiled", value_profile, absorbed, membership_or_null]
@@ -360,6 +365,13 @@ structured channel.
   to a slot row, so two optional tails would collide. A profiled slot carries
   one commitment and is never counted — a vector of commitments is a shape no
   value profile states.
+
+  A binding row carries no construction route, so its membership is appended
+  when the binding fills a contract role and absent when it does not: arity
+  distinguishes them, and a binding that fills no role encodes as it always
+  did. The profiled family exists for the same reason the slot one does — a
+  reader must know whether the string names a value profile or a payload
+  class — and not to carry the role, which either family carries.
 
   `absorbed` is the integer `1` or `0`, not a boolean, and `membership` is
   `[transformer position, role, idx]` or null. Author labels appear only where
