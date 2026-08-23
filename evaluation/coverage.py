@@ -54,8 +54,8 @@ LEDGER: dict[str, dict[str, Any]] = {
     },
     "F-05": {
         "title": "bounded identity work",
-        "boundaries": {"closed-core"},
-        "note": "bounds are enforced; size is measured separately",
+        "boundaries": {"closed-core", "guard:representation"},
+        "note": "measured: guard order changes cost from 2n+2 to 2^n",
     },
     "F-06": {
         "title": "identity-field justification",
@@ -232,6 +232,17 @@ def probe_p04() -> dict[str, set]:
     return sink
 
 
+def probe_p05() -> dict[str, set]:
+    root = EVALUATION / "r2-p05-guards"
+    guards = _load(root, "p05model.guards")
+    sink: dict[str, set] = {"positives": set(), "negatives": set(), "codes": set()}
+    default = guards.GuardProfile("r2.p05.guard.default")
+    narrow = guards.GuardProfile("r2.p05.guard.narrow", max_nodes=64)
+    _record(sink, guards.admit_guard(default, guards.pairing_predicate(4), guards.interleaved_order(4)))
+    _record(sink, guards.admit_guard(narrow, guards.pairing_predicate(8), guards.separated_order(8)))
+    return sink
+
+
 def probe_fri() -> dict[str, set]:
     """The FRI witness already publishes its measured outcomes."""
 
@@ -272,6 +283,7 @@ PROBES: dict[str, Callable[[], dict[str, set]]] = {
     "commitment": probe_p02,
     "logup": probe_p03,
     "bridges": probe_p04,
+    "guards": probe_p05,
 }
 
 
