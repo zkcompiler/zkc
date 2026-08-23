@@ -140,6 +140,8 @@ class Mutation(str, Enum):
     MULTI_ROUND_CONTRACT = "multi_round_contract"
     REDUNDANT_TABLE_BINDING = "redundant_table_binding"
     AUTHORED_ANCHOR_DIVERGES = "authored_anchor_diverges"
+    CLAIM_BOUND_EXCEEDED = "claim_bound_exceeded"
+    REDUCTION_CONSUMES_UNDECLARED = "reduction_consumes_undeclared"
 
 
 def _result(outcome: OutcomeClass, boundary: str, code: str, detail: str) -> CheckResult:
@@ -671,6 +673,15 @@ def mutate(core: LogupCore, mutation: Mutation) -> LogupCore:
             for claim in core.claims
         )
         return replace(core, claims=claims)
+    if mutation is Mutation.CLAIM_BOUND_EXCEEDED:
+        filler = tuple(
+            replace(core.claims[0], name=f"filler{index}")
+            for index in range(MAX_CLAIMS + 1)
+        )
+        return replace(core, claims=core.claims + filler)
+    if mutation is Mutation.REDUCTION_CONSUMES_UNDECLARED:
+        ghosted = replace(core.reductions[0], consumes=("inclusion", "ghost"))
+        return replace(core, reductions=(ghosted,) + core.reductions[1:])
     if mutation is Mutation.MULTI_ROUND_CONTRACT:
         return replace(core, reductions=tuple(
             replace(r, rounds=2) for r in core.reductions

@@ -169,6 +169,20 @@ class DerivedNegativeTest(unittest.TestCase):
         self.assertIs(result.outcome, OutcomeClass.MISMATCH)
         self.assertEqual(result.code, "P03-007")
 
+    def test_a_core_beyond_its_claim_bound_is_refused(self) -> None:
+        """Identity work is bounded, and the bound is enforced not assumed."""
+
+        result = admit_core(mutate(self.core, Mutation.CLAIM_BOUND_EXCEEDED))
+        self.assertIs(result.outcome, OutcomeClass.MALFORMED)
+        self.assertEqual(result.boundary, "closed-core")
+        self.assertEqual(result.code, "P03-001")
+
+    def test_a_reduction_consuming_an_undeclared_claim_is_refused(self) -> None:
+        result = admit_core(mutate(self.core, Mutation.REDUCTION_CONSUMES_UNDECLARED))
+        self.assertIs(result.outcome, OutcomeClass.MISMATCH)
+        self.assertEqual(result.boundary, "logup:claims")
+        self.assertEqual(result.code, "P03-010")
+
     def test_a_multi_round_contract_is_refused(self) -> None:
         """The shipped rule asserts single-round as a machine condition."""
 

@@ -247,6 +247,23 @@ class CommitmentSubjectTest(unittest.TestCase):
         resolved = resolve_construction(ROUTE)
         self.assertIsInstance(resolved, CommitmentConstruction)
 
+    def test_a_route_resolves_to_more_than_one_construction_shape(self) -> None:
+        """The shipped registry proves one route shape is not enough.
+
+        Committed columns name a vector commitment; a preprocessed table names
+        an anchor preimage.  Their opening shapes differ, so a design assuming
+        one construction per family would have modelled the wrong thing for
+        half the roles.
+        """
+
+        from p02model.commitment import CONSTRUCTIONS
+
+        merkle = CONSTRUCTIONS["r2.commit.binary-merkle.v1"]
+        preimage = CONSTRUCTIONS["r2.anchor.preimage.v1"]
+        self.assertNotEqual(merkle.query_sort, preimage.query_sort)
+        self.assertNotEqual(merkle.binding_game, preimage.binding_game)
+        self.assertNotEqual(merkle.identity, preimage.identity)
+
     def test_a_profile_naming_another_construction_is_a_missing_dependency(self) -> None:
         other = CommitmentConstruction(
             name="r2.commit.other.v1",

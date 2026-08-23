@@ -354,6 +354,7 @@ def verify_opening(
 #: The construction table.  A sponge states its rate and capacity, a codec its
 #: squeeze; a commitment states the relation an opening of it satisfies.
 CONSTRUCTIONS: Mapping[str, CommitmentConstruction] = {
+    # A vector commitment: an opening is a length-indexed authentication path.
     "r2.commit.binary-merkle.v1": CommitmentConstruction(
         name="r2.commit.binary-merkle.v1",
         element_sort="rs",
@@ -361,6 +362,21 @@ CONSTRUCTIONS: Mapping[str, CommitmentConstruction] = {
         query_sort="query_index",
         domain_separation="leaf-and-node-tagged",
         binding_game="r2.game.merkle-collision",
+    ),
+    # An anchor preimage.  The shipped registry resolves `binding_route` to
+    # more than one construction: committed columns name a vector commitment
+    # while a preprocessed table names `zkc.anchor.preimage`, whose opening is
+    # the preimage itself rather than a path.  A design assuming one shape per
+    # route would have missed that the *depth* is zero here, so the
+    # length-indexed argument that catches an overstated arity does not apply
+    # and the whole declared content is revealed instead.
+    "r2.anchor.preimage.v1": CommitmentConstruction(
+        name="r2.anchor.preimage.v1",
+        element_sort="rs",
+        arity_log2=8,
+        query_sort="whole_preimage",
+        domain_separation="preimage-tagged",
+        binding_game="r2.game.sha256-preimage",
     ),
 }
 

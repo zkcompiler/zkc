@@ -1,0 +1,97 @@
+{
+  "cases": {
+    "algebra/admitted.v1": {
+      "boundary": "algebra-profile",
+      "code": "P01-ALG-OK",
+      "evidence_id": "sha256:efeffde5ff78a22a8e9f04d856db4347d7c66e03bd45ad3c6981c37badb8f33d",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:3563ed723040d6f22792609e5400bd1e768d45d8b83d2e4b986e0e02914f137f"
+    },
+    "algebra/challenge-exceeds-order-refused.v1": {
+      "boundary": "algebra-profile",
+      "code": "P01-ALG-006",
+      "evidence_id": "sha256:11fea307337260aeb5da33021c93b9fec4934ce455a65d29d5da3e41721a6344",
+      "outcome": "SemanticNegative",
+      "subject_id": "sha256:926d672c1210051e225d24285359847acddc24e0c2cb9f4fea38ec8487c05164"
+    },
+    "algebra/composite-modulus-refused.v1": {
+      "boundary": "algebra-profile",
+      "code": "P01-ALG-002",
+      "evidence_id": "sha256:30e07aa93ec0b27fbfcd1aac4e6b45e5e66f5dde1c79c2acd93d66b280a0f462",
+      "outcome": "SemanticNegative",
+      "subject_id": "sha256:99bcc676ee44837f863f162ee77e7f59d84799cee72767ba47258deb06d9ff77"
+    },
+    "core/admitted.v1": {
+      "boundary": "core-admission",
+      "code": "P01-CORE-OK",
+      "evidence_id": "sha256:efeffde5ff78a22a8e9f04d856db4347d7c66e03bd45ad3c6981c37badb8f33d",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:67ab9f79eab17c5b4db31e5c913f12e3b85df8820cf8df0da9153b3f96f8521b"
+    },
+    "prover/honest-contract-declared.v1": {
+      "boundary": "prover:honest-contract",
+      "code": "P01-RPT-100",
+      "evidence_id": "sha256:efeffde5ff78a22a8e9f04d856db4347d7c66e03bd45ad3c6981c37badb8f33d",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:44cc6255fce17660f6522b3cbd37a9b88cf49fef787f1010323cb786fa5644fe"
+    },
+    "relation/admitted.v1": {
+      "boundary": "relations:relation-admission",
+      "code": "P01-REL-OK",
+      "evidence_id": "sha256:efeffde5ff78a22a8e9f04d856db4347d7c66e03bd45ad3c6981c37badb8f33d",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
+    },
+    "relation/instance-admitted.v1": {
+      "boundary": "relations:instance-admission",
+      "code": "P01-INS-OK",
+      "evidence_id": "sha256:ff5c5510165d04215fb17b63c70fb223ece2f1863fb9ff3bd130c29d82e643b5",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275"
+    },
+    "relation/instance-under-foreign-relation-refused.v1": {
+      "boundary": "relations:instance-admission:relation",
+      "code": "P01-INS-002",
+      "evidence_id": "sha256:e47ac24e24210bd6ddc239abc7961c870c8259971036da5beebb5afa96c5f404",
+      "outcome": "Mismatch",
+      "subject_id": "sha256:0f53c5e10188dcb01d80878b000bb3f07379f3cb6d3ff3736dd85dea58c29766"
+    },
+    "relation/satisfaction.v1": {
+      "boundary": "relations:satisfaction",
+      "code": "P01-SAT-OK",
+      "evidence_id": "sha256:1660a381d8cdf8628a0131ff03d4d5320cd22c9c8f6d9bebd0559f03f063cdf3",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275"
+    },
+    "relation/unsatisfying-witness.v1": {
+      "boundary": "relations:satisfaction",
+      "code": "P01-SAT-001",
+      "evidence_id": "sha256:4c4a9ba3dee71aef86f5354f1d4a630248deaa328768cef4dd2998255f622074",
+      "outcome": "SemanticNegative",
+      "subject_id": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275"
+    },
+    "relation/witness-admitted.v1": {
+      "boundary": "relations:witness-admission",
+      "code": "P01-WIT-OK",
+      "evidence_id": "sha256:173bcffd7c0c80f49cd842ebc3c8b4c824600bac53ca65d0a69bb39db68e0e23",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275"
+    },
+    "relation/witness-under-foreign-instance-refused.v1": {
+      "boundary": "relations:witness-admission:instance",
+      "code": "P01-WIT-002",
+      "evidence_id": "sha256:ba82af9f0dc64118e72e9e3c6a0bdf2fb9a76e623a04e9bbb0049abb4b43e097",
+      "outcome": "Mismatch",
+      "subject_id": "sha256:67e374376bd4db9648cff8b4a498acedfa416c785e253ce1278fddb768348275"
+    }
+  },
+  "fixture": "zkc.r2.p01.schnorr-fixture.v1",
+  "report_id": "sha256:4b16bb651ff688485ea3a4a6e580b27f9fd753b6321ce1548e83c0e74d71b4d9",
+  "schema": "zkc.r2.p01.report.v1",
+  "sources": [
+    "p01model/execution.py",
+    "p01model/relations.py",
+    "p01model/semantic.py",
+    "p01model/terms.py"
+  ]
+}
