@@ -15,7 +15,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from r2model.commitment import (  # noqa: E402
+from p02model.commitment import (  # noqa: E402
     BINDING_ASSUMPTION,
     CommitmentConstruction,
     CommitmentError,
@@ -27,7 +27,7 @@ from r2model.commitment import (  # noqa: E402
     resolve_construction,
     verify_opening,
 )
-from r2model.terms import CheckResult, OutcomeClass  # noqa: E402
+from p02model.terms import CheckResult, OutcomeClass  # noqa: E402
 
 
 ROUTE = "r2.commit.binary-merkle.v1"
