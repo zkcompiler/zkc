@@ -108,6 +108,10 @@ LEDGER: dict[str, dict[str, Any]] = {
         "title": "explicit grounding equations",
         "boundaries": {"commitment:opening", "commitment:domain-separation"},
     },
+    "R-04": {
+        "title": "lossless bridge laws are explicit",
+        "boundaries": {"bridge:lane"},
+    },
     "R-05": {
         "title": "every retained lossy projection is separate and priced",
         "boundaries": {"analysis:projection-loss"},
@@ -201,6 +205,33 @@ def probe_p03() -> dict[str, set]:
     return sink
 
 
+def probe_p04() -> dict[str, set]:
+    root = EVALUATION / "r2-p04-bridges"
+    bridges = _load(root, "p04model.bridges")
+    sink: dict[str, set] = {"positives": set(), "negatives": set(), "codes": set()}
+    Bridge, Lane = bridges.Bridge, bridges.Lane
+    variants = [
+        Bridge("b", Lane.BIJECTION, "s", "t"),
+        Bridge("b", Lane.BIJECTION, "s", "t", image_predicate="i"),
+        Bridge("b", Lane.BIJECTION, "s", "t", loss_bits=40, collision_relation="c"),
+        Bridge("e", Lane.EMBEDDING, "s", "t", image_predicate="i"),
+        Bridge("e", Lane.EMBEDDING, "s", "t"),
+        Bridge("e", Lane.EMBEDDING, "s", "t", image_predicate="i", loss_bits=40),
+        Bridge("p", Lane.PROJECTION, "s", "t", collision_relation="c", loss_bits=40, occurrence_count=1),
+        Bridge("p", Lane.PROJECTION, "s", "t", collision_relation="c", loss_bits=40, occurrence_count=1, image_predicate="i"),
+        Bridge("p", Lane.PROJECTION, "s", "t", loss_bits=40, occurrence_count=1),
+        Bridge("p", Lane.PROJECTION, "s", "t", collision_relation="c", occurrence_count=1),
+        Bridge("p", Lane.PROJECTION, "s", "t", collision_relation="c", loss_bits=40),
+        "not-a-bridge",
+    ]
+    for bridge in variants:
+        _record(sink, bridges.admit_bridge(bridge))
+    for count, rule in ((1, None), (3, "anchors-are-sealed-digests"), (0, None)):
+        _record(sink, bridges.price_projection(bridges.ANCHOR_PROJECTION, count, rule))
+    _record(sink, bridges.price_projection(variants[3], 1, None))
+    return sink
+
+
 def probe_fri() -> dict[str, set]:
     """The FRI witness already publishes its measured outcomes."""
 
@@ -240,6 +271,7 @@ PROBES: dict[str, Callable[[], dict[str, set]]] = {
     "schnorr": probe_p01,
     "commitment": probe_p02,
     "logup": probe_p03,
+    "bridges": probe_p04,
 }
 
 
