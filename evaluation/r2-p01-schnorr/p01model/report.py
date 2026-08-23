@@ -224,12 +224,20 @@ def build_report(repo_root: Path, expectations: Any = None) -> dict[str, Any]:
         raise ValueError("report exceeds its declared case bound")
 
     body = {name: case.term() for name, case in ((c.name, c) for c in cases)}
+    # `overall_pass` is a run-time verdict, not report content: it says whether
+    # this build agreed with the oracle it was handed.  It is therefore kept out
+    # of `report_id`, so freezing a passing run does not make the verdict part
+    # of the identity it is supposed to be checking.
+    matched = True
+    if isinstance(expectations, dict) and isinstance(expectations.get("cases"), dict):
+        matched = expectations["cases"] == body
     return {
         "schema": SCHEMA,
         "fixture": fixture["schema"],
         "sources": sorted(SOURCE_FILES),
         "cases": body,
         "report_id": semantic_id("r2.p01.report.v1", {"cases": body}),
+        "overall_pass": matched,
     }
 
 
@@ -239,7 +247,7 @@ def verify_report(report: Any, repo_root: Path, expectations: Any = None) -> lis
     errors: list[str] = []
     if not isinstance(report, dict):
         return ["report is not an object"]
-    required = {"schema", "fixture", "sources", "cases", "report_id"}
+    required = {"schema", "fixture", "sources", "cases", "report_id", "overall_pass"}
     if set(report) != required:
         return ["report envelope keys differ"]
     if report["schema"] != SCHEMA:

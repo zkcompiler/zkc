@@ -86,6 +86,7 @@
     }
   },
   "fixture": "zkc.r2.p01.schnorr-fixture.v1",
+  "overall_pass": true,
   "report_id": "sha256:4b16bb651ff688485ea3a4a6e580b27f9fd753b6321ce1548e83c0e74d71b4d9",
   "schema": "zkc.r2.p01.report.v1",
   "sources": [
