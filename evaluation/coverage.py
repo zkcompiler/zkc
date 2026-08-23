@@ -84,14 +84,15 @@ LEDGER: dict[str, dict[str, Any]] = {
     },
     "F-05": {
         "title": "bounded identity work",
-        "boundaries": {"closed-core", "guard:representation"},
+        "boundaries": {"closed-core", "guard:representation", "guard:work"},
         "pressure": (
             "Measure stored bytes, peak derived structure, memory, and work on real "
             "and adversarial guards. No divergent semantic verdict."
         ),
         "gap": (
-            "node count and work are measured (2n+2 against 2^n); stored bytes and "
-            "memory are not"
+            "node count and build work are measured and separate (n^2 against 2^n "
+            "expansions); stored bytes and memory are not, and the guards are the "
+            "textbook separating family rather than a corpus of real ones"
         ),
     },
     "F-06": {
@@ -351,9 +352,14 @@ def probe_p05() -> dict[str, set]:
     guards = _load(root, "p05model.guards")
     sink: dict[str, set] = {"positives": set(), "negatives": set(), "codes": set()}
     default = guards.GuardProfile("r2.p05.guard.default")
-    narrow = guards.GuardProfile("r2.p05.guard.narrow", max_nodes=64)
-    _record(sink, guards.admit_guard(default, guards.pairing_predicate(4), guards.interleaved_order(4)))
-    _record(sink, guards.admit_guard(narrow, guards.pairing_predicate(8), guards.separated_order(8)))
+    thrifty = guards.GuardProfile("r2.p05.guard.thrifty", max_nodes=4096, max_work=100)
+    _record(sink, guards.admit_guard(default, guards.pairing_formula(4), guards.interleaved_order(4)))
+    # The declared default bound, not an ad-hoc narrow one: an envelope that only
+    # ever refuses under a profile invented for the test declares nothing.
+    _record(sink, guards.admit_guard(default, guards.pairing_formula(8), guards.separated_order(8)))
+    # Work and size are bounded separately, so they refuse at separate boundaries.
+    _record(sink, guards.admit_guard(thrifty, guards.pairing_formula(8), guards.separated_order(8)))
+    _record(sink, guards.admit_guard(default, guards.BooleanAtom("absent"), ("bool:present",)))
     return sink
 
 
