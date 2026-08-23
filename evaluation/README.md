@@ -4,6 +4,13 @@ This directory contains optional, version-pinned integration evidence. It is
 not required to build the compiler, and its results are scoped to the exact
 fixtures and revisions named here.
 
+## Semantic revalidation probes
+
+[`r2-protocol-model/`](r2-protocol-model/README.md) is a temporary,
+standard-library-only clean-room probe for the `FRI-Grind-1` design witness.
+It compares candidate semantic factorizations and named failure boundaries; it
+is not a compiler component, protocol implementation, or security evaluator.
+
 ## Plonky3
 
 [`upstream/plonky3-replay/`](upstream/plonky3-replay/README.md) is the active

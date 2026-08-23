@@ -1,0 +1,41 @@
+{
+  "schema": "zkc.r2.p01.schnorr-fixture.v1",
+  "source_profile": {
+    "protocol": "Schnorr three-move Sigma protocol and strong Fiat-Shamir form",
+    "sigma_draft": "https://datatracker.ietf.org/doc/draft-irtf-cfrg-sigma-protocols/03/",
+    "fiat_shamir_draft": "https://datatracker.ietf.org/doc/draft-irtf-cfrg-fiat-shamir/03/",
+    "historical_schnorr": "https://doi.org/10.1007/0-387-34805-0_22",
+    "historical_fiat_shamir": "https://mit6875.github.io/PAPERS/Fiat-Shamir.pdf"
+  },
+  "algebra": {
+    "p": 23,
+    "q": 11,
+    "generator": 2,
+    "challenge_size": 8
+  },
+  "application_context": "zkc/p01/test-session/alpha",
+  "finite_instance": {
+    "statement": 13,
+    "witness": 7,
+    "nonce": 4,
+    "commitment": 16,
+    "fresh_challenge": 3,
+    "fresh_response": 3,
+    "fs_challenge": 0,
+    "fs_response": 4
+  },
+  "resource_plan": {
+    "max_strategy_steps": 2,
+    "max_public_reads": 5,
+    "max_private_reads": 2,
+    "max_transcript_atoms": 2,
+    "max_hash_queries": 1,
+    "max_replay_executions": 1
+  },
+  "finite_analysis_scope": {
+    "enumerate_all_witnesses": true,
+    "enumerate_all_nonces": true,
+    "enumerate_all_challenges": true,
+    "claim": "exact finite algebraic equality only"
+  }
+}

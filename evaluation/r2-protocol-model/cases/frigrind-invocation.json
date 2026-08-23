@@ -1,0 +1,8 @@
+{
+  "schema": "zkc.r2.frigrind-invocation.v2",
+  "source_fixture_sha256": "cf2e4effc006cae253a77a9f8e0a0d0a3fe024bf3d6af99a75801d4b4765426a",
+  "statement_value": 7,
+  "g1_strategy": "copy_statement",
+  "nonce_search_start": 0,
+  "nonce_search_limit": 1000000
+}
