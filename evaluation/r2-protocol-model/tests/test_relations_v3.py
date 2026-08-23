@@ -10,21 +10,20 @@ MODEL_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = MODEL_ROOT.parents[1]
 sys.path.insert(0, str(MODEL_ROOT))
 
-from r2model.execution import (
+from r2model.execution import (  # noqa: E402
     ExecutionRecord,
     QualifiedExecution,
     coupled_fresh_tape,
     execute,
     qualify_execution,
 )
-from r2model.frigrind import (
+from r2model.frigrind import (  # noqa: E402
     ApplicationContext,
     CoreDerivationKind,
     DEFAULT_RESOURCE_PLAN,
     ExecutionRequest,
     FixedNoncePlan,
     FreshTapeOrigin,
-    ValueSort,
     base_scenario,
     build_evaluator_basis,
     fresh_fri_scenario,
@@ -33,7 +32,7 @@ from r2model.frigrind import (
     load_external_fresh,
     load_invocation,
 )
-from r2model.relations import (
+from r2model.relations import (  # noqa: E402
     AnchorCapability,
     AnchorReadRequest,
     DispositionKind,
@@ -64,7 +63,7 @@ from r2model.relations import (
     protocol_statement_occurrence,
     statement_correspondence,
 )
-from r2model.terms import CheckResult, OutcomeClass, semantic_id
+from r2model.terms import CheckResult, OutcomeClass, semantic_id  # noqa: E402
 
 
 class RelationsV3Test(unittest.TestCase):

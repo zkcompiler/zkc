@@ -13,8 +13,8 @@ MODEL_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = MODEL_ROOT.parents[1]
 sys.path.insert(0, str(MODEL_ROOT))
 
-import r2model.report as report_module
-from r2model.report import (
+import r2model.report as report_module  # noqa: E402
+from r2model.report import (  # noqa: E402
     EXECUTION_ROLES,
     MAX_REPORT_CASES,
     MAX_REPORT_OPERANDS,
@@ -24,8 +24,8 @@ from r2model.report import (
     build_report,
     verify_report,
 )
-from r2model.terms import semantic_id
-import run as runner
+from r2model.terms import semantic_id  # noqa: E402
+import run as runner  # noqa: E402
 
 
 REPORT_KEYS = {

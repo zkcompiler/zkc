@@ -11,8 +11,8 @@ MODEL_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = MODEL_ROOT.parents[1]
 sys.path.insert(0, str(MODEL_ROOT))
 
-import r2model.execution as execution_module
-from r2model.execution import (
+import r2model.execution as execution_module  # noqa: E402
+from r2model.execution import (  # noqa: E402
     ExecutionRecord,
     QualifiedExecution,
     TraceEvent,
@@ -26,7 +26,7 @@ from r2model.execution import (
     validate_terminal_law,
     worst_case_usage,
 )
-from r2model.frigrind import (
+from r2model.frigrind import (  # noqa: E402
     Actor,
     ApplicationContext,
     CanonicalCodec,
@@ -34,17 +34,13 @@ from r2model.frigrind import (
     CoreDerivationKind,
     DEFAULT_RESOURCE_PLAN,
     ExecutionRequest,
-    FailureEffect,
     FixedNoncePlan,
-    FreshCoinTape,
     FreshTapeOrigin,
     Interpretation,
     MAX_QUALIFICATION_CAPS,
     Mutation,
     NonceSearchPlan,
     Provenance,
-    ResourcePlan,
-    StrategyKind,
     TerminalKind,
     ValueSort,
     _freeze,
@@ -58,7 +54,7 @@ from r2model.frigrind import (
     load_invocation,
     mutate,
 )
-from r2model.terms import (
+from r2model.terms import (  # noqa: E402
     CheckResult,
     OutcomeClass,
     SEMANTIC_REGIME_ID,

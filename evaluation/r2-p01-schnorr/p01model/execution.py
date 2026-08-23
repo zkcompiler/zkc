@@ -21,16 +21,13 @@ import re
 from typing import Any, Iterable, Mapping
 
 from .semantic import (
-    CHECK,
     CHALLENGE,
     COMMITMENT,
     RESPONSE,
     STATEMENT,
-    TERMINAL,
     AlgebraProfile,
     ConversationCore,
     FreshRealization,
-    HonestProverContract,
     ParticipantRole,
     ProtocolVariant,
     RealizationKind,

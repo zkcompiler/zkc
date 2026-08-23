@@ -12,7 +12,7 @@ MODEL_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = MODEL_ROOT.parents[1]
 sys.path.insert(0, str(MODEL_ROOT))
 
-from r2model.frigrind import (
+from r2model.frigrind import (  # noqa: E402
     BASE_FIXTURE,
     BASE_HASH,
     BOUND_FIXTURE,

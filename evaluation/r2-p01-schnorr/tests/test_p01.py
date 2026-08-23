@@ -10,7 +10,7 @@ import unittest
 MODEL_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MODEL_ROOT))
 
-from p01model.relations import (
+from p01model.relations import (  # noqa: E402
     ApplicabilityClaim,
     QualifiedExecutionStatement,
     SchnorrRelationInstance,
@@ -30,7 +30,7 @@ from p01model.relations import (
     honest_transcript,
     probe_analysis_applicability,
 )
-from p01model.semantic import (
+from p01model.semantic import (  # noqa: E402
     APPLICATION_CONTEXT,
     CHALLENGE,
     CHECK,
@@ -72,7 +72,7 @@ from p01model.semantic import (
     required_challenge_atoms,
     scalar_domain_id,
 )
-from p01model.terms import Outcome, Result, semantic_id
+from p01model.terms import Outcome, Result, semantic_id  # noqa: E402
 
 
 def _replace_occurrence(core: object, occurrence: str, **changes: object) -> object:
