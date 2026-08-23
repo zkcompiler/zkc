@@ -22,12 +22,14 @@ from p01model.relations import (  # noqa: E402
     canonical_schnorr_relation,
     check_accepting_transcript,
     check_grounding_shape,
+    check_relation_honest_prover_correspondence,
     check_relation_satisfaction,
     check_special_soundness_fork,
     exhaustive_shvzk_distribution_equality,
     exhaustive_special_soundness,
     grounding_candidate,
     honest_transcript,
+    relation_honest_prover_candidate,
     probe_analysis_applicability,
 )
 from p01model.semantic import (  # noqa: E402
@@ -1297,6 +1299,120 @@ class P01RelationAndFiniteAnalysisTest(ResultAssertions):
                     checked.evidence["non_promotion_law"],
                     "finite evidence cannot author theorem applicability",
                 )
+
+
+class P01RelationProtocolPairTest(ResultAssertions):
+    """The one Relation-to-Protocol law in this witness, actually executed.
+
+    `check_relation_honest_prover_correspondence` pairs an admitted relation
+    with an admitted Core and the honest prover contract over it.  Until now it
+    had zero callers anywhere in the repository: five named codes, a real
+    affirmative, and no execution.  Unreached source reads as coverage from the
+    outside while establishing nothing, which is the failure this suite exists
+    to make impossible.
+
+    The affirmative's `non_claim` is the point of the law rather than a caveat
+    on it.  A structural correspondence between a relation and a Core is not
+    acceptance, satisfaction, completeness, or security, and the direction is
+    what keeps a structural binding from being spent as behavioural equivalence.
+    """
+
+    def setUp(self) -> None:
+        self.profile = AlgebraProfile(p=23, q=11, generator=2, challenge_size=8)
+        self.relation = canonical_schnorr_relation(self.profile)
+        self.core = canonical_core(self.profile)
+        self.honest = canonical_honest_prover_contract(self.core, self.profile)
+        self.correspondence = relation_honest_prover_candidate(
+            self.relation, self.core, self.honest, self.profile
+        )
+
+    def _check(self, correspondence: object) -> Result:
+        return check_relation_honest_prover_correspondence(
+            correspondence, self.relation, self.core, self.honest, self.profile
+        )
+
+    def test_the_canonical_pair_corresponds(self) -> None:
+        checked = self._check(self.correspondence)
+        self.assert_result(
+            checked,
+            Outcome.AFFIRMATIVE,
+            "relations:honest-prover-correspondence",
+            "P01-RHC-OK",
+        )
+        self.assertEqual(
+            checked.evidence["relation_id"], self.relation.identity
+        )
+        self.assertEqual(checked.evidence["core_id"], self.core.identity)
+
+    def test_the_affirmative_refuses_to_license_behaviour(self) -> None:
+        """Structural correspondence is not acceptance; the law says so itself."""
+
+        checked = self._check(self.correspondence)
+        self.assertEqual(
+            checked.evidence["non_claim"],
+            "not witness satisfaction, completeness, acceptance, or security",
+        )
+
+    def test_a_foreign_type_is_malformed_not_a_mismatch(self) -> None:
+        """A wrong-kind operand is a framing failure, not a semantic verdict."""
+
+        self.assert_result(
+            self._check({"relation_id": self.relation.identity}),
+            Outcome.MALFORMED,
+            "relations:honest-prover-correspondence",
+            "P01-RHC-001",
+        )
+
+    def test_a_field_outside_the_closed_grammar_is_malformed(self) -> None:
+        self.assert_result(
+            self._check(replace(self.correspondence, relation_id="not-an-id")),
+            Outcome.MALFORMED,
+            "relations:honest-prover-correspondence:shape",
+            "P01-RHC-002",
+        )
+
+    def test_each_corresponding_field_carries_the_law(self) -> None:
+        """Every field is load-bearing: perturbing any one breaks the exact law."""
+
+        perturbations = {
+            "core_id": _closed_id("core:other"),
+            "honest_prover_contract_id": _closed_id("contract:other"),
+            "statement_domain_id": _closed_id("domain:other"),
+            "witness_domain_id": _closed_id("domain:other"),
+            "witness_precondition_contract_id": _closed_id("precondition:other"),
+            "law": "SomeOtherCorrespondence.v1",
+        }
+        for field, value in perturbations.items():
+            with self.subTest(field=field):
+                self.assert_result(
+                    self._check(replace(self.correspondence, **{field: value})),
+                    Outcome.MISMATCH,
+                    "relations:honest-prover-correspondence:exact-law",
+                    "P01-RHC-004",
+                )
+
+    def test_correspondence_is_not_satisfaction(self) -> None:
+        """The two judgments are separate and stay separate.
+
+        A relation can correspond exactly to a Core while a particular witness
+        assignment fails to satisfy it.  If one judgment could stand in for the
+        other, this pair would agree.
+        """
+
+        instance = SchnorrRelationInstance(self.relation.identity, public_statement=13)
+        wrong = SchnorrWitnessAssignment(instance.identity, "witness:x", secret_scalar=8)
+        self.assert_result(
+            self._check(self.correspondence),
+            Outcome.AFFIRMATIVE,
+            "relations:honest-prover-correspondence",
+            "P01-RHC-OK",
+        )
+        self.assertIs(
+            check_relation_satisfaction(
+                wrong, instance, self.relation, self.profile
+            ).outcome,
+            Outcome.SEMANTIC_NEGATIVE,
+        )
 
 
 if __name__ == "__main__":

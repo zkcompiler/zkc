@@ -42,6 +42,34 @@
       "outcome": "Affirmative",
       "subject_id": "sha256:9c26de4933577b601519c3a859f68f66664b4cf75b2608e962cb851dee383442"
     },
+    "relation/correspondence-exact-law-refused.v1": {
+      "boundary": "relations:honest-prover-correspondence:exact-law",
+      "code": "P01-RHC-004",
+      "evidence_id": "sha256:b76514d2ae76e5bdcaf9a1cb6b3e7c46a035ced9bfbd76644dbd885c25bbe349",
+      "outcome": "Mismatch",
+      "subject_id": "sha256:4aef923444ed64e9428508f63c562388bde60d3e8b426780f4b0ed091ec76c50"
+    },
+    "relation/correspondence-foreign-type-refused.v1": {
+      "boundary": "relations:honest-prover-correspondence",
+      "code": "P01-RHC-001",
+      "evidence_id": "sha256:1e951defb520e751bfb575745e7dbc8579ea9dbc8d50f3b5156dc9db2728cbc0",
+      "outcome": "Malformed",
+      "subject_id": ""
+    },
+    "relation/correspondence-shape-refused.v1": {
+      "boundary": "relations:honest-prover-correspondence:shape",
+      "code": "P01-RHC-002",
+      "evidence_id": "sha256:545d2fa51b0c0cc9c807ca97f1d2deeb750db33625eb533052aee5002bbc3763",
+      "outcome": "Malformed",
+      "subject_id": "sha256:4aef923444ed64e9428508f63c562388bde60d3e8b426780f4b0ed091ec76c50"
+    },
+    "relation/honest-prover-correspondence.v1": {
+      "boundary": "relations:honest-prover-correspondence",
+      "code": "P01-RHC-OK",
+      "evidence_id": "sha256:efeffde5ff78a22a8e9f04d856db4347d7c66e03bd45ad3c6981c37badb8f33d",
+      "outcome": "Affirmative",
+      "subject_id": "sha256:4aef923444ed64e9428508f63c562388bde60d3e8b426780f4b0ed091ec76c50"
+    },
     "relation/instance-admitted.v1": {
       "boundary": "relations:instance-admission",
       "code": "P01-INS-OK",
@@ -87,7 +115,7 @@
   },
   "fixture": "zkc.r2.p01.schnorr-fixture.v1",
   "overall_pass": true,
-  "report_id": "sha256:4b16bb651ff688485ea3a4a6e580b27f9fd753b6321ce1548e83c0e74d71b4d9",
+  "report_id": "sha256:12ee640d843f9477cebc6484df538e4df98a54ac716dcd6e9c615f3da0532cd1",
   "schema": "zkc.r2.p01.report.v1",
   "sources": [
     "p01model/execution.py",

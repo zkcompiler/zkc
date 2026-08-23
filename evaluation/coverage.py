@@ -204,9 +204,17 @@ LEDGER: dict[str, dict[str, Any]] = {
     },
     "R-07": {
         "title": "result correspondence has a direction",
-        "boundaries": {"relations:satisfaction"},
+        "boundaries": {
+            "relations:satisfaction",
+            "relations:honest-prover-correspondence:exact-law",
+        },
         "pressure": (
             "A structural binding cannot be consumed as behavioral equivalence."
+        ),
+        "gap": (
+            "structural correspondence and satisfaction are exercised as separate "
+            "judgments that can disagree; Protocol acceptance, soundness direction, "
+            "completeness direction, and full equivalence are not"
         ),
     },
     "R-08": {

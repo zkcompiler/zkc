@@ -19,7 +19,7 @@ something else stops matching.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 from typing import Any, Mapping
@@ -31,7 +31,9 @@ from .relations import (
     admit_relation,
     admit_witness_assignment,
     canonical_schnorr_relation,
+    check_relation_honest_prover_correspondence,
     check_relation_satisfaction,
+    relation_honest_prover_candidate,
 )
 from .semantic import (
     AlgebraProfile,
@@ -175,6 +177,23 @@ def build_report(repo_root: Path, expectations: Any = None) -> dict[str, Any]:
         )
     )
 
+    # The Relation-to-Protocol pair.  This law was absent from the report for the
+    # same reason it had no callers: it was written and then never reached.  A
+    # judgment the report does not publish cannot be counted as coverage, and
+    # this is the only place in the witness where a relation and a Core are held
+    # against each other.
+    correspondence = relation_honest_prover_candidate(relation, core, honest, profile)
+    cases.append(
+        _case(
+            "relation/honest-prover-correspondence.v1",
+            check_relation_honest_prover_correspondence(
+                correspondence, relation, core, honest, profile
+            ),
+            correspondence.identity,
+            algebra=dict(fixture["algebra"]),
+        )
+    )
+
     # --- refusals ----------------------------------------------------------
     #
     # A report of affirmatives alone shows nothing: it cannot distinguish a
@@ -218,6 +237,34 @@ def build_report(repo_root: Path, expectations: Any = None) -> dict[str, Any]:
               check_relation_satisfaction(wrong, instance, relation, profile),
               instance.identity, statement=int(finite["statement"]),
               witness_declared=True, perturbed=True)
+    )
+
+    cases.append(
+        _case("relation/correspondence-foreign-type-refused.v1",
+              check_relation_honest_prover_correspondence(
+                  {"relation_id": relation.identity}, relation, core, honest, profile
+              ),
+              "", operand_kind="foreign")
+    )
+
+    cases.append(
+        _case("relation/correspondence-shape-refused.v1",
+              check_relation_honest_prover_correspondence(
+                  replace(correspondence, relation_id="not-an-id"),
+                  relation, core, honest, profile,
+              ),
+              correspondence.identity, relation_id="unclosed")
+    )
+
+    # Perturbing the law label alone: the correspondence is exact, so a field no
+    # admission predicate reads still has to break it.
+    cases.append(
+        _case("relation/correspondence-exact-law-refused.v1",
+              check_relation_honest_prover_correspondence(
+                  replace(correspondence, law="SomeOtherCorrespondence.v1"),
+                  relation, core, honest, profile,
+              ),
+              correspondence.identity, law="perturbed")
     )
 
     if len(cases) > MAX_CASES:
