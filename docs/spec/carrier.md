@@ -60,6 +60,52 @@ program — is the unit of identity and verification.
   revalidate the token isolation and no-forwarding assumptions.
 - Absorption (membership in A) is an event property, not implied by
   op kind; unabsorbed slots carry it explicitly (`kernel.md` §5.3).
+- A value handle is `!pir.val<"class">`, naming the semantic payload class
+  its material travels under, or `!pir.val<profile "id">`, naming a **value
+  profile** the sealed vocabulary declares. A profile states what stands
+  behind a commitment: the origin of its content, how much of it there is,
+  the element class it is drawn from, and the construction route that
+  realizes the commitment. The claim type has resolved a descriptor profile
+  since the beginning; this is the same treatment for the other type, and a
+  bare class is the degenerate case rather than a separate thing.
+
+  The marker is a keyword rather than a property of the string. One
+  namespace, in which a name is a profile when the vocabulary resolves it
+  and a payload class otherwise, would read a mistyped profile as a class
+  nobody declared — the failure a closed registry exists to prevent.
+
+  A profiled value is a **commitment, not an element of the class its
+  content is drawn from**. It therefore satisfies no operand slot, no
+  dependency slot, and no challenge capability, all of which declare a
+  payload class; a site asking "is this value of class C" is answered no.
+  The kernel never reads what a profiled value commits to: a value profile
+  fixes arity, class, and route the way a claim profile fixes anchor names,
+  so no-predicate-semantics holds by construction.
+
+  A fact a rule reads off a value profile is a declaration, and a rule that
+  prices in one owes a condition tying it to whatever structure the artifact
+  does fix. Where two declared facts stand in a relation the protocol
+  determines — a multiplicity sequence indexed by a table, so one arity is
+  the other — that relation is a condition of the rule, and an artifact
+  whose declarations disagree is refused. Where no such relation exists, a
+  lone commitment's declared content against its realized content, **no
+  arrangement of transcript events can supply one**: a commitment root
+  occupies one transcript slot whatever stands behind it, so a prover who
+  committed to more than the profile declares is consistent with every
+  spine fact, and understatement is the direction that understates a bound.
+  That is carried as an obligation of the judgment rather than checked, and
+  it is discharged at the seat the profile's origin names — an opening
+  relation of the binding route for committed content, the anchor's
+  preimage for preprocessed content.
+
+  A profile's `origin` says who chose the content, and the event carrying it
+  says the same thing in the carrier's terms: prover material enters on a
+  `pir.slot`, and content the statement fixes enters on a `pir.bind`, which
+  absorbs and so binds every later challenge to it. The two spellings must
+  agree. A reduction contract states the same fact a third time, by naming
+  the source of each message role, so a rule reading a role knows which
+  event kind fills it without inspecting the spine.
+
 - A `pir.chal` is a protocol-neutral **challenge capability**, not a value of
   a distinguished `chal` class. It names the semantic class of each sample,
   and its value result is inferred as `!pir.val<"class">`; the producing op
@@ -141,12 +187,16 @@ program — is the unit of identity and verification.
   a body **slot** references its owning instance with three
   structured props — `instance` (the reduce's label), `role` (contract
   role name), `idx` (occurrence for declared-multiplicity roles).
-  Membership is a slot-only fact: message roles name prover messages; checks
-  remain ordinary non-absorbing spine events and are owned by the reduction's
-  explicit `checks` map (and, where admitted, by its exact output discharge);
-  other event kinds gain membership only with a
-  consumer — until then the shape is unrepresentable rather than
-  rejected. **The
+  Membership is carried by whatever fills a role — a slot for prover
+  material, a public binding for content the statement fixes, which is what a
+  contract's `source` on a message role names (docs/spec/vocabularies.md §3).
+  Checks remain ordinary non-absorbing spine events and are owned by the
+  reduction's explicit `checks` map (and, where admitted, by its exact output
+  discharge); a challenge reaches a round through its contract's
+  `challenge_use` rather than through membership. Any further event kind
+  gains membership only with a consumer, and with a place in its row for the
+  role: an identity that does not record which role an event fills does not
+  determine the protocol. **The
   round number stays out of the IR**: role + contract reach the round
   through the registry's role→round assignment — the single
   declaration that also prices ε_i (kernel §5.2); an IR-carried
@@ -202,9 +252,10 @@ program — is the unit of identity and verification.
   four always-present protocol-entry sections — `claim_profiles`,
   `check_contracts`, `reduction_contracts`, and `terminal_rules` — are the sole
   digest authority for every cited claim profile, check contract, reduction
-  contract, and terminal rule; a fifth protocol-entry section,
-  `hole_contracts`, is present exactly when construction routes cite at least
-  one hole. Consumed construction entries are pinned separately in
+  contract, and terminal rule. Two further protocol-entry sections are
+  present exactly when cited: `hole_contracts` when construction routes cite
+  at least one hole, and `value_profiles` when a value names a profile. A
+  protocol citing neither keeps its exact table shape and bytes. Consumed construction entries are pinned separately in
   `construction_profiles`; the full closed `vocab` section set is §6's.
   Operations carry ids, never a
   second protocol-entry digest that could disagree.
@@ -282,8 +333,8 @@ structured channel.
   `construction_profiles` maps the consumed construction-profile entries — the
   kappa sponge and every codec a payload class routes through — to content
   digests whenever kappa consumes them. `hole_contracts` is present exactly
-  when routes cite at least one HoleContract and contains that exact cited
-  subset. Construction entries are pinned unconditionally on hopped versus
+  when routes cite at least one HoleContract, and `value_profiles` exactly
+  when a value names a profile; each contains that exact cited subset. Construction entries are pinned unconditionally on hopped versus
   unhopped use (zkc-E229). An unknown
   section is refused rather than carried into identity. `transformers` is the sources-then-reduces sequence,
   each source and reduce producing claims in position order. A
@@ -300,11 +351,27 @@ structured channel.
   The PIR event rows, which §6 fixed only by description, are exactly:
 
   ```text
-  ["bind",  payload_class, stage, value_or_null]
-  ["slot",  payload_class, absorbed, membership_or_null]
-  ["chal",  payload_class, label, domain, space, dep_positions, mode_or_null]
-  ["check", contract, input_positions, params, semantic_args, expr_or_null]
+  ["bind",          payload_class, stage, value_or_null, membership?]
+  ["bind_profiled", value_profile, stage, value_or_null, membership?]
+  ["slot",          payload_class, absorbed, membership_or_null]
+  ["slot_vec",      payload_class, count, absorbed, membership_or_null]
+  ["slot_profiled", value_profile, absorbed, membership_or_null]
+  ["chal",          payload_class, label, domain, space, dep_positions, mode_or_null]
+  ["check",         contract, input_positions, params, semantic_args, expr_or_null]
   ```
+
+  A counted slot and a profiled slot are each their own family, distinguished
+  by head rather than by arity: the optional construction route is appended
+  to a slot row, so two optional tails would collide. A profiled slot carries
+  one commitment and is never counted — a vector of commitments is a shape no
+  value profile states.
+
+  A binding row carries no construction route, so its membership is appended
+  when the binding fills a contract role and absent when it does not: arity
+  distinguishes them, and a binding that fills no role encodes as it always
+  did. The profiled family exists for the same reason the slot one does — a
+  reader must know whether the string names a value profile or a payload
+  class — and not to carry the role, which either family carries.
 
   `absorbed` is the integer `1` or `0`, not a boolean, and `membership` is
   `[transformer position, role, idx]` or null. Author labels appear only where
@@ -544,32 +611,39 @@ identity wholesale; only their resolved cited content does.
 
 The protocol-semantic surface is one cross-admitted file,
 `registry/protocol-vocabulary.json`, with envelope
-`zkc.protocol_vocabulary`, with six required source sections:
+`zkc.protocol_vocabulary`, with seven required source sections:
 
 ```text
-predicate_specs    CheckPredicateSpec preimages
-claim_profiles     ClaimDescriptorProfile
-check_contracts    CheckContract
-hole_contracts     HoleContract
+predicate_specs     CheckPredicateSpec preimages
+claim_profiles      ClaimDescriptorProfile
+value_profiles      ValueProfile
+check_contracts     CheckContract
+hole_contracts      HoleContract
 reduction_contracts ReductionContract
-terminal_rules     TerminalRule
+terminal_rules      TerminalRule
 ```
+
+A `ValueProfile` states `origin` — one of `prover_message`,
+`relation_derived`, `preprocessed` — with `arity_log2`, `element_class`, and
+`binding_route`. Every section is required whether or not a protocol cites
+it: an absent section is a load refusal, never a default.
 
 Each entry has canonical content and a tagged content digest under the exact
 ASCII prefix `"zkc/check-predicate-spec\n"`,
-`"zkc/claim-profile\n"`, `"zkc/check-contract\n"`,
+`"zkc/claim-profile\n"`, `"zkc/value-profile\n"`, `"zkc/check-contract\n"`,
 `"zkc/hole-contract\n"`, `"zkc/reduction-contract\n"`, or
-`"zkc/terminal-rule\n"`. Admission is joint, not six independent loader
+`"zkc/terminal-rule\n"`. Admission is joint, not seven independent loader
 successes: it resolves every profile reference, role, contract pin, producer
   reduction-contract content/version, normalized predicate, material
   expression, and attachment source/target;
 detects cycles where forbidden; and rejects stale or ambiguous content before
-the vocabulary can be supplied to seal. The five protocol entry families in
+the vocabulary can be supplied to seal. The six protocol entry families in
 the sealed `vocab` table — `claim_profiles`, `check_contracts`,
-`reduction_contracts`, `terminal_rules`, and `hole_contracts` — are the sole
-digest authority for protocol-entry semantics and contain exactly the
-transitive cited subset; `hole_contracts` is omitted only when no construction
-route cites one, and consumed construction entries are pinned separately in
+`reduction_contracts`, `terminal_rules`, `hole_contracts`, and
+`value_profiles` — are the sole digest authority for protocol-entry semantics
+and contain exactly the transitive cited subset; the last two are omitted
+when nothing cites them, so a protocol using neither keeps its exact table
+bytes. Consumed construction entries are pinned separately in
 `construction_profiles` (§6). A CheckContract
 digest commits to its predicate descriptor, which in turn pins an opaque
 predicate-spec content digest and entrypoint. The sealed artifact does not

@@ -40,7 +40,8 @@ BindOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          BindOp::Adaptor adaptor,
                          SmallVectorImpl<Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(getThreadType(ctx));
-  inferredReturnTypes.push_back(ValType::get(ctx, adaptor.getPayloadClass()));
+  inferredReturnTypes.push_back(
+      ValType::get(ctx, adaptor.getPayloadClass(), adaptor.getProfiled()));
   return success();
 }
 
@@ -49,11 +50,24 @@ SlotOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          SlotOp::Adaptor adaptor,
                          SmallVectorImpl<Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(getThreadType(ctx));
-  inferredReturnTypes.push_back(ValType::get(ctx, adaptor.getPayloadClass()));
+  // The marker travels from the operation into the type it infers, so a
+  // reader of the value cannot mistake a profile name for a payload class
+  // without resolving the vocabulary.
+  inferredReturnTypes.push_back(
+      ValType::get(ctx, adaptor.getPayloadClass(), adaptor.getProfiled()));
   return success();
 }
 
 LogicalResult SlotOp::verify() {
+  // A profiled slot's material is one commitment. A counted one would be a
+  // vector of them, which no profile shape describes and no consumer wants
+  // yet; the two are refused together rather than encoded into a form the
+  // vocabulary cannot read back.
+  if (getProfiled() && getCount() != "1")
+    return emitOpError()
+           << "[zkc-E167] a profiled slot carries one commitment, so it "
+              "cannot also be counted: a vector of commitments is a shape "
+              "no value profile states (docs/spec/carrier.md §3)";
   std::optional<uint64_t> parsed = zkc::challenge::parseCount(getCount());
   if (!parsed)
     return emitOpError()
@@ -72,7 +86,8 @@ ChalOp::inferReturnTypes(MLIRContext *ctx, std::optional<Location>,
                          ChalOp::Adaptor adaptor,
                          SmallVectorImpl<Type> &inferredReturnTypes) {
   inferredReturnTypes.push_back(getThreadType(ctx));
-  inferredReturnTypes.push_back(ValType::get(ctx, adaptor.getPayloadClass()));
+  inferredReturnTypes.push_back(
+      ValType::get(ctx, adaptor.getPayloadClass(), /*profiled=*/false));
   return success();
 }
 
@@ -184,8 +199,11 @@ verifyChallengeCapability(ChallengeCapabilityOpInterface capability) {
     return op->emitOpError()
            << "[zkc-E145] challenge capability must identify one exact SSA "
               "result owned by the implementing operation";
+  // A sampled challenge is never a commitment, so a profiled value cannot
+  // be a challenge capability's value: `bareClass()` is empty for one and no
+  // capability declares an empty payload class.
   auto type = dyn_cast<ValType>(value.getType());
-  if (!type || type.getValueClass() != payloadClass)
+  if (!type || type.bareClass() != payloadClass)
     return op->emitOpError()
            << "[zkc-E145] challenge capability value must have type "
               "!pir.val<\""
@@ -202,7 +220,7 @@ verifyChallengeCapability(ChallengeCapabilityOpInterface capability) {
 /// Membership from a slot's instance/role/idx props: absent only when
 /// all three are unset, so a half-set shape is visible to the verifier
 /// (zkc-E152) instead of silently reading as "no membership".
-static std::optional<Membership> membershipOf(SlotOp op) {
+template <typename OpT> static std::optional<Membership> membershipOf(OpT op) {
   if (!op.getInstance() && !op.getRole() && op.getIdx() == 0)
     return std::nullopt;
   return Membership{op.getInstance().value_or(llvm::StringRef()),
@@ -268,7 +286,14 @@ llvm::StringRef SlotOp::getMemberLabel() { return getLabel(); }
 Value SlotOp::getThreadIn() { return getThread(); }
 Value SlotOp::getThreadOut() { return getOut(); }
 bool SlotOp::isAbsorbing() { return !getUnabsorbed(); }
+Value SlotOp::getMemberValue() { return getVal(); }
 std::optional<Membership> SlotOp::getMembership() {
+  return membershipOf(*this);
+}
+
+Value BindOp::getMemberValue() { return getVal(); }
+
+std::optional<Membership> BindOp::getMembership() {
   return membershipOf(*this);
 }
 
@@ -486,6 +511,28 @@ private:
       if (auto bind = dyn_cast<BindOp>(op)) {
         if (failed(reserveClass(op, bind.getPayloadClass())))
           return failure();
+        // A profiled binding absorbs the digest of the content its profile
+        // describes, so its value is a material reference and answers to the
+        // rules every other one does: it must have reference shape, and no
+        // two verifier values may name one material.
+        if ((bind.getProfiled() || bind.getMembership()) &&
+            bind.getStage() == Stage::Seal) {
+          StringRef value = bind.getValue().value_or(StringRef());
+          if (!zkc::encoding::isSha256Ref(value))
+            return op->emitOpError()
+                   << "[zkc-E159] a seal-stage binding that carries a "
+                      "profile or fills a contract role absorbs the reference "
+                      "of the material it names, so its value "
+                   << zkc::encoding::kSha256RefMessage;
+          if (!boundSemanticRefs.insert(value).second)
+            return op->emitOpError()
+                   << "[zkc-E162] semantic_ref '" << value
+                   << "' is already bound to another verifier value: material "
+                      "references are reverse-injective";
+          // The value already has its reference, so a material binding on it
+          // would be a second one for one value.
+          boundValues.insert(bind.getVal());
+        }
       }
       if (auto slot = dyn_cast<SlotOp>(op)) {
         if (failed(reserveClass(op, slot.getPayloadClass())))

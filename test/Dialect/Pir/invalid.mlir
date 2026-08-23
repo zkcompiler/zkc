@@ -462,6 +462,19 @@ pir.protocol "child_is_a_prover" policy "residual_artifact" {
 
 // -----
 
+// A profiled slot's material is one commitment. A counted one would be a
+// vector of them, which no value profile describes: the profile states an
+// arity for what stands behind a single commitment, not how many
+// commitments there are.
+pir.protocol "profiled_slot_is_counted" policy "residual_artifact" {
+  %relation = pir.instantiate "r" anchors {contract = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", statement = "sha256:a8e0d4fd1cf2805185daf6d0f9234b21b842fefde3503dfd74d6919a109cdb47"} : !pir.claim<"opaque_relation">
+  %t0 = pir.begin
+  // expected-error @below {{[zkc-E167] a profiled slot carries one commitment}}
+  %t1, %v = pir.slot %t0 "cols" : profile "logup_committed_column" count "4"
+  pir.end %t1
+  pir.residual %relation : !pir.claim<"opaque_relation"> route "unmodeled"
+}
+
 // The ABI is omitted where the child has no distinct one. Declaring it empty
 // says the child has one and then declines to name it, and the encoder writes
 // an absent ABI as null, so the two would share an identity.

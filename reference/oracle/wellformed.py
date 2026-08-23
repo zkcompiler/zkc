@@ -127,6 +127,22 @@ MACHINE_DECIDERS = {
     "duplex_spine": ("zkc.side.duplex_spine", ("path_transition",)),
     "codec_bias_declared": ("zkc.side.codec_bias_declared",
                             ("path_transition",)),
+    # The one arity relation the artifact fixes -- a multiplicity column is
+    # indexed by its table -- and the lemma's own characteristic hypothesis.
+    # Neither ties a declared arity to what was committed; that gap is an
+    # external hypothesis, not a machine condition.
+    # Every anchor of every consumed claim is tied by the contract to a
+    # message role: without it a bound prices a passage between two
+    # statements about different objects.
+    "consumed_anchors_are_round_material": (
+        "zkc.side.consumed_anchors_are_round_material", ("reduction_contract",)),
+    # A bound instantiated per round whose quantities come from the whole
+    # reduction prices the first round's numbers against every round.
+    "single_round": ("zkc.side.single_round", ("reduction_contract",)),
+    "multiplicities_match_table": ("zkc.side.multiplicities_match_table",
+                              ("integer", "integer")),
+    "lookup_fits_characteristic": ("zkc.side.lookup_fits_characteristic",
+                                   ("integer", "integer", "integer")),
 }
 
 MACHINE_DECIDER_REVISION = "zkc.soundness"
@@ -681,6 +697,9 @@ def _check_projection(projection, where: str) -> None:
     elif kind == "bound_relation_anchor_count":
         if projection.result_sort != "integer":
             raise Refusal(f"{where} does not produce an integer count")
+    elif kind == "committed_arity":
+        if projection.result_sort != "integer":
+            raise Refusal(f"{where} does not produce an integer arity")
     elif kind == "reduction_parameter":
         if projection.result_sort not in ("integer", "rational", "string",
                                           "boolean"):

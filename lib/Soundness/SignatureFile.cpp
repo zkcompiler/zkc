@@ -365,6 +365,7 @@ Expected<ArtifactProjection> readArtifactProjection(const Reader &reader,
       {"path_binding_field", ArtifactProjectionKind::PathBindingField},
       {"bound_relation_anchor_count",
        ArtifactProjectionKind::BoundRelationAnchorCount},
+      {"committed_arity", ArtifactProjectionKind::CommittedArity},
   };
   auto kind =
       lookupEnum<ArtifactProjectionKind>(reader, *kindText, kinds, context);
@@ -388,6 +389,24 @@ Expected<ArtifactProjection> readArtifactProjection(const Reader &reader,
     if (Error err = reader.closed(entry, {"kind", "result_sort"}, context))
       return std::move(err);
     return projection;
+  case ArtifactProjectionKind::CommittedArity: {
+    // The role is optional: absent reads the whole reduction, which is the
+    // reading every binding written before roles could be selected has.
+    if (Error err = reader.closed(
+            entry, {"kind", "result_sort", "member_role"}, context))
+      return std::move(err);
+    if (entry.get("member_role")) {
+      auto role = reader.string(entry, "member_role", context);
+      if (!role)
+        return role.takeError();
+      if (role->empty())
+        return reader.fail(context +
+                            " member_role must not be empty: absent is how a "
+                            "projection reads the whole reduction");
+      projection.memberRole = role->str();
+    }
+    return projection;
+  }
   case ArtifactProjectionKind::ReductionParameter:
   case ArtifactProjectionKind::PathBindingField: {
     if (Error err =
@@ -1890,6 +1909,12 @@ Expected<SchemaContext> readSchemas(const Reader &reader,
       {"same_point", MachineDeciderKind::SamePoint},
       {"batch_after_material", MachineDeciderKind::BatchAfterMaterial},
       {"fri_shape", MachineDeciderKind::FriShape},
+      {"multiplicities_match_table", MachineDeciderKind::MultiplicitiesMatchTable},
+      {"consumed_anchors_are_round_material",
+       MachineDeciderKind::ConsumedAnchorsAreRoundMaterial},
+      {"single_round", MachineDeciderKind::SingleRound},
+      {"lookup_fits_characteristic",
+       MachineDeciderKind::LookupFitsCharacteristic},
       {"johnson_fold_param", MachineDeciderKind::JohnsonFoldParam},
       {"johnson_slack", MachineDeciderKind::JohnsonSlack},
       {"johnson_multiplicity", MachineDeciderKind::JohnsonMultiplicity},

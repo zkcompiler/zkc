@@ -68,7 +68,7 @@
     {
       "name": "protocol-vocabulary",
       "catches": "Any edit to the admitted vocabulary, which is the sole artifact digest authority. The value is the digest of the normalized document, so an entry added, removed, or re-keyed moves it.",
-      "value": "77dd0934d1a925c6284407e510316aa56d6a1732ec7bbe6e536595be915502bd",
+      "value": "e0aa2f6f646e99872d05058129624045e1b4f2fa26387c13bc5953cd200b37c0",
       "assurance": "cross_checked_here",
       "native": [
         "{bin}/zkc-registry-lint {repo}/registry/protocol-vocabulary.json | sha256sum | cut -d' ' -f1"
@@ -94,7 +94,7 @@
     {
       "name": "soundness-signature",
       "catches": "Any edit to a rule, a binding, or the schemas. The digest is what names an analysis, so two derivations are comparable exactly when it matches.",
-      "value": "9b1069894040e0a07a0826740ebb4e303177c1e4c69028828f0c7f88d75ea22d",
+      "value": "c4ff9ed79292e97efc79bee80fdb80c58f9f5625194a83b3b25cd974019eb482",
       "assurance": "cross_checked_here",
       "native": [
         "{bin}/zkc-registry-lint {repo}/registry/soundness-signature.json | grep -oE '\"digest\":\"sha256:[0-9a-f]{64}\"' | head -1 | grep -oE '[0-9a-f]{64}'"
@@ -110,7 +110,7 @@
     {
       "name": "compiler-configuration-semantics",
       "catches": "A change to what the compiler treats as its semantic configuration: the preimage a transform's authority is resolved against.",
-      "value": "309cadbf3a4066558fcd453ccccc3db812f4a4400f6147e1f894afdb58ff426a",
+      "value": "d63f0e153ab37d8272f62442e07edc07821da2d2b2c807707207cdb239b59689",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [
@@ -123,7 +123,7 @@
     {
       "name": "compiler-configuration-family",
       "catches": "A change to the transform-family configuration the compiler resolves against.",
-      "value": "0cda9f5c1e04acd011c39b466559cc84cc6f69748f90f75080dd0876b708bb2e",
+      "value": "f3c8524d1d6a9ea434d0c218966eb37373b3435d9475ad3f58f8de9fb31fba59",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [
@@ -136,7 +136,7 @@
     {
       "name": "compiler-configuration-domain",
       "catches": "A change to the transform-domain configuration the compiler resolves against.",
-      "value": "006fcbab95cc137de0d4f0ad738decdb3212794bc56608dfc306a523bbb91fce",
+      "value": "f9677c451bdf07d70e4b89cc44657018887887fcd6f5b36e6cd8f424fe7d9297",
       "assurance": "cross_checked_by",
       "cross_checked_by": "test/Compiler/compiler-config-parity.test",
       "native": [

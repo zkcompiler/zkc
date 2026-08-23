@@ -33,12 +33,13 @@ and deterministically rechecks selection.
 ## Current format boundary
 
 The current protocol format is PIR and the current endpoint format is
-OIR. ProtocolVocabulary is `zkc.protocol_vocabulary`. Its six
+OIR. ProtocolVocabulary is `zkc.protocol_vocabulary`. Its seven
 jointly admitted source sections are:
 
 ```text
 predicate_specs
 claim_profiles
+value_profiles
 check_contracts
 hole_contracts
 reduction_contracts

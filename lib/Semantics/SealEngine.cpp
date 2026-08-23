@@ -119,6 +119,19 @@ buildResolvedVocabulary(pir::ProtocolOp protocol,
       {StringAttr::get(context, "terminal_rules"), *terminalRules},
       {StringAttr::get(context, "construction_profiles"),
        *constructionProfiles}};
+  auto valueProfiles = resolveSection(
+      protocol, cited.valueProfiles,
+      [&](StringRef id) -> std::optional<StringRef> {
+        const auto *entry = vocabulary.lookupValueProfile(id);
+        return entry ? std::optional<StringRef>(entry->contentDigest())
+                     : std::nullopt;
+      });
+  if (failed(valueProfiles))
+    return failure();
+  if (!valueProfiles->empty())
+    sections.push_back(
+        {StringAttr::get(context, "value_profiles"), *valueProfiles});
+
   DictionaryAttr holeContracts = routes.resolvedHoleContracts(context);
   if (!holeContracts.empty())
     sections.push_back(

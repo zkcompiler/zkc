@@ -245,12 +245,24 @@ buildRoundFact(pir::ReduceOp reduce,
       if (members.size() != 1)
         return adapterError("a contract round message role has duplicate "
                             "sealed occurrence indices");
-      auto slot = mlir::dyn_cast<pir::SlotOp>(members.front());
-      if (!slot)
-        return adapterError("a contract round message membership is not a "
-                            "prover-message slot");
-      messageFact.payloadClassesByOccurrence.push_back(
-          slot.getPayloadClass().str());
+      // A role is filled by whatever carries the material: a slot for prover
+      // messages, a public binding for content the statement fixes. Which of
+      // the two a role admits is the contract's own declaration, checked
+      // against the spine at seal, so the projection reads either.
+      llvm::StringRef payloadClass;
+      bool profiled = false;
+      if (auto slot = mlir::dyn_cast<pir::SlotOp>(members.front())) {
+        payloadClass = slot.getPayloadClass();
+        profiled = slot.getProfiled();
+      } else if (auto bind = mlir::dyn_cast<pir::BindOp>(members.front())) {
+        payloadClass = bind.getPayloadClass();
+        profiled = bind.getProfiled();
+      } else {
+        return adapterError("a contract round message membership is neither a "
+                            "prover message nor a public binding");
+      }
+      messageFact.payloadClassesByOccurrence.push_back(payloadClass.str());
+      messageFact.profiledByOccurrence.push_back(profiled);
     }
     if (occurrences->second.size() != multiplicity)
       return adapterError("a contract round message role has extra sealed "
@@ -717,6 +729,26 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
 
   llvm::StringMap<pir::CheckOp> checksByLabel;
   llvm::StringMap<uint64_t> materialEventPositions;
+  // A profiled seal-stage binding absorbs the digest of the content its
+  // profile describes, so it is a material reference the same way a semantic
+  // binding is, and the events it names must be findable the same way.
+  for (mlir::Operation &operation : sealed.getBody().front()) {
+    auto bind = mlir::dyn_cast<pir::BindOp>(operation);
+    if (!bind || !bind.getProfiled() || bind.getStage() != pir::Stage::Seal)
+      continue;
+    llvm::StringRef reference = bind.getValue().value_or(llvm::StringRef());
+    if (reference.empty())
+      continue;
+    auto position = canonicalEventPosition(*canonical, bind.getVal(),
+                                           "a profiled public binding");
+    if (!position)
+      return position.takeError();
+    view.boundMaterialRefs.insert(reference.str());
+    view.boundMaterialLabels[reference.str()] = bind.getLabel().str();
+    if (!materialEventPositions.try_emplace(reference, *position).second)
+      return adapterError(
+          "one semantic material reference names more than one event");
+  }
   for (mlir::Operation &operation : sealed.getBody().front()) {
     auto check = mlir::dyn_cast<pir::CheckOp>(operation);
     if (check && !checksByLabel.try_emplace(check.getLabel(), check).second)
@@ -823,6 +855,120 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
       owned.rounds.push_back(std::move(*fact));
     }
 
+    // What the reduction's own commitments stand for. A profiled member
+    // names a value profile; the profile says how much content is behind it,
+    // and a rule that prices in that number reads it here rather than from a
+    // producer's annotation. Collected per role, because which commitment is
+    // the table and which is the looked-up column is a fact the contract
+    // already states, and a lookup whose two sides differ in length has two
+    // numbers to price from.
+    {
+      auto instanceRoles = protocolFacts.memberships().find(reduce.getLabel());
+      if (instanceRoles != protocolFacts.memberships().end())
+        for (const auto &role : instanceRoles->second) {
+          std::set<std::string> arities;
+          for (const auto &occurrence : role.getValue())
+            for (mlir::Operation *member : occurrence.second) {
+              // A member that declares nothing must not be silently passed
+              // over. Skipping it would let a reduction profile one column
+              // and leave another undeclared, and the arity a rule prices
+              // with would then be whatever the profiled member said. The
+              // empty string records "this role has a member with no
+              // declared content", which the projection refuses on rather
+              // than averaging over.
+              llvm::StringRef profileName;
+              if (auto slot = mlir::dyn_cast<pir::SlotOp>(member)) {
+                if (slot.getProfiled())
+                  profileName = slot.getPayloadClass();
+              } else if (auto bind = mlir::dyn_cast<pir::BindOp>(member)) {
+                if (bind.getProfiled())
+                  profileName = bind.getPayloadClass();
+              }
+              if (profileName.empty()) {
+                arities.insert(std::string());
+                continue;
+              }
+              const registry::ValueProfile *profile =
+                  vocabulary.lookupValueProfile(profileName);
+              if (!profile)
+                return adapterError(
+                    "a profiled message member names a value profile the "
+                    "sealed vocabulary does not declare");
+              // One bit for the value and one for the shift's headroom, so
+              // 2^64 -- the declared bound -- is exact rather than wrapping.
+              llvm::APInt arity(static_cast<unsigned>(profile->arityLog2) + 2,
+                                1);
+              arity = arity.shl(static_cast<unsigned>(profile->arityLog2));
+              llvm::SmallString<32> text;
+              arity.toString(text, 10, /*Signed=*/false);
+              arities.insert(std::string(text));
+            }
+          // Sorted numerically rather than by decimal text, so the order is
+          // the one a reader expects and a tie cannot depend on digit count.
+          llvm::SmallVector<registry::Rational> exactArities;
+          bool incomplete = false;
+          for (const std::string &text : arities) {
+            if (text.empty()) {
+              incomplete = true;
+              continue;
+            }
+            auto exact = registry::Rational::fromDecimal(text);
+            if (!exact)
+              return exact.takeError();
+            exactArities.push_back(std::move(*exact));
+          }
+          llvm::sort(exactArities, [](const registry::Rational &lhs,
+                                      const registry::Rational &rhs) {
+            return lhs.compare(rhs) < 0;
+          });
+          CommittedArityByRole entry;
+          entry.role = role.getKey().str();
+          entry.incomplete = incomplete;
+          entry.arities.assign(exactArities.begin(), exactArities.end());
+          owned.committedArityByRole.push_back(std::move(entry));
+        }
+      llvm::sort(owned.committedArityByRole,
+                 [](const CommittedArityByRole &lhs,
+                    const CommittedArityByRole &rhs) {
+                   return lhs.role < rhs.role;
+                 });
+    }
+
+    // Which consumed anchors the contract ties to a message role. The seal
+    // checks the ties hold; a rule that prices a passage between the consumed
+    // and produced claims requires that every anchor has one.
+    for (const registry::MaterialConstraint &constraint : contract->constraints) {
+      // Both spellings tie the same fact: the plural forms compare whole
+      // vectors, the singular ones pin one occurrence to one input, which is
+      // strictly stronger. A rule reading the tie must not care which an
+      // author wrote.
+      auto anchorName = [](const registry::MaterialExpr &side) {
+        return side.kind == registry::MaterialExprKind::InputAnchors ||
+                       side.kind == registry::MaterialExprKind::InputAnchor
+                   ? side.name
+                   : std::string();
+      };
+      auto roleName = [](const registry::MaterialExpr &side) {
+        return side.kind == registry::MaterialExprKind::Messages ||
+                       side.kind == registry::MaterialExprKind::Message
+                   ? side.name
+                   : std::string();
+      };
+      // Which role an anchor is tied to is the fact a rule needs, not merely
+      // that it is tied to something: every anchor pointed at one role would
+      // satisfy "all tied" while leaving the two claims about different
+      // material.
+      for (auto [anchorSide, roleSide] :
+           {std::pair{&constraint.left, &constraint.right},
+            std::pair{&constraint.right, &constraint.left}}) {
+        std::string anchor = anchorName(*anchorSide);
+        std::string role = roleName(*roleSide);
+        if (!anchor.empty() && !role.empty())
+          owned.constrainedInputAnchors.emplace(std::move(anchor),
+                                                std::move(role));
+      }
+    }
+
     // The transformer's body extent, in canonical event positions.
     {
       TransformerExtent extent;
@@ -838,15 +984,23 @@ llvm::Expected<SealedSoundnessView> buildSealedSoundnessViewFromClone(
         for (const auto &role : instanceRoles->second)
           for (const auto &occurrence : role.getValue())
             for (mlir::Operation *member : occurrence.second) {
-              auto slot = mlir::dyn_cast<pir::SlotOp>(member);
-              if (!slot)
-                continue;
+              // A role is filled by whatever carries the material, so the
+              // body extent covers both seats: skipping a bound member would
+              // leave a role the contract declares outside the body its own
+              // rounds define, and two protocols differing only in which seat
+              // fills a role would get different extents.
+              auto carrier =
+                  mlir::dyn_cast<pir::ProtocolMemberOpInterface>(member);
+              if (!carrier || !carrier.getMemberValue())
+                return adapterError(
+                    "a contract round message membership carries no value");
               auto position = canonicalEventPosition(
-                  *canonical, slot.getVal(), "a reduction message member");
+                  *canonical, carrier.getMemberValue(),
+                  "a reduction message member");
               if (!position)
                 return position.takeError();
               observe(*position);
-              if (slot.isAbsorbing())
+              if (carrier.isAbsorbing())
                 extent.central = false;
             }
       // A challenge the transformer's rounds sample is part of its body and

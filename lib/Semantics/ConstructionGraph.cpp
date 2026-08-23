@@ -134,14 +134,22 @@ private:
     int64_t position = 0;
     for (Operation &operation : body) {
       bodyPositions[&operation] = position++;
+      // A profiled value is a commitment, not an element of the class its
+      // content is drawn from, so it answers no to every "is this of class C"
+      // question a construction route asks. Its declared string is a profile
+      // name, and a profile may be named anything an author likes, so reading
+      // it here would let one spelled like a payload class satisfy a route
+      // that requires an element of it.
       if (auto bind = dyn_cast<pir::BindOp>(operation)) {
-        binds[bind.getLabel()].push_back({registry::HoleSegmentSort::Value,
-                                          bind.getPayloadClass(), "1",
-                                          &operation});
+        binds[bind.getLabel()].push_back(
+            {registry::HoleSegmentSort::Value,
+             cast<pir::ValType>(bind.getVal().getType()).bareClass(), "1",
+             &operation});
       } else if (auto slot = dyn_cast<pir::SlotOp>(operation)) {
-        slots[slot.getLabel()].push_back({registry::HoleSegmentSort::Value,
-                                          slot.getPayloadClass(), "1",
-                                          &operation});
+        slots[slot.getLabel()].push_back(
+            {registry::HoleSegmentSort::Value,
+             cast<pir::ValType>(slot.getVal().getType()).bareClass(), "1",
+             &operation});
       } else if (auto challenge = dyn_cast<pir::ChalOp>(operation)) {
         auto capability = cast<pir::ChallengeCapabilityOpInterface>(operation);
         challenges[challenge.getLabel()].push_back(

@@ -233,6 +233,7 @@ class ProtocolVocabulary:
                 "hole_contracts",
                 "reduction_contracts",
                 "terminal_rules",
+                "value_profiles",
             },
             "protocol vocabulary",
         )
@@ -242,6 +243,17 @@ class ProtocolVocabulary:
         self.profiles = {
             name: self._profile(name, body)
             for name, body in document["claim_profiles"].items()
+        }
+        for name in document["value_profiles"]:
+            if not isinstance(name, str) or not name or not all(
+                    0x20 <= ord(char) <= 0x7E for char in name):
+                raise Refusal(
+                    "[zkc-E121] value profile names must be non-empty "
+                    "printable ASCII"
+                )
+        self.value_profiles = {
+            name: self._value_profile(name, body)
+            for name, body in document["value_profiles"].items()
         }
         self.predicate_specs = {
             digest: self._predicate_spec(digest, body)
@@ -276,6 +288,10 @@ class ProtocolVocabulary:
         self.profile_digests = {
             name: tagged_digest("zkc/claim-profile\n", body)
             for name, body in self.profiles.items()
+        }
+        self.value_profile_digests = {
+            name: tagged_digest("zkc/value-profile\n", body)
+            for name, body in self.value_profiles.items()
         }
         self.hole_contract_digests = {
             name: tagged_digest("zkc/hole-contract\n", body)
@@ -348,6 +364,7 @@ class ProtocolVocabulary:
             "reduction_contracts": self.reductions,
             "registry": "zkc.protocol_vocabulary",
             "terminal_rules": self.rules,
+            "value_profiles": self.value_profiles,
         }
 
     @classmethod
@@ -368,6 +385,58 @@ class ProtocolVocabulary:
         if len(set(value)) != len(value):
             raise Refusal(f"{where} contains duplicates")
         return sorted(value) if sort else list(value)
+
+    #: Origins a value profile may declare. The relation-derived and
+    #: preprocessed shapes are what the relation commitment and the
+    #: preprocessed index become, so they are values of one field rather than
+    #: three sibling mechanisms.
+    _VALUE_ORIGINS = frozenset(
+        {"prover_message", "relation_derived", "preprocessed"})
+
+    def _value_profile(self, name: str, body: Any) -> dict[str, Any]:
+        """What a value commits to, where the value type names a profile.
+
+        The claim type resolved a descriptor profile from the beginning and
+        the value type carried one string; this is the same treatment for the
+        other type. The profile fixes arity, element class and binding route
+        while nothing here reads committed data, so the no-predicate-semantics
+        rule holds by construction rather than by care.
+        """
+
+        if not isinstance(body, dict):
+            raise Refusal(f"value profile {name!r} must be an object")
+        _closed(body, {"element_class", "origin", "arity_log2",
+                       "binding_route"}, f"value profile {name!r}")
+        for field in ("element_class", "origin", "binding_route"):
+            value = body[field]
+            if not isinstance(value, str) or not value:
+                raise Refusal(f"value profile {name!r} has no {field}")
+            # Non-empty printable ASCII, like every other registry string: a
+            # value outside the encoding domain cannot round-trip the
+            # canonical form, and the enforced domain is what the parity
+            # argument rests on (docs/spec/kernel.md section 3).
+            if not all(0x20 <= ord(char) <= 0x7E for char in value):
+                raise Refusal(
+                    f"value profile {name!r} needs a non-empty "
+                    f"printable-ASCII {field!r}"
+                )
+        if body["origin"] not in self._VALUE_ORIGINS:
+            raise Refusal(
+                f"value profile {name!r} names origin {body['origin']!r}, "
+                "which is not one of " + ", ".join(sorted(self._VALUE_ORIGINS))
+            )
+        arity = body["arity_log2"]
+        # Bounded on both sides: a negative arity is not a count, and the
+        # bound keeps 2^arity inside the exact integer domain.
+        if type(arity) is not int or not 0 <= arity <= 64:
+            raise Refusal(
+                f"value profile {name!r} needs an 'arity_log2' in 0..64")
+        return {
+            "arity_log2": arity,
+            "binding_route": body["binding_route"],
+            "element_class": body["element_class"],
+            "origin": body["origin"],
+        }
 
     def _profile(self, name: str, body: Any) -> dict[str, Any]:
         if not isinstance(body, dict):
@@ -1056,7 +1125,8 @@ class ProtocolVocabulary:
             for message in round_["messages"]:
                 if (
                     not isinstance(message, dict)
-                    or set(message) != {"role", "count"}
+                    or set(message) - {"role", "count", "source"}
+                    or not {"role", "count"} <= set(message)
                     or not isinstance(message["role"], str)
                     or not message["role"]
                     or message["role"] in dep_roles
@@ -1083,9 +1153,22 @@ class ProtocolVocabulary:
                 else:
                     raise Refusal(f"{where} has malformed tagged message count")
                 message_counts[message["role"]] = normalized_count
-                messages.append(
-                    {"count": normalized_count, "role": message["role"]}
-                )
+                normalized_message = {
+                    "count": normalized_count,
+                    "role": message["role"],
+                }
+                # Absent is the prover-message default, so a contract written
+                # before this field keeps its digest; the field is emitted
+                # only when it says something else.
+                if "source" in message:
+                    if message["source"] not in ("prover_slot", "public_bind"):
+                        raise Refusal(
+                            f"{where} message source must be prover_slot or "
+                            "public_bind"
+                        )
+                    if message["source"] == "public_bind":
+                        normalized_message["source"] = "public_bind"
+                messages.append(normalized_message)
             normalized_round = {
                 "challenge_use": normalized_challenge_use,
                 "messages": messages,
@@ -1474,6 +1557,7 @@ class ProtocolVocabulary:
             "hole_contracts": self.hole_contract_digests,
             "reduction_contracts": self.reduction_digests,
             "terminal_rules": self.rule_digests,
+            "value_profiles": self.value_profile_digests,
         }
         try:
             return tables[section][name]
@@ -1961,6 +2045,11 @@ class Bind(NamedTuple):
     payload_class: str
     stage: str
     value: str | None
+    membership: tuple[str, str, int] | None = None
+    #: When set, ``payload_class`` names a value profile rather than a payload
+    #: class: the bound material is a sequence of the profile's declared
+    #: length, entering the transcript as a public binding.
+    profiled: bool = False
 
 
 class Slot(NamedTuple):
@@ -1971,6 +2060,10 @@ class Slot(NamedTuple):
     membership: tuple[str, str, int] | None
     binding: str | None = None
     count: str = "1"
+    #: When set, ``payload_class`` names a value profile rather than a payload
+    #: class: the slot's material is a commitment, and the profile states what
+    #: stands behind it.
+    profiled: bool = False
 
 
 class Chal(NamedTuple):
@@ -2049,8 +2142,18 @@ def source(label: str, profile: str, anchors: dict[str, str]) -> Source:
     return Source(label, profile, dict(anchors))
 
 
-def bind(label: str, payload_class: str, stage: str, value: str | None = None) -> Bind:
-    return Bind("bind", label, payload_class, stage, value)
+def bind(
+    label: str,
+    payload_class: str,
+    stage: str,
+    value: str | None = None,
+    membership: tuple[str, str, int] | tuple[str, str] | None = None,
+    profiled: bool = False,
+) -> Bind:
+    if membership is not None and len(membership) == 2:
+        membership = (membership[0], membership[1], 0)
+    return Bind("bind", label, payload_class, stage, value, membership,
+                profiled)
 
 
 def slot(
@@ -2060,6 +2163,7 @@ def slot(
     membership: tuple[str, str, int] | tuple[str, str] | None = None,
     binding: str | None = None,
     count: str = "1",
+    profiled: bool = False,
 ) -> Slot:
     if membership is not None and len(membership) == 2:
         membership = (membership[0], membership[1], 0)
@@ -2068,7 +2172,8 @@ def slot(
     # codec width are constants of the sealed instance, so the framing
     # stays injective (docs/spec/kernel.md section 1.1).
     return Slot(
-        "slot", label, payload_class, absorbed, membership, binding, count
+        "slot", label, payload_class, absorbed, membership, binding, count,
+        profiled
     )
 
 
@@ -2303,8 +2408,13 @@ def terminal_closure(
 
     events: list[Any] = protocol["events"]
     reduces: list[Reduce] = protocol.get("reduces", [])
+    # A profiled value is a commitment, not an element of the class its
+    # content is drawn from, so it answers no to every "is this of class C"
+    # question — operand slots, dependency slots and challenge capabilities
+    # alike. Reading the profile name here instead would let a profile
+    # spelled like a class stand in for one element of it.
     value_classes = {
-        event.label: event.payload_class
+        event.label: ("" if event.profiled else event.payload_class)
         for event in events
         if isinstance(event, (Bind, Slot))
     }
@@ -2375,6 +2485,13 @@ def terminal_closure(
             raise Refusal("material binding target is not a sha256 reference")
         if binding.value in binding_by_value:
             raise Refusal(f"value {binding.value!r} has two material bindings")
+        # One accounting for both spellings of a material reference.
+        if self_material_ref_of(protocol, binding.semantic_ref):
+            raise Refusal(
+                f"[zkc-E162] semantic_ref {binding.semantic_ref!r} is already "
+                "bound to another verifier value: material references are "
+                "reverse-injective"
+            )
         if binding.semantic_ref in value_by_reference:
             raise Refusal("semantic material reference has two local producers")
         binding_by_value[binding.value] = binding.semantic_ref
@@ -2382,7 +2499,9 @@ def terminal_closure(
 
     messages: dict[str, dict[str, dict[int, str]]] = {}
     for event in events:
-        if isinstance(event, Slot) and event.membership:
+        # A role is filled by whatever carries the material: a slot for
+        # prover messages, a public binding for statement-fixed content.
+        if isinstance(event, (Slot, Bind)) and event.membership:
             instance, role, index = event.membership
             messages.setdefault(instance, {}).setdefault(role, {})[index] = event.label
 
@@ -2580,8 +2699,13 @@ def reduction_closure(
 
     events: list[Any] = protocol["events"]
     event_positions = {event.label: index for index, event in enumerate(events)}
+    # A profiled value is a commitment, not an element of the class its
+    # content is drawn from, so it answers no to every "is this of class C"
+    # question — operand slots, dependency slots and challenge capabilities
+    # alike. Reading the profile name here instead would let a profile
+    # spelled like a class stand in for one element of it.
     value_classes = {
-        event.label: event.payload_class
+        event.label: ("" if event.profiled else event.payload_class)
         for event in events
         if isinstance(event, (Bind, Slot))
     }
@@ -2625,13 +2749,31 @@ def reduction_closure(
 
     messages: dict[str, dict[str, dict[int, str]]] = {}
     for event in events:
-        if not isinstance(event, Slot) or event.membership is None:
+        if not isinstance(event, (Slot, Bind)) or event.membership is None:
             continue
         instance, role, index = event.membership
         occurrences = messages.setdefault(instance, {}).setdefault(role, {})
         if index in occurrences:
             raise Refusal(f"reduction message {instance}.{role}[{index}] is duplicated")
         occurrences[index] = event.label
+
+    def self_material_ref(label: str) -> str | None:
+        """The material reference a value carries in itself, or None.
+
+        A profiled seal-stage binding absorbs the digest of the content its
+        profile describes, so that digest is the value's own reference.
+        """
+        event = next((e for e in events
+                      if isinstance(e, Bind) and e.label == label), None)
+        # A binding that carries a profile absorbs the digest of what the
+        # profile describes; a binding that fills a contract role absorbs the
+        # reference of the material the role claims. Either way the value is
+        # the reference.
+        if event is None or event.stage != "seal":
+            return None
+        if not event.profiled and event.membership is None:
+            return None
+        return event.value or None
 
     binding_by_value: dict[str, str] = {}
     value_by_reference: dict[str, str] = {}
@@ -2642,6 +2784,20 @@ def reduction_closure(
             raise Refusal("material binding target is not a sha256 reference")
         if binding_entry.value in binding_by_value:
             raise Refusal(f"value {binding_entry.value!r} has two material bindings")
+        if self_material_ref(binding_entry.value) is not None:
+            raise Refusal(
+                f"[zkc-E161] value {binding_entry.value!r} carries its own "
+                "material reference and may not also have a material binding"
+            )
+        # A profiled seal-stage binding absorbs a material reference too, so
+        # the two spellings share one accounting: distinct producers may not
+        # assert one reference however it is written.
+        if self_material_ref_of(protocol, binding_entry.semantic_ref):
+            raise Refusal(
+                f"[zkc-E162] semantic_ref {binding_entry.semantic_ref!r} is "
+                "already bound to another verifier value: material "
+                "references are reverse-injective"
+            )
         if binding_entry.semantic_ref in value_by_reference:
             raise Refusal("semantic material reference has two local producers")
         binding_by_value[binding_entry.value] = binding_entry.semantic_ref
@@ -2698,6 +2854,12 @@ def reduction_closure(
             return result
 
         def binding(value: str) -> str:
+            # A value that carries its own material reference is read from
+            # itself; a material binding on it would be a second spelling of
+            # one fact, and stays unconsumed so the seal refuses it.
+            own = self_material_ref(value)
+            if own is not None:
+                return own
             try:
                 result = binding_by_value[value]
             except KeyError:
@@ -2897,9 +3059,11 @@ def _validate_contract_shape(
     positions = {event.label: index for index, event in enumerate(event_sequence)}
     claim_profiles = {entry.label: entry.profile for entry in protocol["sources"]}
 
-    membership: dict[str, dict[str, dict[int, Slot]]] = {}
+    # A contract role is filled by whatever carries the material: a slot for
+    # prover messages, a public binding for content the statement fixes.
+    membership: dict[str, dict[str, dict[int, Slot | Bind]]] = {}
     for event in event_sequence:
-        if not isinstance(event, Slot) or event.membership is None:
+        if not isinstance(event, (Slot, Bind)) or event.membership is None:
             continue
         instance, role, index = event.membership
         occurrences = membership.setdefault(instance, {}).setdefault(role, {})
@@ -2938,7 +3102,11 @@ def _validate_contract_shape(
             if event is None:
                 raise Refusal(f"reduce {reduce.label!r} has unknown dependency")
             if isinstance(event, (Bind, Slot, Chal)):
-                actual_class = event.payload_class
+                # A profiled value is a commitment, not an element of the
+                # class its content is drawn from, so it satisfies no
+                # dependency slot however its profile is named.
+                actual_class = ("" if getattr(event, "profiled", False)
+                                else event.payload_class)
             else:
                 raise Refusal(
                     f"reduce {reduce.label!r} dependency {label!r} is not a value"
@@ -2967,6 +3135,11 @@ def _validate_contract_shape(
             for round_ in contract["rounds"]
             for message in round_["messages"]
         }
+        declared_sources = {
+            message["role"]: message.get("source", "prover_slot")
+            for round_ in contract["rounds"]
+            for message in round_["messages"]
+        }
         bound_messages = membership.get(reduce.label, {})
         for role in bound_messages:
             if role not in declared_messages:
@@ -2980,7 +3153,12 @@ def _validate_contract_shape(
             # slot occurrence contributes its declared count and a value
             # is never split — the check-operand segmentation rule
             # (docs/spec/vocabularies.md), applied to round messages.
-            units = sum(int(slot.count) for slot in occurrences.values())
+            # A public binding is one unit: its content is the sequence the
+            # profile declares, which no count multiplies.
+            units = sum(
+                1 if isinstance(member, Bind) else int(member.count)
+                for member in occurrences.values()
+            )
             if units != count:
                 raise Refusal(
                     f"[zkc-E244] message role {role!r} needs {count} "
@@ -2991,6 +3169,23 @@ def _validate_contract_shape(
                     f"[zkc-E244] message role {role!r} has a non-canonical "
                     f"occurrence set {sorted(occurrences)}"
                 )
+            # Who fills the role, against who the contract says fills it.
+            # The event kind is the carrier's statement of provenance and
+            # the contract's source is the vocabulary's; a protocol where
+            # they disagree has two answers to who chose the content.
+            wants_bind = declared_sources[role] == "public_bind"
+            for occurrence in occurrences.values():
+                if isinstance(occurrence, Bind) != wants_bind:
+                    filled = ("a public binding"
+                              if isinstance(occurrence, Bind)
+                              else "a prover message")
+                    declared = ("a public binding" if wants_bind
+                                else "a prover message")
+                    raise Refusal(
+                        f"[zkc-E244] message role {role!r} is filled by "
+                        f"{filled} and the contract declares it filled by "
+                        f"{declared}"
+                    )
 
         prior_challenges: list[tuple[str, Chal]] = []
         covered_roles: list[str] = []
@@ -3048,7 +3243,12 @@ def _validate_contract_shape(
                             f"[zkc-E213] round message {role!r} must precede "
                             f"challenge {challenge_role!r}"
                         )
-                    if not occurrence.absorbed:
+                    # Absorption is an event property: a public binding
+                    # always absorbs, a slot unless it is marked unabsorbed
+                    # (docs/spec/kernel.md section 1.1).
+                    absorbed = (True if isinstance(occurrence, Bind)
+                                else occurrence.absorbed)
+                    if not absorbed:
                         raise Refusal(
                             f"[zkc-E213] round message {role!r} is not absorbed "
                             f"before challenge {challenge_role!r}"
@@ -3057,6 +3257,64 @@ def _validate_contract_shape(
 
         for label, profile in reduce.produced:
             claim_profiles[label] = profile
+
+
+def _resolve_value_profile(vocabulary, event, seat: str, admitted: str):
+    """Resolve a profiled event's profile, fail-closed, and check its seat.
+
+    Fail-closed resolution: an unresolved profile name is refused rather than
+    read as a payload class nobody declared, which is what one namespace
+    would have done.  The origin check is the second half of the same
+    reading: a profile's ``origin`` says who chose the content and the event
+    carrying it says the same thing in the carrier's own terms, so the two
+    must agree or the artifact declares a provenance its transcript denies.
+    """
+    profile = vocabulary.value_profiles.get(event.payload_class)
+    if profile is None:
+        raise Refusal(
+            f"[zkc-E166] value profile {event.payload_class!r}, named by "
+            f"{seat} {event.label!r}, is not declared by the sealed vocabulary"
+        )
+    # Preprocessed content is fixed before any statement, and an
+    # instance-stage binding's value arrives per statement, so the seat is
+    # only half the answer and the stage is the other half.
+    if admitted == "preprocessed" and getattr(event, "stage", "seal") != "seal":
+        raise Refusal(
+            f"[zkc-E169] value profile {event.payload_class!r} declares origin "
+            "'preprocessed', which is content fixed before any statement, so "
+            f"it does not belong on an instance-stage {seat}: the stage is "
+            "half of the carrier's statement of who chose the content"
+        )
+    if profile["origin"] != admitted:
+        raise Refusal(
+            f"[zkc-E169] value profile {event.payload_class!r} declares "
+            f"origin {profile['origin']!r}, which does not belong on {seat} "
+            f"{event.label!r}: that seat carries content of origin "
+            f"{admitted!r}, and the event a value enters on is the carrier's "
+            "own statement of who chose it"
+        )
+    return profile
+
+
+def _material_class(event, vocabulary) -> str:
+    """The payload class a value's material travels under.
+
+    A profiled value names a value profile, not a class, and the class is the
+    profile's element class. Emitting the profile name would name a codec the
+    emitted program does not have: the seal admitted one for the element
+    class.
+    """
+    if not getattr(event, "profiled", False):
+        return event.payload_class
+    return vocabulary.value_profiles[event.payload_class]["element_class"]
+
+
+
+def self_material_ref_of(protocol, reference: str) -> bool:
+    """Whether a profiled seal-stage binding already absorbs this reference."""
+    return any(isinstance(event, Bind) and event.profiled
+               and event.stage == "seal" and event.value == reference
+               for event in protocol["events"])
 
 
 def _validate_artifact_verify(
@@ -3201,6 +3459,7 @@ def validate_protocol(
         previous = start
 
     absorbed: set[str] = set()
+    profiled_bind_refs: set[str] = set()
     first_unabsorbed: str | None = None
     first_challenge: str | None = None
     next_segment = 0
@@ -3218,8 +3477,45 @@ def validate_protocol(
                     f"[zkc-E214] statement binding {event.label!r} follows "
                     f"challenge {first_challenge!r} in its segment"
                 )
+            if event.membership is not None and event.stage != "seal":
+                raise Refusal(
+                    f"[zkc-E227] binding {event.label!r} fills a contract role "
+                    "and carries the reference of the material that role "
+                    "claims, which an instance-stage binding has no value to "
+                    "hold"
+                )
+            if event.profiled:
+                _resolve_value_profile(vocabulary, event, "binding",
+                                       "preprocessed")
+            if event.profiled or event.membership is not None:
+                # The absorbed value is a material reference and answers to
+                # the rules every other one does.
+                if event.stage == "seal":
+                    if not is_sha256_ref(event.value or ""):
+                        raise Refusal(
+                            "[zkc-E159] a profiled seal-stage binding absorbs "
+                            "the digest of what its profile describes, so "
+                            f"binding {event.label!r} needs a sha256 reference"
+                        )
+                    if event.value in profiled_bind_refs:
+                        raise Refusal(
+                            f"[zkc-E162] semantic_ref {event.value!r} is "
+                            "already bound to another verifier value: "
+                            "material references are reverse-injective"
+                        )
+                    profiled_bind_refs.add(event.value)
             absorbed.add(event.label)
         elif isinstance(event, Slot):
+            if event.profiled:
+                if event.count != "1":
+                    raise Refusal(
+                        "[zkc-E167] a profiled slot carries one commitment, "
+                        f"so slot {event.label!r} cannot also be counted: a "
+                        "vector of commitments is a shape no value profile "
+                        "states"
+                    )
+                _resolve_value_profile(vocabulary, event, "slot",
+                                       "prover_message")
             if event.absorbed:
                 absorbed.add(event.label)
             elif first_unabsorbed is None:
@@ -3320,7 +3616,21 @@ def resolved_vocabulary(
             name: construction_digest(name) for name in sorted(construction)
         },
     }
-    # Hole contracts are cited by construction routes; the sixth section
+    # A profiled value cites its profile, and the section exists exactly when
+    # one does -- the hole-contract discipline. Without it the identity would
+    # not commit to what the profile says, and an arity a rule reads could
+    # move under a fixed artifact id.
+    value_profiles = sorted({
+        event.payload_class for event in protocol["events"]
+        if isinstance(event, (Slot, Bind)) and event.profiled
+    })
+    if value_profiles:
+        table["value_profiles"] = {
+            name: vocabulary.digest_for("value_profiles", name)
+            for name in value_profiles
+        }
+
+    # Hole contracts are cited by construction routes; the section
     # exists exactly when at least one contract is cited, so a protocol
     # without routes keeps its exact table shape and bytes.
     routes = protocol.get("routes")
@@ -3515,17 +3825,40 @@ def canonical_document(
     event_rows = []
     for event in events:
         if isinstance(event, Bind):
-            event_rows.append(
-                ["bind", event.payload_class, event.stage, event.value]
-            )
+            # A profiled binding is its own event family, exactly as a
+            # profiled slot is: the profile name where the scalar family
+            # carries a payload class, and its membership beside it.
+            # Membership is appended by either family when the binding fills
+            # a contract role; a binding row has no other optional tail, so a
+            # binding that fills no role encodes exactly as it always did.
+            row = ["bind_profiled" if event.profiled else "bind",
+                   event.payload_class, event.stage, event.value]
+            if event.membership is not None:
+                instance, role, index = event.membership
+                row.append([transformer_pos[instance], role, index])
+            event_rows.append(row)
         elif isinstance(event, Slot):
             membership = None
             if event.membership is not None:
                 instance, role, index = event.membership
                 membership = [transformer_pos[instance], role, index]
-            # A counted slot is its own event family: the scalar family
-            # keeps its exact historical encoding.
-            if event.count == "1":
+            # A counted slot is its own event family, and so is a profiled
+            # one: the scalar family keeps its exact historical encoding.
+            if event.profiled:
+                if event.count != "1":
+                    raise Refusal(
+                        "[zkc-E167] a profiled slot carries one commitment, "
+                        f"so slot {event.label!r} cannot also be counted: a "
+                        "vector of commitments is a shape no value profile "
+                        "states"
+                    )
+                row = [
+                    "slot_profiled",
+                    event.payload_class,
+                    1 if event.absorbed else 0,
+                    membership,
+                ]
+            elif event.count == "1":
                 row = [
                     "slot",
                     event.payload_class,
@@ -3743,7 +4076,7 @@ def project(
             else:
                 value = [
                     "r",
-                    emit(["const", event.value, event.payload_class, src]),
+                    emit(["const", event.value, _material_class(event, vocabulary), src]),
                     0,
                 ]
             sponge = ["r", emit(["absorb", sponge, value, src]), 0]
@@ -3751,7 +4084,7 @@ def project(
         elif isinstance(event, Slot):
             if event.count == "1":
                 row = emit(
-                    ["read", stream, event.label, event.payload_class, src]
+                    ["read", stream, event.label, _material_class(event, vocabulary), src]
                 )
             else:
                 row = emit(
@@ -3759,7 +4092,7 @@ def project(
                         "read_vec",
                         stream,
                         event.label,
-                        event.payload_class,
+                        _material_class(event, vocabulary),
                         event.count,
                         src,
                     ]
@@ -3776,7 +4109,7 @@ def project(
                     "squeeze",
                     sponge,
                     event.label,
-                    event.payload_class,
+                    _material_class(event, vocabulary),
                     count,
                     event.domain,
                     rule,
@@ -3856,7 +4189,7 @@ def project(
     if missing:
         raise Refusal(f"OIR realization is incomplete: {missing}")
     entry = [
-        ["val", event.payload_class]
+        ["val", _material_class(event, vocabulary)]
         for event in protocol["events"]
         if isinstance(event, Bind) and event.stage == "instance"
     ] + [["stream"]]
@@ -4022,7 +4355,7 @@ def _project_prover(
             else:
                 value = [
                     "r",
-                    emit(["const", event.value, event.payload_class, src]),
+                    emit(["const", event.value, _material_class(event, vocabulary), src]),
                     0,
                 ]
             sponge = ["r", emit(["absorb", sponge, value, src]), 0]
@@ -4036,7 +4369,7 @@ def _project_prover(
                         stream,
                         value,
                         event.label,
-                        event.payload_class,
+                        _material_class(event, vocabulary),
                         src,
                     ]
                 )
@@ -4047,7 +4380,7 @@ def _project_prover(
                         stream,
                         value,
                         event.label,
-                        event.payload_class,
+                        _material_class(event, vocabulary),
                         event.count,
                         src,
                     ]
@@ -4064,7 +4397,7 @@ def _project_prover(
                     "squeeze",
                     sponge,
                     event.label,
-                    event.payload_class,
+                    _material_class(event, vocabulary),
                     count,
                     event.domain,
                     rule,
@@ -4102,7 +4435,7 @@ def _project_prover(
 
     entry = (
         [
-            ["val", event.payload_class]
+            ["val", _material_class(event, vocabulary)]
             for event in protocol["events"]
             if isinstance(event, Bind) and event.stage == "instance"
         ]
@@ -4518,6 +4851,135 @@ def _self_test() -> None:
         ok("[zkc-E165]" in str(error), "a proof slot precedes its verification")
     else:
         raise AssertionError("a verification naming a later slot was accepted")
+
+    # The value profile's own refusals. Both are declared twin-mirrored, and
+    # the allocation lint is satisfied by the identifier appearing in this
+    # source -- so without these the declaration would be true of the text and
+    # false of the behaviour.
+    def profiled_slot_refuses(reason: str, note: str, **replacements: Any) -> None:
+        mutated = copy.deepcopy(witnesses.LOGUP_BUS)
+        index = next(position
+                     for position, event in enumerate(mutated["events"])
+                     if isinstance(event, Slot) and event.profiled)
+        mutated["events"][index] = mutated["events"][index]._replace(
+            **replacements)
+        try:
+            validate_protocol(mutated, VOCABULARY)
+        except Refusal as error:
+            ok(reason in str(error), note)
+        else:
+            raise AssertionError(f"profiled slot accepted: {note}")
+
+    profiled_slot_refuses("[zkc-E166]",
+                          "a value profile resolves or the seal refuses",
+                          payload_class="no_such_profile")
+    profiled_slot_refuses("[zkc-E167]",
+                          "a profiled slot carries one commitment",
+                          count="4")
+
+    # A profiled seal-stage binding absorbs the digest of what its profile
+    # describes, so its value is a material reference and answers to the rules
+    # every other one does.
+    def profiled_bind_refuses(reason: str, note: str, **replacements: Any) -> None:
+        mutated = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+        index = next(position
+                     for position, event in enumerate(mutated["events"])
+                     if isinstance(event, Bind) and event.profiled)
+        mutated["events"][index] = mutated["events"][index]._replace(
+            **replacements)
+        try:
+            validate_protocol(mutated, VOCABULARY)
+        except Refusal as error:
+            ok(reason in str(error), note)
+        else:
+            raise AssertionError(f"profiled binding accepted: {note}")
+
+    profiled_bind_refuses(
+        "[zkc-E159]",
+        "a profiled binding's absorbed value is a material reference",
+        value="")
+    # A binding fills a contract role whether or not it carries a profile,
+    # and identity records which role: the row appends the membership when
+    # there is one, so two artifacts differing only in it are two artifacts.
+    role_shapes = {}
+    for label, membership in (("norole", None), ("table", ("bus", "table", 0)),
+                              ("second", ("bus", "table", 1))):
+        shaped = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+        shaped["events"][0] = shaped["events"][0]._replace(
+            membership=membership)
+        role_shapes[label] = canonical_encoding(shaped, VOCABULARY)
+    ok(len(set(role_shapes.values())) == 3,
+       "a binding's role is identity content")
+    ok(json.loads(role_shapes["norole"])["events"][0][-1]
+       == "sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a4c2e0f9d7b5638a1c4e2f0d9b7563",
+       "a binding filling no role encodes with no membership tail")
+
+    # A binding names the material its role claims with the value it
+    # absorbs: at seal, and once.
+    stage_shift = copy.deepcopy(witnesses.LOGUP_BARE_TABLE)
+    stage_shift["events"][0] = stage_shift["events"][0]._replace(
+        stage="instance", value=None)
+    try:
+        validate_protocol(stage_shift, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E227]" in str(error),
+           "a role-filling binding names its material at seal")
+    else:
+        raise AssertionError("an instance-stage role binding was accepted")
+
+    role_drift = copy.deepcopy(witnesses.LOGUP_BARE_TABLE)
+    role_drift["material_bindings"] = list(role_drift["material_bindings"]) + [
+        witnesses.material("table", witnesses.LOGUP_TABLE)]
+    try:
+        reduction_closure(role_drift, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E161]" in str(error),
+           "a role-filling binding names its material once")
+    else:
+        raise AssertionError("a doubly-named role binding was accepted")
+
+    alias = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+    table_ref = next(event.value for event in alias["events"]
+                     if isinstance(event, Bind) and event.profiled)
+    alias["material_bindings"] = [
+        binding._replace(semantic_ref=table_ref)
+        if binding.value == "queries" else binding
+        for binding in alias["material_bindings"]]
+    try:
+        reduction_closure(alias, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E162]" in str(error),
+           "one material reference names one value, however it is spelled")
+    else:
+        raise AssertionError("two values naming one material were accepted")
+
+    twice = copy.deepcopy(witnesses.LOGUP_RANGE_CHECK)
+    twice["material_bindings"] = list(twice["material_bindings"]) + [
+        witnesses.material("table", witnesses.LOGUP_TABLE)]
+    try:
+        reduction_closure(twice, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E161]" in str(error),
+           "a value carrying its own reference takes no material binding")
+    else:
+        raise AssertionError("a doubly-referenced value was accepted")
+
+    # The encode path fails closed on its own: it does not run validation, and
+    # it is the conformance oracle for the encoding function, so a counted
+    # profiled slot must not quietly encode as a scalar one.
+    counted = copy.deepcopy(witnesses.LOGUP_BUS)
+    counted_index = next(position
+                         for position, event in enumerate(counted["events"])
+                         if isinstance(event, Slot) and event.profiled)
+    counted["events"][counted_index] = counted["events"][
+        counted_index]._replace(count="4")
+    try:
+        canonical_encoding(counted, VOCABULARY)
+    except Refusal as error:
+        ok("[zkc-E167]" in str(error),
+           "the encoder refuses a counted commitment without validation")
+    else:
+        raise AssertionError("a counted profiled slot encoded")
 
     print(f"oracle: {checks} checks ok")
 

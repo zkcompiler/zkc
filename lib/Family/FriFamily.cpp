@@ -1120,7 +1120,13 @@ std::string zkc::family::emitFriVocabulary(const FriDescription &desc) {
       {"check_contracts", checkContracts(desc, shape, specs)},
       {"hole_contracts", holeContracts(desc, shape)},
       {"reduction_contracts", std::move(reductions)},
-      {"terminal_rules", llvm::json::Object{}}};
+      {"terminal_rules", llvm::json::Object{}},
+      // This family commits nothing whose content a rule reads: its Merkle
+      // roots are slots of a payload class, and what an opening answers is
+      // reconstructed by the query-binding attachments. The section is
+      // emitted empty rather than omitted, because the envelope is closed
+      // and an absent section is a load refusal, not a default.
+      {"value_profiles", llvm::json::Object{}}};
 
   std::string out;
   raw_string_ostream os(out);

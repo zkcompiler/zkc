@@ -1,0 +1,185 @@
+# The first rule that reads two committed arities, and the first family whose
+# table the statement fixes.
+#
+# A lookup's soundness error grows in the sizes of both columns, and the two
+# are different numbers: a range check is a small table with many queries.
+# Reading one arity for the whole reduction could only ever price the equal
+# case, so the projection selects by message role and the contract's roles are
+# what say which commitment is which.
+#
+# RUN: rm -rf %t && mkdir -p %t
+# RUN: zkc-seal %S/../Encoding/logup-range-check.mlir %zkc-seal-full -o %t/rc.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/rc.artifacts %t/rc.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/rc.artifacts %t/rc.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.req.json -o=%t/rc.out.json %t/rc.mlirbc
+# RUN: FileCheck %s --check-prefix=BOUND < %t/rc.out.json
+
+# What the judgment rests on and does not establish. The declared arity is
+# carried rather than grounded, because no arrangement of transcript events
+# separates an honest declaration from a consistent understatement; for a
+# preprocessed table that obligation is owed to the anchor's preimage and for
+# a committed column to its binding route.
+# BOUND: "zkc.hyp.commitment_binds_declared_arity"
+
+# Two hundred and fifty-six table entries and a thousand and twenty-four
+# looked-up values. Clearing denominators at the sampled point leaves a
+# polynomial in which every term omits one of the table + lookups linear
+# factors, so the degree — and the count of points a false inclusion can hide
+# at — is one less than their sum (Haböck, ePrint 2022/1530, Lemma 5 with
+# Schwartz-Zippel). The number is asserted exactly: an off-by-one here is a
+# bound that claims more than the theorem gives.
+# BOUND: "constant": "1279/2305843009213693951"
+
+# The honest prover's own failure set, priced on its own track. It is the
+# points where a denominator vanishes — at most one per table entry and one
+# per looked-up value — so it is counted as a set and comes out one larger
+# than the soundness bound over the same two numbers. The asymmetry is real
+# and both numbers are pinned so neither can drift onto the other.
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-completeness-request.json %t/rc.artifacts %t/rc.comp.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.comp.json -o=%t/rc.comp.out.json %t/rc.mlirbc
+# RUN: FileCheck %s --check-prefix=COMPLETE < %t/rc.comp.out.json
+# COMPLETE: "track": "completeness"
+# COMPLETE: "constant": "1280/2305843009213693951"
+
+# The multiplicity column is indexed by the table, so a declaration that
+# disagrees with the table's is not the object the lemma quantifies over.
+# This is the structural condition of the rule: where the artifact does fix a
+# relation between two declared arities, the rule checks it.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['logup_multiplicities']['arity_log2']=7; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/mult.vocab.json
+# RUN: zkc-seal %S/../Encoding/logup-range-check.mlir \
+# RUN:   --protocol-vocabulary=%t/mult.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/mult.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/mult.artifacts %t/mult.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/mult.artifacts %t/mult.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/mult.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/mult.req.json -o=/dev/null %t/mult.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=MULT
+# MULT: condition_failed at apply.conditions.S1
+
+# The lemma's own hypothesis. Its proof needs the multiplicities to be
+# non-zero as field elements on the lookup side and invertible on the table
+# side, and it is stated for sequences of one common length; the unequal case
+# reduces to it by padding the shorter side, which leaves the common length at
+# the larger of the two. So the condition is on the larger, and a field too
+# small for it refuses rather than pricing a protocol the theorem does not
+# cover.
+# The field is the one the derivation states, not the size of a sampling set:
+# a challenge space is how many values are drawn from, and reading it as a
+# characteristic would be true only for a prime field sampled whole. That is
+# what the two field hypotheses carry, and it is why this leg shrinks the
+# space alongside the declared field — a space that does not embed in the
+# field is refused first, by a different condition.
+# RUN: %python -c "import sys; sys.stdout.write(open(sys.argv[1]).read().replace('space \"2305843009213693951\"','space \"257\"'))" %S/../Encoding/logup-range-check.mlir > %t/tiny.mlir
+# RUN: zkc-seal %t/tiny.mlir %zkc-seal-full -o %t/tiny.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/tiny.artifacts %t/tiny.mlirbc
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['derivation']['resolved_parameters']['zkc.rbr.logup@reduction:logup_range_check']['field_order']={'sort':'integer','value':'257'}; json.dump(d, open(sys.argv[2],'w'))" %S/Inputs/logup-range-check-request.json %t/tiny.base.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %t/tiny.base.json %t/tiny.artifacts %t/tiny.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/tiny.req.json -o=/dev/null %t/tiny.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=OVERFLOW
+# OVERFLOW: condition_failed at apply.conditions.S2
+
+# The compiled judgment, over an artifact whose table is a public binding.
+# The Fiat-Shamir path is infrastructure rather than a per-family
+# construction, so a family that did not exist when it landed compiles
+# through it unchanged — and a seal-stage profiled binding absorbs a
+# seal-time constant, which is material the duplex already models. Round
+# coverage sees this reduction's challenge owned, so nothing is left out of
+# the bound.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); p=d['derivation']['plan']; c=d['derivation']['target']['subject']['claim']; a=d['derivation']['target']['subject']['artifact_id']; sr={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','premises':{'source_rbr':p}}; d['derivation']['plan']={'kind':'apply','site':{'kind':'path','artifact_id':a,'claim':c},'binding':'zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard','premises':{'source_sr':sr}}; d['derivation']['selected_bindings'] += ['zkc.sr.from_rbr@path:rbr_to_sr:soundness:standard','zkc.fs.duplex@path:sr_to_fs_duplex:soundness:standard']; d['derivation']['target']['index']={'notion':'fiat_shamir','track':'soundness','variant':'standard','model':'duplex','quantification':'static'}; d['derivation']['target']['resource_variables']=[{'name':'t','sort':'integer'},{'name':'tau','sort':'integer'}]; json.dump(d, open(sys.argv[2],'w'))" %t/rc.req.json %t/fs.req.json
+# RUN: zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/fs.req.json -o=/dev/null %t/rc.mlirbc | FileCheck %s --check-prefix=COMPILED
+# COMPILED: artifact judgment
+# COMPILED-NOT: belongs to no transformer
+
+# The structural half of the derivation, on both implementations. The bounds
+# themselves are C++-only; the shared surface is the plan the two legs walk
+# to reach them.
+# RUN: %if uv %{ zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%zkc-registry-dir/protocol-vocabulary.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/rc.req.json --skeleton -o=%t/zkc.skeleton.json %t/rc.mlirbc %}
+# RUN: %if uv %{ %uv python -m oracle.parity derive-skeleton logup-range-check \
+# RUN:   %t/rc.req.json > %t/oracle.skeleton.json %}
+# RUN: %if uv %{ diff %t/zkc.skeleton.json %t/oracle.skeleton.json %}
+
+# A bound prices a passage from what the reduction consumes to what it
+# produces, so the two must be about the same objects. The contract states
+# that directly: each consumed anchor must equal the material filling the
+# role of the same name, which is what the produced anchors have been
+# constructor-derived from all along. An artifact whose inclusion is about
+# columns the round never saw is refused at seal, before any rule reads it.
+# RUN: not zkc-opt %pir-seal-full %S/Inputs/logup-unanchored-inclusion.mlir 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=LOOSE
+# LOOSE: [zkc-E325] an admitted material-identity constraint does not hold
+#
+# The tie is stated in three places, each saying what it knows. The rule
+# requires that every consumed anchor has one, because a bound between two
+# claims about different objects prices nothing. The contract says which role
+# each anchor is tied to, because that correspondence is its own naming. The
+# seal checks the tie holds of this artifact. Drop the contract's half and the
+# rule refuses rather than pricing a passage the contract never constrained.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['reduction_contracts']['logup_range_check']['constraints']=[]; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/untied.vocab.json
+# RUN: zkc-seal %S/../Encoding/logup-range-check.mlir \
+# RUN:   --protocol-vocabulary=%t/untied.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/untied.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/untied.artifacts %t/untied.mlirbc
+# RUN: zkc-opt -pir-seal='protocol-vocabulary=%t/untied.vocab.json construction-profile-registry=%zkc-registry-dir/construction-profiles.json' %S/../Encoding/logup-range-check.mlir -o %t/untied.sealed.mlir
+# RUN: %python -c "import json,re,sys; digest=re.search(r'logup_range_check = \"(sha256:[0-9a-f]+)\"', open(sys.argv[1]).read()).group(1); s=json.load(open(sys.argv[2])); [v['anchor']['ref'].__setitem__('source_revision', digest) for v in s['bindings'].values() if v.get('anchor',{}).get('ref',{}).get('id')=='logup_range_check']; json.dump(s, open(sys.argv[3],'w'))" %t/untied.sealed.mlir %zkc-registry-dir/soundness-signature.json %t/untied.sig.json
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-request.json %t/untied.artifacts %t/untied.req.json
+# RUN: not zkc-derive --signature=%t/untied.sig.json \
+# RUN:   --protocol-vocabulary=%t/untied.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/untied.req.json -o=/dev/null %t/untied.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=UNTIED
+# UNTIED: condition_failed at apply.conditions.S8
+
+# The completeness track carries the same conditions, because the honest
+# prover's witness needs them. Lemma 5's forward direction — the one that
+# produces multiplicities — normalizes by the table-side count, so it is the
+# completeness leg that needs those counts invertible; and a witness indexed
+# by a table of one length is not a witness for a table of another. An
+# artifact the soundness track refuses must not be priced here either.
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/logup-range-check-completeness-request.json %t/mult.artifacts %t/mult.comp.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/mult.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/mult.comp.json -o=/dev/null %t/mult.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=COMPMULT
+# COMPMULT: condition_failed at apply.conditions.S3
+
+# The condition that keeps a commitment from being priced as a field element,
+# in the family where it is the only thing standing there. A value profile may
+# be named anything an author likes — including exactly what a payload class
+# is called — so a condition comparing the member's declared string against a
+# class must be able to tell a profile from a class. Reading the string alone
+# bought an evaluation-opening round of commitments a bound of one over the
+# field, for values each standing for a million field elements.
+# RUN: %python -c "import json,sys; d=json.load(open(sys.argv[1])); d['value_profiles']['opening_commitment']={'arity_log2':20,'binding_route':'zkc.commit.toy-vector','element_class':'scalar','origin':'prover_message'}; json.dump(d, open(sys.argv[2],'w'))" %zkc-registry-dir/protocol-vocabulary.json %t/oc.vocab.json
+# RUN: zkc-seal %S/Inputs/evalopen-profiled-member.mlir \
+# RUN:   --protocol-vocabulary=%t/oc.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   -o %t/oc.artifacts > /dev/null
+# RUN: %python %S/../SemanticClosure/lib/artifact_handoff.py stage %t/oc.artifacts %t/oc.mlirbc
+# RUN: %python %S/../Evidence/Inputs/retarget_request.py %S/Inputs/interleaved-a-request.json %t/oc.artifacts %t/oc.req.json
+# RUN: not zkc-derive --signature=%zkc-registry-dir/soundness-signature.json \
+# RUN:   --protocol-vocabulary=%t/oc.vocab.json \
+# RUN:   --construction-profile-registry=%zkc-registry-dir/construction-profiles.json \
+# RUN:   --request=%t/oc.req.json -o=/dev/null %t/oc.mlirbc 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=COMMITMENT
+# COMMITMENT: condition_failed at apply.conditions.S4
+

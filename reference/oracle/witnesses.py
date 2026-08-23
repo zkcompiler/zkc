@@ -13,6 +13,7 @@ import hashlib
 from .model import (
     artifact_verify,
     REGISTRY,
+    Bind,
     Chal,
     Check,
     Discharge,
@@ -1624,7 +1625,128 @@ ARTIFACT_VERIFY = {
     ],
 }
 
+# The first protocol whose values carry profiles. What the profile states —
+# a thousand and twenty-four committed scalars under a named binding route —
+# is what a bare payload class could not say, and what every mechanism that
+# reconstructed a commitment's content on the rule side was working around.
+#
+# The transcript order is forced: the helper column depends on the bus
+# challenge, and a round's messages precede that round's challenge, so the
+# helper is a second round whose challenge indexes into the committed columns
+# at exactly the profile's arity.
+LOGUP_VALUES = ("sha256:9c1e4a7f2b8d0356e9a4c1f7b3d5028e6a"
+                "9c4f1b7d3e5082a6c9f4b1d7e30528")
+LOGUP_TABLE = ("sha256:3f2a1c8d5e7b9046a2c1e8f4d6b0937518a"
+               "4c2e0f9d7b5638a1c4e2f0d9b7563")
+LOGUP_MULT = ("sha256:5b1a0eb6f9c0b5b2fc4a9c9f6a0e4b4d3f1"
+              "c6a8e2d7b0c9a5e3f8d1b7c4a2e60")
+
+LOGUP_ANCHORS = {
+    "multiplicities": LOGUP_MULT,
+    "queries": LOGUP_VALUES,
+    "table": LOGUP_TABLE,
+}
+
+
+def _logup(events, contract):
+    return {
+        "policy": "analysis_only_artifact",
+        "kappa": {
+            "codecs": {"scalar": "ts_be8"},
+            "iv": "artifact-id",
+            "sponge": "toy_duplex",
+        },
+        "sources": [source("inclusion", "logup_inclusion", LOGUP_ANCHORS)],
+        "events": events,
+        "reduces": [
+            reduce_row(
+                "bus", contract, ["inclusion"], ["beta"],
+                [("identity", "logup_identity")],
+                anchors=[dict(LOGUP_ANCHORS)],
+            )
+        ],
+        # The table is bound only where it is a prover message. A profiled
+        # seal-stage binding absorbs its digest and so carries its own
+        # material reference; a material binding on it would be one fact
+        # spelled twice (docs/spec/carrier.md section 4).
+        "material_bindings": [
+            material(label, ref)
+            for label, ref in (("table", LOGUP_TABLE),
+                               ("queries", LOGUP_VALUES),
+                               ("mult", LOGUP_MULT))
+            if not any(getattr(event, "profiled", False)
+                       and getattr(event, "stage", None) == "seal"
+                       and event.label == label
+                       for event in events)
+        ],
+        "sinks": [
+            route("residual", "identity",
+                  "logup-identity-discharge-not-modeled"),
+        ],
+    }
+
+
+BETA = chal("beta", "scalar", "logup.beta", "2305843009213693951", [])
+
+# The range check: a table the statement fixes, entering as a public binding
+# because every later challenge must be bound to it, and a query column four
+# times its length.  The two sides are read by role, which is what lets them
+# differ at all.
+LOGUP_RANGE_CHECK = _logup(
+    [
+        bind("table", "logup_table", "seal", LOGUP_TABLE,
+             ("bus", "table", 0), profiled=True),
+        slot("queries", "logup_queries", True, ("bus", "queries", 0),
+             profiled=True),
+        slot("mult", "logup_multiplicities", True,
+             ("bus", "multiplicities", 0), profiled=True),
+        BETA,
+    ],
+    "logup_range_check",
+)
+
+# The ad-hoc lookup, where the prover supplies the table as well: the same
+# three roles filled by prover messages, which is the other direction of the
+# origin rule.
+LOGUP_BUS = _logup(
+    [
+        slot("table", "logup_committed_column", True, ("bus", "table", 0),
+             profiled=True),
+        slot("queries", "logup_committed_column", True,
+             ("bus", "queries", 0), profiled=True),
+        slot("mult", "logup_committed_column", True,
+             ("bus", "multiplicities", 0), profiled=True),
+        BETA,
+    ],
+    "logup_bus",
+)
+
+
+# A role filled by a binding that carries no profile: the statement fixes a
+# scalar, and identity must still record which role it fills.
+LOGUP_BARE_TABLE = _logup(
+    [
+        bind("table", "scalar", "seal", LOGUP_TABLE, ("bus", "table", 0)),
+        slot("queries", "logup_queries", True, ("bus", "queries", 0),
+             profiled=True),
+        slot("mult", "logup_multiplicities", True,
+             ("bus", "multiplicities", 0), profiled=True),
+        BETA,
+    ],
+    "logup_range_check",
+)
+# The table's binding fills a role, so its absorbed value is the material
+# reference and a material binding on it would be that fact spelled twice.
+LOGUP_BARE_TABLE["material_bindings"] = [
+    material("queries", LOGUP_VALUES),
+    material("mult", LOGUP_MULT),
+]
+
+
 PIR_WITNESSES = {
+    "logup-bus": LOGUP_BUS,
+    "logup-range-check": LOGUP_RANGE_CHECK,
+    "logup-bare-table": LOGUP_BARE_TABLE,
     "artifact-verify": ARTIFACT_VERIFY,
     "relation-direct": RELATION_DIRECT,
     "relation-residual": RELATION_RESIDUAL,
@@ -1682,7 +1804,7 @@ def rename_protocol(protocol: dict, prefix: str) -> dict:
             event = event._replace(deps=[renamed(label) for label in event.deps])
         elif isinstance(event, Check):
             event = event._replace(inputs=[renamed(label) for label in event.inputs])
-        elif isinstance(event, Slot) and event.membership:
+        elif isinstance(event, (Slot, Bind)) and event.membership:
             instance, role, index = event.membership
             event = event._replace(membership=(renamed(instance), role, index))
         renamed_events.append(event)

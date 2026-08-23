@@ -50,6 +50,14 @@ def Pir_ProtocolMemberOpInterface
       kind must route the battery through before it lands.
     }], "bool", "isAbsorbing", (ins), "", [{ return false; }]>,
     InterfaceMethod<[{
+      The transcript value this event carries, or null for events that
+      carry none. A member that fills a contract role must answer it:
+      the role's occupant is the value a check attachment or a rule
+      resolves through, and asking the op kind instead would spell the
+      same fact once per kind.
+    }], "::mlir::Value", "getMemberValue", (ins), "",
+                    [{ return ::mlir::Value(); }]>,
+    InterfaceMethod<[{
       This event's reduction membership, if any props are set. The
       verifier checks the shape (instance and role paired, instance
       resolving to a reduce label) and the one-truth rule (an event

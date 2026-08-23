@@ -127,6 +127,8 @@ makeReductionContract(const SealedReduction &sealed) {
   result.orderedInputAnchors = sealed.orderedInputAnchors;
   result.orderedInputAnchorEventPositions =
       sealed.orderedInputAnchorEventPositions;
+  result.constrainedInputAnchors = sealed.constrainedInputAnchors;
+  result.committedArityByRole = sealed.committedArityByRole;
 
   for (const auto &[name, atom] : sealed.parameters) {
     auto copied = copyParameterAtom(atom);
@@ -536,7 +538,12 @@ std::vector<ValueSort> argumentSorts(MachineDeciderKind kind) {
   case MachineDeciderKind::JohnsonFoldParam:
     return {ValueSort::Integer};
   case MachineDeciderKind::SpaceCoversBatch:
+  case MachineDeciderKind::MultiplicitiesMatchTable:
     return {ValueSort::Integer, ValueSort::Integer};
+  case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial:
+  case MachineDeciderKind::SingleRound:
+    return {ValueSort::ReductionContract};
+  case MachineDeciderKind::LookupFitsCharacteristic:
   case MachineDeciderKind::UdrDomainFloor:
     return {ValueSort::Integer, ValueSort::Integer, ValueSort::Integer};
   case MachineDeciderKind::FriShape:
@@ -678,11 +685,66 @@ projectArtifactFact(const SealedSoundnessView &sealed,
     return RuntimeValue::integer(std::move(*result));
   }
 
+  if (projection.kind == ArtifactProjectionKind::CommittedArity) {
+    if (projection.resultSort != ValueSort::Integer)
+      return projectionError("committed-arity projection has the wrong "
+                             "result sort");
+    auto owner = reductionAt(sealed, site);
+    if (!owner)
+      return owner.takeError();
+    // Without a role the reading is the whole reduction's, as it was before
+    // roles could be selected: every profiled member must agree. With one it
+    // is that role's members, which is what lets a table and a query column
+    // of different lengths both be priced. Either way exactly one arity must
+    // survive: two would leave the rule to choose, and a rule that chooses
+    // which number to price with has a bound the artifact does not determine.
+    llvm::SmallVector<const soundness::CommittedArityByRole *> selected;
+    for (const soundness::CommittedArityByRole &entry :
+         (*owner)->committedArityByRole)
+      if (projection.memberRole.empty() || entry.role == projection.memberRole)
+        selected.push_back(&entry);
+    if (!projection.memberRole.empty() && selected.empty())
+      return projectionError("this reduction has no message role '" +
+                             projection.memberRole +
+                             "', so there is no arity to read for it");
+    bool incomplete = false;
+    std::set<std::string> distinct;
+    for (const soundness::CommittedArityByRole *entry : selected) {
+      incomplete |= entry->incomplete;
+      for (const registry::Rational &arity : entry->arities)
+        distinct.insert(arity.str());
+    }
+    if (incomplete)
+      return projectionError(
+          "a member of what this projection reads declares no committed "
+          "content, so the arity its other members declare is not the arity "
+          "of what it commits to");
+    if (distinct.empty())
+      return projectionError(
+          "what this projection reads carries no committed value profile, so "
+          "there is no arity to read");
+    if (distinct.size() != 1)
+      return projectionError(
+          "what this projection reads declares more than one arity, so the "
+          "one a bound would price is not determined");
+    // `distinct` holds exactly one decimal, and it came from one of the
+    // selected roles, so reading it back is the whole of what is left.
+    auto exact = registry::Rational::fromDecimal(*distinct.begin());
+    if (!exact)
+      return exact.takeError();
+    return RuntimeValue::integer(std::move(*exact));
+  }
+
   auto reduction = reductionAt(sealed, site);
   if (!reduction)
     return reduction.takeError();
 
   switch (projection.kind) {
+  // Both are facts about the whole artifact and are answered above, before
+  // a reduction is resolved.
+  case ArtifactProjectionKind::BoundRelationAnchorCount:
+  case ArtifactProjectionKind::CommittedArity:
+    break;
   case ArtifactProjectionKind::ConclusionReductionContract: {
     if (projection.resultSort != ValueSort::ReductionContract)
       return projectionError(
@@ -807,6 +869,15 @@ evaluateMachineDecider(MachineDeciderKind kind,
          contract(arguments[0]).rounds)
       for (const SealedMessageRoleFact &message : round.messages) {
         sawMessage = true;
+        // A profiled member is a commitment, not an element of the class its
+        // content is drawn from, so it answers no however its profile is
+        // named. Reading the string alone would let a profile called after a
+        // payload class stand in for one element of it — the substitution
+        // the marked type exists to make impossible, and which the check and
+        // dependency sites already refuse.
+        if (llvm::any_of(message.profiledByOccurrence,
+                         [](bool profiled) { return profiled; }))
+          return false;
         if (!llvm::all_of(message.payloadClassesByOccurrence,
                           [&](const std::string &payloadClass) {
                             return payloadClass == fieldClass;
@@ -867,6 +938,64 @@ evaluateMachineDecider(MachineDeciderKind kind,
       }
     }
     return true;
+  }
+  case MachineDeciderKind::SingleRound:
+    return contract(arguments[0]).rounds.size() == 1;
+  case MachineDeciderKind::ConsumedAnchorsAreRoundMaterial: {
+    const ReductionContractValue &value = contract(arguments[0]);
+    const std::vector<soundness::CommittedArityByRole> &arities =
+        value.committedArityByRole;
+    // A bound prices a passage from what the reduction consumes to what it
+    // produces, so the two must be about the same objects. Which consumed
+    // anchor is which role is contract knowledge, so the rule requires only
+    // that the contract ties every one of them, and the seal has already
+    // checked the ties hold of this artifact (zkc-E325). An unanchored claim
+    // would satisfy that vacuously, so an empty anchor set refuses.
+    if (value.orderedInputAnchors.size() != value.inputCount ||
+        value.inputCount == 0)
+      return false;
+    for (size_t input = 0; input < value.inputCount; ++input) {
+      const auto &anchors = value.orderedInputAnchors[input];
+      if (anchors.empty())
+        return false;
+      // Every anchor tied, and no two tied to one role: pointing them all at
+      // a single role would satisfy "all tied" while leaving the consumed
+      // claim about one column and the produced one about three.
+      std::set<std::string> roles;
+      for (const auto &anchor : anchors) {
+        auto tie = value.constrainedInputAnchors.find(anchor.first);
+        if (anchor.second.empty() || tie == value.constrainedInputAnchors.end())
+          return false;
+        if (!roles.insert(tie->second).second)
+          return false;
+      }
+      // And every role whose commitments declare a size is named by one of
+      // them. A bound priced from a role the consumed claim does not mention
+      // prices a passage from a statement that says nothing about it.
+      for (const soundness::CommittedArityByRole &entry : arities)
+        if (!entry.arities.empty() && !roles.count(entry.role))
+          return false;
+    }
+    return true;
+  }
+  case MachineDeciderKind::MultiplicitiesMatchTable:
+    // The multiplicity sequence is indexed by the table: Lemma 5's witness
+    // has one field element per table entry, so a multiplicity column of a
+    // different length is not the object the theorem quantifies over.
+    // Equality, not coverage, for that reason.
+    return number(arguments[0]).compare(number(arguments[1])) == 0;
+  case MachineDeciderKind::LookupFitsCharacteristic: {
+    // max(table, lookups) < characteristic. The theorem is stated for
+    // sequences of one common length N under char > N; the unequal case
+    // reduces to it by padding the shorter side, which leaves the common
+    // length at the larger of the two. Both sides need it: the lookup-side
+    // multiplicities must be nonzero as field elements and the table-side
+    // ones must be invertible, since the honest witness normalizes by them.
+    const auto &table = number(arguments[0]);
+    const auto &lookups = number(arguments[1]);
+    const auto &characteristic = number(arguments[2]);
+    const auto &larger = table.compare(lookups) < 0 ? lookups : table;
+    return larger.compare(characteristic) < 0;
   }
   case MachineDeciderKind::FriShape: {
     // The declared shape must be the realized one. The equation itself

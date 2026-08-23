@@ -27,6 +27,18 @@ struct OperandView {
   llvm::SmallVector<std::pair<std::string, uint64_t>> positions;
 };
 
+/// The material reference a value carries in itself, or empty when it carries
+/// none.
+///
+/// A profiled seal-stage `pir.bind` absorbs the digest of the content its
+/// profile describes, so that digest *is* the value's material reference.
+/// Resolving it through a `pir.material_bind` as well would spell one fact
+/// twice, and two spellings can disagree — the transcript would then absorb
+/// one digest while a claim's anchor named another (docs/spec/carrier.md §4).
+/// Every other value carries no reference of its own and is resolved through
+/// its material binding as before.
+llvm::StringRef selfMaterialRef(mlir::Value value);
+
 /// One SSA operand's element count: a counted slot or a vector
 /// challenge contributes its declared count of units; every other
 /// producer is one unit.

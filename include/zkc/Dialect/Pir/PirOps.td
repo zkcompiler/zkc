@@ -64,9 +64,10 @@ class Pir_MemberOp<string mnemonic, list<string> overridden = [],
                          extraTraits)>;
 
 // The spine-event override set: labeled, threaded, absorption-aware.
-// Membership is a slot-only fact (carrier.md §4): message roles name
-// prover messages, and other event kinds gain membership only with a
-// consumer — until then the shape is unrepresentable, not rejected.
+// Membership is carried by whatever fills a contract role (carrier.md §4):
+// a slot for prover material, a public binding for content the statement
+// fixes. A further event kind gains it only with a consumer and with a place
+// in its encoded row for the role.
 defvar Pir_SpineEventMethods = ["getMemberLabel", "getThreadIn", "getThreadOut",
                                 "isAbsorbing"];
 
@@ -127,7 +128,10 @@ def Pir_BeginOp : Pir_MemberOp<"begin", ["getThreadOut"]> {
 }
 
 def Pir_BindOp
-    : Pir_MemberOp<"bind", Pir_SpineEventMethods, [InferTypeOpAdaptor]> {
+    : Pir_MemberOp<"bind",
+                   !listconcat(Pir_SpineEventMethods,
+                               ["getMembership", "getMemberValue"]),
+                   [InferTypeOpAdaptor]> {
   let summary = "public binding event (absorbing)";
   let description = [{
     Declares a public input or context binding as a spine event
@@ -139,20 +143,40 @@ def Pir_BindOp
     `value` explicitly and projects to a constant (a seal-stage bind
     without a value, or an instance-stage bind with one, is a seal
     error).
+
+    With `profile`, `payload_class` names a `value_profiles` entry instead of
+    a payload class: the bound material is a sequence of the profile's
+    declared length and element class, entering the transcript as a public
+    binding rather than as prover material. The canonical case is a
+    preprocessed table — content the statement fixes, which every later
+    challenge must be bound to (kernel.md §5.2), so it enters here and not
+    as a slot. The result type carries the marker exactly as a profiled
+    slot's does. A profile whose `origin` is not `preprocessed` is refused
+    on this op, and a `preprocessed` profile is refused on a slot: the seat
+    and the declared origin are one fact with two spellings, and they must
+    agree (docs/spec/vocabularies.md).
+
+    Membership props place the bound value in a reduction's contract shape,
+    the same way a slot's do, so a rule may read a preprocessed member's
+    declared content by role.
   }];
   let arguments = (ins Token:$thread, StringProp:$label,
       StringProp:$payload_class, Pir_StageProp:$stage,
-      OptionalProp<StringProp>:$value);
+      OptionalProp<StringProp>:$value, UnitProp:$profiled,
+      OptionalProp<StringProp>:$instance, OptionalProp<StringProp>:$role,
+      DefaultValuedProp<I64Prop, "0">:$idx);
   let results = (outs Token:$out, Pir_ValType:$val);
   let assemblyFormat = [{
-    $thread $label `:` $payload_class `stage` $stage (`=` $value^)?
-    attr-dict
+    $thread $label `:` (`profile` $profiled^)? $payload_class
+    `stage` $stage (`=` $value^)?
+    (`in` $instance^)? (`as` $role^)? (`idx` $idx^)? attr-dict
   }];
 }
 
 def Pir_SlotOp
     : Pir_MemberOp<"slot",
-                   !listconcat(Pir_SpineEventMethods, ["getMembership"]),
+                   !listconcat(Pir_SpineEventMethods,
+                               ["getMembership", "getMemberValue"]),
                    [InferTypeOpAdaptor]> {
   let summary = "prover-message event";
   let description = [{
@@ -163,7 +187,11 @@ def Pir_SlotOp
     authentication paths are the canonical case); by the kernel's default
     rule an unabsorbed slot may not precede any challenge — the
     generalized Frozen-Heart condition, checked at seal (kernel.md §5.2).
-    `binding` is the slot's construction route
+    With `profile`, `payload_class` names a `value_profiles` entry instead
+    of a payload class: the slot's material is a commitment, and the profile
+    states what stands behind it. The result type carries the marker, so a
+    consumer reading the class resolves the vocabulary first and cannot mistake
+    a profile name for a class. `binding` is the slot's construction route
     (docs/spec/endpoints.md §6.2): what supplies the written
     value on the prover endpoint — "<instance>.<result-index>" for a
     hole-instance output, "bind:<name>" for a statement echo, or
@@ -178,11 +206,12 @@ def Pir_SlotOp
       StringProp:$payload_class,
       DefaultValuedProp<StringProp, "\"1\"">:$count, UnitProp:$unabsorbed,
       OptionalProp<StringProp>:$instance, OptionalProp<StringProp>:$role,
-      DefaultValuedProp<I64Prop, "0">:$idx, OptionalAttr<StrAttr>:$binding);
+      DefaultValuedProp<I64Prop, "0">:$idx, OptionalAttr<StrAttr>:$binding,
+      UnitProp:$profiled);
   let results = (outs Token:$out, Pir_ValType:$val);
   let assemblyFormat = [{
-    $thread $label `:` $payload_class (`count` $count^)?
-    (`unabsorbed` $unabsorbed^)?
+    $thread $label `:` (`profile` $profiled^)? $payload_class
+    (`count` $count^)? (`unabsorbed` $unabsorbed^)?
     (`in` $instance^)? (`as` $role^)? (`idx` $idx^)?
     (`binding` $binding^)? attr-dict
   }];

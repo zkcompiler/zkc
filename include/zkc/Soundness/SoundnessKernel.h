@@ -177,6 +177,18 @@ enum class ArtifactProjectionKind {
   /// primitive-game advantage scaled by this count: zero where no
   /// relation identity enters the transcript, and the addend vanishes.
   BoundRelationAnchorCount,
+  /// How much content stands behind the commitments a reduction's own
+  /// messages carry: the arity its value profiles declare, which must be
+  /// one value across them.
+  ///
+  /// A rule that reads this owes a condition tying it back to sealed
+  /// structure. The commitment root occupies one slot whatever it commits
+  /// to, so a declared arity has no structural counterpart on its own, and
+  /// an understated one would understate a bound that grows in it —
+  /// `kernel.md` §9.1's "verified by use" forbids exactly that. Being in
+  /// the type is what makes it sealed; the rule's own condition is what
+  /// makes it checked.
+  CommittedArity,
 };
 
 enum class ProjectionAggregate { UniqueEqual, Count };
@@ -189,6 +201,10 @@ struct ArtifactProjection {
   uint64_t inputIndex = 0;
   ContractRoundSelector roundSelector;
   ProjectionAggregate aggregate = ProjectionAggregate::UniqueEqual;
+  /// Which message role a committed-arity projection reads. Empty reads the
+  /// whole reduction, which is what a rule wants when one number answers for
+  /// every commitment it prices.
+  std::string memberRole;
 };
 
 enum class BindingValueKind {
@@ -584,6 +600,44 @@ enum class MachineDeciderKind {
   PowAdjacent,
   DuplexSpine,
   CodecBiasDeclared,
+  /// The multiplicity sequence is indexed by the table, so its committed
+  /// arity equals the table's.
+  ///
+  /// This is the one arity relation the artifact fixes, and the reason it is
+  /// checkable: Lemma 5's witness has one field element per table entry, so a
+  /// multiplicity column of another length is not the object the theorem
+  /// quantifies over. It is not a tie between a declaration and what was
+  /// committed — no such tie exists in a transcript, and that gap is carried
+  /// as an external hypothesis instead (see the value-profile discussion in
+  /// docs/spec/carrier.md §3).
+  MultiplicitiesMatchTable,
+  /// Every anchor of every consumed claim names transcript material that
+  /// entered before the round's challenge.
+  ///
+  /// A reduction's bound prices a passage from what its consumed claim says
+  /// to what its produced claim says. If the consumed claim is anchored to
+  /// material the round never saw, the two statements are about different
+  /// objects and no theorem relates them — the transition's probability is
+  /// one, whatever the bound says. Produced anchors are constructor-derived
+  /// and checked against the spine already; this is the same discipline on
+  /// the side the artifact declares.
+  ConsumedAnchorsAreRoundMaterial,
+  /// The contract declares exactly one round.
+  ///
+  /// A contract-cased entry instantiates its bound once per matching round,
+  /// but a projection that reads the whole reduction — a committed arity by
+  /// role, say — resolves once. A rule whose numerator comes from the
+  /// reduction and whose denominator comes from the round therefore prices
+  /// the first round's quantities against every round's challenge space. A
+  /// rule that models one sampled point requires the contract to declare
+  /// one; a protocol with two is two arguments and wants a rule that says so.
+  SingleRound,
+  /// The lemma's own hypothesis: multiplicities are field elements, so the
+  /// number of entries must stay below the characteristic. Overflowing
+  /// multiplicities are the known soundness failure of the whole approach
+  /// (Haböck, ePrint 2022/1530, Lemma 5), so a rule without this prices a
+  /// protocol the theorem does not cover.
+  LookupFitsCharacteristic,
 };
 
 struct MachineDeciderDefinition {

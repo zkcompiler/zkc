@@ -8,6 +8,7 @@
 #include "zkc/Registry/RegistryBase.h"
 #include "zkc/Registry/RegistryFile.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <set>
@@ -110,6 +111,64 @@ digestRule(const TerminalRule &rule,
         reductionContracts.find(rule.producer->contract)->second.digest;
   return RegistryFile::digestEntry("zkc/terminal-rule\n",
                                    json::Value(std::move(preimage)));
+}
+
+/// The admitted origins, in one place: the refusal names the same list the
+/// predicate tests, so the two cannot disagree about what is admitted.
+///
+/// Naming the set is the point. A relation-derived commitment and a
+/// preprocessed index are the same object with different provenance, so they
+/// arrive as values of one field rather than as sibling mechanisms each
+/// minting its own shape.
+constexpr llvm::StringLiteral kValueOrigins[] = {
+    "preprocessed", "prover_message", "relation_derived"};
+
+bool admittedOrigin(StringRef origin) {
+  return llvm::is_contained(kValueOrigins, origin);
+}
+
+Expected<ValueProfile> parseValueProfile(const RegistryFile &file, StringRef id,
+                                         const json::Value &value) {
+  auto error = [&](const Twine &message) {
+    return file.error("value profile '" + id + "' " + message);
+  };
+  const json::Object *object = value.getAsObject();
+  if (!object)
+    return error("must map to an object");
+  const std::string where = ("value profile '" + id + "'").str();
+  if (Error e = file.requireClosedFields(
+          *object, {"element_class", "origin", "arity_log2", "binding_route"},
+          where))
+    return std::move(e);
+
+  ValueProfile profile;
+  if (Error e = file.requireStringField(*object, "element_class", where,
+                                        profile.elementClass))
+    return std::move(e);
+  if (Error e =
+          file.requireStringField(*object, "origin", where, profile.origin))
+    return std::move(e);
+  if (!admittedOrigin(profile.origin))
+    return error("names origin '" + profile.origin + "', which is not one of " +
+                 llvm::join(llvm::ArrayRef(kValueOrigins), ", "));
+  if (Error e = file.requireStringField(*object, "binding_route", where,
+                                        profile.bindingRoute))
+    return std::move(e);
+  const json::Value *arity = object->get("arity_log2");
+  std::optional<int64_t> arityValue = arity ? arity->getAsInteger() : std::nullopt;
+  // Bounded on both sides: a negative arity is not a count, and the bound
+  // keeps `2^arity` inside the exact integer domain every quantity here
+  // travels in.
+  if (!arityValue || *arityValue < 0 || *arityValue > 64)
+    return error("needs an 'arity_log2' integer in 0..64");
+  profile.arityLog2 = *arityValue;
+
+  auto digest = RegistryFile::digestEntry("zkc/value-profile\n",
+                                          profile.toCanonicalJson());
+  if (!digest)
+    return digest.takeError();
+  profile.digest = std::move(*digest);
+  return profile;
 }
 
 Expected<ClaimProfile> parseProfile(const RegistryFile &file, StringRef id,
@@ -1144,8 +1203,8 @@ Expected<ReductionContract> parseReductionContract(
           (Twine(context) + " message " + Twine(messageIndex)).str();
       if (!message)
         return file.error(messageContext + " must be an object");
-      if (Error e = file.requireClosedFields(*message, {"role", "count"},
-                                             messageContext))
+      if (Error e = file.requireClosedFields(
+              *message, {"role", "count", "source"}, messageContext))
         return std::move(e);
       VocabularyMessageRole role;
       if (Error e = file.requireStringField(*message, "role", messageContext,
@@ -1164,6 +1223,21 @@ Expected<ReductionContract> parseReductionContract(
       if (!roles.insert(role.role).second)
         return error("role '" + role.role + "' is declared twice");
       role.multiplicity = *multiplicity;
+      // Absent is the prover-message default, so every contract written
+      // before this field keeps its meaning; the two other dep sources name
+      // things a round message cannot be.
+      if (const json::Value *source = message->get("source")) {
+        auto text = source->getAsString();
+        if (!text)
+          return file.error(messageContext + " 'source' must be a string");
+        if (*text == "prover_slot")
+          role.source = VocabularyDepSource::ProverSlot;
+        else if (*text == "public_bind")
+          role.source = VocabularyDepSource::PublicBind;
+        else
+          return file.error(messageContext +
+                            " 'source' must be prover_slot or public_bind");
+      }
       parsed.messages.push_back(std::move(role));
     }
     contract.rounds.push_back(std::move(parsed));
@@ -2089,6 +2163,13 @@ json::Value ClaimProfile::toCanonicalJson() const {
   return json::Object{{"anchors", json::Array(anchors)}, {"kind", kind}};
 }
 
+json::Value ValueProfile::toCanonicalJson() const {
+  return json::Object{{"arity_log2", arityLog2},
+                      {"binding_route", bindingRoute},
+                      {"element_class", elementClass},
+                      {"origin", origin}};
+}
+
 json::Value OperandMultiplicity::toCanonicalJson() const {
   switch (kind) {
   case OperandMultiplicityKind::Exact:
@@ -2337,10 +2418,16 @@ json::Value ReductionContract::toCanonicalJson() const {
   }
   for (const VocabularyRound &round : rounds) {
     json::Array messages;
-    for (const VocabularyMessageRole &message : round.messages)
-      messages.push_back(
-          json::Object{{"count", message.multiplicity.toCanonicalJson()},
-                       {"role", message.role}});
+    for (const VocabularyMessageRole &message : round.messages) {
+      json::Object body{{"count", message.multiplicity.toCanonicalJson()},
+                        {"role", message.role}};
+      // Emitted only when it is not the default, so every contract written
+      // before the field keeps its exact digest (docs/spec/versioning.md's
+      // additive discipline).
+      if (message.source == VocabularyDepSource::PublicBind)
+        body["source"] = "public_bind";
+      messages.push_back(std::move(body));
+    }
     json::Object body{{"challenge_use", round.challengeUse.toCanonicalJson()},
                       {"messages", std::move(messages)}};
     if (!round.kind.empty())
@@ -2472,7 +2559,7 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
   auto file = RegistryFile::parse(
       json, sourceName, "zkc.protocol_vocabulary", "claim_profiles",
       {"predicate_specs", "check_contracts", "hole_contracts",
-       "reduction_contracts", "terminal_rules"});
+       "reduction_contracts", "terminal_rules", "value_profiles"});
   if (!file)
     return file.takeError();
   const json::Object *predicateSpecs = file->extra("predicate_specs");
@@ -2480,6 +2567,7 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
   const json::Object *holeContracts = file->extra("hole_contracts");
   const json::Object *reductionContracts = file->extra("reduction_contracts");
   const json::Object *rules = file->extra("terminal_rules");
+  const json::Object *valueProfiles = file->extra("value_profiles");
   if (!predicateSpecs)
     return file->error("'predicate_specs' must be an object");
   if (!contracts)
@@ -2490,12 +2578,20 @@ Expected<ProtocolVocabulary> ProtocolVocabulary::parse(StringRef json,
     return file->error("'reduction_contracts' must be an object");
   if (!rules)
     return file->error("'terminal_rules' must be an object");
+  if (!valueProfiles)
+    return file->error("'value_profiles' must be an object");
 
   ProtocolVocabulary vocabulary;
   if (Error e = parseEntries(*file, "claim profile", file->payload(),
                              vocabulary.profiles_,
                              [&](StringRef id, const json::Value &value) {
                                return parseProfile(*file, id, value);
+                             }))
+    return std::move(e);
+  if (Error e = parseEntries(*file, "value profile", *valueProfiles,
+                             vocabulary.valueProfiles_,
+                             [&](StringRef id, const json::Value &value) {
+                               return parseValueProfile(*file, id, value);
                              }))
     return std::move(e);
   if (Error e = parseEntries(*file, "predicate spec", *predicateSpecs,
@@ -2548,6 +2644,11 @@ const ClaimProfile *ProtocolVocabulary::lookupProfile(StringRef id) const {
   return lookup(profiles_, id);
 }
 
+const ValueProfile *
+ProtocolVocabulary::lookupValueProfile(StringRef id) const {
+  return lookup(valueProfiles_, id);
+}
+
 
 const CheckContract *
 ProtocolVocabulary::lookupCheckContract(StringRef id) const {
@@ -2569,9 +2670,11 @@ const TerminalRule *ProtocolVocabulary::lookupRule(StringRef id) const {
 
 json::Value ProtocolVocabulary::toCanonicalJson() const {
   json::Object profileJson, predicateSpecJson, checkContractJson,
-      holeContractJson, reductionContractJson, ruleJson;
+      holeContractJson, reductionContractJson, ruleJson, valueProfileJson;
   for (const auto &[id, profile] : profiles_)
     profileJson[id] = profile.toCanonicalJson();
+  for (const auto &[id, profile] : valueProfiles_)
+    valueProfileJson[id] = profile.toCanonicalJson();
   for (const auto &[digest, spec] : predicateSpecs_)
     predicateSpecJson[digest] = spec.toCanonicalJson();
   for (const auto &[id, contract] : checkContracts_)
@@ -2588,5 +2691,6 @@ json::Value ProtocolVocabulary::toCanonicalJson() const {
                       {"predicate_specs", std::move(predicateSpecJson)},
                       {"reduction_contracts", std::move(reductionContractJson)},
                       {"registry", "zkc.protocol_vocabulary"},
-                      {"terminal_rules", std::move(ruleJson)}};
+                      {"terminal_rules", std::move(ruleJson)},
+                      {"value_profiles", std::move(valueProfileJson)}};
 }
