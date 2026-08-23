@@ -62,8 +62,20 @@ LEDGER: dict[str, dict[str, Any]] = {
             "result and reject an unsupported or ambiguously interpreted regime."
         ),
         "gap": (
-            "one implementation reaches the boundary, not two, and the subject is a "
-            "finite-field algebra profile rather than a rotated regime"
+            "one implementation derives the identity and support result, not two: "
+            "the runner's `verify_report` re-derives by calling `build_report` "
+            "and compares against a stored expectation file, which is a frozen "
+            "oracle rather than a second implementation. The subject is a finite- "
+            "field algebra profile rather than a semantic regime; the profile "
+            "does carry an exact change law (a changed field moves its identity), "
+            "but the witnesses' own regime object is judged only by a boolean "
+            "support predicate whose two refusal paths are unreached. Of the two "
+            "rejection kinds the pressure names, only unsupported is exercised — "
+            "and its refusal (P01-ALG-007, a non-pinned codec) lives in the unit "
+            "tests, so the negatives measured at this boundary are the composite- "
+            "modulus and challenge-size well-formedness refusals. No witness "
+            "rejects an ambiguously interpreted regime, and no first-class "
+            "acquired lane is exercised."
         ),
     },
     "F-02": {
@@ -73,6 +85,16 @@ LEDGER: dict[str, dict[str, Any]] = {
             "A noncanonical encoding, wrong domain, or ambiguous equality must fail "
             "before the affected boundary."
         ),
+        "gap": (
+            "the framing boundary pins each occurrence's codec to the one its "
+            "declared sort and cardinality require, which delivers the wrong- "
+            "domain half; no noncanonical byte string is ever decoded and "
+            "refused, and the only surface that would "
+            "(r2-p01-schnorr/p01model/interface.py, codes P01-PROOF-004/005/006) "
+            "has no callers; the ambiguous-equality half is exercised only at "
+            "relations:statement-bridge:relation-qualification, which this entry "
+            "does not claim and the frozen results do not carry"
+        ),
     },
     "F-03": {
         "title": "algorithm closure",
@@ -80,6 +102,17 @@ LEDGER: dict[str, dict[str, Any]] = {
         "pressure": (
             "Round-trip a real codec/sampler/bridge; reject wrong arity, domain, "
             "state, or result."
+        ),
+        "gap": (
+            "both claimed boundaries are name checks on the construction record — "
+            "that a sampler algorithm is cited, and that the cited name is one "
+            "the witness supports; neither encodes a value or steps a sampler, so "
+            "no round-trip is exercised and none of the wrong arity, domain, "
+            "state, or result rejections lands here. A real deterministic sampler "
+            "does run, with a named exhaustion failure, but at an unclaimed "
+            "boundary whose code never fires, and the codec has no decode to "
+            "round-trip against. The quoted pressure also drops the row's shared- "
+            "envelope and domain-ownership clause."
         ),
     },
     "F-05": {
@@ -90,9 +123,22 @@ LEDGER: dict[str, dict[str, Any]] = {
             "and adversarial guards. No divergent semantic verdict."
         ),
         "gap": (
-            "node count and build work are measured and separate (n^2 against 2^n "
-            "expansions); stored bytes and memory are not, and the guards are the "
-            "textbook separating family rather than a corpus of real ones"
+            "work is measured and separate from size (n^2 against 2^n "
+            "expansions), and the 'no divergent semantic verdict' clause is "
+            "delivered — both orders are proved by exhaustion to denote the same "
+            "function, so the refusal is about representation, not meaning. Two "
+            "further boundaries deliver the admission-derived-work clause and "
+            "should be claimed here: `execution-resource` (R2-REQ-006) and "
+            "`execution-qualification:resource` (R2-QUAL-009), which bound "
+            "aggregate worst-case work before execution or replay begins. Still "
+            "missing: stored bytes, memory, and peak derived structure — the "
+            "diagram cost reports the final reachable node count (18 at n=8 "
+            "interleaved), not the peak unique table (80), and nothing bounds the "
+            "peak; and the identity-preimage byte/node/depth bounds declared in "
+            "each witness's terms.py have no test that drives them. The guards "
+            "remain the textbook separating family rather than a corpus of real "
+            "ones, and of the many codes sharing the `closed-core` boundary only "
+            "P03-001, the declared claim bound, bears on this row."
         ),
     },
     "F-06": {
@@ -116,6 +162,18 @@ LEDGER: dict[str, dict[str, Any]] = {
             "wrong codec for one Statement occurrence; duplicate only where the "
             "selected profile forbids it."
         ),
+        "gap": (
+            "omission, delay, and duplication before the fold challenge are "
+            "driven at the claimed boundaries, by two independent routes; "
+            "substitution is not — the FRI witness publishes it as NotExercised "
+            "at `scope:substituted-statement-influence` and its wrong-statement- "
+            "value mutation refuses to build — a reorder inside the prefix is not "
+            "driven either, since R2-FS-006 is defined and never reached, and the "
+            "wrong-codec mutation fires at `framing`, a boundary this entry does "
+            "not claim. The Schnorr witness asserts substitution, reorder, wrong "
+            "codec, and duplication on its challenge prefix, but does not publish "
+            "those cases to its frozen corpus, so nothing here measures them."
+        ),
     },
     "P-03": {
         "title": "exact prefix closure",
@@ -133,6 +191,15 @@ LEDGER: dict[str, dict[str, Any]] = {
             "state dependency, or unlinked stochastic verifier move and require "
             "admission to reject it."
         ),
+        "gap": (
+            "a challenge declared VerifierPrivate is introduced and rejected; the "
+            "pressure's other three introductions are not — CoinSource has the "
+            "single member UniformFinite so no private sample is expressible, no "
+            "mutation gives a verifier action a predicate or residual, and the "
+            "influence-set laws that would catch an unlinked verifier coin "
+            "(R2-FS-009, R2-FS-010) have no driver in any test or published case "
+            "and sit at transcript-prefix boundaries claimed by P-01 and P-03"
+        ),
     },
     "P-07": {
         "title": "unambiguous challenge derivation",
@@ -142,6 +209,23 @@ LEDGER: dict[str, dict[str, Any]] = {
             "grinding/rejection failure mutations, including the semantic boundary "
             "behind E216."
         ),
+        "gap": (
+            "namespace reuse is genuinely mutated and refused at the E216 "
+            "boundary, but the pressure's other demands are not delivered here: "
+            "no mutation drives a wrong state transition against the "
+            "squeeze/sample relation — the relation's own named failure "
+            "(R2-EXEC-012, sampler retry bound exhausted) has no driver, and the "
+            "nearest negative, R2-QUAL-003 'record differs from exact "
+            "reexecution', is whole-record replay equality on another boundary "
+            "and is absent from the frozen case set; the grinding/rejection- "
+            "failure mutation that does exist is refused at `analysis- "
+            "applicability:grinding-failure`, which this entry does not claim; "
+            "the claimed boundary's second code R2-NS-002, for a malformed or "
+            "ambiguous namespace, is never driven; and uniqueness is checked "
+            "within one Core over authored literal namespaces, so composition- "
+            "safety and the ABI's freedom from a globally unique authored string "
+            "hold by construction rather than under pressure"
+        ),
     },
     "P-08": {
         "title": "causal prover generation",
@@ -150,6 +234,16 @@ LEDGER: dict[str, dict[str, Any]] = {
             "A commitment depending on a future challenge is not strategy-generated "
             "even if a whole serialized trace replays."
         ),
+        "gap": (
+            "the future-read negative does hold the wire byte-identical, but "
+            "nothing asserts that half: it is refused before any transcript check "
+            "runs and no replaying trace is ever exhibited for it, and because "
+            "the mutant also differs from the canonical strategy realization the "
+            "exact-match rule would refuse it even with the causality predicate "
+            "removed, so causality is never the sole discriminator; the rule "
+            "reads declared reads, not realized dependence, and the executable "
+            "form of that check in the Schnorr witness has no caller"
+        ),
     },
     "P-10": {
         "title": "typed claim routing",
@@ -157,6 +251,19 @@ LEDGER: dict[str, dict[str, Any]] = {
         "pressure": (
             "Wrong claim contract, parameter order/domain, reduction output, or "
             "check input rejects."
+        ),
+        "gap": (
+            "the claim graph's referential integrity and its single-consumer rule "
+            "are measured; the typing is not. `Claim.contract`, "
+            "`Reduction.contract`, and `Reduction.deps` are inert data no rule "
+            "reads, so a core whose inclusion and identity contracts are swapped, "
+            "whose reduction names a foreign contract, whose side input names a "
+            "challenge nothing samples, or whose challenge declares a different "
+            "domain and space all still admit affirmative. The reduction-output "
+            "rule P03-011 on this boundary has no caller; no witness has a check "
+            "operand to mutate; and `typed-routing`/R2-ROUTE-001 is an equality "
+            "against a hardcoded route order that the closed-core schedule law "
+            "already enforces, carrying no type content."
         ),
     },
     "P-11": {
@@ -174,6 +281,16 @@ LEDGER: dict[str, dict[str, Any]] = {
             "One affirmative real object plus wrong commitment, material, selector, "
             "position, and equation mutations."
         ),
+        "gap": (
+            "the wrong-commitment, material, selector, and equation mutations are "
+            "all asserted, but no position mutation exists: the single "
+            "evaluation-order rule -- an opening must precede the check that "
+            "consumes it -- never fires under the witness's own suite, and no "
+            "mutation can make it fire. This probe also never drives the equation "
+            "mutation itself; a forged answer that fails to reconstruct the "
+            "commitment is reached only by the unit tests, so the measured "
+            "negative set is narrower than the property claimed"
+        ),
     },
     "R-04": {
         "title": "lossless bridge laws are explicit",
@@ -181,6 +298,17 @@ LEDGER: dict[str, dict[str, Any]] = {
         "pressure": (
             "Round-trip a full equivalence in both directions, round-trip an "
             "embedding on its image, and reject a lossy mapping presented as either."
+        ),
+        "gap": (
+            "the lane boundary checks declaration hygiene — which obligations "
+            "each lane must and must not carry — but no bridge carries an "
+            "executable map, so neither round trip is driven at it; the one "
+            "bijection round trip (tests/test_bridges.py:139) runs on free "
+            "lambdas, reaches no boundary, and checks only backward(forward(x)) "
+            "== x despite its docstring claiming both inverse laws, so an "
+            "injective non-surjective map passes it, and no embedding is ever "
+            "inverted on its image because the image predicate is an opaque "
+            "string that is never evaluated"
         ),
     },
     "R-05": {
@@ -190,16 +318,47 @@ LEDGER: dict[str, dict[str, Any]] = {
             "Model the current 256-to-216-bit anchor case with a grounded reduction "
             "or deliberately eliminate it, for example by retaining a full digest."
         ),
+        "gap": (
+            "the shipped anchor case is modeled and its reduction shown "
+            "ungrounded — a projection collision is constructible in constant "
+            "time, so pricing returns CannotAnswer naming the premise nothing "
+            "establishes — but neither branch of the pressure lands: no grounded "
+            "reduction is built and no full-digest elimination is modeled, and "
+            "the one affirmative pricing of the case is reached only by passing "
+            "in an unvalidated premise string. The loss is a declared 40-bit "
+            "constant checked for presence; no advantage or occurrence-scaled "
+            "addend is ever computed. Occurrence exactness has no reachable "
+            "negative: pricing ignores the bridge's declared count, and the "
+            "fixture-side wrong-count refusal is unreachable behind "
+            "requalification"
+        ),
     },
     "R-06": {
         "title": "relation-facing witness surface",
-        "boundaries": {
-            "relations:witness-admission:instance",
-            "relations:instance-admission:relation",
-        },
+        # These boundaries refuse an operand naming a foreign parent, which is
+        # referential binding between admission layers. This invariant is about a
+        # Witness/Context/ProtocolValue surface distinction, and no witness models
+        # that vocabulary at all.
+        "boundaries": set(),
         "pressure": (
             "A protocol-private nonwitness input must not force a Relations witness "
             "port; an exported derived witness must be expressible."
+        ),
+        "gap": (
+            "neither claimed boundary asserts a witness surface: "
+            "relations:instance-admission:relation and relations:witness- "
+            "admission:instance refuse an operand that names a foreign parent, "
+            "which is referential binding between admission layers, not a "
+            "Witness/Context/ProtocolValue distinction. Of the pressure's two "
+            "halves, the nonwitness half is only positively exhibited — "
+            "relation_honest_prover_candidate projects the single RelationWitness "
+            "local input and leaves the PrivateRandomness nonce off the relation "
+            "surface, checked once as an affirmative on relations:honest-prover- "
+            "correspondence — with no case driving a protocol-private nonwitness "
+            "input into a witness port and no Result-bearing guard behind it, and "
+            "the exported-derived-witness half exists only in "
+            "check_qualified_private_witness_grounding, which has no callers, no "
+            "test, and publishes no case"
         ),
     },
     "R-07": {
@@ -225,6 +384,18 @@ LEDGER: dict[str, dict[str, Any]] = {
             "that can produce its declared Negative, or derive the fact internally "
             "instead."
         ),
+        "gap": (
+            "both claimed boundaries are refusals inside `admit_core`, so neither "
+            "operand was ever admitted; the layered case the pressure names — an "
+            "admitted operand failing a later question — is exercised only in the "
+            "uncited Schnorr chain (`relations:satisfaction`, "
+            "`relations:instance-admission:relation`, `relations:witness- "
+            "admission:instance`, `relations:honest-prover-correspondence:exact- "
+            "law`), which this entry should claim; and logup's second "
+            "affirmative, `correspondence`, publishes two negatives no test or "
+            "probe drives, one of which restates admission's role check under a "
+            "weaker name"
+        ),
     },
     "X-02": {
         "title": "derived evidence remains derived",
@@ -235,8 +406,19 @@ LEDGER: dict[str, dict[str, Any]] = {
             "semantic owner."
         ),
         "gap": (
-            "one route detects an authored anchor diverging from derived material; "
-            "the second independent route is not built"
+            "the claimed boundary is on-property but single-sourced: the column "
+            "anchor and the reduction anchor are both reads of the one literal "
+            "ANCHORS map (p03model/logup.py:302-310 into 387 and 407), so nothing "
+            "is recomputed and the law cannot separate derived evidence from two "
+            "identical authored copies. A second route does exist and is not "
+            "claimed here — load_fixture hash-pins the shipped .mlir fixtures and "
+            "correspondence checks the independently declared scenario against "
+            "facts read out of them (logup.py:331-358, 606-620) — but it "
+            "validates roles and challenge space rather than anchors, probe_p03 "
+            "never drives it, and its negatives P03-020 and P03-021 have no "
+            "caller anywhere, so logup:correspondence can never enter the "
+            "measured negative set. The cache-is-not-the-owner clause is untested "
+            "at any claimed boundary."
         ),
     },
     # The two entries below are local observations named by the witnesses, not
