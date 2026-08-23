@@ -56,6 +56,18 @@ BUS_CHALLENGE_SPACE = 2305843009213693951
 
 ROLES = ("table", "queries", "multiplicities")
 
+#: Recovered from `registry/protocol-vocabulary.json`.  Arity is per profile,
+#: not per family: `logup_queries` declares 10 where the others declare 8, so
+#: different roles legitimately carry different arities.  Only two occupants of
+#: the SAME role with disagreeing arities is a refusal.  The preprocessed table
+#: also names a different binding route from the committed columns.
+PROFILES: Mapping[str, Mapping[str, Any]] = {
+    "logup_committed_column": {"arity_log2": 8, "origin": "prover_message", "route": "zkc.commit.toy-vector"},
+    "logup_multiplicities": {"arity_log2": 8, "origin": "prover_message", "route": "zkc.commit.toy-vector"},
+    "logup_queries": {"arity_log2": 10, "origin": "prover_message", "route": "zkc.commit.toy-vector"},
+    "logup_table": {"arity_log2": 8, "origin": "preprocessed", "route": "zkc.anchor.preimage"},
+}
+
 MAX_ACTIONS = 64
 MAX_CLAIMS = 32
 MAX_ANCHOR_ROLES = 8
@@ -125,6 +137,9 @@ class Mutation(str, Enum):
     CHALLENGE_UNBOUND_MATERIAL = "challenge_unbound_material"
     CLAIM_ANCHORS_UNBOUND_ROLE = "claim_anchors_unbound_role"
     ORIGIN_SEAT_MISMATCH = "origin_seat_mismatch"
+    MULTI_ROUND_CONTRACT = "multi_round_contract"
+    REDUNDANT_TABLE_BINDING = "redundant_table_binding"
+    AUTHORED_ANCHOR_DIVERGES = "authored_anchor_diverges"
 
 
 def _result(outcome: OutcomeClass, boundary: str, code: str, detail: str) -> CheckResult:
@@ -141,6 +156,7 @@ class CommittedColumn:
     seat: Seat
     arity_log2: int
     anchor: str
+    binding_route: str = "zkc.commit.toy-vector"
     occurrence_index: int = 0
 
     def __post_init__(self) -> None:
@@ -159,6 +175,7 @@ class CommittedColumn:
             "seat": self.seat.value,
             "arity_log2": self.arity_log2,
             "anchor": self.anchor,
+            "binding_route": self.binding_route,
             "index": self.occurrence_index,
         }
 
@@ -193,6 +210,7 @@ class Reduction:
 
     name: str
     contract: str
+    rounds: int
     consumes: tuple[str, ...]
     produces: tuple[str, ...]
     deps: tuple[str, ...]
@@ -202,6 +220,7 @@ class Reduction:
         return {
             "name": self.name,
             "contract": self.contract,
+            "rounds": self.rounds,
             "consumes": list(self.consumes),
             "produces": list(self.produces),
             "deps": list(self.deps),
@@ -340,30 +359,31 @@ def load_fixture(repo_root: Path, name: str, expected_sha256: str) -> FrozenFixt
 # --- scenario construction ---------------------------------------------------
 
 
-def build_core(variant: Variant, arity_log2: int = 10) -> LogupCore:
+def build_core(variant: Variant) -> LogupCore:
     """Declare the scenario independently of the fixture."""
 
     if variant is Variant.BUS:
-        seats = {
-            "table": (Origin.PROVER_MESSAGE, Seat.PROVER_SLOT, "logup_committed_column"),
-            "queries": (Origin.PROVER_MESSAGE, Seat.PROVER_SLOT, "logup_committed_column"),
-            "multiplicities": (Origin.PROVER_MESSAGE, Seat.PROVER_SLOT, "logup_committed_column"),
-        }
+        named = dict.fromkeys(ROLES, "logup_committed_column")
     else:
-        seats = {
-            "table": (Origin.PREPROCESSED, Seat.SEAL_BINDING, "logup_table"),
-            "queries": (Origin.PROVER_MESSAGE, Seat.PROVER_SLOT, "logup_queries"),
-            "multiplicities": (Origin.PROVER_MESSAGE, Seat.PROVER_SLOT, "logup_multiplicities"),
+        named = {
+            "table": "logup_table",
+            "queries": "logup_queries",
+            "multiplicities": "logup_multiplicities",
         }
 
     columns = tuple(
         CommittedColumn(
             role=role,
-            profile=seats[role][2],
-            origin=seats[role][0],
-            seat=seats[role][1],
-            arity_log2=arity_log2,
+            profile=named[role],
+            origin=Origin(PROFILES[named[role]]["origin"]),
+            seat=(
+                Seat.SEAL_BINDING
+                if PROFILES[named[role]]["origin"] == "preprocessed"
+                else Seat.PROVER_SLOT
+            ),
+            arity_log2=int(PROFILES[named[role]]["arity_log2"]),
             anchor=ANCHORS[role],
+            binding_route=str(PROFILES[named[role]]["route"]),
         )
         for role in ROLES
     )
@@ -378,6 +398,7 @@ def build_core(variant: Variant, arity_log2: int = 10) -> LogupCore:
     reduction = Reduction(
         name="bus",
         contract=variant.value,
+        rounds=1,
         consumes=("inclusion",),
         produces=("identity",),
         deps=("beta",),
@@ -485,6 +506,44 @@ def admit_core(core: Any) -> CheckResult:
                     "an admitted material-identity constraint does not hold",
                 )
 
+    # -- the contract declares exactly one round.  The shipped rule asserts
+    #    this as a machine condition; a family that widened it would price a
+    #    round structure no rule states.
+    for reduction in core.reductions:
+        if reduction.rounds != 1:
+            return _result(
+                OutcomeClass.MISMATCH,
+                "logup:round-structure",
+                "P03-017",
+                f"contract {reduction.contract} declares {reduction.rounds} rounds",
+            )
+
+    # -- a seal-stage binding is its own material reference, so a separate
+    #    material binding on it is that fact spelled twice and is refused as
+    #    unconsumed rather than accepted as harmless redundancy.
+    for column in core.columns:
+        if column.seat is Seat.SEAL_BINDING and column.role in core.material_bindings:
+            return _result(
+                OutcomeClass.MISMATCH,
+                "logup:material-identity",
+                "P03-018",
+                f"{column.role} is seal-bound and carries a redundant material binding",
+            )
+
+    # -- the produced claim's anchors are DERIVED from the material filling each
+    #    role, not authored freely.  An authored anchor that diverges from the
+    #    derived one is refused rather than preferred.
+    derived = {c.role: c.anchor for c in core.columns}
+    for reduction in core.reductions:
+        for role, anchor in reduction.anchors.items():
+            if role in derived and derived[role] != anchor:
+                return _result(
+                    OutcomeClass.MISMATCH,
+                    "logup:derived-anchors",
+                    "P03-019",
+                    f"the authored anchor for {role} diverges from the material it names",
+                )
+
     # -- claim linearity: exactly one consumer for every linear claim.
     names = {claim.name for claim in core.claims}
     if len(names) != len(core.claims):
@@ -581,8 +640,9 @@ def mutate(core: LogupCore, mutation: Mutation) -> LogupCore:
         return replace(core, claims=claims)
     if mutation is Mutation.CLAIM_CONSUMED_TWICE:
         second = Reduction(
-            name="bus_again", contract=core.variant.value, consumes=("inclusion",),
-            produces=(), deps=("beta",), anchors=dict(ANCHORS),
+            name="bus_again", contract=core.variant.value, rounds=1,
+            consumes=("inclusion",), produces=(), deps=("beta",),
+            anchors=dict(ANCHORS),
         )
         doubled = replace(core, reductions=core.reductions + (second,))
         return replace(doubled, schedule=doubled.canonical_schedule())
@@ -611,6 +671,20 @@ def mutate(core: LogupCore, mutation: Mutation) -> LogupCore:
             for claim in core.claims
         )
         return replace(core, claims=claims)
+    if mutation is Mutation.MULTI_ROUND_CONTRACT:
+        return replace(core, reductions=tuple(
+            replace(r, rounds=2) for r in core.reductions
+        ))
+    if mutation is Mutation.REDUNDANT_TABLE_BINDING:
+        bindings = dict(core.material_bindings)
+        bindings["table"] = ANCHORS["table"]
+        return replace(core, material_bindings=bindings)
+    if mutation is Mutation.AUTHORED_ANCHOR_DIVERGES:
+        skewed = dict(ANCHORS)
+        skewed["queries"] = MULT_ANCHOR
+        return replace(core, reductions=tuple(
+            replace(r, anchors=skewed) for r in core.reductions
+        ))
     if mutation is Mutation.ORIGIN_SEAT_MISMATCH:
         columns = tuple(
             replace(column, origin=Origin.PREPROCESSED)

@@ -169,6 +169,28 @@ class DerivedNegativeTest(unittest.TestCase):
         self.assertIs(result.outcome, OutcomeClass.MISMATCH)
         self.assertEqual(result.code, "P03-007")
 
+    def test_a_multi_round_contract_is_refused(self) -> None:
+        """The shipped rule asserts single-round as a machine condition."""
+
+        result = admit_core(mutate(self.core, Mutation.MULTI_ROUND_CONTRACT))
+        self.assertIs(result.outcome, OutcomeClass.MISMATCH)
+        self.assertEqual(result.boundary, "logup:round-structure")
+
+    def test_a_redundant_binding_on_a_seal_bound_table_is_refused(self) -> None:
+        """A seal binding is its own material reference; a second is not harmless."""
+
+        core = build_core(Variant.RANGE_CHECK)
+        result = admit_core(mutate(core, Mutation.REDUNDANT_TABLE_BINDING))
+        self.assertIs(result.outcome, OutcomeClass.MISMATCH)
+        self.assertEqual(result.code, "P03-018")
+
+    def test_an_authored_anchor_may_not_diverge_from_derived_material(self) -> None:
+        """Contract output anchors are derived, not authored freely."""
+
+        result = admit_core(mutate(self.core, Mutation.AUTHORED_ANCHOR_DIVERGES))
+        self.assertIs(result.outcome, OutcomeClass.MISMATCH)
+        self.assertEqual(result.boundary, "logup:derived-anchors")
+
     def test_origin_and_seat_must_agree(self) -> None:
         result = admit_core(mutate(self.core, Mutation.ORIGIN_SEAT_MISMATCH))
         self.assertIs(result.outcome, OutcomeClass.MISMATCH)
@@ -219,6 +241,21 @@ class IdentityTest(unittest.TestCase):
         self.assertNotEqual(
             build_core(Variant.BUS).identity, build_core(Variant.RANGE_CHECK).identity
         )
+
+    def test_arity_is_per_profile_not_per_family(self) -> None:
+        """`logup_queries` declares 10 where the others declare 8."""
+
+        rng = {c.role: c.arity_log2 for c in build_core(Variant.RANGE_CHECK).columns}
+        self.assertEqual(rng["queries"], 10)
+        self.assertEqual(rng["table"], 8)
+        self.assertEqual(rng["multiplicities"], 8)
+        bus = {c.arity_log2 for c in build_core(Variant.BUS).columns}
+        self.assertEqual(bus, {8})
+
+    def test_the_preprocessed_table_names_a_different_binding_route(self) -> None:
+        rng = {c.role: c.binding_route for c in build_core(Variant.RANGE_CHECK).columns}
+        self.assertEqual(rng["table"], "zkc.anchor.preimage")
+        self.assertEqual(rng["queries"], "zkc.commit.toy-vector")
 
     def test_every_role_carries_its_anchor(self) -> None:
         for column in build_core(Variant.BUS).columns:
