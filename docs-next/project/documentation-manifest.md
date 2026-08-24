@@ -16,8 +16,10 @@ and validate all root and domain routes against it.
 There is one temporary exception. [`notes/README.md`](../notes/README.md) is a
 durable workspace boundary and therefore appears in this manifest. The
 disposable working notes it inventories do not. They must appear exactly once
-in that local inventory, may not be durable dependencies, and must all be
-absorbed or rejected before the directory is deleted at cutover.
+through the hierarchical inventory rooted there: the root inventories direct
+packages or standalone notes, and each package README inventories its direct
+children. They may not be durable dependencies and must all be absorbed or
+rejected before the directory is deleted at cutover.
 
 The page header is the source for kind, state, owner, and authority. The columns
 below are a derived navigation catalog and must eventually be validated against

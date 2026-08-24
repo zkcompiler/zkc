@@ -169,8 +169,9 @@ During the scaffold phase, verification checks only documentation mechanics:
 - every directory has a README and no directory is empty;
 - every page is reachable from the root or manifest;
 - relative file and heading links resolve;
-- every temporary note appears exactly once in `notes/README.md`, while no
-  individual working note appears in the durable manifest;
+- every temporary package or standalone note has exactly one inventory-owning
+  route through the hierarchical inventory rooted at `notes/README.md`, while
+  no individual working note appears in the durable manifest;
 - no durable page links directly to an individual temporary note;
 - no trailing whitespace or missing final newline exists;
 - the public-tree boundary check passes; and

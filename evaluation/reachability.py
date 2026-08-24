@@ -54,7 +54,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVALUATION = REPO_ROOT / "evaluation"
 
-#: A witness's codes look like ``P01-ALG-003``, ``R2-FS-001``, ``P03-017``, or
+#: A witness's codes look like ``P01-ALG-003``, ``R2-FS-001``, ``R2-LOGUP-017``, or
 #: ``P01-SAT-OK``.  Some witnesses name a section and some go straight to a
 #: number, so the part after the prefix cannot be required to start with a
 #: letter -- requiring it reported three witnesses as declaring no codes at all

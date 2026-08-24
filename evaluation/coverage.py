@@ -1,31 +1,24 @@
 #!/usr/bin/env python3
-"""Measure which invariants the witnesses actually close.
+"""Produce a live, manually curated invariant-boundary coverage snapshot.
 
-The invariant ledger's own rule is that a candidate does not satisfy an
-invariant by repeating its name: it must exhibit a **positive inhabitant** and a
-**well-formed negative mutation**.  So this tool refuses to count an invariant
-as closed on the strength of a test that merely mentions it.
+For each instrument this script collects affirmative outcomes and every
+non-affirmative ``(outcome, boundary, code)`` triple its probe function reaches.
+It then compares the pooled non-affirmative boundaries with an authored mapping
+from ledger rows to expected boundaries.  The result is useful for finding
+unexercised pressure and prioritizing review.
 
-For each witness it collects, by execution rather than by reading:
+It is not an R2 closure checker.  In particular, it does not establish that a
+driver is a well-formed negative mutation, associate a particular positive
+inhabitant with each invariant, prove that the authored boundary mapping is
+correct, or distinguish semantic refusals from missing dependencies, resource
+limits, checker failures, and intentionally unexercised outcomes.  The FRI and
+P01 inputs are read from stored case oracles; the four cross-cutting probes are
+executed live.  Results are therefore mixed-strength diagnostics.
 
-    positives   distinct affirmative outcomes the witness produces
-    negatives   distinct (outcome, boundary, code) triples its mutations reach
-    reachable   every declared code that some input drives to fire
-
-An invariant is reported ``closed`` only when its claimed boundaries appear in
-the measured negative set AND the witness has a positive inhabitant.  Anything
-else is ``partial`` or ``open``, including invariants a witness clearly
-intends: intent is not evidence.
-
-What this tool cannot measure, and does not pretend to: whether a boundary is
-the *right* boundary for the invariant it is filed under.  Reaching a boundary
-is mechanical; deciding that reaching it discharges a stated requirement is a
-judgment, and a wrong pairing here would report green while measuring something
-else.  So each entry quotes its invariant's required pressure verbatim next to
-the boundaries claimed to deliver it, and states any known shortfall as ``gap``.
-An entry with a gap is held to ``partial`` no matter how many boundaries it
-reaches.  This does not mechanize the judgment; it puts the judgment where a
-reader can check it against the quoted requirement.
+The labels are ``boundary-covered``, ``boundary-partial``, and
+``boundary-uncovered``.  Even ``boundary-covered`` means only that every
+manually listed boundary was observed and no already-authored gap remains.  A
+human closure decision still belongs to the case or invariant owner.
 
 Run from the repository root:
 
@@ -49,9 +42,9 @@ EVALUATION = REPO_ROOT / "evaluation"
 
 # --- the ledger ---------------------------------------------------------------
 #
-# Each entry names the boundaries a witness must reach for the invariant to be
-# considered closed.  The boundaries are the witnesses' own strings, so a
-# renamed boundary reports as open rather than silently passing.
+# Each entry names boundaries whose observation is relevant to the invariant.
+# The mapping is authored, not derived. A renamed boundary reports as uncovered
+# rather than silently matching a stale name.
 
 LEDGER: dict[str, dict[str, Any]] = {
     "F-01": {
@@ -138,7 +131,7 @@ LEDGER: dict[str, dict[str, Any]] = {
             "each witness's terms.py have no test that drives them. The guards "
             "remain the textbook separating family rather than a corpus of real "
             "ones, and of the many codes sharing the `closed-core` boundary only "
-            "P03-001, the declared claim bound, bears on this row."
+            "R2-LOGUP-001, the declared claim bound, bears on this row."
         ),
     },
     "F-06": {
@@ -260,7 +253,7 @@ LEDGER: dict[str, dict[str, Any]] = {
             "whose reduction names a foreign contract, whose side input names a "
             "challenge nothing samples, or whose challenge declares a different "
             "domain and space all still admit affirmative. The reduction-output "
-            "rule P03-011 on this boundary has no caller; no witness has a check "
+            "rule R2-LOGUP-011 on this boundary has no caller; no witness has a check "
             "operand to mutate; and `typed-routing`/R2-ROUTE-001 is an equality "
             "against a hardcoded route order that the closed-core schedule law "
             "already enforces, carrying no type content."
@@ -408,14 +401,14 @@ LEDGER: dict[str, dict[str, Any]] = {
         "gap": (
             "the claimed boundary is on-property but single-sourced: the column "
             "anchor and the reduction anchor are both reads of the one literal "
-            "ANCHORS map (p03model/logup.py:302-310 into 387 and 407), so nothing "
+            "ANCHORS map (logup_model/logup.py:302-310 into 387 and 407), so nothing "
             "is recomputed and the law cannot separate derived evidence from two "
             "identical authored copies. A second route does exist and is not "
             "claimed here — load_fixture hash-pins the shipped .mlir fixtures and "
             "correspondence checks the independently declared scenario against "
             "facts read out of them (logup.py:331-358, 606-620) — but it "
-            "validates roles and challenge space rather than anchors, probe_p03 "
-            "never drives it, and its negatives P03-020 and P03-021 have no "
+            "validates roles and challenge space rather than anchors, probe_logup "
+            "never drives it, and its negatives R2-LOGUP-020 and R2-LOGUP-021 have no "
             "caller anywhere, so logup:correspondence can never enter the "
             "measured negative set. The cache-is-not-the-owner clause is untested "
             "at any claimed boundary."
@@ -465,11 +458,11 @@ def _record(sink: dict[str, set], result: Any) -> None:
     sink["codes"].add(triple[2])
 
 
-def probe_p02() -> dict[str, set]:
-    root = EVALUATION / "r2-p02-commitment"
+def probe_commitment() -> dict[str, set]:
+    root = EVALUATION / "r2-probe-commitment"
     sys.path.insert(0, str(root))
-    core = _load(root, "p02model.core")
-    constructions = importlib.import_module("p02model.commitment").CONSTRUCTIONS
+    core = _load(root, "commitment_model.core")
+    constructions = importlib.import_module("commitment_model.commitment").CONSTRUCTIONS
     sink: dict[str, set] = {"positives": set(), "negatives": set(), "codes": set()}
     construction = constructions["r2.commit.binary-merkle.v1"]
     small = type(construction)(
@@ -493,10 +486,10 @@ def probe_p02() -> dict[str, set]:
     return sink
 
 
-def probe_p03() -> dict[str, set]:
-    root = EVALUATION / "r2-p03-logup"
+def probe_logup() -> dict[str, set]:
+    root = EVALUATION / "r2-probe-logup"
     sys.path.insert(0, str(root))
-    logup = _load(root, "p03model.logup")
+    logup = _load(root, "logup_model.logup")
     sink: dict[str, set] = {"positives": set(), "negatives": set(), "codes": set()}
     for variant in logup.Variant:
         built = logup.build_core(variant)
@@ -510,9 +503,9 @@ def probe_p03() -> dict[str, set]:
     return sink
 
 
-def probe_p04() -> dict[str, set]:
-    root = EVALUATION / "r2-p04-bridges"
-    bridges = _load(root, "p04model.bridges")
+def probe_value_bridges() -> dict[str, set]:
+    root = EVALUATION / "r2-probe-value-bridges"
+    bridges = _load(root, "value_bridge_model.bridges")
     sink: dict[str, set] = {"positives": set(), "negatives": set(), "codes": set()}
     Bridge, Lane = bridges.Bridge, bridges.Lane
     variants = [
@@ -537,12 +530,12 @@ def probe_p04() -> dict[str, set]:
     return sink
 
 
-def probe_p05() -> dict[str, set]:
-    root = EVALUATION / "r2-p05-guards"
-    guards = _load(root, "p05model.guards")
+def probe_guard_cost() -> dict[str, set]:
+    root = EVALUATION / "r2-probe-guard-cost"
+    guards = _load(root, "guard_model.guards")
     sink: dict[str, set] = {"positives": set(), "negatives": set(), "codes": set()}
-    default = guards.GuardProfile("r2.p05.guard.default")
-    thrifty = guards.GuardProfile("r2.p05.guard.thrifty", max_nodes=4096, max_work=100)
+    default = guards.GuardProfile("r2.probe.guard.default")
+    thrifty = guards.GuardProfile("r2.probe.guard.thrifty", max_nodes=4096, max_work=100)
     _record(sink, guards.admit_guard(default, guards.pairing_formula(4), guards.interleaved_order(4)))
     # The declared default bound, not an ad-hoc narrow one: an envelope that only
     # ever refuses under a profile invented for the test declares nothing.
@@ -590,10 +583,10 @@ def probe_p01() -> dict[str, set]:
 PROBES: dict[str, Callable[[], dict[str, set]]] = {
     "fri": probe_fri,
     "schnorr": probe_p01,
-    "commitment": probe_p02,
-    "logup": probe_p03,
-    "bridges": probe_p04,
-    "guards": probe_p05,
+    "commitment": probe_commitment,
+    "logup": probe_logup,
+    "value-bridges": probe_value_bridges,
+    "guard-cost": probe_guard_cost,
 }
 
 
@@ -603,7 +596,6 @@ PROBES: dict[str, Callable[[], dict[str, set]]] = {
 def measure() -> dict[str, Any]:
     per_witness: dict[str, dict[str, Any]] = {}
     boundaries: set[str] = set()
-    positives: set[str] = set()
     for name, probe in PROBES.items():
         sink = probe()
         per_witness[name] = {
@@ -612,27 +604,25 @@ def measure() -> dict[str, Any]:
             "codes": sorted(sink["codes"]),
         }
         boundaries |= {triple[1] for triple in sink["negatives"]}
-        if sink["positives"]:
-            positives.add(name)
     verdicts: dict[str, Any] = {}
     for ident, entry in sorted(LEDGER.items()):
         want: set[str] = entry["boundaries"]
         met = want & boundaries
         if not want:
-            state = "open"
+            state = "boundary-uncovered"
         elif met == want:
-            state = "closed"
+            state = "boundary-covered"
         elif met:
-            state = "partial"
+            state = "boundary-partial"
         else:
-            state = "open"
+            state = "boundary-uncovered"
         # Reaching every claimed boundary is necessary, not sufficient: the
         # boundary must also be the one the invariant's pressure asks for.  That
         # pairing cannot be measured from a run, so an entry states the gap it
-        # knows about and is held to `partial` until the gap is closed.
+        # knows about and is held to boundary-partial until the gap is resolved.
         gap = entry.get("gap")
-        if gap and state == "closed":
-            state = "partial"
+        if gap and state == "boundary-covered":
+            state = "boundary-partial"
         verdicts[ident] = {
             "title": entry["title"],
             "state": state,
@@ -650,18 +640,26 @@ def render(report: dict[str, Any]) -> str:
             f"  {name:<16} {len(data['positives']):>9}  {len(data['negatives']):>9}  {len(data['codes']):>5}"
         )
     lines.append("")
-    lines.append("invariant  state    title")
-    tally: dict[str, int] = {"closed": 0, "partial": 0, "open": 0}
+    lines.append("invariant  coverage-state        title")
+    tally: dict[str, int] = {
+        "boundary-covered": 0,
+        "boundary-partial": 0,
+        "boundary-uncovered": 0,
+    }
     for ident, verdict in report["invariants"].items():
         tally[verdict["state"]] += 1
         missing = set(verdict["required"]) - set(verdict["met"])
         suffix = f"   missing: {', '.join(sorted(missing))}" if missing else ""
-        lines.append(f"  {ident:<8} {verdict['state']:<8} {verdict['title']}{suffix}")
+        lines.append(
+            f"  {ident:<8} {verdict['state']:<20} {verdict['title']}{suffix}"
+        )
         if verdict.get("gap"):
-            lines.append(f"  {'':<8} {'':<8} pressure gap: {verdict['gap']}")
+            lines.append(f"  {'':<8} {'':<20} pressure gap: {verdict['gap']}")
     lines.append("")
     lines.append(
-        f"closed {tally['closed']}  partial {tally['partial']}  open {tally['open']}"
+        f"boundary-covered {tally['boundary-covered']}  "
+        f"boundary-partial {tally['boundary-partial']}  "
+        f"boundary-uncovered {tally['boundary-uncovered']}"
         f"   (of {len(report['invariants'])} tracked)"
     )
     return "\n".join(lines)

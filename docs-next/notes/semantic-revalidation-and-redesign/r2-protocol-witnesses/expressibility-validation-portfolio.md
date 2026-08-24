@@ -1,7 +1,8 @@
 # ZK-Protocol Expressibility Validation Portfolio
 
 > **Kind:** Temporary R2 protocol-selection and validation-depth contract
-> **State:** Selected portfolio; case execution has not begun
+> **State:** Selected portfolio; repaired/refrozen `P01` is retained at T3
+> after exact-snapshot independent re-review; `P02` is queued next
 > **Authority:** None. This page selects research pressure and evidence depth;
 > it does not define target semantics, supported protocols, theorem
 > applicability, implementation conformance, or the final v0 boundary.
@@ -112,7 +113,10 @@ Each completed case receives exactly one primary classification:
 | `P01` | Minimal Schnorr/Sigma identification, Fresh and Fiat--Shamir forms | T3 | Statement binding, prover strategy, response-after-challenge causality, Fresh/FS factorization, special-soundness and HVZK applicability boundaries |
 | `P02` | Native FRI/IOR through query and authenticated opening | T3 | Logical oracle ownership, commitment/opening compilation, draw multiplicity, authentication, residual versus acceptance, BCS/salting boundaries |
 
-`P01` is the next case. `P02` must not reuse the fixture-local invented
+`P01` is a retained T3 result at its exact finite scope. Its repaired 69-test
+packet passed separate lifecycle and provenance cold rechecks on the final
+source-bound identity. `P02` is queued next but has not begun, and it must not
+reuse the fixture-local invented
 acceptance condition withdrawn by `FRI-Grind-1`; it needs a source-faithful
 oracle/query/opening path.
 

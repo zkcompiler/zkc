@@ -9,7 +9,9 @@
 > **Current gate:** R1 is complete. R2 remains active after the repaired
 > `FRI-Grind-1` witness passed refreeze and context-isolated non-authoring
 > replay. A differentiated ZK-protocol expressibility portfolio is selected;
-> its next case, `P01` Schnorr/Sigma, has not begun. Stage 4B remains inactive.
+> `P01` Schnorr/Sigma is retained at T3 after repaired refreeze and two clean
+> exact-snapshot cold rechecks. `P02` is the next queued anchor but has not
+> begun. Stage 4B remains inactive.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -39,6 +41,10 @@ does not claim that the current snapshot will remain unchanged.
 
 ## Current cycle records
 
+This section owns the inventory route for this package's direct pages and the
+`r2-protocol-witnesses/` subpackage. Links to individual R2 pages below are
+reader cross-references; the R2 README owns their inventory.
+
 - [R0 Live Baseline](baseline.md) freezes the activation snapshot, authority,
   version-control boundary, and review-source provenance.
 - [R1 Review Adjudication](review-adjudication.md) classifies the complete
@@ -61,6 +67,10 @@ does not claim that the current snapshot will remain unchanged.
   selects canonical families, recent variants, holdout cases, differentiated
   T1--T3 evidence strength, work order, promotion rules, and the bounded R2
   convergence gate.
+- [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
+  preserves the inspected Phase A status, evidence vocabulary, protocol/probe
+  namespace, and then-unresolved P01 closure blockers without changing target
+  semantics. The Phase B decision owns the current P01 result.
 
 ## Why this is being revisited
 

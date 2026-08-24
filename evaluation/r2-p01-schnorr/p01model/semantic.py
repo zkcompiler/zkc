@@ -59,6 +59,13 @@ class ParticipantRole(str, Enum):
     PUBLIC_ENVIRONMENT = "PublicEnvironment"
 
 
+class ApplicationContextAuthority(str, Enum):
+    """Authority that supplies an FS invocation's public application context."""
+
+    APPLICATION = "Application"
+    PUBLIC_ENVIRONMENT = "PublicEnvironment"
+
+
 class OccurrenceActor(str, Enum):
     PROVER = "Prover"
     VERIFIER = "Verifier"
@@ -184,6 +191,55 @@ def _frame(label: str, payload: bytes) -> bytes:
         + len(payload).to_bytes(4, "big")
         + payload
     )
+
+
+_SHAKE128_RATE_BYTES = 168
+_CFRG_SESSION_ID_DOMAIN = b"irtf-cfrg-fiat-shamir/session-id"
+
+
+class _Shake128Duplex:
+    """Exact finite SHAKE128 XOF-duplex state used by P01 FS v3.
+
+    SHAKE's Python API exposes repeatable prefix reads rather than a consuming
+    reader.  Keeping an explicit read offset gives the CFRG Init/Absorb/Squeeze
+    behavior, including resetting the reader after a later nonempty Absorb.
+    """
+
+    def __init__(self, session_id: bytes) -> None:
+        if not isinstance(session_id, bytes) or len(session_id) != 32:
+            raise ValueError("SHAKE128 duplex Init requires a 32-byte session id")
+        self._absorbed = bytearray(
+            session_id + bytes(_SHAKE128_RATE_BYTES - len(session_id))
+        )
+        self._read_offset = 0
+
+    @property
+    def absorbed_bytes(self) -> bytes:
+        return bytes(self._absorbed)
+
+    def absorb(self, payload: bytes) -> None:
+        if not isinstance(payload, bytes):
+            raise TypeError("SHAKE128 duplex Absorb requires bytes")
+        if payload:
+            self._absorbed.extend(payload)
+            self._read_offset = 0
+
+    def squeeze(self, length: int) -> bytes:
+        if not isinstance(length, int) or isinstance(length, bool) or length < 0:
+            raise ValueError("SHAKE128 duplex Squeeze length must be nonnegative")
+        end = self._read_offset + length
+        stream = hashlib.shake_128(self.absorbed_bytes).digest(end)
+        output = stream[self._read_offset : end]
+        self._read_offset = end
+        return output
+
+
+def _derive_cfrg_session_id(tag: bytes) -> bytes:
+    if not isinstance(tag, bytes) or not tag:
+        raise ValueError("P01 FS v3 session tag must be nonempty bytes")
+    state = _Shake128Duplex(_CFRG_SESSION_ID_DOMAIN)
+    state.absorb(tag)
+    return state.squeeze(32)
 
 
 @dataclass(frozen=True)
@@ -1322,6 +1378,198 @@ def canonical_runtime_context_contract() -> RuntimeContextContract:
 
 
 @dataclass(frozen=True)
+class ChallengeDecoderContract:
+    squeeze_bytes: int
+    byte_order: str
+    reduction: str
+    modulus: int
+    codomain_id: str
+    bias_numerator: int
+    bias_denominator: int
+    failure_numerator: int
+    failure_denominator: int
+
+    def term(self) -> dict[str, Any]:
+        return {
+            "squeeze_bytes": self.squeeze_bytes,
+            "byte_order": self.byte_order,
+            "reduction": self.reduction,
+            "modulus": self.modulus,
+            "codomain_id": self.codomain_id,
+            "bias_numerator": self.bias_numerator,
+            "bias_denominator": self.bias_denominator,
+            "failure_numerator": self.failure_numerator,
+            "failure_denominator": self.failure_denominator,
+        }
+
+    @property
+    def identity(self) -> str:
+        return semantic_id("p01.challenge-decoder-contract.v1", self.term())
+
+
+def p01_language_id(profile: AlgebraProfile) -> str:
+    return _contract_id(
+        "p01.schnorr-language.v1",
+        kind="DiscreteLogKnowledgeLanguage",
+        group_parameters_id=group_parameters_id(profile),
+        statement_domain_id=group_domain_id(profile),
+        witness_domain_id=scalar_domain_id(profile),
+        relation="Exists x in Z_q such that Y=g^x",
+    )
+
+
+def canonical_source_fresh_protocol_id(
+    core: ConversationCore,
+    profile: AlgebraProfile,
+    fresh: FreshRealization,
+) -> str:
+    """Reconstruct the exact construction-independent Fresh Protocol ID."""
+
+    return ProtocolVariant(
+        core_id=core.identity,
+        honest_prover_contract_id=canonical_honest_prover_contract(
+            core, profile
+        ).identity,
+        realization_kind=RealizationKind.FRESH,
+        realization_id=fresh.identity,
+    ).identity
+
+
+def p01_argument_system_id(
+    core: ConversationCore,
+    profile: AlgebraProfile,
+    fresh: FreshRealization,
+) -> str:
+    return _contract_id(
+        "p01.schnorr-public-coin-argument-system.v1",
+        kind="ThreeMoveSchnorrSigma",
+        language_id=p01_language_id(profile),
+        core_id=core.identity,
+        honest_prover_contract_id=canonical_honest_prover_contract(
+            core, profile
+        ).identity,
+        source_fresh_protocol_id=canonical_source_fresh_protocol_id(
+            core, profile, fresh
+        ),
+        fresh_realization_id=fresh.identity,
+        conditional_kernel_contract_id=fresh.conditional_kernel_contract_id,
+    )
+
+
+def p01_proof_flavor_id(core: ConversationCore, profile: AlgebraProfile) -> str:
+    return _contract_id(
+        "p01.fs-proof-flavor.v1",
+        kind="BatchableCommitmentResponse",
+        proof_fields=(
+            (
+                COMMITMENT,
+                core.contract_for(COMMITMENT).value_domain_id,
+                profile.group_codec,
+            ),
+            (
+                RESPONSE,
+                core.contract_for(RESPONSE).value_domain_id,
+                profile.scalar_codec,
+            ),
+        ),
+        serialization="ExactFixedWidthCommitmentThenResponse",
+    )
+
+
+def p01_application_domain_id() -> str:
+    return _contract_id(
+        "p01.fs-application-domain.v1",
+        application="zkc/p01/minimal-schnorr",
+        version=3,
+        purpose="FiniteSemanticWitness",
+    )
+
+
+def p01_duplex_suite_id() -> str:
+    return _contract_id(
+        "p01.fs-duplex-suite.v1",
+        primitive="SHAKE128",
+        model="CFRG-XOFDuplex-v03",
+        rate_bytes=_SHAKE128_RATE_BYTES,
+        init="AbsorbSessionIdThenZeroPadToRate",
+        absorb="IncrementalBytesResetReaderWhenNonEmpty",
+        squeeze="ContinueUniformXOFByteStream",
+    )
+
+
+def p01_session_derivation_rule_id() -> str:
+    return _contract_id(
+        "p01.fs-session-derivation-rule.v1",
+        duplex_suite_id=p01_duplex_suite_id(),
+        initialization_domain=_CFRG_SESSION_ID_DOMAIN,
+        action="InitDomainThenAbsorbInjectivelyFramedTagThenSqueeze32",
+        output_bytes=32,
+    )
+
+
+def p01_salt_policy_id() -> str:
+    return _contract_id(
+        "p01.fs-salt-policy.v1",
+        policy="NoSalt",
+        theorem_effect="NoZeroKnowledgeClaimGrantedByConstruction",
+    )
+
+
+def p01_composition_context_id() -> str:
+    return _contract_id(
+        "p01.fs-composition-context.v1",
+        context="Standalone",
+        child_occurrences=(),
+    )
+
+
+def canonical_challenge_decoder_contract(
+    profile: AlgebraProfile,
+) -> ChallengeDecoderContract:
+    return ChallengeDecoderContract(
+        squeeze_bytes=1,
+        byte_order="LittleEndian",
+        reduction="LE2IP(buf) mod 8",
+        modulus=8,
+        codomain_id=challenge_domain_id(profile),
+        bias_numerator=0,
+        bias_denominator=1,
+        failure_numerator=0,
+        failure_denominator=1,
+    )
+
+
+def source_public_coin_basis_id(
+    fresh: FreshRealization,
+    core: ConversationCore,
+    profile: AlgebraProfile,
+) -> str:
+    return _contract_id(
+        "p01.fs-source-public-coin-basis.v1",
+        core_id=core.identity,
+        honest_prover_contract_id=canonical_honest_prover_contract(
+            core, profile
+        ).identity,
+        fresh_realization_id=fresh.identity,
+        conditional_kernel_contract_id=fresh.conditional_kernel_contract_id,
+        challenge_occurrence=fresh.challenge_occurrence,
+        challenge_domain_id=challenge_domain_id(profile),
+        resolver=fresh.resolver.value,
+    )
+
+
+def _canonical_fresh_basis(
+    core: ConversationCore,
+    profile: AlgebraProfile,
+) -> tuple[FreshRealization, str]:
+    kernel_contract_id = fresh_conditional_kernel_contract_id(core, profile)
+    if isinstance(kernel_contract_id, Result):
+        raise ValueError(kernel_contract_id.detail)
+    fresh = FreshRealization(core.identity, kernel_contract_id)
+    return fresh, source_public_coin_basis_id(fresh, core, profile)
+
+
+@dataclass(frozen=True)
 class TranscriptConstruction:
     core_id: str
     suite_domain: str
@@ -1331,7 +1579,22 @@ class TranscriptConstruction:
     challenge_namespace: str
     framing: str
     sampler: str
-    model: str = "StrongFiatShamirTranscriptConstruction.v2"
+    model: str = "StrongFiatShamirTranscriptConstruction.v3"
+    source_fresh_protocol_id: str = ""
+    source_fresh_realization_id: str = ""
+    source_public_coin_basis_id: str = ""
+    language_id: str = ""
+    argument_system_id: str = ""
+    application_domain_id: str = ""
+    proof_flavor_id: str = ""
+    duplex_suite_id: str = ""
+    session_derivation_rule_id: str = ""
+    salt_policy_id: str = ""
+    composition_context_id: str = ""
+    application_authority: ApplicationContextAuthority = (
+        ApplicationContextAuthority.APPLICATION
+    )
+    decoder: ChallengeDecoderContract | None = None
 
     def term(self) -> dict[str, Any]:
         return {
@@ -1344,11 +1607,24 @@ class TranscriptConstruction:
             "challenge_namespace": self.challenge_namespace,
             "framing": self.framing,
             "sampler": self.sampler,
+            "source_fresh_protocol_id": self.source_fresh_protocol_id,
+            "source_fresh_realization_id": self.source_fresh_realization_id,
+            "source_public_coin_basis_id": self.source_public_coin_basis_id,
+            "language_id": self.language_id,
+            "argument_system_id": self.argument_system_id,
+            "application_domain_id": self.application_domain_id,
+            "proof_flavor_id": self.proof_flavor_id,
+            "duplex_suite_id": self.duplex_suite_id,
+            "session_derivation_rule_id": self.session_derivation_rule_id,
+            "salt_policy_id": self.salt_policy_id,
+            "composition_context_id": self.composition_context_id,
+            "application_authority": self.application_authority.value,
+            "decoder": self.decoder.term() if self.decoder is not None else None,
         }
 
     @property
     def identity(self) -> str:
-        return semantic_id("p01.transcript-construction.v2", self.term())
+        return semantic_id("p01.transcript-construction.v3", self.term())
 
 
 def required_challenge_atoms(
@@ -1404,18 +1680,36 @@ def canonical_transcript_construction(
     core: ConversationCore,
     profile: AlgebraProfile,
 ) -> TranscriptConstruction:
+    if not isinstance(profile, AlgebraProfile) or profile.challenge_size != 8:
+        raise ValueError("P01 FS v3 is defined only for the exact mod-8 profile")
     atoms = required_challenge_atoms(core)
     if isinstance(atoms, Result):
         raise ValueError(atoms.detail)
+    fresh, source_basis_id = _canonical_fresh_basis(core, profile)
     return TranscriptConstruction(
         core_id=core.identity,
-        suite_domain="zkc/p01/minimal-schnorr/fs/v2",
+        suite_domain="zkc/p01/minimal-schnorr/fs/v3",
         runtime_context=canonical_runtime_context_contract(),
         atoms=atoms,
         challenge_occurrence=CHALLENGE,
-        challenge_namespace="zkc/p01/schnorr/challenge/c/v1",
+        challenge_namespace="zkc/p01/schnorr/challenge/c/v2",
         framing="typed-length-delimited.v1",
-        sampler="shake128-low-bits.v1",
+        sampler="shake128-one-byte-mod-8.v1",
+        source_fresh_protocol_id=canonical_source_fresh_protocol_id(
+            core, profile, fresh
+        ),
+        source_fresh_realization_id=fresh.identity,
+        source_public_coin_basis_id=source_basis_id,
+        language_id=p01_language_id(profile),
+        argument_system_id=p01_argument_system_id(core, profile, fresh),
+        application_domain_id=p01_application_domain_id(),
+        proof_flavor_id=p01_proof_flavor_id(core, profile),
+        duplex_suite_id=p01_duplex_suite_id(),
+        session_derivation_rule_id=p01_session_derivation_rule_id(),
+        salt_policy_id=p01_salt_policy_id(),
+        composition_context_id=p01_composition_context_id(),
+        application_authority=ApplicationContextAuthority.APPLICATION,
+        decoder=canonical_challenge_decoder_contract(profile),
     )
 
 
@@ -1423,6 +1717,8 @@ def admit_transcript_construction(
     construction: TranscriptConstruction,
     core: ConversationCore,
     profile: AlgebraProfile,
+    *,
+    source_fresh: FreshRealization | None = None,
 ) -> Result:
     if not isinstance(construction, TranscriptConstruction):
         return result(
@@ -1453,12 +1749,65 @@ def admit_transcript_construction(
         or not isinstance(construction.framing, str)
         or not isinstance(construction.sampler, str)
         or not isinstance(construction.model, str)
+        or not isinstance(construction.source_fresh_protocol_id, str)
+        or not isinstance(construction.source_fresh_realization_id, str)
+        or not isinstance(construction.source_public_coin_basis_id, str)
+        or not isinstance(construction.language_id, str)
+        or not isinstance(construction.argument_system_id, str)
+        or not isinstance(construction.application_domain_id, str)
+        or not isinstance(construction.proof_flavor_id, str)
+        or not isinstance(construction.duplex_suite_id, str)
+        or not isinstance(construction.session_derivation_rule_id, str)
+        or not isinstance(construction.salt_policy_id, str)
+        or not isinstance(construction.composition_context_id, str)
+        or not isinstance(
+            construction.application_authority, ApplicationContextAuthority
+        )
+        or not isinstance(construction.decoder, ChallengeDecoderContract)
+        or not isinstance(construction.decoder.squeeze_bytes, int)
+        or isinstance(construction.decoder.squeeze_bytes, bool)
+        or not isinstance(construction.decoder.byte_order, str)
+        or not isinstance(construction.decoder.reduction, str)
+        or not isinstance(construction.decoder.modulus, int)
+        or isinstance(construction.decoder.modulus, bool)
+        or not isinstance(construction.decoder.codomain_id, str)
+        or any(
+            not isinstance(value, int) or isinstance(value, bool)
+            for value in (
+                construction.decoder.bias_numerator,
+                construction.decoder.bias_denominator,
+                construction.decoder.failure_numerator,
+                construction.decoder.failure_denominator,
+            )
+        )
     ):
         return result(
             Outcome.MALFORMED,
             "transcript-construction",
             "P01-FS-000",
             "transcript construction fields are outside the closed typed grammar",
+        )
+    static_identity_fields = (
+        construction.core_id,
+        construction.source_fresh_protocol_id,
+        construction.source_fresh_realization_id,
+        construction.source_public_coin_basis_id,
+        construction.language_id,
+        construction.argument_system_id,
+        construction.application_domain_id,
+        construction.proof_flavor_id,
+        construction.duplex_suite_id,
+        construction.session_derivation_rule_id,
+        construction.salt_policy_id,
+        construction.composition_context_id,
+        construction.decoder.codomain_id,
+    )
+    if any(not identity for identity in static_identity_fields):
+        return result(
+            Outcome.MALFORMED,
+            "transcript-construction:static-identities",
+            "P01-FS-020",
+            "transcript construction is missing a required static semantic identity",
         )
     if (
         len(construction.atoms) > 32
@@ -1484,12 +1833,51 @@ def admit_transcript_construction(
         or not _bounded_text(construction.framing, 128)
         or not _bounded_text(construction.sampler, 128)
         or not _bounded_text(construction.model, 128)
+        or any(
+            not _bounded_text(identity, 128)
+            for identity in (
+                construction.source_fresh_protocol_id,
+                construction.source_fresh_realization_id,
+                construction.source_public_coin_basis_id,
+                construction.language_id,
+                construction.argument_system_id,
+                construction.application_domain_id,
+                construction.proof_flavor_id,
+                construction.duplex_suite_id,
+                construction.session_derivation_rule_id,
+                construction.salt_policy_id,
+                construction.composition_context_id,
+                construction.decoder.codomain_id,
+            )
+        )
+        or not _bounded_text(construction.decoder.byte_order, 32)
+        or not _bounded_text(construction.decoder.reduction, 128)
+        or any(
+            value < 0 or value.bit_length() > 16
+            for value in (
+                construction.decoder.squeeze_bytes,
+                construction.decoder.modulus,
+                construction.decoder.bias_numerator,
+                construction.decoder.bias_denominator,
+                construction.decoder.failure_numerator,
+                construction.decoder.failure_denominator,
+            )
+        )
     ):
         return result(
             Outcome.RESOURCE_EXCEEDED,
             "transcript-construction:finite-evaluator-bound",
             "P01-FS-018",
             "transcript construction exceeds the explicit finite evaluator bounds",
+        )
+    if any(
+        not _closed_content_id(identity) for identity in static_identity_fields
+    ):
+        return result(
+            Outcome.MALFORMED,
+            "transcript-construction:static-identities",
+            "P01-FS-020",
+            "transcript construction contains a malformed static semantic identity",
         )
     public_coin_result = check_public_coin_eligibility(core, profile)
     if public_coin_result.outcome is not Outcome.AFFIRMATIVE:
@@ -1505,7 +1893,7 @@ def admit_transcript_construction(
             "transcript construction has the wrong conversation Core",
             subject=construction.identity,
         )
-    if construction.model != "StrongFiatShamirTranscriptConstruction.v2":
+    if construction.model != "StrongFiatShamirTranscriptConstruction.v3":
         return result(
             Outcome.UNSUPPORTED,
             "transcript-construction:model",
@@ -1521,13 +1909,106 @@ def admit_transcript_construction(
         not suite_domain_bytes
         or len(suite_domain_bytes) > 256
         or construction.suite_domain
-        != "zkc/p01/minimal-schnorr/fs/v2"
+        != "zkc/p01/minimal-schnorr/fs/v3"
     ):
         return result(
             Outcome.SEMANTIC_NEGATIVE,
             "transcript-initialization:suite-domain",
             "P01-FS-019",
             "construction does not bind the exact fixed FS suite domain",
+            subject=construction.identity,
+        )
+    try:
+        expected_fresh, expected_source_basis_id = _canonical_fresh_basis(
+            core, profile
+        )
+    except (AttributeError, TermEncodingError, TypeError, ValueError) as error:
+        return result(
+            Outcome.CHECKER_FAILURE,
+            "transcript-construction:source-public-coin-basis",
+            "P01-FS-DERIVE-003",
+            "admitted Core did not yield a closed source Fresh basis",
+            subject=construction.identity,
+            cause=str(error),
+        )
+    admitted_source_fresh = (
+        expected_fresh if source_fresh is None else source_fresh
+    )
+    fresh_result = admit_fresh_realization(admitted_source_fresh, core, profile)
+    if fresh_result.outcome is not Outcome.AFFIRMATIVE:
+        return fresh_result
+    if admitted_source_fresh.identity != expected_fresh.identity:
+        return result(
+            Outcome.MISMATCH,
+            "transcript-construction:source-public-coin-basis",
+            "P01-FS-021",
+            "supplied Fresh realization is not the exact canonical source basis",
+            subject=construction.identity,
+            expected_fresh_realization_id=expected_fresh.identity,
+            actual_fresh_realization_id=admitted_source_fresh.identity,
+        )
+    actual_source_basis_id = source_public_coin_basis_id(
+        admitted_source_fresh, core, profile
+    )
+    expected_source_protocol_id = canonical_source_fresh_protocol_id(
+        core, profile, expected_fresh
+    )
+    if (
+        construction.source_fresh_protocol_id != expected_source_protocol_id
+        or construction.source_fresh_realization_id != expected_fresh.identity
+        or construction.source_public_coin_basis_id != expected_source_basis_id
+        or actual_source_basis_id != expected_source_basis_id
+    ):
+        return result(
+            Outcome.MISMATCH,
+            "transcript-construction:source-public-coin-basis",
+            "P01-FS-021",
+            "construction does not bind the exact admitted Fresh realization "
+            "and conditional kernel basis",
+            subject=construction.identity,
+            expected_fresh_protocol_id=expected_source_protocol_id,
+            expected_fresh_realization_id=expected_fresh.identity,
+            expected_source_public_coin_basis_id=expected_source_basis_id,
+        )
+    expected_static_ids = (
+        p01_language_id(profile),
+        p01_argument_system_id(core, profile, expected_fresh),
+        p01_application_domain_id(),
+        p01_proof_flavor_id(core, profile),
+        p01_duplex_suite_id(),
+        p01_session_derivation_rule_id(),
+        p01_salt_policy_id(),
+        p01_composition_context_id(),
+    )
+    actual_static_ids = (
+        construction.language_id,
+        construction.argument_system_id,
+        construction.application_domain_id,
+        construction.proof_flavor_id,
+        construction.duplex_suite_id,
+        construction.session_derivation_rule_id,
+        construction.salt_policy_id,
+        construction.composition_context_id,
+    )
+    if actual_static_ids != expected_static_ids:
+        return result(
+            Outcome.SEMANTIC_NEGATIVE,
+            "transcript-initialization:static-context",
+            "P01-FS-022",
+            "language, argument, application, proof flavor, duplex, session, "
+            "salt, or composition identity differs from P01 FS v3",
+            subject=construction.identity,
+            expected_static_ids=expected_static_ids,
+        )
+    if (
+        construction.application_authority
+        is not ApplicationContextAuthority.APPLICATION
+    ):
+        return result(
+            Outcome.SEMANTIC_NEGATIVE,
+            "transcript-initialization:application-authority",
+            "P01-FS-023",
+            "runtime application context is not owned by the application boundary",
             subject=construction.identity,
         )
     if construction.runtime_context != canonical_runtime_context_contract():
@@ -1619,6 +2100,8 @@ def admit_transcript_construction(
     if (
         not namespace_bytes
         or len(namespace_bytes) > 256
+        or construction.challenge_namespace
+        != "zkc/p01/schnorr/challenge/c/v2"
         or construction.challenge_namespace in {
             STATEMENT,
             COMMITMENT,
@@ -1629,7 +2112,7 @@ def admit_transcript_construction(
             Outcome.SEMANTIC_NEGATIVE,
             "squeeze-sample:namespace",
             "P01-FS-011",
-            "challenge occurrence namespace is empty or collides with another source",
+            "challenge occurrence namespace is not the exact P01 FS v3 namespace",
             subject=construction.identity,
         )
     if construction.framing != "typed-length-delimited.v1":
@@ -1640,7 +2123,7 @@ def admit_transcript_construction(
             "transcript framing is not the pinned injective framing",
             subject=construction.identity,
         )
-    if construction.sampler != "shake128-low-bits.v1":
+    if construction.sampler != "shake128-one-byte-mod-8.v1":
         return result(
             Outcome.UNSUPPORTED,
             "squeeze-sample:algorithm",
@@ -1648,16 +2131,16 @@ def admit_transcript_construction(
             "squeeze/sample algorithm is unsupported",
             subject=construction.identity,
         )
-    if (
-        core.contract_for(construction.challenge_occurrence).value_domain_id
-        != challenge_domain_id(profile)
-    ):
+    expected_decoder = canonical_challenge_decoder_contract(profile)
+    if profile.challenge_size != 8 or construction.decoder != expected_decoder:
         return result(
             Outcome.SEMANTIC_NEGATIVE,
-            "squeeze-sample:codomain",
-            "P01-FS-014",
-            "derived squeeze/sample codomain does not equal the challenge domain",
+            "squeeze-sample:decoder-contract",
+            "P01-FS-025",
+            "P01 FS v3 requires the exact one-byte, little-endian, zero-bias "
+            "mod-8 decoder with zero failure",
             subject=construction.identity,
+            expected_decoder_id=expected_decoder.identity,
         )
     return affirmative(
         "transcript-construction",
@@ -1666,7 +2149,20 @@ def admit_transcript_construction(
         subject=construction.identity,
         required_sources=[atom.occurrence for atom in expected_atoms],
         runtime_context_contract_id=construction.runtime_context.identity,
-        self_binding_law="the construction identity is bound by query execution, never stored in its own preimage",
+        source_fresh_protocol_id=expected_source_protocol_id,
+        source_fresh_realization_id=expected_fresh.identity,
+        source_public_coin_basis_id=expected_source_basis_id,
+        challenge_decoder_contract_id=expected_decoder.identity,
+        decoder_distribution="ExactUniformOn[0,8)",
+        decoder_failure_probability="0",
+        self_binding_law=(
+            "the construction identity is bound by query execution, never "
+            "stored in its own preimage"
+        ),
+        theorem_non_claim=(
+            "construction admission grants no ROM, QROM, knowledge-soundness, "
+            "or zero-knowledge theorem"
+        ),
     )
 
 
@@ -1953,6 +2449,14 @@ def checked_fs_factorization(
     )
     if fresh_admission.outcome is not Outcome.AFFIRMATIVE:
         return fresh_admission
+    construction_admission = admit_transcript_construction(
+        construction,
+        core,
+        profile,
+        source_fresh=fresh,
+    )
+    if construction_admission.outcome is not Outcome.AFFIRMATIVE:
+        return construction_admission
     fs_admission = admit_protocol(
         fs_protocol,
         core,
@@ -1994,22 +2498,29 @@ def checked_fs_factorization(
         )
     if (
         construction.core_id != fresh_protocol.core_id
+        or construction.source_fresh_protocol_id != fresh_protocol.identity
+        or construction.source_fresh_realization_id != fresh.identity
+        or construction.source_public_coin_basis_id
+        != source_public_coin_basis_id(fresh, core, profile)
         or fs_protocol.realization_id != construction.identity
     ):
         return result(
             Outcome.MISMATCH,
             "relations:fresh-fs-factorization",
             "P01-FACT-004",
-            "construction does not realize the exact target over the shared Core",
+            "construction does not realize the exact target over the admitted "
+            "Fresh basis and shared Core",
         )
     factorization_id = semantic_id(
-        "p01.checked-fs-factorization.v1",
+        "p01.checked-fs-factorization.v2",
         {
             "fresh": fresh_protocol.identity,
             "fs": fs_protocol.identity,
             "core": fresh_protocol.core_id,
             "honest_prover_contract": fresh_protocol.honest_prover_contract_id,
             "construction": construction.identity,
+            "source_fresh_protocol": construction.source_fresh_protocol_id,
+            "source_public_coin_basis": construction.source_public_coin_basis_id,
         },
     )
     return affirmative(
@@ -2021,60 +2532,51 @@ def checked_fs_factorization(
         fs_protocol_id=fs_protocol.identity,
         core_id=fresh_protocol.core_id,
         honest_prover_contract_id=fresh_protocol.honest_prover_contract_id,
+        source_fresh_protocol_id=construction.source_fresh_protocol_id,
+        source_public_coin_basis_id=construction.source_public_coin_basis_id,
     )
 
 
-def transcript_query(
+def _transcript_state(
     construction: TranscriptConstruction,
     profile: AlgebraProfile,
     application_context: str,
     statement: int,
     commitment: int,
-) -> tuple[bytes, tuple[dict[str, Any], ...]]:
-    """Build the exact public challenge query for an admitted construction."""
+) -> tuple[_Shake128Duplex, tuple[dict[str, Any], ...]]:
+    """Execute the exact P01 v3 Init/Absorb prefix up to its one squeeze."""
 
+    execution_core = canonical_core(profile)
+    construction_result = admit_transcript_construction(
+        construction,
+        execution_core,
+        profile,
+    )
+    if construction_result.outcome is not Outcome.AFFIRMATIVE:
+        raise ValueError(
+            "challenge execution requires an admitted P01 FS v3 construction: "
+            f"{construction_result.code}"
+        )
     context_result = admit_application_context(application_context)
     if context_result.outcome is not Outcome.AFFIRMATIVE:
         raise ValueError(context_result.detail)
     context_bytes = application_context.encode("utf-8")
     statement_bytes = profile.encode_group(statement)
     commitment_bytes = profile.encode_group(commitment)
-    session_preimage = b"".join(
-        (
-            _frame("suite-domain", construction.suite_domain.encode("ascii")),
-            _frame("core-id", construction.core_id.encode("ascii")),
-            _frame(
-                "transcript-construction-id",
-                construction.identity.encode("ascii"),
-            ),
-            _frame(
-                "runtime-context-contract-id",
-                construction.runtime_context.identity.encode("ascii"),
-            ),
-            _frame(
-                "runtime-context-source",
-                construction.runtime_context.source.encode("ascii"),
-            ),
-            _frame(
-                "runtime-context-domain-id",
-                construction.runtime_context.value_domain_id.encode("ascii"),
-            ),
-            _frame(
-                "runtime-context-codec",
-                construction.runtime_context.codec.encode("ascii"),
-            ),
-            _frame("runtime-context-value", context_bytes),
-            _frame("challenge-namespace", construction.challenge_namespace.encode("ascii")),
+    tag = (
+        _frame("construction-id", construction.identity.encode("ascii"))
+        + _frame(
+            "runtime-context-contract-id",
+            construction.runtime_context.identity.encode("ascii"),
         )
+        + _frame("runtime-context-value", context_bytes)
     )
-    session_id = hashlib.shake_128(
-        _frame("zkc/p01/fs/session/v2", session_preimage)
-    ).digest(32)
+    session_id = _derive_cfrg_session_id(tag)
+    state = _Shake128Duplex(session_id)
     atom_values = {
         STATEMENT: statement_bytes,
         COMMITMENT: commitment_bytes,
     }
-    encoded_atoms = []
     receipts: list[dict[str, Any]] = []
     for atom in construction.atoms:
         payload = atom_values[atom.occurrence]
@@ -2083,7 +2585,7 @@ def transcript_query(
             f"{atom.value_domain_id}:{atom.codec}"
         )
         encoded = _frame(label, payload)
-        encoded_atoms.append(encoded)
+        state.absorb(encoded)
         receipts.append(
             {
                 "source_kind": atom.source_kind,
@@ -2093,12 +2595,26 @@ def transcript_query(
                 "encoded_hex": encoded.hex(),
             }
         )
-    query = (
-        _frame("session-id", session_id)
-        + b"".join(encoded_atoms)
-        + _frame("derive", construction.challenge_namespace.encode("ascii"))
+    return state, tuple(receipts)
+
+
+def transcript_query(
+    construction: TranscriptConstruction,
+    profile: AlgebraProfile,
+    application_context: str,
+    statement: int,
+    commitment: int,
+) -> tuple[bytes, tuple[dict[str, Any], ...]]:
+    """Return the exact bytes absorbed by the P01 v3 challenge XOF state."""
+
+    state, receipts = _transcript_state(
+        construction,
+        profile,
+        application_context,
+        statement,
+        commitment,
     )
-    return query, tuple(receipts)
+    return state.absorbed_bytes, receipts
 
 
 def derive_fs_challenge(
@@ -2108,17 +2624,30 @@ def derive_fs_challenge(
     statement: int,
     commitment: int,
 ) -> tuple[int, bytes, tuple[dict[str, Any], ...]]:
-    query, receipts = transcript_query(
-        construction, profile, application_context, statement, commitment
+    if (
+        profile.challenge_size != 8
+        or construction.decoder != canonical_challenge_decoder_contract(profile)
+        or construction.sampler != "shake128-one-byte-mod-8.v1"
+    ):
+        raise ValueError(
+            "challenge execution requires the exact admitted mod-8 decoder"
+        )
+    state, receipts = _transcript_state(
+        construction,
+        profile,
+        application_context,
+        statement,
+        commitment,
     )
-    challenge_bits = profile.challenge_size.bit_length() - 1
-    output_bytes = max(1, (challenge_bits + 7) // 8)
+    query = state.absorbed_bytes
+    squeezed = state.squeeze(construction.decoder.squeeze_bytes)
     sampled_word = int.from_bytes(
-        hashlib.shake_128(query).digest(output_bytes), "big"
+        squeezed,
+        "little",
     )
-    challenge = sampled_word & (profile.challenge_size - 1)
+    challenge = sampled_word % construction.decoder.modulus
     if not profile.valid_challenge(challenge):
-        raise AssertionError("pinned low-bits sampler escaped its codomain")
+        raise AssertionError("pinned one-byte mod-8 decoder escaped its codomain")
     return challenge, query, receipts
 
 

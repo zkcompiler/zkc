@@ -1,15 +1,18 @@
 # R2 Real-Protocol Witness Program
 
 > **Kind:** Temporary executable-witness charter and index
-> **State:** Active R2 program; repaired `FRI-Grind-1` is closed and the
-> differentiated protocol-expressibility portfolio is selected; `P01`
-> Schnorr/Sigma has not begun
+> **State:** Active R2 program; repaired `FRI-Grind-1` is closed at its finite
+> source-residual scope, the differentiated protocol-expressibility portfolio
+> is selected, and repaired/refrozen `P01` Schnorr/Sigma is retained at T3
+> after exact-snapshot independent re-review
 > **Authority:** None. A witness can falsify a candidate or recover a
 > requirement; it cannot ratify target semantics, a theorem, implementation
 > conformance, or migration policy.
-> **Current witness:** Repaired `FRI-Grind-1`, from
-> `test/Family/Inputs/frigrind.json`, completed its repaired refreeze/replay
-> gate with explicit unexercised obligations
+> **Current witness:** `P01` Schnorr/Sigma is the retained first T3 anchor. Its
+> prior 62-test snapshot failed cold review; the staged 69-test repair, rotated
+> source-bound report, refrozen projection, copied-checkout replay, and separate
+> lifecycle and provenance cold rechecks now pass. `P02` is queued next but has
+> not begun. All-code reachability remains nonblocking hygiene.
 > **Downstream boundary:** Stage 4B remains inactive.
 > **Deletion:** Absorb reviewed results into their durable owners, route open
 > questions forward, then delete this package.
@@ -52,6 +55,63 @@ refreeze are recorded in
 The next cases, validation depths, recent variants, holdouts, ordering, and
 promotion rules are fixed by the
 [ZK-Protocol Expressibility Validation Portfolio](expressibility-validation-portfolio.md).
+The active case's source reconstruction and current-target obstruction are
+owned by [P01 Schnorr/Sigma](p01-schnorr-sigma.md). Its selected finite model,
+evidence, and gates are owned by the
+[P01 Phase B Repair and Refreeze Decision](p01-phase-b-repair-and-refreeze.md),
+while runnable mechanics are documented by the
+[P01 evaluation package](../../../../evaluation/r2-p01-schnorr/README.md).
+The Phase A status and evidence reconciliation is frozen in the temporary
+[R2 State Reconciliation](r2-state-reconciliation.md).
+
+### Local inventory
+
+This README owns the inventory route for its direct working pages. Links made
+elsewhere are cross-references, not additional inventory ownership.
+
+| Page | Role |
+|---|---|
+| [Source Reconstruction and Primary Research](source-and-research.md) | Frozen FRI-Grind-1 source and research record. |
+| [FRI-Grind-1 Cold Review and Repair Decision](cold-review-and-repair.md) | Historical failed gates, repair decision, and passing bounded replay. |
+| [ZK-Protocol Expressibility Validation Portfolio](expressibility-validation-portfolio.md) | Reserved protocol, variant, and holdout portfolio with required evidence depth. |
+| [P01 Schnorr/Sigma](p01-schnorr-sigma.md) | P01 source reconstruction, current-target obstruction, and theorem boundary. |
+| [P01 Phase B Repair and Refreeze Decision](p01-phase-b-repair-and-refreeze.md) | Selected finite repair, public evidence boundary, gate states, and reopening conditions. |
+| [R2 State Reconciliation](r2-state-reconciliation.md) | Temporary Phase A status, namespace, evidence, and open-obligation snapshot. |
+
+### Protocol and probe namespaces
+
+`Pnn`, `Vnn`, and `Hnn` are reserved for the protocol portfolio: primary
+cases, recent variants, and holdouts. Cross-cutting experiments are named
+`r2-probe-<subject>` and use `R2-<SUBJECT>-...` diagnostic codes. A probe may
+pressure several portfolio cases, but it is not itself a numbered case and
+does not advance the portfolio cursor.
+
+| Cross-cutting probe | Scope |
+|---|---|
+| [`r2-probe-commitment`](../../../../evaluation/r2-probe-commitment/) | Commitment/opening and closed-Core invariants. |
+| [`r2-probe-logup`](../../../../evaluation/r2-probe-logup/) | LogUp role, claim-routing, and correspondence invariants. |
+| [`r2-probe-value-bridges`](../../../../evaluation/r2-probe-value-bridges/) | Bijection, embedding, and loss-priced projection lanes. |
+| [`r2-probe-guard-cost`](../../../../evaluation/r2-probe-guard-cost/) | Guard representation, semantic equivalence, and derived-work cost. |
+
+### Evidence vocabulary
+
+R2 uses five non-interchangeable evidence descriptions:
+
+1. a **frozen replay-verified corpus** is a published case set reproduced from
+   frozen public inputs by the replay contract named by that witness;
+2. a **published narrow case oracle** freezes only the cases its report emits
+   and says nothing about unreported modules or judgments;
+3. **unit-asserted behavior** is behavior reached by a local test suite but not
+   necessarily published or independently replayed; and
+4. a **closed diagnostic classification** accounts for every declared code by
+   authored class, but does not show that constructible codes have executed
+   drivers or reach their intended first boundary; and
+5. a **live diagnostic snapshot** measures the current checkout and may reveal
+   coverage or reachability gaps, but is not itself a closure decision.
+
+`Declared but unreached` is a source-surface observation, not proof that a
+judgment is impossible or defective. Conversely, a fired result is not a
+claim that its boundary is the right one for an invariant.
 
 ## 2. Method
 
@@ -80,10 +140,10 @@ realizations, deterministic verifier actions, public-coin eligibility, closed
 codecs/samplers/algorithms/regimes, typed checks and reductions, and
 source/anchor provenance. Admission, execution, relation correspondence,
 theorem applicability, and quantitative Analysis remain different judgments.
-The finite probe checks only fixed strategy contracts against Core order.
-Durable semantics must expose execution as a relation parameterized by
-protocol, strategy, inputs, and verifier coins; Analysis must quantify over an
-admitted causal or adversarial strategy class.
+Finite probes check only their named closed schedules, capability transitions,
+or response plans against Core order. Durable semantics must expose execution
+as a relation parameterized by protocol, strategy, inputs, and verifier coins;
+Analysis must quantify over an admitted causal or adversarial strategy class.
 
 Required mutations cover: omitted, delayed, duplicated, wrongly encoded, or
 substituted Statement influence; Wire-only `g1` or nonce; challenge-namespace
@@ -159,8 +219,9 @@ nomenclature.
 Failure is a valid R2 result and must retain its exact inputs and reopening
 conditions. Later work follows the differentiated portfolio rather than making
 every case executable: T1 boundary analyses, T2 constructive encodings, and T3
-executable witnesses carry different evidence. `P01` Schnorr/Sigma is the next
-case; native FRI/IOR is the second required T3 anchor. Recent design-set
+executable witnesses carry different evidence. `P01` Schnorr/Sigma is the
+retained first T3 anchor; native FRI/IOR remains the second required T3 anchor
+and is queued but not active. Recent design-set
 variants and withheld cold cases prevent the portfolio from collapsing into a
 list of canonical examples.
 
@@ -179,11 +240,38 @@ influence and Fresh distribution evidence remain `NotExercised`. These
 classifications are frozen outputs and requirements for later witnesses, not
 silently waived gate pressure.
 
-This closes only the finite FRI-grinding pressure already named by this
-witness. The next R2 case must add materially different semantics rather than
-more local variants of the same trace. The broader candidate and holdout set is
-selected by the adjacent portfolio, but none of those protocol cases has been
-validated merely by being listed.
+This closes only the finite FRI-grinding pressure already named by that
+witness. P01's prior 62-test snapshot failed cold review because its causality
+falsifier was label-driven, its private authority admitted equal-content
+occurrence aliasing, and its independent-reconstruction basis omitted shared
+dependencies. The repaired Phase B suite now passes 69/69 tests: 8 semantic, 27
+execution/Interface, 8 provenance/diagnostics, 13 Relations/Analysis, and 13
+report/replay. Its source-bound public report executes 45 exact cases, with 22
+affirmative and 23 nonaffirmative results, and a separately coded byte path
+reproduces the v3 Fiat--Shamir support point `c=6,z=2`, proof `1002`, from a
+448-byte query. That path's validation basis includes the executed package
+initializer and exactly `terms.py`, `semantic.py`, and `independent.py`; it is
+diversity evidence rather than an independent semantic authority. The rotated
+report, separately refrozen
+expected projection, and minimal copied-checkout replay pass.
+
+P01 also classifies all 203 declared diagnostics as 30 affirmative, 144
+constructible-driver, 15 internal, 1 environmental, and 13 retired. The current
+suite fires 68 of 203 and leaves 135 unreached. This is classification and live-
+reachability accounting only, not complete execution coverage. The repaired
+13-obligation semantic falsification matrix, rather than a 144/144 driver
+target, closes Gate 6. Full diagnostic reachability remains a nonblocking
+hygiene queue. Separate lifecycle and provenance cold rechecks pass on the final
+identity, so P01 is retained at T3; the Phase B decision owns the exact gate
+states. The broader candidate and holdout set is selected by the adjacent
+portfolio, but no other protocol case has begun merely because cross-cutting
+probes exist.
+
+For P01 specifically, precommitment-before-challenge resolution holds only
+inside the modeled owner-local capability flow. It does not establish out-of-
+band challenge ignorance, nonce uniformity or independence, Fresh sampling,
+historical artifact-authoring chronology, or general adversarial non-
+anticipation; its closed `ResponsePlan` is not a strategy language.
 
 R2 does not establish cryptographic security, theorem applicability, protocol
 soundness or completeness, outer-relation correctness, compiler correctness,

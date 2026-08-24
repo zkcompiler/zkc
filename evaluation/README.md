@@ -4,12 +4,54 @@ This directory contains optional, version-pinned integration evidence. It is
 not required to build the compiler, and its results are scoped to the exact
 fixtures and revisions named here.
 
-## Semantic revalidation probes
+## Semantic revalidation witnesses and probes
 
-[`r2-protocol-model/`](r2-protocol-model/README.md) is a temporary,
-standard-library-only clean-room probe for the `FRI-Grind-1` design witness.
-It compares candidate semantic factorizations and named failure boundaries; it
-is not a compiler component, protocol implementation, or security evaluator.
+These packages are temporary R2 research instruments. They are not compiler
+components, protocol implementations, security evaluators, or evidence that a
+listed portfolio case is supported. Their results have different strengths and
+must not be summarized as one green test count.
+
+| Package | Classification | Retained evidence and exact limit |
+|---|---|---|
+| [`r2-protocol-model/`](r2-protocol-model/README.md) | Repaired `FRI-Grind-1` fixture witness | A 41-case frozen replay-verified corpus and 39 local tests close the named finite source-residual pressure. The model stops before authenticated FRI opening and acceptance; it is not a native FRI/IOR case. |
+| [`r2-p01-schnorr/`](r2-p01-schnorr/README.md) | Retained T3 portfolio case `P01` | The prior 62-test snapshot failed cold review on modeled causality, equal-content occurrence aliasing, and incomplete independent-basis closure. The staged repair now passes 69/69 tests: 8 semantic, 27 execution/Interface, 8 provenance/diagnostics, 13 Relations/Analysis, and 13 report/replay. Its rotated source-bound report executes 45 cases—22 affirmative and 23 nonaffirmative—with 39 distinct public codes, and reproduces Fresh `c=3,z=3` and FS v3 `c=6,z=2`, proof `1002`. A separately coded query path is bound to the executed package initializer and shared term and semantic dependencies; it is diversity evidence, not independent semantic authority. The refrozen expected projection and minimal copied-checkout replay pass. Separate lifecycle and provenance cold rechecks pass on the final identity, closing Gate 10 and retaining P01 at T3 only for this exact finite scope. |
+| [`r2-probe-commitment/`](r2-probe-commitment/) | Cross-cutting commitment/opening invariant probe | Thirty-three unit tests. It is not portfolio case `P02`. |
+| [`r2-probe-logup/`](r2-probe-logup/) | Cross-cutting LogUp claim-routing invariant probe | Twenty-nine unit tests. It is not portfolio case `P03` or any other numbered case. |
+| [`r2-probe-value-bridges/`](r2-probe-value-bridges/) | Cross-cutting value-bridge invariant probe | Eighteen unit tests. It is not portfolio case `P04`. |
+| [`r2-probe-guard-cost/`](r2-probe-guard-cost/) | Cross-cutting guard-cost invariant probe | Twenty-two unit tests. It is not portfolio case `P05`. |
+
+The protocol namespace is reserved: `Pnn` names primary protocol cases, `Vnn`
+recent variants, and `Hnn` holdouts. Cross-cutting packages use
+`r2-probe-<subject>` and `R2-<SUBJECT>-...` codes so their existence cannot be
+mistaken for portfolio progress.
+
+Run P01's current suite and source-bound public replay from the repository
+root:
+
+```sh
+python3 -m unittest discover -s evaluation/r2-p01-schnorr/tests -v
+python3 evaluation/r2-p01-schnorr/run.py --check
+```
+
+The runner builds and strictly verifies the report before reading the expected
+projection. Its successful comparison is exact finite replay evidence, not a
+cryptographic theorem or complete diagnostic reachability result.
+
+[`coverage.py`](coverage.py) produces a manually curated live boundary-coverage
+snapshot. It pools reached boundaries across instruments and relies on an
+authored invariant-to-boundary map, so its labels prioritize review; they are
+not R2 closure verdicts. [`reachability.py`](reachability.py) instruments the
+current suites and reports declared versus fired result codes. A fired code is
+not proof that the boundary discharges an invariant, and an unreached code is
+not automatically a defect.
+
+Run the current diagnostics from the repository root:
+
+```sh
+python3 evaluation/coverage.py
+python3 evaluation/reachability.py
+python3 evaluation/reachability.py --witness r2-p01-schnorr --list-unreachable
+```
 
 ## Plonky3
 

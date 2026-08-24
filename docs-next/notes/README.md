@@ -115,7 +115,10 @@ rationale, not the incubation layout.
 ## Working-note inventory
 
 These pages are intentionally excluded from the durable documentation manifest.
-This index is their temporary inventory.
+This index owns the direct children of `notes/`. Each package README owns its
+direct children recursively; ordinary cross-links do not create another
+inventory owner. This hierarchy must give every temporary page exactly one
+inventory-owning route before cutover.
 
 | Note | Scope | Intended destinations |
 |---|---|---|
@@ -123,7 +126,7 @@ This index is their temporary inventory.
 | [Stage 2: Transition and Bridge Contract Research](stage-2-transitions/README.md) | Completed bounded package: current transition reconstruction, external cases, candidate frameworks, matrices, scenario falsification, convergence, gap map, and Stage 3 handoff | Selected decision absorbed into `project/transition-and-bridge-architecture.md` and durable domain boundaries; retained until later exact seam absorption |
 | [Stage 3: Protocol, Canonical PIR, and Relations Co-design](stage-3-protocol-and-relations/README.md) | Completed bounded package: current reconstruction, primary-source research, five equal-resolution candidates, frozen target, matrices, sixteen scenarios, independent audits, convergence, promotion, and handoffs | Selected result absorbed into `project/protocol-and-relations-architecture.md`, exact target owners under `pir/` and `relations/`, and separate unactivated Stage 4A/4B entry contracts; retained until downstream absorption and deletion gates |
 | [Stage 4A: Analysis and Compiler Co-design](stage-4a-analysis-and-compiler/README.md) | Completed bounded package: current reconstruction, primary-source research, five equal-resolution candidates, frozen target, thirty-nine scenarios, matrices, independent audits, convergence, promotion, gap map, and peer reconciliation | Selected result absorbed into `project/analysis-and-compiler-architecture.md`, exact target owners under `analysis/` and `compiler/`, the Relations satisfaction and Protocol-correspondence boundary, and exact source-binding/outcome refinements in the four PIR semantic pages; Stage 4B remains unactivated |
-| [Semantic Revalidation and Redesign Cycle](semantic-revalidation-and-redesign/README.md) | Active cycle: R1 completed after two failed gates and a passing final follow-up; repaired FRI grinding evidence is closed; R2 now has a differentiated T1--T3 ZK-protocol expressibility portfolio with recent design variants and frozen holdouts, and `P01` Schnorr/Sigma is next but not started | Exact affected owners under `project/`, `foundation/`, `pir/`, `relations/`, `analysis/`, and `compiler/`; deferred OIR/Realization pressure remains inactive until separately authorized |
+| [Semantic Revalidation and Redesign Cycle](semantic-revalidation-and-redesign/README.md) | Active cycle: R1 completed after two failed gates and a passing final follow-up; repaired FRI grinding evidence is closed at its finite source-residual scope; R2 has a selected T1--T3 portfolio, `P01` Schnorr/Sigma is retained at T3 after final cold rechecks, and `P02` is queued but not begun | Exact affected owners under `project/`, `foundation/`, `pir/`, `relations/`, `analysis/`, and `compiler/`; deferred OIR/Realization pressure remains inactive until separately authorized |
 | [Redesign Candidates](redesign-candidates.md) | Complete catalog of proposed changes, alignment work, alternatives, and promotion gates | `project/`, `foundation/`, `relations/`, `pir/`, `analysis/`, `compiler/`, `oir/`, `realization/`, `evidence/` |
 | [Research Questions and Design Cautions](research-questions-and-cautions.md) | Cross-cutting unknowns, non-implications, recheck ledger, and research discipline | Domain specifications, architecture, decisions, roadmap, and evidence policy |
 | [MLIR Carrier Assessment](mlir-carrier-assessment.md) | Why MLIR should remain, its costs, architectural limits, and reconsideration triggers | `project/` architecture, protocol/PIR carrier specification, OIR carrier specification, future decision record |

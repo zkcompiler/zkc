@@ -1,30 +1,45 @@
-"""Minimal noninteractive proof interface for the finite P01 FS protocol.
+"""Exact proof ABI and public verification for the finite P01 FS protocol.
 
-The interface serializes exactly the two prover messages ``(A, z)``.  The
-runtime application context and Schnorr Statement are external inputs, while
-the challenge is always recomputed by the admitted transcript construction.
-There is no API parameter, proof field, or fallback path for a caller-supplied
-challenge.
-
-This module owns only the finite proof ABI and verification routing.  It binds
-the verifier-check and terminal contract identities already owned by the
-``ConversationCore``; it does not mint duplicate equation or terminal
-identities, and it makes no general Fiat--Shamir or security claim.
+The proof contains exactly ``(commitment, response)``.  Application context and
+Statement are external public inputs; the challenge is always recomputed by the
+admitted transcript construction.  Schnorr equation and terminal evaluation
+are delegated to :func:`execution.evaluate_schnorr_verifier`, the same owner
+used by exact execution replay.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+import re
 from typing import Any
 
+from .execution import (
+    CheckedPublicExecution,
+    Disposition,
+    EvaluatorBasis,
+    PublicResourceUsage,
+    PublicVerifierDecision,
+    TranscriptReadReceipt,
+    admit_evaluator_basis,
+    evaluate_schnorr_verifier,
+    public_usage_fits,
+    public_trace_value,
+    requalify_public_execution,
+)
+from .provenance import (
+    ArtifactContentId,
+    EvidenceRecordId,
+    ProvenanceError,
+    ValidationBasisId,
+    artifact_content_id,
+    canonical_json_content_id,
+    evidence_record_id,
+)
 from .semantic import (
     CHALLENGE,
-    CHECK,
     COMMITMENT,
     RESPONSE,
     STATEMENT,
-    TERMINAL,
     AlgebraProfile,
     ConversationCore,
     ProtocolVariant,
@@ -39,8 +54,24 @@ from .semantic import (
 from .terms import Outcome, Result, TermEncodingError, affirmative, result, semantic_id
 
 
-_SERIALIZATION = "exact-fixed-width-product.v1"
-_MODEL = "FiatShamirProofInterface.v1"
+_CONTENT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_SERIALIZATION = "exact-fixed-width-product.v2"
+_MODEL = "FiatShamirProofInterface.v2"
+_FS_PUBLIC_VERIFICATION_USAGE = PublicResourceUsage(2, 2, 5)
+
+
+def _is_content_id(value: Any) -> bool:
+    return isinstance(value, str) and _CONTENT_ID.fullmatch(value) is not None
+
+
+def _safe_identity(value: Any) -> str:
+    try:
+        identity = value.identity
+    except (AttributeError, ProvenanceError, TermEncodingError, TypeError, ValueError):
+        return ""
+    if isinstance(identity, (ArtifactContentId, EvidenceRecordId)):
+        return str(identity)
+    return identity if _is_content_id(identity) else ""
 
 
 @dataclass(frozen=True)
@@ -89,8 +120,6 @@ class ChallengeRecomputationSpec:
 
 @dataclass(frozen=True)
 class FiatShamirProofInterface:
-    """Identity-bearing ABI bound to one admitted finite FS Protocol."""
-
     protocol_id: str
     core_id: str
     algebra_profile_id: str
@@ -113,7 +142,7 @@ class FiatShamirProofInterface:
             "algebra_profile_id": self.algebra_profile_id,
             "construction_id": self.construction_id,
             "external_inputs": [item.term() for item in self.external_inputs],
-            "proof_fields": [field.term() for field in self.proof_fields],
+            "proof_fields": [item.term() for item in self.proof_fields],
             "challenge_recomputation": self.challenge_recomputation.term(),
             "verifier_check_occurrence": self.verifier_check_occurrence,
             "verifier_check_contract_id": self.verifier_check_contract_id,
@@ -124,7 +153,7 @@ class FiatShamirProofInterface:
 
     @property
     def identity(self) -> str:
-        return semantic_id("p01.fs-proof-interface.v1", self.term())
+        return semantic_id("p01.fs-proof-interface.v2", self.term())
 
     @property
     def proof_width(self) -> int:
@@ -137,14 +166,12 @@ def canonical_fs_proof_interface(
     core: ConversationCore,
     profile: AlgebraProfile,
 ) -> FiatShamirProofInterface:
-    """Construct the sole P01 FS proof ABI; admission remains separate."""
-
     return FiatShamirProofInterface(
-        protocol_id=protocol.identity,
-        core_id=core.identity,
-        algebra_profile_id=profile.identity,
-        construction_id=construction.identity,
-        external_inputs=(
+        protocol.identity,
+        core.identity,
+        profile.identity,
+        construction.identity,
+        (
             ExternalInputSpec(
                 construction.runtime_context.source,
                 construction.runtime_context.value_domain_id,
@@ -156,7 +183,7 @@ def canonical_fs_proof_interface(
                 core.contract_for(STATEMENT).codec,
             ),
         ),
-        proof_fields=(
+        (
             ProofFieldSpec(
                 COMMITMENT,
                 group_domain_id(profile),
@@ -170,51 +197,15 @@ def canonical_fs_proof_interface(
                 profile.scalar_width,
             ),
         ),
-        challenge_recomputation=ChallengeRecomputationSpec(
+        ChallengeRecomputationSpec(
             CHALLENGE,
             construction.identity,
             (construction.runtime_context.source, STATEMENT, COMMITMENT),
         ),
-        verifier_check_occurrence=core.verifier_check.output_occurrence,
-        verifier_check_contract_id=core.verifier_check.semantic_contract_id,
-        terminal_occurrence=core.terminal_route.output_occurrence,
-        terminal_contract_id=core.terminal_route.semantic_contract_id,
-    )
-
-
-def _safe_interface_id(value: Any) -> str:
-    try:
-        identity = value.identity
-    except (AttributeError, TermEncodingError, TypeError, ValueError):
-        return ""
-    return identity if isinstance(identity, str) else ""
-
-
-def _operand_type_failure(
-    interface: Any,
-    protocol: Any,
-    construction: Any,
-    core: Any,
-    profile: Any,
-    *,
-    boundary: str,
-) -> Result | None:
-    expected = (
-        (interface, FiatShamirProofInterface, "interface"),
-        (protocol, ProtocolVariant, "protocol"),
-        (construction, TranscriptConstruction, "construction"),
-        (core, ConversationCore, "core"),
-        (profile, AlgebraProfile, "profile"),
-    )
-    wrong = tuple(name for value, kind, name in expected if not isinstance(value, kind))
-    if not wrong:
-        return None
-    return result(
-        Outcome.MALFORMED,
-        boundary,
-        "P01-IFACE-000",
-        "FS proof-interface operation has a raw operand of the wrong type",
-        wrong_operands=list(wrong),
+        core.verifier_check.output_occurrence,
+        core.verifier_check.semantic_contract_id,
+        core.terminal_route.output_occurrence,
+        core.terminal_route.semantic_contract_id,
     )
 
 
@@ -225,34 +216,21 @@ def admit_fs_proof_interface(
     core: ConversationCore,
     profile: AlgebraProfile,
 ) -> Result:
-    """Admit the exact external-input, proof-byte, and verifier bindings."""
-
-    type_failure = _operand_type_failure(
-        interface,
-        protocol,
-        construction,
-        core,
-        profile,
-        boundary="fs-proof-interface:admission",
-    )
-    if type_failure is not None:
-        return type_failure
-    nested_values = (
-        isinstance(interface.external_inputs, tuple)
-        and all(isinstance(item, ExternalInputSpec) for item in interface.external_inputs)
-        and isinstance(interface.proof_fields, tuple)
-        and all(isinstance(item, ProofFieldSpec) for item in interface.proof_fields)
-        and isinstance(
-            interface.challenge_recomputation, ChallengeRecomputationSpec
-        )
-    )
-    if not nested_values:
+    if not isinstance(interface, FiatShamirProofInterface):
         return result(
             Outcome.MALFORMED,
-            "fs-proof-interface:admission:shape",
+            "fs-proof-interface",
             "P01-IFACE-001",
-            "FS proof interface has malformed nested vocabulary",
-            subject=_safe_interface_id(interface),
+            "FS proof interface has the wrong type",
+        )
+    try:
+        interface_id = interface.identity
+    except (AttributeError, TermEncodingError, TypeError, ValueError):
+        return result(
+            Outcome.MALFORMED,
+            "fs-proof-interface",
+            "P01-IFACE-001",
+            "FS proof interface is outside the closed grammar",
         )
     protocol_result = admit_protocol(
         protocol,
@@ -262,186 +240,46 @@ def admit_fs_proof_interface(
     )
     if protocol_result.outcome is not Outcome.AFFIRMATIVE:
         return protocol_result
-    interface_id = _safe_interface_id(interface)
-    if not interface_id:
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:admission:identity",
-            "P01-IFACE-002",
-            "FS proof interface has no closed semantic identity",
-        )
     if protocol.realization_kind is not RealizationKind.FIAT_SHAMIR:
         return result(
-            Outcome.SEMANTIC_NEGATIVE,
-            "fs-proof-interface:admission:realization",
-            "P01-IFACE-003",
-            "noninteractive proof interface requires an admitted Fiat-Shamir Protocol",
+            Outcome.UNSUPPORTED,
+            "fs-proof-interface:realization",
+            "P01-IFACE-002",
+            "proof interface requires an admitted Fiat-Shamir Protocol",
             subject=interface_id,
         )
     expected = canonical_fs_proof_interface(protocol, construction, core, profile)
-    if (
-        interface.protocol_id != protocol.identity
-        or interface.core_id != core.identity
-        or interface.algebra_profile_id != profile.identity
-        or interface.construction_id != construction.identity
-    ):
-        return result(
-            Outcome.MISMATCH,
-            "fs-proof-interface:admission:scope",
-            "P01-IFACE-004",
-            "interface does not bind the exact Protocol, Core, construction, and algebra profile",
-            subject=interface_id,
-            expected_interface_id=expected.identity,
-        )
-    if interface.external_inputs != expected.external_inputs:
-        return result(
-            Outcome.SEMANTIC_NEGATIVE,
-            "fs-proof-interface:admission:external-inputs",
-            "P01-IFACE-005",
-            "external inputs are not exactly runtime application context followed by Statement",
-            subject=interface_id,
-        )
-    if interface.proof_fields != expected.proof_fields:
-        return result(
-            Outcome.SEMANTIC_NEGATIVE,
-            "fs-proof-interface:admission:proof-abi",
-            "P01-IFACE-006",
-            "proof ABI is not exactly fixed-width commitment followed by response",
-            subject=interface_id,
-            expected_width=expected.proof_width,
-        )
-    if interface.challenge_recomputation != expected.challenge_recomputation:
-        return result(
-            Outcome.SEMANTIC_NEGATIVE,
-            "fs-proof-interface:admission:challenge",
-            "P01-IFACE-007",
-            "challenge is not the exact construction-derived value over context, Statement, and commitment",
-            subject=interface_id,
-        )
-    if (
-        interface.verifier_check_occurrence != expected.verifier_check_occurrence
-        or interface.verifier_check_contract_id
-        != expected.verifier_check_contract_id
-        or interface.terminal_occurrence != expected.terminal_occurrence
-        or interface.terminal_contract_id != expected.terminal_contract_id
-    ):
-        return result(
-            Outcome.MISMATCH,
-            "fs-proof-interface:admission:verifier-routing",
-            "P01-IFACE-008",
-            "interface does not reference the Core-owned check and terminal contracts exactly",
-            subject=interface_id,
-        )
-    if interface.serialization != _SERIALIZATION or interface.model != _MODEL:
-        return result(
-            Outcome.UNSUPPORTED,
-            "fs-proof-interface:admission:serialization",
-            "P01-IFACE-009",
-            "proof-interface model or serialization law is unsupported",
-            subject=interface_id,
-        )
     if interface != expected:
         return result(
-            Outcome.SEMANTIC_NEGATIVE,
-            "fs-proof-interface:admission:exactness",
-            "P01-IFACE-010",
-            "interface differs from the complete canonical FS proof interface",
+            Outcome.MISMATCH,
+            "fs-proof-interface:exact-abi",
+            "P01-IFACE-003",
+            "proof interface differs from the exact two-field FS ABI",
             subject=interface_id,
             expected_interface_id=expected.identity,
         )
     return affirmative(
-        "fs-proof-interface:admission",
+        "fs-proof-interface",
         "P01-IFACE-OK",
-        "minimal FS proof interface is admitted",
+        "exact statement-external, challenge-recomputing FS ABI is admitted",
         subject=interface_id,
-        protocol_id=protocol.identity,
-        proof_fields=(COMMITMENT, RESPONSE),
-        serialized_challenge=False,
-        proof_width=interface.proof_width,
-        verifier_check_contract_id=interface.verifier_check_contract_id,
-        terminal_contract_id=interface.terminal_contract_id,
     )
 
 
 @dataclass(frozen=True)
 class FSExternalInputs:
-    interface_id: str
     application_context: str
     statement: int
 
     def term(self) -> dict[str, Any]:
         return {
-            "interface_id": self.interface_id,
             "application_context": self.application_context,
             "statement": self.statement,
         }
 
     @property
-    def identity(self) -> str:
-        return semantic_id("p01.fs-external-inputs.v1", self.term())
-
-
-def _check_fs_external_input_shape(
-    external_inputs: FSExternalInputs,
-    interface: FiatShamirProofInterface,
-    profile: AlgebraProfile,
-) -> Result:
-    if not isinstance(external_inputs, FSExternalInputs):
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:external-inputs",
-            "P01-INPUT-001",
-            "external inputs have the wrong type",
-        )
-    if not isinstance(interface, FiatShamirProofInterface) or not isinstance(
-        profile, AlgebraProfile
-    ):
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:external-inputs",
-            "P01-INPUT-002",
-            "interface or algebra profile has the wrong type",
-        )
-    interface_id = _safe_interface_id(interface)
-    if not interface_id or external_inputs.interface_id != interface_id:
-        return result(
-            Outcome.MISMATCH,
-            "fs-proof-interface:external-inputs:scope",
-            "P01-INPUT-003",
-            "runtime external inputs name a different proof interface",
-            subject=interface_id,
-        )
-    context_result = admit_application_context(external_inputs.application_context)
-    if context_result.outcome is not Outcome.AFFIRMATIVE:
-        return result(
-            context_result.outcome,
-            "fs-proof-interface:external-inputs:application-context",
-            "P01-INPUT-004",
-            "runtime application context is not admitted",
-            subject=interface_id,
-            cause=context_result.term(),
-        )
-    if not profile.valid_group_element(external_inputs.statement):
-        outcome = (
-            Outcome.MALFORMED
-            if not isinstance(external_inputs.statement, int)
-            or isinstance(external_inputs.statement, bool)
-            else Outcome.SEMANTIC_NEGATIVE
-        )
-        return result(
-            outcome,
-            "fs-proof-interface:external-inputs:statement",
-            "P01-INPUT-005",
-            "runtime Statement is not an admitted prime-order subgroup element",
-            subject=interface_id,
-        )
-    return affirmative(
-        "fs-proof-interface:external-inputs",
-        "P01-INPUT-OK",
-        "runtime application context and Statement are admitted external inputs",
-        subject=external_inputs.identity,
-        interface_id=interface_id,
-    )
+    def identity(self) -> ArtifactContentId:
+        return canonical_json_content_id(self.term())
 
 
 def admit_fs_external_inputs(
@@ -452,427 +290,427 @@ def admit_fs_external_inputs(
     core: ConversationCore,
     profile: AlgebraProfile,
 ) -> Result:
-    """Admit runtime inputs only against an independently admitted interface."""
-
-    type_failure = _operand_type_failure(
-        interface,
-        protocol,
-        construction,
-        core,
-        profile,
-        boundary="fs-proof-interface:external-inputs",
-    )
-    if type_failure is not None:
-        return type_failure
-    if not isinstance(external_inputs, FSExternalInputs):
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:external-inputs",
-            "P01-INPUT-001",
-            "external inputs have the wrong type",
-        )
     interface_result = admit_fs_proof_interface(
         interface, protocol, construction, core, profile
     )
     if interface_result.outcome is not Outcome.AFFIRMATIVE:
         return interface_result
-    return _check_fs_external_input_shape(external_inputs, interface, profile)
+    if not isinstance(external_inputs, FSExternalInputs):
+        return result(
+            Outcome.MALFORMED,
+            "fs-external-inputs",
+            "P01-EXT-001",
+            "FS external inputs have the wrong type",
+        )
+    context_result = admit_application_context(external_inputs.application_context)
+    if context_result.outcome is not Outcome.AFFIRMATIVE:
+        return context_result
+    if not profile.valid_group_element(external_inputs.statement):
+        return result(
+            Outcome.SEMANTIC_NEGATIVE,
+            "fs-external-inputs:statement",
+            "P01-EXT-002",
+            "external Statement is outside the admitted group domain",
+            subject=_safe_identity(external_inputs),
+        )
+    return affirmative(
+        "fs-external-inputs",
+        "P01-EXT-OK",
+        "FS application context and Statement are admitted external inputs",
+            subject=str(external_inputs.identity),
+    )
 
 
 @dataclass(frozen=True)
 class DecodedFSProof:
-    """Canonical decoded proof; intentionally contains no challenge field."""
-
     interface_id: str
-    encoded: bytes
     commitment: int
     response: int
 
     def term(self) -> dict[str, Any]:
         return {
             "interface_id": self.interface_id,
-            "encoded": self.encoded,
             "commitment": self.commitment,
             "response": self.response,
         }
 
     @property
     def identity(self) -> str:
-        return semantic_id("p01.decoded-fs-proof.v1", self.term())
-
-
-def _decode_admitted_proof(
-    interface: FiatShamirProofInterface,
-    proof_bytes: bytes,
-    profile: AlgebraProfile,
-) -> DecodedFSProof | Result:
-    expected_width = profile.group_width + profile.scalar_width
-    actual_width = len(proof_bytes)
-    if actual_width < expected_width:
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:decode:truncated",
-            "P01-PROOF-002",
-            "proof is truncated before the exact commitment-response product ends",
-            subject=interface.identity,
-            expected_width=expected_width,
-            actual_width=actual_width,
-        )
-    if actual_width > expected_width:
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:decode:trailing-bytes",
-            "P01-PROOF-003",
-            "proof has trailing bytes; a serialized challenge or any extra field is forbidden",
-            subject=interface.identity,
-            expected_width=expected_width,
-            actual_width=actual_width,
-            trailing_width=actual_width - expected_width,
-        )
-    commitment_bytes = proof_bytes[: profile.group_width]
-    response_bytes = proof_bytes[profile.group_width :]
-    commitment = int.from_bytes(commitment_bytes, "big")
-    response = int.from_bytes(response_bytes, "big")
-    if not profile.valid_group_element(commitment):
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:decode:noncanonical-commitment",
-            "P01-PROOF-004",
-            "commitment bytes do not canonically encode an admitted subgroup element",
-            subject=interface.identity,
-        )
-    if not profile.valid_scalar(response):
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:decode:noncanonical-response",
-            "P01-PROOF-005",
-            "response bytes do not canonically encode a scalar modulo q",
-            subject=interface.identity,
-        )
-    canonical = profile.encode_group(commitment) + profile.encode_scalar(response)
-    if canonical != proof_bytes:
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:decode:noncanonical-roundtrip",
-            "P01-PROOF-006",
-            "decoded proof does not round-trip to the exact original bytes",
-            subject=interface.identity,
-        )
-    return DecodedFSProof(interface.identity, proof_bytes, commitment, response)
+        return semantic_id("p01.decoded-fs-proof.v2", self.term())
 
 
 def decode_fs_proof(
+    proof_bytes: bytes,
     interface: FiatShamirProofInterface,
     protocol: ProtocolVariant,
     construction: TranscriptConstruction,
     core: ConversationCore,
     profile: AlgebraProfile,
-    proof_bytes: bytes,
 ) -> DecodedFSProof | Result:
-    """Fully consume and canonically decode exactly ``(A,z)``."""
-
-    type_failure = _operand_type_failure(
-        interface,
-        protocol,
-        construction,
-        core,
-        profile,
-        boundary="fs-proof-interface:decode",
-    )
-    if type_failure is not None:
-        return type_failure
-    if not isinstance(proof_bytes, bytes):
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:decode:raw-type",
-            "P01-PROOF-001",
-            "proof input must be an immutable bytes value",
-            subject=_safe_interface_id(interface),
-        )
     interface_result = admit_fs_proof_interface(
         interface, protocol, construction, core, profile
     )
     if interface_result.outcome is not Outcome.AFFIRMATIVE:
         return interface_result
-    return _decode_admitted_proof(interface, proof_bytes, profile)
+    if not isinstance(proof_bytes, bytes) or len(proof_bytes) != interface.proof_width:
+        return result(
+            Outcome.MALFORMED,
+            "fs-proof-decoding:length",
+            "P01-PROOF-001",
+            "proof bytes do not have the exact fixed product width",
+            subject=interface.identity,
+        )
+    commitment_width = interface.proof_fields[0].width
+    commitment = int.from_bytes(proof_bytes[:commitment_width], "big")
+    response = int.from_bytes(proof_bytes[commitment_width:], "big")
+    if not profile.valid_group_element(commitment) or not profile.valid_scalar(response):
+        return result(
+            Outcome.SEMANTIC_NEGATIVE,
+            "fs-proof-decoding:field-domain",
+            "P01-PROOF-002",
+            "decoded commitment or response is outside its declared domain",
+            subject=interface.identity,
+        )
+    decoded = DecodedFSProof(interface.identity, commitment, response)
+    if encode_fs_proof(decoded, interface, protocol, construction, core, profile) != proof_bytes:
+        return result(
+            Outcome.MISMATCH,
+            "fs-proof-decoding:canonicality",
+            "P01-PROOF-003",
+            "proof bytes are not the canonical encoding of decoded fields",
+            subject=decoded.identity,
+        )
+    return decoded
 
 
 def encode_fs_proof(
+    proof: DecodedFSProof,
     interface: FiatShamirProofInterface,
     protocol: ProtocolVariant,
     construction: TranscriptConstruction,
     core: ConversationCore,
     profile: AlgebraProfile,
-    commitment: int,
-    response: int,
 ) -> bytes | Result:
-    """Canonically encode exactly ``(A,z)``; no challenge parameter exists."""
-
-    type_failure = _operand_type_failure(
-        interface,
-        protocol,
-        construction,
-        core,
-        profile,
-        boundary="fs-proof-interface:encode",
-    )
-    if type_failure is not None:
-        return type_failure
-    if (
-        not isinstance(commitment, int)
-        or isinstance(commitment, bool)
-        or not isinstance(response, int)
-        or isinstance(response, bool)
-    ):
-        return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:encode:raw-type",
-            "P01-PROOF-ENC-001",
-            "commitment and response must be integer values",
-            subject=_safe_interface_id(interface),
-        )
     interface_result = admit_fs_proof_interface(
         interface, protocol, construction, core, profile
     )
     if interface_result.outcome is not Outcome.AFFIRMATIVE:
         return interface_result
-    if not profile.valid_group_element(commitment):
+    if (
+        not isinstance(proof, DecodedFSProof)
+        or proof.interface_id != interface.identity
+        or not profile.valid_group_element(proof.commitment)
+        or not profile.valid_scalar(proof.response)
+    ):
         return result(
-            Outcome.SEMANTIC_NEGATIVE,
-            "fs-proof-interface:encode:commitment-domain",
-            "P01-PROOF-ENC-002",
-            "commitment is outside the admitted subgroup domain",
-            subject=interface.identity,
+            Outcome.MALFORMED,
+            "fs-proof-encoding",
+            "P01-PROOF-004",
+            "decoded proof is malformed or belongs to a different interface",
+            subject=_safe_identity(proof),
         )
-    if not profile.valid_scalar(response):
-        return result(
-            Outcome.SEMANTIC_NEGATIVE,
-            "fs-proof-interface:encode:response-domain",
-            "P01-PROOF-ENC-003",
-            "response is outside the scalar domain",
-            subject=interface.identity,
-        )
-    encoded = profile.encode_group(commitment) + profile.encode_scalar(response)
-    if len(encoded) != interface.proof_width:
-        return result(
-            Outcome.CHECKER_FAILURE,
-            "fs-proof-interface:encode:width",
-            "P01-PROOF-ENC-004",
-            "canonical encoder escaped the admitted proof width",
-            subject=interface.identity,
-        )
-    return encoded
-
-
-class VerifierDisposition(str, Enum):
-    ACCEPT = "Accept"
-    REJECT = "Reject"
+    return profile.encode_group(proof.commitment) + profile.encode_scalar(proof.response)
 
 
 @dataclass(frozen=True)
 class FSVerificationRecord:
     interface_id: str
     protocol_id: str
+    external_inputs_id: ArtifactContentId
+    proof_artifact_id: ArtifactContentId
     construction_id: str
-    external_inputs_id: str
-    decoded_proof_id: str
+    verifier_basis_id: ValidationBasisId
     challenge: int
-    challenge_query_id: str
-    verifier_check_contract_id: str
-    terminal_contract_id: str
-    check_value: bool
-    disposition: VerifierDisposition
+    query_hex: str
+    reads: tuple[TranscriptReadReceipt, ...]
+    usage: PublicResourceUsage
+    decision: PublicVerifierDecision
 
     def term(self) -> dict[str, Any]:
         return {
             "interface_id": self.interface_id,
             "protocol_id": self.protocol_id,
+            "external_inputs_id": str(self.external_inputs_id),
+            "proof_artifact_id": str(self.proof_artifact_id),
             "construction_id": self.construction_id,
-            "external_inputs_id": self.external_inputs_id,
-            "decoded_proof_id": self.decoded_proof_id,
+            "verifier_basis_id": str(self.verifier_basis_id),
             "challenge": self.challenge,
-            "challenge_query_id": self.challenge_query_id,
-            "verifier_check_contract_id": self.verifier_check_contract_id,
-            "terminal_contract_id": self.terminal_contract_id,
-            "check_value": self.check_value,
-            "disposition": self.disposition.value,
+            "query_hex": self.query_hex,
+            "reads": [receipt.term() for receipt in self.reads],
+            "usage": self.usage.term(),
+            "verification_executions": self.verification_executions,
+            "decision": self.decision.term(),
         }
 
     @property
-    def identity(self) -> str:
-        return semantic_id("p01.fs-verification-record.v1", self.term())
+    def identity(self) -> EvidenceRecordId:
+        return evidence_record_id("fs-verification-record", self.term())
+
+    @property
+    def disposition(self) -> Disposition:
+        return self.decision.disposition
+
+    @property
+    def verification_executions(self) -> int:
+        return 1
+
+
+def _transcript_receipts(
+    raw_receipts: tuple[dict[str, Any], ...]
+) -> tuple[TranscriptReadReceipt, ...]:
+    return tuple(
+        TranscriptReadReceipt(
+            raw["source_kind"],
+            raw["occurrence"],
+            raw["value_domain_id"],
+            raw["codec"],
+            raw["encoded_hex"],
+        )
+        for raw in raw_receipts
+    )
+
+
+def fs_proof_artifact_id(proof_bytes: bytes) -> ArtifactContentId:
+    """Identify exact public proof bytes, independently of decoded meaning."""
+
+    return artifact_content_id(proof_bytes)
 
 
 def evaluate_fs_proof(
+    proof_bytes: bytes,
+    external_inputs: FSExternalInputs,
     interface: FiatShamirProofInterface,
+    evaluator_basis: EvaluatorBasis,
     protocol: ProtocolVariant,
     construction: TranscriptConstruction,
     core: ConversationCore,
     profile: AlgebraProfile,
-    external_inputs: FSExternalInputs,
-    proof_bytes: bytes,
 ) -> FSVerificationRecord | Result:
-    """Decode, derive ``c``, and execute the exact Core-owned verifier route."""
+    """Decode, recompute the challenge, and invoke the shared public verifier."""
 
-    type_failure = _operand_type_failure(
-        interface,
-        protocol,
-        construction,
-        core,
-        profile,
-        boundary="fs-proof-interface:verify",
-    )
-    if type_failure is not None:
-        return type_failure
-    if not isinstance(external_inputs, FSExternalInputs):
+    basis_result = admit_evaluator_basis(evaluator_basis)
+    if basis_result.outcome is not Outcome.AFFIRMATIVE:
+        return basis_result
+    if protocol.identity not in evaluator_basis.supported_protocol_ids:
         return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:verify:external-inputs",
-            "P01-VERIFY-001",
-            "verification external inputs have the wrong type",
-            subject=_safe_interface_id(interface),
+            Outcome.UNSUPPORTED,
+            "fs-proof-verification:verifier-basis",
+            "P01-VERIFY-003",
+            "FS Protocol is outside the exact public verifier basis",
+            subject=str(evaluator_basis.identity),
         )
-    if not isinstance(proof_bytes, bytes):
+    if (
+        not public_usage_fits(
+            _FS_PUBLIC_VERIFICATION_USAGE,
+            evaluator_basis.hard_caps,
+        )
+        or evaluator_basis.hard_caps.max_replay_executions < 1
+    ):
         return result(
-            Outcome.MALFORMED,
-            "fs-proof-interface:verify:proof",
-            "P01-VERIFY-002",
-            "verification proof must be an immutable bytes value",
-            subject=_safe_interface_id(interface),
+            Outcome.RESOURCE_EXCEEDED,
+            "fs-proof-verification:resources",
+            "P01-VERIFY-004",
+            "FS proof verification exceeds the public evaluator hard caps",
+            subject=str(evaluator_basis.identity),
+            required_usage=_FS_PUBLIC_VERIFICATION_USAGE.term(),
+            required_verification_executions=1,
         )
-    interface_result = admit_fs_proof_interface(
-        interface, protocol, construction, core, profile
+    external_result = admit_fs_external_inputs(
+        external_inputs, interface, protocol, construction, core, profile
     )
-    if interface_result.outcome is not Outcome.AFFIRMATIVE:
-        return interface_result
-    inputs_result = _check_fs_external_input_shape(
-        external_inputs, interface, profile
+    if external_result.outcome is not Outcome.AFFIRMATIVE:
+        return external_result
+    decoded = decode_fs_proof(
+        proof_bytes, interface, protocol, construction, core, profile
     )
-    if inputs_result.outcome is not Outcome.AFFIRMATIVE:
-        return inputs_result
-    decoded = _decode_admitted_proof(interface, proof_bytes, profile)
     if isinstance(decoded, Result):
         return decoded
     try:
-        challenge, query, _ = derive_fs_challenge(
+        challenge, query, raw_receipts = derive_fs_challenge(
             construction,
             profile,
             external_inputs.application_context,
             external_inputs.statement,
             decoded.commitment,
         )
-    except (AssertionError, AttributeError, TypeError, ValueError) as error:
+        receipts = _transcript_receipts(raw_receipts)
+    except (KeyError, TypeError, ValueError):
         return result(
-            Outcome.CHECKER_FAILURE,
-            "fs-proof-interface:verify:challenge-recomputation",
-            "P01-VERIFY-003",
-            f"admitted challenge recomputation failed: {error}",
-            subject=interface.identity,
+            Outcome.MALFORMED,
+            "fs-proof-verification:challenge",
+            "P01-VERIFY-001",
+            "challenge recomputation failed on admitted public inputs",
+            subject=decoded.identity,
         )
-    if not profile.valid_challenge(challenge):
-        return result(
-            Outcome.CHECKER_FAILURE,
-            "fs-proof-interface:verify:challenge-codomain",
-            "P01-VERIFY-004",
-            "recomputed challenge escaped the Core challenge domain",
-            subject=interface.identity,
-        )
-
-    # Admission has already established that these are the canonical Schnorr
-    # deterministic rules.  The evaluator dispatches through their existing
-    # Core-owned IDs; it does not create another equation or terminal identity.
-    if (
-        interface.verifier_check_contract_id
-        != core.verifier_check.semantic_contract_id
-        or interface.terminal_contract_id
-        != core.terminal_route.semantic_contract_id
-        or interface.verifier_check_occurrence != CHECK
-        or interface.terminal_occurrence != TERMINAL
-    ):
-        return result(
-            Outcome.MISMATCH,
-            "fs-proof-interface:verify:core-routing",
-            "P01-VERIFY-005",
-            "verification route differs from the admitted Core contracts",
-            subject=interface.identity,
-        )
-    left = pow(profile.generator, decoded.response, profile.p)
-    right = (
-        decoded.commitment
-        * pow(external_inputs.statement, challenge, profile.p)
-    ) % profile.p
-    check_value = left == right
-    disposition = (
-        VerifierDisposition.ACCEPT
-        if check_value
-        else VerifierDisposition.REJECT
-    )
-    query_id = semantic_id(
-        "p01.fs-challenge-query.v1",
-        {"construction_id": construction.identity, "query": query},
-    )
-    return FSVerificationRecord(
-        interface_id=interface.identity,
-        protocol_id=protocol.identity,
-        construction_id=construction.identity,
-        external_inputs_id=external_inputs.identity,
-        decoded_proof_id=decoded.identity,
+    decision = evaluate_schnorr_verifier(
+        core,
+        profile,
+        statement=external_inputs.statement,
+        commitment=decoded.commitment,
         challenge=challenge,
-        challenge_query_id=query_id,
-        verifier_check_contract_id=core.verifier_check.semantic_contract_id,
-        terminal_contract_id=core.terminal_route.semantic_contract_id,
-        check_value=check_value,
-        disposition=disposition,
+        response=decoded.response,
+    )
+    if isinstance(decision, Result):
+        return decision
+    return FSVerificationRecord(
+        interface.identity,
+        protocol.identity,
+        external_inputs.identity,
+        fs_proof_artifact_id(proof_bytes),
+        construction.identity,
+        evaluator_basis.identity,
+        challenge,
+        query.hex(),
+        receipts,
+        _FS_PUBLIC_VERIFICATION_USAGE,
+        decision,
     )
 
 
 def check_fs_proof(
+    proof_bytes: bytes,
+    external_inputs: FSExternalInputs,
     interface: FiatShamirProofInterface,
+    evaluator_basis: EvaluatorBasis,
     protocol: ProtocolVariant,
     construction: TranscriptConstruction,
     core: ConversationCore,
     profile: AlgebraProfile,
-    external_inputs: FSExternalInputs,
-    proof_bytes: bytes,
 ) -> Result:
-    """Return the finite verifier decision as an explicit Result judgment."""
-
     verification = evaluate_fs_proof(
+        proof_bytes,
+        external_inputs,
         interface,
+        evaluator_basis,
         protocol,
         construction,
         core,
         profile,
-        external_inputs,
-        proof_bytes,
     )
     if isinstance(verification, Result):
         return verification
-    common = {
-        "interface_id": verification.interface_id,
-        "protocol_id": verification.protocol_id,
-        "verification_record_id": verification.identity,
-        "challenge": verification.challenge,
-        "challenge_query_id": verification.challenge_query_id,
-        "verifier_check_contract_id": verification.verifier_check_contract_id,
-        "terminal_contract_id": verification.terminal_contract_id,
-        "finite_scope": "one decoded P01 proof invocation; no security theorem",
-    }
-    if verification.disposition is VerifierDisposition.ACCEPT:
-        return affirmative(
-            "fs-proof-interface:verify",
-            "P01-VERIFY-ACCEPT",
-            "canonical (commitment,response) proof accepts under the recomputed challenge and Core verifier rule",
-            subject=verification.identity,
-            disposition=verification.disposition.value,
-            **common,
+    if verification.disposition is Disposition.REJECT:
+        return result(
+            Outcome.SEMANTIC_NEGATIVE,
+            "fs-proof-verification:terminal",
+            "P01-VERIFY-002",
+            "proof reached the shared public verifier's Reject terminal",
+            subject=str(verification.identity),
         )
-    return result(
-        Outcome.SEMANTIC_NEGATIVE,
-        "fs-proof-interface:verify",
-        "P01-VERIFY-REJECT",
-        "canonical (commitment,response) proof rejects under the recomputed challenge and Core verifier rule",
-        subject=verification.identity,
-        disposition=verification.disposition.value,
-        **common,
+    return affirmative(
+        "fs-proof-verification",
+        "P01-VERIFY-OK",
+        "proof reached the shared public verifier's Accept terminal",
+        subject=str(verification.identity),
+    )
+
+
+def check_fs_execution_projection(
+    checked: CheckedPublicExecution,
+    interface: FiatShamirProofInterface,
+    *,
+    proof_bytes: bytes | None = None,
+) -> Result:
+    """Check the exact FS execution -> external-input/proof ABI projection.
+
+    ``proof_bytes`` may be supplied to test a published artifact.  If omitted,
+    the canonical bytes are derived from the checked execution.  In either
+    case, the verifier record must agree with the checked execution's exact
+    challenge query, reads, decision, and terminal value.
+    """
+
+    replayed = requalify_public_execution(checked)
+    if isinstance(replayed, Result):
+        return replayed
+    if (
+        replayed.protocol.realization_kind is not RealizationKind.FIAT_SHAMIR
+        or not isinstance(replayed.construction, TranscriptConstruction)
+        or replayed.invocation.application_context is None
+    ):
+        return result(
+            Outcome.MISMATCH,
+            "fs-execution-projection:realization",
+            "P01-FS-PROJECTION-001",
+            "checked execution is not a complete FS realization",
+            subject=str(replayed.identity),
+        )
+    interface_result = admit_fs_proof_interface(
+        interface,
+        replayed.protocol,
+        replayed.construction,
+        replayed.core,
+        replayed.profile,
+    )
+    if interface_result.outcome is not Outcome.AFFIRMATIVE:
+        return interface_result
+    commitment = public_trace_value(replayed.record, COMMITMENT)
+    response = public_trace_value(replayed.record, RESPONSE)
+    if isinstance(commitment, Result) or isinstance(response, Result):
+        return result(
+            Outcome.MALFORMED,
+            "fs-execution-projection:messages",
+            "P01-FS-PROJECTION-001",
+            "checked execution lacks its exact two public proof messages",
+            subject=str(replayed.identity),
+        )
+    decoded = DecodedFSProof(interface.identity, commitment, response)
+    canonical_bytes = encode_fs_proof(
+        decoded,
+        interface,
+        replayed.protocol,
+        replayed.construction,
+        replayed.core,
+        replayed.profile,
+    )
+    if isinstance(canonical_bytes, Result):
+        return canonical_bytes
+    if proof_bytes is not None and proof_bytes != canonical_bytes:
+        return result(
+            Outcome.MISMATCH,
+            "fs-execution-projection:proof-bytes",
+            "P01-FS-PROJECTION-002",
+            "published proof bytes differ from the checked execution projection",
+            subject=str(replayed.identity),
+        )
+    external_inputs = FSExternalInputs(
+        replayed.invocation.application_context,
+        replayed.invocation.statement,
+    )
+    verification = evaluate_fs_proof(
+        canonical_bytes,
+        external_inputs,
+        interface,
+        replayed.evaluator_basis,
+        replayed.protocol,
+        replayed.construction,
+        replayed.core,
+        replayed.profile,
+    )
+    if isinstance(verification, Result):
+        return verification
+    receipt = replayed.record.challenge_receipt
+    if (
+        verification.challenge != receipt.challenge
+        or verification.query_hex != receipt.query_hex
+        or verification.reads != receipt.reads
+        or verification.usage != replayed.record.usage
+        or verification.verification_executions != replayed.replay_executions
+        or verification.decision != replayed.record.verifier_decision
+    ):
+        return result(
+            Outcome.MISMATCH,
+            "fs-execution-projection:exact-verifier-record",
+            "P01-FS-PROJECTION-003",
+            "proof-interface verification differs from checked execution replay",
+            subject=str(replayed.identity),
+            verification_record_id=str(verification.identity),
+        )
+    return affirmative(
+        "fs-execution-projection",
+        "P01-FS-PROJECTION-OK",
+        "checked FS execution projects exactly to external inputs, proof bytes, challenge, and terminal",
+        subject=str(replayed.identity),
+        interface_id=interface.identity,
+        proof_artifact_id=str(fs_proof_artifact_id(canonical_bytes)),
+        verification_record_id=str(verification.identity),
     )

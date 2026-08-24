@@ -213,11 +213,17 @@ cannot authorize its own use.
 ### Temporary-workspace exception
 
 The durable documentation manifest lists [`notes/README.md`](../notes/README.md)
-as the boundary and inventory authority for the temporary workspace. Individual
-working notes are deliberately excluded from the durable manifest and must
-appear exactly once in that local inventory. This is the only permitted second
-inventory because its subjects are explicitly disposable rather than durable
-documentation pages.
+as the boundary and root inventory authority for the temporary workspace.
+Temporary inventory is hierarchical: `notes/README.md` inventories each direct
+child package or standalone note exactly once, and every package README
+inventories its own direct pages and subpackages exactly once. Individual
+working notes are deliberately excluded from the durable manifest. This is the
+only permitted second inventory tree because its subjects are explicitly
+disposable rather than durable documentation pages.
+
+A cross-reference is not an inventory entry. Before cutover, a recursive check
+must establish one inventory-owning route from `notes/README.md` to every
+temporary page, with no orphan, duplicate owner, or cycle.
 
 No durable page may depend on an individual working note. A root or governance
 page may route readers to the temporary workspace index only. The entire
