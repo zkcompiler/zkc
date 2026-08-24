@@ -970,6 +970,20 @@ public:
     }
 
     SmallVector<zkc::pir::SealedOp> sealed(module.getOps<zkc::pir::SealedOp>());
+    if (!protocolName.empty()) {
+      // Composition leaves the operands in the module alongside their
+      // composite, and an operand that only exports a claim carries no
+      // verifier face, so projecting every seal would refuse the module for a
+      // protocol nobody asked to project.
+      llvm::erase_if(sealed, [&](zkc::pir::SealedOp raw) {
+        return raw.getProtocolName() != protocolName;
+      });
+      if (sealed.empty()) {
+        module.emitError() << "pir-project: no sealed protocol named '"
+                           << protocolName << "'";
+        return signalPassFailure();
+      }
+    }
     for (zkc::pir::SealedOp raw : sealed) {
       auto decoded = zkc::artifact::snapshotArtifact(raw);
       if (!decoded) {
