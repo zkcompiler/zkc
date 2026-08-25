@@ -15,6 +15,13 @@
 > **Frozen target basis:** SHA-256
 > `7729b1043e6f3ca1e77ce617327e3e9a959b8442f54da61a9e21ab9cb4fbabf3`
 
+> **K1 transition notice — 2026-08-26:** The identity, value, algorithm,
+> dependency, and replay forms below predate
+> [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K1 does not ratify these assessment and selection carriers. Their exact
+> reconciliation remains a post-kernel integration obligation under the
+> Compiler-owned judgments.
+
 ## 1. Scope
 
 This document defines two distinct paths: how one exact semantic

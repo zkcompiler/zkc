@@ -9,6 +9,17 @@
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
 > This document makes no implementation, compatibility, or migration claim.
 
+> **K1 transition notice — 2026-08-26:** The algorithm, dependency, value,
+> execution-capability, and `H(...)` identity forms retained below are pre-K1
+> Stage 3 placeholders. [Executable Semantic Foundations](../foundation/executable-foundations.md)
+> owns the exact selected substrate. K2 must refine every semantic algorithm position to an
+> exact PIR-owned `PortableAlgorithmRef`, authenticate each supplied candidate
+> against its own `DirectPrimitiveRefs`, `DirectModuleRoots`, and
+> `RequiredModuleClosure_B`, and define the exact Foundation `ValueType`s used
+> by transcript state, codecs, and challenge results. Primitive references stay
+> direct; only module imports form a transitive preimage DAG. Strong
+> Fiat--Shamir closure is therefore still a K2 obligation.
+
 ## 1. Scope and design center
 
 This document defines two PIR-owned structural constructions:

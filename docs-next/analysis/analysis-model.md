@@ -10,6 +10,13 @@
 > This document makes no implementation, migration, compatibility, theorem,
 > property-establishment, or consumer-reliance claim.
 
+> **K1 transition notice — 2026-08-26:** The identity, canonical-value,
+> algorithm, dependency, and evaluation forms below predate
+> [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K3 must reconcile Analysis inputs and checked results with the exact K1
+> substrate and the K2 Protocol model; this page is not yet an integrated
+> K1-aligned Analysis calculus.
+
 ## 1. Scope and architectural position
 
 Analysis owns reusable post-admission evaluation of exact semantic questions.

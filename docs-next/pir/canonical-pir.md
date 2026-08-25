@@ -9,6 +9,17 @@
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
 > This document makes no implementation, compatibility, or migration claim.
 
+> **K1 transition notice — 2026-08-26:** The candidate/dependency bundles and
+> identity equations below retain the historical Stage 3 vocabulary. The
+> exact selected substrate is [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K2 must
+> replace algorithm dependencies with exact portable-algorithm candidates and
+> each candidate's own authenticated `RequiredModuleClosure_B`; direct
+> primitive references do not become transitive closure nodes. K2 must also
+> replace every legacy `H(...)` equation with an exact
+> `SemanticContentId<K>` body under an authenticated prior-meta basis. This
+> carrier page is not yet a K1-computable Protocol lifecycle.
+
 ## 1. Scope and invariants
 
 This document specifies the unique physical v0 carrier for the

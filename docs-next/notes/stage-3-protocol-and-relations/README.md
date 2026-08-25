@@ -11,10 +11,19 @@
 > **Completed:** 2026-08-22
 > **Current boundary:** Stage 3.0--3.5 are complete. The selected model is
 > promoted into durable non-normative target owners, and separate Stage 4A and
-> Stage 4B entry contracts are closed. Neither Stage 4 branch is activated.
+> At this package's Stage 3 exit snapshot, neither Stage 4 branch was
+> activated. Stage 4A was subsequently activated and historically completed;
+> Stage 4B remains inactive.
 > **Disposition:** Retain this package as temporary research and handoff
 > evidence until its absorption and deletion conditions are satisfied; delete
 > it before `docs-next/` authority cutover.
+
+> **Subsequent supersession:** Integrated revalidation K1 replaces this
+> package's provisional `CanonicalAlgorithmSpec = ClosedFiniteTerm |
+> ContentAddressedContractRef` foundation with the stratified model in
+> [Executable Semantic Foundations](../../foundation/executable-foundations.md).
+> Occurrences of the older names in this temporary package are historical
+> candidate evidence, not live target definitions.
 
 ## Purpose
 
@@ -45,8 +54,9 @@ Stage 3 is complete. It established:
   carriers, ZK systems, protocol theory, and formal composition;
 - five equal-resolution architectures, including genuine reopening controls,
   one conditional calculus alternative, and one generative authoring overlay;
-- a frozen complete Candidate-C target, independently audited through type,
-  authority, source-transfer, matrix, and sixteen-scenario gates;
+- a historically frozen Candidate-C package target, independently audited
+  through type, authority, source-transfer, matrix, and sixteen-scenario gates;
+  later integrated revalidation may supersede its cross-cutting definitions;
 - one selected integrated Protocol, canonical PIR, Interface, Plan, Relations,
   Fiat--Shamir, and Core-composition model with explicit rejections, reversal
   triggers, costs, and non-claims;
@@ -69,7 +79,7 @@ establish a cryptographic theorem, or pre-approve a later-stage result.
 | [Design forces and opportunities](design-forces-and-opportunities.md) | Complete | Native pressures, option-value search, opportunities, falsifiers, and non-goals |
 | [Comparative case dossiers](cases/README.md) | Complete | Primary-source IR, ZK-system, protocol-theory, and formal-composition research with transfer limits |
 | [Equal-resolution candidates](candidate-models.md) | Complete | Five architectures over the same twelve axes; frozen portfolio SHA-256 `ce4f71e88741f71d126c81ce8afeb2cb29da83f856bb13fdf032a702756b9923` |
-| [Integrated target](target-semantic-model.md) | Selected and frozen | Complete Candidate-C model; SHA-256 `107255938efa6af7802030b93bdbc9dcb4d5535335866cffa304df33083a7f5b` |
+| [Integrated target](target-semantic-model.md) | Historical selection; cross-cutting algorithm foundation superseded by K1 | Complete Candidate-C package model; SHA-256 `107255938efa6af7802030b93bdbc9dcb4d5535335866cffa304df33083a7f5b` |
 | [Validation matrices](validation-matrices.md) and [scenario results](scenario-results.md) | Complete | Cross-cutting closure plus sixteen integrated scenarios and laundering probes |
 | [Convergence](convergence.md) and [current-to-target gap](current-to-target-gap.md) | Complete | Integrated decision, alternatives, reversals, deferrals, and semantic delta without migration planning |
 | [Stage 4A entry](stage-4a-entry-contract.md) and [Stage 4B entry](stage-4b-entry-contract.md) | Complete handoffs | Narrow, mutually consistent downstream inputs; no branch activation |

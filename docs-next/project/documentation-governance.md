@@ -205,7 +205,13 @@ schemas, or rule text that can drift independently.
 
 A shared glossary indexes terms and their owners; it does not centralize all
 definitions. Vocabulary entries live with the domain that gives them meaning.
-Only common admission and extension mechanics belong in `foundation/`.
+Only mechanisms with genuinely identical cross-domain meaning belong in
+`foundation/`. The provisional K1 Foundation includes the constitutional
+encoding and identity substrate, same-regime semantic modules,
+domain-indexed canonical values, bounded portable semantic functions, typed
+completed failures, and deterministic evaluation control. It does not absorb
+domain predicates, admission judgments, authorities, resource policies, or
+theorem conclusions; K3 must still satisfy the two-consumer extraction test.
 
 ### Producer definitions and bridge contracts
 

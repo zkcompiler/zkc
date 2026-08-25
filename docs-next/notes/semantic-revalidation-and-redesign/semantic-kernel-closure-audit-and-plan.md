@@ -27,11 +27,12 @@ The execution model should be a small global skeleton followed by
 dependency-ordered vertical slices. The current `docs/` and implementation
 remain authoritative until an explicit cutover.
 
-**Current execution position:** K0 completed on 2026-08-25. K1 executable
-foundations is next and has not begun. The R2 protocol-witness track remains an
-evidence source; a P02 probe may inform an earlier question, but P02 cannot
-close its portfolio gate before K1--K3 establish the substrate it is meant to
-test. Stage 4B remains inactive.
+**Current execution position:** K0 completed on 2026-08-25 and bounded K1
+executable foundations completed on 2026-08-26. K2 Protocol/FS closure is
+next; the integrated kernel is not frozen. The R2 protocol-witness track
+remains an evidence source; a P02 probe may inform an earlier question, but
+P02 cannot close its portfolio gate before K1--K3 establish the substrate it
+is meant to test. Stage 4B remains inactive.
 
 ## 2. Stable architecture spine
 
@@ -72,7 +73,7 @@ A pure reopening condition is not itself a closure test.
 | Area | Result | Closing owner | Executable falsifier or gate |
 |---|---|---|---|
 | Subject and authority factorization | Coherent | Project and PIR | Reopen if a bounded protocol needs ambient state, a shadow Protocol schema, or Interface/Plan variation changes a Protocol-only observation. |
-| Regime, value, algorithm, ABI, totality, and resource foundations | Open | Foundation mechanism plus each exact semantic domain | Two independent evaluators must agree on identity, support, canonical values, algorithm steps, totality evidence, failures, and bounds; wrong-kind, noncanonical, partial, unsupported, and exhausted cases must refuse at the named boundary. |
+| Regime, value, portable-function ABI, typed-failure, totality, and bounded-evaluation foundations | K1 standalone closed; K3 extraction and integration open | Foundation owns the selected substrate; PIR, Relations, Analysis, and OIR own their exact semantic bodies and use-site admission | The independent identity/value oracle must agree with the K1 reference model, while the term evaluator exercises function steps, typed failures, totality, and bounds. Reopen K1 if exact law/vector parity breaks or a consumer requires an owner-specific escape or general virtual machine. K3 must demonstrate two aligned consumer extractions; a second term evaluator remains independent-freeze evidence rather than credited K1 evidence. |
 | Core execution | Open | PIR execution structure; Analysis strategy classes | An honest online execution and replay must agree, while a trace whose early prover move depends on a future challenge must replay but fail strategy generation. |
 | Strong Fiat--Shamir structure | Open regression | PIR structural admission | Run [J1](invariant-ledger.md#71-semantic-guarantees): target acceptance of an omitted/late Statement, Wire-only required proof message, wrong prefix, reused challenge namespace, or verifier-private influence fails the gate. |
 | Fresh/FS relation | Promising, not frozen | PIR construction; Analysis theorem applicability | A native Fresh/FS FRI or IOR pair must preserve one declaration through structural maps; a mismatched map, context, or related-Core claim must fail at the declared relation rather than disappear into Analysis. |
@@ -162,7 +163,7 @@ K0 closed those control obligations in the
 and this page's owner/falsifier audit. It selected no K1 representation and
 does not count any unrun falsifier as passed.
 
-### K1 — Executable foundations
+### K1 — Executable foundations — complete 2026-08-26
 
 - select the regime, canonical-value, finite-algorithm, ABI, totality, failure,
   and resource model;
@@ -170,6 +171,16 @@ does not count any unrun falsifier as passed.
   and
 - run round trips plus wrong-kind, noncanonical, partial, unsupported, and
   exhausted negatives.
+
+K1 selected the bounded executable foundation specified by
+[`foundation/executable-foundations.md`](../../foundation/executable-foundations.md)
+and exercised it through 116 passing checks: 90 reference/parity checks and 26
+independent-oracle checks. The independent implementation boundary covers
+canonical values and identity, not term evaluation. The package deliberately
+does not claim a fully serialized request decoder, a second term evaluator,
+Protocol/Fiat--Shamir closure, consumer closure, implementation adoption, or
+kernel freeze. Those boundaries advance to K2 and K3 rather than being hidden
+inside the K1 result.
 
 ### K2 — Protocol and FS kernel
 

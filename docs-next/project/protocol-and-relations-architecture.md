@@ -16,6 +16,13 @@
 > equal-resolution candidate portfolio SHA-256
 > `ce4f71e88741f71d126c81ce8afeb2cb29da83f856bb13fdf032a702756b9923`.
 
+> **K1 reconciliation status — 2026-08-26:** K1 selected a provisional
+> executable Foundation, but it did not ratify this historical Stage 3
+> consumer model. K2 must reconcile Protocol and Fiat--Shamir; K3 must
+> reconcile Interface, Relations, Analysis, and the minimum downstream seams.
+> In particular, pre-K1 algorithm, value-domain, dependency-closure, and
+> identity notation below carries no K1 typing or authentication claim.
+
 ## 1. Decision
 
 The v0 target is a **small language-independent Protocol semantic kernel, one
@@ -138,7 +145,8 @@ challenges, checks, terminal behavior, or transcript semantics.
 
 The Interface owns:
 
-- an identity-bearing least algorithm-dependency closure;
+- an identity-bearing algorithm-dependency description, whose pre-K1 closure
+  form must be replaced by exact per-algorithm module closure during K2/K3;
 - exact external ports and role entry points;
 - the sole statement byte language, whose successful decode is the dependent
   total `ProtocolPublicAssignment` over every and only public Statement input
@@ -373,20 +381,22 @@ must receive the affirmative variant rather than merely a completed check.
 
 ## 8. Why this model is selected
 
-The frozen decision passed four independent design gates: target
+The historical Stage 3 package-selection decision passed four independent
+design gates: target
 type/operation/authority closure, equal-resolution five-candidate and IR-case
 comparison, named-scenario falsification, and cross-cutting identity,
-dependency, authority, outcome, and persistence matrices. Those gates close
-the architecture comparison at its declared design resolution; they are not
-implementation, mechanization, or cryptographic evidence.
+dependency, authority, outcome, and persistence matrices. Those gates closed
+the architecture comparison at that package's declared design resolution.
+They did not establish K1 alignment or integrated semantic-kernel closure, and
+they are not implementation, mechanization, or cryptographic evidence.
 
 This topology is the only compared center that satisfies the fixed Stage 1 and
 Stage 2 boundaries without turning its principal risk into a permanent global
 discipline:
 
-- the semantic center is small enough for clean-room interpretation but
-  complete enough to preserve every verifier-visible and refusal-sensitive
-  distinction;
+- within that historical comparison, the semantic center was judged small
+  enough for clean-room interpretation and complete enough to preserve every
+  verifier-visible and refusal-sensitive distinction;
 - physical canonicality has one carrier and one owner, while meaning remains
   independent of MLIR implementation details;
 - Interface, Plan, Relations, transcript construction, and composition evolve

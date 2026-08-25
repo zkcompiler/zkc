@@ -4,8 +4,9 @@
 > **Document state:** Active
 > **Program status:** Active. Stages 0--4A are historically package-complete at
 > their recorded selection gates. Integrated semantic-kernel closure K0
-> completed on 2026-08-25; K1 is next, the kernel is not frozen, and Stage 4B
-> remains unactivated.
+> completed on 2026-08-25 and bounded K1 executable foundations completed on
+> 2026-08-26; K2 is next, the kernel is not frozen, and Stage 4B remains
+> unactivated.
 > **Provisional owner:** `project`
 > **Authority:** This is the single execution plan for semantic redesign inside
 > `docs-next/`. It does not replace current product planning or roadmap
@@ -560,6 +561,11 @@ Move a mechanism to `foundation/` only after at least two domains demonstrate
 the same meaning and lifecycle. Domain-specific identity preimages,
 vocabularies, and judgments remain local.
 
+K1 selected a provisional Foundation candidate so that later consumers have
+one concrete target to falsify. The extraction gate is not satisfied until K3
+demonstrates at least two aligned consumers and confirms that no owner-specific
+semantics leaked into Foundation.
+
 ### Global architecture
 
 Maintain the typed subject-and-transition graph, ownership map, and deliberate
@@ -623,7 +629,7 @@ the promoted candidate is mutually closed and ready to freeze.
 | Stage 2 | Historical package complete | Selected [Transition and Bridge Architecture](transition-and-bridge-architecture.md), supported by the Stage 2 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
 | Stage 3 | Historical package complete | Selected [Protocol and Relations Architecture](protocol-and-relations-architecture.md), candidate PIR/Relations target owners at package resolution, research evidence, and separate Stage 4A/4B entry contracts |
 | Stage 4A | Historical package complete | Selected [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md), candidate Analysis/Compiler target owners at package resolution, Relations/PIR reconciliation, research evidence, and an unactivated Stage 4B peer boundary |
-| Integrated semantic-kernel closure K0--K5 | K0 complete; K1 next; not frozen | The regression baseline, owner/falsifier register, and minimum Relations/Analysis/OIR questions are frozen. Executable foundations, Protocol/FS closure, minimum consumer co-design, protocol portfolio, and independent freeze remain. |
+| Integrated semantic-kernel closure K0--K5 | K0--K1 complete; K2 next; not frozen | The regression baseline and bounded executable-foundations package are complete. Protocol/FS closure, minimum consumer co-design, protocol portfolio, and independent freeze remain. |
 | Stage 4B | Historical entry contract ready; activation blocked | OIR then Realization may activate only after integrated semantic-kernel freeze and a separate explicit decision. |
 | Stages 5--8 | Not started as decision packages | Later stages may be surveyed for design forces but cannot finalize contracts that depend on unresolved earlier-stage results |
 

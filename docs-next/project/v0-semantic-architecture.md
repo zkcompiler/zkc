@@ -32,6 +32,15 @@
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns that live gate. Stage 4B remains unactivated.
 
+> **K1 integrated-closure update — 2026-08-26:** Bounded executable
+> foundations are complete and provisionally absorbed into
+> [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> This closes the bootstrap, typed identity, module, canonical-value,
+> portable-function, typed-failure, and deterministic-evaluation substrate at
+> K1 resolution. It does not ratify the historical consumer schemas or freeze
+> the integrated kernel: K2 Protocol/Fiat--Shamir closure is next, and K3 must
+> reconcile the minimum consumers and satisfy Foundation's extraction test.
+
 ## 1. Result of the first reconstruction package
 
 The current zkc design should not be replaced with a conventional source-to-
@@ -477,7 +486,7 @@ anchored to the transition graph rather than treated as the graph themselves.
 
 | Domain | Selected or working semantic ownership | Hard stop |
 |---|---|---|
-| `foundation` | Common identity, environment, encoding, authentication, qualified admission, refusal, and evolution mechanisms | Must not absorb domain meaning into a universal artifact model |
+| `foundation` | Fixed bootstrap and canonical encoding; typed content identities and semantic regimes; authenticated semantic modules; domain-indexed values; portable semantic functions with typed completed failures; and deterministic bounded evaluation control | Must not absorb domain meaning, consumer judgments, or one universal result/resource/artifact model |
 | `relations` | External relation references and interfaces; instance and witness mappings; protocol correspondence; exact occurrence-local satisfaction; future descent | Must not infer predicate truth or witness satisfaction from interface admission or correspondence, compile sources, or establish satisfaction outside exact Relations-owned `CheckRelationSatisfaction` |
 | `pir` | Small closed canonical Protocol level in MLIR, two geometries, canonical authentication, whole-Protocol admission, semantic identity projection, and carrier contract | Must not absorb rich authoring languages, property analysis, compiler search, external interface bindings, or endpoint behavior |
 | `analysis` | Federated family-owned questions, goals, propositions, semantic/basis/validation profiles, equality and refinement, intentional change, cryptographic and distributional properties, cost, derivations, transport/composition, qualified judgments, and exact replay/trust contracts | Must not absorb Relations-owned predicate satisfaction, Compiler selection, Evidence appraisal, or consumer reliance, and must not collapse family meaning into a generic judgment |

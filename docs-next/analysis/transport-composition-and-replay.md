@@ -11,6 +11,12 @@
 > authority, implementation support, migration feasibility, or consumer
 > reliance.
 
+> **K1 transition notice — 2026-08-26:** The identity, algorithm, dependency,
+> and replay forms below predate
+> [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K3 must reconcile exact source identities and portable or checked bridges
+> with K1/K2 before transport or composition can be integrated.
+
 ## 1. Scope and governing invariants
 
 This document defines:

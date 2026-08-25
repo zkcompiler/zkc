@@ -9,6 +9,17 @@
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
 > This document makes no implementation, compatibility, or migration claim.
 
+> **K1 transition notice — 2026-08-26:** This Stage 3 target still uses
+> pre-K1 identity equations, `CanonicalAlgorithmSpec`,
+> `CanonicalSemanticValue`, and domain-contract vocabulary. Those spellings
+> are not computable identities, algorithms, or `ValueType`s under
+> [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K2 must replace them with exact `SemanticContentId` bodies, PIR-refined
+> `PortableAlgorithmRef`s with derived ABIs and per-algorithm module closure,
+> and an explicit mapping from every PIR value-domain contract to an exact
+> Foundation `ValueType`. Until then this page is a historical consumer
+> candidate, not evidence that the K1 substrate and Protocol are integrated.
+
 ## 1. Scope and architectural position
 
 This document defines the complete v0 Protocol semantic subject: a finite

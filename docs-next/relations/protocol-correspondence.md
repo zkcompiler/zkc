@@ -10,6 +10,12 @@
 > This document makes no implementation, migration, compatibility, or
 > downstream property-establishment claim.
 
+> **K1 transition notice — 2026-08-26:** The identity, value, bridge, and
+> dependency forms below predate [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K3 must map both relation and Protocol occurrences to exact Foundation types
+> and separately checked same- or cross-regime algorithms. This page does not
+> yet establish K1-aligned correspondence admission.
+
 ## 1. Scope and design center
 
 This document defines two Relations-owned checked judgments:

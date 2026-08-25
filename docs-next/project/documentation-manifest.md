@@ -44,6 +44,7 @@ authority over the current corpus under `docs/` before explicit cutover.
 | [`project/migration-policy.md`](migration-policy.md) | Governance proposal | `project` | Controlled migration and cutover process |
 | [`project/documentation-manifest.md`](documentation-manifest.md) | Manifest | `project` | Single scaffold page inventory |
 | [`foundation/README.md`](../foundation/README.md) | Domain index | `foundation` | Shared semantic substrate boundary |
+| [`foundation/executable-foundations.md`](../foundation/executable-foundations.md) | Target semantic specification | `foundation` | Fixed bootstrap, typed identities and regimes, domain-indexed values, portable semantic functions, typed completed failures, deterministic evaluation control, and operational noncompletion boundaries |
 | [`pir/README.md`](../pir/README.md) | Domain index | `pir` | Protocol semantic object and lifecycle boundary |
 | [`pir/protocol-lifecycle.md`](../pir/protocol-lifecycle.md) | Architecture proposal | `pir` | Superseded first Stage 1 baseline for Protocol root, identity, carrier, authority graph, admission, and lifecycle |
 | [`pir/protocol-model.md`](../pir/protocol-model.md) | Target semantic specification | `pir` | Candidate finite operational InteractiveCore and Protocol model, identity, execution, admission, outcomes, and views |

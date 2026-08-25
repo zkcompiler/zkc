@@ -1,7 +1,7 @@
 # Foundation
 
 > **Document kind:** Domain index
-> **Document state:** Scaffold
+> **Document state:** Active target-domain index
 > **Provisional owner:** `foundation`
 > **Authority:** None during the transition. Current normative rules remain in
 > the individual [specifications](../../docs/spec/overview.md).
@@ -16,6 +16,15 @@ semantics. It applies or cites the project rules; it does not redefine them as
 a common executable transition model.
 
 It is not the place for every concept that several documents mention.
+
+## Selected documents
+
+- [Executable Semantic Foundations](executable-foundations.md) defines the
+  selected K1 candidate for bootstrap, typed identity, semantic modules,
+  domain-indexed values, portable algorithms, deterministic evaluation
+  control, and the boundary between semantic completion and operational
+  noncompletion. Domain regimes, predicates, judgments, and resource policies
+  remain with their owners. K3 still owes the two-consumer extraction test.
 
 ## Owns
 
@@ -42,9 +51,10 @@ It is not the place for every concept that several documents mention.
   domain-specific, while Project retains the global policy; and
 - a terminology index that routes each semantic term to its actual owner.
 
-Each artifact-owning domain still defines the exact fields, bytes, dependencies,
-semantic regime, admission predicate, capability behavior, outcomes, and
-identity preimage.
+Foundation fixes the common canonical-value encoding and typed identity-
+preimage framing selected by K1. Each artifact-owning domain still defines its
+exact domain-specific semantic body and regime contents, dependency meaning,
+admission predicate, capability behavior, outcomes, and domain policy.
 
 ## Does not own
 
@@ -132,8 +142,8 @@ These are topics, not directories to create in advance.
 
 ## Open schema questions
 
-- What exact typed subject-reference schema expresses family, semantic
-  identity, and regime without becoming a universal transition envelope?
+- Which later subject families require refinements of the selected typed
+  identity without becoming a universal transition envelope?
 - Which capability traits are genuinely common while copy, borrow, threading,
   attenuation, revocation, expiry, and single-use rules remain domain-owned?
 - Which parts of diagnostic allocation are semantic evolution rules and which

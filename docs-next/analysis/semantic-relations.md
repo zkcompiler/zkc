@@ -10,6 +10,12 @@
 > This document establishes no relation, property, cost, implementation, or
 > migration result.
 
+> **K1 transition notice — 2026-08-26:** The identity, canonical-value,
+> algorithm, dependency, and checked-result forms below predate
+> [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K3 must reconcile these Analysis families with the exact K1 substrate and
+> the K2 Protocol model; this page is not yet a K1-integrated calculus.
+
 ## 1. Scope and common contract
 
 This document defines the direct Analysis families for:

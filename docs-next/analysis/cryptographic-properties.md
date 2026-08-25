@@ -11,6 +11,12 @@
 > security property, implementation support, migration feasibility, or
 > consumer assurance.
 
+> **K1 transition notice — 2026-08-26:** Identity, value, algorithm, and
+> evaluation notation below predates
+> [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K3 must bind each theorem-applicability input to exact K1 identities and the
+> K2 Protocol/Fiat--Shamir model before any family here is integrated.
+
 ## 1. Scope and family architecture
 
 This document defines the target Analysis shape for completeness, soundness,

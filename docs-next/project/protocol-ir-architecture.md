@@ -12,6 +12,12 @@
 > The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns the live integrated-closure gate.
 
+> **K1 reconciliation notice — 2026-08-26:** The architectural factorization
+> remains a design input, but its identity, regime, value, algorithm, and
+> dependency notation predates [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K2/K3 must reconcile those exact consumer contracts before this page can be
+> read as an integrated semantic-kernel decision.
+
 ## 1. Decision
 
 The v0 target is a **layered canonical Protocol architecture**:

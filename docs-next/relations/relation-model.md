@@ -11,6 +11,17 @@
 > This document makes no implementation, migration, compatibility, or
 > downstream property-establishment claim.
 
+> **K1 transition notice — 2026-08-26:** The value, bridge-algorithm,
+> dependency, and `H(...)` identity forms retained below are pre-K1 Stage 3/4A
+> placeholders. [Executable Semantic Foundations](../foundation/executable-foundations.md)
+> owns the exact selected substrate. K3 must map each relation and Protocol domain contract to an
+> exact Foundation `ValueType`, replace identities with exact
+> `SemanticContentId<K>` bodies, and select explicit checked translation
+> subjects for cross-regime bridges. Such a bridge is a Foundation
+> `PortableAlgorithm` only when all reachable types share one exact semantic
+> regime; an external operation contract cannot inherit a portable denotation.
+> This page therefore does not yet establish K1-aligned Relations admission.
+
 ## 1. Scope and ownership
 
 This document defines the durable target model for relation-facing semantic

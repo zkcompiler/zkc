@@ -41,7 +41,7 @@ endpoint. Procedural adjacency alone is not a bridge-composition theorem.
 
 | Domain | Provisional subject | Primary boundary guardrail |
 |---|---|---|
-| `foundation/` | Shared identity, authority, admission, capability, encoding, extension, and evolution mechanisms | Accept only genuinely shared semantics; never become a universal transition runtime or absorb whole PIR/OIR vocabularies |
+| `foundation/` | Constitutional encoding and typed identity, same-regime semantic modules, domain-indexed values, bounded portable functions, typed completed failures, and deterministic evaluation control | Accept only genuinely shared semantics; never become a universal domain algebra, transition runtime, judgment, authority, capability, or resource policy |
 | `relations/` | External relation identities and interfaces, artifact interpretation, statement and witness ports, adapters, and correspondence | Keep relation admission, artifact interpretation, correspondence, satisfaction, and source compilation distinct |
 | `pir/` | Canonical Protocol semantics and lifecycle, formation, authentication, admission, composition, carrier, obligations, independently identified Protocol Interface and Prover Plan subjects, and admitted source/target subjects | Do not mirror MLIR; fold Interface or Plan identity into Protocol identity; or absorb property analysis, compiler search, endpoint behavior, or realization merely by convenience |
 | `analysis/` | Qualified property judgments, `FSCompile`, and property-specific transport over exact admitted subjects | Do not collect every domain-local predicate or turn search failure into a negative judgment |
@@ -145,8 +145,8 @@ Evidence appraisal, and reliance at their actual authority cuts.
 | Normalize to `CanonicalProtocolCandidate` | `pir/` | Form one canonical physical subject; any Interface or Plan candidate remains separately identified |
 | Authenticate canonical Protocol candidate | `pir/` | Recompute canonical form, identity, regime, and dependency closure; authentication is not whole-Protocol admission |
 | Admit authenticated Protocol | `pir/` | Establish the complete normative predicate and mint only process-local immutable authority |
-| Persist admitted Protocol | `pir/` using foundation transport mechanisms | Official persistence is admission-gated; bytes preserve representation and references, never local capability |
-| Decode Protocol carrier | `pir/` using foundation transport mechanisms | Parsing establishes only bounded carrier structure; it neither authenticates identity nor admits Protocol meaning |
+| Persist admitted Protocol | `pir/` using its carrier contract and Foundation canonical-content rules | Official persistence is admission-gated; Foundation does not define a transport contract, and persisted bytes or references never carry local capability |
+| Decode Protocol carrier | `pir/` using its carrier contract | Parsing establishes only bounded carrier structure; Foundation canonical decoding may establish canonical structural form for embedded values, but neither that nor carrier parsing performs typed owner admission or admits Protocol meaning |
 | Re-authenticate and re-admit decoded Protocol | `pir/` | Recompute identities and the whole-Protocol predicate under exact regimes and closure; never trust a stored admission marker |
 | Reopen admitted Protocol | `pir/` | Produce an independent mutable authoring branch with no output authority; the immutable source remains admitted |
 | Form `ProtocolInterface` or `ProverPlan` candidate | `pir/` | Candidate identity is an unauthoritative expectation over the exact Protocol reference |

@@ -5,13 +5,13 @@
 > **Provisional owner:** `project`, coordinating affected semantic owners
 > **Authority:** None. This page records an agreed method only; it changes no
 > target specification, decision, implementation claim, or Stage 4B state.
-> **Activated:** 2026-08-23 by explicit user instruction.
-> **Current gate:** Integrated semantic-kernel closure K0 is complete; K1
-> executable foundations is next and has not begun. R2 remains an evidence
-> track after the repaired `FRI-Grind-1` witness and retained T3 `P01`
-> Schnorr/Sigma result. `P02` is the next witness anchor and may run early as a
-> non-ratifying pressure probe, but its portfolio acceptance follows K1--K3.
-> Stage 4B remains inactive.
+> **Activated:** 2026-08-23
+> **Current gate:** Integrated semantic-kernel closure K0 and bounded K1
+> executable foundations are complete; K2 Protocol/Fiat--Shamir closure is
+> next. R2 remains an evidence track after the repaired `FRI-Grind-1` witness
+> and retained T3 `P01` Schnorr/Sigma result. `P02` is the next witness anchor
+> and may run early as a non-ratifying pressure probe, but its portfolio
+> acceptance follows K1--K3. Stage 4B remains inactive.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -42,8 +42,9 @@ does not claim that the current snapshot will remain unchanged.
 ## Current cycle records
 
 This section owns the inventory route for this package's direct pages and the
-`r2-protocol-witnesses/` subpackage. Links to individual R2 pages below are
-reader cross-references; the R2 README owns their inventory.
+`k1-executable-foundations/` and `r2-protocol-witnesses/` subpackages. Each
+subpackage README owns its direct children. Links to individual R2 pages below
+are reader cross-references rather than inventory edges.
 
 - [R0 Live Baseline](baseline.md) freezes the activation snapshot, authority,
   version-control boundary, and review-source provenance.
@@ -56,6 +57,9 @@ reader cross-references; the R2 README owns their inventory.
   records the post-P01 integrated closure verdict, the minimal downstream seams
   that may still pressure PIR, the kernel freeze gate, and the dependency-ordered
   implementation plan.
+- [K1 Executable Foundations](k1-executable-foundations/README.md) selects and
+  tests the shared bootstrap, identity, canonical-value, portable-algorithm,
+  failure, and deterministic-resource substrate required before K2.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,

@@ -9,6 +9,17 @@
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
 > This document makes no implementation, compatibility, or migration claim.
 
+> **K1 transition notice — 2026-08-26:** The `CanonicalAlgorithmSpec`,
+> `CanonicalSemanticValue`, dependency-bundle, and `H(...)` identity forms
+> retained below predate [Executable Semantic Foundations](../foundation/executable-foundations.md).
+> K2/K3 must decide whether
+> each codec is a same-regime PIR-refined `PortableAlgorithmRef` over exact
+> Foundation `ValueType`s or a separately checked representation bridge. Each
+> portable candidate then has its own derived primitive references and exact
+> required module closure; there is no mixed transitive primitive/module
+> closure and no Foundation authentication capability. Until that work, this
+> page does not establish K1-aligned Interface or Plan admission.
+
 ## 1. Scope and architectural position
 
 A Protocol fixes verifier-visible semantics. A `ProtocolInterface` and a
