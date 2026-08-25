@@ -11,22 +11,26 @@
 > and roadmap under [`docs/`](../../docs/README.md) retain their existing
 > authority until an explicit review and cutover.
 
-> **Stage 1--4A convergence — 2026-08-22:** The selected semantic root,
+> **Stage 1--4A package convergence — 2026-08-22:** The selected semantic root,
 > MLIR and carrier roles, identity boundary, representation levels, and
 > consumer interfaces are recorded by the
-> [Protocol IR Architecture](protocol-ir-architecture.md). The completed
+> [Protocol IR Architecture](protocol-ir-architecture.md). The selected
 > transition lifecycle, shared contract invariants, bridge ownership,
 > checker-selection rule, outcome model, and Stage 3 boundary are recorded by the
 > [Transition and Bridge Architecture](transition-and-bridge-architecture.md).
-> The completed Protocol, canonical PIR, Interface, Plan, Relations,
+> The selected Protocol, canonical PIR, Interface, Plan, Relations,
 > Fiat--Shamir, and semantic-composition model is recorded by the
 > [Protocol and Relations Architecture](protocol-and-relations-architecture.md)
-> and exact durable owners under `pir/` and `relations/`. The selected
+> and candidate target owners under `pir/` and `relations/`. The selected
 > family-indexed Analysis and five-plane validated-decision Compiler are
 > recorded by the
 > [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md)
-> and exact durable owners under `analysis/`, `compiler/`, and the Relations
-> satisfaction boundary. Stage 4B remains unactivated.
+> and candidate target owners under `analysis/`, `compiler/`, and the Relations
+> satisfaction boundary. These packages selected and promoted a coherent
+> candidate at their then-current resolution; they did not establish integrated
+> semantic-kernel closure or freeze. The
+> [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+> owns that live gate. Stage 4B remains unactivated.
 
 ## 1. Result of the first reconstruction package
 
@@ -51,9 +55,11 @@ live specifications and implementation:
 The original weakness was global rather than local: strong pieces existed, but
 not one complete typed model of their semantic objects, authority-bearing
 transitions, correspondence obligations, refusal boundaries, and independently
-qualified admission states. Stages 1--4A now close that model through Analysis
-and bounded Protocol selection. Later OIR, Realization, cross-system
-capability, Evidence, consolidation, and implementation packages remain. The selected
+qualified admission states. Stages 1--4A selected and distributed a typed
+candidate model through Analysis and bounded Protocol selection. Post-selection
+revalidation has not yet established it as a closed, independently
+implementable semantic kernel. Later OIR, Realization, cross-system capability,
+Evidence, consolidation, and implementation packages remain. The selected
 backbone for v0 is therefore a **typed subject-and-transition architecture**,
 not a new universal IR, a universal transition runtime type, or a
 documentation tree treated as an architecture.
@@ -744,15 +750,17 @@ through the
 Protocol/PIR lifecycle retained as historical baseline evidence. Stage 2 also
 completed the research package routed through that inventory and selected the
 [Transition and Bridge Architecture](transition-and-bridge-architecture.md).
-Stage 3 completed and selected the
+Stage 3 completed its bounded package and selected the
 [Protocol and Relations Architecture](protocol-and-relations-architecture.md),
-with exact target contracts under `pir/` and `relations/`. Stage 4A completed
-and selected the
+with candidate target contracts promoted at package resolution under `pir/`
+and `relations/`. Stage 4A completed its bounded package and selected the
 [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md),
-with exact target contracts under `analysis/` and `compiler/`, the Relations
+with candidate target contracts promoted at package resolution under
+`analysis/` and `compiler/`, the Relations
 satisfaction/correspondence boundary, and the four PIR semantic pages refined
-for owner-created source bindings and qualified outcomes. Stage 4B remains
-unactivated.
+for owner-created source bindings and qualified outcomes. Those historical
+package results do not establish current integrated closure; the design program
+owns that gate. Stage 4B remains unactivated.
 
 ## 12. Deliberate non-decisions
 

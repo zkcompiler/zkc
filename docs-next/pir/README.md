@@ -5,11 +5,17 @@
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current protocol semantics remain
 > governed by the relevant [normative specifications](../../docs/spec/overview.md).
+> **Closure interpretation:** This index records a selected package-resolution
+> target. `Selected`, `target`, and `exact` describe intended role, scope, and
+> ownership; they do not assert integrated definition closure or semantic
+> freeze. The [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
+> owns the live gate.
 
 ## Purpose
 
 Stage 1 selected `pir/` as the conceptual owner of a distinct small closed
-canonical Protocol level in MLIR. Stage 3 completed that target: PIR denotes
+canonical Protocol level in MLIR. Stage 3 selected and promoted a candidate at
+its package resolution: in that candidate, PIR denotes
 exactly one Protocol under one typed semantic regime, with one physically
 canonical carrier bijective to a finite language-independent operational
 model. Rich authoring, import, and synthesis forms remain in an upstream MLIR
@@ -22,10 +28,10 @@ contract. The selected
 [Transition and Bridge Architecture](../project/transition-and-bridge-architecture.md)
 fixes the Protocol lifecycle and its downstream authority boundaries. The
 selected [Protocol and Relations Architecture](../project/protocol-and-relations-architecture.md)
-fixes the completed Stage 3 integration and alternatives. The completed
+records the Stage 3 package-selection snapshot and alternatives. The completed
 research packages, routed through the
 [temporary workspace inventory](../notes/README.md#working-note-inventory),
-preserves the comparative evidence. Current normative Protocol semantics
+preserve the comparative evidence. Current normative Protocol semantics
 remain under `docs/` until explicit cutover.
 
 ## Owns
@@ -144,8 +150,8 @@ first being found by the optimizer or successfully projected to every target.
 - [Candidate Protocol Subject and Lifecycle](protocol-lifecycle.md)
 
 The two project architecture pages are selected non-normative Stage 1 and
-Stage 3 decisions. The four target semantic specifications promote the exact
-Stage 3 model into durable owners; Stage 4A further refines those same pages
+Stage 3 decisions. The four target semantic specifications are candidate owners
+promoted at Stage 3 package resolution; Stage 4A further refined those pages
 with owner-created admitted-subject and checked-result bindings, exact
 qualified-outcome exports, and total transitive source-policy closure at every
 Analysis/Compiler ingress. The lifecycle page is the superseded
@@ -180,11 +186,17 @@ authenticates and admits the target, the relation-specific bridge checks the
 predecessor/successor relation, and only then may Compiler select or Analysis
 transport a property. Target admission alone proves no source/target relation.
 
-## Remaining later-owner questions
+## Reopened integrated-closure and later-owner questions
 
-Stage 3 closed the Core/Protocol grammar, canonical carrier, Interface, Plan,
-Fiat--Shamir construction, and structural Core-composition questions at target
-design resolution. The remaining questions belong to later owners:
+Stage 3 selected the Core/Protocol grammar, canonical carrier, Interface, Plan,
+Fiat--Shamir construction, and structural Core-composition candidate at its
+then-current resolution. Post-selection revalidation reopened the exact kernel
+closure. Before freeze, Foundation and PIR must close executable regimes,
+values, algorithms and ABIs; causal strategy-generated execution; target-native
+non-regression against the pinned current contract; strong
+Statement/required-influence/public-coin and squeeze/sample laws; exact
+Core/extension choices; and the minimum
+Relations/Analysis/OIR read questions. After that closure, later work includes:
 
 - Stage 4A selected the exact Analysis model families and theorem/profile
   architecture for `FSCompile`, composition properties, and property

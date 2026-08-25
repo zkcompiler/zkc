@@ -2,12 +2,15 @@
 
 > **Document kind:** Architecture decision
 > **Document state:** Active
-> **Target decision status:** Selected Stage 3 target
+> **Target decision status:** Selected Stage 3 package result; integrated
+> semantic-kernel closure remains under revalidation
 > **Provisional owner:** `project`
 > **Authority:** Non-normative target architecture for `docs-next/`. The
 > current specifications under [`docs/`](../../docs/README.md) remain
 > authoritative until normative consolidation, review, and explicit cutover.
 > This decision does not claim implementation or migration.
+> The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+> owns the live integrated-closure gate.
 > **Frozen research basis:** target model SHA-256
 > `107255938efa6af7802030b93bdbc9dcb4d5535335866cffa304df33083a7f5b`;
 > equal-resolution candidate portfolio SHA-256
@@ -535,7 +538,8 @@ compatibility promise.
 ## 13. Stage 4 split and handoff
 
 Stage 4 is split into two coordinated branches. This Stage 3 decision activated
-neither branch. Stage 4A was subsequently activated and completed by the
+neither branch. Stage 4A was subsequently activated and completed its bounded
+package through the
 [Selected Analysis and Compiler Architecture](analysis-and-compiler-architecture.md);
 Stage 4B remains unactivated. Each branch consumes the same admitted Stage 3
 subjects and preserves the selected ownership and noninterference rules.
@@ -543,7 +547,7 @@ subjects and preserves the selected ownership and noninterference rules.
 ### 13.1 Stage 4A: Analysis, then Compiler
 
 Analysis owns semantic questions, properties, assumptions, models, theorem
-bases, derivations, and judgments. The completed Stage 4A design defines:
+bases, derivations, and judgments. The Stage 4A package candidate defines:
 
 - equivalence, refinement, intentional change, distributional, and property
   questions over exact admitted views;
@@ -590,10 +594,11 @@ and occurrence structure, Plan constraints, and explicit judgment signatures.
 
 ### 13.3 Cross-branch checkpoint
 
-Stage 4A performed this checkpoint against the dormant Stage 4B boundary and
-retained an exact handoff contract rather than inventing OIR facts. Before Stage
-4B closes, its selected design must reconcile the same items against the frozen
-Stage 4A output:
+Stage 4A performed this package checkpoint against the dormant Stage 4B
+boundary and retained a candidate handoff contract rather than inventing OIR
+facts. Before Stage 4B closes, its selected design must reconcile the same
+items against the then-frozen Stage 4A package output and any changes accepted
+by integrated revalidation:
 
 - protected observations and effect classes;
 - Protocol, Interface, Plan, successor, and OIR identity dependencies;
@@ -658,7 +663,7 @@ future Stage 4 and later schemas, and all eventual normative rules, belong with
 their domain owners under `pir/`, `relations/`, `analysis/`, `compiler/`,
 `oir/`, and `realization/`.
 
-The complete promoted Stage 3 target is split across six exact durable owners:
+The promoted Stage 3 package candidate is split across six durable owners:
 
 - [Protocol Semantic Model](../pir/protocol-model.md) owns Core, Protocol,
   execution, failure, obligation, and admitted-view semantics;

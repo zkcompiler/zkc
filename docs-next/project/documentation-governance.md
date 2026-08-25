@@ -155,7 +155,7 @@ are rewritten into the exact durable owners; rejected or deferred conclusions
 receive a rationale or roadmap destination where needed. Absorption never means
 that a specification links back to the note.
 
-## 4. Three independent state axes
+## 4. Four independent state axes
 
 Never compress these axes into one word such as “supported” or “valid”:
 
@@ -164,10 +164,21 @@ Never compress these axes into one word such as “supported” or “valid”:
    or deprecated, where the owning specification defines the exact meaning.
 3. **Implementation state:** implemented, bounded, partial, absent, or
    unverified, owned only by global status and its cited evidence.
+4. **Design-research package state:** active, historical package complete,
+   reopened, or retired, owned by the design program and package record.
 
 An admitted semantic contract may be unimplemented. A passing implementation
 may exercise a provisional surface. A reserved name may have code experiments
 without defining an accepted contract.
+
+`Complete` for a research stage means only that the bounded package met its
+recorded exit gate at its then-current resolution and selected material for
+promotion. It does not mean that promoted pages are mutually closed,
+independently implementable, semantically frozen, admitted, normative, or ready
+for cutover. The
+[v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+owns the live integrated-design closure gate; global status remains the sole
+owner of implementation support.
 
 The baseline meanings for surface maturity are:
 

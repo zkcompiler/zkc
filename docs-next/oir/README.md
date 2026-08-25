@@ -2,7 +2,9 @@
 
 > **Document kind:** Domain index
 > **Document state:** Scaffold
-> **Target alignment:** Stage 3 input boundary closed; Stage 4B not activated
+> **Target alignment:** Stage 3 package boundary selected; the minimum
+> PIR-to-OIR read seam is active as semantic-kernel pressure, while full Stage
+> 4B OIR design remains unactivated
 > **Provisional owner:** `oir`
 > **Authority:** None during the transition. Current endpoint semantics remain
 > governed by the [Endpoints](../../docs/spec/endpoints.md),

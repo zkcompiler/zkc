@@ -6,6 +6,11 @@
 > **Provisional owner:** `compiler`
 > **Authority:** None during the transition. Current compiler semantics remain
 > governed by the [Compiler Core specification](../../docs/spec/compiler.md).
+> **Closure interpretation:** This index records a selected package-resolution
+> target. `Selected`, `target`, and `exact` describe intended role, scope, and
+> ownership; they do not assert integrated definition closure or semantic
+> freeze. The [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
+> owns the live gate.
 
 ## Purpose
 
@@ -170,20 +175,23 @@ own preimage names a local handle is nonpersistable and has no exact cold replay
 - [Proposals, Transitions, and Candidate Domains](proposals-relations-and-domains.md)
 - [Assessment, Selection, and Replay](assessment-selection-and-replay.md)
 
-These pages are durable non-normative Stage 4A targets. The current Compiler
-Core specification under `docs/` remains authoritative until explicit
-normative consolidation and cutover.
+These pages are durable non-normative Stage 4A candidate targets at package
+resolution. The current Compiler Core specification under `docs/` remains
+authoritative until explicit normative consolidation and cutover.
 
-## Remaining later work
+## Reopened dependency boundary and later work
 
-Stage 4A closed problem, policy, operational search, frozen proposal scope,
-per-alternative target admission and transition qualification, total alternative resolution,
-problem-local legality, candidate and comparison domains, assessment inputs,
-typed constraints/objectives, decisions, open reports, replay, trust, and
-Stage 4B/Evidence firewalls at target design resolution. It did not select
-concrete transform families, producer algorithms, checkers, certificate
-formats, objective profiles, wire encodings, storage policies, or
-implementation organization.
+Stage 4A selected problem, policy, operational search, frozen proposal scope,
+per-alternative target admission and transition qualification, total
+alternative resolution, problem-local legality, candidate and comparison
+domains, assessment inputs, typed constraints/objectives, decisions, open
+reports, replay, trust, and Stage 4B/Evidence firewalls at its then-current
+package resolution. The five-plane separation remains a candidate, not a
+validated integrated Compiler contract. Its closure is downstream of frozen
+PIR, Relations, and Analysis inputs and must be rechecked against those exact
+subjects and results. Later work includes concrete transform families,
+producer algorithms, checkers, certificate formats, objective profiles, wire
+encodings, storage policies, and implementation organization.
 
 Stage 4B may export exact endpoint-owned facts under the selected association
 contract but remains unactivated. Stage 5 tests the joined capability surface.

@@ -5,17 +5,23 @@
 > **Provisional owner:** `relations`
 > **Authority:** None during the transition. Current relation semantics remain
 > governed by the [Relations specification](../../docs/spec/relations.md).
+> **Closure interpretation:** This index records a selected package-resolution
+> target. `Selected`, `target`, and `exact` describe intended role, scope, and
+> ownership; they do not assert integrated definition closure or semantic
+> freeze. The [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
+> owns the live gate.
 
 ## Purpose
 
 `relations/` owns zkc's boundary to already formed relations. Stage 2 divided
 that boundary into three non-collapsible contracts: relation-interface
 admission, optional relation-artifact interpretation, and post-admission
-correspondence to an exact Protocol Interface. Stage 3 completed their exact
-target ontology, identity, binding, grounding, checking, outcome, and replay
-contracts. Stage 4A then assigned exact occurrence-local relation satisfaction
-to Relations. Subject admission and correspondence still do not imply that
-zkc compiled the predicate, generated a satisfying witness, or established
+correspondence to an exact Protocol Interface. Stage 3 selected a candidate
+ontology, identity, binding, grounding, checking, outcome, and replay model at
+its package resolution. Stage 4A then assigned candidate occurrence-local
+relation satisfaction semantics to Relations. Integrated closure remains
+reopened. Subject admission and correspondence still do not imply that zkc
+compiled the predicate, generated a satisfying witness, or established
 satisfaction.
 
 ## Owns
@@ -150,20 +156,23 @@ remain under `oir/`.
 - [Protocol Correspondence](protocol-correspondence.md)
 - [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md)
 
-These pages are durable non-normative Stage 3 and Stage 4A targets. The current
-Relations specification under `docs/` remains authoritative until explicit
-normative consolidation and cutover.
+These pages are durable non-normative Stage 3 and Stage 4A candidate targets at
+their package resolution. The current Relations specification under `docs/`
+remains authoritative until explicit normative consolidation and cutover.
 
-## Remaining later-owner questions
+## Reopened integrated-closure and later-owner questions
 
-Stage 3 closed relation-interface identity and admission, occurrence-indexed
-instance/witness assignments, bidirectional value bridges, artifact
-observation and comparison, committed-object grounding, and exact Protocol
-correspondence at target design resolution. Stage 4A closed the generic
-relation-satisfaction ownership, model, outcome, confidentiality, and replay
-contract and reconciled structural and public-instance Protocol correspondence
-with the exact checked-result binding, source-policy closure, and portable/local
-replay law consumed by Analysis and Compiler. Later owners must still define:
+Stage 3 selected relation-interface identity and admission,
+occurrence-indexed instance/witness assignments, value bridges, artifact
+observation and comparison, committed-object grounding, and Protocol
+correspondence at its then-current package resolution. Stage 4A selected the
+generic relation-satisfaction ownership, model, outcome, confidentiality, and
+replay contract and reconciled its candidate Analysis/Compiler ingress.
+Post-selection revalidation reopened the exact grounding equations, fact
+algebra and selectors, reachable checked prerequisites, relation-facing
+Witness surface, lossless equivalence and embedding, priced lossy projection,
+and directional result meaning. After those pre-freeze questions close, later
+owners must still define:
 
 - any relation-source compilation language or checked source-to-definition
   relation;

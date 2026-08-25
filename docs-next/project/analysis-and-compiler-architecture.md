@@ -2,13 +2,16 @@
 
 > **Document kind:** Architecture decision
 > **Document state:** Active
-> **Target decision status:** Selected Stage 4A target
+> **Target decision status:** Selected Stage 4A package result; integrated
+> semantic-kernel closure remains under revalidation
 > **Provisional owner:** `project`
 > **Authority:** Non-normative target architecture for `docs-next/`. The
 > current specifications under [`docs/`](../../docs/README.md) remain
 > authoritative until normative consolidation, review, and explicit cutover.
 > This decision does not establish a property, compiler result, implementation,
 > migration, or Stage 4B activation.
+> The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+> owns the live integrated-closure gate.
 > **Frozen research basis:** integrated target SHA-256
 > `7729b1043e6f3ca1e77ce617327e3e9a959b8442f54da61a9e21ab9cb4fbabf3`;
 > equal-resolution candidate portfolio SHA-256
@@ -691,8 +694,10 @@ feasibility, compatibility, performance, endpoint support, or release result.
 
 ## 11. Evolution and reversal conditions
 
-The semantic surface is closed by exact family and Compiler policy profiles;
-production is replaceable. Unknown meaning-bearing tags are `Unsupported`.
+The package candidate bounds its semantic surface by exact family and Compiler
+policy profiles while keeping production replaceable. Integrated revalidation
+must still establish that those profiles and their upstream read contracts are
+closed and sufficient. Unknown meaning-bearing tags are `Unsupported`.
 Dynamic registration cannot create semantic authority.
 
 Reconsider the selected center only if independently reviewed evidence shows:
@@ -718,7 +723,7 @@ not by itself a semantic reversal trigger.
 
 ## 12. Durable semantic owners and next boundary
 
-The exact target is split by meaning:
+The package-resolution candidate target is split by meaning:
 
 - [Canonical PIR](../pir/canonical-pir.md), [Protocol semantic
   model](../pir/protocol-model.md), [Interfaces and Prover

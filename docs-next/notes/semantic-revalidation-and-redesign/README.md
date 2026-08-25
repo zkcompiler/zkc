@@ -6,12 +6,12 @@
 > **Authority:** None. This page records an agreed method only; it changes no
 > target specification, decision, implementation claim, or Stage 4B state.
 > **Activated:** 2026-08-23 by explicit user instruction.
-> **Current gate:** R1 is complete. R2 remains active after the repaired
-> `FRI-Grind-1` witness passed refreeze and context-isolated non-authoring
-> replay. A differentiated ZK-protocol expressibility portfolio is selected;
-> `P01` Schnorr/Sigma is retained at T3 after repaired refreeze and two clean
-> exact-snapshot cold rechecks. `P02` is the next queued anchor but has not
-> begun. Stage 4B remains inactive.
+> **Current gate:** Integrated semantic-kernel closure K0 is complete; K1
+> executable foundations is next and has not begun. R2 remains an evidence
+> track after the repaired `FRI-Grind-1` witness and retained T3 `P01`
+> Schnorr/Sigma result. `P02` is the next witness anchor and may run early as a
+> non-ratifying pressure probe, but its portfolio acceptance follows K1--K3.
+> Stage 4B remains inactive.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 

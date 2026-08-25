@@ -27,6 +27,12 @@ The execution model should be a small global skeleton followed by
 dependency-ordered vertical slices. The current `docs/` and implementation
 remain authoritative until an explicit cutover.
 
+**Current execution position:** K0 completed on 2026-08-25. K1 executable
+foundations is next and has not begun. The R2 protocol-witness track remains an
+evidence source; a P02 probe may inform an earlier question, but P02 cannot
+close its portfolio gate before K1--K3 establish the substrate it is meant to
+test. Stage 4B remains inactive.
+
 ## 2. Stable architecture spine
 
 Carry these choices forward unless a named falsifier fires or a real protocol
@@ -58,19 +64,24 @@ these separations.
 
 ## 3. Integrated closure audit
 
-| Area | Result | Consequence |
-|---|---|---|
-| Subject and authority factorization | Coherent | Carry forward as the default architecture. |
-| Regime, value, algorithm, ABI, totality, and resource foundations | Open | Identities and admission are not constructible from durable target pages alone. |
-| Core execution | Open | Trace replay exists, but a causal strategy-generated execution relation does not. |
-| Strong Fiat--Shamir structure | Open regression | Required influence, mandatory Statement initialization, public-coin eligibility, and the squeeze/sample ABI must be structurally closed. |
-| Fresh/FS relation | Promising, not frozen | P01 supplies bounded evidence; native IOR/FRI and shared-declaration pressure remain. |
-| Core algebra and extension model | Open selections | Claims, failures, terminals, effects, and vocabulary evolution still have reachable falsifiers. |
-| Relations boundary | Open co-design seam | Witness surface, fact algebra, grounding, bridge kinds, and directional result meaning can change PIR-facing types. |
-| Analysis boundary | Partially stable | Family separation is stable; strategy, theorem grounding, loss hooks, and the three-way FS read contract are not. |
-| OIR boundary | Inactive but relevant | Full semantics is deferred, but its projection-obligation read contract must be known before PIR freeze. |
-| Compiler, Realization, and Evidence | Deferrable | They may consume frozen subjects and checked results but may not add Core meaning by backflow. |
-| Documentation and protocol evidence | Open | Required symbols remain undefined, temporary dependencies remain, and only P01 has reached its assigned deep protocol gate. |
+Every executable falsifier below must include an unchanged same-boundary
+positive control, as required by the
+[non-regression baseline](invariant-ledger.md#7-target-owes-shipped-non-regression-baseline).
+A pure reopening condition is not itself a closure test.
+
+| Area | Result | Closing owner | Executable falsifier or gate |
+|---|---|---|---|
+| Subject and authority factorization | Coherent | Project and PIR | Reopen if a bounded protocol needs ambient state, a shadow Protocol schema, or Interface/Plan variation changes a Protocol-only observation. |
+| Regime, value, algorithm, ABI, totality, and resource foundations | Open | Foundation mechanism plus each exact semantic domain | Two independent evaluators must agree on identity, support, canonical values, algorithm steps, totality evidence, failures, and bounds; wrong-kind, noncanonical, partial, unsupported, and exhausted cases must refuse at the named boundary. |
+| Core execution | Open | PIR execution structure; Analysis strategy classes | An honest online execution and replay must agree, while a trace whose early prover move depends on a future challenge must replay but fail strategy generation. |
+| Strong Fiat--Shamir structure | Open regression | PIR structural admission | Run [J1](invariant-ledger.md#71-semantic-guarantees): target acceptance of an omitted/late Statement, Wire-only required proof message, wrong prefix, reused challenge namespace, or verifier-private influence fails the gate. |
+| Fresh/FS relation | Promising, not frozen | PIR construction; Analysis theorem applicability | A native Fresh/FS FRI or IOR pair must preserve one declaration through structural maps; a mismatched map, context, or related-Core claim must fail at the declared relation rather than disappear into Analysis. |
+| Core algebra and extension model | Open selections | PIR | Run each registered Core/extension fork on a shared substrate whose output can differ; the unchanged supported base vocabulary is the positive control. A locally supported extension that rotates unrelated meaning, an unknown constructor that admits, or a rejected control fails the gate. |
+| Relations boundary | Open co-design seam | PIR surfaces, Relations semantics, Analysis loss | A relation-bound R1CS/AIR or Sumcheck fixture must distinguish Statement, Witness, private nonwitness, grounding, lossless bridge, and priced lossy projection; an opaque carrier escape or unpriced projection fails. |
+| Analysis boundary | Partially stable | Analysis, reading PIR-owned views | Instantiate one primary-source FS theorem over causal target execution and one relation-bound property; wrong model, strategy, correspondence, hypothesis, or loss occurrence must change the qualified result. |
+| OIR boundary | Inactive but relevant | PIR source obligations; OIR projection relation | Project both roles, then drop one required effect, add phantom provenance, change a discharge family, and exercise the bounded imported-verification shape with typed `Unsupported` where projection remains unimplemented. Local validity must not survive as source-relative correctness. |
+| Compiler, Realization, and Evidence | Deferrable | Their later domain owners | They remain outside kernel closure unless a concrete feasibility/cost counterexample shows that a frozen source fact is insufficient; no downstream result may add Protocol meaning by backflow. |
+| Documentation and protocol evidence | Open | Project governance and exact evidence producer | Hide `notes/`, run manifest/link/symbol-owner reconstruction, and cold-implement the frozen kernel; separately complete the differentiated protocol portfolio at its assigned strengths. Any missing definition, hidden dependency, or self-authored success fact fails. |
 
 No contradiction found in this audit invalidates the central factorization.
 The failure is closure: some exact-looking identities and judgments depend on
@@ -116,6 +127,11 @@ owner. Before semantic-kernel freeze it must close these dependency groups:
    encodings; price new capabilities; and remove undefined required symbols and
    temporary semantic dependencies.
 
+The exact pre-freeze questions are frozen in the invariant ledger's
+[minimum consumer question set](invariant-ledger.md#8-minimum-pre-freeze-consumer-questions).
+It freezes required questions, not the current target's answers. Adding,
+removing, or answering one through ambient carrier access reopens K0.
+
 The unfinished domains have different upstream force:
 
 | Domain | What must be co-designed before PIR freeze | What remains downstream |
@@ -133,12 +149,18 @@ explicit kernel reopening, witness, and regime decision.
 
 ## 5. Execution plan
 
-### K0 — Freeze contract and regression baseline
+### K0 — Freeze contract and regression baseline — complete 2026-08-25
 
 - add one target-owes-shipped section to the invariant ledger;
 - reconcile historical stage labels with the integrated closure gate;
 - give every open finding one owner and one executable falsifier; and
 - freeze the minimum Relations, Analysis, and OIR questions PIR must answer.
+
+K0 closed those control obligations in the
+[non-regression baseline](invariant-ledger.md#7-target-owes-shipped-non-regression-baseline),
+[consumer question set](invariant-ledger.md#8-minimum-pre-freeze-consumer-questions),
+and this page's owner/falsifier audit. It selected no K1 representation and
+does not count any unrun falsifier as passed.
 
 ### K1 — Executable foundations
 

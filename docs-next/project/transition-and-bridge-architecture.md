@@ -2,13 +2,16 @@
 
 > **Document kind:** Architecture decision
 > **Document state:** Active
-> **Target decision status:** Selected Stage 2 target
+> **Target decision status:** Selected Stage 2 package result; integrated
+> semantic-kernel closure remains under revalidation
 > **Provisional owner:** `project`
 > **Authority:** Non-normative target architecture for `docs-next/`. The
 > current specifications under [`docs/`](../../docs/README.md) remain
 > authoritative until normative consolidation and explicit cutover. This page
 > selects the v0 transition architecture; it does not select public APIs, wire
 > formats, exact domain schemas, or implementation.
+> The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+> owns the live integrated-closure gate.
 
 ## 1. Decision
 
@@ -533,21 +536,21 @@ Stage 2 did not select:
   genuinely smaller independent validator; or
 - an implementation migration sequence or conformance claim.
 
-Stage 3 subsequently closed the Protocol, canonical PIR, Interface, Plan,
-Relations, Fresh-to-Fiat--Shamir, and semantic Core-composition contracts at
-non-normative target resolution. Analysis, Compiler, OIR, Realization,
-Evidence, concrete encodings and checkers, compatibility, implementation, and
-migration remain with their later owners. Historical deferrals cannot justify
-ambient inputs, generic validity,
+Stage 3 subsequently selected candidate Protocol, canonical PIR, Interface,
+Plan, Relations, Fresh-to-Fiat--Shamir, and semantic Core-composition contracts
+at its non-normative package resolution. Their integrated closure is reopened.
+Analysis, Compiler, OIR, Realization, Evidence, concrete encodings and
+checkers, compatibility, implementation, and migration remain with their later
+owners. Historical deferrals cannot justify ambient inputs, generic validity,
 serialized local authority, source coverage inferred from source-free targets,
 or policy backflow.
 
 The durable [v0 Semantic Design Program](v0-design-program.md) owns the stage
-sequence and exit gates. Stage 3 completed under the selected
+sequence and exit gates. Stage 3 completed its bounded package under the selected
 [Protocol and Relations Architecture](protocol-and-relations-architecture.md).
 A detailed historical handoff remains in the completed Stage 2 research
-package, but no durable decision depends on retaining it. Stage 4A
-subsequently completed under the selected [Analysis and Compiler
+package, but no durable decision depends on retaining it. Stage 4A subsequently
+completed its bounded package under the selected [Analysis and Compiler
 Architecture](analysis-and-compiler-architecture.md); Stage 4B remains
 unactivated.
 

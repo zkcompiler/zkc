@@ -46,7 +46,7 @@ authority over the current corpus under `docs/` before explicit cutover.
 | [`foundation/README.md`](../foundation/README.md) | Domain index | `foundation` | Shared semantic substrate boundary |
 | [`pir/README.md`](../pir/README.md) | Domain index | `pir` | Protocol semantic object and lifecycle boundary |
 | [`pir/protocol-lifecycle.md`](../pir/protocol-lifecycle.md) | Architecture proposal | `pir` | Superseded first Stage 1 baseline for Protocol root, identity, carrier, authority graph, admission, and lifecycle |
-| [`pir/protocol-model.md`](../pir/protocol-model.md) | Target semantic specification | `pir` | Complete finite operational InteractiveCore and Protocol model, identity, execution, admission, outcomes, and views |
+| [`pir/protocol-model.md`](../pir/protocol-model.md) | Target semantic specification | `pir` | Candidate finite operational InteractiveCore and Protocol model, identity, execution, admission, outcomes, and views |
 | [`pir/canonical-pir.md`](../pir/canonical-pir.md) | Target semantic specification | `pir` | One-root canonical MLIR PIR profile, semantic bijection, authentication, admission, information-loss, persistence, and replay contract |
 | [`pir/interfaces-and-plans.md`](../pir/interfaces-and-plans.md) | Target semantic specification | `pir` | Independently identified Protocol Interface and Prover Plan subjects, codecs, admission, PlanRealizes, and downstream exports |
 | [`pir/fiat-shamir-and-composition.md`](../pir/fiat-shamir-and-composition.md) | Target semantic specification | `pir` | Transcript construction, Fresh-to-Fiat--Shamir structural construction, semantic Core composition, checked maps, outcomes, and replay |

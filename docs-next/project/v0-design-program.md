@@ -2,8 +2,10 @@
 
 > **Document kind:** Design-research execution plan
 > **Document state:** Active
-> **Program status:** Active design-research program; Stages 0--4A complete;
-> Stage 4B entry ready but not activated
+> **Program status:** Active. Stages 0--4A are historically package-complete at
+> their recorded selection gates. Integrated semantic-kernel closure K0
+> completed on 2026-08-25; K1 is next, the kernel is not frozen, and Stage 4B
+> remains unactivated.
 > **Provisional owner:** `project`
 > **Authority:** This is the single execution plan for semantic redesign inside
 > `docs-next/`. It does not replace current product planning or roadmap
@@ -155,8 +157,9 @@ avoid both accidental duplicate sources of truth and premature rejection of a
 second representation whose independent purpose, laws, and synchronization
 mechanism have actually been established.
 
-This exit condition is satisfied. Stage 1 was reopened and completed on
-2026-08-22. Its research record is routed through the
+This bounded package exit condition was judged satisfied at its then-current
+resolution. Stage 1 was reopened and completed on 2026-08-22. Its research
+record is routed through the
 [temporary workspace inventory](../notes/README.md#working-note-inventory), and
 its durable result is the
 [Protocol IR Architecture](protocol-ir-architecture.md). The
@@ -182,9 +185,10 @@ The package was reopened because:
 - the ideal target must be designed before compatibility and migration cost
   are allowed to constrain it.
 
-At Stage 1 closure, Stage 2 remained paused by the program boundary even though
-its source subject vocabulary was selected. Its earlier work was retained as
-observations, scenarios, and counterexamples rather than ratified contracts.
+At Stage 1 package closure, Stage 2 remained paused by the program boundary even
+though its source subject vocabulary was selected. Its earlier work was
+retained as observations, scenarios, and counterexamples rather than ratified
+contracts.
 Stage 2 was subsequently activated and completed on 2026-08-22 by explicit
 direction. That research authorization did not authorize implementation
 change, migration, normative cutover, or Stage 3.
@@ -238,7 +242,8 @@ every result valid. Later domain packages can refine their own subjects without
 inventing hidden transition inputs or silently moving fields across the Stage
 1 Protocol, Interface, and ProverPlan boundaries.
 
-This exit condition is satisfied. Stage 2 completed on 2026-08-22. Its
+This exit condition was judged satisfied at the package's then-current
+resolution. Stage 2 completed on 2026-08-22. Its
 research record is routed through the
 [temporary workspace inventory](../notes/README.md#working-note-inventory), and
 its durable result is the
@@ -255,10 +260,11 @@ subsequently activated at the bounded Stage 3.0 charter and intake gate.
 
 ### Current position
 
-Stage 3 completed on 2026-08-22. Its temporary package, routed through the
+Stage 3 completed its bounded research package on 2026-08-22. Its temporary
+package, routed through the
 [temporary workspace inventory](../notes/README.md#working-note-inventory),
 completed current reconstruction, open design-space and primary-source
-research, five equal-resolution candidates, a frozen integrated target,
+research, five equal-resolution candidates, a frozen package-selection snapshot,
 cross-cutting matrices, sixteen symbolic scenarios, independent parity and
 source-transfer audits, convergence, durable promotion, and separate Stage 4A
 and Stage 4B handoffs.
@@ -267,8 +273,10 @@ The selected [Protocol and Relations Architecture](protocol-and-relations-archit
 uses one finite language-independent operational Core/Protocol algebra, one
 physically canonical bijective MLIR PIR carrier, and independently identified
 Interface, Plan, relation, transcript-construction, and composition subjects.
-The exact target contracts are owned by `pir/` and `relations/`. This program
-state does not make them normative, implemented, migration-ready, or proven.
+Candidate target contracts promoted at package resolution are owned by `pir/`
+and `relations/`. This historical package result does not establish integrated
+semantic closure and does not make the contracts normative, implemented,
+migration-ready, or proven.
 
 ### Central question
 
@@ -315,17 +323,22 @@ credible future sources without using one object in incompatible authority
 roles. Structural composition is defined; property and endpoint consequences
 remain explicit inputs to later stages.
 
-This exit condition is satisfied. The selected model, alternatives,
+This exit condition was judged satisfied at the package's then-current
+resolution. The selected model, alternatives,
 reversals, exact non-claims, and downstream seams were promoted to durable
-target owners. Both Stage 4 entry contracts are complete and mutually
-consistent. No Stage 4 branch was activated by Stage 3 closure.
+target owners. Both Stage 4 entry contracts were locally complete and mutually
+consistent at that snapshot. Post-selection revalidation has reopened
+integrated kernel closure without erasing the historical package result. No
+Stage 4 branch was activated by Stage 3 closure.
 
 ## 8. Stage 4 — two coordinated branches
 
 Stage 4 begins only after the shared Protocol subject and relation boundary are
-provisionally stable. Stage 3 has now satisfied that prerequisite, but a branch
-still requires explicit activation under its own entry contract. Exploratory
-work may begin earlier, but final decisions return to the shared contracts.
+provisionally stable. Stage 3 was judged to satisfy that prerequisite at its
+package resolution, but post-selection revalidation has reopened the integrated
+kernel. A branch still requires explicit activation under its own entry
+contract. Exploratory work may begin earlier, but final decisions return to the
+shared contracts.
 
 `ProtocolInterface` and `ProverPlan` remain cross-package seams throughout
 Stage 4. Each branch may refine the fields it consumes, but shared ownership,
@@ -364,12 +377,13 @@ Compiler then determines:
 Compiler requirements may reopen the provisional Analysis envelope, but they
 cannot make optimization policy part of property meaning.
 
-**Selected Stage 4A result:** a federated typed Analysis calculus separates
+**Selected Stage 4A package result:** at its then-current resolution, a
+federated typed Analysis calculus separates
 family semantic profiles from basis, support, validation, operation, and replay
 identities. A five-plane validated-decision Compiler separates problem,
 production, proposal resolution, qualification/assessment, and decision. Its
 semantic `CandidateDomain` is distinct from the policy-derived
-`ComparisonAlternativeDomain`. Exact durable owners are routed through the
+`ComparisonAlternativeDomain`. Candidate target owners are routed through the
 [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md).
 
 ### Stage 4B — OIR, then Realization
@@ -410,8 +424,9 @@ Before the branches rejoin for Stage 5, both branches reconcile:
 ### Exit condition
 
 Each branch may close locally when its own contracts, peer-input boundary, and
-noninterference rules are exact. Stage 4A has done so against the frozen Stage
-4B entry contract without activating or deciding Stage 4B. The combined Stage
+noninterference rules are exact. Stage 4A selected a locally coherent candidate
+at its then-current resolution against the frozen Stage 4B entry contract,
+without activating or deciding Stage 4B. The combined Stage
 4 exit requires both locally coherent branches to rejoin through exact Protocol
 identities, relation roles, transition obligations, and the checkpoint above.
 
@@ -597,17 +612,25 @@ depend on the incubation workspace.
 
 ## 14. Progress and change control
 
-Current program position:
+This section owns the live integrated-design closure state. Stage labels record
+historical bounded-package outcomes; the integrated-closure row records whether
+the promoted candidate is mutually closed and ready to freeze.
 
-| Stage | State | Durable result or next gate |
+| Stage or gate | State | Durable result or next gate |
 |---|---|---|
 | Stage 0 | Established | Common method, program, and temporary-note discipline |
-| Stage 1 | Complete | Selected [Protocol IR Architecture](protocol-ir-architecture.md), supported by the Stage 1 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
-| Stage 2 | Complete | Selected [Transition and Bridge Architecture](transition-and-bridge-architecture.md), supported by the Stage 2 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
-| Stage 3 | Complete | Selected [Protocol and Relations Architecture](protocol-and-relations-architecture.md), exact durable PIR/Relations target specifications, validated research package, and separate Stage 4A/4B entry contracts |
-| Stage 4A | Complete | Selected [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md), exact durable Analysis/Compiler specifications, Relations satisfaction/correspondence reconciliation, PIR source-binding/outcome refinements, validated research package, and reconciled unactivated Stage 4B peer boundary |
-| Stage 4B | Entry ready; not activated | OIR then Realization may begin only through the bounded Stage 4B entry contract retained in the completed Stage 3 package |
+| Stage 1 | Historical package complete | Selected [Protocol IR Architecture](protocol-ir-architecture.md), supported by the Stage 1 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
+| Stage 2 | Historical package complete | Selected [Transition and Bridge Architecture](transition-and-bridge-architecture.md), supported by the Stage 2 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
+| Stage 3 | Historical package complete | Selected [Protocol and Relations Architecture](protocol-and-relations-architecture.md), candidate PIR/Relations target owners at package resolution, research evidence, and separate Stage 4A/4B entry contracts |
+| Stage 4A | Historical package complete | Selected [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md), candidate Analysis/Compiler target owners at package resolution, Relations/PIR reconciliation, research evidence, and an unactivated Stage 4B peer boundary |
+| Integrated semantic-kernel closure K0--K5 | K0 complete; K1 next; not frozen | The regression baseline, owner/falsifier register, and minimum Relations/Analysis/OIR questions are frozen. Executable foundations, Protocol/FS closure, minimum consumer co-design, protocol portfolio, and independent freeze remain. |
+| Stage 4B | Historical entry contract ready; activation blocked | OIR then Realization may activate only after integrated semantic-kernel freeze and a separate explicit decision. |
 | Stages 5--8 | Not started as decision packages | Later stages may be surveyed for design forces but cannot finalize contracts that depend on unresolved earlier-stage results |
+
+`Complete` in a Stage 0--4A row records historical package completion only. It
+does not mean integrated definition closure, independent implementability,
+semantic freeze, normative admission, implementation support, or cutover
+readiness.
 
 Stages advance by exit conditions, not by elapsed time, page count, or the
 absence of discovered defects. A stage may revisit an earlier provisional

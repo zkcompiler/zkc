@@ -16,6 +16,13 @@ inventory provides better evidence.
 The name is deliberately `docs-next`, not `docs-v2`. Reorganizing documents
 does not create a new protocol version, artifact version, or product release.
 
+In this tree, a `completed` Stage 1--4A label records historical completion of
+one bounded research package at its selection gate. It does not mean the
+promoted candidate is mutually closed or semantically frozen. The
+[v0 Semantic Design Program](project/v0-design-program.md#14-progress-and-change-control)
+owns that live integrated-design gate; the kernel is not frozen and Stage 4B
+remains inactive.
+
 ## Where current truth lives
 
 During this transition, use the existing owners for real answers:
@@ -147,15 +154,16 @@ The [Design Research Method](project/design-research-method.md) defines the
 common package cycle, candidate portfolio, opportunity discipline, scenarios,
 evaluation axes, and convergence gates. These documents sequence research;
 they do not replace the current product roadmap or grant authority to a target
-design. The temporary workspace index routes to the completed Stage 1, Stage
-2, Stage 3, and Stage 4A research packages. Stage 1 selected the subject and
-carrier architecture. Stage 2 selected domain-owned typed transition contracts under
-shared project invariants. Stage 3 completed the Protocol, canonical PIR,
-Interface, Plan, Relations, Fiat--Shamir, and semantic-composition co-design,
-promoted its selected model into durable target owners, and produced separate
-Stage 4A and Stage 4B entry contracts. Stage 4A selected the federated Analysis
-and validated-decision Compiler architecture and promoted exact target owners.
-Stage 4B remains unactivated.
+design. The temporary workspace index routes to the historically completed
+Stage 1, Stage 2, Stage 3, and Stage 4A research packages. Stage 1 selected the
+subject and carrier architecture. Stage 2 selected domain-owned typed
+transition contracts under shared project invariants. Stage 3 selected the
+Protocol, canonical PIR, Interface, Plan, Relations, Fiat--Shamir, and
+semantic-composition candidate at package resolution, promoted it into
+candidate target owners, and produced separate Stage 4A and Stage 4B entry
+contracts. Stage 4A selected the federated Analysis and validated-decision
+Compiler architecture and promoted candidate target owners. Stage 4B remains
+unactivated.
 
 The first semantic reconstruction result is the
 [Candidate v0 Semantic Architecture](project/v0-semantic-architecture.md). It
@@ -183,19 +191,21 @@ tagged Plan basis; and evidence, appraisal, and reliance remain three
 non-interchangeable downstream results. It is a non-normative target and does
 not claim implementation.
 
-The selected [Protocol and Relations Architecture](project/protocol-and-relations-architecture.md)
-completes the Stage 3 center: a finite language-independent operational
-Core/Protocol algebra has one physically canonical bijective MLIR PIR carrier,
-while Interface, Plan, relation subjects, transcript construction, and
-composition remain independently identified and admitted. Exact target
-contracts live under [`pir/`](pir/README.md) and
-[`relations/`](relations/README.md). They remain non-normative until explicit
-consolidation and cutover.
+The selected
+[Protocol and Relations Architecture](project/protocol-and-relations-architecture.md)
+records the Stage 3 package-selection center: a finite language-independent
+operational Core/Protocol algebra has one physically canonical bijective MLIR
+PIR carrier, while Interface, Plan, relation subjects, transcript construction,
+and composition remain independently identified and admitted. Candidate target
+contracts promoted at package resolution live under [`pir/`](pir/README.md)
+and [`relations/`](relations/README.md). They remain non-normative until
+explicit consolidation and cutover.
 
 The selected [Analysis and Compiler Architecture](project/analysis-and-compiler-architecture.md)
 adds family-owned semantic questions and qualified judgments, then separates
 Compiler problem, production, proposal resolution, qualification/assessment,
-and decision authority. Exact target contracts live under
+and decision authority. Candidate target contracts promoted at package
+resolution live under
 [`analysis/`](analysis/README.md) and [`compiler/`](compiler/README.md), with
 relation satisfaction and Protocol-correspondence reconciliation owned by
 [`relations/`](relations/README.md) and the

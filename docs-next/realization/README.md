@@ -2,7 +2,8 @@
 
 > **Document kind:** Domain index
 > **Document state:** Scaffold
-> **Target alignment:** Stage 3 input boundary closed; Stage 4B not activated
+> **Target alignment:** Stage 3 package boundary selected; Stage 4B and full
+> Realization design remain unactivated
 > **Provisional owner:** `realization`
 > **Authority:** None during the transition. Current realization material is
 > split among the reserved [boundary contract](../../docs/spec/boundaries.md),

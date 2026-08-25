@@ -89,7 +89,111 @@ promises.
 | X-06 | `Required` | **Independent gate evidence.** A closing gate freezes inputs, distinguishes author and falsifier roles, permits a failed artifact, and records exact reopening conditions. | External validator can rebut an adjudication without accepting its proposed repair. Project method. |
 | X-07 | `Required` | **One semantic owner after convergence.** Temporary targets, matrices, and narratives are absorbed or deleted; shared mechanisms are defined once without moving domain meaning into Foundation. | Shadow-definition scan, manifest closure, and cold-reader reconstruction after R5. Project governance. |
 
-## 7. Open scope and representation decisions
+## 7. Target-owes-shipped non-regression baseline
+
+Here, **shipped** means the current authoritative semantic contract under
+`docs/`, with the current implementation and tests used as correspondence
+evidence and counterexample sources. A known implementation defect does not
+weaken the contract the target owes. Conversely, preserving an implementation
+accident is not a design requirement.
+
+This baseline is revision-pinned to pre-K0 commit
+`d6868a447d5bedb86c017bf8a35adf3b480e9a7c`: `docs/` at that revision owns the
+semantic debt, while `include/`, `lib/`, `test/`, and `evaluation/` at the same
+revision supply implementation correspondence and counterexamples only. A
+later current-system change does not silently move this baseline; rebasing it
+requires an explicit K0 amendment with changed rows and rerun falsifiers.
+
+The comparison has three tiers:
+
+1. On their shared domain, target semantic guarantees must be at least as
+   strong as the current contract. A deliberate removal requires its own
+   selected decision, affected-consumer analysis, and executable falsifier; it
+   cannot occur by omission.
+2. Carrier, encoding, and evolution choices may change incompatibly, but their
+   canonicity, refusal behavior, resource use, and independent reproducibility
+   must be measured as equal or better against frozen inputs.
+3. New capabilities are not free. Each records the extra identities,
+   declarations, checkers, failure surface, representation cost, and consumers
+   that purchase it.
+
+No row closes because a target page contains a similarly named type. The named
+falsifier must run against a target-native object and reach the boundary whose
+guarantee is being compared. Every falsifier invocation includes an unchanged
+positive control at the same boundary so that a checker which rejects
+everything cannot satisfy the row.
+
+### 7.1 Semantic guarantees
+
+| ID | Current contract and target debt | State and owner | Executable falsifier |
+|---|---|---|---|
+| S-00 | **Fail-closed authentication and admission.** Raw or decoded objects are rechecked against exact immutable dependencies and identity; caller assertions, cached booleans, receipts, and mutable handles confer no authority. The target lifecycle preserves this shape, but its regime, value, ABI, and totality foundations are not executable. | `Open closure`; Foundation mechanism and PIR admission. | Serialize an admitted target object, mutate one identity-bearing dependency or the claimed ID, and present the old capability or a cached affirmative. Any consumer acceptance without complete reauthentication and readmission falsifies the target. |
+| J1 | **Structural Fiat--Shamir admissibility.** The current BIND judgment derives requirements from round contracts and structurally rejects omitted statements, late or unabsorbed required proof material, Last-Challenge/Frozen-Heart shapes, and colliding challenge domains. The target currently lacks complete derived influence, Statement initialization, public-coin, and squeeze/sample laws. | `Open regression`; PIR owns structural admission, while Analysis owns theorem applicability and priced relaxation. | Run one target-native fixture and well-formed mutations that omit or delay a scoped Statement, mark required proof material nontranscript, move a required message after its challenge, reuse a challenge occurrence namespace, and add verifier-private influence. The positive set must include a multi-segment construction whose later segment binds its Statement after an earlier segment's challenge but before its own first challenge. Acceptance of any mutation or rejection of either control falsifies the target. |
+| J2 | **Linear claim accounting.** Every claim has exact production and consumption, the claim graph is acyclic, and duplication, weakening, split, batch, fold, and sink behavior are explicit and contract-gated. | `Parity unproved`; PIR claim/resource algebra. | From one admitted multi-claim fixture, drop a consumption, duplicate a use, create a cycle, and change a declared multiplicity. Any admitted mutation or refused unchanged control falsifies parity. |
+| J3 | **Canonical identity, equivalence, and diff.** Identity covers every meaning-bearing field and cited dependency but excludes nonsemantic evidence, backend metadata, and recomputable caches. An independently identified derived semantic subject instead has its own identity and exact source binding. Consumers can independently recompute both. | `Open closure`; Foundation identity mechanism plus PIR semantic and carrier owners. | Two independent evaluators decode the same carrier and derive identical semantic IDs and field-level diffs; mutate each semantic field and each excluded metadata/cache field. A semantic mutation preserving identity, an excluded mutation changing it, an independently identified derived subject losing its source binding, or evaluator disagreement falsifies the target. |
+| J4 | **Checked transformation legality.** A target's admission does not establish its relation to a predecessor; the current Compiler re-runs family recognition, realization, relation checks, quantitative ceilings, and obligation non-growth. | `Downstream parity debt`; Compiler owns selection, the exact transform family owns the checked predecessor/successor relation, and PIR exports authenticated operands. | Hold admitted predecessor and successor fixed, then mutate the transform trace, family checker result, quantitative ceiling, or obligation comparison. A checked decision that survives any mismatched relation input falsifies the target; target admission alone must remain unaffected. |
+| J5 | **Source-relative endpoint preservation and non-vacuity.** Seal derives every source projection obligation and projection proves exact coverage with no omission or phantom effect; local endpoint validity is insufficient, and a verifier face with no accepting check cannot become an accept-all endpoint. The current `COV_obl` implementation gap recorded as CUR-8 does not waive this normative debt. | `Open read seam`; PIR owns source obligations and OIR owns source-relative projection. | Project verifier and prover endpoints, then independently drop one required effect, add one phantom provenance position, use a wrong discharge family, and remove the verifier's check. Any affirmative source-relative projection for a mutation falsifies the target. |
+| J6 | **Composition and descent.** Composition rechecks the combined subject, imported requirements, joint transcript state, namespace separation, claims, and residual obligations rather than inheriting child admission. | `Parity unproved`; PIR composition with relation-specific or OIR-specific descent owned by the result domain. | Compose two independently admitted children, then reset shared transcript state, collide namespaces, leave an imported requirement unresolved, or misroute one claim/obligation. An admitted composite or affirmative descent result for a mutation falsifies the target. |
+| J7 | **Post-admission conditional security derivation.** Security is a separate, typed derivation over authenticated structural facts, explicit rules, models, hypotheses, bindings, and quantitative terms; admission or a citation alone proves none. | `Open grounding`; Analysis owns property meaning and PIR owns the exact source view. | Reproduce one current derivation over a target-native view, then alter the theorem binding, model, hypothesis, structural source, or one quantitative occurrence. An unchanged affirmative judgment, or any property minted directly by Protocol admission, falsifies the target. |
+| J8 | **Exact local reduction closure.** Reduction inputs, outputs, round structure, checks, attachments, material equations, and constructed claim descriptors agree with one exact contract. | `Open closure`; PIR contract and claim-routing algebra. | Mutate one input/output profile, role-selected check, round assignment, material attachment, or output constructor in a well-formed reduction fixture. Any admitted mutation falsifies the target. |
+| J9 | **Typed terminal closure.** Every discharged claim reaches one exact check-backed terminal rule with total roles, typed attachments, permitted reuse, and complete material-binding use. | `Open closure`; PIR terminal, failure, and material-binding algebra. | Mutate the consumed claim pattern, terminal role map, selected check contract, attachment relation, reuse, or binding coverage. Any admitted mutation falsifies the target. |
+| S-10 | **The bounded imported-verification carrier shape is not silently erased.** The current identity-bearing `artifact_verify` records only a bounded subset of future recursion/zkVM facts, and both endpoints deliberately refuse it; it does not verify a child artifact. The target owes preserved protected-source meaning or an explicit unsupported extension boundary, not successful recursive verification. | `Open target-home/evolution selection`; PIR owns the source event/effect and OIR owns typed projection refusal. | Encode the current bounded fact shape target-natively and mutate each identity-bearing fact. Failure to represent the control without opaque escape, a mutation preserving identity, or projection producing a partial OIR instead of typed `Unsupported` falsifies the target. |
+| S-11 | **Decidable bounded structural admission on the shared domain.** Current supported structural checks terminate over finite inputs with a fixed descriptor-depth counter, finite well-founded dependency closure, and fail-closed typed refusal. The target owes that behavior on the shared domain. A uniform resource envelope for new guards, codecs, samplers, and algorithms is a K1 selection and new-capability price, not a shipped guarantee. | `Open shared-domain parity`; PIR admission, using Foundation's selected finite-term mechanism. | Admit one valid current-shape object at the supported depth boundary, then exceed the descriptor-depth bound and present cyclic, unresolved, unknown, and malformed dependencies or constructors. Divergence, authority after the depth/closure boundary fails, an untyped failure, or refusal of the control falsifies parity. New target-only structures are tested separately by M-03 and N-04. |
+| S-12 | **Material-reference integrity.** Stable semantic material references and verifier-visible local values are partial-function, reverse-injective, consumed bindings; composition may reindex local values but cannot alias or silently drift stable material. This proves reference equality only, not witness truth. | `Open target definition`; PIR owns material identity and binding, with Relations owning any additional value proposition. | Bind two values to one stable reference, bind one value twice, leave a retained edge unused, and create a cross-child alias. Any admitted mutation, or refusal of the one-to-one consumed control, falsifies the target. |
+| S-13 | **Typed prover-route totality and linear handle use.** Within the supported construction profiles, every required proof slot has exactly one typed route or explicit hole contract, dependencies are acyclic and available before use, and opaque handles have one consumer. This is structural construction, not completeness. | `Open downstream parity`; PIR Plan owns source routing and OIR owns endpoint realization. | Remove or duplicate a slot route, change a hole ABI/class/count, create a future dependency or cycle, and duplicate a handle reader. Any accepted mutation, or rejection of the fully routed control, falsifies the target. |
+| S-14 | **Relation fact authority and explicit information loss.** Relation interface admission, artifact interpretation, checked comparison, Protocol correspondence, and satisfaction remain distinct authorities. Any retained non-bijective bridge is named, directional, occurrence-bound, and quantitatively priced or explicitly left as an obligation; no digest equality silently becomes predicate truth. | `Open co-design seam`; Relations owns the distinctions and bridge meaning, PIR supplies authenticated source views, and Analysis owns quantitative consequence. | Substitute a raw observation for a checked prerequisite, use structural correspondence as satisfaction, or treat a lossy projection as bijection with zero loss. Acceptance of a mutation, or inability to express the valid separated control, falsifies the target. |
+
+The authoritative source map for J1--J9 is the current
+[Kernel purpose table](../../../docs/spec/kernel.md#0-purpose). Exact present
+rules remain in their owning current specifications; this table is a regression
+index, not a second definition. Current implementation defects remain separately
+routed by [R1 adjudication](review-adjudication.md#8-current-system-findings-checked-during-review).
+
+### 7.2 Representation and evolution measurements
+
+| ID | Selection being compared | Owner | Executable falsifier |
+|---|---|---|---|
+| M-01 | Current MLIR SSA/token references versus target canonical ordinals and semantic references. | PIR semantic/carrier correspondence. | Round-trip one multi-round, multi-claim target through the abstract evaluator and MLIR carrier; inject stale, duplicated, reordered, and cross-kind references. A semantic mismatch, ambiguous canonical form, or weaker refusal falsifies the selected representation. |
+| M-02 | Current canonical bytes, independent C++/Python twin parity, and depth-bounded encoding versus the new semantic/carrier identity split. Byte compatibility is not required. | Foundation encoding envelope and each identity owner. | Two independent implementations encode/decode the same frozen corpus and adversarial noncanonical inputs while recording bytes, size, and work. Disagreement, multiple accepted encodings, or an unbounded path falsifies the selection. |
+| M-03 | Current deterministic diagnostics and bounded seal work versus target algorithm, guard, and admission work. | Exact semantic owner plus implementation-conformance Evidence. | Run real and adversarial guards, codecs, samplers, and dependency closures under declared limits. Divergent semantic verdicts under resource pressure, undeclared exponential work, or nondeterministic first-boundary classification falsifies the selection. |
+| M-04 | Current fail-closed vocabulary growth versus a closed target algebra and regime evolution. | PIR vocabulary/evolution with Foundation regime mechanism. | Add one locally scoped event/effect through the declared extension lane and present one unknown constructor. Acceptance of the unknown, or forced rotation/change of unrelated identities when the extension is supported, falsifies the selected evolution model. |
+
+### 7.3 New-capability price ledger
+
+| ID | Capability and promised value | Required price and owner | Executable falsifier |
+|---|---|---|---|
+| N-01 | One `InteractiveCore` can support checked Fresh and multiple FS interpretations without duplicating interaction meaning. | Distinct construction/Protocol identities, construction checker, maps, and no hidden duplicated source declaration; PIR. | A Fresh/FS pair and second FS interpretation must share the declared Core facts while differing only where interpretation requires. If the views duplicate or disagree on round, Statement, or required-influence meaning, the factorization has not purchased its claim. |
+| N-02 | Interfaces, Plans, and narrow consumer views vary independently of Protocol meaning. | Extra dependent identities, admission/checking, view adequacy, and bounded retained state; PIR and consuming owner. | Exhibit two useful Interfaces and two useful Plans for one Protocol and measure object/checker cost. If changing either alters a Protocol-only observation, or no independent consumer reads the distinction, the split must be reduced or deferred. |
+| N-03 | Native oracle/IOP, recurrence, and additional protected-effect constructs can extend the finite kernel. | Exact operational laws, extension/evolution behavior, projection obligations, and protocol-family witnesses; PIR with OIR/Analysis consumers. | Native FRI/IOR and one holdout must use the construct without opaque escape. If local extension forces unrelated regime rotation or cannot reach a downstream read, the capability is not purchased. |
+| N-04 | Canonical guarded schedules support concise conditional behavior. | Declared size/work bounds or certificates, deterministic failure, and no exponential object hidden in identity; PIR/Foundation resource boundary. | Measure a real guard corpus and adversarial variable orders. If admission crosses its bound without a nonsemantic resource failure, or equivalent guards receive unstable meaning, the representation is rejected. |
+| N-05 | Federated Analysis and richer Compiler decisions support independent property families and producers. | Every additional subject, result, policy, replay form, and closed domain needs an independent consumer and a smaller-rival comparison; Analysis/Compiler, downstream of kernel freeze. | Before activation, two independent families or producers must require the distinction on one shared substrate. If the same observable decision is obtained from the smaller current-style contract, the extra surface remains notes-only. |
+
+## 8. Minimum pre-freeze consumer questions
+
+This freezes the **questions the kernel must answer**, not their final schema,
+representation, or identity preimage. K1--K3 may choose a smaller or different
+answer than the current target pages, but PIR cannot freeze while any question
+requires a carrier escape, a shadow Protocol schema, or an ambient read.
+
+| ID | Question PIR must make answerable | Answer owner and failing observation |
+|---|---|---|
+| REL-Q1 | What is the complete Statement-only public occurrence table, with domains and multiplicities, and how does an Interface bind external assignments to it? Mapped-occurrence correspondence and optional whole-Protocol Statement coverage must remain separate questions. | PIR/Interface owns the surface; Relations owns correspondence. A relation mapping one Statement while leaving a Protocol-only public parameter unmapped must permit the mapped check to pass and the exact-surface check to return a meaningful negative. |
+| REL-Q2 | Which private Prover inputs and explicitly exported derived outputs form the relation-facing Witness surface, with roles, domains, multiplicities, producers, and lifetimes? Confidential Context, ProtocolValue, nonce/advice, and internal obligation outputs remain distinguishable. | PIR owns the surface; Relations owns correspondence. A private nonwitness forced into the witness image, or an explicitly exported derived witness that cannot be named, fails the cut. |
+| REL-Q3 | What execution-issued, capability-backed view identifies the exact qualified run, Statement occurrence/domain/value, and result/object occurrences needed to compare a relation instance with what the verifier actually consumed? | PIR owns the checked execution view; Relations owns instance grounding. A caller-constructed value must refuse, a wrong occurrence/value must disagree, and an exact execution-issued view must pass. |
+| REL-Q4 | Which object declarations and occurrences, produced claims, invoked checks, accepted terminals, material bindings, and stable references may a requested correspondence clause read; which are structural versus value-grounded; and is each value bridge an equivalence, embedding, or lossy projection with exact occurrence and loss hooks? | PIR supplies source facts; Relations owns fact, grounding, bridge, and directional-result semantics; Analysis owns quantitative loss. Raw carrier inspection, structural result shape masquerading as behavioral correspondence, or a retained lossy projection with no occurrence/loss hook fails the cut. |
+| ANA-Q1 | What visible history, legal move relation, public coins, private inputs/state/randomness, permitted oracle responses, outcomes, and failures parameterize strategy-generated execution? | PIR owns execution structure; Analysis owns adversary and strategy classes. A whole trace correlated with a future challenge that still counts as strategy-generated fails the cut. |
+| ANA-Q2 | What single identified declaration determines Statement scope, round/oracle roles, required influence, challenge occurrences, transcript construction, framing, codec/sampler behavior, and the Fresh/FS structural maps read by both admission and theorem applicability? | PIR owns the declaration and checked construction; Analysis owns applicability and transport. Two source declarations that can disagree on a binding or quantitative coordinate fail the cut. |
+| ANA-Q3 | Which exact approximation, projection, transform, composition, and retry/failure occurrences may contribute quantitative loss, and which authenticated facts bind their count and parameters? | Source owners expose occurrences; Analysis owns games and loss arithmetic. Any theorem instance needing an authored mirror or hidden count fails the cut. |
+| OIR-Q1 | What is the complete role-qualified set of typed inputs, schedule/guards, source events, protected observations/effects, claims, checks, challenges, producer nonproduction obligations, failures, terminals/payloads, imported verifications, source maps, and projection obligations, with stable occurrences and discharge families? | PIR owns the source view; OIR owns exact coverage and its distinction from local validity. Omission, duplication, reordering of a protected effect, phantom provenance, wrong failure/terminal payload, or unsupported discharge must prevent source-relative correctness even when local OIR remains valid. |
+| OIR-Q2 | Which external port/proof/Statement facts belong to the exact Interface, which optional Plan facts may change canonical prover OIR, and how is that declared projection basis identified without importing realization-only state or committing irrelevant Plan facts? | PIR owns Interface/Plan meaning; OIR owns its declared read set and identity effect. A realization-only change that rotates OIR, a projection-relevant route change that does not, a required ambient read, or the same fact arriving authoritatively at OIR and Realization fails the cut. K0 freezes no constructor names for the answer. |
+
+Every answer uses the same view law: the source owner defines finite fact
+meaning and derives an immutable view from one admitted subject; the consumer
+declares the complete read closure and checks adequacy; missing, extra,
+wrong-subject, wrong-purpose, and unauthenticated reads have distinct outcomes.
+No view becomes a second semantic owner.
+
+## 9. Open scope and representation decisions
 
 These are not invariants and must not be resolved by whichever patch is
 shortest. Each row asks one question: **if this selection is wrong, what would
@@ -224,7 +328,7 @@ stands at 3 closed, 15 partial, 3 open of 21 tracked; the number fell when
 boundary names stopped counting as evidence, which is the same failure this
 section is now built to catch.
 
-## 8. R1 gate
+## 10. R1 gate
 
 R1 is internally complete when every adjudicated finding maps to this ledger,
 a rebuttal, or an explicit current-system finding, and the independent
@@ -234,7 +338,7 @@ required material corrections to this ledger; its outcome is recorded in
 rewrites. R2 begins only after a fresh follow-up falsifier validates the amended
 record or its further material corrections are incorporated and rechecked.
 
-## 9. Why the selection standard changed
+## 11. Why the selection standard changed
 
 X-05 was a completeness test and became a falsifiability test on 2026-08-24.
 Executable inhabitance filtered nothing: read literally it asks for one

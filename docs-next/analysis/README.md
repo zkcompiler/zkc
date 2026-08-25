@@ -6,6 +6,11 @@
 > **Provisional owner:** `analysis`
 > **Authority:** None during the transition. Current property calculus remains
 > governed principally by the [Soundness Kernel specification](../../docs/spec/soundness.md).
+> **Closure interpretation:** This index records a selected package-resolution
+> target. `Selected`, `target`, and `exact` describe intended role, scope, and
+> ownership; they do not assert integrated definition closure or semantic
+> freeze. The [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
+> owns the live gate.
 
 ## Purpose
 
@@ -181,19 +186,25 @@ changed hypotheses or quantitative loss.
 - [Cryptographic Property Families](cryptographic-properties.md)
 - [Transport, Composition, and Replay](transport-composition-and-replay.md)
 
-These pages are durable non-normative Stage 4A targets. The current Soundness
-Kernel and related specifications under `docs/` remain authoritative until
-explicit normative consolidation and cutover.
+These pages are durable non-normative Stage 4A candidate targets at package
+resolution. The current Soundness Kernel and related specifications under
+`docs/` remain authoritative until explicit normative consolidation and
+cutover.
 
-## Remaining later work
+## Reopened integrated-closure and later work
 
-Stage 4A closed the family-indexed question/proposition model, profile and
+Stage 4A selected a family-indexed question/proposition model, profile and
 basis boundaries, support and validation identities, qualified outcomes,
 property-family topology, Fiat--Shamir applicability, transport, composition,
-coverage, replay, trust, and extension law at target design resolution. It did
-not select concrete theorem libraries, external proof systems, certificate
-formats, checker implementations, supported theorem instances, cryptographic
-assumptions, or implementation organization.
+coverage, replay, trust, and extension law at its then-current package
+resolution. Post-selection revalidation reopened the causal strategy/history
+interface, primary-source theorem and model grounding, the single shared
+Fiat--Shamir structural read contract, and authenticated quantitative
+occurrence and loss hooks. Those are pre-freeze consumer questions; they do not
+require completing every theorem family. Later work still includes concrete
+theorem libraries, external proof systems, certificate formats, checker
+implementations, supported theorem instances, cryptographic assumptions, and
+implementation organization.
 
 Stage 4B may add exact OIR-, realization-, or endpoint-owned subjects only
 through explicit family profiles and complete read contracts. Stage 5 tests

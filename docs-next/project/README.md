@@ -89,24 +89,24 @@ compatibility triggers.
 
 The selected
 [Transition and Bridge Architecture](transition-and-bridge-architecture.md)
-records the completed Stage 2 result: domain-owned typed contracts under
-shared closure, authority, outcome, replay, composition, and persistence
-invariants. It separates authentication from admission, target admission from
-a checked predecessor/successor relation, local OIR validity from
-source-relative projection, and observation from appraisal and reliance.
+records the completed Stage 2 package result: candidate domain-owned typed
+contracts under shared closure, authority, outcome, replay, composition, and
+persistence invariants. It separates authentication from admission, target
+admission from a checked predecessor/successor relation, local OIR validity
+from source-relative projection, and observation from appraisal and reliance.
 
 The selected
 [Protocol and Relations Architecture](protocol-and-relations-architecture.md)
-records the completed Stage 3 result: a finite language-independent
-operational Core/Protocol algebra, one physically canonical bijective MLIR PIR
-carrier, separately admitted Interface and Plan satellites, an exact Relations
-ontology and correspondence boundary, and checked Fiat--Shamir and semantic
-composition constructions.
+records the completed Stage 3 package result: a candidate finite
+language-independent operational Core/Protocol algebra, one physically
+canonical bijective MLIR PIR carrier, separately admitted Interface and Plan
+satellites, a Relations ontology and correspondence boundary, and checked
+Fiat--Shamir and semantic-composition constructions.
 
 The selected
 [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md)
-records the completed Stage 4A result: family-indexed Analysis semantics with
-separate proposition, basis, support, validation, capability, and replay
+records the selected Stage 4A package result: family-indexed Analysis semantics
+with separate proposition, basis, support, validation, capability, and replay
 identities, followed by a five-plane validated-decision Compiler over exact
 semantic candidate and qualified comparison domains.
 
@@ -116,19 +116,23 @@ defines how each bounded package reconstructs the current model, generates
 alternatives and new opportunities, evaluates them, converges across domains,
 and promotes only reviewed conclusions.
 
-Stages 1--4A are complete as non-normative design-research packages. Their
+Stages 1--4A are historically complete as non-normative design-research
+packages. Their
 temporary records are routed through the
 [temporary workspace inventory](../notes/README.md#working-note-inventory),
 which preserves reconstruction, alternatives, source-backed cases, scenario
 tests, audits, and convergence reasoning behind the durable decisions. Stage
-3 promoted exact target contracts into `pir/` and `relations/` and closed
-separate Stage 4A and Stage 4B entry contracts. Stage 4A has now promoted exact
-target contracts into `analysis/`, `compiler/`, and the Relations satisfaction
+3 promoted candidate target contracts at package resolution into `pir/` and
+`relations/` and produced separate Stage 4A and Stage 4B entry contracts. Stage
+4A promoted candidate target contracts at package resolution into `analysis/`,
+`compiler/`, and the Relations satisfaction
 and Protocol-correspondence boundary, and refined the four PIR semantic pages
-with exact owner-created
+with intended owner-created
 admitted-subject/checked-result bindings and qualified outcome contracts.
-Stage 4B remains unactivated, and none of these target pages claims
-normative cutover or implementation.
+The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+owns the reopened integrated-closure gate. Stage 4B remains unactivated, and
+none of these target pages claims semantic freeze, normative cutover, or
+implementation.
 
 Future durable documents may include a charter, current status, roadmap, and
 decision index. They will be created only when content is migrated and their

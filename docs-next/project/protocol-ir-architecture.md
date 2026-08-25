@@ -2,12 +2,15 @@
 
 > **Document kind:** Architecture decision
 > **Document state:** Active
-> **Target decision status:** Selected Stage 1 target
+> **Target decision status:** Selected Stage 1 package result; integrated
+> semantic-kernel closure remains under revalidation
 > **Provisional owner:** `project`
 > **Authority:** Non-normative target architecture for `docs-next/`. The current
 > specifications under [`docs/`](../../docs/README.md) remain authoritative
 > until normative consolidation and explicit cutover. This decision selects
 > the semantic and representation backbone; it does not claim implementation.
+> The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+> owns the live integrated-closure gate.
 
 ## 1. Decision
 
@@ -598,10 +601,12 @@ adds domain-owned contracts under shared invariants. In particular, it:
   directional chain with no semantic backflow.
 
 These are non-normative target decisions, not public API, schema,
-implementation, or conformance claims. Stage 3 later consumed these inputs,
-completed the exact Protocol/PIR-and-Relations co-design, and selected the
+implementation, or conformance claims. Stage 3 later consumed these inputs and
+selected the package-resolution candidate recorded by the
 [Protocol and Relations Architecture](protocol-and-relations-architecture.md).
-That later decision refines rather than silently rewrites this Stage 1 record.
+That later decision refines rather than silently rewrites this Stage 1 record;
+post-selection revalidation determines whether the integrated candidate is
+closed enough to freeze.
 
 ## 14. Deliberate deferrals
 
@@ -619,12 +624,13 @@ Stage 1 did not select:
 - a compatibility window or historical upgrade machinery; or
 - migration and implementation sequencing from the current checkout.
 
-Stage 3 subsequently closed the complete abstract Protocol grammar, canonical
+Stage 3 subsequently selected candidate abstract Protocol grammar, canonical
 PIR profile and bijection, Interface and Plan fields, and structural Core
-composition at non-normative target resolution. Concrete hash primitives,
-stable byte encodings, implementation and proof artifacts, OIR semantics,
-compatibility policy, and migration remain downstream. Historical deferral
-does not reopen the semantic ownership and representation decisions recorded
+composition at its non-normative package resolution. Integrated closure of
+those candidate contracts is reopened. Concrete hash primitives, stable byte
+encodings, implementation and proof artifacts, OIR semantics, compatibility
+policy, and migration remain downstream. Historical deferral does not by
+itself reopen the semantic ownership and representation decisions recorded
 above.
 
 ## 15. Evidence and decision boundary
@@ -654,7 +660,7 @@ The external mechanisms are used with explicit limits:
   quantitative theorem conditions cannot be reduced to ordinary SSA
   equivalence.
 
-This closes the reopened Stage 1 architecture selection. The completed Stage 2
-and Stage 3 decisions are separate dependent architecture results. None
+This closes the bounded Stage 1 architecture-selection package. The Stage 2
+and Stage 3 selections are separate dependent architecture results. None
 authorizes normative cutover, implementation changes, migration, or automatic
 activation of Stage 4.
