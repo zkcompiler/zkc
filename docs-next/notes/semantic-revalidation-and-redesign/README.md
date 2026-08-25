@@ -52,6 +52,10 @@ reader cross-references; the R2 README owns their inventory.
   system findings.
 - [R1 Invariant Ledger](invariant-ledger.md) states solution-independent
   requirements and the executable pressure required to close them.
+- [Semantic Kernel Closure Audit and Execution Plan](semantic-kernel-closure-audit-and-plan.md)
+  records the post-P01 integrated closure verdict, the minimal downstream seams
+  that may still pressure PIR, the kernel freeze gate, and the dependency-ordered
+  implementation plan.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,
