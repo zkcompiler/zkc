@@ -427,4 +427,3 @@ The audit does not select one versus several dialects, MLIR as a public
 portable carrier, Protocol plus Interface or ProverPlan factorization,
 physical versus quotient canonicalization, total versus partial-order authoring,
 or an independent-checker representation.
-

@@ -441,4 +441,3 @@ This is an initial force ledger. It has not yet incorporated the comparative
 case studies or theory track and makes no carrier recommendation. Each force
 must be retained, refined, split, or rejected during synthesis with its source
 and transfer logic visible.
-

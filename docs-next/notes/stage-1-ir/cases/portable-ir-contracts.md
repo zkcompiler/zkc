@@ -297,4 +297,3 @@ These remain open until cross-family synthesis:
 
 The dossier does **not** yet decide whether canonical PIR and optimizing PIR
 are one dialect, two dialects, or one semantic model with several adapters.
-

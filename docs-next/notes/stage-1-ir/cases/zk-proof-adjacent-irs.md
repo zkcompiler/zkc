@@ -309,4 +309,3 @@ language-independent normative Protocol semantics
 
 This is not yet a selection of one dialect versus several, nor a decision to
 publish MLIR bytecode as the stable interchange artifact.
-

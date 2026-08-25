@@ -272,4 +272,3 @@ identifiers and display labels require separate namespaces.
 
 These histories support careful separation. They do not independently select
 MLIR, a wire schema, or a particular Protocol factorization.
-

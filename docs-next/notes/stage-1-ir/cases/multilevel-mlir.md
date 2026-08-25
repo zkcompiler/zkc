@@ -292,4 +292,3 @@ semantic difference may outweigh several weak similarities.
 
 This dossier narrows the reasons for adding dialects; it does not yet choose
 the final number of PIR representations.
-

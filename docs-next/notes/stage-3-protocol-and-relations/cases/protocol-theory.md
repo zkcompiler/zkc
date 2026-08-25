@@ -333,4 +333,3 @@ This dossier does not establish that:
 - a structural composition preserves any cryptographic property;
 - relation correspondence implies relation satisfaction; or
 - any formalization library validates zkc.
-
