@@ -143,21 +143,28 @@ first being found by the optimizer or successfully projected to every target.
 
 - [Selected Protocol IR Architecture](../project/protocol-ir-architecture.md)
 - [Selected Protocol and Relations Architecture](../project/protocol-and-relations-architecture.md)
-- [Protocol Semantic Model](protocol-model.md)
+- [Interactive Core and Causal Execution](interactive-core.md) — active K2
+  definition owner for Core, Protocol, causal execution, public coin, and the
+  standard Oracle lifecycle
+- [Fiat--Shamir Construction](fiat-shamir.md) — active K2 definition owner for
+  transcript semantics and the same-Core Fresh/FS construction
 - [Canonical PIR](canonical-pir.md)
 - [Protocol Interfaces and Prover Plans](interfaces-and-plans.md)
+- [Protocol Semantic Model](protocol-model.md) — pre-K2 semantic snapshot
 - [Fiat--Shamir Construction and Semantic Core Composition](fiat-shamir-and-composition.md)
+  — pre-K2 FS snapshot and historical composition candidate
 - [Candidate Protocol Subject and Lifecycle](protocol-lifecycle.md)
 
 The two project architecture pages are selected non-normative Stage 1 and
-Stage 3 decisions. The four target semantic specifications are candidate owners
-promoted at Stage 3 package resolution; Stage 4A further refined those pages
-with owner-created admitted-subject and checked-result bindings, exact
-qualified-outcome exports, and total transitive source-policy closure at every
-Analysis/Compiler ingress. The lifecycle page is the superseded
-baseline candidate and remains useful for its current-model reconstruction.
-None replaces the current Protocol Kernel, Carrier, Boundaries, Vocabularies,
-or Versioning specifications before normative cutover.
+Stage 3 decisions. K2 revalidated and replaced the Core/Protocol and
+Fiat--Shamir definition surfaces with the first two active K2 pages above.
+The carrier and Interface/Plan pages remain dependent candidates awaiting
+reconciliation; the two explicitly marked snapshots remain research history,
+not parallel authority. Stage 4A's Analysis/Compiler source bindings must be
+rechecked against the new views in K3. The lifecycle page is the superseded
+baseline candidate and remains useful for current-model reconstruction. None
+replaces the current Protocol Kernel, Carrier, Boundaries, Vocabularies, or
+Versioning specifications before normative cutover.
 
 ## Lifecycle and bridge ownership
 
@@ -191,12 +198,14 @@ transport a property. Target admission alone proves no source/target relation.
 Stage 3 selected the Core/Protocol grammar, canonical carrier, Interface, Plan,
 Fiat--Shamir construction, and structural Core-composition candidate at its
 then-current resolution. Post-selection revalidation reopened the exact kernel
-closure. Before freeze, Foundation and PIR must close executable regimes,
-values, algorithms and ABIs; causal strategy-generated execution; target-native
-non-regression against the pinned current contract; strong
-Statement/required-influence/public-coin and squeeze/sample laws; exact
-Core/extension choices; and the minimum
-Relations/Analysis/OIR read questions. After that closure, later work includes:
+closure. K1 and K2 have now closed executable Foundation and PIR semantics at
+their bounded resolutions: causal strategy-generated execution, target-native
+non-regression, Statement and required-influence closure, derived public-coin
+eligibility, exact squeeze/sample transitions, and the registered Core and
+extension choices. Before integrated freeze, K3 must test those definitions
+against the minimum Relations, Analysis, and OIR read questions; K4 and K5 must
+then complete the bounded protocol portfolio and independent freeze. Later work
+includes:
 
 - Stage 4A selected the exact Analysis model families and theorem/profile
   architecture for `FSCompile`, composition properties, and property

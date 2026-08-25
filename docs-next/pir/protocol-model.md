@@ -20,6 +20,13 @@
 > Foundation `ValueType`. Until then this page is a historical consumer
 > candidate, not evidence that the K1 substrate and Protocol are integrated.
 
+> **K2 routing notice:** [Interactive Core and Causal Execution](interactive-core.md)
+> now owns the K2 Core/Protocol, scope, public-binding, oracle, strategy,
+> execution, public-coin, and replay definitions. This page is retained as the
+> pre-revalidation Stage 3/4A snapshot and must not be used as a competing
+> definition source for those subjects. Carrier, Interface/Plan, and later
+> consumer integration remain separately open.
+
 ## 1. Scope and architectural position
 
 This document defines the complete v0 Protocol semantic subject: a finite

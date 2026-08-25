@@ -20,6 +20,13 @@
 > `SemanticContentId<K>` body under an authenticated prior-meta basis. This
 > carrier page is not yet a K1-computable Protocol lifecycle.
 
+> **K2 routing notice:** The language-independent Core and Protocol reconstructed
+> by a future canonical carrier are now defined by
+> [Interactive Core and Causal Execution](interactive-core.md) and
+> [Fiat--Shamir Construction](fiat-shamir.md). This page has not yet been
+> reconciled to their exact bodies and remains a pre-K2 carrier candidate; it
+> cannot override either semantic definition.
+
 ## 1. Scope and invariants
 
 This document specifies the unique physical v0 carrier for the

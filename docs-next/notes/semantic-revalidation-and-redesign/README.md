@@ -6,9 +6,11 @@
 > **Authority:** None. This page records an agreed method only; it changes no
 > target specification, decision, implementation claim, or Stage 4B state.
 > **Activated:** 2026-08-23
-> **Current gate:** Integrated semantic-kernel closure K0 and bounded K1
-> executable foundations are complete; K2 Protocol/Fiat--Shamir closure is
-> next. R2 remains an evidence track after the repaired `FRI-Grind-1` witness
+> **Current gate:** Integrated semantic-kernel closure K0, bounded K1
+> executable foundations, and bounded K2 Protocol/Fiat--Shamir closure are
+> complete; K3 minimum consumer co-design is next. R2 remains an evidence
+> track after the repaired
+> `FRI-Grind-1` witness
 > and retained T3 `P01` Schnorr/Sigma result. `P02` is the next witness anchor
 > and may run early as a non-ratifying pressure probe, but its portfolio
 > acceptance follows K1--K3. Stage 4B remains inactive.
@@ -60,6 +62,10 @@ are reader cross-references rather than inventory edges.
 - [K1 Executable Foundations](k1-executable-foundations/README.md) selects and
   tests the shared bootstrap, identity, canonical-value, portable-algorithm,
   failure, and deterministic-resource substrate required before K2.
+- [K2 Protocol and Fiat--Shamir Kernel](k2-protocol-and-fiat-shamir/README.md)
+  records the completed bounded Protocol/FS selection, durable closure,
+  cold-audit disposition, executable gate, consumer deferrals, and
+  work-package inventory.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,

@@ -17,9 +17,10 @@ spine**. Open-ended architecture discovery should stop. Work should now move to
 bounded semantic closure, real-protocol pressure, and implementation-facing
 falsification.
 
-The exact PIR semantic kernel is **not yet frozen or independently
-implementable**. Its central factorization has not been contradicted, but
-several definitions, laws, regressions, and consumer seams remain open.
+The exact integrated semantic kernel is **not yet frozen**. K1 and K2 now give
+an independently specified Foundation and Protocol/Fiat--Shamir candidate, but
+minimum Relations, Analysis, and OIR consumer seams remain open. The central
+factorization has not been contradicted.
 “Stage 1--4A complete” records historical research-package selection at the
 then-current resolution; it does not mean that the integrated kernel is closed.
 
@@ -27,9 +28,10 @@ The execution model should be a small global skeleton followed by
 dependency-ordered vertical slices. The current `docs/` and implementation
 remain authoritative until an explicit cutover.
 
-**Current execution position:** K0 completed on 2026-08-25 and bounded K1
-executable foundations completed on 2026-08-26. K2 Protocol/FS closure is
-next; the integrated kernel is not frozen. The R2 protocol-witness track
+**Current execution position:** K0 completed on 2026-08-25; bounded K1
+executable foundations and bounded K2 Protocol/FS closure completed on
+2026-08-26. K3 minimum consumer co-design is next; the integrated kernel is
+not frozen. The R2 protocol-witness track
 remains an evidence source; a P02 probe may inform an earlier question, but
 P02 cannot close its portfolio gate before K1--K3 establish the substrate it
 is meant to test. Stage 4B remains inactive.
@@ -74,10 +76,10 @@ A pure reopening condition is not itself a closure test.
 |---|---|---|---|
 | Subject and authority factorization | Coherent | Project and PIR | Reopen if a bounded protocol needs ambient state, a shadow Protocol schema, or Interface/Plan variation changes a Protocol-only observation. |
 | Regime, value, portable-function ABI, typed-failure, totality, and bounded-evaluation foundations | K1 standalone closed; K3 extraction and integration open | Foundation owns the selected substrate; PIR, Relations, Analysis, and OIR own their exact semantic bodies and use-site admission | The independent identity/value oracle must agree with the K1 reference model, while the term evaluator exercises function steps, typed failures, totality, and bounds. Reopen K1 if exact law/vector parity breaks or a consumer requires an owner-specific escape or general virtual machine. K3 must demonstrate two aligned consumer extractions; a second term evaluator remains independent-freeze evidence rather than credited K1 evidence. |
-| Core execution | Open | PIR execution structure; Analysis strategy classes | An honest online execution and replay must agree, while a trace whose early prover move depends on a future challenge must replay but fail strategy generation. |
-| Strong Fiat--Shamir structure | Open regression | PIR structural admission | Run [J1](invariant-ledger.md#71-semantic-guarantees): target acceptance of an omitted/late Statement, Wire-only required proof message, wrong prefix, reused challenge namespace, or verifier-private influence fails the gate. |
-| Fresh/FS relation | Promising, not frozen | PIR construction; Analysis theorem applicability | A native Fresh/FS FRI or IOR pair must preserve one declaration through structural maps; a mismatched map, context, or related-Core claim must fail at the declared relation rather than disappear into Analysis. |
-| Core algebra and extension model | Open selections | PIR | Run each registered Core/extension fork on a shared substrate whose output can differ; the unchanged supported base vocabulary is the positive control. A locally supported extension that rotates unrelated meaning, an unknown constructor that admits, or a rejected control fails the gate. |
+| Core execution | K2 standalone closed; Analysis strategy classes open | PIR execution structure; Analysis strategy classes | The bounded K2 instrument makes honest online execution and replay agree, while a trace whose early prover move depends on a future challenge replays but cannot obtain causal-generation provenance. K3 must define the adversary and strategy classes used by property judgments. |
+| Strong Fiat--Shamir structure | K2 structural regression closed | PIR structural admission | [J1](invariant-ledger.md#71-semantic-guarantees) now rejects omitted or late Statement binding, Wire-only or missing required influence, wrong prefixes, reused challenge coordinates, and direct or transitive verifier-private influence. K3 still owns theorem applicability. |
+| Fresh/FS relation | K2 Schnorr control closed; portfolio pressure open | PIR construction; Analysis theorem applicability | K2 preserves one literal Core and identity occurrence map across Fresh and FS on its Schnorr control and rejects mismatched constructions. K4 must pressure the same relation with native FRI/IOR and the differentiated portfolio; K3 owns theorem meaning. |
+| Core algebra and extension model | K2 bounded selections closed | PIR | K2 fixes the finite base algebra, exact supported-module ownership, fail-closed unknown extensions, scope order, Oracle lifecycle, and identity effects. A later protocol that needs a semantically distinct effect or cannot inhabit the registered module boundary reopens only this cone. |
 | Relations boundary | Open co-design seam | PIR surfaces, Relations semantics, Analysis loss | A relation-bound R1CS/AIR or Sumcheck fixture must distinguish Statement, Witness, private nonwitness, grounding, lossless bridge, and priced lossy projection; an opaque carrier escape or unpriced projection fails. |
 | Analysis boundary | Partially stable | Analysis, reading PIR-owned views | Instantiate one primary-source FS theorem over causal target execution and one relation-bound property; wrong model, strategy, correspondence, hypothesis, or loss occurrence must change the qualified result. |
 | OIR boundary | Inactive but relevant | PIR source obligations; OIR projection relation | Project both roles, then drop one required effect, add phantom provenance, change a discharge family, and exercise the bounded imported-verification shape with typed `Unsupported` where projection remains unimplemented. Local validity must not survive as source-relative correctness. |
@@ -85,10 +87,12 @@ A pure reopening condition is not itself a closure test.
 | Documentation and protocol evidence | Open | Project governance and exact evidence producer | Hide `notes/`, run manifest/link/symbol-owner reconstruction, and cold-implement the frozen kernel; separately complete the differentiated protocol portfolio at its assigned strengths. Any missing definition, hidden dependency, or self-authored success fact fails. |
 
 No contradiction found in this audit invalidates the central factorization.
-The failure is closure: some exact-looking identities and judgments depend on
-symbols whose formation, evaluation, comparison, cost, or read law is absent.
-The current target is a detailed candidate schema, not yet a complete v0
-specification.
+K1 and K2 have repaired the previously missing Foundation and PIR definitions
+at bounded standalone resolution. The remaining closure risk is now the exact
+consumer seam: Relations, Analysis, and OIR must read those definitions without
+inventing parallel meaning or forcing hidden changes upstream. The current
+target is therefore a detailed, executable candidate kernel, not yet a complete
+or frozen v0 specification.
 
 The audited evidence instruments remain reproducible: P01 passes 69 tests and
 its source-bound replay, while the repaired FRI-grinding witness passes 39 tests
@@ -100,7 +104,9 @@ semantic verdict, but it independently supports the freeze decision above.
 ## 4. Kernel closure boundary
 
 The [invariant ledger](invariant-ledger.md) remains the single obligation
-owner. Before semantic-kernel freeze it must close these dependency groups:
+owner. K1 closes group 1 at standalone Foundation scope and K2 closes groups
+2--4 at standalone PIR scope. Before semantic-kernel freeze, K3--K5 must test
+their integration and close the remaining groups:
 
 1. **Executable foundations:** regime identity/support; canonical typed values;
    kind-safe ABIs; executable codecs, samplers, and algorithms; checkable
@@ -179,10 +185,10 @@ independent-oracle checks. The independent implementation boundary covers
 canonical values and identity, not term evaluation. The package deliberately
 does not claim a fully serialized request decoder, a second term evaluator,
 Protocol/Fiat--Shamir closure, consumer closure, implementation adoption, or
-kernel freeze. Those boundaries advance to K2 and K3 rather than being hidden
-inside the K1 result.
+kernel freeze. K2 has now closed the first of those semantic boundaries at its
+bounded scope; consumer integration and kernel freeze remain with K3--K5.
 
-### K2 — Protocol and FS kernel
+### K2 — Protocol and FS kernel — complete 2026-08-26
 
 - add causal strategy-generated execution;
 - close Statement/Witness occurrences, required influence, initialization and
@@ -190,6 +196,18 @@ inside the K1 result.
 - resolve the registered Core and extension choices on shared substrates; and
 - exercise every strong-FS and shipped non-regression row at structural
   admission rather than assuming it in Analysis.
+
+K2 selected the finite same-Core Fresh/FS model specified by
+[`pir/interactive-core.md`](../../pir/interactive-core.md) and
+[`pir/fiat-shamir.md`](../../pir/fiat-shamir.md). It closes causal strategy
+generation, scoped public binding, derived transcript influence, dependency-
+computed public-coin eligibility, native finite Oracle interaction,
+reduction-sensitive Last-Challenge ordering, semantic namespaces, and the
+state-passing sampling/failure contract at bounded K2 resolution. Its 48-test
+reference instrument is green after the final cold-audit findings were
+reconciled. K3 still owns external Statement correspondence, adversary and
+theorem applicability, quantitative property transport, and the minimum OIR
+read seam; no cryptographic theorem or integrated-kernel freeze follows.
 
 ### K3 — Minimum consumer co-design
 

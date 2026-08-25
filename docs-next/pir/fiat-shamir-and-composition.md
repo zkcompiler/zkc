@@ -20,6 +20,14 @@
 > direct; only module imports form a transitive preimage DAG. Strong
 > Fiat--Shamir closure is therefore still a K2 obligation.
 
+> **K2 routing notice:** [Fiat--Shamir Construction](fiat-shamir.md) now owns
+> transcript identity, initialization, framing, required influence, exact
+> prefix, public-coin admission, squeeze/sample, failure, namespace, execution,
+> and the same-Core Fresh/FS relation. The FS portions below are the
+> pre-revalidation snapshot and are not a second definition source. The
+> composition material remains historical input until its later dedicated
+> closure pass.
+
 ## 1. Scope and design center
 
 This document defines two PIR-owned structural constructions:

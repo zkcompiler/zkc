@@ -20,6 +20,14 @@
 > closure and no Foundation authentication capability. Until that work, this
 > page does not establish K1-aligned Interface or Plan admission.
 
+> **K2 routing notice:** `CoreId`, `ProtocolId`, causal strategy generation,
+> and public execution views are now owned by
+> [Interactive Core and Causal Execution](interactive-core.md); transcript-
+> construction coordinates are owned by
+> [Fiat--Shamir Construction](fiat-shamir.md). This Interface/Plan page remains
+> a pre-K2 dependent-subject candidate and will be reconciled in the later
+> consumer seam, rather than redefining either upstream subject.
+
 ## 1. Scope and architectural position
 
 A Protocol fixes verifier-visible semantics. A `ProtocolInterface` and a

@@ -1,0 +1,1526 @@
+# Interactive Core and Causal Execution
+
+> **Document kind:** Target semantic specification
+> **Document state:** Active non-normative K2 target
+> **Target status:** Bounded K2 candidate complete; K3 consumer integration
+> remains open
+> **Provisional owner:** `pir`
+> **Authority:** None during the transition. Current normative Protocol
+> semantics remain under [`docs/`](../../docs/README.md).
+
+## 1. Contract
+
+This page is the sole K2 definition owner for:
+
+- the finite verifier-observable `InteractiveCore`;
+- its identity, formation, admission, and structural source views;
+- public instance bindings and explicit composition scopes;
+- its base effects and standard immutable-oracle extension;
+- typed claims, reductions, checks, and terminal closure;
+- legal actor-visible histories and prover decisions;
+- causal strategy-generated execution and non-authoritative replay; and
+- structural public-coin eligibility.
+
+The companion [Fiat--Shamir Construction](fiat-shamir.md) owns transcript
+state, derived required influence, challenge sampling, and the checked Fresh/FS
+relation. Foundation owns the identities, values, algorithms, typed failures,
+evaluation contracts, and operational outcome distinctions reused here.
+
+PIR does not own witness satisfaction, adversary classes, soundness, knowledge,
+zero knowledge, theorem applicability, concrete suppliers, proof serialization,
+endpoint projection, or implementation evidence.
+
+## 2. Foundation notation and limits
+
+K2 uses the definitions in
+[Executable Semantic Foundations](../foundation/executable-foundations.md)
+without aliases that can change their meaning:
+
+- `PriorMetaAuthenticationBasis B`;
+- `SemanticContentId<K>(B, body)` and `ContentRefV0`;
+- `SemanticModuleId` and authenticated exact-used module closure;
+- `ValueType` and `CanonicalValue<T>`;
+- `PortableAlgorithmRef`, its derived `SemanticFunctionType`, and admitted
+  `EvaluationContractId`; and
+- completed `Success`/typed `DomainFailure` versus `Unsupported`,
+  `MissingDependency`, `KindMismatch`, `Malformed`, `Refused`,
+  `DeterministicLimitExceeded`, and `CheckerFailure`.
+
+Every sequence on this page is finite and ordered. A set is encoded as the
+sorted-unique sequence under the exact canonical body bytes of its elements.
+Every local reference is an unsigned dense ordinal into the named sequence.
+`None | Some(x)` is a K1 finite variant, never a null value. Naturals and all
+aggregate bodies fit the constitutional K1 limits. Additionally:
+
+```text
+maximum Core occurrences             = 2^14
+maximum values, inputs, scopes,
+  challenges, oracles, checks,
+  claims, reductions, and terminals  = 2^14 each
+maximum direct occurrence inputs     = 2^14
+maximum scope depth                  = 384
+```
+
+These local ceilings do not relax the smaller cumulative K1 byte, node, edge,
+or depth bound. Formation preflights the enclosing canonical body before
+materializing a derived aggregate. Reaching a limit is allowed; crossing it
+produces no Core ID.
+
+The PIR K2 semantic regime supports the exact declarations on this page. A
+Core may import additional same-regime semantic modules under Section 8, but
+only exact-used imports enter its body.
+
+Several Core fields need nominal semantic coordinates without asking PIR to
+prove the theorem or cryptographic meaning attached to them. K2 uses one
+closed reference form for that purpose:
+
+```text
+ProtocolDeclarationRef<K> = ModuleDeclarationRef<K>
+
+For x = (m, K, n):
+  ModuleDeclarationRefBody(x) =
+    DeclarationRefBody(Module(m, K, n))
+  ModuleOwner(x) = m
+
+SemanticModuleRefBody(m) = MetaBytes(ContentRefV0(m))
+
+NominalProtocolDeclarationBody = MetaRecord {
+  0: MetaSymbol(nonempty semantic symbol)
+}
+```
+
+The selected PIR regime recognizes this body for the declaration kinds
+`"pir.message-channel"`, `"pir.challenge-domain"`,
+`"pir.public-coin-law"`, `"pir.coin-correlation-group"`,
+`"pir.challenge-sharing-contract"`, `"pir.claim-contract"`,
+`"pir.reduction-contract"`, and `"pir.oracle-binding-contract"`.
+`ModuleDeclarationRefBody` is the mandatory Foundation union injection: a bare
+`ModuleDeclarationRef` is never passed directly to `DeclarationRefBody` and a
+module ID is never encoded as an untyped digest. The reference is an
+authenticated, owner-qualified nominal coordinate. It is not resolved by its
+symbol, and its formation alone proves no distribution, claim denotation,
+reduction theorem, or binding property. Section 8 derives the exact direct
+owner-module set; later Analysis reads the exact reference when assigning such
+meaning.
+
+## 3. Subjects and identities
+
+### 3.1 Core and Protocol
+
+```text
+InteractiveCore = {
+  used_modules: CanonicalSortedUniqueSeq<SemanticModuleId>,
+  public_inputs: CanonicalSeq<PublicInputDecl>,
+  verifier_private_inputs: CanonicalSeq<VerifierPrivateInputDecl>,
+  constants: CanonicalSeq<TypedConstantDecl>,
+  derived_values: CanonicalSeq<DerivedValueDecl>,
+  scopes: NonEmptyCanonicalSeq<ScopeDecl>,
+  bindings: CanonicalSeq<PublicBindingDecl>,
+  challenges: CanonicalSeq<ChallengeDecl>,
+  oracles: CanonicalSeq<OracleDecl>,
+  checks: CanonicalSeq<CheckDecl>,
+  claims: CanonicalSeq<ClaimDecl>,
+  reductions: CanonicalSeq<ReductionDecl>,
+  terminals: NonEmptyCanonicalSeq<TerminalDecl>,
+  occurrences: NonEmptyCanonicalSeq<OccurrenceDecl>
+}
+```
+
+The identity-bearing body is `InteractiveCoreBody` in Appendix A:
+
+```text
+CoreId = SemanticContentId<"pir.interactive-core">(
+  B, InteractiveCoreBody(core))
+```
+
+Display names, source locations, MLIR syntax, authoring labels, diagnostics,
+plans, suppliers, compiler routes, research notes, and evidence are absent from
+the body.
+
+One admitted Core may have two challenge interpretations:
+
+```text
+ChallengeInterpretation =
+    Fresh
+  | FiatShamir(TranscriptConstructionId)
+
+Protocol = {
+  core_id: CoreId,
+  challenge_interpretation: ChallengeInterpretation
+}
+
+ProtocolId = SemanticContentId<"pir.protocol">(B, ProtocolBody(protocol))
+```
+
+`TranscriptConstructionId` is defined by the companion page. `Fresh` is one
+closed tag; its challenge laws are already in the Core. The two Protocol IDs
+are distinct while retaining one literal `CoreId`.
+
+### 3.2 Lifecycle
+
+```text
+CanonicalCoreCandidate
+  --AuthenticateCore--> AuthenticatedCoreCandidate
+  --AdmitCore---------> AdmittedCore
+
+(AdmittedCore, Fresh)
+  --AdmitFresh--------> AdmittedFreshProtocol
+
+(AdmittedCore, admitted TranscriptConstruction)
+  --AdmitFS-----------> AdmittedFSProtocol
+```
+
+Authentication recomputes the typed Core ID and every consulted K1 dependency
+inside one request-local hash-binding ledger. It grants no semantic authority.
+Admission runs the closed predicates in Section 10. Only an immutable exact
+`AdmittedCore` may be used for execution or a checked construction.
+
+An admitted handle retains the exact ID, canonical body, authenticated prior-
+meta basis, exact-used module and algorithm closure, admission regime, and
+evaluator identity. Serialization is not the handle.
+
+## 4. Parties, inputs, values, and scopes
+
+### 4.1 Parties and external sources
+
+The base v0 Core has exactly two protocol parties:
+
+```text
+Party = Prover | Verifier
+```
+
+Public invocation values and public coins are typed external sources, not a
+third party. Prover-private witness, advice, randomness, and mutable state
+belong to an external strategy or a dependent Interface/Plan. They never occur
+as concrete values in `CoreId`.
+
+A general interactive Core may declare Verifier-private invocation values.
+Their existence is identity-bearing and their visibility is exactly Verifier.
+Section 11 rejects any such value or its dependency closure from an FS-eligible
+Core.
+
+### 4.2 Inputs and value references
+
+```text
+PublicInputDecl = { value_type: ValueType }
+
+VerifierPrivateInputDecl = { value_type: ValueType }
+
+TypedConstantDecl = {
+  value_type: ValueType,
+  value: CanonicalValue<value_type>
+}
+
+ValueRef =
+    PublicInput(PublicInputRef)
+  | VerifierPrivateInput(VerifierPrivateInputRef)
+  | Constant(ConstantRef)
+  | Derived(DerivedValueRef)
+  | OccurrenceOutput(OccurrenceRef, output_ordinal)
+
+TypedValueRef = { ref: ValueRef, value_type: ValueType }
+```
+
+The repeated `value_type` is checked metadata: admission derives the referenced
+type and requires exact equality. It is included in canonical bodies only where
+Appendix A says so; a cache may not override derivation.
+
+```text
+DerivedValueDecl = {
+  algorithm: PortableAlgorithmRef,
+  evaluation_contract: EvaluationContractId,
+  inputs: CanonicalSeq<ValueRef>,
+  result_type: ValueType
+}
+```
+
+The algorithm's admitted derived ABI must have the exact ordered input types,
+the exact `result_type`, and an empty semantic-failure row. A value whose
+mathematical operation is partial must use a total tagged result value and make
+the branch explicit; an unhandled algorithm failure cannot be hidden as value
+absence.
+
+`ValueRef` availability is derived from initial inputs/constants, earlier
+occurrence outputs, and the topological `derived_values` order. A derived value
+may read only available operands. There is no generic ambient value, host
+object, callback, or late registry lookup.
+
+### 4.3 Public binding classes
+
+```text
+PublicBindingClass = Statement | SessionContext | PublicParameter
+
+PublicBindingDecl = {
+  scope: ScopeRef,
+  class: PublicBindingClass,
+  value: ValueRef
+}
+```
+
+- `Statement` fixes the exact public claim or instance for that scope.
+- `SessionContext` distinguishes application/session use without asserting
+  proof freshness or replay prevention by itself.
+- `PublicParameter` is a runtime public value affecting verifier behavior;
+  a static parameter belongs directly in the Core or construction body.
+
+Every public input has at least one binding. No Verifier-private value may be a
+public binding. The same value may have distinct binding occurrences in
+different scopes; each occurrence has its own `BindingRef` and transcript
+coordinate. Duplicate `(scope, class, value)` triples refuse because they add
+no distinguishable meaning.
+
+### 4.4 Explicit scopes
+
+```text
+ScopeOpening = Initially | BeforeOccurrence(OccurrenceRef)
+
+ScopeDecl = {
+  parent: None | Some(ScopeRef),
+  opening: ScopeOpening
+}
+```
+
+Scope 0 is the unique root, has no parent, and opens `Initially`. Every other
+scope names an earlier scope as parent and opens before one occurrence. Scope
+depth is bounded. A scope's binding sequence is derived by scanning
+`PublicBindingDecl` in ascending `BindingRef` order; there is no second authored
+backlink list.
+
+A child opens after its parent and after every value in its bindings is
+available. It opens at most once. At least one occurrence belongs to it. A
+scope cannot open after its first occurrence or after any challenge assigned
+to that scope. An occurrence's active scope is explicit; its ancestors must
+already be open.
+
+Scope opening is not a caller event or strategy move. It is a deterministic
+semantic boundary used by visible-history and transcript derivation. The
+transcript remains continuous across openings. At each boundary, let `Due(b)`
+be every unopened scope whose `opening` is `Initially` at the initial boundary
+or `BeforeOccurrence(b)` at the named occurrence boundary. Admission requires
+that the root is the only initially due scope. Before occurrence `b`, execution
+opens all members of `Due(b)` in ascending `(scope_depth, ScopeRef)` order;
+therefore a simultaneously due parent always opens before its child, and
+siblings open by ascending ordinal. Each opening emits its bindings in
+ascending `BindingRef` order before the next scope opens. A due scope whose
+parent is neither already open nor earlier in that exact order refuses
+admission. No implementation traversal order may replace this order.
+
+## 5. Guards, challenges, and occurrence order
+
+### 5.1 Guards
+
+```text
+Guard =
+    Always
+  | EvaluateBoolean {
+      algorithm: PortableAlgorithmRef,
+      evaluation_contract: EvaluationContractId,
+      inputs: CanonicalSeq<ValueRef>
+    }
+```
+
+The algorithm must be admitted, total on the exact input domains, return the
+K1 Boolean value type, and have an empty failure row. Inputs are available
+before the guarded occurrence. A guard is evaluated exactly once. The result
+is public only if all input dependency leaves are public; Prover visibility is
+computed, not asserted.
+
+There is no canonical decision diagram or extensional equivalence claim.
+Changing the algorithm reference or operands changes the Core body even when
+an Analysis relation could later prove equivalent behavior.
+
+### 5.2 Challenge declarations
+
+```text
+CoinCorrelation =
+    Independent
+  | JointMember {
+      group: ProtocolDeclarationRef<"pir.coin-correlation-group">,
+      index: ordinal,
+      prior_members: CanonicalSeq<ChallengeRef>
+    }
+
+ReductionUsePolicy =
+    Exclusive
+  | Shared(
+      ProtocolDeclarationRef<"pir.challenge-sharing-contract">)
+
+ChallengeDecl = {
+  scope: ScopeRef,
+  value_type: ValueType,
+  domain: ProtocolDeclarationRef<"pir.challenge-domain">,
+  fresh_law: ProtocolDeclarationRef<"pir.public-coin-law">,
+  correlation: CoinCorrelation,
+  reduction_use: ReductionUsePolicy,
+  public_conditions: CanonicalSeq<ValueRef>
+}
+```
+
+Each Challenge has exactly one occurrence and one output. Its public
+conditions are available and public before that occurrence. Independent draws
+have no prior member. Joint members use dense indices from zero, one exact
+group, compatible laws and types, and list every earlier member required by
+the conditional law in group order. A group may not mix scopes unless its
+declaration explicitly uses their least common active ancestor.
+
+Challenge domains are semantic-purpose coordinates and may repeat. Distinct
+draws remain distinct because the Fiat--Shamir namespace contains the exact
+scope path and `ChallengeRef`. A shared value is represented by one Challenge
+occurrence referenced at multiple legal consumers, not by two declarations
+with the same domain. Joint members represent correlated but distinct draws.
+
+Section 6.3 derives the sorted-unique `ReductionConsumers(c)` from exact
+reduction declarations; a value dependency or equal challenge value does not
+create such a consumer. `Exclusive` requires
+`|ReductionConsumers(c)| <= 1`. `Shared(contract)` requires
+`|ReductionConsumers(c)| >= 2`, binds that complete derived consumer sequence
+to the exact sharing-contract coordinate, and permits no consumer outside the
+sequence. Every consumer uses this one Challenge occurrence and its one output,
+not a copied or equal-valued draw. The sharing declaration is a coordinate for
+the K3 property/pricing obligation; its nominal body does not itself prove that
+reuse is sound. Ordinary value uses by checks and deterministic computations
+are not reduction-role uses.
+
+The Fresh law denotes a distribution independent of prover-controlled history,
+conditioned only on its named earlier public-coin members and public static
+conditions. Distribution truth is an Analysis/evidence obligation. PIR checks
+the exact structural dependency surface.
+
+### 5.3 Occurrence envelope
+
+```text
+OccurrenceDecl = {
+  scope: ScopeRef,
+  guard: Guard,
+  effect: CoreEffect
+}
+
+CoreEffect =
+    ProverMessage(ProverMessageDecl)
+  | DeterministicVerifierMessage(VerifierMessageDecl)
+  | Challenge(ChallengeRef)
+  | InvokeCheck(CheckRef)
+  | ApplyReduction(ReductionRef)
+  | ReachTerminal(TerminalRef)
+  | StandardOracle(OracleEffect)
+  | ModuleEffect(ModuleEffectRef)
+```
+
+The sequence ordinal is the `OccurrenceRef`; no second schedule field exists.
+It is the exact semantic order. Every `ValueRef`, guard input, scope opening,
+claim use, query, and reduction reference obeys the earlier-boundary laws on
+this page.
+
+An occurrence is attempted iff execution is live, its scope is open, and its
+guard evaluates true. An inactive occurrence emits no Core output. The
+Fiat--Shamir page separately decides when an exact inactive marker is required
+to distinguish transcript histories.
+
+### 5.4 Messages
+
+```text
+MessageChannelRef = ProtocolDeclarationRef<"pir.message-channel">
+
+ProverMessageDecl = {
+  channel: MessageChannelRef,
+  payload_type: ValueType
+}
+
+VerifierMessageDecl = {
+  channel: MessageChannelRef,
+  algorithm: PortableAlgorithmRef,
+  evaluation_contract: EvaluationContractId,
+  inputs: CanonicalSeq<ValueRef>,
+  payload_type: ValueType
+}
+```
+
+An active `ProverMessage` is a strategy decision expecting one canonical value
+of `payload_type`; output 0 is that value and becomes visible to both parties.
+An active deterministic Verifier message evaluates its exact total, failure-
+free algorithm; output 0 becomes visible to both parties. A verifier message
+whose value is selected by hidden state or a supplier is not this constructor.
+
+Messages have no authored Wire/Transcript switch. Wire exposure belongs to
+Interface/OIR; transcript influence is derived by the companion page.
+
+## 6. Checks, claims, reductions, and terminals
+
+### 6.1 Checks
+
+```text
+CheckDecl = {
+  algorithm: PortableAlgorithmRef,
+  evaluation_contract: EvaluationContractId,
+  inputs: CanonicalSeq<ValueRef>
+}
+```
+
+The admitted algorithm has the exact input ABI, Boolean success type, and
+empty failure row. Cryptographic or backend-specific operations enter through
+exact K1 semantic primitives used by that portable algorithm; there is no
+second opaque check callback. Missing primitive/evaluator support is
+operational `Unsupported`, not false. A successful active check creates
+Boolean output 0, visible to Verifier and to Prover only if a later public
+message or terminal exposes it.
+
+Checks are predicates over already available values. Their existence proves no
+relation satisfaction or cryptographic property.
+
+### 6.2 Claims
+
+```text
+ClaimUsage = Linear | Reusable
+
+ClaimSource =
+    InitialClaim(BindingRef)
+  | ReductionOutput(ReductionRef, output_ordinal)
+
+ClaimDecl = {
+  contract: ProtocolDeclarationRef<"pir.claim-contract">,
+  scope: ScopeRef,
+  usage: ClaimUsage,
+  source: ClaimSource
+}
+```
+
+An initial claim cites a Statement binding in the same scope or an ancestor.
+A reduction output has the exact contract declared for that output. A claim is
+live only after its source exists. A linear claim can be consumed or discharged
+once. A reusable claim can be cited repeatedly but remains subject to terminal
+disposition.
+
+### 6.3 Reductions
+
+```text
+ReductionPublicationRequirement = {
+  publication: OccurrenceRef,
+  next_challenge: None | Some(ChallengeRef)
+}
+
+ReductionDecl = {
+  contract: ProtocolDeclarationRef<"pir.reduction-contract">,
+  scope: ScopeRef,
+  input_claims: NonEmptyCanonicalSeq<ClaimRef>,
+  side_inputs: CanonicalSeq<ValueRef>,
+  required_challenges: CanonicalSeq<ChallengeRef>,
+  required_publications: CanonicalSeq<ReductionPublicationRequirement>,
+  output_contracts:
+    CanonicalSeq<ProtocolDeclarationRef<"pir.claim-contract">>
+}
+```
+
+An active `ApplyReduction` requires every input claim live, every side input
+available, and every required challenge and publication already occurred. The
+exact reduction contract fixes the structural role and output-claim ABI. The
+occurrence consumes each linear input and creates its declared outputs in
+ordinal order. It does not execute a proof theorem; K3 assigns property meaning
+to the admitted structural transition.
+
+`ReductionPublicationOccurrence(o)` is derived, never asserted. It is true
+exactly when `o` carries a `ProverMessage`, a `PublishOracle`, or a supported
+`ModuleEffect` whose admitted effect declaration gives it the exact
+`ProverPublication` decision class and a public module observation. A
+deterministic Verifier message, Challenge, Oracle Query/Answer, Check,
+Reduction, or Terminal cannot inhabit this slot.
+
+For one reduction, `required_challenges` has no duplicate and is ordered by the
+occurrence positions of its one-to-one Challenge occurrences.
+`required_publications` has no duplicate `publication` and is ordered by those
+publication occurrence positions. The one `ApplyReduction` occurrence has
+exactly the reduction's declared scope. Every named Challenge and publication
+has that scope or an ancestor on its active scope path, is guard-available
+under `GuardImplies`, and precedes `ApplyReduction`. A future,
+inactive-on-the-use-path, wrong-kind, or wrongly scoped entry refuses admission.
+
+For a publication requirement `p`:
+
+- `Some(c)` requires `c` in this reduction's `required_challenges`, requires
+  `p.publication` to precede the occurrence of `c`, and requires `c` to be the
+  **least** required challenge occurring after that publication; and
+- `None` is legal exactly when no required challenge follows the publication.
+  If the reduction has a required challenge, such a publication therefore
+  follows its last required challenge.
+
+Consequently, every reduction-owned publication before a later round challenge
+has one mechanically determined `next_challenge`; the Fiat--Shamir construction
+adds that publication occurrence to `RequiredInfluence(c)`. Cumulative
+transcript state carries it to still later challenges. A Schnorr response may
+legally use `None` after its last challenge, whereas material placed before a
+later batching challenge cannot be mislabeled as a post-challenge response.
+This is the K2 Last-Challenge law.
+
+Every `ReductionPublicationOccurrence` in the transitive value-dependency
+closure of `side_inputs` must occur exactly once in `required_publications`.
+The declaration may name an additional publication when the selected reduction
+contract assigns it a semantic round role not visible in value dataflow; naming
+it makes that occurrence reduction-owned for all K2 ordering and influence
+checks. K3 must check that this exact structural role set is adequate for the
+reduction contract's property rule; PIR does not infer theorem roles from a
+label.
+
+Define one reduction-role consumer as the pair `(ReductionRef, ChallengeRef)`
+for each unique membership of `ChallengeRef` in that reduction's
+`required_challenges`, and define:
+
+```text
+ReductionConsumers(c) =
+  sort_unique_by(
+    (position(ApplyReduction(reduction)), ReductionRef),
+    every (reduction, c))
+```
+
+Each consumer's Challenge occurrence precedes its `ApplyReduction`, and every
+publication linked to that challenge satisfies the law above. The complete
+derived sequence is checked against the Challenge's `ReductionUsePolicy` in
+Section 5.2. Equal values, equal domains, ordinary dataflow uses, and repeated
+references inside one reduction create no additional consumer.
+
+### 6.4 Terminals
+
+```text
+TerminalVerdict = Accept | Reject | Abort
+
+ClaimDisposition = Consume | Discharge
+
+TerminalDecl = {
+  verdict: TerminalVerdict,
+  public_outputs: CanonicalSeq<ValueRef>,
+  required_true_checks: CanonicalSeq<CheckRef>,
+  claim_dispositions:
+    CanonicalSeq<(ClaimRef, ClaimDisposition)>
+}
+```
+
+At an active terminal, every public output is available to Verifier, every
+required check has occurred and is true, and every named claim is live. Its
+dispositions apply in sequence, then every live linear claim must be consumed
+or discharged and every accepting-path required reduction must be saturated.
+An `Accept` terminal additionally rejects an unresolved initial claim or
+unapplied required reduction. `Reject` and `Abort` may discharge remaining
+claims only through explicit dispositions.
+
+Each Terminal has exactly one occurrence. The final Core occurrence is an
+unconditional `ReachTerminal` in the root or an open descendant scope, ensuring
+a finite fallback. Execution stops at the first active terminal. Earlier
+guarded terminals are allowed.
+
+## 7. Standard immutable-oracle extension
+
+### 7.1 Oracle declarations
+
+```text
+OraclePublicationMode =
+    FullCanonicalOracle
+  | PublicBinding {
+      binding_type: ValueType,
+      binding_contract:
+        ProtocolDeclarationRef<"pir.oracle-binding-contract">,
+      binding_algorithm: PortableAlgorithmRef,
+      evaluation_contract: EvaluationContractId
+    }
+
+OracleDecl = {
+  scope: ScopeRef,
+  index_type: ValueType,
+  element_type: ValueType,
+  maximum_entries: Natural,
+  publication_mode: OraclePublicationMode
+}
+
+OracleEntryType(o) =
+  RootRecord<[(0, o.index_type), (1, o.element_type)]>
+
+OracleCarrierType(o) =
+  RootSeq<OracleEntryType(o), o.maximum_entries>
+
+OracleLookupResultType(o) =
+  RootVariant<[(0, RootUnit), (1, o.element_type)]>
+
+CanonicalFiniteOracle<o> = CanonicalValue<OracleCarrierType(o)>
+
+OraclePublicationOutputType(o) =
+  if o.publication_mode = FullCanonicalOracle
+  then OracleCarrierType(o)
+  else o.publication_mode.binding_type
+
+OracleAnswerOutputType(o) = OracleLookupResultType(o)
+```
+
+The three root-type constructors above are the exact K1 aliases in the Core's
+semantic regime; `0` and `1` are exact record/case ordinals. A finite Oracle's
+admitted datum is exactly:
+
+```text
+S[ R{0:index_0.datum,1:element_0.datum}, ... ]
+```
+
+The sequence length is at most `maximum_entries`; every index and element is
+owner-admitted at its declared type; entries are strictly ascending by
+`index.canonical_bytes`; and indices are unique under the Foundation
+domain-owned equality for the exact `index_type`. Unique canonical
+representatives make an equal index have equal canonical bytes, but lookup
+uses the domain-owned equality, not host byte equality or a language map.
+
+`Lookup(o, index)` scans that bounded sequence in order and returns the exact
+`OracleLookupResultType(o)` value `V(0,Unit)` when absent or
+`V(1,element.datum)` for the unique equal index. This total definition removes
+an ambient missing-index exception. Publication output and Answer output have
+the exact derived types above; neither output type is inferred from a receipt.
+
+The Oracle carrier is strategy-supplied once at publication, strictly admitted
+as `CanonicalFiniteOracle<o>`, and snapshotted immutably by the execution
+engine. `FullCanonicalOracle` publishes that exact carrier. `PublicBinding`
+keeps the carrier confidential and publishes the result of the named admitted,
+total, failure-free algorithm whose exact ABI is
+`[OracleCarrierType(o)] -> binding_type`. Its evaluation contract is checked by
+K1. The nominal binding contract records the intended cryptographic relation
+for K3; it does not replace executable binding computation or prove the
+relation secure.
+
+### 7.2 Oracle effects
+
+```text
+OracleEffect =
+    PublishOracle(OracleRef)
+  | QueryOracle {
+      oracle: OracleRef,
+      index: ValueRef,
+      visibility: Public | VerifierOnly
+    }
+  | AnswerOracle {
+      query: OccurrenceRef
+    }
+```
+
+Each Oracle has exactly one `PublishOracle`, and that occurrence's scope equals
+`OracleDecl.scope`. Publication is a prover decision, output 0 has
+`OraclePublicationOutputType(o)`, and both parties observe that exact public
+value. There is no second strategy-supplied `public_material` that could
+disagree with it.
+
+A Query occurs strictly after publication, uses one available value of exact
+`index_type`, and lies in the Oracle scope or a descendant whose scope path
+contains it. Its guard must imply the publication guard. `VerifierOnly` means
+the index and answer remain verifier-visible and makes every dependent sink
+fail Section 11; a Public query coordinate is visible to both parties. Query
+has no Core output.
+
+`AnswerOracle` names one earlier unmatched Query, has exactly the Query's scope
+and visibility, and its guard must imply the Query guard. It performs
+`Lookup(o,index)` and creates output 0 of exact
+`OracleLookupResultType(o)`. Every active Query has exactly one active Answer
+before any dependent use or terminal; an inactive Query has no Answer on that
+path. Wrong Oracle, wrong index type, answer before query, duplicate answer,
+scope/guard mismatch, mutation after publication, or a recorded answer unequal
+under Foundation equality at that exact result type refuses generation/replay
+at the first affected boundary.
+
+Replay reconstructs a `FullCanonicalOracle` by strict decoding of its
+publication output. For `PublicBinding`, the replay capability supplies one
+exact `CanonicalFiniteOracle<o>`; replay reruns the binding algorithm and
+requires Foundation equality with the recorded publication output. It then
+recomputes every Query index from the Core state and every Answer with
+`Lookup`, comparing the receipt and occurrence output at their exact types.
+Missing/extra Oracle witnesses or receipts refuse; unsupported domain equality
+or binding evaluation is qualified noncompletion, never a successful match.
+
+A commitment root, authentication path, and opening check are ordinary public
+values/messages/checks around this lifecycle. They do not replace the logical
+Oracle or allow an answer to define it retroactively.
+
+## 8. Exact-used semantic extensions
+
+A Core constructor outside Sections 5--7 is a `ModuleEffectRef`:
+
+```text
+ModuleEffectRef = {
+  module: SemanticModuleId,
+  declaration: ModuleDeclarationRef<"pir.core-effect">,
+  payload: MetaValueV0
+}
+```
+
+The declaration module must be in `used_modules`. Its authenticated local body
+fixes the effect's exact payload schema, inputs and outputs, actor-visible
+history, transition, guard behavior, required-influence rule, replay rule,
+terminal interaction, and deterministic work bounds. It also fixes exactly one
+decision class (`NoProverDecision`, `ProverDecision`, or
+`ProverPublication`), a finite ordered dependency edge list for every output
+and control result, and, for each deterministic public output, an exact admitted
+portable reconstruction algorithm plus evaluation contract over those ordered
+dependencies. `ProverPublication` additionally requires one public
+`ModuleObservation`. Every outward `ValueType` is lifted under K1. The evaluator
+must advertise support for that exact module and effect declaration before
+owner admission. A declaration cannot supply a `publicly_recomputable` Boolean
+or other asserted classification in place of these executable facts.
+
+Unknown same-kind semantics are `Unsupported`; wrong kind/regime is
+`KindMismatch`; malformed payload is `Malformed`; a supported well-formed
+payload failing its owner law is `Refused`. No opaque effect, callback, or
+authored observation set is accepted. Adding a supported module does not rotate
+unrelated Core IDs; only Cores importing it cite its ID.
+
+The Core's direct module set is a derived function:
+
+```text
+DirectOwnerModules(C) = sort_unique_by(ContentRefV0, modules from)
+  1. ModuleOwner(x) for every ProtocolDeclarationRef x in C;
+  2. the owner of every module-owned ValueDomainRef recursively present in
+     any ValueType or typed constant in C;
+  3. ModuleEffectRef.module and ModuleOwner(ModuleEffectRef.declaration),
+     which admission requires to be equal; and
+  4. every module owner in a declaration-reference or value-type slot obtained
+     by strict decoding of a ModuleEffect payload under its exact owner schema.
+
+ExactUsedModules(C) := C.used_modules = DirectOwnerModules(C)
+```
+
+Equality is equality of the complete sorted `SemanticModuleId` sequence. An
+omitted direct owner and an unreferenced extra owner both refuse admission.
+Imports of these direct owners are authenticated through K1's derived
+`RequiredModuleClosure_B(DirectOwnerModules(C))`; transitive imports are not
+silently copied into `used_modules` unless a Core field directly cites them.
+Portable algorithms and evaluation contracts authenticate their own exact
+closures and do not donate hidden modules to the Core's direct list.
+
+## 9. Visible history and legal prover decisions
+
+### 9.1 Observations
+
+```text
+Observation =
+    PublicBindingOpened(BindingRef, CanonicalValue)
+  | MessageObserved(OccurrenceRef, Party, CanonicalValue)
+  | ChallengeObserved(OccurrenceRef, CanonicalValue)
+  | OraclePublished(OccurrenceRef, OracleRef, public_material)
+  | OracleQueryObserved(OccurrenceRef, OracleRef, CanonicalValue)
+  | OracleAnswerObserved(OccurrenceRef, CanonicalValue)
+  | PublicTerminalObserved(OccurrenceRef, TerminalRef,
+                           TerminalVerdict, public_outputs)
+  | ModuleObservation(ModuleEffectRef, module_defined_payload)
+```
+
+`VisibleHistory(party, boundary)` is the exact subsequence of occurred
+observations visible to that party before the boundary, preserving Core order
+and scope-opening positions. Prover additionally knows every move it supplied
+and its strategy-private state; those are not public observations. Verifier
+additionally knows its declared private inputs, Verifier-only oracle queries
+and answers, and internal check results.
+
+An object being used by transcript, a check, or a claim is not an implicit
+knowledge transfer. Visibility follows only the constructors above and an
+exact supported module rule.
+
+### 9.2 Decision points and views
+
+```text
+ProverDecisionKind =
+    SupplyMessage(payload_type)
+  | SupplyOracle(oracle_schema, publication_mode)
+  | ModuleDecision(module_defined_type)
+
+ProverDecisionPoint = {
+  occurrence: OccurrenceRef,
+  scope_path: NonEmptyCanonicalSeq<ScopeRef>,
+  kind: ProverDecisionKind
+}
+
+ProverMove =
+    MessageValue(CanonicalValue<declared payload type>)
+  | OracleValue {
+      immutable_oracle: CanonicalFiniteOracle<declared Oracle>
+    }
+  | ModuleMove {
+      declaration: exact ModuleEffectRef,
+      payload: exact module-defined canonical value
+    }
+
+ProverView = {
+  protocol_id: ProtocolId,
+  static_protocol_view: PublicProtocolDescriptionView,
+  public_invocation: CanonicalSeq<(PublicInputRef, CanonicalValue)>,
+  visible_history: CanonicalSeq<Observation>,
+  current_decision: ProverDecisionPoint
+}
+```
+
+`PublicProtocolDescriptionView` is the immutable tuple of exact `ProtocolId`,
+admitted Core declaration/view, and, for an FS Protocol, the exact admitted
+transcript-construction declaration. It exposes static public declarations and
+schedule shape, never invocation values or mutable execution state. Knowing
+the protocol is not anticipation. The view
+includes only runtime public inputs whose scopes are open and only observations
+that have occurred. It contains no future runtime value or receipt, future
+coin, verifier-private value, unqueried oracle answer, mutable transcript
+state, ambient registry, clock, file, or process object.
+
+```text
+StrategyStep(private_state, ProverView, private_randomness)
+  -> Produce(ProverMove, next_private_state)
+   | Stop
+```
+
+PIR defines this relation and the legal move grammar, not a strategy language
+or identity. The capability is bound to the exact `ProtocolId`; a realization
+invokes it through an interface that can read only `ProverView` plus its
+supplied private state/randomness. A dependent Plan may identify a particular
+strategy implementation without changing the Core.
+
+`Stop`, unavailable capability, private search exhaustion, or failure to
+produce a legal move yields operational noncompletion and no Core terminal.
+An explicit protocol abort is a public move followed by ordinary terminal
+logic.
+
+## 10. Core admission
+
+`AdmitCore` evaluates these boundaries in order:
+
+1. authenticate the prior-meta basis, Core ID/body, every asserted direct
+   module ID/body pair, all ordinary references, algorithms, contracts, and the
+   K1-derived transitive module closures inside one hash-binding ledger;
+2. validate Appendix A carrier shape, all bounds, dense ordinals, sorted-unique
+   sets, exact reference kinds/regimes, and absence of trailing or unknown
+   fields;
+3. derive `DirectOwnerModules(core)`, require `ExactUsedModules(core)`, reject
+   omitted and extra module IDs, resolve and support every exact-used PIR
+   declaration and extension, derive every algorithm ABI, and refuse an unknown
+   constructor;
+4. type constants, inputs, derived values, guards, messages, checks,
+   challenges, oracles, claims, reductions, terminals, and occurrence outputs;
+5. validate the rooted scope tree, the exact simultaneous-opening order,
+   binding completeness and uniqueness, value availability, and occurrence
+   scope membership;
+6. validate the total occurrence order, guard availability, one-to-one
+   Challenge/Check/Reduction/Terminal/Oracle occurrence backlinks, the exact
+   finite-Oracle carrier/lookup/output laws, and standard effect lifetime and
+   scope rules;
+7. derive party visibility and reject a use that is unavailable to its actor;
+8. validate challenge laws, joint-group closure, derived namespace
+   distinguishability, the exact `ReductionConsumers` sequence, and its
+   `Exclusive`/`Shared` law;
+9. simulate structural claim liveness on every schedule path induced by the
+   finite guards, using the Core's bounded explicit state, and check linearity,
+   required-publication kind/uniqueness/least-next-challenge order,
+   Last-Challenge closure, reduction saturation, and terminal closure; and
+10. require the unconditional final fallback terminal and mint one immutable
+    `AdmittedCore` only if every boundary succeeds.
+
+Step 9 does not enumerate Boolean assignments or build an ROBDD. K2 uses a
+finite forward abstract state and one closed syntactic implication law:
+
+```text
+GuardImplies(use_guard, source_guard) :=
+  source_guard = Always or use_guard = source_guard
+```
+
+A guarded use of a conditionally produced value, claim, query, or other state
+must pass this law. A mathematically valid but syntactically different
+implication is not guessed, delegated to a host solver, or accepted by an
+unidentified certificate; it is outside this K2 regime. A future checked
+implication satellite would require its own exact proposition, validator,
+bounds, and admission integration.
+
+Admission is deterministic and bounded by the K1 body limits plus linear scans,
+sorted-set operations, algorithm checks, and the finite abstract-state
+transfer. It constructs no exponential decision diagram.
+
+## 11. Structural public-coin eligibility
+
+`PublicCoinEligible(AdmittedCore)` is computed by one finite dependency
+analysis, not read from an authored flag. Its closed coordinate algebra is:
+
+```text
+PCNode =
+    PublicInputNode(PublicInputRef)
+  | VerifierPrivateInputNode(VerifierPrivateInputRef)
+  | ConstantNode(ConstantRef)
+  | DerivedValueNode(DerivedValueRef)
+  | ScopeOpeningNode(ScopeRef)
+  | BindingObservationNode(BindingRef)
+  | OccurrenceActivityNode(OccurrenceRef)
+  | OccurrenceEffectNode(OccurrenceRef)
+  | OccurrenceOutputNode(OccurrenceRef, output_ordinal)
+  | ClaimStateNode(ClaimRef)
+  | ReductionStateNode(ReductionRef)
+  | TerminalDecisionNode(TerminalRef)
+  | ModuleControlNode(OccurrenceRef, control_ordinal)
+  | ModuleOutputNode(OccurrenceRef, output_ordinal)
+```
+
+`PCNodeBody` in Appendix A fixes these tags and fields. `ValueProducerNode`
+maps every `ValueRef` to its unique input, constant, derived-value, or
+occurrence-output node. Construct `PCGraph(core)` with exactly the applicable
+nodes above and the following edges:
+
+1. a derived-value node receives its declared input producer nodes;
+2. a scope-opening node receives its parent opening, and a binding-observation
+   node receives its scope opening and bound value producer;
+3. occurrence activity receives its scope opening and exact guard producers;
+4. occurrence effect receives activity plus all constructor operands:
+   message/check inputs, challenge conditions and prior joint members, Oracle
+   publication/query dependencies, reduction claims/side inputs/challenges/
+   publications, terminal checks/claims/public outputs, or the exact supported
+   module dependency list;
+5. every occurrence output receives its effect node; claim, reduction, and
+   terminal nodes receive their exact source/effect nodes; and
+6. module control/output nodes receive precisely the declaration-owned ordered
+   edges, with every outward module output connected to its occurrence output.
+
+No implicit schedule-prefix edge is added: order alone is not data or control
+dependence. Admission has already made the resulting graph acyclic and forward;
+the graph is bounded by Section 2. Its deterministic topological order is
+Kahn's algorithm, selecting at each step the available node with the least
+`M(PCNodeBody(node))`; failure to exhaust every node refuses admission.
+
+Evaluate its unique topological order in the lattice:
+
+```text
+PCClass = StaticPublic | PublicHistory | VerifierPrivate | Invalid
+
+Join(xs) = Invalid          if Invalid in xs
+         | VerifierPrivate  else if VerifierPrivate in xs
+         | PublicHistory    else if PublicHistory in xs
+         | StaticPublic     otherwise
+
+Publish(x) = PublicHistory  if x in {StaticPublic, PublicHistory}
+           | x              otherwise
+```
+
+Public inputs and constants are `StaticPublic`; Verifier-private inputs are
+`VerifierPrivate`. Total failure-free derived algorithms, guards, scope
+openings, checks, reductions, and terminals use `Join` of their exact incoming
+edges. A Prover message, Oracle publication output, or Public Oracle answer uses
+`Publish(activity)`; a Public Query uses `Join(activity,index)`, while a
+Verifier-only Query/Answer is `VerifierPrivate`. A deterministic Verifier
+message uses `Join(activity,inputs)` only after its exact K1 ABI check. A
+Challenge is `PublicHistory` only when its activity is public, every
+`public_condition` is `StaticPublic`, and every named joint member is an earlier
+valid Challenge; otherwise it is `Invalid` or `VerifierPrivate` by the first
+failed dependency. Any other nondeterministic Verifier-to-Prover output is
+`Invalid`.
+
+A module effect applies these same transfers to its exact dependency edges:
+Prover publications use `Publish`, and deterministic public outputs use the
+declared reconstruction algorithm after ABI checking. A missing edge,
+unsupported reconstruction algorithm, asserted Boolean classification, or
+Verifier nondeterminism yields `Invalid`.
+
+`PCSinks(core)` is the derived set of every guard/activity controlling a public
+observation, deterministic Verifier output, public Query index, Challenge
+condition, invoked Check, Reduction transition, Terminal decision, terminal
+public output, and module control/output declared acceptance-relevant.
+`PublicCoinEligible(core)` is true exactly when every sink is
+`StaticPublic` or `PublicHistory`, every Challenge passed its special transfer,
+and every challenge is observed before a later Prover-decision dependency may
+consume it. Unused Verifier-private inputs are therefore harmless; any path
+from one to a sink is mechanically rejecting. The finite node/edge tables and
+final classes are retained in `PublicCoinView`.
+
+This predicate proves no distribution, independence, soundness, or random-
+oracle property. It identifies the exact Core structure for which a
+Fiat--Shamir interpretation can be formed. A false result refuses FS admission
+but does not invalidate the Fresh Core.
+
+## 12. Challenge-parameterized execution
+
+### 12.1 Resolver interface
+
+Core execution is parameterized only by an admitted challenge resolver:
+
+```text
+ResolveChallenge(
+  admitted_core,
+  challenge_ref,
+  public_history,
+  exact public conditions,
+  prior joint members)
+  -> Success(CanonicalValue<challenge.value_type>)
+   | typed interpretation DomainFailure
+   | qualified operational noncompletion
+```
+
+`FreshResolver` obtains one exact value from a scoped public-coin capability
+and records its declared-law coordinate. The value must be in the exact domain.
+One sample cannot establish that the capability followed the distribution.
+`FiatShamirResolver` is defined by the companion page. No other resolver may
+inhabit an admitted Protocol.
+
+### 12.2 Invocation and state
+
+```text
+CoreInvocation = {
+  public_inputs:
+    TotalMap<PublicInputRef, CanonicalValue<declared type>>,
+  verifier_private_inputs:
+    TotalMap<VerifierPrivateInputRef, CanonicalValue<declared type>>
+}
+
+CoreState = {
+  next_occurrence,
+  open_scopes,
+  canonical_values,
+  party_visible_histories,
+  immutable_oracles,
+  pending_queries,
+  check_results,
+  live_claims,
+  applied_reductions,
+  optional_terminal
+}
+
+CoreInvocationId = SemanticContentId<"pir.invocation">(
+  B, CoreInvocationBody(admitted_core.id, invocation))
+```
+
+Input maps cover every and only declared occurrence. Strict canonical decode
+and domain admission precede execution. State collections use declaration
+ordinals and are bounded by the Core. `CoreInvocationBody` is fixed in
+Appendix A. The invocation handle and ID may be confidential when the Fresh
+Core has Verifier-private inputs; content addressing never authorizes
+disclosure.
+
+The capability arguments are exact runtime bindings, not semantic shortcuts:
+
+```text
+ChallengeResolverCapability = one resolver admitted by Protocol interpretation
+ExactCheckAndExtensionCapabilities =
+  exact K1 evaluator plus total bindings for every used primitive/module effect
+ExactOracleReplayCapabilities =
+  TotalMap<PublicBinding OracleRef, CanonicalFiniteOracle<declared Oracle>>
+```
+
+Each binding is checked against the ID or declaration already committed by the
+admitted subjects. Missing support is qualified noncompletion; a disagreeing
+provider is `CheckerFailure`.
+
+### 12.3 Generated run
+
+```text
+GenerateRun(
+  AdmittedProtocol,
+  CoreInvocation,
+  ProverStrategyCapability,
+  ChallengeResolverCapability,
+  ExactCheckAndExtensionCapabilities)
+  -> CompletedRun(RunRecord, CausalGenerationCapability)
+   | InterpretationFailed(ProtocolFailureRecord)
+   | StrategyStopped(PartialRunRecord)
+   | qualified operational noncompletion
+```
+
+Execution opens due scopes, evaluates each guard, and applies active effects in
+occurrence order. At a prover decision it constructs the exact current
+`ProverView`, invokes one strategy step, validates one move, and commits it
+atomically. A capability request for a value outside the view refuses strategy
+generation at that decision. At a Challenge it invokes the exact resolver. At
+the first active terminal it records completion and stops.
+
+`InterpretationFailed` is the completed typed-failure lane of the selected
+challenge interpretation. It is not a Core terminal. `StrategyStopped` is not
+a Core outcome and cannot be converted to Reject or Abort without an explicit
+protocol event. Other missing capabilities, unsupported algorithms, resource
+exhaustion, and checker defects follow K1's qualified noncompletion partition.
+
+`CausalGenerationCapability` is a nonserializable, process-local capability
+minted only by this invocation of `GenerateRun` after its restricted strategy
+calls and terminal complete. It is bound to the live admitted-Protocol handle,
+invocation handle, evaluator instance, and returned record object. It has no
+canonical body, ID, receipt field, Boolean surrogate, or replay constructor and
+expires with that process-local execution scope. A consumer requiring causal
+generation must receive this capability directly; possession, serialization,
+hashing, or successful replay of `RunRecord` never establishes provenance.
+
+### 12.4 Run and replay records
+
+```text
+OccurrenceStatus = Inactive | Active
+
+OccurrenceReceipt = {
+  occurrence: OccurrenceRef,
+  status: OccurrenceStatus,
+  outputs: CanonicalSeq<CanonicalValue>
+}
+
+FreshChallengeReceipt = {
+  challenge: ChallengeRef,
+  law: ProtocolDeclarationRef<"pir.public-coin-law">,
+  public_source_coordinate: MetaValueV0,
+  value: CanonicalValue<declared challenge type>
+}
+
+ChallengeResolverReceipt =
+    Fresh(FreshChallengeReceipt)
+  | FiatShamir(FSChallengeReceipt)
+
+OracleReceipt =
+    Published(occurrence, oracle,
+              CanonicalValue<OraclePublicationOutputType(oracle)>)
+  | Queried(occurrence, oracle,
+            CanonicalValue<oracle.index_type>, visibility)
+  | Answered(occurrence, oracle,
+             CanonicalValue<OracleLookupResultType(oracle)>, visibility)
+
+RunRecord = {
+  protocol_id: ProtocolId,
+  invocation_id: CoreInvocationId,
+  occurrence_receipts: CanonicalSeq<OccurrenceReceipt>,
+  challenge_receipts: CanonicalSeq<ChallengeResolverReceipt>,
+  oracle_receipts: CanonicalSeq<OracleReceipt>,
+  terminal: TerminalRef,
+  terminal_public_outputs: CanonicalSeq<CanonicalValue>
+}
+
+PartialRunRecord = the exact prefix of RunRecord before a terminal
+
+ProtocolFailureRecord = {
+  protocol_id: ProtocolId,
+  invocation_id: CoreInvocationId,
+  occurrence_prefix: CanonicalSeq<OccurrenceReceipt>,
+  challenge_receipts: CanonicalSeq<ChallengeResolverReceipt>,
+  failure: exact typed interpretation DomainFailure,
+  interpretation_receipt: MetaValueV0
+}
+```
+
+`FSChallengeReceipt` is closed by the companion page. Receipt output arity,
+type, visibility, and effect-specific payload are derived from the exact Core;
+a receipt cannot add an output or hide an expected one. The records are typed
+execution data rather than independently authoritative subjects. Private
+strategy state, witness, advice, randomness, and an opaque oracle body under
+`PublicBinding` are absent. Exact replay receives any required confidential
+oracle witness through a separate capability and checks every exposed answer.
+A Plan-specific confidential generation record may bind private material
+separately.
+
+```text
+ReplayRun(
+  AdmittedProtocol,
+  exact CoreInvocation,
+  RunRecord,
+  ChallengeResolverReplayCapability,
+  ExactOracleReplayCapabilities,
+  ExactCheckAndExtensionCapabilities)
+  -> ReplayMatches | qualified refusal/noncompletion
+```
+
+Replay consumes decisions and receipts in occurrence order, recomputes every
+deterministic transition, challenge, check, oracle lookup, claim state, and
+terminal output, and requires exact exhaustion of the record. It does not invoke
+a strategy and therefore does not mint `CausalGenerationCapability`. A trace
+can replay even when its producer had future information. The live capability
+attests only that this semantic engine used the restricted relation for that
+one call; implementation isolation and host side channels remain Evidence
+questions.
+
+## 13. PIR-owned source views
+
+An admitted Core exports immutable question-scoped views, each derived from the
+exact body and carrying `CoreId`:
+
+```text
+PublicBindingView =
+  (scopes, openings, every BindingRef/class/type/value origin)
+
+StrategyDecisionView =
+  (decision points, exact ProverView formation, legal move types)
+
+PublicCoinView =
+  (eligibility result, challenge laws, conditions, joint groups,
+   verifier-private dependency closure)
+
+EffectView =
+  (messages, oracle lifecycle, checks, terminals, supported extensions)
+
+ClaimReductionView =
+  (claim contracts/usage/source, reductions, required challenges/publications,
+   terminal dispositions)
+
+ExecutionView =
+  (visible-history law, resolver coordinates, process-local causal-capability
+   issuance, RunRecord and replay law)
+```
+
+PIR owns their source facts and adequacy for the named question. Relations,
+Analysis, and OIR own any additional proposition computed from them. A view is
+not a second Protocol schema and does not add facts absent from the admitted
+body.
+
+## 14. Composition and finite recurrence boundary
+
+Canonical composition must produce a new `InteractiveCore` body, authenticate
+it, and run all admission predicates again. Child occurrence paths are
+represented by explicit scopes and the new total sequence. Public input,
+value, claim, and terminal wiring must resolve to exact target references; no
+ambient child handle remains in execution.
+
+The new `CoreId` is the complete semantic composition context. Authoring
+lineage, compiler route, and a composition-spec ID are excluded from challenge
+meaning. If two routes normalize to the same exact Core body, replay between
+them is intentional. An application needing domain separation supplies a
+distinct identified SessionContext or static application domain.
+
+V0 recurrence is finite unrolling before Core authentication. Recursive proof
+verification is one finite message/check interaction or a supported exact-used
+module effect; it does not recursively execute a child authority. Dynamic
+schedules, unbounded loops, noncommunicating multiprover semantics, and
+distributed-verifier knowledge require a future explicit extension and cannot
+be encoded through labels or opaque effects.
+
+## 15. Nonclaims and reopening conditions
+
+This page establishes no cryptographic property, strategy implementation
+conformance, distribution truth, relation satisfaction, endpoint coverage, or
+production support. It does not claim that differently identified Cores are
+observationally different, that a binding digest is collision resistant, or
+that access receipts exclude host side channels.
+
+Reopen this Core if a K4 protocol requires one of the following without a
+faithful finite supported extension:
+
+- independent noncommunicating provers or distributed verifier knowledge;
+- a statement introduced after the first challenge of its active scope;
+- scheduler nondeterminism as protocol meaning;
+- a necessary conditional-use implication outside the closed K2 syntactic
+  `GuardImplies` law;
+- an oracle whose publication/query/answer lifecycle cannot inhabit Section 7;
+- symbolic recurrence whose finite lowering is infeasible or semantically
+  lossy; or
+- an acceptance-relevant effect that cannot state exact transition,
+  visibility, influence, replay, and bounds under the module law.
+
+## Appendix A. Canonical bodies
+
+All bodies below are exact `MetaValueV0` records. `R{...}`, `S[...]`, `V(tag,x)`,
+`N(n)`, `Q(symbol)`, and `Y(bytes)` denote K1 record, sequence, variant,
+natural, symbol, and bytes forms. References to ordinary IDs are
+`Y(ContentRefV0(id))`; value types use `CanonicalValueTypeBody`; canonical
+values use their admitted datum body. Fields are listed in ordinal order and
+no other field is legal.
+
+```text
+InteractiveCoreBody(C) = R {
+  0: S[ SemanticModuleRefBody(module) ... ],
+  1: S[ PublicInputBody ... ],
+  2: S[ VerifierPrivateInputBody ... ],
+  3: S[ TypedConstantBody ... ],
+  4: S[ DerivedValueBody ... ],
+  5: S[ ScopeBody ... ],
+  6: S[ PublicBindingBody ... ],
+  7: S[ ChallengeBody ... ],
+  8: S[ OracleBody ... ],
+  9: S[ CheckBody ... ],
+ 10: S[ ClaimBody ... ],
+ 11: S[ ReductionBody ... ],
+ 12: S[ TerminalBody ... ],
+ 13: S[ OccurrenceBody ... ]
+}
+
+PublicInputBody(x) = R { 0: ValueTypeBody(x.value_type) }
+VerifierPrivateInputBody(x) = R { 0: ValueTypeBody(x.value_type) }
+TypedConstantBody(x) = R {
+  0: ValueTypeBody(x.value_type), 1: x.value.datum
+}
+
+ValueRefBody =
+  V(0,N(public_input_ref))
+| V(1,N(verifier_private_input_ref))
+| V(2,N(constant_ref))
+| V(3,N(derived_value_ref))
+| V(4,R{0:N(occurrence_ref),1:N(output_ordinal)})
+
+DerivedValueBody(x) = R {
+  0: ContentRef(x.algorithm),
+  1: ContentRef(x.evaluation_contract),
+  2: S[ ValueRefBody(input) ... ],
+  3: ValueTypeBody(x.result_type)
+}
+
+ScopeOpeningBody = V(0,Unit) | V(1,N(occurrence_ref))
+ScopeBody(x) = R {
+  0: NoneOrSomeOrdinalBody(x.parent),
+  1: ScopeOpeningBody(x.opening)
+}
+
+PublicBindingClassBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
+PublicBindingBody(x) = R {
+  0: N(x.scope),
+  1: PublicBindingClassBody(x.class),
+  2: ValueRefBody(x.value)
+}
+
+CoinCorrelationBody =
+  V(0,Unit)
+| V(1,R{0:ModuleDeclarationRefBody(group),1:N(index),
+        2:S[N(prior_challenge_ref)...]})
+
+ReductionUsePolicyBody =
+  V(0,Unit)
+| V(1,ModuleDeclarationRefBody(sharing_contract))
+
+ChallengeBody(x) = R {
+  0: N(x.scope),
+  1: ValueTypeBody(x.value_type),
+  2: ModuleDeclarationRefBody(x.domain),
+  3: ModuleDeclarationRefBody(x.fresh_law),
+  4: CoinCorrelationBody(x.correlation),
+  5: ReductionUsePolicyBody(x.reduction_use),
+  6: S[ ValueRefBody(condition) ... ]
+}
+
+OraclePublicationModeBody =
+  V(0,Unit)
+| V(1,R{0:ValueTypeBody(binding_type),
+        1:ModuleDeclarationRefBody(binding_contract),
+        2:ContentRef(binding_algorithm),
+        3:ContentRef(evaluation_contract)})
+
+OracleBody(x) = R {
+  0: N(x.scope),
+  1: ValueTypeBody(x.index_type),
+  2: ValueTypeBody(x.element_type),
+  3: N(x.maximum_entries),
+  4: OraclePublicationModeBody(x.publication_mode)
+}
+
+CheckBody(x) = R {
+  0: ContentRef(x.algorithm),
+  1: ContentRef(x.evaluation_contract),
+  2: S[ ValueRefBody(input) ... ]
+}
+
+ClaimUsageBody = V(0,Unit) | V(1,Unit)
+ClaimSourceBody =
+  V(0,N(public_binding_ref))
+| V(1,R{0:N(reduction_ref),1:N(output_ordinal)})
+
+ClaimBody(x) = R {
+  0: ModuleDeclarationRefBody(x.contract),
+  1: N(x.scope),
+  2: ClaimUsageBody(x.usage),
+  3: ClaimSourceBody(x.source)
+}
+
+ReductionPublicationRequirementBody(x) = R {
+  0: N(x.publication),
+  1: NoneOrSomeOrdinalBody(x.next_challenge)
+}
+
+ReductionBody(x) = R {
+  0: ModuleDeclarationRefBody(x.contract),
+  1: N(x.scope),
+  2: S[ N(claim_ref) ... ],
+  3: S[ ValueRefBody(input) ... ],
+  4: S[ N(challenge_ref) ... ],
+  5: S[ ReductionPublicationRequirementBody(requirement) ... ],
+  6: S[ ModuleDeclarationRefBody(output_claim_contract) ... ]
+}
+
+TerminalVerdictBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
+ClaimDispositionBody = V(0,Unit) | V(1,Unit)
+TerminalBody(x) = R {
+  0: TerminalVerdictBody(x.verdict),
+  1: S[ ValueRefBody(output) ... ],
+  2: S[ N(check_ref) ... ],
+  3: S[ R{0:N(claim_ref),1:ClaimDispositionBody(disposition)} ... ]
+}
+```
+
+The remaining exact bodies are:
+
+```text
+GuardBody =
+  V(0,Unit)
+| V(1,R{0:ContentRef(algorithm),
+        1:ContentRef(evaluation_contract),
+        2:S[ValueRefBody(input)...]})
+
+ProverMessageBody(x) = R {
+  0: ModuleDeclarationRefBody(x.channel),
+  1: ValueTypeBody(x.payload_type)
+}
+
+VerifierMessageBody(x) = R {
+  0: ModuleDeclarationRefBody(x.channel),
+  1: ContentRef(x.algorithm),
+  2: ContentRef(x.evaluation_contract),
+  3: S[ValueRefBody(input)...],
+  4: ValueTypeBody(x.payload_type)
+}
+
+OracleEffectBody =
+  V(0,N(oracle_ref))
+| V(1,R{0:N(oracle_ref),1:ValueRefBody(index),
+        2:V(visibility_tag,Unit)})
+| V(2,N(query_occurrence_ref))
+
+ModuleEffectRefBody(x) = R {
+  0: SemanticModuleRefBody(x.module),
+  1: ModuleDeclarationRefBody(x.declaration),
+  2: x.payload
+}
+
+CoreEffectBody =
+  V(0,ProverMessageBody)
+| V(1,VerifierMessageBody)
+| V(2,N(challenge_ref))
+| V(3,N(check_ref))
+| V(4,N(reduction_ref))
+| V(5,N(terminal_ref))
+| V(6,OracleEffectBody)
+| V(7,ModuleEffectRefBody)
+
+OccurrenceBody(x) = R {
+  0: N(x.scope), 1: GuardBody(x.guard), 2: CoreEffectBody(x.effect)
+}
+
+ChallengeInterpretationBody =
+  V(0,Unit) | V(1,ContentRef(transcript_construction_id))
+
+ProtocolBody(P) = R {
+  0: ContentRef(P.core_id),
+  1: ChallengeInterpretationBody(P.challenge_interpretation)
+}
+
+CoreInvocationBody(core_id, I) = R {
+  0: ContentRef(core_id),
+  1: S[ R{
+       0:N(public_input_ref),
+       1:CanonicalValueTypeBody(declared_type),
+       2:value.datum} ... in PublicInputRef order ],
+  2: S[ R{
+       0:N(verifier_private_input_ref),
+       1:CanonicalValueTypeBody(declared_type),
+       2:value.datum} ... in VerifierPrivateInputRef order ]
+}
+
+PCNodeBody =
+  V(0,N(public_input_ref))
+| V(1,N(verifier_private_input_ref))
+| V(2,N(constant_ref))
+| V(3,N(derived_value_ref))
+| V(4,N(scope_ref))
+| V(5,N(binding_ref))
+| V(6,N(occurrence_ref))
+| V(7,N(occurrence_ref))
+| V(8,R{0:N(occurrence_ref),1:N(output_ordinal)})
+| V(9,N(claim_ref))
+| V(10,N(reduction_ref))
+| V(11,N(terminal_ref))
+| V(12,R{0:N(occurrence_ref),1:N(control_ordinal)})
+| V(13,R{0:N(occurrence_ref),1:N(output_ordinal)})
+```
+
+`NoneOrSomeOrdinalBody` is `V(0,Unit) | V(1,N(ordinal))`. Appendix shorthands
+are exact:
+
+```text
+ContentRef(x)    = Y(ContentRefV0(x))
+ValueTypeBody(T) = CanonicalValueTypeBody(T)
+```
+
+`ModuleDeclarationRefBody` and `SemanticModuleRefBody` are the exact Section 2
+wrappers around the K1 union and content-reference carriers. None is a textual
+identifier. Tag meanings are fixed by the order shown on this page. Changing a
+field, tag, order, or admission law requires a new
+supported PIR semantic module/regime; old bytes are never reinterpreted.

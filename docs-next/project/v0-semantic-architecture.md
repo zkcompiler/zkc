@@ -38,8 +38,21 @@
 > This closes the bootstrap, typed identity, module, canonical-value,
 > portable-function, typed-failure, and deterministic-evaluation substrate at
 > K1 resolution. It does not ratify the historical consumer schemas or freeze
-> the integrated kernel: K2 Protocol/Fiat--Shamir closure is next, and K3 must
-> reconcile the minimum consumers and satisfy Foundation's extraction test.
+> the integrated kernel. At that checkpoint K2 Protocol/Fiat--Shamir closure
+> and K3 consumer reconciliation remained; the K2 update below records the
+> former's bounded completion.
+
+> **K2 integrated-closure update — 2026-08-26:** Bounded Protocol and
+> Fiat--Shamir closure is complete in
+> [Interactive Core](../pir/interactive-core.md) and
+> [Fiat--Shamir Construction](../pir/fiat-shamir.md). One literal finite Core
+> now owns scoped public bindings, causal strategy execution, native finite
+> Oracle interaction, claims/reductions, exact public-coin dependency analysis,
+> and replay; the paired construction owns derived transcript influence,
+> semantic namespaces, four one-result sampling algorithms, advancing retry,
+> and exact typed exhaustion. This replaces the pre-K2 snapshots as the active
+> target definition without making the target normative or implemented. K3
+> consumer co-design is next, and the integrated kernel remains unfrozen.
 
 ## 1. Result of the first reconstruction package
 
