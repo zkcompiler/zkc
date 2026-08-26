@@ -50,11 +50,8 @@ def core_with(
     )
 
 
-def invocation(values: dict[str, model.Value], coins: dict[str, int] | None = None) -> model.Invocation:
-    return model.Invocation(
-        MappingProxyType(dict(values)),
-        MappingProxyType({} if coins is None else dict(coins)),
-    )
+def invocation(values: dict[str, model.Value]) -> model.Invocation:
+    return model.Invocation(MappingProxyType(dict(values)))
 
 
 def construction(label: bytes = b"zkc/k2/test/v0", **kwargs: object) -> model.TranscriptConstruction:
@@ -161,6 +158,7 @@ class SchnorrPairTest(unittest.TestCase):
                 model.ChallengeInterpretation.FRESH,
                 self.invocation,
                 self.strategy,
+                fresh_resolver=model.ScriptedFreshResolver({"challenge": 7}),
             )
         )
         fs = completed(
@@ -210,6 +208,11 @@ class SchnorrPairTest(unittest.TestCase):
                         interpretation,
                         self.invocation,
                         self.strategy,
+                        fresh_resolver=(
+                            model.ScriptedFreshResolver({"challenge": 7})
+                            if interpretation is model.ChallengeInterpretation.FRESH
+                            else None
+                        ),
                     )
                 )
                 self.assertEqual(
@@ -296,6 +299,7 @@ class SchnorrPairTest(unittest.TestCase):
                 model.ChallengeInterpretation.FRESH,
                 self.invocation,
                 self.strategy,
+                fresh_resolver=model.ScriptedFreshResolver({"challenge": 7}),
             )
         )
         deliberately_unsupported = replace(
@@ -349,6 +353,96 @@ class SchnorrPairTest(unittest.TestCase):
             valid,
         )
 
+    def test_fresh_coin_is_resolved_only_at_its_challenge(self) -> None:
+        self.assertFalse(hasattr(self.invocation, "public_coins"))
+        resolver = model.ScriptedFreshResolver({"challenge": 7})
+
+        def commitment(_: model.ProverView) -> model.Value:
+            self.assertEqual(resolver.requests, ())
+            return pow(2, 4, 23)
+
+        def response(view: model.ProverView) -> model.Value:
+            self.assertEqual(
+                tuple(request.occurrence for request in resolver.requests),
+                ("challenge",),
+            )
+            challenge = view.read_occurrence("challenge")
+            assert type(challenge) is int
+            return (4 + challenge * 3) % 11
+
+        record = completed(
+            model.generate(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FRESH,
+                self.invocation,
+                model.ScriptedStrategy(
+                    {"commitment": commitment, "response": response}
+                ),
+                fresh_resolver=resolver,
+            )
+        )
+        self.assertIs(record.entries[-1].value, True)
+
+    def test_fresh_resolver_value_does_not_change_invocation_identity(self) -> None:
+        first = completed(
+            model.generate(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FRESH,
+                self.invocation,
+                self.strategy,
+                fresh_resolver=model.ScriptedFreshResolver({"challenge": 7}),
+            )
+        )
+        second = completed(
+            model.generate(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FRESH,
+                self.invocation,
+                self.strategy,
+                fresh_resolver=model.ScriptedFreshResolver({"challenge": 8}),
+            )
+        )
+        self.assertEqual(first.invocation_id, second.invocation_id)
+        self.assertNotEqual(first.entries[1].value, second.entries[1].value)
+        self.assertNotEqual(first, second)
+
+    def test_fresh_generation_refuses_missing_or_invalid_resolution(self) -> None:
+        class ConstantResolver:
+            def __init__(self, value: object) -> None:
+                self.value = value
+
+            def resolve(self, _: model.FreshChallengeRequest) -> int:
+                return self.value  # type: ignore[return-value]
+
+        cases = (
+            ("missing resolver", None, "needs a resolver"),
+            (
+                "missing challenge value",
+                model.ScriptedFreshResolver({}),
+                "has no value",
+            ),
+            ("non-integer value", ConstantResolver(b"bad"), "non-integer"),
+            (
+                "out-of-domain value",
+                model.ScriptedFreshResolver({"challenge": 11}),
+                "outside the declared domain",
+            ),
+        )
+        for label, resolver, message in cases:
+            with self.subTest(case=label):
+                with self.assertRaisesRegex(model.FreshResolutionError, message):
+                    model.generate(
+                        self.core,
+                        self.construction,
+                        model.ChallengeInterpretation.FRESH,
+                        self.invocation,
+                        self.strategy,
+                        fresh_resolver=resolver,
+                    )
+
     def test_strategy_stop_is_not_a_core_terminal(self) -> None:
         result = model.generate(
             self.core,
@@ -370,6 +464,7 @@ class SchnorrPairTest(unittest.TestCase):
                 model.ChallengeInterpretation.FRESH,
                 self.invocation,
                 model.ScriptedStrategy({"commitment": 1, "response": 1}),
+                fresh_resolver=model.ScriptedFreshResolver({"challenge": 7}),
             )
         )
         self.assertIs(fresh.entries[-1].value, False)
@@ -437,7 +532,7 @@ class StrongFiatShamirBindingTest(unittest.TestCase):
     def test_substituted_statement_changes_invocation_and_replay_fails(self) -> None:
         values = dict(self.invocation.values)
         values["statement"] = 1
-        changed = invocation(values, dict(self.invocation.public_coins))
+        changed = invocation(values)
         self.assertNotEqual(
             model.invocation_id(self.core, changed),
             self.record.invocation_id,
@@ -607,7 +702,7 @@ class StrongFiatShamirBindingTest(unittest.TestCase):
                 ),
             ),
         )
-        inv = invocation({"statement": b"s", "enabled": False}, {"challenge": 3})
+        inv = invocation({"statement": b"s", "enabled": False})
         record = completed(
             model.generate(
                 core,
@@ -660,7 +755,7 @@ class StrongFiatShamirBindingTest(unittest.TestCase):
                 ),
             ),
         )
-        inv = invocation({"statement": b"s", "enabled": True}, {"challenge": 3})
+        inv = invocation({"statement": b"s", "enabled": True})
         record = completed(
             model.generate(
                 core,
@@ -693,7 +788,7 @@ class PublicCoinAndNamespaceTest(unittest.TestCase):
             ),
             inputs=(model.InputDecl("private", model.InputRole.VERIFIER_PRIVATE),),
         )
-        inv = invocation({"private": b"secret"}, {"challenge": 2})
+        inv = invocation({"private": b"secret"})
         self.assertFalse(model.is_public_coin_eligible(core))
         fresh = completed(
             model.generate(
@@ -702,6 +797,7 @@ class PublicCoinAndNamespaceTest(unittest.TestCase):
                 model.ChallengeInterpretation.FRESH,
                 inv,
                 model.ScriptedStrategy({}),
+                fresh_resolver=model.ScriptedFreshResolver({"challenge": 2}),
             )
         )
         self.assertIs(fresh.entries[-1].value, True)
@@ -731,7 +827,7 @@ class PublicCoinAndNamespaceTest(unittest.TestCase):
                 ),
             ),
         )
-        inv = invocation({"unused-private": b"secret"}, {"challenge": 2})
+        inv = invocation({"unused-private": b"secret"})
         self.assertTrue(model.is_public_coin_eligible(core))
         record = completed(
             model.generate(
@@ -815,7 +911,7 @@ class PublicCoinAndNamespaceTest(unittest.TestCase):
                 core,
                 construction(b"nonpublic"),
                 model.ChallengeInterpretation.FIAT_SHAMIR,
-                invocation({"private": b"secret"}, {"challenge": 2}),
+                invocation({"private": b"secret"}),
                 model.ScriptedStrategy({}),
             )
 
@@ -842,10 +938,17 @@ class PublicCoinAndNamespaceTest(unittest.TestCase):
                 model.Occurrence("terminal", model.OccurrenceKind.TERMINAL),
             )
         )
-        inv = invocation({}, {"c1": 1, "c2": 2})
+        inv = invocation({})
         tc = construction(b"namespace-mutation")
         fresh = completed(
-            model.generate(core, tc, model.ChallengeInterpretation.FRESH, inv, model.ScriptedStrategy({}))
+            model.generate(
+                core,
+                tc,
+                model.ChallengeInterpretation.FRESH,
+                inv,
+                model.ScriptedStrategy({}),
+                fresh_resolver=model.ScriptedFreshResolver({"c1": 1, "c2": 2}),
+            )
         )
         fs = completed(
             model.generate(core, tc, model.ChallengeInterpretation.FIAT_SHAMIR, inv, model.ScriptedStrategy({}))
@@ -1022,6 +1125,13 @@ class NativeOracleTest(unittest.TestCase):
                     interpretation,
                     self.invocation,
                     self.strategy,
+                    fresh_resolver=(
+                        model.ScriptedFreshResolver(
+                            {"query_coin": 2, "fold_coin": 3}
+                        )
+                        if interpretation is model.ChallengeInterpretation.FRESH
+                        else None
+                    ),
                 )
             )
             self.assertIs(record.entries[-1].value, True)
@@ -1046,6 +1156,9 @@ class NativeOracleTest(unittest.TestCase):
                 model.ChallengeInterpretation.FRESH,
                 self.invocation,
                 self.strategy,
+                fresh_resolver=model.ScriptedFreshResolver(
+                    {"query_coin": 2, "fold_coin": 3}
+                ),
             )
         )
         self.assertEqual(record.entries[2].value, 2)
@@ -1099,6 +1212,9 @@ class NativeOracleTest(unittest.TestCase):
                 model.ChallengeInterpretation.FRESH,
                 self.invocation,
                 self.strategy,
+                fresh_resolver=model.ScriptedFreshResolver(
+                    {"query_coin": 2, "fold_coin": 3}
+                ),
             )
         )
         entries = list(record.entries)
@@ -1321,8 +1437,7 @@ class ScheduleScopeAndClosureTest(unittest.TestCase):
                 "child_statement": b"child",
                 "child_context": b"context",
                 "child_parameter": b"parameter",
-            },
-            {"parent_challenge": 2, "child_challenge": 3},
+            }
         )
         record = completed(
             model.generate(
@@ -1410,7 +1525,7 @@ class ScheduleScopeAndClosureTest(unittest.TestCase):
             ),
         )
         tc = construction(b"child-statement")
-        inv = invocation({"statement": b"child"}, {"challenge": 1})
+        inv = invocation({"statement": b"child"})
         record = completed(
             model.generate(
                 core,
@@ -1551,7 +1666,7 @@ class GrindingSeparationTest(unittest.TestCase):
                 core,
                 tc,
                 model.ChallengeInterpretation.FIAT_SHAMIR,
-                invocation({}, {"challenge": 1}),
+                invocation({}),
                 model.ScriptedStrategy({"nonce": nonce}),
             )
         )

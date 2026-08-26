@@ -6,8 +6,8 @@ finite protocol surface needed by the K2 fixtures.  The model deliberately
 separates three questions:
 
 * ``admit_core`` checks one exact finite interaction schedule;
-* ``generate`` asks a causal prover strategy for each current move through a
-  restricted view; and
+* ``generate`` asks an online prover strategy for each current move through a
+  restricted prefix view; and
 * ``replay`` checks a completed record without claiming that a causal strategy
   generated it.
 
@@ -74,6 +74,10 @@ class AdmissionError(ModelError):
 
 class InvocationError(ModelError):
     """An invocation does not provide the Core's exact input surface."""
+
+
+class FreshResolutionError(ModelError):
+    """A Fresh challenge resolver is missing or returned an invalid value."""
 
 
 class ReplayError(ModelError):
@@ -259,7 +263,6 @@ Value: TypeAlias = bytes | int | bool | OracleObject
 @dataclass(frozen=True)
 class Invocation:
     values: Mapping[str, Value]
-    public_coins: Mapping[str, int]
 
 
 @dataclass(frozen=True)
@@ -345,6 +348,40 @@ class StrategyStopped(Exception):
 class ProverStrategy(Protocol):
     def move(self, occurrence: Occurrence, view: "ProverView") -> Value:
         ...
+
+
+@dataclass(frozen=True)
+class FreshChallengeRequest:
+    """One challenge-time request issued only by the Fresh execution lane."""
+
+    occurrence: str
+    domain: ChallengeDomain
+
+
+class FreshChallengeResolver(Protocol):
+    def resolve(self, request: FreshChallengeRequest) -> int:
+        ...
+
+
+class ScriptedFreshResolver:
+    """Deterministic runtime resolver for bounded fixtures and falsifiers."""
+
+    def __init__(self, values: Mapping[str, int]) -> None:
+        self._values = MappingProxyType(dict(values))
+        self._requests: list[FreshChallengeRequest] = []
+
+    @property
+    def requests(self) -> tuple[FreshChallengeRequest, ...]:
+        return tuple(self._requests)
+
+    def resolve(self, request: FreshChallengeRequest) -> int:
+        self._requests.append(request)
+        try:
+            return self._values[request.occurrence]
+        except KeyError as error:
+            raise FreshResolutionError(
+                f"fresh resolver has no value for challenge {request.occurrence!r}"
+            ) from error
 
 
 # ---------------------------------------------------------------------------
@@ -727,19 +764,6 @@ def invocation_body(core: Core, invocation: Invocation) -> bytes:
                             ((0, _symbol(item.name, "input name")), (1, _datum(values[item.name])))
                         )
                         for item in core.inputs
-                    )
-                ),
-            ),
-            (
-                1,
-                k1.DatumSeq(
-                    tuple(
-                        k1.DatumRecord(
-                            ((0, _symbol(name, "challenge name")), (1, k1.Nat(value)))
-                        )
-                        for name, value in sorted(
-                            invocation.public_coins.items(), key=lambda item: item[0]
-                        )
                     )
                 ),
             ),
@@ -1289,7 +1313,7 @@ def is_public_coin_eligible(core: Core) -> bool:
 
 def admit_invocation(core: Core, invocation: Invocation) -> Mapping[str, Value]:
     admit_core(core)
-    if type(invocation) is not Invocation or not isinstance(invocation.values, Mapping) or not isinstance(invocation.public_coins, Mapping):
+    if type(invocation) is not Invocation or not isinstance(invocation.values, Mapping):
         raise InvocationError("invocation has the wrong finite mapping shape")
     expected = tuple(item.name for item in core.inputs)
     if set(invocation.values) != set(expected):
@@ -1304,11 +1328,6 @@ def admit_invocation(core: Core, invocation: Invocation) -> Mapping[str, Value]:
         if not _sort_accepts(value, declarations[name].value_sort):
             raise InvocationError("invocation value does not match its declared sort")
         copied[name] = value
-    for name, coin in invocation.public_coins.items():
-        if name not in {item.name for item in core.schedule if item.kind is OccurrenceKind.CHALLENGE}:
-            raise InvocationError("public coin names an unknown challenge")
-        if type(coin) is not int or coin < 0:
-            raise InvocationError("fresh public coins are nonnegative exact integers")
     return MappingProxyType(copied)
 
 
@@ -1919,6 +1938,7 @@ def _execute(
     invocation: Invocation,
     strategy: ProverStrategy | None,
     expected_record: RunRecord | None,
+    fresh_resolver: FreshChallengeResolver | None,
 ) -> GenerationResult:
     admit_core(core)
     is_fs = interpretation is ChallengeInterpretation.FIAT_SHAMIR
@@ -2097,11 +2117,28 @@ def _execute(
         elif occurrence.kind is OccurrenceKind.CHALLENGE:
             assert occurrence.challenge_domain is not None
             if interpretation is ChallengeInterpretation.FRESH:
-                if occurrence.name not in invocation.public_coins:
-                    raise InvocationError("fresh interpretation needs one public coin per challenge")
-                value = invocation.public_coins[occurrence.name]
+                if expected_entries is not None:
+                    value = expected_entries[ordinal].value
+                    if type(value) is not int:
+                        raise ReplayError("recorded Fresh challenge is not an exact integer")
+                else:
+                    if fresh_resolver is None:
+                        raise FreshResolutionError(
+                            "Fresh generation needs a resolver at each challenge"
+                        )
+                    value = fresh_resolver.resolve(
+                        FreshChallengeRequest(
+                            occurrence.name,
+                            occurrence.challenge_domain,
+                        )
+                    )
+                    if type(value) is not int:
+                        raise FreshResolutionError(
+                            "fresh resolver returned a non-integer challenge"
+                        )
                 if not 0 <= value < occurrence.challenge_domain.modulus:
-                    raise InvocationError("fresh public coin is outside the challenge domain")
+                    error_type = ReplayError if expected_entries is not None else FreshResolutionError
+                    raise error_type("Fresh challenge is outside the declared domain")
             else:
                 assert state is not None
                 for ref, dependency in zip(occurrence.dependencies, dependencies):
@@ -2227,10 +2264,20 @@ def generate(
     interpretation: ChallengeInterpretation,
     invocation: Invocation,
     strategy: ProverStrategy,
+    *,
+    fresh_resolver: FreshChallengeResolver | None = None,
 ) -> GenerationResult:
     if strategy is None:
         raise ModelError("generation requires a prover strategy")
-    return _execute(core, construction, interpretation, invocation, strategy, None)
+    return _execute(
+        core,
+        construction,
+        interpretation,
+        invocation,
+        strategy,
+        None,
+        fresh_resolver,
+    )
 
 
 def replay(
@@ -2246,6 +2293,7 @@ def replay(
         invocation,
         None,
         record,
+        None,
     )
     if type(result) is not Completed:  # pragma: no cover - replay has no strategy
         raise ReplayError("replay unexpectedly did not complete")
@@ -2445,8 +2493,7 @@ def schnorr_fixture() -> tuple[Core, TranscriptConstruction, Invocation, ProverS
                 "statement": statement,
                 "session": b"fixture-session",
             }
-        ),
-        MappingProxyType({"challenge": 7}),
+        )
     )
     return core, construction, invocation, strategy
 
@@ -2510,7 +2557,6 @@ def oracle_fixture() -> tuple[Core, TranscriptConstruction, Invocation, ProverSt
     cells = (b"statement", b"statement", b"statement")
     strategy = ScriptedStrategy({"oracle": OracleObject(cells)})
     invocation = Invocation(
-        MappingProxyType({"statement": b"statement", "session": b"oracle-session"}),
-        MappingProxyType({"query_coin": 2, "fold_coin": 3}),
+        MappingProxyType({"statement": b"statement", "session": b"oracle-session"})
     )
     return core, TranscriptConstruction(b"zkc/k2/oracle/v0"), invocation, strategy

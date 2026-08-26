@@ -863,9 +863,7 @@ class RunGroundingTest(unittest.TestCase):
         construction = model.k2.TranscriptConstruction(
             b"zkc/k3/private-terminal/v0"
         )
-        invocation = model.k2.Invocation(
-            MappingProxyType({"verifier-flag": True}), MappingProxyType({})
-        )
+        invocation = model.k2.Invocation(MappingProxyType({"verifier-flag": True}))
         record = completed(
             model.k2.generate(
                 core,
@@ -925,8 +923,7 @@ class RunGroundingTest(unittest.TestCase):
             core, None, interpretation, (relation,), (), binding
         )
         invocation = model.k2.Invocation(
-            MappingProxyType({"left": b"same", "right": b"same"}),
-            MappingProxyType({}),
+            MappingProxyType({"left": b"same", "right": b"same"})
         )
         construction = model.k2.TranscriptConstruction(b"unused-fresh")
         record = completed(

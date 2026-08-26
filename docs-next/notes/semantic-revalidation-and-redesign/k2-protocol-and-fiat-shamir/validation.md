@@ -107,14 +107,14 @@ security audit.
 
 ## 4. Executable falsifier matrix
 
-The strict runner executes 54 tests. The table records only what those finite
+The strict runner executes 57 tests. The table records only what those finite
 tests observe.
 
 | Obligation | Positive control | Falsifier or contrast | State |
 |---|---|---|---|
 | exact canonical frame bodies | K1 admits `MF`/`MT` guards and both lookup-result Oracle-answer cases at their exact target types | wrapped Booleans, bare elements, and cross-case/cross-type substitutions fail; canonical bytes distinguish absent from present | passed |
 | same-Core Fresh/FS | Schnorr accepts under both interpretations with equal `CoreId` | construction identity changes with Core; Fresh carries no FS state | passed |
-| causal strategy | honest prefix-only strategy completes and replays | future read and strategy stop are noncompletion; replay alone gains no causal provenance | passed |
+| online strategy API and Fresh issuance | honest prefix-only strategy completes; the Fresh resolver is first invoked at its challenge; replay consumes the recorded historical value | future read and strategy stop are noncompletion; invocation carries no future coin; changing resolver output preserves invocation identity; replay alone gains no causal provenance | passed at the bounded Python API; not a host-isolation theorem |
 | Statement/scope binding | root and child bindings occur in exact continuous-state order | omitted, late, substituted, unopened-scope, and missing-frame cases fail | passed |
 | exact transcript prefix | canonical initialization, guard, message, condition, and draw sequence | omission, duplication, reordering, Wire-only mutation, and altered prefix state fail | passed |
 | reduction influence | Schnorr commitment is required before challenge; final response is legal after it | late prerequisite and incomplete side-input publication closure fail | passed |
@@ -153,7 +153,7 @@ choice only with a concrete contradiction.
 
 | Gate | Final result |
 |---|---|
-| K2 strict semantic instrument | 54/54 passing |
+| K2 strict semantic instrument | 57/57 passing |
 | K1 strict foundation instrument | 116/116 passing: 90 reference checks and 26 independent-oracle checks |
 | R2 Protocol-model non-regression | 39/39 tests passing; canonical report identities and classifications reproduced |
 | P01 Schnorr/Sigma non-regression | 69/69 tests passing; public report rebuilt, verified, and matched to the frozen projection |

@@ -154,7 +154,7 @@ host callbacks into target semantics.
 | Gate | Final result |
 |---|---|
 | K3-B dependent-surface instrument | 29/29 passing |
-| K2 Protocol and Fiat--Shamir non-regression | 54/54 passing |
+| K2 Protocol and Fiat--Shamir non-regression | 57/57 passing |
 | K1 executable-foundation non-regression | 116/116 passing |
 | P01 Schnorr/Sigma non-regression | 69/69 tests passing; `run.py --check` passing |
 | value-bridge probe non-regression | 18/18 passing |
@@ -178,8 +178,17 @@ treated as evidence for cryptographic claims.
 
 One additional cold-review attempt yielded no adjudicable report inside its
 bounded window and therefore contributes no evidence to this validation
-record. Closure rests on the explicit repairs and reproducible gates above,
-not on that attempt.
+record. A later completed independent review found one executable-evidence
+defect rather than a normative K2 defect: the Python `Invocation` pre-supplied
+Fresh challenge values, so a host closure could bypass `ProverView` and
+correlate an earlier move with a future coin. The instrument was repaired to
+remove coins from invocation data and identity, invoke a runtime resolver only
+at the challenge occurrence, replay from the recorded historical value, and
+exercise issuance order, missing resolution, and resolver-independent
+invocation identity. The 57-case K2 gate above includes those regressions.
+This does not claim Python process isolation or universal noncommunication.
+Closure rests on the explicit repairs and reproducible gates above, not on the
+non-result attempt or the later positive rerun alone.
 
 ## 7. Verdict, residuals, and next phase
 

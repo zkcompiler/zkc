@@ -11,8 +11,10 @@ fixed basis it implements a fixture-exact finite model with:
 - an exact finite total interaction schedule with explicit nested scope opens;
 - first-class statements, public context and parameters, and optional
   verifier-private inputs;
-- causal prover generation through a prefix-only `ProverView`, separately from
+- online prover generation through a prefix-only `ProverView`, separately from
   completed-record replay;
+- Fresh challenge resolution through a runtime-only resolver invoked at the
+  exact challenge occurrence, outside invocation data and identity;
 - transitive dependency-derived public-coin eligibility over every represented
   public activity (`ProverMessage`, `VerifierMessage`, `Challenge`,
   `OraclePublish`, `OracleQuery`, `OracleAnswer`, `Check`, and `Terminal`), with
@@ -60,7 +62,9 @@ causal future reads, scope-local input visibility, sampling
 retries/exhaustion, typed and scope-correct oracle indices, oracle lifecycle
 and answers, extension refusal, schedule identity, nested-scope continuity,
 grinding separation, claim linearity, reduction-required Last-Challenge
-ordering, and terminal closure. The frozen gate runs 54 tests.
+ordering, terminal closure, challenge-time Fresh resolution, resolver-free
+Fresh replay, and resolver-independent invocation identity. The frozen gate
+runs 57 tests.
 
 ## Evidence boundary
 
@@ -80,6 +84,11 @@ implementation conformance, or production readiness. Strategy generation
 establishes causality only relative to a restricted Python API and the concrete
 strategies exercised here; it does not implement a non-serializable causal
 capability. Replay intentionally makes no strategy-existence claim.
+The Fresh resolver is not supplied through `Invocation` or `ProverView`, and
+the gate checks that it is first invoked at its challenge occurrence. Python
+does not enforce process isolation or prevent a caller from deliberately
+sharing ambient state between objects, so this is bounded API-order evidence,
+not a universal noncommunication theorem for arbitrary host-language closures.
 
 Public-coin eligibility is checked over this fixture's represented sinks and
 dependency graph, not the durable model's complete `PCNode`/module graph. The

@@ -3115,8 +3115,7 @@ def verifier_private_case() -> DependentSurfaceCase:
     )
     construction = k2.TranscriptConstruction(b"zkc/k3/verifier-private/v0")
     invocation = k2.Invocation(
-        MappingProxyType({"statement": b"public", "verifier-secret": b"secret"}),
-        MappingProxyType({}),
+        MappingProxyType({"statement": b"public", "verifier-secret": b"secret"})
     )
     interpretation = k2.ChallengeInterpretation.FRESH
     plan = ProverPlan(protocol_id(core, None, interpretation), (), (), (), (), ())
