@@ -1,13 +1,17 @@
 # K2 Protocol and Fiat--Shamir Kernel
 
 > **Document kind:** Temporary bounded work-package charter
-> **Document state:** Bounded K2 package complete
+> **Document state:** Bounded K2 package narrowly reclosed; final gate evidence
+> is owned by [`validation.md`](validation.md)
 > **Provisional owner:** `pir`, coordinated by `project`
 > **Authority:** None. This package records research, selection, and validation;
 > current normative Protocol and Fiat--Shamir rules remain under
 > [`docs/`](../../../../docs/README.md).
 > **Activated:** 2026-08-26
 > **Completed:** 2026-08-26
+> **Narrow reclosure:** 2026-08-26, after exact-body and evidence-boundary
+> repair; the green final gates and focused follow-up are recorded in
+> [`validation.md`](validation.md)
 > **Disposition:** Selected semantics and exact limitations are absorbed into
 > the durable PIR owners. Retain this research/validation package as optional
 > reference until the redesign notes are normalized before cutover; durable
@@ -39,6 +43,15 @@ oracle or quantum-random-oracle applicability, quantitative loss, relation
 grounding or satisfaction, OIR projection correctness, compiler legality, or
 implementation migration. K3 owns the minimum Relations, Analysis, and OIR
 consumer co-design. K4 owns the differentiated real-protocol portfolio.
+
+### Narrow reclosure amendment
+
+A later exactness review preserved the architecture while repairing the Oracle-
+answer and guard-Boolean canonical bodies, correcting evidence claims, and
+making the stricter all-prior-prover absorption choice explicit. The detailed
+rationale and dependency cone live in
+[`research-and-selection.md`](research-and-selection.md); final disposition and
+gates live only in [`validation.md`](validation.md).
 
 ## Fixed intake
 

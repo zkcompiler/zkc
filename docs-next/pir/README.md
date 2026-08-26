@@ -157,7 +157,9 @@ first being found by the optimizer or successfully projected to every target.
 
 The two project architecture pages are selected non-normative Stage 1 and
 Stage 3 decisions. K2 revalidated and replaced the Core/Protocol and
-Fiat--Shamir definition surfaces with the first two active K2 pages above.
+Fiat--Shamir definition surfaces with the first two active K2 pages above. A
+narrow reclosure preserved that architecture while repairing exact transcript
+bodies and evidence boundaries; its validation record owns the details.
 The carrier and Interface/Plan pages remain dependent candidates awaiting
 reconciliation; the two explicitly marked snapshots remain research history,
 not parallel authority. Stage 4A's Analysis/Compiler source bindings must be
@@ -198,14 +200,12 @@ transport a property. Target admission alone proves no source/target relation.
 Stage 3 selected the Core/Protocol grammar, canonical carrier, Interface, Plan,
 Fiat--Shamir construction, and structural Core-composition candidate at its
 then-current resolution. Post-selection revalidation reopened the exact kernel
-closure. K1 and K2 have now closed executable Foundation and PIR semantics at
-their bounded resolutions: causal strategy-generated execution, target-native
-non-regression, Statement and required-influence closure, derived public-coin
-eligibility, exact squeeze/sample transitions, and the registered Core and
-extension choices. Before integrated freeze, K3 must test those definitions
-against the minimum Relations, Analysis, and OIR read questions; K4 and K5 must
-then complete the bounded protocol portfolio and independent freeze. Later work
-includes:
+closure. K1 and the narrowly reclosed K2 have now closed executable Foundation
+and PIR semantics at their bounded resolutions. Before integrated freeze, K3
+must treat these as source declarations rather than assumed correspondence,
+reconcile the dependent bindings, and test the minimum Relations, Analysis,
+and OIR read questions. K4 and K5 must then complete the bounded protocol
+portfolio and independent freeze. Later work includes:
 
 - Stage 4A selected the exact Analysis model families and theorem/profile
   architecture for `FSCompile`, composition properties, and property

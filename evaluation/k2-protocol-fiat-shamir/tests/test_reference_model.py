@@ -61,6 +61,94 @@ def construction(label: bytes = b"zkc/k2/test/v0", **kwargs: object) -> model.Tr
     return model.TranscriptConstruction(label, **kwargs)  # type: ignore[arg-type]
 
 
+class CanonicalFrameContractVectorTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.element_type = model.k1.ValueType(
+            model.k1.BYTES_DOMAIN,
+            model.k1.BytesSchema(0, 32),
+        )
+        self.result_type = model.appendix_oracle_lookup_result_type(
+            self.element_type
+        )
+
+    def _assert_oracle_answer_vector(self, answer: object) -> object:
+        body = model.appendix_oracle_answer_frame_body(
+            7,
+            3,
+            self.element_type,
+            answer,
+        )
+        self.assertIs(type(body), model.k1.DatumVariant)
+        self.assertEqual(body.case, 10)
+        self.assertIs(type(body.payload), model.k1.DatumRecord)
+        self.assertEqual(
+            body.payload.fields,
+            (
+                (0, model.k1.Nat(7)),
+                (1, model.k1.Nat(3)),
+                (2, model.k1.value_type_datum(self.result_type)),
+                (3, answer),
+            ),
+        )
+        self.assertEqual(
+            model.k1.decode_datum(model.k1.encode_datum(body)),
+            body,
+        )
+        self.assertEqual(
+            model.k1.admit_value(self.result_type, answer).datum,
+            answer,
+        )
+        return body
+
+    def test_guard_outcome_uses_exact_k1_boolean_scalars(self) -> None:
+        for active, scalar_bytes in ((False, b"\x01"), (True, b"\x02")):
+            with self.subTest(active=active):
+                body = model.appendix_guard_outcome_frame_body(9, active)
+                self.assertIs(type(body), model.k1.DatumVariant)
+                self.assertEqual(body.case, 5)
+                self.assertIs(type(body.payload), model.k1.DatumRecord)
+                self.assertEqual(body.payload.fields, ((0, model.k1.Nat(9)), (1, active)))
+                self.assertIs(type(body.payload.fields[1][1]), bool)
+                self.assertEqual(model.k1.encode_datum(active), scalar_bytes)
+                self.assertEqual(
+                    model.k1.decode_datum(model.k1.encode_datum(body)),
+                    body,
+                )
+                with self.assertRaisesRegex(
+                    model.ModelError,
+                    "exact K1 Boolean",
+                ):
+                    model.appendix_guard_outcome_frame_body(
+                        9,
+                        model.k1.DatumVariant(0, active),  # type: ignore[arg-type]
+                    )
+
+    def test_oracle_answer_absent_uses_lookup_result_type(self) -> None:
+        absent = model.k1.DatumVariant(0, model.k1.UNIT)
+        self._assert_oracle_answer_vector(absent)
+        with self.assertRaises(model.k1.ValueAdmissionRefusedError):
+            model.k1.admit_value(self.element_type, absent)
+
+    def test_oracle_answer_present_uses_lookup_result_type(self) -> None:
+        element = model.k1.BytesValue(b"answer")
+        present = model.k1.DatumVariant(1, element)
+        present_body = self._assert_oracle_answer_vector(present)
+        with self.assertRaises(model.k1.ValueAdmissionRefusedError):
+            model.k1.admit_value(self.element_type, present)
+        with self.assertRaises(model.k1.ValueAdmissionRefusedError):
+            model.k1.admit_value(self.result_type, element)
+        absent_body = model.appendix_oracle_answer_frame_body(
+            7,
+            3,
+            self.element_type,
+            model.k1.DatumVariant(0, model.k1.UNIT),
+        )
+        self.assertNotEqual(
+            model.k1.encode_datum(absent_body),
+            model.k1.encode_datum(present_body),
+        )
+
+
 class SchnorrPairTest(unittest.TestCase):
     def setUp(self) -> None:
         self.core, self.construction, self.invocation, self.strategy = model.schnorr_fixture()
@@ -452,6 +540,27 @@ class StrongFiatShamirBindingTest(unittest.TestCase):
             required,
         )
 
+    def test_influence_comparison_is_an_ordered_subtrace(self) -> None:
+        first = model.InfluenceAtom("prover-message", ("first",))
+        second = model.InfluenceAtom("prover-message", ("second",))
+        extra = model.InfluenceAtom("scope-open", ("root",))
+
+        positive = model.compare_influence(
+            (first, second),
+            (extra, first, second),
+        )
+        self.assertEqual(positive.required, (first, second))
+        self.assertEqual(positive.observed, (extra, first, second))
+        self.assertEqual(positive.missing, ())
+
+        reversed_trace = model.compare_influence(
+            (first, second),
+            (second, first),
+        )
+        self.assertEqual(reversed_trace.required, (first, second))
+        self.assertEqual(reversed_trace.observed, (second, first))
+        self.assertEqual(reversed_trace.missing, (second,))
+
     def test_duplicate_frame_is_rejected_as_duplicate_influence(self) -> None:
         index = next(
             i
@@ -635,18 +744,55 @@ class PublicCoinAndNamespaceTest(unittest.TestCase):
         )
         self.assertIs(record.entries[-1].value, True)
 
+    def test_private_guard_on_public_prover_activity_blocks_fs(self) -> None:
+        core = core_with(
+            (
+                model.Occurrence(
+                    "conditional-publication",
+                    model.OccurrenceKind.PROVER_MESSAGE,
+                    guard=model.Predicate(
+                        model.PredicateKind.BOOL,
+                        (model.ValueRef.input("private"),),
+                    ),
+                ),
+                model.Occurrence("terminal", model.OccurrenceKind.TERMINAL),
+            ),
+            inputs=(
+                model.InputDecl(
+                    "private",
+                    model.InputRole.VERIFIER_PRIVATE,
+                    value_sort=model.ValueSort.BOOL,
+                ),
+            ),
+        )
+        inv = invocation({"private": False})
+        self.assertFalse(model.is_public_coin_eligible(core))
+        fresh = completed(
+            model.generate(
+                core,
+                construction(b"private-guard"),
+                model.ChallengeInterpretation.FRESH,
+                inv,
+                model.ScriptedStrategy({}),
+            )
+        )
+        self.assertIs(fresh.entries[-1].value, True)
+        with self.assertRaisesRegex(model.AdmissionError, "public-coin"):
+            model.generate(
+                core,
+                construction(b"private-guard"),
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                inv,
+                model.ScriptedStrategy({}),
+            )
+
     def test_nonpublic_verifier_move_blocks_fs(self) -> None:
         core = core_with(
             (
                 model.Occurrence(
                     "secret-derived",
-                    model.OccurrenceKind.PROVER_MESSAGE,
-                    dependencies=(model.ValueRef.input("private"),),
-                ),
-                model.Occurrence(
-                    "hint",
                     model.OccurrenceKind.VERIFIER_MESSAGE,
-                    dependencies=(model.ValueRef.occurrence("secret-derived"),),
+                    dependencies=(model.ValueRef.input("private"),),
                     verifier_rule=model.VerifierRule(
                         model.VerifierRuleKind.COPY,
                     ),
@@ -654,7 +800,7 @@ class PublicCoinAndNamespaceTest(unittest.TestCase):
                 model.Occurrence(
                     "challenge",
                     model.OccurrenceKind.CHALLENGE,
-                    dependencies=(model.ValueRef.occurrence("hint"),),
+                    dependencies=(model.ValueRef.occurrence("secret-derived"),),
                     challenge_domain=model.ChallengeDomain(7),
                 ),
                 model.Occurrence("terminal", model.OccurrenceKind.TERMINAL),
@@ -1112,14 +1258,32 @@ class ScheduleScopeAndClosureTest(unittest.TestCase):
             (
                 model.Occurrence(
                     "use",
-                    model.OccurrenceKind.PROVER_MESSAGE,
+                    model.OccurrenceKind.VERIFIER_MESSAGE,
                     dependencies=(model.ValueRef.occurrence("future"),),
+                    verifier_rule=model.VerifierRule(model.VerifierRuleKind.COPY),
                 ),
                 model.Occurrence("future", model.OccurrenceKind.PROVER_MESSAGE),
                 model.Occurrence("terminal", model.OccurrenceKind.TERMINAL),
             )
         )
         with self.assertRaisesRegex(model.AdmissionError, "exact prior prefix"):
+            model.admit_core(bad)
+
+    def test_prover_message_rejects_authored_dependencies(self) -> None:
+        bad = core_with(
+            (
+                model.Occurrence(
+                    "message",
+                    model.OccurrenceKind.PROVER_MESSAGE,
+                    dependencies=(model.ValueRef.input("public"),),
+                ),
+                model.Occurrence("terminal", model.OccurrenceKind.TERMINAL),
+            ),
+            inputs=(
+                model.InputDecl("public", model.InputRole.PUBLIC_CONTEXT),
+            ),
+        )
+        with self.assertRaisesRegex(model.AdmissionError, "no authored dependency"):
             model.admit_core(bad)
 
     def test_child_scope_statement_opens_on_continuous_state(self) -> None:

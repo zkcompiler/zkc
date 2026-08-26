@@ -82,19 +82,37 @@ equality with the derived direct-owner set; simultaneous scope openings have a
 fixed depth/ordinal order; and causal-generation provenance is a
 nonserializable process-local capability rather than a `RunRecord` field.
 
-A single narrow cold follow-up then rechecked only those seven original
-blockers and four clarifications against the repaired owners and instrument.
-It classified all seven as resolved and all four clarifications as satisfied,
-and independently reran the 48-test K2 gate. This was a defect-disposition
-check, not a new broad architecture or cryptographic-security audit.
+A later independent focused review reopened K2 without rejecting its
+factorization. The repair and frozen follow-up disposition is:
+
+| Narrow-reopen finding | Final disposition |
+|---|---|
+| `GuardOutcome` used a generic variant instead of the K1 Boolean carrier | closed by exact `MF`/`MT` frame bodies and K1-backed positive and negative vectors |
+| Oracle answers were framed at the bare element type | closed by the exact absent/present lookup-result sum at `OracleAnswerOutputType` and cross-type rejection vectors |
+| transcript byte and evaluator authority boundaries were incomplete | closed by typed raw-octet admission, the exact `2^20 - 26` success-payload ceiling, complete tagged-completion preflight, and one retained evaluator identity from Core admission through generation and replay |
+| required influence could be read as a second runtime acceptance law indexed by state | closed by exact full-prefix equality as the sole runtime law and a receipt-prefix-indexed ordered-subtrace audit corollary |
+| verifier-private Oracle activity was rejected by an incomplete enumeration | closed by the exact descendant-to-`PCSinks(core)` criterion, which admits semantically dead private activity and rejects every live private path |
+| terminal and interpretation-failure replay were not one closed input sum | closed by `CompletedProtocolRecord`, exact FS failure recomputation, Fresh/FS variant separation, and explicit nonclaims for partial records |
+| the finite instrument overclaimed target conformance | closed by limiting target-exact claims to the two K1-backed frame families and naming the fixture-only lifecycle, evaluator, Oracle, dependency-graph, reduction, and Schnorr boundaries |
+
+One focused follow-up found no architectural blocker, but a separate exactness
+audit then found that the first byte calculation had omitted K1's 17-octet
+tagged-success envelope and that evaluator and receipt-prefix authority needed
+to be explicit. Those points were corrected before closure. A final frozen,
+read-only review rechecked the original blockers, the stricter corrections,
+and their dependency cone and reported no blocker. This sequence is recorded
+because the first positive follow-up was not treated as stronger evidence than
+the later counterexample. None of these reviews was a broad cryptographic-
+security audit.
 
 ## 4. Executable falsifier matrix
 
-The strict runner executes 48 tests. The table records only what those finite
+The strict runner executes 54 tests. The table records only what those finite
 tests observe.
 
 | Obligation | Positive control | Falsifier or contrast | State |
 |---|---|---|---|
+| exact canonical frame bodies | K1 admits `MF`/`MT` guards and both lookup-result Oracle-answer cases at their exact target types | wrapped Booleans, bare elements, and cross-case/cross-type substitutions fail; canonical bytes distinguish absent from present | passed |
 | same-Core Fresh/FS | Schnorr accepts under both interpretations with equal `CoreId` | construction identity changes with Core; Fresh carries no FS state | passed |
 | causal strategy | honest prefix-only strategy completes and replays | future read and strategy stop are noncompletion; replay alone gains no causal provenance | passed |
 | Statement/scope binding | root and child bindings occur in exact continuous-state order | omitted, late, substituted, unopened-scope, and missing-frame cases fail | passed |
@@ -118,16 +136,16 @@ behavior for this surface only.
 | 1 | passed | the two routed durable owners now close formation, identity, authentication, admission, execution, replay, Fresh, FS, and their checked relation using K1 mechanisms |
 | 2 | passed | strategy-generated execution is prefix-only and replay is explicitly noncausal evidence |
 | 3 | passed at K2 scope | every declared public input and scoped binding is structurally complete; completeness against an external Relations Statement remains the named K3 obligation |
-| 4 | passed | full prefix equality and ordered required-influence inclusion cover message, Oracle, condition, guard, draw, reduction, and supported-module atoms |
+| 4 | passed | full prefix equality is the sole independent runtime law; admission-time resolution and the receipt-prefix-indexed ordered-subtrace audit view cover message, Oracle, condition, guard, draw, reduction, and supported-module atoms |
 | 5 | passed | occurrence/draw namespaces are derived; the finite dependency graph rejects verifier-private paths to FS-relevant sinks |
-| 6 | passed | four one-result algorithms, exact length, state advance, acceptance/decode, retry bound, typed exhaustion, and deterministic work bounds are closed |
+| 6 | passed | four one-result algorithms, typed raw octets, the `2^20 - 26` squeeze-success ceiling, complete completion-schema preflight, exact length, state advance, acceptance/decode, retry bound, typed exhaustion, retained evaluator identity, and deterministic per-call work controls are closed |
 | 7 | passed | Fresh and FS Schnorr execute over one literal Core with identity occurrence maps |
-| 8 | passed at bounded finite-Oracle scope | native publication/query/answer is typed and replayable; polynomial/oracle commitment and BCS correctness remain separate |
+| 8 | passed at bounded finite-Oracle scope | native publication/query/answer is typed and replayable, and exact vectors form both present and absent answer bodies; the fixture runtime does not execute sparse absence or verifier-only Oracle visibility, while polynomial/oracle commitment and BCS correctness remain separate |
 | 9 | passed | guard, schedule, role, failure, composition, extension, identity, admission, rejected-rival, and reopening effects are explicit |
-| 10 | passed | the bounded gate, durable routing, manifest/link checks, final cold-audit disposition, and repository non-regression commands are recorded below |
+| 10 | passed | the bounded gate, durable routing, manifest/link checks, final independent frozen follow-up, exactness-audit disposition, and repository non-regression commands are recorded below |
 
-K2 is therefore complete at its frozen bounded scope. This does not freeze the
-integrated semantic kernel: K3 must test the read interfaces against Relations,
+K2 is therefore narrowly reclosed at its bounded scope. This does not freeze
+the integrated semantic kernel: K3 must test the read interfaces against Relations,
 Analysis, and the minimum OIR projection-obligation view, and may reopen a K2
 choice only with a concrete contradiction.
 
@@ -135,7 +153,7 @@ choice only with a concrete contradiction.
 
 | Gate | Final result |
 |---|---|
-| K2 strict semantic instrument | 48/48 passing |
+| K2 strict semantic instrument | 54/54 passing |
 | K1 strict foundation instrument | 116/116 passing: 90 reference checks and 26 independent-oracle checks |
 | R2 Protocol-model non-regression | 39/39 tests passing; canonical report identities and classifications reproduced |
 | P01 Schnorr/Sigma non-regression | 69/69 tests passing; public report rebuilt, verified, and matched to the frozen projection |
@@ -143,10 +161,19 @@ choice only with a concrete contradiction.
 | Python lint for the K2 instrument | `ruff` passing |
 | public-tree guard | passing; no development-repository paths tracked |
 | durable manifest | 40/40 exact rows including the exceptional `notes/README.md` boundary |
-| local Markdown targets | 1,335/1,335 local file targets resolve |
+| local Markdown targets | 1,390/1,390 parsed local file targets resolve |
 | whitespace and patch integrity | `git diff --check` passing |
 
 No generated fixture or accepted vector was rewritten by these commands.
+
+This narrow reclosure changes the exact guard and Oracle-answer `FrameBody`
+octets and tightens the transcript byte ceiling. It therefore supersedes the
+earlier unshipped K2 draft law; no supported or deployed target byte stream is
+being reinterpreted. Had the earlier frame law been frozen in a supported
+semantic module or regime, that module or regime and every dependent ordinary
+identity would have to rotate. The K5 freeze audit must treat this record as the
+latest K2 frame-law movement, not assume identity continuity across the draft
+change.
 
 ## 7. Explicit nonclaims and K3 handoff
 

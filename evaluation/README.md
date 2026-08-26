@@ -6,14 +6,15 @@ fixtures and revisions named here.
 
 ## Semantic revalidation witnesses and probes
 
-These packages are temporary R2 research instruments. They are not compiler
-components, protocol implementations, security evaluators, or evidence that a
-listed portfolio case is supported. Their results have different strengths and
-must not be summarized as one green test count.
+These packages are temporary semantic-revalidation research instruments. They
+are not compiler components, protocol implementations, security evaluators, or
+evidence that a listed portfolio case is supported. Their results have
+different strengths and must not be summarized as one green test count.
 
 | Package | Classification | Retained evidence and exact limit |
 |---|---|---|
 | [`k1-executable-foundations/`](k1-executable-foundations/README.md) | K1 foundation reference and independent identity oracle | The 116-test gate combines 90 reference/parity tests with 26 independent-oracle tests over 20 frozen vectors. It covers the constitutional value/identity surface, typed domain values, bounded portable terms, deterministic charges, and qualified outcomes. The oracle is independent only for values and identity; term evaluation has one Python implementation, and the instrument does not decode the complete serialized request carrier or establish a protocol or cryptographic claim. |
+| [`k2-protocol-fiat-shamir/`](k2-protocol-fiat-shamir/README.md) | K2 bounded contract vectors and Protocol/Fiat--Shamir behavioral instrument | The 54-test gate includes target-exact K1-backed vectors only for `GuardOutcome` `MF`/`MT` bodies and `OracleAnswer` lookup-result absent/present bodies. The remaining results are fixture-exact or behavioral-shape evidence over a simplified carrier: ordered transcript influence, represented public-coin sinks, Fresh/FS pairing, finite oracle activity, sampling, and schedule-anchored reduction declarations. It does not implement the complete target carrier, causal capabilities, K1 `AlgorithmUse` path, full `PCNode` graph, sparse absent-lookup execution, or first-class reduction semantics, and it establishes no protocol or security theorem. |
 | [`r2-protocol-model/`](r2-protocol-model/README.md) | Repaired `FRI-Grind-1` fixture witness | A 41-case frozen replay-verified corpus and 39 local tests close the named finite source-residual pressure. The model stops before authenticated FRI opening and acceptance; it is not a native FRI/IOR case. |
 | [`r2-p01-schnorr/`](r2-p01-schnorr/README.md) | Retained T3 portfolio case `P01` | The prior 62-test snapshot failed cold review on modeled causality, equal-content occurrence aliasing, and incomplete independent-basis closure. The staged repair now passes 69/69 tests: 8 semantic, 27 execution/Interface, 8 provenance/diagnostics, 13 Relations/Analysis, and 13 report/replay. Its rotated source-bound report executes 45 cases—22 affirmative and 23 nonaffirmative—with 39 distinct public codes, and reproduces Fresh `c=3,z=3` and FS v3 `c=6,z=2`, proof `1002`. A separately coded query path is bound to the executed package initializer and shared term and semantic dependencies; it is diversity evidence, not independent semantic authority. The refrozen expected projection and minimal copied-checkout replay pass. Separate lifecycle and provenance cold rechecks pass on the final identity, closing Gate 10 and retaining P01 at T3 only for this exact finite scope. |
 | [`r2-probe-commitment/`](r2-probe-commitment/) | Cross-cutting commitment/opening invariant probe | Thirty-three unit tests. It is not portfolio case `P02`. |

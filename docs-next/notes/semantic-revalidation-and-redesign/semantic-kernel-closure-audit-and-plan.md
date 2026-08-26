@@ -30,8 +30,11 @@ remain authoritative until an explicit cutover.
 
 **Current execution position:** K0 completed on 2026-08-25; bounded K1
 executable foundations and bounded K2 Protocol/FS closure completed on
-2026-08-26. K3 minimum consumer co-design is next; the integrated kernel is
-not frozen. The R2 protocol-witness track
+2026-08-26. K2 was then narrowly reopened for two exact canonical-body defects
+and evidence-claim reconciliation without reopening its architecture, and is
+reclosed at that bounded scope with the final green gates and focused follow-up
+recorded by its validation owner. K3 minimum consumer co-design is next; the
+integrated kernel is not frozen. The R2 protocol-witness track
 remains an evidence source; a P02 probe may inform an earlier question, but
 P02 cannot close its portfolio gate before K1--K3 establish the substrate it
 is meant to test. Stage 4B remains inactive.
@@ -77,7 +80,7 @@ A pure reopening condition is not itself a closure test.
 | Subject and authority factorization | Coherent | Project and PIR | Reopen if a bounded protocol needs ambient state, a shadow Protocol schema, or Interface/Plan variation changes a Protocol-only observation. |
 | Regime, value, portable-function ABI, typed-failure, totality, and bounded-evaluation foundations | K1 standalone closed; K3 extraction and integration open | Foundation owns the selected substrate; PIR, Relations, Analysis, and OIR own their exact semantic bodies and use-site admission | The independent identity/value oracle must agree with the K1 reference model, while the term evaluator exercises function steps, typed failures, totality, and bounds. Reopen K1 if exact law/vector parity breaks or a consumer requires an owner-specific escape or general virtual machine. K3 must demonstrate two aligned consumer extractions; a second term evaluator remains independent-freeze evidence rather than credited K1 evidence. |
 | Core execution | K2 standalone closed; Analysis strategy classes open | PIR execution structure; Analysis strategy classes | The bounded K2 instrument makes honest online execution and replay agree, while a trace whose early prover move depends on a future challenge replays but cannot obtain causal-generation provenance. K3 must define the adversary and strategy classes used by property judgments. |
-| Strong Fiat--Shamir structure | K2 structural regression closed | PIR structural admission | [J1](invariant-ledger.md#71-semantic-guarantees) now rejects omitted or late Statement binding, Wire-only or missing required influence, wrong prefixes, reused challenge coordinates, and direct or transitive verifier-private influence. K3 still owns theorem applicability. |
+| Strong Fiat--Shamir structure | K2 structural regression narrowly reclosed | PIR structural admission | [J1](invariant-ledger.md#71-semantic-guarantees) now rejects omitted or late Statement binding, Wire-only or missing required influence, wrong prefixes, reused challenge coordinates, and direct or transitive verifier-private influence. Exact full-prefix equality is the independent runtime law; the ordered required-influence projection is a derived audit view. K2 deliberately absorbs every active prior prover publication. A theorem-priced omission requires a separately identified checked construction and reopens this cone; K3 still owns theorem applicability and loss. |
 | Fresh/FS relation | K2 Schnorr control closed; portfolio pressure open | PIR construction; Analysis theorem applicability | K2 preserves one literal Core and identity occurrence map across Fresh and FS on its Schnorr control and rejects mismatched constructions. K4 must pressure the same relation with native FRI/IOR and the differentiated portfolio; K3 owns theorem meaning. |
 | Core algebra and extension model | K2 bounded selections closed | PIR | K2 fixes the finite base algebra, exact supported-module ownership, fail-closed unknown extensions, scope order, Oracle lifecycle, and identity effects. A later protocol that needs a semantically distinct effect or cannot inhabit the registered module boundary reopens only this cone. |
 | Relations boundary | Open co-design seam | PIR surfaces, Relations semantics, Analysis loss | A relation-bound R1CS/AIR or Sumcheck fixture must distinguish Statement, Witness, private nonwitness, grounding, lossless bridge, and priced lossy projection; an opaque carrier escape or unpriced projection fails. |
@@ -188,7 +191,7 @@ Protocol/Fiat--Shamir closure, consumer closure, implementation adoption, or
 kernel freeze. K2 has now closed the first of those semantic boundaries at its
 bounded scope; consumer integration and kernel freeze remain with K3--K5.
 
-### K2 — Protocol and FS kernel — complete 2026-08-26
+### K2 — Protocol and FS kernel — narrowly reclosed 2026-08-26
 
 - add causal strategy-generated execution;
 - close Statement/Witness occurrences, required influence, initialization and
@@ -203,15 +206,23 @@ K2 selected the finite same-Core Fresh/FS model specified by
 generation, scoped public binding, derived transcript influence, dependency-
 computed public-coin eligibility, native finite Oracle interaction,
 reduction-sensitive Last-Challenge ordering, semantic namespaces, and the
-state-passing sampling/failure contract at bounded K2 resolution. Its 48-test
-reference instrument is green after the final cold-audit findings were
-reconciled. K3 still owns external Statement correspondence, adversary and
-theorem applicability, quantitative property transport, and the minimum OIR
-read seam; no cryptographic theorem or integrated-kernel freeze follows.
+state-passing sampling/failure contract at bounded K2 resolution.
+
+A narrow exact-body and evidence-boundary repair preserved the selected
+architecture. K2 is reclosed at this bounded semantic scope; the final
+repository gates and focused follow-up are recorded in its
+[`validation.md`](k2-protocol-and-fiat-shamir/validation.md). K3 receives source
+declarations and open read seams, not assumed correspondence: it still owns
+external Statement completeness, Witness/private-advice separation, adversary
+and theorem applicability, quantitative property transport, and the minimum
+OIR read contract. No cryptographic theorem or integrated-kernel freeze
+follows.
 
 ### K3 — Minimum consumer co-design
 
 - finish the minimum Relations algebra and Protocol correspondence;
+- reconcile the pre-K2 Interface/Plan, canonical-carrier, and Analysis source
+  bindings against the K2 declarations rather than assuming correspondence;
 - make FS construction, theorem applicability, and property transport read one
   identified source declaration;
 - close Analysis's strategy/history and quantitative-loss inputs; and

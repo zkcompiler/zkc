@@ -42,6 +42,16 @@ For one exact K1 `PriorMetaAuthenticationBasis B`, K2 uses:
 - exact `EvaluationContractId` and deterministic request bounds; and
 - `Success`, typed `DomainFailure`, and the qualified noncompletion partition.
 
+`B.semantic_regime.id` is the sole semantic-regime coordinate used by the
+admitted Core and this construction. Every ordinary ID and body authenticates
+under the same complete `B`; every value type resolves under it; and every
+canonical value is strictly decoded and owner-admitted at its exact value type.
+Exact-used modules additionally resolve through that basis's authenticated
+same-root module closure. A construction cannot introduce a second basis or
+regime axis; a formed reference selecting another basis or regime is
+`KindMismatch`, while malformed carriers and failed owner admission retain
+their K1 classifications.
+
 The input Core is an exact `AdmittedCore` from the companion page. Its
 occurrence order, values, scope tree, public bindings, challenges, messages,
 oracles, reductions, extensions, and public-coin result are immutable.
@@ -56,7 +66,7 @@ All collections and bodies obey the K1 constitutional bounds. In addition:
 ```text
 maximum challenge rules       = core.challenge_count <= 2^14
 maximum draws per challenge   = 2^20
-maximum bytes per squeeze     = 2^20
+maximum bytes per squeeze     = 2^20 - 26
 maximum frames per execution  =
   exact derived bound from the admitted finite Core <= 2^20
 maximum total transition calls per execution =
@@ -95,11 +105,26 @@ Precisely,
 "foundation.root-value-domain",1), Boolean)` under the `Root` abbreviation
 made explicit in Section 3.2. `TranscriptBytesType` must use the same regime's
 root byte-string domain at ordinal 4 with a `Bytes(0,L)` schema for some
-`L <= 2^20` large enough for every admitted frame, namespace, and draw.
+`L <= 2^20 - 26` large enough for every admitted frame, namespace, and draw.
 `NaturalType` must use the root natural domain at ordinal 2 with a `Nat(Ln)`
 schema that admits every `draw_bytes` value and all construction counters.
-These constraints make `ByteLength` and requested-count admission exact K1
-operations rather than methods of an opaque bytes-like domain.
+K1 gives a standalone byte datum `Worst(Bytes(0,L)) = 9 + L`, then wraps every
+algorithm success in a tagged completion adding another `17` octets. Because
+`TranscriptBytesType` is the success type of `SqueezeBytesUse`, its tight
+common ceiling is therefore `17 + 9 + L <= 2^20`, or `L <= 2^20 - 26`.
+Construction admission also preflights the complete tagged-completion schema of
+every other algorithm use; a larger state, challenge, or failure type may
+impose a smaller admissible construction.
+In particular, both `AbsorbUse` and `AdvanceStateUse` require
+`17 + MaxDatumBytes(TranscriptStateType) <= 2^20`; their complete failure
+payload schemas must fit the same maximum-completion preflight.
+
+After K1 admits `CanonicalValue<TranscriptBytesType>(O(x))`, this owner defines
+the structural projection
+`OctetLength(CanonicalValue<TranscriptBytesType>(O(x))) = length(x)`.
+`OctetLength` is not an additional portable algorithm or an opaque host method:
+K1 owns the unique byte-string carrier and admission, while this page owns the
+bounded postcondition on its exact octet payload.
 
 The exact derived ABIs are:
 
@@ -154,6 +179,12 @@ ChallengeRule = {
   decode: AlgorithmUse
 }
 ```
+
+For `TranscriptBytesType = Bytes(0,L)`, construction admission requires
+`1 <= draw_bytes <= L`, `1 <= maximum_draws <= 2^20`, and the cumulative
+transition bounds in Section 2. Every derived frame and namespace body must
+also encode to at most `L` raw octets before it can be admitted as a transcript
+byte value.
 
 The admitted acceptance ABI is exactly
 `SamplingInputTypes(c) -> BooleanType`, and the admitted decoder ABI is exactly
@@ -322,8 +353,8 @@ TranscriptFrame =
   | OracleAnswer {
       occurrence: OccurrenceRef,
       oracle: OracleRef,
-      element_type: ValueType,
-      answer: CanonicalValue<element_type>
+      answer_type: OracleAnswerOutputType(core.oracles[oracle]),
+      answer: CanonicalValue<answer_type>
     }
   | ChallengeCondition {
       challenge: ChallengeRef,
@@ -338,18 +369,31 @@ TranscriptFrame =
     }
 ```
 
-`FrameBody` and tags are fixed in Appendix A. The exact bytes supplied to
-`AbsorbUse` are:
+`FrameBody` and tags are fixed in Appendix A. First derive raw octets, then
+admit the exact K1 byte datum at the construction's byte type:
 
 ```text
-FrameBytes(frame) = M(FrameBody(frame))
+FrameOctets(frame) = M(FrameBody(frame))
+
+FrameBytes(frame) =
+  CanonicalValue<TranscriptBytesType>(O(FrameOctets(frame)))
 ```
 
-K1's injective canonical encoding and the explicit tag, occurrence coordinate,
-type, and payload framing prevent cross-kind, empty-value, concatenation, and
-reordering aliases. No caller codec, display label, host serialization, or raw
-concatenation can replace `FrameBytes`. Wire/proof serialization remains a
-separate Interface/OIR concern.
+Construction admission proves from the exact value schemas and module frame
+bounds that every possible `FrameOctets` length is at most `L`; runtime still
+performs exact byte-value admission before each absorb. K1's injective canonical
+encoding and the explicit tag, occurrence coordinate, type, and payload framing
+prevent cross-kind, empty-value, concatenation, and reordering aliases. No
+caller codec, display label, host serialization, or raw concatenation can
+replace `FrameBytes`. Wire/proof serialization remains a separate Interface/OIR
+concern. Every `AbsorbUse` evaluation uses the exact evaluator and fresh
+per-request limits supplied to that run call's `ExecutionEvaluationControl`.
+
+For each standard frame variant, that proof applies K1's exact `M` size law to
+the fixed tag and record fields and substitutes `MaxDatumBytes(value_type)` for
+each typed datum. Each supported module rule supplies the corresponding finite
+maximum for its exact module body. The construction takes the maximum over all
+reachable variants and refuses admission unless it is at most `L`.
 
 ### 4.2 Initialization
 
@@ -389,7 +433,7 @@ construction derives:
 | active Oracle publication | absorb its full canonical oracle value or public binding material, according to its admitted mode |
 | active Public Oracle query | absorb one `OracleQuery` frame |
 | active Public Oracle answer | absorb one `OracleAnswer` frame |
-| Verifier-only Oracle query/answer | no FS action because Section 8 rejects the construction first |
+| Verifier-only Oracle query/answer | no FS frame; any path from such activity to `PCSinks(core)` is rejected by Section 8 |
 | Check, Reduction, Terminal | no direct frame; any later public control dependence is represented by a guard outcome or public derived value |
 | supported module effect | exact frames derived by its authenticated `pir.core-effect` declaration |
 
@@ -397,6 +441,12 @@ An `Always` occurrence has no guard frame. An inactive guarded occurrence has
 only its false guard frame. Thus an absent publication cannot alias an empty or
 different publication, and two control histories reaching a later challenge
 have distinct typed frame sequences.
+
+Semantically dead verifier-private Oracle activity may coexist with an FS
+interpretation when it reaches no member of `PCSinks(core)`. It emits no frame
+and its descendant cone must remain disjoint from that exact sink set while the
+Core's Challenge special transfer remains valid. This is the ordinary public-
+coin dependency criterion, not a special exemption.
 
 An extension declaration's transcript rule is part of the Core's exact-used
 semantic module. It returns a bounded canonical frame sequence from the exact
@@ -550,16 +600,13 @@ owner coordinate. `DerivedPrefix` below compares the full `TransitionInput`,
 including exact frame value, namespace, requested length, and squeeze output;
 the atom trace cannot substitute for that comparison.
 
-`TransitionInputLog` is not an assertion of cryptographic security. Define:
-
-```text
-Influence(state_before_challenge) =
-  InfluenceTrace(the exact receipt prefix producing that state)
-```
-
-This means “presented to the admitted state transition under exact framing.” It
-does not mean collision resistance, indifferentiability, entropy, binding, or
-unpredictability; Analysis owns those assumptions.
+`TransitionInputLog` is not an assertion of cryptographic security. Influence
+is always indexed by the actual ordered receipt prefix, never inferred from
+transcript state alone: absorb and advance algorithms are not required to be
+injective, and cryptographic state binding remains an Analysis assumption.
+Thus `InfluenceTrace(receipts)` means only “presented to the admitted state
+transition under exact framing.” It does not mean collision resistance,
+indifferentiability, entropy, binding, or unpredictability.
 
 ### 5.2 Derived requirement
 
@@ -612,26 +659,34 @@ RequiredInfluence(c) =
 ```
 
 Filtering the unique temporal prefix fixes requirement order and multiplicity.
-An addition must resolve to one exact prefix occurrence; ambiguous or absent
-coordinates refuse admission/replay. Immediately before the first draw of
-`c`, after all of `c`'s condition frames have been absorbed, the resolver
-checks both laws in this order:
+At admission, every base, reduction, and module requirement must resolve
+symbolically to one exact prefix occurrence on every applicable finite guard
+path; ambiguous, absent, or path-inconsistent coordinates refuse admission.
+Immediately before the first draw of `c`, after all of `c`'s condition frames
+have been absorbed, the independent runtime law is:
 
 
 ```text
 TransitionInputLog(actual_receipts_before_draw_c) = DerivedPrefix(c)
+```
 
+Together with the admission-time resolution and the definition of
+`RequiredInfluence` as an ordered filter of `DerivedInfluencePrefix`, the
+runtime equality entails the exported audit corollary:
+
+```text
 RequiredInfluence(c) is an exact order-preserving subtrace of
-  Influence(actual_state_immediately_before_draw_c),
+  InfluenceTrace(actual_receipts_before_draw_c),
 with every required atom matched exactly once
 ```
 
-The second law allows safe extra influence, while the first law prevents an
-implementation from using that allowance to inject, omit, duplicate, reorder,
-or substitute any actual frame or draw. Missing, delayed, wrongly scoped,
-wrong-kind, or conditionally ambiguous required material refuses the
-construction or replay at the first affected coordinate. In particular, no
-requirement is checked against a state that predates its own condition frame.
+This subtrace is a derived audit view, not a second weaker runtime escape hatch.
+The full-prefix equality prevents an implementation from injecting, omitting,
+duplicating, reordering, or substituting any actual frame or draw. Missing,
+delayed, wrongly scoped, wrong-kind, or conditionally ambiguous required
+material refuses admission or replay at the first affected coordinate. In
+particular, no requirement is compared against a state predating its own
+condition frame.
 
 ### 5.3 Exact prefix
 
@@ -669,7 +724,7 @@ statement from no declaration at all.
 For construction `T`, challenge `c`, and zero-based draw ordinal `i`, derive:
 
 ```text
-ChallengeNamespace(T, c, i) = M(R {
+ChallengeNamespaceOctets(T, c, i) = M(R {
   0: Y(ContentRefV0(T.id)),
   1: Y(ContentRefV0(T.core_id)),
   2: S[N(scope_ref) ... exact root-to-c scope path],
@@ -679,9 +734,14 @@ ChallengeNamespace(T, c, i) = M(R {
   6: CoinCorrelationBody(core.challenges[c].correlation),
   7: N(i)
 })
+
+ChallengeNamespace(T, c, i) =
+  CanonicalValue<TranscriptBytesType>(O(
+    ChallengeNamespaceOctets(T, c, i)))
 ```
 
-The byte value is admitted at `TranscriptBytesType` before squeeze. The
+Construction admission proves the exact namespace body has at most `L` raw
+octets; runtime performs exact byte-value admission before squeeze. The
 namespace contains no display name. A construction cannot author, omit, or
 override one field.
 
@@ -701,9 +761,13 @@ scope and `ChallengeRef` remain in the coordinate.
 ## 7. Challenge transition
 
 Let `state` be the exact transcript state after all prefix frames and challenge
-condition frames for challenge `c`. The resolver first performs both Section
-5 comparisons against this exact pre-draw state. Let `rule[c]` be the admitted
-rule.
+condition frames for challenge `c`. The resolver first performs the Section 5
+full-prefix equality against this exact pre-draw state and exports the derived
+required-influence audit view. Let `rule[c]` be the admitted rule.
+Every `Evaluate` below uses the exact evaluator and fresh per-request
+`PortableEvaluationLimitsV0` from the run call's
+`ExecutionEvaluationControl`; those controls are ephemeral and do not enter
+construction, Protocol, invocation, receipt, or transcript identity.
 
 ```text
 for i in 0 .. rule.maximum_draws - 1:
@@ -712,7 +776,7 @@ for i in 0 .. rule.maximum_draws - 1:
     bytes = Evaluate(T.squeeze_bytes,
         [draw_pre_state, namespace, rule.draw_bytes])
 
-    if ByteLength(bytes) != rule.draw_bytes:
+    if OctetLength(bytes) != rule.draw_bytes:
         return Refused(PIR.FiatShamir, SqueezeLengthMismatch)
 
     next_state = Evaluate(T.advance_state,
@@ -771,12 +835,19 @@ budget cannot be relabeled as semantic exhaustion. `draw_bytes` is checked
 before each squeeze, static state/output capacity is preflighted under the
 evaluation contract, and the FS owner performs the exact runtime byte-length
 postcondition before permitting state advancement.
+Replay may use the same limits or limits componentwise sufficient for the same
+deterministic requests. Insufficient limits produce
+`DeterministicLimitExceeded`, never a semantic sampling failure or replay
+mismatch.
 
 ## 8. Construction admission
 
-`AdmitTranscriptConstruction(candidate, AdmittedCore)` runs in this order:
+`AdmitTranscriptConstruction(candidate, AdmittedCore)` runs through the exact
+evaluator retained by the supplied admitted-Core handle; a caller cannot
+substitute another evaluator. It proceeds in this order:
 
-1. authenticate the prior-meta basis, construction ID/body, exact `CoreId`,
+1. require the exact complete prior-meta basis retained by the supplied Core,
+   then authenticate the construction ID/body, exact `CoreId`,
    application-domain and sampling-failure declarations, algorithm IDs/bodies,
    evaluation contracts, primitives, and exact-used module closure in one K1
    ledger;
@@ -785,14 +856,15 @@ postcondition before permitting state advancement.
 3. require exact equality between the candidate `core_id` and the supplied
    admitted Core;
 4. require `PublicCoinEligible(core) = true`;
-5. admit the state, bytes, natural, Boolean, and initial-state values and
-   require all three common algorithm ABIs from Section 3.1;
+5. admit the state, bytes, natural, Boolean, and initial-state values, require
+   all three common algorithm ABIs from Section 3.1, and preflight each exact
+   K1 maximum tagged-completion schema;
 6. resolve `sampling_exhausted_failure`, require its exact declaration body,
    lifted payload type, canonical coordinate, regime, and construction-body
    occurrence from Section 3.2;
 7. for each challenge in order, derive `SamplingInputTypes(c)`, admit the exact
-   Boolean acceptance and challenge-value decoder ABIs, and check positive draw
-   size and bounds;
+   Boolean acceptance and challenge-value decoder ABIs and their maximum tagged-
+   completion schemas, and check positive draw size and bounds;
 8. require support for every exact-used Core effect module's transcript-frame
    and influence derivation rule;
 9. derive initialization, scope actions, occurrence actions, every finite
@@ -804,7 +876,8 @@ postcondition before permitting state advancement.
    that its publication precedes `c` and emits one or more unambiguous derived
    transcript atoms before `c`; and
 11. mint one immutable `AdmittedTranscriptConstruction` retaining every exact
-    authenticated dependency and derivation result.
+    authenticated dependency and derivation result, including the supplied
+    Core handle's evaluator identity.
 
 Step 9 does not execute runtime values or prove a cryptographic property. It
 checks the totality of the derivation for every finite Core constructor and
@@ -828,7 +901,10 @@ AdmitFS(
 ```
 
 requires `T.core_id = C.id` and rechecks the exact retained public-coin and
-module-support results. It forms:
+module-support results. It also requires literal equality of the evaluator
+identities retained by `C` and `T`; a same-ID construction admitted elsewhere
+is cold-reauthenticated and readmitted before use. The returned FS Protocol
+handle retains that evaluator identity. It forms:
 
 ```text
 Protocol {
@@ -855,8 +931,8 @@ At execution start, the FS resolver performs Section 4.2. The Core engine calls
 the resolver's deterministic hook before and after each scope/occurrence. The
 hook derives exactly the actions in Section 4.3 and commits state atomically.
 At a Challenge, it absorbs all condition frames in input-ordinal order, freezes
-the pre-draw receipt prefix, checks `DerivedPrefix` and `RequiredInfluence`, and
-only then runs Section 7.
+the pre-draw receipt prefix, checks exact equality with `DerivedPrefix`, exports
+the derived `RequiredInfluence` audit view, and only then runs Section 7.
 
 Successful resolution returns the exact challenge value and
 `FSChallengeReceipt` to the unchanged Core engine. The exact
@@ -870,9 +946,10 @@ noncompletion classes produce no semantic Protocol outcome.
 FS replay recomputes initialization, every frame, namespace, squeeze-bytes
 result, exact-length check, state advancement, acceptance result, successful
 decode, retry, state, challenge receipt, Core effect, check, claim transition,
-and terminal. It requires exact record exhaustion. A cached state digest or
-prefix is only a comparison witness and cannot replace the canonical state
-transition.
+and terminal or exact sampling-exhaustion failure. It compares the closed
+`CompletedProtocolRecord` variant and requires exact field exhaustion. A cached
+state digest or prefix is only a comparison witness and cannot replace the
+canonical state transition.
 
 Replay proves consistency of one public record with the admitted construction.
 It does not prove causal strategy generation, hash security, coin distribution,
@@ -975,11 +1052,14 @@ separation, RBR/state-restoration hypotheses, and quantitative loss are not
 construction and Analysis result. Plain same-Core FS may be used after that
 step.
 
-An ideal Oracle Core with Verifier-only queries is Fresh-valid but fails
-`PublicCoinEligible` and therefore cannot receive this FS interpretation. An
-Oracle Core whose binding, public queries, answers, and accepting computation
-are publicly reconstructible can pass, subject to its exact module and theorem
-obligations.
+An ideal Oracle Core fails this construction exactly when a descendant of its
+verifier-private Query or Answer reaches `PCSinks(core)`, or when the Core's
+special Challenge transfer is invalid. Such a Core remains Fresh-valid but
+cannot receive this FS interpretation. Semantically dead verifier-private
+activity does not fail merely by existing.
+An Oracle Core whose binding, live public queries, answers, and accepting
+computation are publicly reconstructible can pass, subject to its exact module
+and theorem obligations.
 
 ## 12. Composition and session separation
 
@@ -1061,7 +1141,24 @@ Passing these structural boundaries establishes none of the following:
 - causal generation of a record that was only replayed; or
 - production support for the identified algorithms or construction.
 
-## 15. Reopening conditions
+## 15. Bounded executable evidence
+
+The repository package
+[`evaluation/k2-protocol-fiat-shamir/`](../../evaluation/k2-protocol-fiat-shamir/)
+provides bounded executable pressure for the lifecycle, causal/public-coin
+refusals, transcript order, retries, replay, composition, and selected
+reduction shapes defined here. Its Appendix-A contract vectors use the exact K1
+carrier for guard Booleans and present/absent Oracle-answer result values.
+
+The remaining fixture is intentionally smaller than the durable carrier. It
+does not execute raw Core canonical bodies, nonserializable causal or replay
+capabilities, the complete K1 `AlgorithmUse` request ABI, the complete PC graph
+and module-sink algebra, first-class reduction effects, generic typed Oracle
+indices, or OIR serialization. Fixture success is therefore structural and
+behavioral evidence for the named finite cases, not implementation conformance,
+cryptographic security, or theorem evidence.
+
+## 16. Reopening conditions
 
 Reopen the K2 construction if a K4 inhabitant requires:
 
@@ -1073,17 +1170,23 @@ Reopen the K2 construction if a K4 inhabitant requires:
 - transcript rollback, fork, merge, or tree state as semantic meaning;
 - an event whose required influence cannot be derived from an exact supported
   module rule;
-- a dynamic Statement introduced after its active scope's first challenge; or
+- a dynamic Statement introduced after its active scope's first challenge;
+- theorem-qualified pre-challenge prover material that must deliberately remain
+  unabsorbed without weakening the default strong-FS rule; or
 - a same-Core transformation whose verifier-observable interaction actually
   changes.
 
 The response is a new exact model or checked prior construction, not an opaque
 callback, manual prefix, skip flag, or theorem name stored in the Core.
+K2 intentionally chooses the stricter baseline in which every active prior
+prover publication is absorbed. A future theorem-backed relaxation must define
+a distinct checked source/target construction and Analysis obligation; it may
+not be an authored per-message omission flag.
 
 ## Appendix A. Canonical bodies
 
 Use the K1 notation from the companion page: `R{...}`, `S[...]`, `V(tag,x)`,
-`N(n)`, `Q(symbol)`, `Y(bytes)`, `Unit`, `ContentRefV0`,
+`MF`, `MT`, `N(n)`, `Q(symbol)`, `Y(bytes)`, `Unit`, `ContentRefV0`,
 `CanonicalValueTypeBody`, and admitted canonical datums. Fields are exact,
 ordered, and closed.
 
@@ -1134,7 +1237,7 @@ FrameBody =
       1:PublicBindingClassBody(class),
       2:CanonicalValueTypeBody(value_type),
       3:value.datum})
-| V(5, R{0:N(occurrence_ref),1:V(boolean_tag,Unit)})
+| V(5, R{0:N(occurrence_ref),1:K1BooleanDatum(active)})
 | V(6, MessageFrameBody)
 | V(7, MessageFrameBody)
 | V(8, OraclePublicationFrameBody)
@@ -1181,10 +1284,17 @@ OracleQueryFrameBody = R {
 OracleAnswerFrameBody = R {
   0:N(occurrence_ref),
   1:N(oracle_ref),
-  2:CanonicalValueTypeBody(element_type),
+  2:CanonicalValueTypeBody(
+      OracleAnswerOutputType(core.oracles[oracle_ref])),
   3:answer.datum
 }
 ```
+
+Here `K1BooleanDatum(false) = MF` and `K1BooleanDatum(true) = MT`; neither case
+is a `MetaVariant`. An Oracle answer datum is likewise the exact Core-owned
+lookup-result sum: `V(0,Unit)` when absent or `V(1,element.datum)` when present.
+Both cases are admitted at `OracleAnswerOutputType(o) =
+OracleLookupResultType(o)`, never at bare `o.element_type`.
 
 The exact influence and transition-input bodies are:
 
@@ -1223,10 +1333,12 @@ sorted-unique atom set, it sorts by the full bytes
 `M(InfluenceAtomBody(atom))`; runtime `InfluenceTrace` instead preserves
 transition order. `TransitionInputBody` is interpreted under the construction's
 exact `TranscriptBytesType`, so both datums are owner-admitted at that type
-before comparison.
+before comparison. It is an exact structural comparison form, not a single
+`MetaValueV0` submitted to `M`; no implementation may concatenate its two byte
+datums and treat the resulting aggregate as another transcript byte value.
 
 The message variants 6 and 7 distinguish Prover from Verifier without another
-party field. Boolean false and true use K1's exact Boolean cases. Reused bodies
+party field. Boolean false and true use the `MF` and `MT` cases above. Reused bodies
 such as `PublicBindingClassBody`, `CoinCorrelationBody`,
 and `OraclePublicationModeBody` are exactly those in
 [Interactive Core Appendix A](interactive-core.md#appendix-a-canonical-bodies).

@@ -7,8 +7,10 @@
 > target specification, decision, implementation claim, or Stage 4B state.
 > **Activated:** 2026-08-23
 > **Current gate:** Integrated semantic-kernel closure K0, bounded K1
-> executable foundations, and bounded K2 Protocol/Fiat--Shamir closure are
-> complete; K3 minimum consumer co-design is next. R2 remains an evidence
+> executable foundations, and the narrowly reclosed bounded K2
+> Protocol/Fiat--Shamir kernel are complete at their stated scopes; the final
+> K2 gates and focused follow-up are green in its validation record. K3 minimum
+> consumer co-design is next. R2 remains an evidence
 > track after the repaired
 > `FRI-Grind-1` witness
 > and retained T3 `P01` Schnorr/Sigma result. `P02` is the next witness anchor
@@ -44,9 +46,10 @@ does not claim that the current snapshot will remain unchanged.
 ## Current cycle records
 
 This section owns the inventory route for this package's direct pages and the
-`k1-executable-foundations/` and `r2-protocol-witnesses/` subpackages. Each
-subpackage README owns its direct children. Links to individual R2 pages below
-are reader cross-references rather than inventory edges.
+`k1-executable-foundations/`, `k2-protocol-and-fiat-shamir/`, and
+`r2-protocol-witnesses/` subpackages. Each subpackage README owns its direct
+children. Links to individual R2 pages below are reader cross-references rather
+than inventory edges.
 
 - [R0 Live Baseline](baseline.md) freezes the activation snapshot, authority,
   version-control boundary, and review-source provenance.
@@ -63,9 +66,10 @@ are reader cross-references rather than inventory edges.
   tests the shared bootstrap, identity, canonical-value, portable-algorithm,
   failure, and deterministic-resource substrate required before K2.
 - [K2 Protocol and Fiat--Shamir Kernel](k2-protocol-and-fiat-shamir/README.md)
-  records the completed bounded Protocol/FS selection, durable closure,
-  cold-audit disposition, executable gate, consumer deferrals, and
-  work-package inventory.
+  records the preserved bounded Protocol/FS selection, its narrow exact-body
+  reopening and reclosure, cold-audit dispositions, executable gates, consumer
+  deferrals, and work-package inventory. Its final validation record owns the
+  evidence for reclosure.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,

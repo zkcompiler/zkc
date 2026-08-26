@@ -57,6 +57,7 @@ maximum Core occurrences             = 2^14
 maximum values, inputs, scopes,
   challenges, oracles, checks,
   claims, reductions, and terminals  = 2^14 each
+maximum entries declared by one Oracle = 2^14
 maximum direct occurrence inputs     = 2^14
 maximum scope depth                  = 384
 ```
@@ -66,9 +67,16 @@ or depth bound. Formation preflights the enclosing canonical body before
 materializing a derived aggregate. Reaching a limit is allowed; crossing it
 produces no Core ID.
 
-The PIR K2 semantic regime supports the exact declarations on this page. A
-Core may import additional same-regime semantic modules under Section 8, but
-only exact-used imports enter its body.
+The PIR K2 semantic regime supports the exact declarations on this page. In
+this document, that phrase means the exact `B.semantic_regime.id` in the
+authenticated `PriorMetaAuthenticationBasis B`, together with the Core's
+exact-used same-regime semantic modules. It does not introduce a second PIR or
+transcript-construction regime axis. A Core, either Protocol interpretation,
+and any transcript construction for that Core use the same complete `B`,
+including its identity profile, hash suite, semantic-regime descriptor, and
+semantic-regime ID. Equality of a bare digest or only one component is
+insufficient. A Core may import additional same-regime semantic modules under
+Section 8, but only exact-used imports enter its body.
 
 Several Core fields need nominal semantic coordinates without asking PIR to
 prove the theorem or cryptographic meaning attached to them. K2 uses one
@@ -178,6 +186,10 @@ Admission runs the closed predicates in Section 10. Only an immutable exact
 An admitted handle retains the exact ID, canonical body, authenticated prior-
 meta basis, exact-used module and algorithm closure, admission regime, and
 evaluator identity. Serialization is not the handle.
+`AdmitFresh` retains the supplied Core handle's evaluator identity. Any cold
+consumer first reauthenticates and readmits serialized subjects through its own
+evaluator; an ID or record never transfers another evaluator's admission
+authority.
 
 ## 4. Parties, inputs, values, and scopes
 
@@ -624,7 +636,7 @@ OracleDecl = {
   scope: ScopeRef,
   index_type: ValueType,
   element_type: ValueType,
-  maximum_entries: Natural,
+  maximum_entries: Natural, // 0 .. 2^14
   publication_mode: OraclePublicationMode
 }
 
@@ -655,10 +667,14 @@ admitted datum is exactly:
 S[ R{0:index_0.datum,1:element_0.datum}, ... ]
 ```
 
-The sequence length is at most `maximum_entries`; every index and element is
-owner-admitted at its declared type; entries are strictly ascending by
-`index.canonical_bytes`; and indices are unique under the Foundation
-domain-owned equality for the exact `index_type`. Unique canonical
+Formation requires `0 <= maximum_entries <= 2^14` and requires the complete
+`OracleCarrierType(o)` to pass K1's `Worst` byte, node, edge, and depth bounds.
+The local `2^14` ceiling is therefore not a promise that every entry type can
+inhabit that capacity; larger index or element types may force a smaller
+formable maximum. The sequence length is at most `maximum_entries`; every index
+and element is owner-admitted at its declared type; entries are strictly
+ascending by `index.canonical_bytes`; and indices are unique under the
+Foundation domain-owned equality for the exact `index_type`. Unique canonical
 representatives make an equal index have equal canonical bytes, but lookup
 uses the domain-owned equality, not host byte equality or a language map.
 
@@ -1006,6 +1022,12 @@ declared reconstruction algorithm after ABI checking. A missing edge,
 unsupported reconstruction algorithm, asserted Boolean classification, or
 Verifier nondeterminism yields `Invalid`.
 
+For a supported module, the authenticated edge and sink declarations are the
+effect's semantic dependency law rather than evidence about a host
+implementation. Admission validates and applies that law. Realization and
+Evidence must show that an implementation has no undeclared dependency; a host
+that reads one is nonconforming and does not change `PublicCoinView`.
+
 `PCSinks(core)` is the derived set of every guard/activity controlling a public
 observation, deterministic Verifier output, public Query index, Challenge
 condition, invoked Check, Reduction transition, Terminal decision, terminal
@@ -1041,10 +1063,13 @@ ResolveChallenge(
 ```
 
 `FreshResolver` obtains one exact value from a scoped public-coin capability
-and records its declared-law coordinate. The value must be in the exact domain.
-One sample cannot establish that the capability followed the distribution.
-`FiatShamirResolver` is defined by the companion page. No other resolver may
-inhabit an admitted Protocol.
+and records the Challenge's declared-law coordinate. The value must be in the
+exact domain. A concrete source, supplier, device, or observation coordinate
+is not part of the K2 semantic receipt; Analysis or Evidence may bind such
+provenance separately without changing the Protocol or pretending that source
+identity proves a distribution. One sample cannot establish that the
+capability followed the distribution. `FiatShamirResolver` is defined by the
+companion page. No other resolver may inhabit an admitted Protocol.
 
 ### 12.2 Invocation and state
 
@@ -1080,19 +1105,32 @@ Appendix A. The invocation handle and ID may be confidential when the Fresh
 Core has Verifier-private inputs; content addressing never authorizes
 disclosure.
 
-The capability arguments are exact runtime bindings, not semantic shortcuts:
+The capability arguments and evaluation control are exact runtime bindings,
+not semantic shortcuts:
 
 ```text
 ChallengeResolverCapability = one resolver admitted by Protocol interpretation
+ExecutionEvaluationControl = {
+  evaluator: exact K1 evaluator,
+  per_request_limits: PortableEvaluationLimitsV0
+}
 ExactCheckAndExtensionCapabilities =
-  exact K1 evaluator plus total bindings for every used primitive/module effect
+  total bindings for every used primitive/module effect
 ExactOracleReplayCapabilities =
   TotalMap<PublicBinding OracleRef, CanonicalFiniteOracle<declared Oracle>>
 ```
 
 Each binding is checked against the ID or declaration already committed by the
 admitted subjects. Missing support is qualified noncompletion; a disagreeing
-provider is `CheckerFailure`.
+provider is `CheckerFailure`. `ExecutionEvaluationControl` is an immutable
+snapshot for one generated or replayed run. Every K1 algorithm request starts
+fresh counters under its exact finite `per_request_limits`; the limits and
+charges are ephemeral evaluator control and enter no Core, Protocol,
+construction, invocation, or record identity.
+Its `evaluator` must be the identical evaluator retained by the admitted
+Protocol handle. Only the finite limits may vary between calls. Portable use by
+another evaluator requires cold reauthentication and readmission of the Core,
+construction when present, and Protocol before execution.
 
 ### 12.3 Generated run
 
@@ -1102,7 +1140,8 @@ GenerateRun(
   CoreInvocation,
   ProverStrategyCapability,
   ChallengeResolverCapability,
-  ExactCheckAndExtensionCapabilities)
+  ExactCheckAndExtensionCapabilities,
+  ExecutionEvaluationControl)
   -> CompletedRun(RunRecord, CausalGenerationCapability)
    | InterpretationFailed(ProtocolFailureRecord)
    | StrategyStopped(PartialRunRecord)
@@ -1121,6 +1160,10 @@ challenge interpretation. It is not a Core terminal. `StrategyStopped` is not
 a Core outcome and cannot be converted to Reject or Abort without an explicit
 protocol event. Other missing capabilities, unsupported algorithms, resource
 exhaustion, and checker defects follow K1's qualified noncompletion partition.
+
+In particular, exhaustion of `ExecutionEvaluationControl.per_request_limits`
+is `DeterministicLimitExceeded` and produces no semantic completion. It cannot
+be relabeled as a Core rejection, strategy stop, or interpretation failure.
 
 `CausalGenerationCapability` is a nonserializable, process-local capability
 minted only by this invocation of `GenerateRun` after its restricted strategy
@@ -1145,7 +1188,6 @@ OccurrenceReceipt = {
 FreshChallengeReceipt = {
   challenge: ChallengeRef,
   law: ProtocolDeclarationRef<"pir.public-coin-law">,
-  public_source_coordinate: MetaValueV0,
   value: CanonicalValue<declared challenge type>
 }
 
@@ -1173,14 +1215,24 @@ RunRecord = {
 
 PartialRunRecord = the exact prefix of RunRecord before a terminal
 
+InterpretationFailureReceipt =
+  FiatShamirSamplingFailure {
+    construction: TranscriptConstructionId,
+    receipt: FSSamplingFailureReceipt
+  }
+
 ProtocolFailureRecord = {
   protocol_id: ProtocolId,
   invocation_id: CoreInvocationId,
   occurrence_prefix: CanonicalSeq<OccurrenceReceipt>,
   challenge_receipts: CanonicalSeq<ChallengeResolverReceipt>,
   failure: exact typed interpretation DomainFailure,
-  interpretation_receipt: MetaValueV0
+  interpretation_receipt: InterpretationFailureReceipt
 }
+
+CompletedProtocolRecord =
+    TerminalCompletion(RunRecord)
+  | InterpretationFailure(ProtocolFailureRecord)
 ```
 
 `FSChallengeReceipt` is closed by the companion page. Receipt output arity,
@@ -1192,26 +1244,66 @@ strategy state, witness, advice, randomness, and an opaque oracle body under
 oracle witness through a separate capability and checks every exposed answer.
 A Plan-specific confidential generation record may bind private material
 separately.
+`PartialRunRecord` is diagnostic execution data for `StrategyStopped`, not a
+completed Protocol record. K2 defines no affirmative prefix-replay result for
+it; a later audit consumer needing one must define a distinct nonsemantic audit
+relation and cannot call it `ReplayMatches`.
+
+K2 Fresh resolution has no completed semantic-failure row: unavailable or
+failed fresh-coin supply is operational noncompletion. The sole
+`InterpretationFailureReceipt` case is therefore the companion page's exact
+sampling-failure receipt. Its `construction` must equal the construction named
+by the admitted FS Protocol whose ID is `protocol_id`; the receipt's challenge,
+prefix count, draw sequence, and states must recompute exactly under that
+construction; the draw-sequence length must equal that challenge rule's
+`maximum_draws`; and `failure` must be the construction's exact
+sampling-exhausted coordinate and payload. These are closed typed runtime
+fields, not a new identity-bearing or canonical transport schema. OIR or
+Evidence must define any later serialization separately.
 
 ```text
 ReplayRun(
   AdmittedProtocol,
   exact CoreInvocation,
-  RunRecord,
-  ChallengeResolverReplayCapability,
+  CompletedProtocolRecord,
   ExactOracleReplayCapabilities,
-  ExactCheckAndExtensionCapabilities)
-  -> ReplayMatches | qualified refusal/noncompletion
+  ExactCheckAndExtensionCapabilities,
+  ExecutionEvaluationControl)
+  -> ReplayMatches
+   | Refused(PIR.InteractiveCore, ReplayRecordMismatch)
+   | qualified operational noncompletion
 ```
 
 Replay consumes decisions and receipts in occurrence order, recomputes every
 deterministic transition, challenge, check, oracle lookup, claim state, and
-terminal output, and requires exact exhaustion of the record. It does not invoke
-a strategy and therefore does not mint `CausalGenerationCapability`. A trace
-can replay even when its producer had future information. The live capability
-attests only that this semantic engine used the restricted relation for that
-one call; implementation isolation and host side channels remain Evidence
-questions.
+terminal output or typed interpretation failure, and requires equality of the
+record variant plus exact exhaustion of all fields. Fresh replay consumes each
+recorded `FreshChallengeReceipt.value` as the historical nondeterministic
+choice, then validates its declared-law reference, canonical/domain membership,
+schedule, conditions, and downstream effects; it makes no source, distribution,
+or provenance claim and needs no replay source capability. FS replay instead
+recomputes every challenge and sampling-failure receipt from the admitted
+construction and never accepts a recorded challenge as a shortcut. A Fresh
+Protocol cannot replay an interpretation-failure variant. Wrong variants,
+coordinates, values, payloads, or unconsumed fields produce the named replay
+refusal.
+
+Replay does not invoke a strategy and therefore does not mint
+`CausalGenerationCapability`. A trace can replay even when its producer had
+future information. If a terminal run is separately accompanied by its still-
+live `CausalGenerationCapability`, that capability attests only that this
+semantic engine used the restricted generation relation for that one call;
+successful replay never creates or strengthens it. Implementation isolation
+and host side channels remain Evidence questions.
+
+`ReplayMatches` is produced only when every K1 request completes under the
+replay call's supplied evaluation control. Reusing the same evaluator and
+limits from a completed generation, or limits componentwise sufficient for the
+same deterministic requests, prevents a smaller replay budget from erasing a
+shared completed transition. Insufficient replay limits yield
+`DeterministicLimitExceeded`, not `ReplayMatches`, the record-mismatch refusal,
+or a semantic Protocol outcome. A record by itself carries no evaluator-budget
+authority.
 
 ## 13. PIR-owned source views
 
@@ -1267,7 +1359,18 @@ schedules, unbounded loops, noncommunicating multiprover semantics, and
 distributed-verifier knowledge require a future explicit extension and cannot
 be encoded through labels or opaque effects.
 
-## 15. Nonclaims and reopening conditions
+## 15. Evidence boundary, nonclaims, and reopening conditions
+
+The standalone
+[K2 reference instrument](../../evaluation/k2-protocol-fiat-shamir/README.md)
+provides bounded executable pressure for selected lifecycle, ordering,
+strategy/replay, public-input binding, Oracle, claim, and refusal shapes. It
+reuses K1 identity machinery, but its compact Python carrier is not the durable
+Core carrier and does not execute every exact `AlgorithmUse`, capability,
+`PCNode`/module-sink rule, generic Oracle type, or `PublicBinding` path defined
+here. Its successful cases are finite inhabitance and falsification evidence,
+not implementation conformance, capability nontransportability, protocol-family
+coverage, or a cryptographic theorem.
 
 This page establishes no cryptographic property, strategy implementation
 conformance, distribution truth, relation satisfaction, endpoint coverage, or

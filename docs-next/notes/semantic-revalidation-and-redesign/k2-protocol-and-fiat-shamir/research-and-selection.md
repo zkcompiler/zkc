@@ -1,7 +1,8 @@
 # K2 Protocol and Fiat--Shamir Research and Selection
 
 > **Document kind:** Temporary research and selection record
-> **Document state:** Integrated candidate selected and bounded K2 validation complete
+> **Document state:** Integrated candidate preserved and narrowly reclosed;
+> final gate evidence is owned by [`validation.md`](validation.md)
 > **Provisional owner:** `pir`, coordinated by `project`
 > **Authority:** None. Current normative Protocol and Fiat--Shamir rules remain
 > under [`docs/`](../../../../docs/README.md).
@@ -372,16 +373,20 @@ a PLONK or KZG message required before a later batching challenge is not.
 
 No event owns a `Transcript` Boolean. Standard occurrence semantics derive its
 transcript action. A supported extension module must define the same influence
-law for each new constructor. Admission checks:
+law for each new constructor. The independently checked runtime law is exact
+full-prefix equality:
 
 ```text
-RequiredInfluence(c)
-  subset_of Influence(TranscriptStateImmediatelyBefore(c))
+TransitionInputLog(actual before c) = DerivedPrefix(c)
 ```
 
-Safe extra influence, such as explicit session context, is permitted. Missing,
-late, duplicate, reordered, wrongly scoped, type-incompatible, or conditionally
-ambiguous required influence refuses the construction.
+`RequiredInfluence(c)` is then the exact ordered projection used to explain and
+audit why that prefix contains every Core-required source. Safe extra influence,
+such as explicit session context, is permitted because it is already part of
+the derived full prefix. Missing, late, duplicate, reordered, wrongly scoped,
+type-incompatible, or conditionally ambiguous source material either prevents
+the required projection from being derived or breaks full-prefix equality; the
+projection is not a second independent runtime rejection after equality passes.
 
 ### 8.2 Prefix and framing
 
@@ -444,7 +449,7 @@ heterogeneous product or sum:
 
 ```text
 bytes = SqueezeBytes(state, namespace, requested_length)
-require ByteLength(bytes) = requested_length
+require OctetLength(bytes) = requested_length
 post_state = AdvanceState(state, namespace, requested_length, bytes)
 
 accepted = Accept(bytes, public conditional inputs)
@@ -455,8 +460,9 @@ else:
 ```
 
 All four algorithms have one exact K1 success type and empty failure rows. An
-infallible rule accepts its one draw. A rejection rule uses K1
-`BoundedIterate`; every attempt advances state before acceptance is tested.
+infallible rule accepts its one draw. For a rejection rule, the FS owner runs a
+finite loop of K1 evaluation requests; every attempt advances state before
+acceptance is tested.
 Exhausting the admitted draw count completes with one exact, module-owned
 `SamplingExhaustedFailure`. It never returns a partial challenge or restores a
 pre-squeeze state. A successful squeeze with the wrong exact byte length is an
@@ -541,6 +547,43 @@ are explicit unsupported boundaries.
 | Repetition/recursion | Finite unrolling; recursive verification as finite typed check/extension | Keeps Core bounded and verifier-observable | K4 requires a symbolic recurrence in canonical meaning to avoid infeasible or semantically lossy expansion |
 | Extension model | Exact-used supported K1 semantic modules; unknown constructors refuse | Adds local vocabulary without rotating unrelated subjects or admitting opaque effects | Module extraction creates ambiguous constructor ownership or unverifiable transition semantics |
 
+### 12.1 Narrow exactness amendment
+
+The post-selection exactness review did not reopen the selected architecture.
+It found two local canonical-body contradictions: the Fiat--Shamir Oracle answer
+frame was typed at the element type even though Core execution produces the
+total `OracleLookupResultType`, and the guard-outcome body admitted a second
+Boolean spelling beside the exact K1 Boolean datum. The repaired bodies use the
+Core lookup-result type and the single K1 Boolean representation. No Core,
+Protocol, Fresh/FS, execution, public-coin, Oracle-lifecycle, or namespace
+factorization changed.
+
+Because those body repairs change exact `FrameOctets`, this reclosure
+supersedes the earlier unshipped K2 candidate law. No earlier target byte stream
+is supported or reinterpreted. A concrete semantic module or regime frozen from
+the earlier draft would have to rotate before admitting the repaired law.
+
+The same pass tightened the common transcript-byte ceiling to `2^20 - 26`,
+including K1's byte-datum and tagged-success envelopes, and bound construction,
+Protocol, generation, and replay handles to one retained evaluator identity.
+It also closed replay over terminal and typed interpretation-failure records.
+
+The review also narrowed the claim made for ordered influence. Exact full-prefix
+equality remains an independently checked execution and replay law. Because the
+required-influence sequence is derived as an ordered projection of that exact
+prefix, it is an exported audit and admission view rather than a second
+independent runtime gate. This removes an overstated evidence claim without
+weakening transcript closure.
+
+Finally, the selected construction intentionally does not carry the current
+system's theorem-priced relaxation for an unabsorbed prover slot before a later
+challenge. K2 absorbs every active prior prover-controlled publication. A
+protocol that needs the relaxation must identify a distinct checked prior
+construction or introduce a new supported construction whose assumptions,
+scope, and quantitative consequence are explicit. A theorem or Analysis result
+cannot mutate the already checked K2 transcript. Inability to express such a
+justified construction reopens only the Fiat--Shamir construction cone.
+
 ## 13. K1 and downstream ownership
 
 K2 reuses, rather than redefines, K1 canonical values, typed content IDs,
@@ -559,6 +602,17 @@ backflow:
   loss occurrences;
 - OIR: role projections, public inputs, messages, oracle effects, checks,
   failures/noncompletion boundary, terminals, and optional Plan requirements.
+
+These are source declarations and open read seams, not prevalidated
+correspondence. K3 must first reconcile the pre-K2 Interface/Plan, canonical
+carrier, and Analysis source bindings; check that an external relation's full
+Statement set maps to the exact PIR bindings; distinguish Witness from private
+nonwitness advice; and define the strategy, theorem, loss, and minimum OIR
+questions over the resulting views. Nominal claim/reduction coordinates and
+module-declared dependency facts do not acquire theorem meaning or semantic-
+honesty evidence by being present in K2. A consumer need for new verifier-
+observable behavior or identity-bearing source data reopens the affected K2
+cone; an ordinary consumer proposition remains owned by K3 without backflow.
 
 K4 must still test native FRI/IOR, Sumcheck/GKR, polynomial commitments,
 pairing and IPA arguments, folding/recursion, and recent variants at their

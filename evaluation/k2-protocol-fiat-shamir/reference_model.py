@@ -377,6 +377,80 @@ def _datum(value: Value | None) -> object:
     raise ModelError(f"unsupported fixture value: {type(value)!r}")
 
 
+def _appendix_ref(value: int, what: str) -> object:
+    """Form one exact Appendix-A natural reference coordinate."""
+
+    if type(value) is not int or not 0 <= value < 1 << 64:
+        raise ModelError(f"{what} must be an unsigned 64-bit natural")
+    return k1.Nat(value)
+
+
+def appendix_guard_outcome_frame_body(
+    occurrence_ref: int,
+    active: bool,
+) -> object:
+    """Form the exact K2 Appendix-A GuardOutcome frame body.
+
+    K1 Boolean values are MetaBooleanFalse/MetaBooleanTrue scalar datums.  In
+    particular, this body deliberately does not wrap ``active`` in a generic
+    MetaVariant.
+    """
+
+    if type(active) is not bool:
+        raise ModelError("guard outcome must be one exact K1 Boolean")
+    return k1.DatumVariant(
+        5,
+        k1.DatumRecord(
+            (
+                (0, _appendix_ref(occurrence_ref, "occurrence reference")),
+                (1, active),
+            )
+        ),
+    )
+
+
+def appendix_oracle_lookup_result_type(element_type: object) -> object:
+    """Form ``RootVariant<[(0, RootUnit), (1, element_type)]>`` exactly."""
+
+    if type(element_type) is not k1.ValueType:
+        raise ModelError("Oracle element type must be one exact K1 ValueType")
+    if element_type.domain.semantic_regime != k1.SEMANTIC_REGIME_ID:
+        raise ModelError("Oracle element type crosses the K2 fixture regime")
+    unit_type = k1.ValueType(k1.UNIT_DOMAIN, k1.UNIT_SCHEMA)
+    return k1.ValueType(
+        k1.VARIANT_DOMAIN,
+        k1.VariantSchema(((0, unit_type), (1, element_type))),
+    )
+
+
+def appendix_oracle_answer_frame_body(
+    occurrence_ref: int,
+    oracle_ref: int,
+    element_type: object,
+    answer: object,
+) -> object:
+    """Form one exact K2 Appendix-A OracleAnswer frame body.
+
+    The type carried in field 2 is the derived lookup-result sum, never the
+    element type.  Admission at that sum makes both absent and present answers
+    formable before the frame is returned.
+    """
+
+    result_type = appendix_oracle_lookup_result_type(element_type)
+    admitted = k1.admit_value(result_type, answer)
+    return k1.DatumVariant(
+        10,
+        k1.DatumRecord(
+            (
+                (0, _appendix_ref(occurrence_ref, "occurrence reference")),
+                (1, _appendix_ref(oracle_ref, "Oracle reference")),
+                (2, k1.value_type_datum(result_type)),
+                (3, admitted.datum),
+            )
+        ),
+    )
+
+
 def _ref_datum(ref: ValueRef) -> object:
     return k1.DatumRecord(
         ((0, k1.Symbol(ref.kind.value)), (1, _symbol(ref.name, "reference name")))
@@ -891,6 +965,13 @@ def admit_core(core: Core) -> None:
             raise AdmissionError("occurrence dependencies must be unique")
         if any(ref not in available for ref in occurrence.dependencies):
             raise AdmissionError("occurrence dependency is not in the exact prior prefix")
+        if (
+            occurrence.kind is OccurrenceKind.PROVER_MESSAGE
+            and occurrence.dependencies
+        ):
+            raise AdmissionError(
+                "prover messages have no authored dependency field"
+            )
         _validate_predicate(occurrence.guard, available, sorts)
 
         if occurrence.kind is OccurrenceKind.CHALLENGE:
@@ -1175,9 +1256,12 @@ def is_public_coin_eligible(core: Core) -> bool:
         if item.kind is OccurrenceKind.TERMINAL:
             sources.update(checks)
         consumer = item.kind in {
+            OccurrenceKind.PROVER_MESSAGE,
             OccurrenceKind.VERIFIER_MESSAGE,
             OccurrenceKind.CHALLENGE,
+            OccurrenceKind.ORACLE_PUBLISH,
             OccurrenceKind.ORACLE_QUERY,
+            OccurrenceKind.ORACLE_ANSWER,
             OccurrenceKind.CHECK,
             OccurrenceKind.TERMINAL,
         }
@@ -1511,18 +1595,65 @@ def _draw_atom(entry: RunEntry, ordinal: int, namespace: bytes) -> InfluenceAtom
 def extract_influence_atoms(
     frames: tuple[Frame, ...],
     prior_entries: tuple[RunEntry, ...] = (),
+    core: Core | None = None,
 ) -> tuple[InfluenceAtom, ...]:
-    """Extract the finite observed influence set from an exact run prefix."""
+    """Extract the finite observed influence trace from an exact run prefix."""
 
-    atoms: list[InfluenceAtom] = []
+    frame_atoms: list[InfluenceAtom] = []
     for frame in frames:
         if type(frame) is not Frame or frame.tag != frame.atom.kind:
             raise ReplayError("transcript frame and influence atom disagree")
         _atom_bytes(frame.atom)
-        atoms.append(frame.atom)
-    for entry in prior_entries:
-        for ordinal, namespace in enumerate(entry.draw_namespaces):
-            atoms.append(_draw_atom(entry, ordinal, namespace))
+        frame_atoms.append(frame.atom)
+
+    draw_atoms = tuple(
+        (entry_index, _draw_atom(entry, ordinal, namespace))
+        for entry_index, entry in enumerate(prior_entries)
+        for ordinal, namespace in enumerate(entry.draw_namespaces)
+    )
+    if core is None or not draw_atoms:
+        atoms = frame_atoms + [atom for _, atom in draw_atoms]
+    else:
+        occurrence_index = {
+            occurrence.name: index for index, occurrence in enumerate(core.schedule)
+        }
+        scope_index = {
+            scope.name: (
+                -1
+                if scope.open_before is None
+                else occurrence_index[scope.open_before]
+            )
+            for scope in core.scopes
+        }
+
+        def frame_rank(atom: InfluenceAtom) -> int:
+            if atom.kind in {
+                "core-header",
+                "construction-header",
+                "application-domain",
+            }:
+                return -1
+            if atom.kind in {
+                "scope-open",
+                InputRole.STATEMENT.value,
+                InputRole.PUBLIC_CONTEXT.value,
+                InputRole.PUBLIC_PARAMETER.value,
+            }:
+                return scope_index[atom.coordinates[0]]
+            return occurrence_index[atom.coordinates[0]]
+
+        atoms = []
+        draw_index = 0
+        for atom in frame_atoms:
+            rank = frame_rank(atom)
+            while (
+                draw_index < len(draw_atoms)
+                and draw_atoms[draw_index][0] < rank
+            ):
+                atoms.append(draw_atoms[draw_index][1])
+                draw_index += 1
+            atoms.append(atom)
+        atoms.extend(atom for _, atom in draw_atoms[draw_index:])
     if len(atoms) != len(set(atoms)):
         raise ReplayError("duplicate transcript influence atom")
     return tuple(atoms)
@@ -1539,7 +1670,6 @@ def required_influence_atoms(
     occurrence = core.schedule[challenge_ordinal]
     if occurrence.kind is not OccurrenceKind.CHALLENGE:
         raise AdmissionError("required influence is defined only for challenges")
-    occurrence_index = {item.name: index for index, item in enumerate(core.schedule)}
     required: list[InfluenceAtom] = [
         _atom("core-header", core_id(core).internal_reference().hex()),
         _atom(
@@ -1548,9 +1678,10 @@ def required_influence_atoms(
         ),
         _atom("application-domain", construction.application_domain.hex()),
     ]
-    for scope in core.scopes:
-        opening = -1 if scope.open_before is None else occurrence_index[scope.open_before]
-        if opening <= challenge_ordinal:
+    scopes_by_opening = _scope_openings(core)
+
+    def append_scope_openings(open_before: str | None) -> None:
+        for scope in scopes_by_opening.get(open_before, ()):
             required.append(_atom("scope-open", scope.name))
             required.extend(
                 _atom(item.role.value, item.scope, item.name)
@@ -1563,9 +1694,12 @@ def required_influence_atoms(
                     InputRole.PUBLIC_PARAMETER,
                 }
             )
+
+    append_scope_openings(None)
     by_name = {item.name: item for item in core.schedule}
     for entry in prior_entries:
         prior = by_name[entry.occurrence]
+        append_scope_openings(prior.name)
         if prior.guard.kind is not PredicateKind.ALWAYS:
             required.append(
                 _atom(
@@ -1582,6 +1716,7 @@ def required_influence_atoms(
                 _draw_atom(entry, ordinal, namespace)
                 for ordinal, namespace in enumerate(entry.draw_namespaces)
             )
+    append_scope_openings(occurrence.name)
     if occurrence.guard.kind is not PredicateKind.ALWAYS:
         required.append(_atom("guard-outcome", occurrence.name, "executed"))
     required.extend(
@@ -1601,17 +1736,32 @@ def compare_influence(
     required: tuple[InfluenceAtom, ...],
     observed: tuple[InfluenceAtom, ...],
 ) -> InfluenceComparison:
+    if len(required) != len(set(required)):
+        raise ReplayError("duplicate required transcript influence atom")
     if len(observed) != len(set(observed)):
         raise ReplayError("duplicate transcript influence atom")
-    observed_set = set(observed)
 
-    def key(item: InfluenceAtom) -> tuple[str, tuple[str, ...]]:
-        return (item.kind, item.coordinates)
+    # Greedily match the required trace in its declared order.  Extra observed
+    # atoms are allowed, but an atom seen only before its required predecessor
+    # cannot be reused after that predecessor and is therefore reported
+    # missing.  This is an ordered-subtrace check, not set containment.
+    observed_index = 0
+    missing: list[InfluenceAtom] = []
+    for required_atom in required:
+        while (
+            observed_index < len(observed)
+            and observed[observed_index] != required_atom
+        ):
+            observed_index += 1
+        if observed_index == len(observed):
+            missing.append(required_atom)
+        else:
+            observed_index += 1
 
     return InfluenceComparison(
-        tuple(sorted(set(required), key=key)),
-        tuple(sorted(observed_set, key=key)),
-        tuple(sorted(set(required) - observed_set, key=key)),
+        required,
+        observed,
+        tuple(missing),
     )
 
 
@@ -1786,6 +1936,7 @@ def _execute(
         extract_influence_atoms(
             expected_record.transcript_frames,
             expected_record.entries,
+            core,
         )
 
     cid = core_id(core)
@@ -1970,7 +2121,11 @@ def _execute(
                         ref.kind.value,
                         ref.name,
                     )
-                observed = extract_influence_atoms(tuple(frames), tuple(entries))
+                observed = extract_influence_atoms(
+                    tuple(frames),
+                    tuple(entries),
+                    core,
+                )
                 required = required_influence_atoms(
                     core,
                     construction,
@@ -2213,7 +2368,6 @@ def schnorr_fixture() -> tuple[Core, TranscriptConstruction, Invocation, ProverS
             Occurrence(
                 "response",
                 OccurrenceKind.PROVER_MESSAGE,
-                dependencies=(ValueRef.occurrence("challenge"),),
                 prover_value_sort=ValueSort.NAT,
             ),
             Occurrence(
