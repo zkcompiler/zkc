@@ -17,6 +17,15 @@
 > equal-resolution candidate portfolio SHA-256
 > `a65bb0a9bbe49962377a28571874ba6f86a52e3f8c66a9ce766f36fa5a25cc61`.
 
+> **K3-A reconciliation notice — 2026-08-26:** The federated Analysis and
+> validated-decision Compiler factorization remains selected at its recorded
+> Stage 4A resolution. Its Analysis source contracts and the PIR owner routes
+> below predate the active K2 Core/Fiat--Shamir model and are not integrated
+> target contracts. K3-C must rebuild Analysis ingress, strategy/experiment,
+> theorem-applicability, and loss semantics over exact K2/K3 sources. This
+> notice does not reopen the Compiler architecture or allow Compiler to consume
+> unreconciled Analysis results.
+
 ## 1. Decision
 
 Select a **federated typed Analysis architecture followed by a validated-

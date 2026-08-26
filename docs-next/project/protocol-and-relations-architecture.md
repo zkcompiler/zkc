@@ -16,12 +16,15 @@
 > equal-resolution candidate portfolio SHA-256
 > `ce4f71e88741f71d126c81ce8afeb2cb29da83f856bb13fdf032a702756b9923`.
 
-> **K1 reconciliation status — 2026-08-26:** K1 selected a provisional
-> executable Foundation, but it did not ratify this historical Stage 3
-> consumer model. K2 must reconcile Protocol and Fiat--Shamir; K3 must
-> reconcile Interface, Relations, Analysis, and the minimum downstream seams.
-> In particular, pre-K1 algorithm, value-domain, dependency-closure, and
-> identity notation below carries no K1 typing or authentication claim.
+> **K1/K2/K3-A reconciliation notice — 2026-08-26:** K1 now owns the
+> executable Foundation and K2 owns the active Interactive Core and
+> Fiat--Shamir construction. They do not ratify this historical Stage 3
+> consumer model. Public-coin-Core, port, object, randomness,
+> abstract-prover-obligation, authored FS-map, and pre-K1 identity notation
+> below are historical where they conflict with those active owners. K3-B must
+> reconstruct Interface, Plan, Relations, value bridges, and carrier
+> correspondence before those dependent surfaces can become current target
+> contracts.
 
 ## 1. Decision
 

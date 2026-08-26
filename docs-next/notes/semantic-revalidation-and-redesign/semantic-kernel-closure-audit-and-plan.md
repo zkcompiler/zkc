@@ -33,7 +33,8 @@ executable foundations and bounded K2 Protocol/FS closure completed on
 2026-08-26. K2 was then narrowly reopened for two exact canonical-body defects
 and evidence-claim reconciliation without reopening its architecture, and is
 reclosed at that bounded scope with the final green gates and focused follow-up
-recorded by its validation owner. K3 minimum consumer co-design is next; the
+recorded by its validation owner. K3-A consumer-boundary reconstruction is
+complete and K3-B dependent-surface and Relations co-design is next; the
 integrated kernel is not frozen. The R2 protocol-witness track
 remains an evidence source; a P02 probe may inform an earlier question, but
 P02 cannot close its portfolio gate before K1--K3 establish the substrate it
@@ -220,18 +221,36 @@ follows.
 
 ### K3 — Minimum consumer co-design
 
-- finish the minimum Relations algebra and Protocol correspondence;
-- reconcile the pre-K2 Interface/Plan, canonical-carrier, and Analysis source
-  bindings against the K2 declarations rather than assuming correspondence;
-- make FS construction, theorem applicability, and property transport read one
-  identified source declaration;
-- close Analysis's strategy/history and quantitative-loss inputs; and
-- close OIR's projection-obligation view without activating Stage 4B.
+The completed
+[K3-A reconstruction](k3-minimum-consumer-co-design/README.md) found that the
+old Relations targets depend on pre-K2 Interface/Plan and carrier subjects.
+K3 therefore proceeds through one dependency cone rather than repairing each
+directory independently:
+
+1. **K3-B:** co-design the K2-dependent Interface/Plan surfaces, K1-aligned
+   Relations and correspondence, value bridges, execution grounding, and the
+   parallel minimum complete carrier and imported-verification source lanes;
+2. **K3-C:** close Analysis's exact K2/K3 source ingress, strategy/experiment
+   semantics, one Fresh-to-FS theorem profile, one relation-bound property,
+   and typed quantitative loss;
+3. **K3-D:** close OIR's source read, exact Plan read partition and identity
+   effect, imported-verification refusal, and projection-obligation view
+   without selecting the full OIR grammar or activating Stage 4B; and
+4. **K3-E:** rerun the integrated dependency, identity, view-adequacy, and
+   reopen audit before the protocol portfolio.
+
+K2 remains provisionally closed. A later phase reopens it only when a concrete
+consumer requires a verifier-observable or identity-bearing Core fact that
+cannot be derived faithfully from the existing body and owner views.
 
 ### K4 — Bounded protocol portfolio
 
 - run P02 native FRI/IOR at T3 first because it decides oracle,
-  commitment/opening, extension, and residual/terminal questions;
+  commitment/opening, extension, BCS/IOR-to-Core correspondence, and
+  residual/terminal questions;
+- close structural Core composition and descent against P02 plus the selected
+  folding/recursion cases before K5; K3's deferred property composition does
+  not discharge this gate;
 - complete the selected P03--P10, V01--V05, and H01--H05 cases at their assigned
   T1--T3 strengths, promoting only when a shared decision remains ambiguous;
 - require decisive abstractions to have a positive inhabitant and a well-formed

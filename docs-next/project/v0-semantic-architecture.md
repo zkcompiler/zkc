@@ -47,12 +47,17 @@
 > [Interactive Core](../pir/interactive-core.md) and
 > [Fiat--Shamir Construction](../pir/fiat-shamir.md). One literal finite Core
 > now owns scoped public bindings, causal strategy execution, native finite
-> Oracle interaction, claims/reductions, exact public-coin dependency analysis,
+> Oracle interaction, claims/reductions, derived public-coin eligibility,
 > and replay; the paired construction owns derived transcript influence,
 > semantic namespaces, four one-result sampling algorithms, advancing retry,
 > and exact typed exhaustion. This replaces the pre-K2 snapshots as the active
-> target definition without making the target normative or implemented. K3
-> consumer co-design is next, and the integrated kernel remains unfrozen.
+> target definition without making the target normative or implemented.
+
+> **Live closure status:** The
+> [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
+> is the sole durable owner of the current K0--K5 gate. This architecture page
+> records selected structure and open research surfaces rather than duplicating
+> subphase status.
 
 ## 1. Result of the first reconstruction package
 
@@ -138,11 +143,13 @@ protocols. It begins downstream of relation-source compilation and ends, in
 the complete target architecture, at explicitly bound endpoint realizations,
 invocations, results, and scoped assurance records.
 
-Its native v0 protocol class is a fully instantiated public-coin protocol with
-an explicit transcript schedule. Fiat–Shamir behavior is part of the compiled
-protocol surface rather than an invisible backend detail. A sealed artifact is
-one concrete protocol, not a protocol family, paper construction, or backend
-configuration template.
+Its native v0 protocol class is a fully instantiated finite interaction with an
+explicit verifier-observable schedule. A Fresh interpretation may retain
+verifier-private behavior; a Fiat--Shamir interpretation is admissible only
+when the Core passes its derived public-coin eligibility law. Fiat--Shamir
+behavior is part of the compiled Protocol surface rather than an invisible
+backend detail. A sealed artifact is one concrete protocol, not a protocol
+family, paper construction, or backend configuration template.
 
 The semantic subject is the Protocol; PIR is its current explicit semantic
 representation and artifact format. The selected target keeps MLIR central
@@ -381,10 +388,12 @@ not imply one universal registry. Every normative result closes over the
 semantic subjects, regimes, dependencies, policies, and capabilities that can
 change it. Projection consumes the admitted Protocol, exact dependent
 `ProtocolInterfaceId`, endpoint role, and a tagged Plan basis. The basis says
-whether no Plan is read or an admitted `ProverPlanId` is an identity-bearing
-projection input. A Plan used only below OIR enters realization explicitly
-instead. Bare possession of bytes, a source identifier, or a carrier label
-never substitutes for these inputs or preserves local authority.
+whether no Plan is read or an exact projection-purpose Plan view or subject is
+read. K3-B owns that structural factorization; K3-D must select the exact read
+partition and its effect on OIR identity and the source-relative projection
+result. A Plan fact used only below OIR enters realization explicitly instead.
+Bare possession of bytes, a source identifier, or a carrier label never
+substitutes for these inputs or preserves local authority.
 
 The checked-change path is equally deliberate: the successor is authenticated
 and admitted as a target before a relation-specific bridge checks its exact
@@ -396,11 +405,13 @@ can flow backward into semantic identity or admission.
 The selected Stage 1 model factors the protocol portion more precisely. An
 ordered `InteractiveCore` plus a Fresh or Fiat--Shamir
 `ChallengeInterpretation` determines `ProtocolId`. A dependent
-`ProtocolInterfaceId` binds external ABI data to the Protocol's canonical
-semantic ports; a separate `ProverPlanId` realizes Protocol-owned abstract
-prover obligations. A content-addressed semantic closure supplies exact
-contract preimages, while opaque referenced subjects do not acquire admission
-authority. Each subject is qualified by its exact typed semantic regime.
+`ProtocolInterfaceId` and a separate `ProverPlanId` remain the intended
+downstream subjects, but their pre-K2 port and prover-obligation schemas are
+not current target contracts. K3-B reconstructs them over exact K2 invocation,
+scoped-binding, effect, and prover-strategy surfaces. A content-addressed
+semantic closure supplies exact contract preimages, while opaque referenced
+subjects do not acquire admission authority. Each subject is qualified by its
+exact typed semantic regime.
 
 ### 5.2 Complete object roles
 
@@ -410,12 +421,12 @@ not proposed wire identifiers.
 | Role | Meaning | Architecture state |
 |---|---|---|
 | Relation definition | Externally owned predicate over public instances and private witnesses | Current external authority |
-| Relation interface | Exact public-instance, witness-port, object, dependency, and accepted-result boundary used by zkc | Selected Stage 3 subject with exact identity, authentication, and admission |
+| Relation interface | Independently identified relation-facing boundary over public instances, relation witnesses, committed material, dependencies, and result interpretation | Separate role preserved; exact public/witness/material/result schema and its K1 extraction are open for K3-B reconstruction |
 | Authoring unit | Editable proposal with no inherited Protocol authority | Selected lifecycle role |
 | Resolved authoring unit | Proposal bound to one immutable input snapshot and complete actual read closure | Selected Stage 2 lifecycle role |
-| Interactive Core | One ordered public-coin interaction with canonical ports, events, claim flow, abstract prover obligations, and total observable schedule | Selected Stage 1 subject |
-| Transcript construction | Exact Fiat--Shamir history interpretation, framing, oracle/sponge behavior, sampling, and domains scoped to one Core | Selected Stage 1 subject |
-| Protocol | Interactive Core plus Fresh or Fiat--Shamir challenge interpretation | Selected Stage 1 subject and semantic root |
+| Interactive Core | One finite verifier-observable interaction with invocation inputs, scoped bindings, guarded effects, claim/reduction flow, explicit terminals, a deterministic verifier, and a prover strategy boundary; public-coin eligibility is derived rather than intrinsic | Active bounded K2 subject |
+| Transcript construction | Exact Fiat--Shamir history interpretation, framing, oracle/sponge behavior, sampling, and domains scoped to one Core | Active bounded K2 subject |
+| Protocol | Interactive Core plus Fresh or Fiat--Shamir challenge interpretation | Active bounded K2 subject and semantic root |
 | Semantic authority graph | Least typed graph of digest-verified contract preimages interpreted by admission | Selected refinement of the previous seal-authority graph |
 | Referenced-subject graph | Opaque anchors, material references, and external subject identifiers that admission does not interpret | Selected distinction from the previous candidate |
 | Canonical PIR candidate | Closed canonical carrier claiming one Protocol identity, before authentication and admission | Selected raw boundary; no authority by syntax alone |
@@ -424,8 +435,8 @@ not proposed wire identifiers.
 | Decoded Protocol artifact | Reconstructed carrier with no inherited process-local authority | Selected Stage 2 boundary and current implementation correspondence |
 | Semantic regime | Typed, identified interpretation of intrinsic operations, canonical semantics, and admission rules for one subject family | Selected Stage 1 identity qualifier; implicit today |
 | Admitted Protocol capability | Process-local immutable capability rechecked against an exact admission basis and semantic regime | Current normative role and implementation correspondence, target qualification |
-| Protocol interface | Protocol-dependent mapping from canonical semantic ports and proof events to one exact external ABI | Selected separate `ProtocolInterfaceId` with its own authentication and admission |
-| Prover plan | Protocol-dependent construction plan over abstract prover obligations without changing verifier-visible behavior | Selected separate `ProverPlanId`; its admission remains distinct from `PlanRealizes` and it is consumed at the first boundary that reads it |
+| Protocol interface | Protocol-dependent mapping from exact K2 invocation inputs, scoped Statement bindings, and role-qualified transport effects to one external ABI | Separate `ProtocolInterfaceId` preserved; detailed pre-K2 schema is open for K3-B reconstruction |
+| Prover plan | Protocol-dependent implementation candidate for the K2 prover strategy boundary, with relation witness ingress distinct from advice, randomness, state, search, and realization-only facts | Separate `ProverPlanId` preserved; detailed schema, realization judgment, and projection-purpose view are open for K3-B reconstruction |
 | Consumer view | Ephemeral facts mechanically derived for one consumer from admitted authority | Stage 1 provisional role; normally no independent identity |
 | Durable derived artifact or judgment | Independently meaningful OIR, relation result, derivation, or judgment produced by its owner | Current family of roles; not a mere Protocol view |
 | Analysis question and proposition | Exact family experiment separated from one truth-apt conclusion and residual hypotheses | Selected Stage 4A family-indexed identity boundary |
@@ -526,8 +537,9 @@ remain provisional:
 - The compiled protocol remains the identity-bearing primary subject.
 - The transcript spine and claim-flow graph remain separate and explicitly
   joined by contracts.
-- The native scope remains explicit public-coin protocols with static sealed
-  transcript structure.
+- The native scope remains explicit finite interactions with static sealed
+  verifier-observable structure. Fresh may retain verifier-private behavior;
+  Fiat--Shamir requires an affirmatively checked public-coin-eligible Core.
 - Structural admission, property analysis, evidence, reliance, and execution
   remain separate.
 - Semantic content identity is defined over a normalized Protocol projection,
@@ -620,18 +632,25 @@ remain provisional:
    policy-derived `ComparisonAlternativeDomain`; every closed decision binds
    both and complete resolution/assessment ledgers.
 
-### 7.5 Research remaining after Stage 4A
+### 7.5 Research remaining after Stage 4A, updated by K3-A
 
-1. **OIR behavior and correspondence.** Define observable semantics for
+1. **Pre-freeze consumer closure.** Reconcile Interface/Plan, Relations,
+   value bridges, execution grounding, and the canonical carrier against the
+   K2 source; then close the minimum Analysis strategy/experiment, theorem-
+   applicability, and quantitative-loss seams.
+
+2. **OIR behavior and correspondence.** First close the minimum source read
+   and projection-obligation seam. After a separate Stage 4B activation,
+   define observable semantics for
    verifier and prover OIR, including randomness, failure, resources,
    completion, and proof ABI. Then state which refinement or equivalence a
    realization must establish.
 
-2. **Cross-system capability synthesis.** Pressure-test the joined Protocol,
+3. **Cross-system capability synthesis.** Pressure-test the joined Protocol,
    Relations, Analysis, Compiler, OIR, and Realization capability surface after
    Stage 4B closes, without inventing a universal admission token.
 
-3. **Evidence appraisal.** Define evidence records and scoped claim
+4. **Evidence appraisal.** Define evidence records and scoped claim
    assessments before designing any global admission policy. The consumer,
    not the record, must own reliance.
 

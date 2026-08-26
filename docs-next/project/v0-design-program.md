@@ -6,8 +6,9 @@
 > their recorded selection gates. Integrated semantic-kernel closure K0
 > completed on 2026-08-25; bounded K1 executable foundations and bounded K2
 > Protocol/Fiat--Shamir closure completed on 2026-08-26 and was narrowly
-> reclosed after exact-body repair without an architectural change. K3 minimum
-> consumer co-design is next, the kernel is not frozen, and Stage 4B remains
+> reclosed after exact-body repair without an architectural change. K3-A
+> consumer-boundary reconstruction is complete; K3-B dependent-surface and
+> Relations co-design is next, the kernel is not frozen, and Stage 4B remains
 > unactivated.
 > **Provisional owner:** `project`
 > **Authority:** This is the single execution plan for semantic redesign inside
@@ -607,10 +608,14 @@ preservation.
 
 ### Protected observers and effects
 
-Track `TRANSCRIPT`, `WIRE`, `PUBLIC`, `CHECK`, `ARTIFACT`, `CLAIM`, and
-`TERMINAL` observations across transformations, projection, realization, and
-composition. Local SSA equality or operational success cannot silently stand
-in for observer-qualified preservation.
+Track the exact owner-derived K2 binding, guarded occurrence, message, Oracle,
+challenge, check, claim, reduction, failure, and terminal coordinates, plus
+the FS framing and transition views, across transformation, projection,
+realization, and composition. When measuring the current system, legacy
+`TRANSCRIPT`, `WIRE`, `PUBLIC`, `CHECK`, `ARTIFACT`, `CLAIM`, and `TERMINAL`
+categories are correspondence inputs rather than target authority. Local SSA
+equality or operational success cannot silently stand in for source-qualified
+preservation.
 
 ### Temporary-note absorption
 
@@ -631,7 +636,7 @@ the promoted candidate is mutually closed and ready to freeze.
 | Stage 2 | Historical package complete | Selected [Transition and Bridge Architecture](transition-and-bridge-architecture.md), supported by the Stage 2 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
 | Stage 3 | Historical package complete | Selected [Protocol and Relations Architecture](protocol-and-relations-architecture.md), candidate PIR/Relations target owners at package resolution, research evidence, and separate Stage 4A/4B entry contracts |
 | Stage 4A | Historical package complete | Selected [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md), candidate Analysis/Compiler target owners at package resolution, Relations/PIR reconciliation, research evidence, and an unactivated Stage 4B peer boundary |
-| Integrated semantic-kernel closure K0--K5 | K0--K2 complete after narrow K2 reclosure; K3 next; not frozen | The regression baseline, bounded executable foundations, and bounded Protocol/FS kernel are complete at their stated scopes. K2's two exact canonical-body defects were repaired without changing the Core/interpretation architecture; its validation record owns the final gate and focused-follow-up evidence. Minimum consumer co-design, protocol portfolio, and independent freeze remain. |
+| Integrated semantic-kernel closure K0--K5 | K0--K2 complete after narrow K2 reclosure; K3-A complete, K3-B next; not frozen | The regression baseline, bounded executable foundations, and bounded Protocol/FS kernel are complete at their stated scopes. K2's two exact canonical-body defects were repaired without changing the Core/interpretation architecture. K3-A reconstructed the minimum consumer cone: Interface/Plan and Relations form one semantic co-design lane, while carrier correspondence is a parallel freeze lane with the same K3-B convergence gate. Analysis and OIR follow at K3-C/D. K3-B--K3-E, the protocol portfolio, and independent freeze remain. |
 | Stage 4B | Historical entry contract ready; activation blocked | OIR then Realization may activate only after integrated semantic-kernel freeze and a separate explicit decision. |
 | Stages 5--8 | Not started as decision packages | Later stages may be surveyed for design forces but cannot finalize contracts that depend on unresolved earlier-stage results |
 

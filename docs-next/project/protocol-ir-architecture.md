@@ -12,11 +12,16 @@
 > The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns the live integrated-closure gate.
 
-> **K1 reconciliation notice — 2026-08-26:** The architectural factorization
-> remains a design input, but its identity, regime, value, algorithm, and
-> dependency notation predates [Executable Semantic Foundations](../foundation/executable-foundations.md).
-> K2/K3 must reconcile those exact consumer contracts before this page can be
-> read as an integrated semantic-kernel decision.
+> **K1/K2 reconciliation notice — 2026-08-26:** The architectural
+> factorization remains a design input, but the body below predates
+> [Executable Semantic Foundations](../foundation/executable-foundations.md),
+> the active [Interactive Core](../pir/interactive-core.md), and the active
+> [Fiat--Shamir construction](../pir/fiat-shamir.md). Its public-coin Core,
+> port, abstract-prover-obligation, authored FS-map, and whole-Plan endpoint
+> examples are historical where they conflict with those owners. K3-B must
+> reconstruct Interface, Plan, Relations, and carrier consumers; K3-D must
+> close the exact endpoint read and identity effect. This page is not an
+> integrated semantic-kernel decision by itself.
 
 ## 1. Decision
 

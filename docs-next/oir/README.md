@@ -11,6 +11,15 @@
 > [Boundaries](../../docs/spec/boundaries.md), and
 > [Carrier](../../docs/spec/carrier.md) specifications.
 
+> **K3-A alignment notice — 2026-08-26:** The projection/local-validity split
+> below remains selected, but the rule that a plan-specialized OIR commits to
+> the whole `ProverPlanId` is reopened. It conflicts with the requirement that
+> independently variable realization-only Plan facts neither enter OIR reads
+> nor rotate OIR identity. K3-B owns the structural projection-view
+> factorization; K3-D owns the exact Plan read partition, corresponding OIR
+> identity effect, and checked-projection binding. No resolution is selected
+> by this notice.
+
 ## Purpose
 
 `oir/` owns canonical prover and verifier endpoint subjects derived from an
@@ -64,8 +73,9 @@ observation producer; its implementation does not become semantic authority.
 
 ## Projection boundary
 
-The selected projection boundary is closed over explicit admitted subjects and
-a source-owned read contract:
+The candidate projection boundary has the following intended closed shape over
+explicit admitted subjects and a source-owned read contract, subject to the
+K3-A Plan-identity notice above:
 
 ```text
 ProjectionInput =
@@ -97,13 +107,15 @@ affirmative CheckedProjection only
 ```
 
 Verifier projection always uses `InterfaceOnly`. A generic prover-obligation
-skeleton may also use `InterfaceOnly`. A plan-specialized prover OIR uses
-`InterfaceAndPlan`, and the `ProverPlanId` then enters the projection
-dependency and OIR identity. Every projector publishes its complete Plan-field
-read set and adequacy check. Plan information classified from exact Stage 4B
-reader semantics as `RealizationOnly`, or an `ExternalSupplyRequirement`
-explicitly routed below OIR, remains outside OIR and is supplied explicitly to
-realization. The same plan fact may not arrive ambiently at both boundaries.
+skeleton may also use `InterfaceOnly`. Under the pre-K2 candidate rule, a
+plan-specialized prover OIR uses `InterfaceAndPlan`, and the whole
+`ProverPlanId` enters the projection dependency and OIR identity. That exact
+full-ID rule is reopened by the K3-A notice. Every projector still must publish
+its complete Plan-field read set and adequacy check. Plan information
+classified from exact Stage 4B reader semantics as `RealizationOnly`, or an
+`ExternalSupplyRequirement` explicitly routed below OIR, remains outside OIR
+and is supplied explicitly to realization. The same plan fact may not arrive
+ambiently at both boundaries.
 
 Carrier labels, compiler state, retained projector state, and process-global
 defaults cannot substitute for the Interface, Plan, role, regime, or cited

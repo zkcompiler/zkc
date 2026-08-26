@@ -13,6 +13,17 @@
 > The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns the live integrated-closure gate.
 
+> **K2/K3-A reconciliation notice — 2026-08-26:** The shared transition,
+> authority, recomputation, and outcome separations below remain design inputs.
+> Protocol, Interface, Plan, and projection examples that use pre-K2 ports,
+> abstract prover obligations, or authored event coordinates are historical
+> until their dependent owners are reconciled to the active
+> [Interactive Core](../pir/interactive-core.md) and
+> [Fiat--Shamir construction](../pir/fiat-shamir.md). In particular, the rule
+> that plan-specialized OIR commits to the whole `ProverPlanId` is reopened;
+> K3-B owns the structural Plan view and K3-D owns the exact read partition and
+> identity effect.
+
 ## 1. Decision
 
 The v0 target uses **domain-owned typed transition contracts under shared
