@@ -10,8 +10,9 @@
 > executable foundations, and the narrowly reclosed bounded K2
 > Protocol/Fiat--Shamir kernel are complete at their stated scopes; the final
 > K2 gates and focused follow-up are green in its validation record. K3-A
-> consumer-boundary reconstruction is complete and K3-B dependent-surface and
-> Relations co-design is next. R2 remains an evidence
+> consumer-boundary reconstruction and bounded K3-B dependent-surface,
+> Relations, and carrier co-design completed on 2026-08-27; K3-C minimum
+> Analysis closure is next. R2 remains an evidence
 > track after the repaired
 > `FRI-Grind-1` witness
 > and retained T3 `P01` Schnorr/Sigma result. `P02` is the next witness anchor
@@ -72,10 +73,10 @@ below are reader cross-references rather than inventory edges.
   deferrals, and work-package inventory. Its final validation record owns the
   evidence for reclosure.
 - [K3 Minimum Consumer Co-design](k3-minimum-consumer-co-design/README.md)
-  records the completed K3-A dependency reconstruction, the revised
-  Interface/Plan--Relations--carrier dependency cone, minimum Analysis and OIR
-  seams, research pressure, discriminating cases, and bounded K3-B--K3-E
-  sequence. It selects no downstream schema by itself.
+  records the completed K3-A dependency reconstruction and bounded K3-B
+  selection, promotion, and finite validation of the revised
+  Interface/Plan--Relations--carrier dependency cone. K3-C minimum Analysis
+  closure is next; minimum OIR closure remains K3-D work.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,

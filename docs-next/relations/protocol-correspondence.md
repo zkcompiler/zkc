@@ -1,700 +1,877 @@
 # Protocol correspondence for relations
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative target
-> **Target status:** Stage 3.5 durable promotion
+> **Document state:** Active non-normative K3-B target
 > **Provisional owner:** `relations`
-> **Authority:** This document specifies the selected target for `docs-next/`.
-> It is non-normative until explicit consolidation and cutover. The current
+> **Authority:** This page specifies the selected `docs-next/` correspondence
+> model. It is non-normative until consolidation and cutover; the current
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
-> This document makes no implementation, migration, compatibility, or
-> downstream property-establishment claim.
 
-> **K1 transition notice — 2026-08-26:** The identity, value, bridge, and
-> dependency forms below predate [Executable Semantic Foundations](../foundation/executable-foundations.md).
-> K3 must map both relation and Protocol occurrences to exact Foundation types
-> and separately checked same- or cross-regime algorithms. This page does not
-> yet establish K1-aligned correspondence admission.
+## 1. Scope and ownership
 
-## 1. Scope and design center
+This page owns one closed family of questions over already admitted Relations
+and PIR subjects. It keeps mapped structure, whole-surface coverage, external
+presentation, concrete-value comparison, artifact interpretation, grounding,
+and one-run facts separate. No result from one family silently answers another.
 
-This document defines two Relations-owned checked judgments:
+It consumes, without redefining:
 
-1. structural correspondence between one exact admitted Protocol at one exact
-   admitted `ProtocolInterface` and one exact admitted relation Interface and
-   binding; and
-2. value-level correspondence between one admitted relation instance and one
-   decoded `ProtocolPublicAssignment<P>` after affirmative public-port
-   structural correspondence.
+- K1 identity, values, portable algorithms, exact dependency closure,
+  qualified completion, and authority from
+  [Executable Semantic Foundations](../foundation/executable-foundations.md);
+- Protocol structure, execution, replay, and the public-only
+  `RelationRunView` from
+  [Interactive Core and Causal Execution](../pir/interactive-core.md);
+- external Interface and source-ID-free `PlanWitnessSurface` meaning from
+  [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md); and
+- relation Interfaces, instances, split Protocol/Plan bindings, value bridges,
+  artifact observations, grounding equations, and commitment slots from
+  [Relation Model](relation-model.md).
 
-The [relation semantic model](relation-model.md) owns relation Interfaces,
-instances, bindings, value bridges, artifact comparison, committed-object
-grounding, and their admitted capabilities. The
-[Protocol Interface and Plan specification](../pir/interfaces-and-plans.md)
-owns `ProtocolInterface`, statement decoding, and
-`ProtocolPublicAssignment<P>`. The
-[transition and bridge architecture](../project/transition-and-bridge-architecture.md)
-owns the shared checked-result, authority, and replay discipline. The
-[Relations index](README.md) remains the domain map.
+This page does not own relation satisfaction, Protocol execution, Plan
+realization, property Analysis, OIR projection, or realization. A raw carrier
+path, label, digest, record, external container, or caller-created tuple is
+never a correspondence source.
 
-Correspondence is question-scoped, field-factored, and post-admission. It does
-not admit any operand, execute the Protocol, interpret raw artifact bytes,
-inspect a private witness, or establish satisfaction. A binding is a proposal;
-only this owner check can establish the exact agreements or disagreements
-named by a `CorrespondenceQuestion`.
+## 2. Directional dependency cut
 
-## 2. Imported exact subjects and reference discipline
+```text
+K1 --------------------> RelationInterface
+ |                            |
+ +--> Protocol --> ProverPlan |
+          |              |    |
+          |              v    |
+          |      PlanWitnessSurface
+          |              |    |
+          |              +----+--> PlanWitnessBinding
+          +-------------------+--> ProtocolRelationBinding
 
-This specification consumes, but does not redefine, the following exact
-admitted subjects and capabilities:
+checked correspondence combines exact operands;
+it creates no new semantic root
+```
 
-| Input | Owning contract | Required authority |
-|---|---|---|
-| `AdmittedProtocol` and Relations-purpose Protocol view | PIR | Exact Protocol ID/regime, embedded Core view, and every source fact permitted by the requested clauses |
-| `AdmittedProtocolInterface` | PIR Interface | Exact dependent Protocol ID, public-assignment domain and lossless statement binding, proof positions, application bindings, and terminal/reference views |
-| `AdmittedRelationInterface` | Relation model | Exact definition ref, regime-qualified dependency closure, occurrence-expanded public/witness/object schemas, and accepted-result role |
-| `AdmittedRelationBinding` | Relation model | Exact dependent IDs, occurrence-total maps, admitted bridge/grounding dependency views, object entries, and closed result binding |
-| `CheckedArtifactInterfaceComparison` | Relation model | Exact observation, relation Interface, nonempty field question, `CorrespondenceRegime`, and completed A/N field facts |
-| `CheckedCommittedObjectGrounding` | Relation model | Exact Protocol/Interface/relation/binding operands, conditional observation map, `CorrespondenceRegime`, and completed A/N grounding facts |
-| `AdmittedRelationInstance` | Relation model | Exact relation Interface ID and occurrence-total public-value assignment |
-| `ProtocolPublicAssignment<P>` | PIR Interface | Total same-domain map over every and only public input `Statement` occurrence of the exact Protocol `P` |
+`ProtocolRelationBinding` names no external `ProtocolInterfaceId` or Plan.
+`PlanWitnessBinding` names one source-ID-free surface and one relation
+Interface, never a full Plan. `ProverPlan` contains no Relations-owned ID.
+These directions are invariant.
 
-Bare `CoreRef<K>` values are structural references within one Core. Any
-interpretation-sensitive read is qualified by the exact dependent
-`ProtocolId`, Interface, and admitted view. Relation occurrence references are
-likewise expanded from their exact Interface multiplicities. Ordinal equality,
-unqualified digests, names, or equal bytes never create a cross-owner
-reference.
+When one operation needs Plan bindings for several relation Interfaces, it
+uses:
 
-Every algorithm executed by correspondence is selected by an admitted binding
-or Interface and its exact regime-qualified dependency view. A caller cannot
-select a replacement codec, bridge, adapter, fact, grounding algorithm, or
-checker through an ambient registry.
+```text
+SelectedPlanWitnessBindings =
+  ExactMap<RelationInterfaceId, PlanWitnessBindingId>
+```
 
-## 3. Question algebra
+The key set is every and only selected Interface whose witness surface the
+question reads. Each value names that key as its exact
+`relation_interface_id`; every surface names the Protocol of the selected
+`ProtocolRelationBinding`. A missing, extra, duplicate, wrong-Interface, or
+wrong-Protocol entry is rejected before the proposition is evaluated. Missing,
+extra, or duplicate keys are `Malformed`; an authenticated binding for the
+wrong Interface or Protocol is `Refused`. The map is operation intake, not an
+identified aggregate.
 
-### 3.1 Structural question
+## 3. Closed correspondence-question algebra
 
-~~~text
-CorrespondenceBaseClause =
-    PublicPorts
-  | WitnessPorts
-  | ResultBindingReferenceShape
-  | CommittedObjectGrounding
+### 3.1 Local references and policies
 
-CorrespondenceQuestion = {
-  base_clauses: CanonicalSet<CorrespondenceBaseClause>,
-  artifact_question: Optional<ArtifactComparisonQuestion>
+All local references below are dense ordinals in the named admitted owner:
+
+```text
+StatementEdgeRef       = ordinal in ProtocolRelationBinding.statement_edges
+PhaseEdgeRef           = ordinal in ProtocolRelationBinding.phase_edges
+OracleEdgeRef          = ordinal in ProtocolRelationBinding.oracle_edges
+ClaimMeaningRef        = ordinal in ProtocolRelationBinding.claim_meanings
+ReductionMeaningRef    = ordinal in ProtocolRelationBinding.reduction_meanings
+CommitmentClauseRef    = ordinal in ProtocolRelationBinding.commitment_groundings
+PlanWitnessEdgeRef     = ordinal in PlanWitnessBinding.witness_edges
+StatementMemberRef     = ordinal in ProtocolInterface.statement_members
+TransportEntryRef      = ordinal in ProtocolInterface.transport_entries
+```
+
+A reference always carries the complete owner ID when it leaves that owner.
+Equal bodies or values do not merge references.
+
+```text
+OccurrenceMappingPolicy = {
+  source_functional: Bool,
+  target_injective: Bool
 }
 
-base_clauses is nonempty OR artifact_question is present
-~~~
+GroundingEquationOwner =
+    StandaloneEquation(GroundingEquationId)
+  | CommitmentEquation(ProtocolRelationBindingId, CommitmentClauseRef)
 
-`ArtifactComparisonQuestion` is the nonempty canonical set of relation
-Interface fields defined by the relation model. It is a separate optional
-nested question, not a fifth base-clause constructor. There is at most one
-artifact question.
+RequiredRunQualification =
+    ExactReplayQualified
+  | ExactCausallyGenerated
 
-The question is an exact operand of the check. It determines:
+GroundingRunRequirements =
+  ExactMap<GroundingRunSlotRef, RequiredRunQualification>
 
-- every source field the checker may read;
-- the exact prerequisite checked results that must be supplied;
-- every result field the completed judgment must contain; and
-- every field about which the result makes no claim.
+CommitmentRunRequirements =
+  ExactMap<CommitmentClauseRef, GroundingRunRequirements>
 
-An empty base set with no artifact question is malformed. A result over a
-subset, superset, different nested artifact field set, or different regime
-cannot answer the question.
+StatementDomain =
+    AllStatementBindings
+  | ExactScopes(NonEmptyCanonicalSortedUniqueSeq<ScopeRef>)
 
-### 3.2 Prerequisite presence rule
+ExternalCoveragePolicy = MappedOnly | WholeSelectedSurface
 
-| Requested question member | Exact prerequisite | Absent or mismatched | Extra input when unrequested |
-|---|---|---|---|
-| `CommittedObjectGrounding` | `CheckedCommittedObjectGrounding` retaining the identical Protocol object view, Protocol Interface, relation Interface, binding, and `CorrespondenceRegime` | `CannotAnswer` | Refused as an undeclared read |
-| `artifact_question = Some(q)` | `CheckedArtifactInterfaceComparison` retaining its exact admitted observation, the identical relation Interface and `CorrespondenceRegime`, and exactly `q` | `CannotAnswer` | Refused as an undeclared read |
+CorrespondenceHistoryBoundary =
+    Initial
+  | BeforeOccurrence(OccurrenceRef)
+  | AfterOccurrence(OccurrenceRef)
+  | Completion
 
-A prerequisite may be an affirmative or negative completed capability. Its
-affirmative result supports the requested field. Its negative result refutes
-that field and contributes its retained unaffected agreements. A raw artifact
-observation, adapter assertion, admitted grounding declaration, or serialized
-result cannot substitute.
+DecodedExternalAssignment = {
+  protocol_interface_id: ProtocolInterfaceId,
+  values: TotalMap<
+    ExternalSlotRef,
+    CanonicalValue<semantic type of that slot's admitted codec>>
+}
+```
 
-The admitted `CorrespondenceRegime` binds one exact authenticated capability
-contract and ABI:
+The two mapping booleans select propositions; they do not alter edge
+admission. `source_functional` asks whether one selected source slice maps to
+at most one selected target slice. `target_injective` asks whether two selected
+source slices never share one target slice.
 
-~~~text
-RelationsCorrespondenceResultFamily =
-    ArtifactInterfaceComparison
-  | CommittedObjectGrounding
-  | StructuralCorrespondence
-  | InstanceCorrespondence
+Whole coverage uses one fixed recursive law. For one exact root occurrence of
+type `T`, `SelectorPartition(T,S)` holds exactly when either `S = {Whole}`, or
+`Whole` is absent and the following constructor-specific rule holds:
 
-RelationsCorrespondenceCapabilityAbi = {
-  exact result-family set above,
-  exact operand, completed A/N result, and checked-result binding schema per
-    family,
-  exact RelationsOperationPurpose<R> ABI per family R,
-  exact NamedConsumer and purpose indices retained by every result and
-    capability,
-  exact freshness, process-lifetime, and binding-equality requirements
+1. for a record, every and only field ordinal occurs as the first step and the
+   suffix selectors for each field recursively partition that field type;
+2. for a variant, every and only case ordinal occurs as the first step and the
+   suffix selectors for each case recursively partition that case payload;
+   selecting a case covers that case discriminator as well as its payload;
+3. for a positive-capacity bounded sequence, every and only element ordinal
+   below the capacity occurs as the first step and the suffix selectors for
+   each element recursively partition the element type; an element region
+   includes its presence/absence position as well as its payload when present;
+4. a zero-capacity sequence and every scalar type have only the `{Whole}`
+   partition.
+
+`ExactNonoverlappingCover(R)` groups the finite selected region set `R` by its
+complete typed root occurrence and requires `SelectorPartition` for every
+root. A root is a full owner-qualified relation role, K2 binding occurrence,
+or Plan-surface occurrence, never merely a type or equal value. The recursive
+rule rejects duplicate regions, ancestor/descendant overlap, omitted branches,
+and a selector for another root. It is a decidable structural law over the
+finite admitted schemas; there is no caller-defined coverage predicate.
+
+For `ExternalStatement`, `WholeSelectedSurface` has one exact domain. Every
+selected Interface member is treated as its complete external-slot value;
+the selected Statement-edge targets must name every and only the distinct K2
+Statement bindings named by those members, and their target selectors must
+form `ExactNonoverlappingCover` of each such binding value. An edge targeting
+an unselected member's binding, a selected member with no covering edge, or a
+partial/overlapping target partition is a coverage disagreement. This policy
+does not quantify over unselected Interface members; whole Interface coverage
+is already the independent `StatementCoverage` admission law.
+
+### 3.2 External and run selectors
+
+```text
+ExternalInstanceSelector =
+    PublicValue(StatementEdgeRef, StatementMemberRef)
+  | OraclePublicBinding(OracleEdgeRef, TransportEntryRef)
+  | PhaseValue(PhaseEdgeRef, TransportEntryRef)
+
+RelationBoundRunValueSelector =
+    StatementValue(StatementEdgeRef)
+  | PhaseValue(PhaseEdgeRef)
+  | OraclePublicBinding(OracleEdgeRef)
+
+UnboundRunValueSelector =
+    PublicMessageOutput(OccurrenceRef, TypedValueSelector)
+  | PublicOraclePublication(OracleRef, OccurrenceRef, TypedValueSelector)
+  | PublicOracleQuery(OracleRef, OccurrenceRef, TypedValueSelector)
+  | PublicOracleAnswer(OracleRef, OccurrenceRef, TypedValueSelector)
+  | TerminalPublicOutput(TerminalRef, OccurrenceRef, output_ordinal,
+                         TypedValueSelector)
+  | PublicModuleObservation(OccurrenceRef, ModuleEffectRef,
+                            output_ordinal, TypedValueSelector)
+
+RunValueSelector =
+    RelationBoundRunValueSelector
+  | UnboundRunValueSelector
+
+RunMetaSelector =
+    ClaimState(ClaimMeaningRef, CorrespondenceHistoryBoundary)
+  | ReductionState(ReductionMeaningRef, CorrespondenceHistoryBoundary)
+  | CheckResult(CheckRef, OccurrenceRef)
+  | TerminalVerdict(TerminalRef, OccurrenceRef)
+
+PublicRunFactSelector = RunValueSelector | RunMetaSelector
+
+RunPresenceExpectation =
+    RequireAvailable
+  | RequireInactive
+  | RequireNotReached
+
+RunFactCheck =
+    RelationBoundValue(RelationBoundRunValueSelector)
+  | ExpectedValue(
+      RunValueSelector,
+      CanonicalValue<RunValueSelectorType(selector)>)
+  | ExpectedCheckResult(
+      CheckResult(CheckRef, OccurrenceRef),
+      MetaBooleanFalse | MetaBooleanTrue)
+  | ExpectedTerminalVerdict(
+      TerminalVerdict(TerminalRef, OccurrenceRef),
+      TerminalVerdict)
+  | Presence(PublicRunFactSelector, RunPresenceExpectation)
+```
+
+Every selector derives exactly one PIR-owned `RelationRunCoordinate` and exact
+type or closed meta type. `RunValueSelectorType` is that owner-derived K1
+value type after applying its written `TypedValueSelector`; the caller cannot
+assert it. `PublicMessageOutput` is restricted to a standard public Prover or
+deterministic-Verifier message. Oracle and module-effect outputs use only their
+dedicated constructors. Terminal verdict and each terminal public output are
+separate coordinates. A selected Oracle query or answer must have Public
+visibility. Thus no fact can be requested through both a generic occurrence
+output and a role-specific alias; aliasing selectors make the question
+malformed.
+
+`RelationBoundValue` obtains its expectation only from the exact relation
+instance endpoint and admitted edge `ValueRelation`. `ExpectedValue` carries
+one canonical value of the selector-derived type and uses exact K1 equality;
+it has no relation-derived expectation. The two expected-meta constructors are
+closed because K2 already owns their finite result types. There is deliberately
+no generic expected-meta arm for `RelationClaimHistory` or
+`RelationReductionHistory`: K3-B can ask only whether such a history coordinate
+is `Available`, `Inactive`, or `NotReached`. Exact history predicates require a
+separately admitted grammar and are unsupported here rather than being guessed
+from a binding.
+
+`Presence` compares only the outer PIR observation alternative and never
+claims equality of an available payload. `RequireInactive` forms only for a
+coordinate that PIR classifies as occurrence-produced; other impossible
+status/coordinate combinations are malformed. Across all arms, two checks
+that derive the same PIR coordinate are malformed, even if their surface
+selectors differ.
+
+Each `CorrespondenceHistoryBoundary` maps constructor-for-constructor to the
+identically spelled PIR `RunBoundary`; it is durable question syntax, not a run
+coordinate. `ExactReplayQualified` accepts only a `ReplayQualified` owner view,
+and `ExactCausallyGenerated` accepts only a `CausallyGenerated` owner view.
+
+### 3.3 Complete tagged sum
+
+```text
+CorrespondenceQuestion =
+    MappedStatements {
+      binding_id: ProtocolRelationBindingId,
+      edges: NonEmptyCanonicalSortedUniqueSeq<StatementEdgeRef>,
+      mapping: OccurrenceMappingPolicy
+    }
+  | WholeRelationPublic {
+      binding_id: ProtocolRelationBindingId,
+      interface_id: RelationInterfaceId,
+      edges: CanonicalSortedUniqueSeq<StatementEdgeRef>
+    }
+  | WholeStatement {
+      binding_id: ProtocolRelationBindingId,
+      domain: StatementDomain,
+      edges: CanonicalSortedUniqueSeq<StatementEdgeRef>
+    }
+  | MappedPlanWitness {
+      plan_binding_id: PlanWitnessBindingId,
+      edges: NonEmptyCanonicalSortedUniqueSeq<PlanWitnessEdgeRef>,
+      mapping: OccurrenceMappingPolicy
+    }
+  | WholeRelationWitness {
+      plan_binding_id: PlanWitnessBindingId,
+      edges: CanonicalSortedUniqueSeq<PlanWitnessEdgeRef>
+    }
+  | WholePlanWitnessSurface {
+      plan_binding_id: PlanWitnessBindingId,
+      edges: CanonicalSortedUniqueSeq<PlanWitnessEdgeRef>
+    }
+  | ClaimReductionShape {
+      binding_id: ProtocolRelationBindingId,
+      claims: CanonicalSortedUniqueSeq<ClaimMeaningRef>,
+      reductions: CanonicalSortedUniqueSeq<ReductionMeaningRef>
+    }
+  | ExternalStatement {
+      protocol_interface_id: ProtocolInterfaceId,
+      binding_id: ProtocolRelationBindingId,
+      edges: NonEmptyCanonicalSortedUniqueSeq<StatementEdgeRef>,
+      members: NonEmptyCanonicalSortedUniqueSeq<StatementMemberRef>,
+      coverage: ExternalCoveragePolicy
+    }
+  | ExternalInstance {
+      instance_id: RelationInstanceId,
+      protocol_interface_id: ProtocolInterfaceId,
+      binding_id: ProtocolRelationBindingId,
+      selectors: NonEmptyCanonicalSortedUniqueSeq<ExternalInstanceSelector>
+    }
+  | ArtifactComparison {
+      observation_id: RelationArtifactObservationId,
+      relation_interface_id: RelationInterfaceId,
+      artifact_question_id: ArtifactComparisonQuestionId
+    }
+  | EquationGrounding {
+      equation_id: GroundingEquationId,
+      run_requirements: GroundingRunRequirements
+    }
+  | CommitmentGroundingCheck {
+      binding_id: ProtocolRelationBindingId,
+      clauses: NonEmptyCanonicalSortedUniqueSeq<CommitmentClauseRef>,
+      run_requirements: CommitmentRunRequirements
+    }
+  | RunGrounding {
+      instance_id: RelationInstanceId,
+      binding_id: ProtocolRelationBindingId,
+      checks: NonEmptyCanonicalSortedUniqueSeq<RunFactCheck>,
+      required_qualification: RequiredRunQualification
+    }
+
+CorrespondenceQuestionBody(question) =
+  RelationsBodyV0<CorrespondenceQuestion>(question)
+
+CorrespondenceQuestionId =
+  RelationsId<"relations.correspondence-question">(
+    B, CorrespondenceQuestionBody(question))
+```
+
+Variant tags and record fields follow the written order. A question contains
+only durable IDs, owner-scoped references, canonical policies, selectors, and
+qualification requirements. It contains no source capability, run, decoded
+assignment, secret occurrence, observation handle, checker, or result.
+
+Question formation authenticates every owner ID, resolves every local
+reference, derives every selector type, admits every expected canonical value,
+rejects duplicate or aliased reads,
+and enforces exact same-Protocol and same-Interface dependencies. It does not
+evaluate mapping, coverage, equality, shape, equation, or run facts. Those
+remain constructibly negative propositions.
+
+Every `RunGrounding` contains at least one `RelationBoundValue` check. This
+makes its `instance_id` and `binding_id` semantically necessary rather than
+identity-bearing context for an unrelated run assertion. Each such check's
+edge belongs to that binding and its relation endpoint belongs to the exact
+instance Interface. Other checks may provide explicit public expectations or
+presence facts in the same binding's Protocol. A standalone run-monitoring
+question with no relation-bound value is outside this page's algebra.
+
+For an admitted `RunGrounding` question `q`, Relations derives:
+
+```text
+RunGroundedBridgeUseScope(q) = {
+  protocol_bindings: [q.binding_id],
+  plan_witness_bindings: [],
+  artifact_questions: []
 }
 
-RelationsCorrespondenceCapabilityAbiId = H(
-  "zkc/relations-correspondence-capability-abi",
-  CanonicalEncode(RelationsCorrespondenceCapabilityAbi))
+RunSelectorBridgeUseCoordinate(q,StatementValue(e)) =
+  ProtocolStatementEdge(q.binding_id,e.ordinal)
+RunSelectorBridgeUseCoordinate(q,PhaseValue(e)) =
+  ProtocolPhaseEdge(q.binding_id,e.ordinal)
+RunSelectorBridgeUseCoordinate(q,OraclePublicBinding(e)) =
+  ProtocolOracleEdge(q.binding_id,e.ordinal)
 
-RelationsCorrespondenceCapabilityContract = {
-  exact Relations owner domain and contract version,
-  exact RelationsCorrespondenceCapabilityAbiId,
-  exact covered result-family set,
-  exact result-family-, named-consumer-, and typed-purpose-indexed invocation
-    and capability-use rules,
-  exact result-family-, named-consumer-, and typed-purpose-indexed completed-
-    result-record creation, portable stable-identity, owner-private association,
-    retention, and disclosure rules,
-  exact result-family-, named-consumer-, and typed-purpose-indexed attempt-audit
-    creation, stable-identity, retention, and disclosure rules, separately from
-    completed-result records,
-  explicit no-separate-owner-operation-policy clause for every covered family,
-  exact reconstruction and replay-equality contract
+RunGroundedPotentialLossyCoordinates(q) =
+  the canonical sorted-unique sequence of
+  RunSelectorBridgeUseCoordinate(q,selector) for every
+  RelationBoundValue(selector) in q.checks whose resolved exact admitted
+  binding edge names an admitted lossy bridge
+
+RunGroundedLossySelection(q,set) = {
+  bridge_use_set: set,
+  coordinates: RunGroundedPotentialLossyCoordinates(q)
+}
+```
+
+`RunGroundedPotentialLossyCoordinates(q)` is derived from the admitted
+question, its exact admitted binding, and the admitted lane of every bridge
+named by a selected edge. It does not inspect a `BridgeUseSet`, premise, or
+consumer join, so it decides the conditional intake without circularity.
+When that sequence is nonempty, `set.scope` must equal
+`RunGroundedBridgeUseScope(q)` and every potential coordinate must resolve to
+its exact checked lossy entry in that full set. The selection coordinates must
+equal the potential sequence exactly. The selection is therefore a total
+owner-derived function, not a caller-authored subset. The sequence may be
+empty; the lossy set, premise, and join intake is required exactly when it is
+nonempty.
+
+`ClaimReductionShape` requires at least one selected claim or reduction; a
+selected reduction also derives reads for every claim meaning it cites.
+
+A request for a well-formed family outside this tagged sum is `Unsupported`.
+An unknown version-`0` tag or payload shape is `Malformed`; it is not an
+extension point.
+
+For `EquationGrounding`, the run-requirement key set is exactly the run slots
+in `RequiredGroundingOperandSlots(equation)`. For
+`CommitmentGroundingCheck`, its
+outer key set is exactly `clauses` and each inner key set is exactly the run
+slots in that clause's required operand set. Empty required run-slot sets
+therefore have exactly empty maps; no ambient qualification or default is
+permitted.
+
+## 4. One derived read manifest
+
+### 4.1 Closed read vocabulary
+
+```text
+ProtocolStaticReadBody =
+    StatementBinding(BindingRef)
+  | PhaseSource(PhaseTarget)
+  | OracleDeclarationAndPublication(OracleTarget)
+  | ClaimDeclaration(ClaimRef)
+  | ReductionDeclaration(ReductionRef)
+  | CheckDeclaration(CheckRef)
+  | TerminalDeclaration(TerminalRef)
+  | MessageDeclaration(OccurrenceRef)
+  | ModuleObservationDeclaration(OccurrenceRef, ModuleEffectRef,
+                                 output_ordinal)
+
+ProtocolStaticRead = {
+  protocol_id: ProtocolId,
+  read: ProtocolStaticReadBody
 }
 
-RelationsCorrespondenceCapabilityContractId = H(
-  "zkc/relations-correspondence-capability-contract",
-  CanonicalEncode(RelationsCorrespondenceCapabilityContract))
-~~~
+ProtocolInterfaceReadBody =
+    InvocationAssignment(InvocationInputRef)
+  | StatementMember(StatementMemberRef)
+  | TransportEntry(TransportEntryRef)
 
-The contract preimage does not name the containing regime, so there is no
-identity cycle. `CorrespondenceRegime` admission authenticates both canonical
-preimages, recomputes both IDs, checks ABI/contract agreement and exact family
-coverage, and binds them immutably; there is no separately reusable contract
-capability. The contract explicitly declares that the four operations have no
-separate owner operation policy. This is an affirmative owner-contract clause,
-not an omitted field. The contract itself must separately authorize invocation,
-capability use, completed-result construction and retention, attempt-audit
-construction and disclosure, and replay for the exact family, named consumer,
-and typed purpose; none of those permissions implies another. In particular,
-it does not silently authorize portable attempt audits. An Analysis source-policy closure may therefore use only
-`OwnerDefinesNoOperationPolicy(RelationsCorrespondenceCapabilityContractId,
-RelationsCorrespondenceCapabilityAbiId)` for these capabilities. A regime whose
-authenticated contract and ABI do not make that declaration is incompatible
-with this seam.
+ProtocolInterfaceRead = {
+  protocol_interface_id: ProtocolInterfaceId,
+  read: ProtocolInterfaceReadBody
+}
 
-## 4. Structural Protocol-at-Interface correspondence
+PlanSurfaceRead =
+  WitnessSurfaceEntry(PlanWitnessSurfaceId, WitnessSurfaceKey)
 
-### 4.1 Signature
+RelationsRead =
+    RelationRole(RelationPublicRef | RelationWitnessRef |
+                 RelationOracleRef | RelationPhaseRef)
+  | StatementEdge(ProtocolRelationBindingId, StatementEdgeRef)
+  | PhaseEdge(ProtocolRelationBindingId, PhaseEdgeRef)
+  | OracleEdge(ProtocolRelationBindingId, OracleEdgeRef)
+  | ClaimMeaning(ProtocolRelationBindingId, ClaimMeaningRef)
+  | ReductionMeaning(ProtocolRelationBindingId, ReductionMeaningRef)
+  | PlanWitnessEdge(PlanWitnessBindingId, PlanWitnessEdgeRef)
+  | RelationInstanceField(RelationInstanceId,
+                          RelationPublicRef | RelationOracleRef |
+                          RelationPhaseRef)
+  | ValueBridgeLaw(ValueBridgeId)
+  | BridgeUsePremise(BridgeUseCoordinate)
+  | BridgeUseConsumerSourceJoin(BridgeUseCoordinate)
+  | ArtifactClause(ArtifactComparisonQuestionId,
+                   RelationArtifactObservationId, clause_ordinal)
+  | GroundingSource(GroundingEquationOwner, source_ordinal)
+  | GroundingStep(GroundingEquationOwner, step_ordinal)
+  | GroundingEquality(GroundingEquationOwner, equality_ordinal)
+  | CommitmentClause(ProtocolRelationBindingId, CommitmentClauseRef)
 
-This signature and the instance-correspondence signature in Section 7 are the
-`Ready` forms of the closed family-indexed
-[Relations checked-operation ingress](relation-model.md#8-artifactinterface-comparison).
-Missing, malformed, or unauthorized partial inputs are represented by that
-capability-neutral carrier and its exact U/C/R/M/F attempt outcome, never by
-constructing either complete signature.
+CorrespondenceRunRead =
+    EquationRun {
+      owner: GroundingEquationOwner,
+      slot: GroundingRunSlotRef,
+      protocol_id: ProtocolId,
+      manifest: RelationRunReadManifest,
+      required_qualification: RequiredRunQualification
+    }
+  | BindingRun {
+      protocol_id: ProtocolId,
+      manifest: RelationRunReadManifest,
+      required_qualification: RequiredRunQualification
+    }
 
-~~~text
-RelationCorrespondsAtInterface(
-  AdmittedProtocol,
-  AdmittedProtocolInterface,
-  AdmittedRelationInterface,
-  AdmittedRelationBinding,
-  CorrespondenceQuestion,
-  Optional<CheckedArtifactInterfaceComparison>,
-  Optional<CheckedCommittedObjectGrounding>,
-  exact ExactSourceAuthorityBinding for every admitted root and supplied
-    checked prerequisite, with separately supplied fresh capabilities,
-  exact named_consumer: NamedConsumer,
-  exact operation_purpose:
-    RelationsOperationPurpose<StructuralCorrespondence>,
-  CorrespondenceRegime)
-  -> Qualified<CheckedRelationCorrespondenceJudgment,
-               exact ExactCheckedResultAuthorityBinding<Relations,
-                 StructuralCorrespondence>>
-~~~
+CorrespondenceReadManifest = {
+  protocol: CanonicalSortedUniqueSeq<ProtocolStaticRead>,
+  protocol_interface: CanonicalSortedUniqueSeq<ProtocolInterfaceRead>,
+  plan_surface: CanonicalSortedUniqueSeq<PlanSurfaceRead>,
+  relations: CanonicalSortedUniqueSeq<RelationsRead>,
+  run: FiniteSeq<CorrespondenceRunRead>
+}
+```
 
-All four admitted roots must agree on their exact dependent identities and
-regimes. The Protocol Interface names the supplied Protocol. The binding names
-that Interface and the supplied relation Interface. The checked prerequisites,
-when required, retain the identical operands, regime, and nested question.
-Every source binding must match its fresh capability and contributes exactly
-one authenticated owner-policy disposition to the canonical total transitive
-source-policy closure. The checker freshly validates every bound policy or
-explicit no-policy owner contract for the named correspondence purpose. It also
-reauthenticates the exact correspondence capability contract and ABI preimages
-bound by the regime and requires their invocation and capability-use rules to
-permit this exact family, named consumer, and typed purpose.
+There is exactly one manifest:
 
-The checker consumes owner-defined narrow views. It does not receive a
-universal Protocol fact root or an ambient relation environment.
+```text
+ManifestFor(q: admitted CorrespondenceQuestion) =
+  the canonical least manifest derived by the rules below
+```
 
-### 4.2 `PublicPorts`
+Set-like read families use their written canonical order. Run reads preserve
+question order and then grounding-slot or run-check order; no caller order
+enters the result.
 
-When requested, `PublicPorts` compares:
+The caller never supplies or widens it. Derivation is exhaustive:
 
-- the complete multiplicity-expanded relation public occurrence domain;
-- the binding's total injective public map and its exact image;
-- the exact dependent Interface domain of every and only public input
-  `Statement` occurrence;
-- the relation and Protocol domains and ABIs of every binding-owned
-  `RelationToProtocolValueBridge`;
-- both admitted bridge round-trip laws; and
-- the lossless Interface statement shape and decoding contract.
+| Question | Exact derived reads |
+|---|---|
+| `MappedStatements` | selected Statement edges; their relation roles, K2 bindings, selectors, and bridges |
+| `WholeRelationPublic` | the complete public-role sequence of the selected relation Interface plus selected Statement edges and endpoints |
+| `WholeStatement` | every K2 Statement binding in `domain` plus selected Statement edges and sources |
+| `MappedPlanWitness` | selected witness edges, relation witness roles, surface entries, selectors, and bridges |
+| `WholeRelationWitness` | the complete witness-role sequence plus selected witness edges and surface entries |
+| `WholePlanWitnessSurface` | every entry in the selected surface plus selected witness edges and relation sources |
+| `ClaimReductionShape` | selected claim/reduction meanings and the exact K2 claim/reduction declarations, recipes, transforms, side inputs, challenges, and full publication requirements they cite |
+| `ExternalStatement` | selected Interface members, Statement edges, invocation assignments reached by `SuppliesInvocation`, codecs, and bindings |
+| `ExternalInstance` | selected instance fields, Interface members/transports, binding edges, codecs, and bridges |
+| `ArtifactComparison` | the exact admitted artifact question, issued observation fields, selected relation Interface facts, selectors, and bridges named by each clause |
+| `EquationGrounding` | the exact admitted equation; every source, step, equality, exactly `RequiredGroundingOperandSlots(equation)`, and one exact run read per run slot |
+| `CommitmentGroundingCheck` | every typed construction input and publication slot plus the exact source, step, and equality in each selected closed grounding |
+| `RunGrounding` | the binding edge for every `RelationBoundRunValueSelector` appearing in any check; the instance field selected only by each `RelationBoundValue` check; when the owner-derived `RunGroundedPotentialLossyCoordinates(q)` is nonempty, the premise and consumer-source join for every coordinate in that sequence; plus the unique public `RelationRunCoordinate` derived from every check. Expected values are authenticated question literals, not owner reads. |
 
-The clause is affirmative only when the public-map image equals the complete
-`CanonicalPublicAssignmentDomain` of the dependent Interface: every and only
-public input `Statement` occurrence is covered exactly once. A strict subset
-is a meaningful negative. An extra target, duplicate target, or domain/position
-mismatch cannot enter through an admitted binding and therefore does not
-become negative correspondence.
+Reading one edge includes its complete typed endpoints and the exact admitted
+bridge plus affirmative bridge-law result when the edge is not same-type.
+For `RunGrounding`, each coordinate in its exact owner-derived potential lossy
+sequence additionally reads the affirmative occurrence-local source premise and
+affirmative consumer-source join bound to that use coordinate. Other structural, coverage,
+Plan, and artifact questions do not acquire such a read merely because an edge
+names a lossy bridge; K3-B defines no live source-consumer join for them.
+Concretely, coordinate `c` adds both `BridgeUsePremise(c)` and
+`BridgeUseConsumerSourceJoin(c)` to the Relations submanifest.
+The exact full `BridgeUseSet` and `LossyUseSelection` are separately
+authenticated Section 9 operation operands; they are not manifest read arms.
+Reading one Oracle edge additionally includes the relation access declaration,
+K2 Oracle index/answer types, `PublicBinding` publication mode, binding
+construction, and publication occurrence. Reading a reduction meaning includes
+the exact side-input, challenge, and `(publication,next_challenge)` ordinal
+maps; it does not read a refinement theorem or output-agreement proof.
 
-Structural correspondence compares occurrence, role, position, domain, map,
-and algorithm facts. It has no relation instance or runtime statement value,
-so it does not claim equality of a particular public assignment. The exact
-instance-level check in Section 7 owns that result.
+An owner issues an immutable view for its exact submanifest. Every requested
+entry occurs once and no unrequested entry is accepted as authoritative input.
+A missing required entry is `CannotAnswer`; an unsupported owner constructor is
+`Unsupported`; a wrong subject or unauthenticated source is `Refused`; an
+extra, duplicate, aliased, or ill-formed entry is `Malformed`. None is Negative.
 
-An admitted binding is allowed to map only a subset of the Protocol statement
-surface. Therefore `PublicPorts` can return a meaningful negative when the
-question requires exact image/cardinality agreement.
+## 5. Completed result payloads and authority
 
-### 4.3 `WitnessPorts`
+This page imports the common qualified-outcome partition from K1 and the
+relation model exactly once. It defines only correspondence payloads:
 
-When requested, `WitnessPorts` compares:
+```text
+QuestionCoordinate =
+    Edge(StatementEdgeRef | PhaseEdgeRef | OracleEdgeRef |
+         PlanWitnessEdgeRef)
+  | RelationOccurrence(RelationPublicRef | RelationWitnessRef)
+  | StatementOccurrence(BindingRef)
+  | PlanSurfaceOccurrence(PlanWitnessSurfaceId, WitnessSurfaceKey)
+  | ClaimMeaning(ClaimMeaningRef)
+  | ReductionMeaning(ReductionMeaningRef)
+  | ExternalSelector(ExternalInstanceSelector)
+  | ArtifactClause(ArtifactComparisonQuestionId, artifact_clause_ordinal)
+  | GroundingEquality(GroundingEquationOwner, equality_ordinal)
+  | CommitmentClause(CommitmentClauseRef)
+  | RunCheck(RunFactCheck)
 
-- the complete multiplicity-expanded relation witness occurrence domain;
-- the binding's total injective witness map and exact image required by the
-  question;
-- target roles restricted to private Prover input occurrences or exact
-  prover-obligation output ordinals;
-- exact relation/Protocol bridge domains, ABIs, dependency views, and both
-  round trips; and
-- the abstract Protocol prover-obligation declarations and occurrence roles.
+CorrespondenceAgreement =
+    EdgeAgrees(QuestionCoordinate)
+  | CoverageMember(QuestionCoordinate)
+  | ShapeAgrees(QuestionCoordinate)
+  | ValueAgrees(QuestionCoordinate)
+  | EqualityTrue(QuestionCoordinate)
+  | RelationBoundValueAgrees(QuestionCoordinate)
+  | ExpectedValueAgrees(QuestionCoordinate)
+  | ExpectedMetaAgrees(QuestionCoordinate)
+  | PresenceAgrees(QuestionCoordinate)
 
-The clause is affirmative only when the witness-map image equals the complete
-declared witness surface: every and only private Prover input occurrence and
-every exact prover-obligation output ordinal is covered exactly once. A strict
-subset is a valid binding proposal but a negative answer to this clause;
-illegal, duplicate, or wrong-domain targets cannot enter through binding
-admission.
+CorrespondenceDisagreement =
+    MappingPolicyDisagreement(QuestionCoordinate)
+  | MissingCoverage(QuestionCoordinate)
+  | OverlappingCoverage(QuestionCoordinate, QuestionCoordinate)
+  | ShapeDisagreement(QuestionCoordinate)
+  | ValueDisagreement(QuestionCoordinate)
+  | MetaDisagreement(QuestionCoordinate)
+  | EqualityFalse(QuestionCoordinate)
+  | PresenceOrOccurrenceDisagreement(QuestionCoordinate)
 
-The checker never reads a `PrivateWitnessAssignment`, secret value,
-construction trace, provider, or runtime prover output. An affirmative result
-is structural witness-interface agreement, not witness possession or
+CheckedCorrespondence = {
+  question_id: CorrespondenceQuestionId,
+  manifest: CorrespondenceReadManifest,
+  agreements: CanonicalSortedUniqueSeq<CorrespondenceAgreement>,
+  disagreements: CanonicalSortedUniqueSeq<CorrespondenceDisagreement>
+}
+```
+
+`Completed(Affirmative(...))` requires an empty disagreement sequence.
+`Completed(Negative(...))` requires a nonempty disagreement sequence and
+retains every independently established agreement. Two well-typed endpoint
+values may disagree and yield Negative; an ill-typed selector, wrong reference
+kind, wrong owner, or unresolvable coordinate is malformed before the
+proposition exists and never yields Negative.
+
+Endpoint type, selector type, and expected-value type mismatches make question
+formation malformed; they cannot produce an admitted proposition and therefore
+have no disagreement constructor.
+
+Only completed affirmative or negative results receive the ordinary exact
+question-, operand-, consumer-, and purpose-bound checked-result binding and a
+fresh live capability. IDs, serialized records, manifests, and source bindings
+are inert and grant no authority.
+
+## 6. Structural and coverage operations
+
+All named operations below are specializations of:
+
+```text
+CheckCorrespondence(
+  admitted CorrespondenceQuestion,
+  every exact admitted operand named by the question,
+  owner-issued views for ManifestFor(question),
+  matching live source authority,
+  exact evaluator support and limits)
+  -> Qualified<CheckedCorrespondence>
+```
+
+The structural families are:
+
+```text
+CheckMappedStatementCorrespondence(MappedStatements)
+CheckWholeRelationPublicCoverage(WholeRelationPublic)
+CheckWholeStatementCoverage(WholeStatement)
+CheckMappedPlanWitnessCorrespondence(MappedPlanWitness)
+CheckWholeRelationWitnessCoverage(WholeRelationWitness)
+CheckWholePlanWitnessSurfaceCoverage(WholePlanWitnessSurface)
+CheckClaimReductionShape(ClaimReductionShape)
+```
+
+Mapped checks establish exact references, selectors, types, bridge direction,
+and the selected functionality/injectivity propositions. They do not establish
+whole coverage or runtime equality.
+
+Whole relation-public coverage requires the selected relation-side slices to
+form one exact nonoverlapping cover of every `RelationPublicRef` value in the
+named Interface. Whole Statement coverage requires the selected target slices
+to cover every Statement occurrence in `StatementDomain`. Session Context and
+Public Parameter bindings are never in that domain. Neither direction implies
+the other.
+
+Whole relation-witness coverage covers every `RelationWitnessRef` in the
+binding's exact Interface. Whole Plan-surface coverage covers every
+`WitnessIngress` or `DerivedWitnessExport` entry in the exact surface. Advice,
+confidential context, randomness, state, and unexported values are absent from
+both propositions.
+
+`ClaimReductionShape` checks only:
+
+1. exact K2 claim source, contract, scope, and usage;
+2. recipe source domains and result-Interface typing;
+3. ordered input/output claim meanings against the exact K2 declaration;
+4. exact side-input, challenge, and complete publication-requirement ordinal
+   maps, including every `next_challenge`;
+5. transform input/output Interface and public-derivation ABI agreement; and
+6. occurrence, scope, guard, and order coordinates already owned by K2.
+
+It does not check witness evolution, a relation refinement, prover/verifier
+output agreement, reduction soundness/completeness, or any cryptographic
+property.
+
+## 7. External presentation and instance operations
+
+```text
+CheckExternalStatementPresentation(ExternalStatement)
+CheckExternalInstanceCorrespondence(ExternalInstance,
+                                    exact DecodedExternalAssignment,
+                                    matching codec-evaluation authority)
+```
+
+External Statement presentation follows each selected Interface member through
+its exact codec and flow to one selected scoped Statement edge. It checks
+audience, direction, type, multiplicity, scope, and the selected mapped/whole
+coverage proposition. Under `WholeSelectedSurface`, it additionally checks the
+exact member/binding domain and recursive target partitions defined in Section
+3.1; it does not silently widen to every member of the Interface.
+Verifier-private invocation inputs remain covered by the Interface assignment
+lens but can never be Statement members.
+
+External instance correspondence compares canonical typed values through the
+selected public, Oracle-binding, or phase path. An Oracle path additionally
+requires the exact K2 `PublicBinding` publication mode, compatible relation/K2
+index and answer types, admitted binding construction, public publication
+occurrence, and matching public transport entry. A phase path names its exact
+challenge or public occurrence and transport entry. Repeated equal values are
+checked at distinct coordinates.
+
+For a transport selector, `Inactive` is a well-formed
+`PresenceOrOccurrenceDisagreement`; `Active(v)` compares only its typed payload
+`v` through the selected edge's `ValueRelation`. The wrapper is never passed to
+that relation as though it had payload type. The assignment's key domain is
+every and only the admitted Interface's external slots, and each value has its
+slot codec's exact semantic type. Missing, extra, wrong-type, or ill-shaped
+assignments are `Malformed`; absent matching codec authority or a
+caller-constructed assignment is `Refused`. Neither is Negative.
+
+These operations concern one decoded external assignment. They say nothing
+about what a verifier run consumed and do not inspect private relation or Plan
+material.
+
+## 8. Artifact, equation, and commitment operations
+
+```text
+CheckArtifactInterfaceComparison(
+  ArtifactComparison,
+  exact admitted ArtifactComparisonQuestion,
+  exact admitted RelationInterface,
+  exact owner-issued RelationArtifactObservation,
+  matching fresh interpretation-or-replay authority)
+
+CheckGroundingEquation(
+  EquationGrounding,
+  exact GroundingInvocation and every required fresh source capability)
+
+CheckCommitmentGrounding(
+  CommitmentGroundingCheck,
+  SelectedCommitmentInvocations,
+  every required fresh source capability)
+```
+
+where:
+
+```text
+SelectedCommitmentInvocations =
+  ExactMap<CommitmentClauseRef, GroundingInvocation>
+```
+
+Its key set is exactly the question's `clauses`; each invocation's
+`equation_id` is identical to that binding clause's equation ID and its operand
+map exactly exhausts `RequiredGroundingOperandSlots(equation)`. Its run
+operands have exactly the qualification required by the question's matching
+inner run-requirement map.
+Missing, extra, duplicate, wrong-equation, or wrong-qualification entries do
+not create a false proposition. A bad key domain or wrong equation is
+`Malformed`; a wrong authenticated subject is `Refused`; and an absent required
+capability or qualification is `CannotAnswer`.
+
+Artifact comparison can consume only an observation issued by the relation
+model's exact interpretation operation over authenticated bytes. `Unread`
+yields `CannotAnswer`; `Observed([])` is an observed absence and may yield a
+meaningful disagreement. An invalid selector is malformed. The result concerns
+only selected fields and relation facts.
+
+Grounding evaluation reads exactly the derived operand-slot set, evaluates
+steps in topological order, and records every equality. A false equality is
+Negative. A missing secret occurrence, unread artifact field, missing run fact,
+unsupported algorithm, or operational noncompletion is not false equality.
+
+Each commitment grounding connects every typed construction input and its one
+publication target to exact equation sources, the exact construction step, and
+the exact equality. The construction ABI and every selected coordinate must
+agree before evaluation. A true equation establishes only that exact
+construction equality at those occurrences; it establishes no binding,
+hiding, extraction, opening knowledge, or verifier soundness. A commitment is
+not a lossy value bridge.
+
+## 9. Public run-grounded operation
+
+```text
+CheckRunGroundedCorrespondence(
+  admitted RunGrounding q,
+  exact admitted RelationInstance,
+  exact admitted ProtocolRelationBinding,
+  PIR-issued public-only RelationRunView,
+  matching fresh run-view authority,
+  when RunGroundedPotentialLossyCoordinates(q) is nonempty:
+    exact BridgeUseSet set for RunGroundedBridgeUseScope(q) and fresh
+      affirmative authority,
+    exact LossyUseSelection equal to RunGroundedLossySelection(q,set),
+    exact overall-Affirmative CheckedLossyUsePremiseSet for that selection and
+      fresh capability,
+    fresh affirmative CheckLossyUseAtConsumerSource result and capability for
+      every coordinate in that exact selection)
+  -> Qualified<CheckedCorrespondence>
+```
+
+The run view's Protocol and qualification must match the question. Its
+issuance authority must retain the exact invocation and source binding required
+by the operation. Its payload contains every and only the public coordinates
+in `ManifestFor(question)`; the full `CompletedProtocolRecord` remains in
+PIR's private source binding and is not a correspondence read.
+
+For every `RelationBoundValue` check, Relations selects the exact instance
+value and exact `Available` run value and applies the edge's admitted
+`ValueRelation`. A lossy bridge use additionally requires its exact checked
+occurrence-local source premise from one overall-Affirmative
+`CheckedLossyUsePremiseSet` over the exact
+`RunGroundedLossySelection(q,set)`. For every coordinate in that selection it
+consumes a fresh affirmative
+`CheckLossyUseAtConsumerSource` result whose live `LossySourceBinding` equals
+the exact `RelationInstance` field binding and source capability consumed by
+this operation, including owner, subject, field coordinate, local occurrence
+where applicable, process generation, and capability contract. A premise
+checked for another instance, generation, or equal-valued occurrence is
+refused; a static `BridgeUseCoordinate` cannot establish the join. The result
+retains its ordinary exact question, manifest, and agreement coordinates; it
+does not serialize the live selection or joins. The fresh overall-Affirmative
+checked-result capability retains the exact `LossyUseSelection`, premise-set
+capability, and every consumer-source join result and capability. Only that
+fresh capability licenses Analysis to consume
+`SelectedBridgeUseCardinality(selection,b)`. Missing premise or join authority
+is `CannotAnswer`, never inequality.
+`Inactive` or `NotReached` yields a presence disagreement rather than a value
+disagreement.
+
+For `ExpectedValue`, an `Available` payload is compared with the question's
+exact typed canonical value using K1 equality. `ExpectedCheckResult` and
+`ExpectedTerminalVerdict` compare only their respective closed meta types.
+A different well-formed value or meta value is Negative; a different outer
+observation alternative is a presence disagreement. `Presence` compares the
+outer `Available | Inactive | NotReached` tag only and, when it agrees, records
+`PresenceAgrees`; it makes no claim about an available payload.
+
+In particular, a `Presence(ClaimState(...),RequireAvailable)` or
+`Presence(ReductionState(...),RequireAvailable)` proves only that PIR exposed
+that public history coordinate at the requested boundary. It does not compare
+the history, prove claim creation, prove a reduction application, or establish
+relation meaning. Exact claim/reduction-state comparison is `Unsupported` in
+K3-B. A different repeated occurrence, inactive guarded occurrence, or
+unreached boundary is Negative only when an admitted check selected a different
+status or expectation. A missing manifest entry or caller-created value is
+respectively `CannotAnswer` or `Refused`.
+
+`ExactReplayQualified` requires a `ReplayQualified` view and answers what exact
+K2 replay consumed. `ExactCausallyGenerated` requires a `CausallyGenerated`
+view and the still-live K2 causal capability; replay cannot mint it. Neither
+qualification proves relation satisfaction, honest strategy, coin
+distribution, or implementation isolation.
+
+No private witness, Oracle material, verifier-private query or answer, Plan
+state, advice, randomness, or strategy-local value is readable here. A later
+private supply-occurrence question requires a distinct PIR owner view and new
+question variant; until then it is `Unsupported`.
+
+## 10. Combined results, persistence, and nonclaims
+
+An operation may combine affirmative mapped Statement results with an exact
+`SelectedPlanWitnessBindings` map and the corresponding affirmative mapped
+Plan-witness results. Every selected Interface key and Protocol must agree.
+The aggregate retains each original question/result and source binding; it has
+no new semantic ID or authority and implies neither `PlanRealizes` nor relation
 satisfaction.
 
-### 4.4 `ResultBindingReferenceShape`
-
-This clause has one deliberately narrow, directly recomputable meaning:
-
-~~~text
-ClaimPresence(claim)
-  -> claim is in range and is produced
-
-CheckTrue(check)
-  -> check is in range, invoked, and Boolean-valued
-
-AcceptingTerminals(terminals)
-  -> terminals is nonempty and duplicate-free, every member is in range,
-     and every member has static result Accept
-~~~
-
-The checker retains the admitted relation result role as an operand fact but
-does not compare its `output_domain` or `accepted_values` with the Protocol
-constructor. It does not establish that relation acceptance and Protocol
-acceptance coincide, nor that a terminal subset is exhaustive for relation
-acceptance. That stronger result is unavailable until a later owner supplies
-an exact relation-result semantics and checked behavioral-equivalence
-capability.
-
-### 4.5 `CommittedObjectGrounding`
-
-This clause reads only the exact checked grounding prerequisite. The
-underlying binding entry remains identity-bearing context, but a declaration,
-adapter, material digest, Interface-position reference, or raw observation is
-not grounding authority.
-
-An affirmative prerequisite supports the clause for every relation committed-
-object occurrence. A negative prerequisite makes the clause negative and
-retains its exact unaffected agreements. The structural correspondence check
-does not widen grounding to Protocol objects outside the relation-total map,
-infer inverse injectivity, prove opening knowledge, or prove derivation
-faithfulness beyond the checked equations.
-
-### 4.6 Optional artifact question
-
-When `artifact_question = Some(q)`, the checker reads only the exact
-`CheckedArtifactInterfaceComparison` over `q`. An affirmative prerequisite
-supports every requested artifact field. A negative prerequisite refutes its
-conflicting fields and preserves unaffected agreements.
-
-The optional artifact result does not establish a base clause, relation truth,
-artifact provenance, or an unrequested field. Artifact interpretation remains
-expectation-free; agreement exists only at this separate comparison boundary.
-
-## 5. Exact read closure
-
-### 5.1 Structural checker read set
-
-| Source | Permitted reads |
-|---|---|
-| Protocol Relations view | Exact Protocol/Core identities and regimes; public `Statement` and private Prover port occurrences; prover-obligation outputs; object declarations; produced claims; invoked Boolean checks; Accept terminals; events and input ordinals needed by binding-owned Interface-position chains |
-| Protocol Interface | Exact dependent IDs; canonical public-assignment domain; lossless statement binding; proof-trace positions; application bindings; and only the external position facts requested by the binding/question |
-| Relation Interface | Definition ref; exact dependency and occurrence schemas; public/witness/object domains and multiplicities; accepted-result role retained as a nonbehavioral fact |
-| Relation binding | Exact dependent IDs; public/witness maps; value-bridge specs and retained dependency views; committed-object entries; per-object artifact selectors; position chains; and closed result binding |
-| Question and regime | Exact canonical base-clause set, optional nested artifact question, `CorrespondenceRegime`, and its declared assumptions/checker identity |
-| Checked prerequisites | Exact same-subject grounding result iff grounding is requested; exact same-question artifact comparison iff the artifact question is present |
-
-The read closure excludes private witness values, relation-instance public
-values, Protocol execution traces, Plan internals, raw artifact bytes, raw
-observations, unselected facts, caller labels, ambient registries, and any
-unrequested clause. Supplying an otherwise valid extra capability does not
-expand the read set; it is refused.
-
-### 5.2 Adequacy
-
-The Relations-purpose Protocol and Interface views must contain every source
-fact required by the exact question and no authority to infer omitted facts.
-View adequacy is checked before correspondence. If a requested fact is absent
-from an otherwise exact owner view, the operation is `CannotAnswer`, not a
-negative judgment and not permission to inspect the producer's carrier.
-
-No view acquires a new semantic identity merely by attenuation. The completed
-result retains the exact admitted source views so a consumer cannot widen it
-to a larger Protocol, Interface, relation, binding, or question.
-
-## 6. Structural result and capability
-
-### 6.1 Completed A/N result
-
-For a well-formed, supported, authorized invocation with complete named inputs,
-the checker produces one total field result for every and only requested base
-clause and, when present, every field in the nested artifact question.
-
-- `Affirmative` means every requested field agrees.
-- `Negative` names every refuted requested field and retains all unaffected
-  agreements.
-
-Either completed result atomically creates the exact
-`RelationCheckedResultCoordinate<StructuralCorrespondence>` and mints the
-opaque process-local `CheckedRelationCorrespondenceJudgment` capability. It
-retains:
-
-- the exact admitted Protocol, Protocol Interface, relation Interface, and
-  binding views;
-- the exact `CorrespondenceQuestion` and `CorrespondenceRegime`;
-- the exact named consumer and
-  `RelationsOperationPurpose<StructuralCorrespondence>`;
-- the exact `RelationsCorrespondenceCapabilityContractId` and
-  `RelationsCorrespondenceCapabilityAbiId` declaring the no-owner-operation-
-  policy disposition;
-- the complete `ExactSourceAuthorityBinding`, including its exact
-  `OwnerCapabilityRequirement` and canonical total transitive source-policy
-  closure over every direct or transitive admitted-subject and checked-result
-  source binding;
-- the exact conditionally required checked prerequisites;
-- the field-factored A/N result;
-- the checker identity and complete dependency/read closure; and
-- the qualified residual-trust basis.
-
-The result coordinate is the domain-separated portable record ID only when its
-complete preimage is portable, the correspondence contract permits completed-
-result creation, portable stable identity, retention, and disclosure for the
-exact family, named consumer, and typed purpose, and every disposition in the
-complete transitive source-policy closure permits that construction and
-retention. Otherwise, if the same contract and source closure permit an owner-
-local completed result, it is the typed owner-local premise-record reference; a
-denial prevents `Completed` entirely. Attempt-audit permission cannot substitute
-for either branch. Serialized result bytes carry no live authority and cannot
-be widened across operands, regimes, questions, or artifact field sets.
-
-### 6.2 Non-completed outcomes
-
-~~~text
-Unsupported(exact unsupported question or dependency)
-CannotAnswer(missing named semantic input or view fact, or an absent or
-  mismatched required checked-result prerequisite)
-Refused(missing live authority, prohibited invocation, or undeclared extra
-  input or read)
-Malformed(exact framing, question, assignment, or reference defect)
-CheckerFailure(operational failure with no semantic conclusion)
-~~~
-
-U/C/R/M/F mint no checked capability and are never negative correspondence.
-A prerequisite negative is different: it is a completed semantic result and
-therefore makes the exact requested field negative.
-A mismatched live admission, checker, or execution capability is missing
-authority and therefore refused; only the required checked-result prerequisite
-uses the `CannotAnswer` rule above.
-
-### 6.3 Affirmative-only authority
-
-Only an affirmative structural capability may feed an affirmative-only
-consumer. A negative capability retains exact refutation facts for a consumer
-that explicitly requests them, but it cannot authorize instance
-correspondence. Neither A nor N establishes an unrequested field.
-
-## 7. Public-instance correspondence
-
-### 7.1 Signature
-
-~~~text
-RelationInstanceCorrespondsAtInterface(
-  affirmative CheckedRelationCorrespondenceJudgment
-    whose exact CorrespondenceQuestion.base_clauses contains PublicPorts,
-  AdmittedProtocolInterface,
-  AdmittedRelationBinding,
-  AdmittedRelationInstance,
-  ProtocolPublicAssignment<the exact dependent ProtocolId>,
-  exact admitted value-bridge dependency views attenuated from the binding,
-  ExactRelationValueBridgeExecutionCapabilities,
-  exact ExactSourceAuthorityBinding for the structural result, every admitted
-    semantic operand, and every authority-bearing attenuated value-bridge
-    dependency view, with separately supplied fresh capabilities,
-  exact named_consumer: NamedConsumer,
-  exact operation_purpose:
-    RelationsOperationPurpose<InstanceCorrespondence>,
-  CorrespondenceRegime)
-  -> Qualified<CheckedInstanceCorrespondenceJudgment,
-               exact ExactCheckedResultAuthorityBinding<Relations,
-                 InstanceCorrespondence>>
-~~~
-
-The structural capability must be affirmative, must select `PublicPorts`, and
-must retain the identical Protocol, Interface, relation Interface, binding,
-and regime. An affirmative result whose question omitted `PublicPorts` cannot
-be widened.
-Every exact source binding must match its fresh capability. The instance result
-retains the canonical total transitive source-policy closure over the
-structural result, all admitted semantic operands, and every authority-bearing
-attenuated dependency view, and the checker freshly validates every disposition
-for the named instance-correspondence purpose. It separately reauthenticates the
-regime-bound correspondence contract and ABI and requires exact invocation and
-capability-use permission for `InstanceCorrespondence`, the named consumer, and
-the typed purpose.
-
-`ProtocolPublicAssignment<P>` is the pure semantic result of successful
-Interface statement decoding. It contains one same-domain value for every and
-only public input `Statement` occurrence of that exact Protocol. Partial,
-extra-key, wrong-Protocol, wrong-occurrence, or wrong-domain maps are malformed.
-It is not an invocation, deployment, or capability.
-
-### 7.2 Exact value comparison
-
-The checker requires identity agreement among the structural capability,
-Interface, binding, relation Interface, instance, assignment Protocol, and
-`CorrespondenceRegime`. For every relation public occurrence it:
-
-1. reads the canonical relation value from the admitted instance;
-2. resolves the exact occurrence target in the admitted binding;
-3. executes the binding-owned `to_protocol` bridge through an
-   identity-and-ABI-matched `ExactRelationValueBridgeExecutionCapabilities`
-   entry and retained dependency view;
-4. reads the same target value from the decoded
-   `ProtocolPublicAssignment<P>`; and
-5. compares the two canonical Protocol-domain values.
-
-No raw-byte, unqualified-value, or mnemonic equality is used. A binding law
-checker is not retained as executable bridge authority. The operation does not
-decode a second statement container, execute the Protocol or verifier, inspect
-a witness, or derive a post-statement value.
-
-### 7.3 Instance read closure and result
-
-The instance checker reads every and only the affirmative structural
-capability, the dependent Interface assignment domain, the binding's public
-occurrence map and retained `to_protocol` bridge views, the admitted
-instance's public values, the exact `ProtocolPublicAssignment<P>`, the matching
-bridge-execution capabilities, and `CorrespondenceRegime`. It reads no private
-witness, raw statement or artifact bytes, Protocol trace, verifier state,
-Plan, grounding entry, or unrequested structural field, and it does not
-execute `to_relation`.
-
-A completed affirmative result records equality at every relation public
-occurrence after exact bridge conversion. A completed negative names every
-value mismatch and retains all unaffected agreements. Either A/N result mints
-`CheckedInstanceCorrespondenceJudgment` together with the exact
-`RelationCheckedResultCoordinate<InstanceCorrespondence>`, retaining the exact
-structural source binding and separately supplied capability, Interface,
-binding, instance, dependent assignment, bridge
-dependency/execution basis, regime, checker identity, read closure, and
-field-factored result, together with its qualified residual-trust basis and the
-exact `RelationsCorrespondenceCapabilityContractId` and
-`RelationsCorrespondenceCapabilityAbiId` declaring the no-owner-operation-
-policy disposition, exact named consumer, and exact
-`RelationsOperationPurpose<InstanceCorrespondence>`.
-It also retains the complete `ExactSourceAuthorityBinding`, including the exact
-`OwnerCapabilityRequirement` and transitive source-policy closure.
-
-It records the exact bridge contract identities and ABIs but retains no live
-bridge-execution capability.
-
-U/C/R/M/F mint neither a result coordinate nor checked capability. The result is scoped to this one exact
-assignment and cannot be reused for another invocation, Interface, codec,
-binding, instance, bridge, or regime.
-
-The portable/local result-coordinate and completed-result authorization rule is
-identical to structural correspondence. Serialized result bytes convey no live
-authority.
-
-## 8. Authentication, checking, and replay
-
-Correspondence never authenticates or admits its operands implicitly. Every
-operand must arrive through its owner lifecycle. A source ID, stored
-capability, normalization audit, package-membership proof, or producer report
-is insufficient.
-
-### 8.1 Structural cold replay
-
-Exact cold replay exists only when the complete source-binding and structural-
-result-binding preimages are portable. Under that condition, a new process
-must:
-
-1. reconstruct and re-admit the exact Protocol and its Relations-purpose view;
-2. reauthenticate and re-admit the exact Protocol Interface;
-3. reauthenticate and re-admit the exact relation Interface and binding,
-   including every bridge/grounding dependency and conditional adapter view;
-4. reconstruct the exact named consumer,
-   `RelationsOperationPurpose<StructuralCorrespondence>`,
-   `CorrespondenceQuestion`, and `CorrespondenceRegime`, including the regime's
-   exact authenticated
-   `RelationsCorrespondenceCapabilityContractId`, exact
-   `RelationsCorrespondenceCapabilityAbiId`, and explicit no-policy declaration;
-   reauthenticate both preimages and require their invocation, capability-use,
-   completed-result-record, and replay rules to permit this exact family,
-   consumer, and purpose;
-5. iff requested, rerun artifact interpretation/admission and exact
-   artifact/interface comparison over the same nested question;
-6. iff requested, rerun committed-object grounding with the exact conditional
-   observation map and execution capabilities; and
-7. reauthenticate every disposition in the complete transitive source-policy
-   closure and require it to permit reconstruction, result-record creation, and
-   retention for the identical use; then rerun
-   `RelationCorrespondsAtInterface`, recreate the exact portable source binding
-   and result record, require complete equality with the recorded binding, and
-   mint a fresh A/N capability.
-
-Replaying a negative prerequisite preserves its exact refutation role. It does
-not become missing authority or an affirmative result. Prior result bytes may
-be compared diagnostically but never authorize the new check.
-
-If any identity-bearing structural source or the structural result coordinate
-is owner-local, exact cold replay is impossible. An authorized local rerun must
-obtain fresh owner-local source references and matching capabilities, rerun the
-same check, and create a fresh structural premise-record reference, downstream
-local handles where applicable, and complete checked-result binding. None is
-equal to or authorized by the prior local reference, binding, capability, or
-serialized result.
-
-### 8.2 Instance cold replay
-
-When the structural result and every additional instance source are portable,
-instance replay additionally must:
-
-1. first recreate an affirmative structural capability whose exact question
-   contains `PublicPorts`;
-2. reauthenticate and re-admit the exact relation instance;
-3. reconstruct the exact `ProtocolPublicAssignment<P>` through the admitted
-   Interface's successful statement-decoding semantics or supply its exact
-   already typed semantic preimage;
-4. reconstruct fresh matching bridge execution capabilities; and
-5. reconstruct the exact instance named consumer and
-   `RelationsOperationPurpose<InstanceCorrespondence>`, rerun every bridge
-   conversion and canonical value comparison, recreate the exact portable
-   instance source binding, and require complete binding equality before
-   minting a fresh capability.
-
-Instance replay also reauthenticates the identical correspondence capability
-contract and ABI retained by the recreated structural and instance
-capabilities; requires their invocation, capability-use, completed-result-
-record, and replay rules for the exact family, consumer, and purpose; and
-reauthenticates every source-policy disposition before recreating either result
-coordinate. Attempt-audit permission is irrelevant to this replay gate.
-
-If the structural prerequisite, any additional identity-bearing instance
-source, or the instance result coordinate is owner-local, exact instance cold
-replay is impossible. An authorized local rerun creates fresh affected source
-references, structural and instance premise-record references, downstream local
-handles, complete checked-result bindings, and live capabilities. Matching old
-bytes or fields neither restores the prior local coordinates nor grants
-authority.
-
-A serialized assignment or checked result conveys no authority. If external
-bytes are used to reconstruct the assignment, the Interface decoder must be
-reestablished independently; correspondence does not absorb byte-decoding
-authority.
-
-## 9. Consumer seams
-
-### 9.1 Analysis
-
-The [Analysis domain](../analysis/README.md) may consume a checked structural
-or instance result only when its question names the identical operands,
-`CorrespondenceQuestion`, nested artifact field set, assignment where
-applicable, regime, model, and assumptions. Analysis may use an affirmative as
-an exact premise or a negative as an exact refutation fact. It may not:
-
-- widen the result to an unrequested clause or field;
-- turn `ResultBindingReferenceShape` into acceptance equivalence;
-- infer satisfaction, soundness, completeness, knowledge, zero knowledge, or
-  another property without a separately owned judgment; or
-- treat checker execution or an observation as evidence of a broader claim.
-
-The exact source binding and separately supplied checked correspondence
-capability supply a bounded semantic premise, not a theorem or evidence
-appraisal. Analysis retains the binding's exact result coordinate, origin,
-capability requirement, capability-contract identity, and capability ABI and
-binds the explicit
-`OwnerDefinesNoOperationPolicy(RelationsCorrespondenceCapabilityContractId,
-RelationsCorrespondenceCapabilityAbiId)` disposition; it never infers no policy
-from absence.
-
-### 9.2 OIR
-
-The [OIR domain](../oir/README.md) owns projection, occurrence placement,
-endpoint behavior, and `LocalOirValid`. Correspondence may supply exact
-relation-facing facts to an explicitly named OIR transition, but it does not:
-
-- create an OIR;
-- place an Interface output on a path;
-- classify a Plan or prove prover realization;
-- establish endpoint support or verifier execution; or
-- imply `LocalOirValid`, projection coverage, or recursive realization.
-
-OIR may consume an admitted relation Interface or affirmative correspondence
-only through a future transition that takes the exact source value plus its
-complete `ExactAdmittedSubjectAuthorityBinding` or
-`ExactCheckedResultAuthorityBinding`, including the inert
-`OwnerCapabilityRequirement`, authenticated `OwnerOperationPolicyDisposition`,
-and canonical total transitive source-policy closure; receives the separately
-fresh binding-matched capability; and fixes an exact OIR `NamedConsumer` and
-typed operation purpose. The transition must freshly authorize every `BoundTo`
-policy and every explicit no-policy contract/ABI branch for that exact use. A
-source ID, capability name, or declared read set is insufficient. Stage 4A does
-not activate this transition or select its OIR-owned purpose, operation
-contract, result, or admission rule. Nothing flows backward into Protocol,
-Interface, relation, binding, or correspondence identity.
-
-## 10. Nonclaims
-
-Neither structural nor instance correspondence establishes:
-
-- relation-definition truth, satisfiability, or faithful formalization;
-- public-instance truth independently of the exact bridge-converted equality;
-- witness existence, possession, validity, secrecy, or satisfaction;
-- equivalence of relation acceptance and Protocol acceptance;
-- Protocol admission, verifier execution, proof production, termination, or
-  transcript behavior;
-- artifact provenance, parser correctness beyond its named contract, or
-  agreement on an unrequested artifact field;
-- committed-object derivation faithfulness beyond the checked contract
-  equations, inverse injectivity, or opening knowledge;
-- soundness, completeness, knowledge, zero knowledge, Fiat--Shamir security,
-  or another cryptographic property;
-- compiler preservation, OIR validity, endpoint support, realization, or
-  evidence sufficiency; or
-- implementation correspondence, migration safety, compatibility, or
-  production readiness.
-
-`RelationSatisfies` remains a separate Relations-owned operation over the
-external definition, exact admitted semantic model and instance,
-occurrence-local private witness, assumptions, and exact checking basis, as
-defined by the sibling [Relation model](relation-model.md). No correspondence
-capability may be substituted for it.
+Structural, coverage, external-public, artifact, and equation checks may cold
+replay only when every exact subject, source observation, purpose view,
+algorithm, manifest, and result preimage is portable. Replay reauthenticates,
+readmits, reissues owner views, reruns the checker, and requires complete result
+equality before fresh authority is created.
+
+A run-grounded result cold-replays only in the `ReplayQualified` lane. Causal
+generation, private occurrences, and source-local capabilities never cold
+replay. A fresh authorized execution creates fresh occurrence coordinates and
+results.
+
+No correspondence result establishes:
+
+- truth, satisfiability, or adequate modeling of a relation definition;
+- relation satisfaction, witness possession, or witness validity;
+- correctness, completeness, termination, or fidelity of a Prover Plan;
+- equivalence between relation satisfaction and Protocol acceptance;
+- relation refinement, witness evolution, reduction soundness, completeness,
+  security, knowledge, zero knowledge, or Fiat--Shamir theorem applicability;
+- artifact provenance beyond the exact issued interpretation source;
+- OIR validity, endpoint support, realization, or implementation
+  correspondence; or
+- compatibility with another semantic regime.
+
+Those require separately owned admitted subjects and qualified judgments.

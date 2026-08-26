@@ -358,6 +358,16 @@ that closure. Analysis does not choose the optimization policy.
 
 ## 8. Relations-owned `RelationSatisfies`
 
+> **K3 transition notice.** The ownership conclusion below remains selected,
+> but its detailed consumer schema predates the K3-B rewrite of Relations.
+> The durable definition, satisfaction command machine, semantic/validation
+> split, operation policy, and qualified result are now owned exclusively by
+> [Relation Model](../relations/relation-model.md#43-occurrence-local-satisfaction).
+> Any repeated field list below is historical Analysis intake, not a second
+> current Relations contract. K3-C must replace it with the minimum exact
+> Analysis source manifest before this page can become a current integration
+> specification.
+
 ### 8.1 Ownership decision
 
 `RelationSatisfies` belongs to **Relations**. Predicate truth for one exact
@@ -368,7 +378,7 @@ consume the result but cannot mint or reinterpret it.
 The exact question, request, semantic basis, inert support instantiation,
 validation basis, operation policy, invocation, qualified outcome, persistence,
 and replay contracts belong exclusively to [Relation semantic
-model](../relations/relation-model.md#12-relation-satisfaction). In particular,
+model](../relations/relation-model.md#43-occurrence-local-satisfaction). In particular,
 the owner requires fresh identity- and ABI-matched premise, correspondence-
 support, checker-execution, and private-witness capabilities at the checking
 occurrence. An opaque definition, support record, checker identity, or public

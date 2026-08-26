@@ -53,6 +53,18 @@
 > and exact typed exhaustion. This replaces the pre-K2 snapshots as the active
 > target definition without making the target normative or implemented.
 
+> **K3-B integrated-closure update — 2026-08-27:** The bounded dependent
+> consumer lane is now reconciled in the active
+> [canonical carrier](../pir/canonical-pir.md),
+> [Interface and Plan](../pir/interfaces-and-plans.md),
+> [relation model](../relations/relation-model.md), and
+> [Protocol correspondence](../relations/protocol-correspondence.md) targets.
+> K3-B selected split Protocol/Plan relation bindings, the narrow source-ID-free
+> `PlanWitnessSurface`, distinct value-bridge/refinement/commitment contracts,
+> public execution-issued grounding views, and an exact factor-preserving K2
+> carrier. It did not close Analysis, OIR, protocol-family coverage, or the
+> integrated kernel.
+
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > is the sole durable owner of the current K0--K5 gate. This architecture page
@@ -323,7 +335,7 @@ flowchart LR
   CE[Relation-specific checked change]
   J[Conditional property judgment]
   I[Admitted Protocol Interface]
-  PB[Tagged Plan basis: none or admitted Plan]
+  SV[K3-D purpose-specific source view, if any]
   ROLE[Endpoint role]
   PI[Exact projection input]
   O[OIR endpoint artifact]
@@ -354,7 +366,7 @@ flowchart LR
   SAP -->|successor| CE
   AP --> PI
   I --> PI
-  PB --> PI
+  SV --> PI
   ROLE --> PI
   PI -->|project or refuse| O
   O -->|bind exact suppliers| SB
@@ -377,21 +389,25 @@ flowchart LR
 ```
 
 The relation edge into authoring and the post-admission correspondence edge
-were a Stage 3 design surface. Stage 3 now keeps independently admitted
-relation subjects, optional artifact observation and comparison,
-committed-object grounding, and exact Protocol-at-Interface correspondence
-distinct. The current normative `RelationContract` remains authoritative
-until cutover, and correspondence is not classified as an Evidence result.
+were a Stage 3 design surface. K3-B now keeps independently admitted relation
+subjects, optional artifact observation and comparison, typed equations,
+commitment grounding, and correspondence distinct. Structural correspondence
+uses `ProtocolRelationBinding` without requiring an external Interface;
+`PlanWitnessBinding` and external-presentation correspondence are separate
+operands and questions. The current normative `RelationContract` remains
+authoritative until cutover, and correspondence is not classified as an
+Evidence result.
 
 The diagram omits each transition's exact closure to remain readable; it does
 not imply one universal registry. Every normative result closes over the
 semantic subjects, regimes, dependencies, policies, and capabilities that can
 change it. Projection consumes the admitted Protocol, exact dependent
-`ProtocolInterfaceId`, endpoint role, and a tagged Plan basis. The basis says
-whether no Plan is read or an exact projection-purpose Plan view or subject is
-read. K3-B owns that structural factorization; K3-D must select the exact read
-partition and its effect on OIR identity and the source-relative projection
-result. A Plan fact used only below OIR enters realization explicitly instead.
+`ProtocolInterfaceId`, and endpoint role. If a prover projection needs Plan
+meaning, K3-D must select a purpose-specific source-owned view, its exact read
+manifest, and its effect on OIR identity and the source-relative projection
+result. K3-B's `PlanWitnessSurface` is Relations-specific and cannot substitute
+for that contract. A Plan fact used only below OIR enters realization
+explicitly instead.
 Bare possession of bytes, a source identifier, or a carrier label never
 substitutes for these inputs or preserves local authority.
 
@@ -405,13 +421,12 @@ can flow backward into semantic identity or admission.
 The selected Stage 1 model factors the protocol portion more precisely. An
 ordered `InteractiveCore` plus a Fresh or Fiat--Shamir
 `ChallengeInterpretation` determines `ProtocolId`. A dependent
-`ProtocolInterfaceId` and a separate `ProverPlanId` remain the intended
-downstream subjects, but their pre-K2 port and prover-obligation schemas are
-not current target contracts. K3-B reconstructs them over exact K2 invocation,
-scoped-binding, effect, and prover-strategy surfaces. A content-addressed
-semantic closure supplies exact contract preimages, while opaque referenced
-subjects do not acquire admission authority. Each subject is qualified by its
-exact typed semantic regime.
+`ProtocolInterfaceId` and a separate `ProverPlanId` are now active K3-B target
+subjects over exact K2 invocation, scoped-binding, effect, and prover-decision
+surfaces. Their pre-K2 port and abstract-obligation schemas remain historical.
+A content-addressed semantic closure supplies exact contract preimages, while
+opaque referenced subjects do not acquire admission authority. Each subject is
+qualified by its exact typed semantic regime.
 
 ### 5.2 Complete object roles
 
@@ -421,7 +436,7 @@ not proposed wire identifiers.
 | Role | Meaning | Architecture state |
 |---|---|---|
 | Relation definition | Externally owned predicate over public instances and private witnesses | Current external authority |
-| Relation interface | Independently identified relation-facing boundary over public instances, relation witnesses, committed material, dependencies, and result interpretation | Separate role preserved; exact public/witness/material/result schema and its K1 extraction are open for K3-B reconstruction |
+| Relation interface | Independently identified K1-aligned occurrence boundary with `PublicInstance`, `PrivateWitness`, `OracleStatement`, and `PhaseInput` roles | Active bounded K3-B target; Protocol correspondence, Plan witness attachment, and external presentation remain separate bindings or questions |
 | Authoring unit | Editable proposal with no inherited Protocol authority | Selected lifecycle role |
 | Resolved authoring unit | Proposal bound to one immutable input snapshot and complete actual read closure | Selected Stage 2 lifecycle role |
 | Interactive Core | One finite verifier-observable interaction with invocation inputs, scoped bindings, guarded effects, claim/reduction flow, explicit terminals, a deterministic verifier, and a prover strategy boundary; public-coin eligibility is derived rather than intrinsic | Active bounded K2 subject |
@@ -435,8 +450,8 @@ not proposed wire identifiers.
 | Decoded Protocol artifact | Reconstructed carrier with no inherited process-local authority | Selected Stage 2 boundary and current implementation correspondence |
 | Semantic regime | Typed, identified interpretation of intrinsic operations, canonical semantics, and admission rules for one subject family | Selected Stage 1 identity qualifier; implicit today |
 | Admitted Protocol capability | Process-local immutable capability rechecked against an exact admission basis and semantic regime | Current normative role and implementation correspondence, target qualification |
-| Protocol interface | Protocol-dependent mapping from exact K2 invocation inputs, scoped Statement bindings, and role-qualified transport effects to one external ABI | Separate `ProtocolInterfaceId` preserved; detailed pre-K2 schema is open for K3-B reconstruction |
-| Prover plan | Protocol-dependent implementation candidate for the K2 prover strategy boundary, with relation witness ingress distinct from advice, randomness, state, search, and realization-only facts | Separate `ProverPlanId` preserved; detailed schema, realization judgment, and projection-purpose view are open for K3-B reconstruction |
+| Protocol interface | Protocol-dependent mapping from exact K2 invocation inputs, scoped Statement bindings, and role-qualified transport and completion effects to one external ABI | Active bounded K3-B target with a separate `ProtocolInterfaceId`; it changes no Protocol meaning |
+| Prover plan | Protocol-dependent finite recipe system for the K2 prover-decision boundary, with witness ingress distinct from advice, confidential context, randomness, and persistent state | Active bounded K3-B target with a separate `ProverPlanId`, independent `PlanRealizes`, and narrow source-ID-free `PlanWitnessSurface`; OIR-specific views remain K3-D work |
 | Consumer view | Ephemeral facts mechanically derived for one consumer from admitted authority | Stage 1 provisional role; normally no independent identity |
 | Durable derived artifact or judgment | Independently meaningful OIR, relation result, derivation, or judgment produced by its owner | Current family of roles; not a mere Protocol view |
 | Analysis question and proposition | Exact family experiment separated from one truth-apt conclusion and residual hypotheses | Selected Stage 4A family-indexed identity boundary |
@@ -447,7 +462,7 @@ not proposed wire identifiers.
 | Candidate and comparison domains | Exact admitted relation-qualified semantic candidates plus a separate policy-qualified comparison carrier | Selected Stage 4A target with independent closure |
 | Qualified Compiler decision | Bounded best, complete Pareto, or no-eligible result over exact closed domains and complete ledgers | Selected Stage 4A target; persistence is purpose-bound replay material, never authority |
 | Qualified Compiler open report | Strictly weaker checked statement over an exact qualified subset and audit-record-relative accounting scope; never a closed-domain decision | Selected Stage 4A non-decision branch with separate capability, policy, and replay contract |
-| OIR endpoint artifact | Canonical verifier or prover endpoint semantics projected from exact Protocol, Interface, role, and tagged Plan basis | Selected Stage 2 input boundary; exact semantics remain Stage 4 work |
+| OIR endpoint artifact | Canonical verifier or prover endpoint semantics projected from exact Protocol, Interface, role, and any exact purpose-specific source view selected by OIR | Selected Stage 2 input boundary; the exact read basis and identity effect remain K3-D work, and full Stage 4B semantics remain inactive |
 | Supplier binding | Exact immutable provider designation for OIR requirements, distinct from live provider authority | Selected Stage 2 boundary; exact schema remains Stage 4 work |
 | Realization candidate and admitted realization | Produced target artifact followed by a separate target-specific `RealizesOir` result or explicit trusted boundary | Selected Stage 2 categories; exact target contracts remain Stage 4 work |
 | Deployment binding and live capability | Immutable deployment configuration followed by effectful activation and scoped live authority | Selected Stage 2 categories; exact resource and revocation schemas remain Stage 4 work |
@@ -488,12 +503,12 @@ Different transitions retain different mathematics and domain owners.
 | Admit Protocol | `pir` | Check the complete normative predicate and mint a local immutable capability | Admission establishes no cryptographic property or endpoint support |
 | Persist, decode, re-admit, reopen | `pir` with encoding mechanisms | Representation boundaries discard authority; receivers authenticate and re-admit | Bytes, provenance, and no-op edits do not preserve capability continuity |
 | Interface and ProverPlan lifecycle | `pir` | Authenticate and admit dependent identities separately from Protocol | Dependent identity alone proves no correspondence or completeness |
-| Relation ingress and correspondence | `relations` | Separate admitted relation interface, artifact observation, and correspondence judgment | Parsing, reader authority, correspondence, and witness satisfaction are different claims |
+| Relation ingress and correspondence | `relations` | Separate admitted relation subjects, split Protocol/Plan bindings, artifact and grounding checks, correspondence, and satisfaction | Parsing, reader authority, correspondence, and witness satisfaction are different claims |
 | Property analysis | `analysis` | Check a qualified judgment over an exact subject tuple and explicit plan | Search failure is not a negative judgment |
 | Checked Protocol change | relation-specific bridge owner | Propose, authenticate, and admit the target before checking the predecessor/successor relation | Target admission and relation checking do not imply one another |
 | Compiler selection | `compiler` | Select among already admitted, relation-checked candidates over the exact domain | Winner validity proves no optimality over omitted candidates |
 | FS construction, `FSCompile`, property transport | `pir`, then `analysis` | Keep target construction, theorem-backed relation, and property-specific transport distinct | Adjacency or one checked relation transports no property automatically |
-| OIR projection and local admission | `oir` | Project from exact Protocol, Interface, role, and tagged Plan basis; check `LocalOirValid` separately | Source-free local validity proves neither origin nor source coverage |
+| OIR projection and local admission | `oir` | Project from exact Protocol, Interface, role, and any purpose-specific source view selected by K3-D; check `LocalOirValid` separately | Source-free local validity proves neither origin nor source coverage |
 | Supplier binding and realization | `realization` | Separate exact designation, live authority, effectful production, and target-specific correspondence | Binding or build success proves no semantic realization |
 | Deployment and invocation | `realization` | Separate configuration, activation, invocation binding, execution, and partial effects | Operational success cannot redefine Protocol or OIR meaning |
 | Observation, evidence, appraisal, reliance | producing domain, then `evidence`, then consuming domain | Preserve producer-owned observation meaning and completeness, form an attributable scoped record, appraise under policy, then decide one use | Provenance is not truth; appraisal is not permission |
@@ -632,12 +647,12 @@ remain provisional:
    policy-derived `ComparisonAlternativeDomain`; every closed decision binds
    both and complete resolution/assessment ledgers.
 
-### 7.5 Research remaining after Stage 4A, updated by K3-A
+### 7.5 Research remaining after Stage 4A, updated by K3-B
 
-1. **Pre-freeze consumer closure.** Reconcile Interface/Plan, Relations,
+1. **Pre-freeze consumer closure.** K3-B reconciled Interface/Plan, Relations,
    value bridges, execution grounding, and the canonical carrier against the
-   K2 source; then close the minimum Analysis strategy/experiment, theorem-
-   applicability, and quantitative-loss seams.
+   K2 source. K3-C must now close the minimum Analysis strategy/experiment,
+   theorem-applicability, and quantitative-loss seams.
 
 2. **OIR behavior and correspondence.** First close the minimum source read
    and projection-obligation seam. After a separate Stage 4B activation,
@@ -672,12 +687,13 @@ baseline reconstruction that exposed the original ownership gap.
 
 ### 8.2 Relation ingress and relation correspondence are different roles
 
-The selected target now distinguishes relation definition, interface,
-instance, private witness, binding, optional artifact interpretation,
-grounding, and post-admission Protocol correspondence. The current normative
-`RelationContract` is post-seal and evidence-only relative to PIR. Both current
-and target roles remain visible, but one contract cannot stand in for all of
-them.
+The selected target now distinguishes relation definition, four-role
+Interface, public instance, owner-local private assignments, split Protocol and
+Plan bindings, optional artifact interpretation, typed equations, commitment
+grounding, satisfaction, and post-admission correspondence. The current
+normative `RelationContract` is post-seal and evidence-only relative to PIR.
+Both current and target roles remain visible, but one contract cannot stand in
+for all of them.
 
 ### 8.3 The reserved realization seam lags the selected target
 
@@ -801,7 +817,8 @@ with candidate target contracts promoted at package resolution under
 satisfaction/correspondence boundary, and the four PIR semantic pages refined
 for owner-created source bindings and qualified outcomes. Those historical
 package results do not establish current integrated closure; the design program
-owns that gate. Stage 4B remains unactivated.
+owns that gate. K3-B subsequently reconciled the dependent Interface/Plan,
+carrier, and Relations targets to K1/K2 without activating Stage 4B.
 
 ## 12. Deliberate non-decisions
 

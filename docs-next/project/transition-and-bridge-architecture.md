@@ -13,16 +13,20 @@
 > The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns the live integrated-closure gate.
 
-> **K2/K3-A reconciliation notice — 2026-08-26:** The shared transition,
+> **K2/K3-B reconciliation notice — 2026-08-27:** The shared transition,
 > authority, recomputation, and outcome separations below remain design inputs.
 > Protocol, Interface, Plan, and projection examples that use pre-K2 ports,
 > abstract prover obligations, or authored event coordinates are historical
-> until their dependent owners are reconciled to the active
+> where they conflict with the active
 > [Interactive Core](../pir/interactive-core.md) and
-> [Fiat--Shamir construction](../pir/fiat-shamir.md). In particular, the rule
-> that plan-specialized OIR commits to the whole `ProverPlanId` is reopened;
-> K3-B owns the structural Plan view and K3-D owns the exact read partition and
-> identity effect.
+> [Fiat--Shamir construction](../pir/fiat-shamir.md). K3-B reconciled the
+> dependent [Interface and Plan](../pir/interfaces-and-plans.md),
+> [Relations](../relations/relation-model.md), and
+> [canonical carrier](../pir/canonical-pir.md) targets. It rejected the rule
+> that plan-specialized OIR commits to the whole `ProverPlanId`; K3-D still owns
+> any OIR-specific view, its exact read partition, and its identity effect.
+> Those exact owners supersede conflicting Interface-sensitive relation and
+> whole-Plan examples below.
 
 ## 1. Decision
 

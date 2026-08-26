@@ -1,9 +1,10 @@
 # Interactive Core and Causal Execution
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K2 target
-> **Target status:** Bounded K2 candidate complete; K3 consumer integration
-> remains open
+> **Document state:** Active non-normative K2 target with K3-B consumer view
+> **Target status:** K2 identity-bearing Core and execution body complete;
+> K3-B execution-issued relation grounding view selected; K3-C/K3-D consumer
+> integration remains open
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Protocol
 > semantics remain under [`docs/`](../../docs/README.md).
@@ -19,7 +20,8 @@ This page is the sole K2 definition owner for:
 - typed claims, reductions, checks, and terminal closure;
 - legal actor-visible histories and prover decisions;
 - causal strategy-generated execution and non-authoritative replay; and
-- structural public-coin eligibility.
+- structural public-coin eligibility; and
+- the execution-issued, occurrence-scoped view used by Relations grounding.
 
 The companion [Fiat--Shamir Construction](fiat-shamir.md) owns transcript
 state, derived required influence, challenge sampling, and the checked Fresh/FS
@@ -252,9 +254,12 @@ mathematical operation is partial must use a total tagged result value and make
 the branch explicit; an unhandled algorithm failure cannot be hidden as value
 absence.
 
-`ValueRef` availability is derived from initial inputs/constants, earlier
-occurrence outputs, and the topological `derived_values` order. A derived value
-may read only available operands. There is no generic ambient value, host
+`ValueRef` availability to the execution engine is derived from initial
+inputs/constants, earlier occurrence outputs, and the topological
+`derived_values` order. A derived value may read only available operands. This
+engine availability does not grant a strategy access to an invocation input;
+Section 9.2 separately derives the scope-gated `ProverView`, and a
+Verifier-private input never enters it. There is no generic ambient value, host
 object, callback, or late registry lookup.
 
 ### 4.3 Public binding classes
@@ -275,11 +280,11 @@ PublicBindingDecl = {
 - `PublicParameter` is a runtime public value affecting verifier behavior;
   a static parameter belongs directly in the Core or construction body.
 
-Every public input has at least one binding. No Verifier-private value may be a
-public binding. The same value may have distinct binding occurrences in
-different scopes; each occurrence has its own `BindingRef` and transcript
-coordinate. Duplicate `(scope, class, value)` triples refuse because they add
-no distinguishable meaning.
+Every public input is named directly by at least one binding. No
+Verifier-private value may be a public binding. The same value may have
+distinct binding occurrences in different scopes; each occurrence has its own
+`BindingRef` and transcript coordinate. Duplicate `(scope, class, value)`
+triples refuse because they add no distinguishable meaning.
 
 ### 4.4 Explicit scopes
 
@@ -814,7 +819,8 @@ Observation =
   | OracleAnswerObserved(OccurrenceRef, CanonicalValue)
   | PublicTerminalObserved(OccurrenceRef, TerminalRef,
                            TerminalVerdict, public_outputs)
-  | ModuleObservation(ModuleEffectRef, module_defined_payload)
+  | ModuleObservation(OccurrenceRef, ModuleEffectRef,
+                      module_defined_payload)
 ```
 
 `VisibleHistory(party, boundary)` is the exact subsequence of occurred
@@ -842,6 +848,13 @@ ProverDecisionPoint = {
   kind: ProverDecisionKind
 }
 
+ProverDecisionPointRef =
+  OccurrenceRef restricted to an occurrence whose effect is
+    ProverMessage
+  | PublishOracle
+  | supported ModuleEffect with decision class
+      ProverDecision or ProverPublication
+
 ProverMove =
     MessageValue(CanonicalValue<declared payload type>)
   | OracleValue {
@@ -861,15 +874,73 @@ ProverView = {
 }
 ```
 
+`ProverDecisionPointRef` is therefore a Core-local dense occurrence ordinal,
+not a second authored sequence or an ordinal into a derived host table. The
+`occurrence` field of the point denoted by `d` is exactly `d`. Its `scope_path`
+and `kind` are owner-derived from that occurrence and, for a module effect, its
+exact admitted declaration.
+
 `PublicProtocolDescriptionView` is the immutable tuple of exact `ProtocolId`,
 admitted Core declaration/view, and, for an FS Protocol, the exact admitted
 transcript-construction declaration. It exposes static public declarations and
 schedule shape, never invocation values or mutable execution state. Knowing
-the protocol is not anticipation. The view
-includes only runtime public inputs whose scopes are open and only observations
+the protocol is not anticipation. Define `ProverInputOpening(i)` as the least
+scope-opening boundary, in Section 4.4's exact deterministic boundary order,
+among the direct public bindings whose value is `PublicInput(i)`.
+`public_invocation` contains every and only declared public input whose
+`ProverInputOpening` has occurred, in `PublicInputRef` order. A root-bound input
+is therefore present from initialization; an input bound only in a child scope
+first appears when that scope opens and remains visible thereafter. The binding
+occurrence is still distinct: its own scope determines when it becomes an
+observation and influences a transcript. The view contains only observations
 that have occurred. It contains no future runtime value or receipt, future
-coin, verifier-private value, unqueried oracle answer, mutable transcript
-state, ambient registry, clock, file, or process object.
+coin, verifier-private value, unqueried oracle answer, mutable transcript state,
+ambient registry, clock, file, or process object.
+
+For dependent Plans, K2 exports one structural read predicate rather than a
+caller-asserted snapshot predicate:
+
+```text
+K2ProverReadCoordinate =
+    StaticConstant(ConstantRef)
+  | PublicInvocationInput(PublicInputRef)
+  | OpenedBinding(BindingRef)
+  | ObservedMessage(OccurrenceRef)
+  | ObservedChallenge(OccurrenceRef)
+  | ObservedOraclePublication(OccurrenceRef)
+  | ObservedOracleQuery(OccurrenceRef)
+  | ObservedOracleAnswer(OccurrenceRef)
+  | ObservedModuleValue(OccurrenceRef, observation_ordinal)
+  | PriorOwnMove(ProverDecisionPointRef)
+
+GuaranteedProverRead(d: ProverDecisionPointRef,
+                     r: K2ProverReadCoordinate) = true
+  exactly under the owner rules below
+```
+
+Constants are guaranteed at every decision. `PublicInvocationInput(i)` is
+guaranteed exactly when `ProverInputOpening(i)` is no later than
+`BeforeOccurrence(d)`; a child-only input cannot be read by an earlier parent
+decision. `OpenedBinding(b)` is guaranteed exactly when the deterministic
+opening boundary of `b` is no later than `BeforeOccurrence(d)`. An observation
+or prior move is guaranteed exactly when its exact source occurrence precedes
+`d`, its source kind and output coordinate match the requested constructor,
+its K2 visibility includes Prover, the source scope and every ancestor on its
+declared scope path deterministically open before `d`, and
+`GuardImplies(guard(d), guard(source))`. For a module observation, the supported
+declaration must export that exact ordinal as Prover-visible. For a Public
+Oracle query or answer visibility includes Prover; a Verifier-only coordinate
+never passes. `PriorOwnMove` additionally requires the named source to be an
+exact earlier prover decision.
+
+These checks use Core order, deterministic scope ancestry/opening, owner-derived
+visibility, and the closed Section 10 `GuardImplies` rule only. Since a run that
+reaches `d` has not taken an earlier terminal, they establish that `r` is in
+every legal `ProverView` in which `d` is active. A mathematically stronger guard
+implication, one sample run, or a caller-provided history cannot widen this
+predicate. A dependent `PlanRealizes` judgment must use
+`GuaranteedProverRead`; membership in one supplied runtime view is
+insufficient.
 
 ```text
 StrategyStep(private_state, ProverView, private_randomness)
@@ -1247,7 +1318,7 @@ separately.
 `PartialRunRecord` is diagnostic execution data for `StrategyStopped`, not a
 completed Protocol record. K2 defines no affirmative prefix-replay result for
 it; a later audit consumer needing one must define a distinct nonsemantic audit
-relation and cannot call it `ReplayMatches`.
+relation and cannot call it `CheckedReplayMatch`.
 
 K2 Fresh resolution has no completed semantic-failure row: unavailable or
 failed fresh-coin supply is operational noncompletion. The sole
@@ -1269,7 +1340,7 @@ ReplayRun(
   ExactOracleReplayCapabilities,
   ExactCheckAndExtensionCapabilities,
   ExecutionEvaluationControl)
-  -> ReplayMatches
+  -> ReplayMatched(CheckedReplayMatch)
    | Refused(PIR.InteractiveCore, ReplayRecordMismatch)
    | qualified operational noncompletion
 ```
@@ -1296,26 +1367,39 @@ semantic engine used the restricted generation relation for that one call;
 successful replay never creates or strengthens it. Implementation isolation
 and host side channels remain Evidence questions.
 
-`ReplayMatches` is produced only when every K1 request completes under the
+`CheckedReplayMatch` is a fresh opaque process-local capability minted only by
+that successful `ReplayRun` call. It is bound to the live admitted-Protocol
+handle, exact invocation handle, completed-record object, evaluator instance,
+the exact Oracle and check/extension capability snapshots consumed by replay,
+and that replay call's evaluation-control snapshot. It has no canonical body,
+ID, receipt field, Boolean surrogate, copy constructor, or serialized form.
+Supplying the same values, an equal record, or a prior replay report does not
+recreate it. A consumer must receive the live matching capability directly;
+one whose process scope has ended or whose operands differ is not a replay
+match for that consumer.
+
+`CheckedReplayMatch` is minted only when every K1 request completes under the
 replay call's supplied evaluation control. Reusing the same evaluator and
 limits from a completed generation, or limits componentwise sufficient for the
 same deterministic requests, prevents a smaller replay budget from erasing a
 shared completed transition. Insufficient replay limits yield
-`DeterministicLimitExceeded`, not `ReplayMatches`, the record-mismatch refusal,
+`DeterministicLimitExceeded`, not `ReplayMatched`, the record-mismatch refusal,
 or a semantic Protocol outcome. A record by itself carries no evaluator-budget
-authority.
+or replay-match authority. Successful replay still does not mint or strengthen
+`CausalGenerationCapability`.
 
 ## 13. PIR-owned source views
 
-An admitted Core exports immutable question-scoped views, each derived from the
-exact body and carrying `CoreId`:
+An admitted Core exports the following immutable static question-scoped views,
+each derived from the exact body and carrying `CoreId`:
 
 ```text
 PublicBindingView =
   (scopes, openings, every BindingRef/class/type/value origin)
 
 StrategyDecisionView =
-  (decision points, exact ProverView formation, legal move types)
+  (decision points, exact ProverView formation, GuaranteedProverRead table,
+   legal move types)
 
 PublicCoinView =
   (eligibility result, challenge laws, conditions, joint groups,
@@ -1330,13 +1414,321 @@ ClaimReductionView =
 
 ExecutionView =
   (visible-history law, resolver coordinates, process-local causal-capability
-   issuance, RunRecord and replay law)
+   and checked-replay issuance, RunRecord and replay law, owner-local public
+   relation-run-view issuance)
 ```
 
 PIR owns their source facts and adequacy for the named question. Relations,
 Analysis, and OIR own any additional proposition computed from them. A view is
 not a second Protocol schema and does not add facts absent from the admitted
-body.
+body. Section 13.1 separately defines a process-local view issued from one exact
+Protocol execution; it is not one of these static Core views.
+
+### 13.1 Execution-issued relation grounding view
+
+Relations sometimes needs the value that one exact verifier run consumed at a
+scoped Statement, phase-input, Oracle, claim, reduction, check, terminal, or
+public module-effect occurrence. `RunRecord` alone cannot supply that fact: it
+does not retain every invocation value, and successful replay does not mint
+causal provenance. PIR therefore owns one attenuated execution view rather
+than requiring Relations to reconstruct a shadow Core state.
+
+```text
+RunBoundary =
+    Initial
+  | BeforeOccurrence(OccurrenceRef)
+  | AfterOccurrence(OccurrenceRef)
+  | Completion
+
+RelationRunCoordinate =
+    BindingValue(BindingRef)
+  | OccurrenceOutput(OccurrenceRef, output_ordinal)
+  | ChallengeValue(ChallengeRef)
+  | OraclePublication(OracleRef, OccurrenceRef)
+  | PublicOracleQuery(OracleRef, OccurrenceRef)
+  | PublicOracleAnswer(OracleRef, OccurrenceRef)
+  | ClaimHistory(ClaimRef, RunBoundary)
+  | ReductionHistory(ReductionRef, RunBoundary)
+  | CheckResult(CheckRef, OccurrenceRef)
+  | TerminalResult(TerminalRef, OccurrenceRef)
+  | PublicModuleObservation(OccurrenceRef, output_ordinal)
+
+RelationRunReadManifest =
+  FiniteOrderedUniqueSeq<RelationRunCoordinate>
+
+RelationRunQualification =
+    ReplayQualified
+  | CausallyGenerated
+
+RelationClaimCreation =
+    NotCreated
+  | InitialBindingCreated(BindingRef, RunBoundary)
+  | ReductionOutputCreated(ReductionRef, OccurrenceRef, output_ordinal)
+
+RelationClaimReductionUse = {
+  reduction: ReductionRef,
+  occurrence: OccurrenceRef
+}
+
+RelationTerminalDisposition = {
+  terminal: TerminalRef,
+  occurrence: OccurrenceRef,
+  disposition: Consume | Discharge
+}
+
+RelationClaimHistory = {
+  creation: RelationClaimCreation,
+  reduction_uses:
+    FiniteSeq<RelationClaimReductionUse in occurrence order>,
+  terminal_disposition: None | Some(RelationTerminalDisposition)
+}
+
+RelationReductionHistory =
+    PendingAtBoundary
+  | OccurrenceNotReached
+  | InactiveAt(OccurrenceRef)
+  | AppliedAt {
+      occurrence: OccurrenceRef,
+      input_claims: CanonicalSeq<ClaimRef>,
+      output_claims: CanonicalSeq<ClaimRef>
+    }
+
+RelationRunFact(c: RelationRunCoordinate) =
+  the exact owner-derived typed payload selected by c:
+    BindingValue             -> CanonicalValue<binding value type>
+    OccurrenceOutput         -> CanonicalValue<exact output type>
+    ChallengeValue           -> CanonicalValue<challenge value type>
+    OraclePublication        -> CanonicalValue<publication output type>
+    PublicOracleQuery        -> CanonicalValue<oracle index type>
+    PublicOracleAnswer       -> CanonicalValue<oracle lookup-result type>
+    ClaimHistory             -> RelationClaimHistory
+    ReductionHistory         -> RelationReductionHistory
+    CheckResult              -> MetaBooleanFalse | MetaBooleanTrue
+    TerminalResult           ->
+      (TerminalVerdict, CanonicalSeq<typed public outputs>)
+    PublicModuleObservation  ->
+      CanonicalValue<exact declaration-owned public output type>
+
+RelationRunObservation<c> =
+    Available(RelationRunFact(c))
+  | Inactive
+  | NotReached
+
+RelationRunSelectedEntry<c> = {
+  coordinate: c,
+  scope_path: NonEmptySeq<ScopeRef>,
+  observation: RelationRunObservation<c>
+}
+
+RelationRunView = {
+  protocol_id: ProtocolId,
+  qualification: RelationRunQualification,
+  manifest: RelationRunReadManifest,
+  entries: FiniteSeq<RelationRunSelectedEntry>
+}
+
+ScopeOpeningRunBoundary(Initially) = Initial
+ScopeOpeningRunBoundary(BeforeOccurrence(o)) = BeforeOccurrence(o)
+
+ChallengeOccurrence(core,c) =
+  the unique admitted OccurrenceRef in core whose effect is Challenge(c)
+
+RequiredBoundary(core,BindingValue(b)) =
+  ScopeOpeningRunBoundary(
+    core.scopes[core.bindings[b].scope].opening)
+RequiredBoundary(core,OccurrenceOutput(o,_)) = AfterOccurrence(o)
+RequiredBoundary(core,ChallengeValue(c)) =
+  AfterOccurrence(ChallengeOccurrence(core,c))
+RequiredBoundary(core,OraclePublication(_,o)) = AfterOccurrence(o)
+RequiredBoundary(core,PublicOracleQuery(_,o)) = AfterOccurrence(o)
+RequiredBoundary(core,PublicOracleAnswer(_,o)) = AfterOccurrence(o)
+RequiredBoundary(core,ClaimHistory(_,boundary)) = boundary
+RequiredBoundary(core,ReductionHistory(_,boundary)) = boundary
+RequiredBoundary(core,CheckResult(_,o)) = AfterOccurrence(o)
+RequiredBoundary(core,TerminalResult(_,o)) = AfterOccurrence(o)
+RequiredBoundary(core,PublicModuleObservation(o,_)) = AfterOccurrence(o)
+```
+
+Within this owner-local grammar, `FiniteSeq` is a bounded process-local ordered
+container, `NonEmptySeq` is its nonempty form, and
+`FiniteOrderedUniqueSeq<T>` preserves the caller-supplied order while requiring
+pairwise-distinct `T` values under exact typed structural equality. None of
+these names imports K1 canonical ordering or encoding.
+
+`RunBoundary` is the exact generated-run boundary order. `Initial` precedes the
+first occurrence; each reached occurrence has a before boundary and, only when
+its effect completes, an after boundary; `Completion` is the terminal or typed
+interpretation-failure boundary. The boundary of a binding coordinate is the
+deterministic opening boundary of its scope. The boundary of an occurrence
+value is its `AfterOccurrence`; a history coordinate carries its requested
+boundary explicitly. `RequiredBoundary` is total exactly over a statically
+well-formed `RelationRunCoordinate`: every named reference, output ordinal,
+effect kind, and owner must resolve in the admitted Core, and a binding's
+resolved `ScopeOpening` must be one of the two closed alternatives above.
+An absent, mismatched, or inapplicable owner-derived boundary makes the
+coordinate malformed before disclosure is considered.
+
+For a reached history boundary, `ClaimHistory` is always `Available`, even when
+its creation is `NotCreated`. Its creation coordinate is the exact initial
+binding opening or exact reduction-output occurrence from `ClaimSource`.
+`reduction_uses` contains every active reduction through that boundary that
+names the claim, including every use of a reusable claim. The optional terminal
+entry retains the exact terminal and `Consume` versus `Discharge` disposition.
+For a linear claim, admission permits at most one reduction use and no later
+terminal disposition after that consuming use. For a reusable claim, reduction
+uses do not close it; an exact terminal disposition does. Thus the history
+determines liveness without collapsing reusable uses or the two terminal
+dispositions. `ReductionHistory` likewise distinguishes a boundary before its
+occurrence, completion before the occurrence, an inactive occurrence, and one
+exact applied transition with its input and created output claims.
+
+`Inactive` is legal only when the coordinate selects an occurrence-produced
+fact, execution reached its before boundary, the scan deterministically
+advanced past that occurrence without applying its effect, and that exact
+occurrence guard was false. `NotReached` means the coordinate's required
+boundary was not reached because an earlier terminal or interpretation failure
+completed the record. Neither means that the owner failed to supply a requested
+source.
+Wrong-kind or out-of-range coordinates are malformed; absent required source
+material, unsupported module semantics, and checker disagreement retain their
+ordinary distinct qualified outcomes and produce no partial view.
+
+The public whitelist is closed and dependency-sensitive. For this owner-local
+view, define:
+
+```text
+PublicPCBasis(protocol,nodes) :=
+  every node in nodes and in their transitive predecessor closure in
+  PCGraph(protocol.core) has class StaticPublic or PublicHistory
+```
+
+`RunReachabilityBasis(protocol,record,boundary)` is the exact owner-derived set
+of Section 11 nodes in `PCGraph(protocol.core)` whose realized outcomes in
+`record` determine that execution reached `boundary`: the required
+scope-opening path, every earlier terminal activity that had to be false, and,
+at a completion boundary, the reached stopping terminal or FS
+interpretation-failure control. For a stopping terminal the set includes its
+occurrence activity/effect and `TerminalDecisionNode`; for an FS interpretation
+failure it includes the Challenge activity/effect/output and the complete
+public prefix/condition basis consumed by the admitted resolver. Formation
+requires `record.protocol_id = protocol.id`; neither the ID nor ambient lookup
+supplies the Core. This is a disclosure-only derived set; it adds no
+schedule-prefix edge to `PCGraph`.
+
+`RunFactBasis(protocol,record,c,fact)` is the exact realized-node set in
+`PCGraph(protocol.core)`, under the same record/Protocol equality, selected by
+coordinate:
+
+1. `BindingValue(b)` selects `BindingObservationNode(b)`;
+2. `OccurrenceOutput(o,n)` and `ChallengeValue` select the exact
+   `OccurrenceActivityNode(o)`, `OccurrenceEffectNode(o)`, and
+   `OccurrenceOutputNode(o,n)`;
+3. an Oracle publication or answer selects those same applicable occurrence
+   nodes, while a public Query additionally selects the exact producer of its
+   index;
+4. `ClaimHistory` selects `ClaimStateNode` plus every realized source,
+   reduction-state, and terminal-disposition node represented through its
+   boundary;
+5. `ReductionHistory` selects `ReductionStateNode` plus the exact apply
+   occurrence and claim-state nodes represented by its selected alternative;
+6. `CheckResult` selects its invocation activity/effect/output nodes;
+7. `TerminalResult` selects its activity/effect,
+   `TerminalDecisionNode`, and every exact producer of its public outputs; and
+8. `PublicModuleObservation` selects its occurrence activity/effect, exact
+   declaration-owned module control/output nodes, and outward occurrence
+   output.
+
+The static coordinate shape must still be one of the previously named public
+arms: a public binding; a both-party occurrence output; the unique Challenge
+occurrence; an Oracle publication or exactly `Public` Query/Answer with matching
+Oracle occurrence; a claim, reduction, or Check coordinate; a public terminal;
+or an exact supported public module-output ordinal. Shape alone is never enough.
+
+`PublicRelationRunObservation(protocol,record,c,observation)` holds exactly
+under the following status law:
+
+- `Available(fact)` requires both
+  `PublicPCBasis(protocol,RunReachabilityBasis(protocol,record,RequiredBoundary(protocol.core,c)))`
+  and
+  `PublicPCBasis(protocol,RunFactBasis(protocol,record,c,fact))`;
+- `Inactive` requires an occurrence-produced coordinate, public reachability to
+  its before boundary, and a public basis for its complete scope path and
+  `OccurrenceActivityNode`; the latter's predecessor closure includes every
+  producer of the false guard, so a private false guard cannot be disclosed;
+  and
+- `NotReached` requires
+  `PublicPCBasis(protocol,RunReachabilityBasis(protocol,record,Completion))`, where that exact
+  reached completion precedes and prevents
+  `RequiredBoundary(protocol.core,c)`. A stopping
+  terminal or FS interpretation failure whose activity, decision, output,
+  prefix, condition, or failure control depends on `VerifierPrivate` or
+  `Invalid` state cannot be exposed even as absence.
+
+The `InactiveAt` and `OccurrenceNotReached` alternatives nested inside a
+reduction history, and a claim creation or use omitted because its source was
+inactive or not reached, must pass the corresponding status law as part of
+`RunFactBasis`; wrapping them in `Available` does not bypass it. Consequently,
+both-party visibility of a Verifier output and a terminal's declared public
+surface are insufficient by themselves: their effect/decision and output
+producer closures must also be public. A Verifier-private input, Verifier-only
+Oracle coordinate, verifier-only module output, opaque Oracle body, private
+strategy value, internal transcript state, or any
+`VerifierPrivate`/`Invalid` dependency cannot pass. These predicates belong to
+PIR and have no caller-, Relations-, or policy-extensible arm.
+
+`IssueRelationRunView` is a PIR owner operation. It receives one exact admitted
+Protocol, the exact `CoreInvocation`, the identical completed-record object, an
+ordered manifest, and either:
+
+- the still-live matching `CausalGenerationCapability`, selecting
+  `CausallyGenerated` for its exact terminal-completion record; or
+- the fresh matching `CheckedReplayMatch` produced by `ReplayRun` over those
+  exact operands, selecting `ReplayQualified`.
+
+```text
+IssueRelationRunView(...)
+  -> Qualified<IssuedRelationRunView(
+       RelationRunView,
+       CheckedRelationRunViewAuthority)>
+```
+
+The operation first validates every coordinate's static shape, derives its
+exact boundary, scope path, status, fact, reachability basis, and fact basis
+from owner state, and then requires `PublicRelationRunObservation` for every
+entry. It first requires the completed record's `protocol_id` to equal the
+supplied `protocol.id` and its `invocation_id` to equal the supplied exact
+invocation's ID; neither record ID is dereferenced as ambient authority.
+Duplicate coordinates refuse. `entries` has exactly the manifest length and
+order, and entry `i` names exactly manifest coordinate `i`; a permutation,
+extra entry, omitted entry, equal value at another occurrence, or caller-created
+fact cannot pass. The operation is atomic and returns no partial view.
+
+It also returns fresh opaque `CheckedRelationRunViewAuthority` bound to the live
+admitted-Protocol handle, exact invocation handle, completed-record object,
+the supplied causal or replay-match capability, manifest object, and returned
+view object. Those source operands remain in this authority; neither
+`CoreInvocationId` nor the complete record is copied into the attenuated view.
+The authority is nonserializable and expires with its process-local source
+scope.
+
+`RelationRunView`, its manifest, coordinates, histories, and selected entries
+are owner-local typed structural objects. They have no K1 canonical body,
+semantic ID, canonical-sort requirement, serialized authority, or Appendix A
+encoding, and they enter neither `CoreId` nor `ProtocolId`. A copied tuple or
+structurally equal value is not a view or authority. When the exact invocation
+and every replay material are lawfully portable, cold replay may rerun
+`ReplayRun` and this issuance operation to obtain a new typed view and fresh
+authority; equality with a prior object grants nothing and never recreates
+causal provenance. A durable consumer result must retain its portable source
+coordinates and rerun the owner operation; it cannot embed this live view as
+identity authority.
+
+The view does not decode an external Interface container, inspect Plan-private
+material, establish actor knowledge, or assert a relation proposition. A view
+qualified `CausallyGenerated` may answer a question that explicitly requires
+causality; `ReplayQualified` may not be widened to that role. Neither
+qualification proves relation satisfaction, soundness, completeness,
+knowledge, cryptographic security, or implementation isolation.
 
 ## 14. Composition and finite recurrence boundary
 
@@ -1378,6 +1770,15 @@ production support. It does not claim that differently identified Cores are
 observationally different, that a binding digest is collision resistant, or
 that access receipts exclude host side channels.
 
+The owner-local relation-run view exposes only the closed public coordinates in
+Section 13.1. It supplies no verifier-private grounding channel. A later need to
+ground a relation in confidential run state requires a separately designed
+PIR-owned disclosure contract and purpose-specific view; a Relations manifest
+cannot enable it. The derived decision references, structural read table,
+replay-match capability, and relation-run view add no field to
+`InteractiveCoreBody`, `ProtocolBody`, `CoreInvocationBody`, or any record body,
+and therefore do not rotate `CoreId`, `ProtocolId`, or `CoreInvocationId`.
+
 Reopen this Core if a K4 protocol requires one of the following without a
 faithful finite supported extension:
 
@@ -1387,6 +1788,8 @@ faithful finite supported extension:
 - a necessary conditional-use implication outside the closed K2 syntactic
   `GuardImplies` law;
 - an oracle whose publication/query/answer lifecycle cannot inhabit Section 7;
+- a relation whose necessary run grounding is verifier-private and cannot use a
+  separately authorized purpose-specific disclosure view;
 - symbolic recurrence whose finite lowering is infeasible or semantically
   lossy; or
 - an acceptance-relevant effect that cannot state exact transition,

@@ -11,14 +11,14 @@
 > [Boundaries](../../docs/spec/boundaries.md), and
 > [Carrier](../../docs/spec/carrier.md) specifications.
 
-> **K3-A alignment notice — 2026-08-26:** The projection/local-validity split
-> below remains selected, but the rule that a plan-specialized OIR commits to
-> the whole `ProverPlanId` is reopened. It conflicts with the requirement that
-> independently variable realization-only Plan facts neither enter OIR reads
-> nor rotate OIR identity. K3-B owns the structural projection-view
-> factorization; K3-D owns the exact Plan read partition, corresponding OIR
-> identity effect, and checked-projection binding. No resolution is selected
-> by this notice.
+> **K3-B alignment notice — 2026-08-27:** The projection/local-validity split
+> remains selected, but K3-B rejected whole-`ProverPlanId` coupling and did not
+> select a generic purpose-view constructor. Its source-ID-free
+> `PlanWitnessSurface` serves only the Relations witness-attachment seam and is
+> not an OIR input by default. K3-D must define any OIR-specific Interface or
+> Plan view, its closed purpose grammar, exact read manifest, adequacy law,
+> checked extraction, and identity effect. The `InterfaceAndPlan` schema below
+> is retained as a historical pre-K3 candidate, not a current target contract.
 
 ## Purpose
 
@@ -38,8 +38,9 @@ and invocation begin.
 - `ProjectionCorrect(P, I, role, basis, O)`, including exact source-obligation
   coverage and protected-effect correspondence, together with the projection
   check's distinct qualified outcomes;
-- the tagged `ProjectionBasis` choice between `InterfaceOnly` and
-  `InterfaceAndPlan`;
+- the eventual explicit projection-basis contract and its complete source read
+  manifest, without ambient Plan access; K3-D has not yet selected its exact
+  variants;
 - OIR program, carrier, canonical identity, and identity-authenticated endpoint
   ABI;
 - standalone OIR authentication and admission under `LocalOirValid(O)`;
@@ -73,9 +74,9 @@ observation producer; its implementation does not become semantic authority.
 
 ## Projection boundary
 
-The candidate projection boundary has the following intended closed shape over
-explicit admitted subjects and a source-owned read contract, subject to the
-K3-A Plan-identity notice above:
+The following pre-K3 candidate records the boundary that motivated the K3-B
+reconciliation. It is historical where it selects `InterfaceAndPlan`; the
+alignment notice above governs until K3-D supplies the replacement:
 
 ```text
 ProjectionInput =
@@ -106,15 +107,14 @@ affirmative CheckedProjection only
      carrying ProjectionCorrect(P, I, role, basis, O)
 ```
 
-Verifier projection always uses `InterfaceOnly`. A generic prover-obligation
-skeleton may also use `InterfaceOnly`. Under the pre-K2 candidate rule, a
-plan-specialized prover OIR uses `InterfaceAndPlan`, and the whole
-`ProverPlanId` enters the projection dependency and OIR identity. That exact
-full-ID rule is reopened by the K3-A notice. Every projector still must publish
-its complete Plan-field read set and adequacy check. Plan information
-classified from exact Stage 4B reader semantics as `RealizationOnly`, or an
-`ExternalSupplyRequirement` explicitly routed below OIR, remains outside OIR
-and is supplied explicitly to realization. The same plan fact may not arrive
+Verifier projection does not consume a Plan. The historical candidate allowed
+a generic prover-obligation skeleton to use `InterfaceOnly` and a specialized
+prover OIR to use `InterfaceAndPlan`; neither spelling is a current K3-B
+selection. In particular, `PlanWitnessSurface` cannot substitute for an
+OIR-owned purpose-specific source contract. K3-D must make every permitted read
+explicit and prove the corresponding adequacy and identity effect. Information
+classified by that exact reader as realization-only remains outside OIR and is
+supplied explicitly to realization. The same Plan fact may not arrive
 ambiently at both boundaries.
 
 Carrier labels, compiler state, retained projector state, and process-global

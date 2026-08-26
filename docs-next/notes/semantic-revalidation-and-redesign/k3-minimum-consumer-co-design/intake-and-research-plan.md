@@ -1,7 +1,7 @@
 # K3-A Intake and Research Plan
 
 > **Document kind:** Temporary reconstruction and research record
-> **Document state:** K3-A complete; K3-B selection open
+> **Document state:** K3-A complete; bounded K3-B completed on 2026-08-27
 > **Provisional owner:** `project`, coordinating exact domain owners
 > **Authority:** None. Confirmed conflicts below constrain later work, but
 > candidate names and schemas do not become target semantics until selected
@@ -11,6 +11,12 @@
 > `pir/`, `relations/`, `analysis/`, `oir/`, and `project/`; route explicit
 > deferrals to their owning extension boundary; then delete this page under
 > the parent [deletion trigger](README.md#8-deletion-trigger).
+
+> **Completion reconciliation — 2026-08-27:** The future-tense K3-B questions
+> below are preserved as the frozen intake contract. Their bounded resolution
+> is recorded in [K3-B Research and Selection](k3-b-research-and-selection.md)
+> and [K3-B Validation](k3-b-validation.md). K3-C minimum Analysis closure is
+> the next active phase; K3 and the integrated semantic kernel are not closed.
 
 ## 1. Question and method
 
@@ -511,9 +517,7 @@ K3-A is complete because:
 5. K2 has an explicit, evidence-demanding reopen rule; and
 6. the next package has bounded decisions and an observable exit gate.
 
-This verdict does not close K3 or freeze the semantic kernel. K3-B is the next
-active phase. The most important remaining uncertainty is not whether K2's
-Core/FS factorization survives; it is whether the minimum dependent surfaces
-can express relation instances, witnesses, claim/reduction evolution,
-committed material, and exact carrier projection without reintroducing shadow
-authority.
+This historical K3-A verdict did not close K3 or freeze the semantic kernel.
+Bounded K3-B subsequently resolved the listed dependent-surface questions on
+2026-08-27 without reopening K2; its selection and validation records own that
+conclusion. K3-C minimum Analysis closure is next.

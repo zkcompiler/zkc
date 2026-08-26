@@ -1,7 +1,7 @@
 # K3 Minimum Consumer Co-design
 
 > **Document kind:** Temporary bounded work-package charter
-> **Document state:** Active; K3-A intake and boundary reconstruction complete
+> **Document state:** Active; K3-A and bounded K3-B complete
 > **Provisional owner:** `project`, coordinating `pir`, `relations`,
 > `analysis`, and the minimum `oir` seam
 > **Authority:** None. This package records reconstruction, research questions,
@@ -9,7 +9,8 @@
 > itself, does not activate Stage 4B, and cannot override a durable owner.
 > **Activated:** 2026-08-26
 > **K3-A completed:** 2026-08-26
-> **Current gate:** K3-B dependent-surface and Relations co-design is next.
+> **K3-B completed:** 2026-08-27
+> **Current gate:** K3-C minimum Analysis closure is next.
 > **Disposition:** Absorb selected results into exact durable owners, retain
 > only necessary rationale and deferred work, then delete this package before
 > cutover.
@@ -91,10 +92,22 @@ K3-A preserves these decisions unless a later discriminator falsifies them:
 | Phase | Scope | Exit condition |
 |---|---|---|
 | **K3-A** | Intake, dependency reconstruction, renewed research pressure, phase ordering, and reopen rules | Complete. Every consumer conflict identified by this intake is routed to an owner and, where a selection remains open, a discriminator; no downstream schema is silently ratified. |
-| **K3-B** | K2-dependent Interface/Plan surfaces, K1-aligned Relations and correspondence, value bridges, execution grounding, and a parallel minimum carrier lane | Exact Statement and witness roles are inhabited; claim/reduction and grounding questions are executable; equivalence, embedding, and lossy lanes are distinct; the Plan/OIR projection-view factorization is selected; every K2 semantic subject and field has a carrier disposition. |
+| **K3-B** | K2-dependent Interface/Plan surfaces, K1-aligned Relations and correspondence, value bridges, execution grounding, and a parallel minimum carrier lane | Exact Statement and witness roles are inhabited; claim/reduction and grounding question grammars are closed and finitely pressured at their named boundaries; equivalence, embedding, and lossy lanes are distinct; the Plan/OIR projection-view factorization is selected; every K2 semantic subject and field has a carrier disposition. Full claim/reduction execution remains a later integration obligation. |
 | **K3-C** | Minimum Analysis source, strategy/experiment, theorem-applicability, and quantitative-loss contracts | One relation-bound property and one Fresh-to-FS property can be stated over exact K2/K3 sources without a shadow Protocol, supplied-trace adversary, hidden loss, or replay conflation. |
 | **K3-D** | Minimum PIR-to-OIR read and projection-obligation contract | The exact source basis, protected effects, imported-verification refusal, outcomes, Plan read partition, OIR identity binding, and typed unsupported boundary are closed without full OIR design or Stage 4B activation. |
 | **K3-E** | Integrated closure and reopen audit | K1/K2/K3 identities, views, read closures, negative boundaries, and two consumer extractions agree; every residual issue is routed to K4, Stage 4B, or a later owner. |
+
+**Completion reconciliation — 2026-08-27.** Bounded K3-B satisfied its stated
+exit at the selected resolution: the dependent Interface/Plan and Relations
+contracts, exact correspondence-question grammar, public run-view boundary,
+three value-bridge lanes, and the fourteen-field carrier disposition have
+durable candidate owners. A separate 29-case finite boundary gate exercises
+the bounded legacy K2 executable carrier shape; it does not round-trip the
+durable fourteen-field carrier or execute the complete claim/reduction and
+grounding contracts. This closes neither K3 nor the semantic kernel. K3-C
+remains responsible for Analysis
+source, experiment, theorem-applicability, and quantitative-loss contracts;
+K3-D remains responsible for the minimum OIR seam.
 
 K3-B through K3-D may use parallel research and falsifier construction, but
 selection follows semantic dependency. K3-C cannot ratify a relation-bound
@@ -133,6 +146,12 @@ This README owns the direct K3 inventory:
   evidence basis, source exports, consumer conflicts, preserved and replaced
   mechanisms, primary-source pressure, exact research questions,
   discriminators, phase order, and reopen matrix.
+- [K3-B Research and Selection](k3-b-research-and-selection.md) records the
+  selected dependency graph, relation and carrier contracts, alternatives,
+  source pressure, and K2 reopen verdict.
+- [K3-B Validation](k3-b-validation.md) records the bounded executable and
+  documentation gates, repaired falsifiers, exact claim boundary, and K3-C
+  handoff.
 
 Later phases add records only when their question cannot be answered by
 updating this plan and their durable owners. A phase does not receive a large
@@ -143,9 +162,10 @@ research narrative by default.
 K3 does not establish cryptographic security, theorem truth, protocol-family
 completeness, implementation conformance, a final MLIR spelling, a complete
 Analysis catalog, compiler policy, full OIR semantics, realization, migration,
-or cutover readiness. K3-A performed reconstruction and static audits; it did
-not make downstream schemas executable or prove that K2 represents every
-protocol in the K4 portfolio.
+or cutover readiness. K3-A performed reconstruction and static audits. K3-B
+selected a bounded downstream schema and exercised a finite reference
+instrument; it did not establish implementation conformance or prove that K2
+represents every protocol in the K4 portfolio.
 
 Current implementation behavior is regression and design evidence only. A
 current exact-coverage check, transcript interpreter, relation adapter, or

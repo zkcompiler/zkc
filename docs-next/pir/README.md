@@ -34,6 +34,12 @@ research packages, routed through the
 preserve the comparative evidence. Current normative Protocol semantics
 remain under `docs/` until explicit cutover.
 
+K3-B has now reconciled the canonical carrier, `ProtocolInterface`, and
+`ProverPlan` targets to the active K1/K2 definitions. It also selects the
+narrow source-ID-free `PlanWitnessSurface` needed for relation-witness
+attachment. This bounded closure does not freeze the integrated kernel;
+Analysis and OIR still own their K3-C and K3-D consumer contracts.
+
 ## Owns
 
 - the exact `InteractiveCore`, challenge interpretation, and complete abstract
@@ -108,9 +114,12 @@ import later relation-interface facts.
 admitted dependent subjects. PIR does not absorb either into `ProtocolId`.
 Every downstream edge that reads one must cite its exact dependent identity;
 Protocol-only consumers remain independent of both. A Plan is additionally
-subject to a separate
-`PlanRealizes(AdmittedProtocol, AdmittedPlan, PlanRealizesRegime)` judgment and
-cannot change verifier-visible Protocol behavior.
+subject to a separate `PlanRealizes` judgment over the exact admitted Protocol,
+admitted Plan, owner-derived `StrategyDecisionView`, and matching
+`DependentAdmissionBasis`. It cannot change verifier-visible Protocol
+behavior. PIR may derive a source-ID-free `PlanWitnessSurface` for the narrow
+Relations attachment seam; its checked extraction retains source authority
+without placing the Plan ID or Plan-local references in the surface identity.
 
 PIR must remain meaningful without depending on the compiler or endpoint
 realization. A Protocol may be authored, authenticated, and admitted without
@@ -124,19 +133,22 @@ first being found by the optimizer or successfully projected to every target.
   affirmative `CheckedCoreComposition`, Interface, or Plan only when its exact
   family question or rule reads that structural satellite or result; none of
   those PIR-owned structural results establishes a property by itself;
-- `relations/` consumes an admitted Protocol, the exact admitted
-  `ProtocolInterface`, an independently admitted relation interface and
-  binding, an exact correspondence question, and conditionally required
-  checked artifact-comparison/grounding prerequisites to derive post-admission
-  correspondence without changing the Protocol; a raw artifact observation
-  cannot substitute for those checked prerequisites;
+- `relations/` consumes an admitted Protocol, independently admitted relation
+  subjects, and a `ProtocolRelationBinding` for structural correspondence. A
+  separate `PlanWitnessBinding` may attach relation-witness occurrences to one
+  source-ID-free `PlanWitnessSurface`. An admitted `ProtocolInterface` is an
+  additional operand only for questions about external presentation; it is not
+  a universal relation dependency. Checked artifact, equation, commitment, and
+  run-grounding prerequisites remain question-specific, and raw observations
+  cannot substitute for their checked results;
 - `compiler/` may propose successors, but PIR alone authenticates and admits
   each target; a separate relation-specific checker must then relate exact
   predecessor and successor subjects;
 - `oir/` consumes an admitted Protocol, an exact admitted Interface, its
-  projection obligations, and a tagged `InterfaceOnly` or
-  `InterfaceAndPlan(admitted Plan, checked PlanRealizes capability)` basis when
-  prover projection actually reads a Plan;
+  projection obligations, and endpoint role. K3-D must select any additional
+  purpose-specific Interface or Plan view, its exact read manifest, and its
+  identity effect; neither a whole Plan nor the Relations-specific
+  `PlanWitnessSurface` is an ambient OIR input;
 - `evidence/` binds conformance observations to exact PIR subjects.
 
 ## Target documents
@@ -160,13 +172,15 @@ Stage 3 decisions. K2 revalidated and replaced the Core/Protocol and
 Fiat--Shamir definition surfaces with the first two active K2 pages above. A
 narrow reclosure preserved that architecture while repairing exact transcript
 bodies and evidence boundaries; its validation record owns the details.
-The carrier and Interface/Plan pages remain dependent candidates awaiting
-reconciliation; the two explicitly marked snapshots remain research history,
-not parallel authority. Stage 4A's Analysis/Compiler source bindings must be
-rechecked against the new views in K3. The lifecycle page is the superseded
-baseline candidate and remains useful for current-model reconstruction. None
-replaces the current Protocol Kernel, Carrier, Boundaries, Vocabularies, or
-Versioning specifications before normative cutover.
+K3-B reconciled the carrier and Interface/Plan pages to the active K1/K2
+owners. They are the current non-normative target definitions at that bounded
+scope. The two explicitly marked snapshots remain research history, not
+parallel authority. Stage 4A's Analysis sources remain K3-C work, and exact
+OIR reads and identity effects remain K3-D work. The lifecycle page is the
+superseded baseline candidate and remains useful for current-model
+reconstruction. None replaces the current Protocol Kernel, Carrier,
+Boundaries, Vocabularies, or Versioning specifications before normative
+cutover.
 
 ## Lifecycle and bridge ownership
 
@@ -178,15 +192,17 @@ persistence is admission-gated; a workbench cache must use an unmistakably
 unauthoritative envelope. Decoding produces a carrier, not authority, and
 reopening preserves only lineage.
 
-PIR owns every exported Protocol view's source facts and adequacy boundary, but
-not the consumer's additional proposition:
+PIR owns every exported Protocol view's source facts and checked derivation.
+The consumer owns its closed read manifest, adequacy requirement, and
+additional proposition:
 
 - a PIR-owned fact view plus an Analysis question is interpreted by
   `analysis/`;
-- admitted Protocol plus exact Interface, role, and tagged Plan basis to OIR
-  belongs to `oir/`;
-- Protocol plus Interface plus relation-interface correspondence belongs to
-  `relations/`;
+- admitted Protocol plus exact Interface and role, together with any
+  purpose-specific source view later selected by K3-D, belongs to `oir/`;
+- Protocol-to-relation correspondence and Plan-witness attachment belong to
+  separate `relations/` bindings; an external Interface enters only a question
+  that reads its presentation;
 - PIR facts used by compiler constraints belong to the compiler ingress or
   constraint contract.
 
@@ -200,12 +216,13 @@ transport a property. Target admission alone proves no source/target relation.
 Stage 3 selected the Core/Protocol grammar, canonical carrier, Interface, Plan,
 Fiat--Shamir construction, and structural Core-composition candidate at its
 then-current resolution. Post-selection revalidation reopened the exact kernel
-closure. K1 and the narrowly reclosed K2 have now closed executable Foundation
-and PIR semantics at their bounded resolutions. Before integrated freeze, K3
-must treat these as source declarations rather than assumed correspondence,
-reconcile the dependent bindings, and test the minimum Relations, Analysis,
-and OIR read questions. K4 and K5 must then complete the bounded protocol
-portfolio and independent freeze. Later work includes:
+closure. K1 and the narrowly reclosed K2 closed executable Foundation and PIR
+semantics at their bounded resolutions; K3-B has now reconciled the dependent
+Interface/Plan, carrier, and Relations seams without reopening the K2 Core.
+K3-C must close the minimum Analysis sources, K3-D the minimum OIR read and
+projection contract, and K3-E their integrated boundary. K4 and K5 must then
+complete the bounded protocol portfolio and independent freeze. Later work
+includes:
 
 - Stage 4A selected the exact Analysis model families and theorem/profile
   architecture for `FSCompile`, composition properties, and property

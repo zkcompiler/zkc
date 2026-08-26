@@ -5,181 +5,163 @@
 > **Provisional owner:** `relations`
 > **Authority:** None during the transition. Current relation semantics remain
 > governed by the [Relations specification](../../docs/spec/relations.md).
-> **Closure interpretation:** This index records a selected package-resolution
-> target. `Selected`, `target`, and `exact` describe intended role, scope, and
-> ownership; they do not assert integrated definition closure or semantic
-> freeze. The [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
+> **Closure interpretation:** This index routes the selected K3-B target. It
+> does not assert semantic freeze, implementation conformance, protocol-family
+> support, or normative cutover. The
+> [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
 > owns the live gate.
 
 ## Purpose
 
-`relations/` owns zkc's boundary to already formed relations. Stage 2 divided
-that boundary into three non-collapsible contracts: relation-interface
-admission, optional relation-artifact interpretation, and post-admission
-correspondence to an exact Protocol Interface. Stage 3 selected a candidate
-ontology, identity, binding, grounding, checking, outcome, and replay model at
-its package resolution. Stage 4A then assigned candidate occurrence-local
-relation satisfaction semantics to Relations. Integrated closure remains
-reopened. Subject admission and correspondence still do not imply that zkc
-compiled the predicate, generated a satisfying witness, or established
-satisfaction.
+`relations/` owns mathematical relation meaning and the checked bridges from
+that meaning to exact PIR facts. It keeps five questions separate:
 
-## Owns
+1. what relation is defined;
+2. what typed public, private, Oracle, and phased inputs it expects;
+3. whether one exact confidential assignment satisfies one exact semantic
+   model;
+4. whether selected Protocol, Plan, artifact, or run occurrences correspond to
+   selected relation occurrences; and
+5. whether one relation transformation preserves satisfaction in a stated
+   direction.
 
-- relation-interface candidate, identity, semantic regime, schema, admission,
-  immutable capability, and lifecycle;
-- relation artifact references, exact format profiles, and artifact
-  interpretation observations kept separate from interface admission;
-- public-instance encoding and ABI;
-- witness-port declarations and interface roles;
-- anchors and their protocol-facing projection;
-- `RelationCorrespondsAtInterface` over exact admitted Protocol, Protocol
-  Interface, relation Interface, `RelationBinding`, `CorrespondenceQuestion`,
-  conditionally required checked artifact-comparison/grounding prerequisites,
-  exact source bindings, and correspondence regime;
-- adapter contracts and the explicitly bounded interface facts they may
-  produce;
-- computed, cross-checked, and asserted classifications, affirmative and
-  negative correspondence, retained agreements, residual obligations, and
-  non-claims, without creating a parallel trust taxonomy;
-- an admitted `RelationSemanticModel` plus occurrence-local
-  `CheckRelationSatisfaction` with exact model, assumptions, basis, qualified
-  polarity, confidential witness authority, and replay boundary; and
-- a provisional later ownership slot for verifier-to-relation descent only
-  after Stage 4B activates and supplies its exact admitted OIR/result contract.
+Admission of a definition, Interface, instance, or binding answers none of the
+later questions automatically.
 
-Format-specific profiles, such as an R1CS reader, are separate change
-boundaries from the generic relation contract even if both remain in this
-domain.
+## Owned semantic subjects
+
+- `RelationDefinition`, its admitted definition-language declaration, and
+  exact typed payload;
+- `RelationInterface`, with four ordered and non-collapsible roles:
+  `PublicInstance`, `PrivateWitness`, `OracleStatement`, and `PhaseInput`;
+- `RelationInstance`, containing only public-instance values, public Oracle
+  bindings, and phase values;
+- fresh owner-local private-witness and Oracle-material assignments;
+- `RelationSemanticModel` and its identity-bearing deterministic satisfaction
+  command machine;
+- `RelationTransform` and separately checked directional refinement;
+- exactly three value-representation bridges: total equivalence, injective
+  embedding, and directional lossy projection;
+- relation artifact profiles, expectation-free observations, typed comparison,
+  grounding equations, and commitment grounding; and
+- the closed correspondence-question algebra and its checked results.
+
+Semantic proposition identity is separate from validation basis. Certificates,
+assumption evidence, exhaustive-check controls, evaluator charging contracts,
+request limits, and replay inputs do not enter a proposition or bridge identity.
+A checked result binds the exact proposition and the exact validation request.
+
+## Protocol and Plan dependency cut
+
+The two attachment paths are deliberately independent:
+
+| Subject | Reads | Does not read |
+|---|---|---|
+| `ProtocolRelationBinding` | one exact `ProtocolId`, relation Interfaces, typed K2 Statement/challenge/Oracle/claim/reduction occurrences | external `ProtocolInterface`, `ProverPlan`, secret assignments |
+| `PlanWitnessBinding` | one PIR-owned source-ID-free `PlanWitnessSurfaceId`, one `RelationInterfaceId`, typed witness occurrences | `ProverPlanId`, Plan-local nodes, private source maps, Protocol correspondence |
+
+An external `ProtocolInterface` is an additional operand only for questions
+about decoded external presentation. It is not a prerequisite for structural
+Protocol/relation correspondence. A checked aggregate may combine independently
+checked bindings without becoming a new semantic owner.
+
+Equal values at different occurrences never alias. Coverage, injectivity,
+whole-surface agreement, and mapped-edge agreement are separate questions.
+
+## Satisfaction
+
+The admitted satisfaction-evaluator declaration commits to exact role types,
+model program, state type, and K1 `start`/per-Oracle `resume` algorithms. The
+Relations owner runs the closed command machine and alone holds restricted
+Oracle lookup capabilities. Portable algorithms receive neither Oracle material
+nor a capability.
+
+`CheckRelationSatisfaction` is Affirmative only when that machine reaches
+`Decide(true)` and Negative only at `Decide(false)` for the exact model,
+instance, confidential occurrences, assumptions, and lookup trace. Missing
+support or material, authority refusal, malformed input, deterministic limit
+exhaustion, and checker disagreement retain distinct qualified outcomes. The
+result establishes no Protocol acceptance or cryptographic property.
+
+## Values, artifacts, and grounding
+
+A value bridge relates representations only. Relation refinement, commitment
+construction, and a K2 reduction are different subjects with different laws.
+Lossy projection carries an exact collision relation and exact use coordinates;
+K3-B closes occurrence-premise and count consumption only for the run-grounded
+relation-instance seam. Structural Plan and artifact mappings acquire no
+implicit live-source or quantitative claim. Analysis, not Relations, owns any
+quantitative security price.
+
+Artifact interpretation is optional and expectation-free. `Unread` differs
+from `Observed([])`. The interpreter consumes one exact format-derived byte
+type and returns a closed, typed, bounded field record. A later comparison owns
+expected agreement. Grounding equations are finite acyclic typed DAGs over
+exact relation, artifact, and PIR sources; commitment grounding names the exact
+construction and equation position but proves no binding, hiding, extraction,
+or opening theorem.
+
+Run grounding consumes only a PIR-issued public occurrence view produced by a
+live causal execution or an affirmative exact replay. A raw record, equal value,
+caller-built tuple, or stored result ID cannot mint that view.
+
+## Outcomes and authority
+
+A well-formed completed disagreement is Negative. `Unsupported`,
+`CannotAnswer`, `Refused`, `Malformed`, `DeterministicLimitExceeded`, and
+`CheckerFailure` are not Negative. Only a completed result creates a fresh
+process-local checked capability; portable IDs and reports are inert.
+
+Relations has no OIR dependency in K3-B. Future verifier-to-relation descent
+remains unavailable until OIR defines and admits its exact source result.
 
 ## Does not own
 
-- relation-source languages or relation compilation;
-- external predicate truth, satisfiability, model faithfulness, or witness
-  existence beyond one exact completed `CheckRelationSatisfaction` result;
-- witness generation, storage, secrecy, or endpoint/runtime witness
-  capabilities beyond the one holder-issued occurrence-local capability that
-  `CheckRelationSatisfaction` consumes for its exact semantic check;
-- protocol transcript or claim-flow semantics;
-- cryptographic property judgments about a protocol;
-- endpoint execution or deployment; or
-- broad compatibility claims for external relation ecosystems.
+- relation-source languages or source-to-definition compilation;
+- witness generation, storage, secrecy policy, or endpoint supply;
+- Protocol transcript, challenge, claim-flow, or acceptance semantics;
+- soundness, knowledge, completeness, zero knowledge, theorem applicability,
+  or quantitative security loss;
+- OIR projection, endpoint execution, deployment, or realization; or
+- broad compatibility with an external relation ecosystem.
 
-Reader and adapter implementations are conformance subjects. Their observed
-behavior belongs in evidence, not in the normative relation contract.
+## Consumers
 
-Declaring a witness port describes an interface. Relations consumes one fresh
-holder-issued local witness capability only inside
-`CheckRelationSatisfaction`; it neither generates nor stores the witness and
-the capability dies with that checking occurrence. Supplying and consuming a
-witness for endpoint or downstream runtime execution belongs to Realization and
-invocation.
-
-## Dependencies
-
-- `foundation/` for identity, admission, encoding, and version rules;
-- `pir/` definitions when specifying exact protocol anchor or statement
-  correspondence; and
-- conditionally after Stage 4B activation, exact admitted `oir/` subjects and
-  checked results for verifier-to-relation descent.
-
-Current relation admission, correspondence, and satisfaction have no OIR
-dependency. The provisional descent slot imports nothing until its later owner
-defines and admits the exact OIR/result contract.
-
-The relation itself remains external. A digest or adapter result identifies and
-describes a boundary; it does not establish the predicate it names.
-
-Authentication verifies the independently identified relation-interface
-candidate and its exact dependency closure. Admission then checks the complete
-relation-interface predicate and mints only local authority over the admitted
-interface. Interpreting later bytes may form an exact observation without
-changing the relation interface or Protocol. Interpretation is expectation-
-free and has no negative disagreement outcome. A separate artifact/interface
-comparison owns affirmative agreement or well-formed negative disagreement.
-Only the still-later correspondence checker consumes that checked comparison
-when requested and yields an affirmative or negative
-`RelationCorrespondenceJudgment`.
-
-## Consumers and outputs
-
-- Protocol/PIR supplies an exact admitted Protocol and a narrow PIR-owned
-  correspondence view; statement wiring additionally cites the exact admitted
-  `ProtocolInterfaceId`. Attaching a relation interface or interpreting bytes
-  does not change Protocol or Interface identity;
-- property analysis may consume authenticated relation facts only through an
-  explicit subject projection;
-- OIR endpoint programs and realization consume public and private interface
-  roles;
-- the compiler may require relation-facing prerequisites without owning them;
-  and
-- evidence records adapter behavior and correspondence checks at exact scope.
-
-## Bridge ownership
-
-`relations/` first owns direct authentication and admission of one closed
-relation-interface subject. It separately owns interpretation of immutable
-artifact bytes under an exact format adapter. That adapter may produce bounded
-facts and unread declarations; a separate checked comparison may produce
-bounded agreements, disagreements, and residual obligations. Neither can mint
-relation truth or Protocol authority.
-
-`relations/` then owns `RelationCorrespondsAtInterface`, which consumes exact
-admitted Protocol, admitted Protocol Interface, admitted relation interface,
-admitted `RelationBinding`, exact `CorrespondenceQuestion`, conditionally
-required `CheckedArtifactInterfaceComparison` and
-`CheckedCommittedObjectGrounding`, complete source bindings with separately
-supplied fresh capabilities, and correspondence regime. A raw observation
-cannot substitute for either checked prerequisite. The bridge
-establishes only its named agreements and obligations, preserves all source
-identities, and returns an affirmative or negative judgment. Missing
-authority, malformed input, or an unsupported question is not a negative
-correspondence. PIR owns both Protocol and Interface and defines their narrow
-authenticated views; Relations owns their correspondence interpretation.
-
-Relations separately owns `CheckRelationSatisfaction`. It consumes one exact
-admitted semantic model and instance plus an occurrence-local private witness.
-Its affirmative or negative capability applies only to that witness occurrence,
-model, assumptions, basis, and process generation. It is not implied by
-admission or correspondence and does not become a public witness identifier.
-Analysis may consume the exact result but cannot redefine it.
-
-`relations/` also provisionally owns endpoint descent because the output gains
-the semantic role of relation material. Endpoint identity and verifier behavior
-remain under `oir/`.
+- `pir/` supplies admitted Protocol subjects, typed owner views, and the narrow
+  `PlanWitnessSurface`;
+- `analysis/` may consume exact checked relation, refinement, bridge-use,
+  commitment, and run facts without redefining them;
+- `compiler/` may require those facts as independently owned prerequisites;
+- future `oir/` and Realization may consume public/private roles only through
+  their own admitted contracts; and
+- `evidence/` records exact adapter and checker observations without upgrading
+  their claim scope.
 
 ## Target documents
 
-- [Selected Protocol and Relations Architecture](../project/protocol-and-relations-architecture.md)
-- [Selected Analysis and Compiler Architecture](../project/analysis-and-compiler-architecture.md)
-- [Relation Model](relation-model.md)
-- [Protocol Correspondence](protocol-correspondence.md)
-- [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md)
+- [Relation Model](relation-model.md) — definitions, four-role Interfaces,
+  instances, confidential satisfaction, transforms, bridges, split bindings,
+  artifacts, and grounding
+- [Protocol Correspondence](protocol-correspondence.md) — closed question
+  grammar, one derived read manifest, checked operations, outcomes, and run
+  grounding
+- [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md) — PIR-
+  owned external presentation, strategy recipes, `PlanRealizes`, and
+  `PlanWitnessSurface`
+- [Interactive Core and Causal Execution](../pir/interactive-core.md) — K2-
+  owned occurrence, execution, replay, and public run-view sources
 
-These pages are durable non-normative Stage 3 and Stage 4A candidate targets at
-their package resolution. The current Relations specification under `docs/`
-remains authoritative until explicit normative consolidation and cutover.
+The selected project architecture pages remain historical rationale. These
+durable domain pages own the current K3-B target definitions. Current `docs/`
+remains normative until explicit consolidation and cutover.
 
-## Reopened integrated-closure and later-owner questions
+## Remaining gates
 
-Stage 3 selected relation-interface identity and admission,
-occurrence-indexed instance/witness assignments, value bridges, artifact
-observation and comparison, committed-object grounding, and Protocol
-correspondence at its then-current package resolution. Stage 4A selected the
-generic relation-satisfaction ownership, model, outcome, confidentiality, and
-replay contract and reconciled its candidate Analysis/Compiler ingress.
-Post-selection revalidation reopened the exact grounding equations, fact
-algebra and selectors, reachable checked prerequisites, relation-facing
-Witness surface, lossless equivalence and embedding, priced lossy projection,
-and directional result meaning. After those pre-freeze questions close, later
-owners must still define:
-
-- any relation-source compilation language or checked source-to-definition
-  relation;
-- concrete admitted definition-language/model correspondence profiles and
-  satisfaction checker implementations;
-- exact Analysis family rules that consume relation and correspondence facts
-  without widening their checked scope;
-- verifier-to-relation descent after OIR semantics exist; and
-- normative encodings, compatibility, implementation correspondence, and
-  migration during Stages 7 and 8.
+- K3-C must define the Analysis games, theorem-applicability rules, and
+  quantitative loss that consume these exact sources.
+- K3-D must define any OIR-specific purpose view and projection identity effect;
+  `PlanWitnessSurface` is Relations-specific and grants no OIR authority.
+- Native P02 FRI/IOR and P09 Nova/folding remain executable portfolio pressure
+  for commitment/opening and relation-changing reduction paths.
+- K3-E still owns integrated deduplication and freeze review; later stages own
+  normative encodings, implementation correspondence, and migration.

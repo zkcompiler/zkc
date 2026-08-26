@@ -12,16 +12,18 @@
 > The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns the live integrated-closure gate.
 
-> **K1/K2 reconciliation notice — 2026-08-26:** The architectural
+> **K1/K2/K3-B reconciliation notice — 2026-08-27:** The architectural
 > factorization remains a design input, but the body below predates
 > [Executable Semantic Foundations](../foundation/executable-foundations.md),
 > the active [Interactive Core](../pir/interactive-core.md), and the active
-> [Fiat--Shamir construction](../pir/fiat-shamir.md). Its public-coin Core,
-> port, abstract-prover-obligation, authored FS-map, and whole-Plan endpoint
-> examples are historical where they conflict with those owners. K3-B must
-> reconstruct Interface, Plan, Relations, and carrier consumers; K3-D must
-> close the exact endpoint read and identity effect. This page is not an
-> integrated semantic-kernel decision by itself.
+> [Fiat--Shamir construction](../pir/fiat-shamir.md). K3-B has now reconciled
+> the exact [canonical carrier](../pir/canonical-pir.md),
+> [Interface and Plan](../pir/interfaces-and-plans.md), and
+> [Relations](../relations/relation-model.md) consumers to those owners. The
+> public-coin Core, port, abstract-prover-obligation, authored FS-map, and
+> whole-Plan endpoint examples below are historical where they conflict with
+> these active targets. K3-D still owns the exact endpoint read and identity
+> effect. This page is not an integrated semantic-kernel decision by itself.
 
 ## 1. Decision
 

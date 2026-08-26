@@ -136,7 +136,7 @@ falsification evidence, but it does not promote the cited general theorems.
 | Required inclusion of `A` | Message transcript annotation and event-action map | **Wrong authority.** An author can omit a semantic proof message instead of admission deriving and enforcing its influence. |
 | Commitment-before-challenge causality | [`ProverTrace` and `ExecuteProtocol`](../../../pir/protocol-model.md#311-invocation-grammar-and-execution) | **Blocked.** A wholesale supplied trace is replay input, not evidence of causal strategy generation. |
 | Public-coin FS eligibility | `ProtocolAdmissible` | P01 is public coin, but the reusable rule does not express the complete transform prerequisite. |
-| DL relation correspondence | [`RelationBinding`](../../../relations/relation-model.md#6-protocol-to-relation-binding) | Bridges are expressible, but grounding, satisfaction, acceptance, and implications between them must remain separate. |
+| DL relation correspondence | [`ProtocolRelationBinding`](../../../relations/relation-model.md#72-protocol-relation-binding) | Bridges are expressible, but grounding, satisfaction, acceptance, and implications between them must remain separate. |
 | Special soundness, HVZK, and FS security | [`cryptographic-properties.md`](../../../analysis/cryptographic-properties.md) | Analysis-owned applicability only; none follows from structural admission or finite replay. |
 
 Encoding `Y` as generic `Context`, synthesizing a dummy Statement message, or

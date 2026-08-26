@@ -2,679 +2,683 @@
 
 > **Document kind:** Target semantic specification
 > **Document state:** Active non-normative target
-> **Target status:** Stage 3.5 durable promotion
+> **Normative surface maturity:** Provisional K1/K2 carrier contract
 > **Provisional owner:** `pir`
-> **Authority:** This document specifies the selected target for `docs-next/`.
-> It is non-normative until explicit consolidation and cutover. The current
-> specifications under [`docs/`](../../docs/README.md) remain authoritative.
-> This document makes no implementation, compatibility, or migration claim.
+> **Authority:** This page specifies the selected carrier target for
+> `docs-next/`. It remains non-normative until explicit consolidation and
+> cutover; the current specifications under [`docs/`](../../docs/README.md)
+> remain authoritative. It makes no implementation, compatibility, or
+> migration claim.
+>
+> **Normative dependencies:** [Executable foundations](../foundation/executable-foundations.md),
+> [Interactive Core](interactive-core.md), and
+> [Fiat--Shamir interpretation](fiat-shamir.md)
+>
+> **Implementation status:** the current `pir`/`oir` TableGen dialects are
+> pre-K2 regression evidence. They do not implement this carrier.
 
-> **K1 transition notice — 2026-08-26:** The candidate/dependency bundles and
-> identity equations below retain the historical Stage 3 vocabulary. The
-> exact selected substrate is [Executable Semantic Foundations](../foundation/executable-foundations.md).
-> K2 must
-> replace algorithm dependencies with exact portable-algorithm candidates and
-> each candidate's own authenticated `RequiredModuleClosure_B`; direct
-> primitive references do not become transitive closure nodes. K2 must also
-> replace every legacy `H(...)` equation with an exact
-> `SemanticContentId<K>` body under an authenticated prior-meta basis. This
-> carrier page is not yet a K1-computable Protocol lifecycle.
+This page fixes how the K2 `InteractiveCore` and `Protocol` subjects inhabit
+one canonical MLIR PIR graph. It supersedes the earlier carrier candidate based
+on roles, ports, objects, randomness declarations, endpoint obligations, and a
+universal dependency row. Those were fields of the pre-K2 model and are not a
+second spelling of the K2 subjects.
 
-> **K2 routing notice:** The language-independent Core and Protocol reconstructed
-> by a future canonical carrier are now defined by
-> [Interactive Core and Causal Execution](interactive-core.md) and
-> [Fiat--Shamir Construction](fiat-shamir.md). This page has not yet been
-> reconciled to their exact bodies and remains a pre-K2 carrier candidate; it
-> cannot override either semantic definition.
+The language-independent algebra owns meaning. MLIR is its one structural PIR
+carrier:
+
+```text
+(InteractiveCore, Protocol over that Core)
+             <-> one canonical MLIR PIR graph
+
+raw transport
+  -> transport decoding
+  -> canonical graph and dependency authentication
+  -> K2 Core and Protocol admission
+  -> opaque process-local AdmittedProtocol
+```
+
+This page freezes the semantic groups, field disposition, correspondence laws,
+and refusal boundary. It deliberately does not yet freeze TableGen class names,
+operation mnemonics, assembly syntax, bytecode versioning, or a public exchange
+format. A later physical profile must realize the exact groups below without
+adding another Protocol schema.
 
 ## 1. Scope and invariants
 
-This document specifies the unique physical v0 carrier for the
-[Protocol semantic model](protocol-model.md), its exact physical normal form,
-the language-independent algebra-to-carrier bijection, and the authority
-boundary from raw material to an admitted Protocol.
+The carrier contract has six load-bearing invariants.
 
-The selected architecture has one meaning and one production carrier:
+1. One graph denotes exactly one `Protocol` and embeds exactly the
+   `InteractiveCore` body named by that Protocol.
+2. Every field in `InteractiveCoreBody` and `ProtocolBody` is present exactly
+   once. No identity-bearing fact is inferred from a name, registry, SSA use,
+   default, source position, or consumer.
+3. An FS root carries only `TranscriptConstructionId`. The construction body
+   and its dependencies are separately authenticated inputs.
+4. K1 modules, declarations, primitives, algorithms, evaluation contracts,
+   value domains, and failures remain independently identified dependencies.
+   Their bodies are not copied into the Protocol graph.
+5. Interface, Plan, Relations, Analysis, Evidence, OIR, runtime invocations,
+   and execution records are not Protocol fields.
+6. Transport validity, canonical authentication, and semantic admission are
+   distinct. Success at an earlier boundary implies no later success.
 
-~~~text
-language-independent Protocol algebra
-       <-> one closed canonical MLIR PIR graph
+The graph carries semantic structure, not live authority. A graph, stored ID,
+signature, admission marker, or prior result never serializes a capability.
 
-raw graph
-  -> structural and dependency authentication
-  -> authenticated immutable candidate
-  -> semantic Protocol admission
-  -> opaque process-local AdmittedProtocol
-~~~
+## 2. Exact subject and field disposition
 
-The algebra defines meaning; MLIR carries it. There is no parallel canonical
-Rust model, carrier-neutral runtime package, compatibility dialect, or second
-Protocol representation. Other Stage 3 subjects are finite canonical
-algebraic values with lossless transport profiles only.
+### 2.1 Root subject pair
 
-Three predicates remain distinct:
+The carrier domain is the finite pair:
 
-1. **transport validity** says bytes decode and MLIR parses;
-2. **canonical authentication** says the graph has the exact physical form,
-   authenticated dependencies, and directly recomputed IDs; and
-3. **Protocol admission** says the reconstructed semantic object satisfies
-   the complete Core and interpretation laws.
-
-No success at an earlier layer implies success at a later layer.
-
-## 2. Exact MLIR carrier profile
-
-### 2.1 Closed operation allowlist
-
-Canonical PIR is one MLIR operation graph with exactly one `pir.protocol`
-root. Its complete v0 semantic operation allowlist is:
-
-~~~text
-pir.protocol
-pir.core
-pir.dependency
-pir.role
-pir.port
-pir.value
-pir.object
-pir.randomness
-pir.event
-pir.challenge
-pir.claim
-pir.reduction
-pir.check
-pir.failure
-pir.terminal
-pir.endpoint_obligation
-pir.prover_obligation
-pir.prover_obligation_failure
-~~~
-
-Only a separately fixed minimal allowlist of builtin scalar, array,
-dictionary, and type primitives may occur. Locations are absent. No other
-dialect operation, unknown attribute, symbol name, source location, comment,
-author label, cache, analysis result, Interface, Plan, relation material,
-proof, or provenance is legal.
-
-Unknown constructors and fields fail closed. Rich authoring operations cannot
-be retained behind an “ignored” marker, and a canonical graph cannot carry an
-extension merely because an MLIR parser accepts it.
-
-### 2.2 One-root physical normal form
-
-The `pir.protocol` root contains one Core body and one challenge
-interpretation. Root regions and operation groups occur in the field order of
-the semantic `InteractiveCore` and `Protocol` products. Each group has exactly
-one block. Every semantic declaration occurs exactly once in its owning group
-and uses its canonical ordinal.
-
-The physical rules are:
-
-- positional references are typed canonical ordinals;
-- there are no semantic SSA names or symbol-table lookups;
-- all defaults are explicit;
-- sequences retain semantic order;
-- sets and maps use canonical semantic-key order and reject duplicate keys;
-- all local references are in range and point to the exact declared kind;
-- the claimed `ProtocolSemanticRegimeId`, `CoreId`, and `ProtocolId` are
-  present at the root and directly recomputed during authentication; and
-- no nonsemantic material occurs inside the graph.
-
-SSA values may exist only where a minimal builtin carrier primitive requires
-them. Their names are not semantic and alpha-renaming is the only permitted
-SSA variation.
-
-For an FS Protocol, the root stores only the exact
-`TranscriptConstructionId`. `TranscriptConstruction` is a separate semantic
-subject whose canonical preimage and algorithm dependency preimages are
-supplied explicitly during authentication. It is never nested as a
-`pir.transcript_construction` operation. Consequently the PIR graph denotes
-exactly one `Protocol`, while whole-Protocol admission still closes the
-external construction dependency.
-
-### 2.3 What is not a canonical form
-
-Textual spelling, MLIR bytecode encoding, attribute insertion order, omitted
-defaults, alternative symbol names, source locations, and arbitrary metadata
-are not additional canonical forms. Text and bytecode are transport encodings
-outside semantic graph identity. A parser may accept transport variation, but
-authentication must reconstruct and check the one physical graph normal form.
-
-## 3. Algebra-to-carrier bijection
-
-### 3.1 Domain
-
-For semantic regime `R`, define:
-
-~~~text
-IdConsistentCanonicalPirGraph_R =
-  physically canonical closed PIR graph whose claimed regime, CoreId,
-  TranscriptConstructionId when present, and ProtocolId equal direct
-  recomputation from its reconstructed Protocol
-~~~
-
-A raw graph with a wrong claimed regime or ID may be parseable and even have
-the closed operation vocabulary, but it is outside this domain.
-
-### 3.2 `Lower_R` and `Read_R`
-
-~~~text
-Lower_R : Protocol -> IdConsistentCanonicalPirGraph_R
-Read_R  : IdConsistentCanonicalPirGraph_R -> Protocol
-
-Read_R(Lower_R(P)) = P
-Lower_R(Read_R(G)) = G modulo CarrierTrivia
-~~~
-
-`Lower_R` is a total structural encoding of every field and reference in the
-language-independent Protocol algebra. `Read_R` is its total inverse over the
-ID-consistent canonical graph domain. Neither operation consults a registry,
-policy, source program, authoring order, Plan, Interface, relation subject, or
-live checker.
-
-The complete trivia relation is:
-
-~~~text
-CarrierTrivia =
-    MLIR in-memory operation identity
-  | SSA alpha-renaming when a builtin carrier requires names
-~~~
-
-Nothing else is quotiented. In particular, reordering a semantic sequence,
-changing a default between explicit and absent, replacing a reference scheme,
-or attaching unknown metadata is not trivia.
-
-An internal diagnostic `ReadUnchecked_R` may reconstruct a tentative semantic
-object from a structurally parsed graph. It has no round-trip law, identity
-authority, or consumer authority. Only successful authentication establishes
-`IdConsistentCanonicalPirGraph_R` and exposes `Read_R`.
-
-## 4. Canonical authentication
-
-### 4.1 Explicit preimages and capabilities
-
-Authentication never treats a content ID as its own evidence. Its complete
-external semantic inputs are:
-
-~~~text
-CanonicalTranscriptConstructionCandidate =
-  unauthoritative canonical algebraic value of TranscriptConstruction
-
-ExactTranscriptConstructionCandidateAndDependencyPreimages = {
-  candidate: CanonicalTranscriptConstructionCandidate,
-  algorithm_dependencies:
-    ExactTranscriptAlgorithmDependencyPreimageBundle
+```text
+CanonicalPirSubjectPair_B = {
+  core: InteractiveCore,
+  protocol: Protocol
 }
 
-ExactProtocolDependencyPreimageBundle = {
-  core_dependencies:
-    ExactMap<DependencyRef, AuthenticatedDependencyPreimageInput>,
-  transcript_construction:
-    None
-    | ExactTranscriptConstructionCandidateAndDependencyPreimages
+where
+  protocol.core_id =
+    SemanticContentId<"pir.interactive-core">(
+      B, InteractiveCoreBody(core))
+```
+
+The physical root carries the complete typed `core_id` and one claimed complete
+typed `ProtocolId`. A `SemanticContentId` already contains the foundation
+epoch, identity-profile ID, hash-suite ID, semantic-regime ID, subject kind, and
+digest fixed by K1. There is no additional independently variable
+`ProtocolSemanticRegimeId` field.
+
+The exact descriptor preimages forming `PriorMetaAuthenticationBasis B` remain
+external authentication inputs. Repeating their bytes in the graph would not
+make an unauthenticated root authoritative.
+
+### 2.2 `InteractiveCoreBody`
+
+The Core body has exactly the fourteen K2 fields below, in this order. The
+canonical MLIR graph carries every listed field. The exact nested
+`MetaValueV0` record and variant tags are those in
+[Interactive Core Appendix A](interactive-core.md#appendix-a-canonical-bodies);
+this page does not create parallel encodings for them.
+
+| Ordinal | Core field | Exact graph-carried content | External or excluded content |
+|---:|---|---|---|
+| 0 | `used_modules` | Canonically sorted unique sequence of complete typed direct-owner `SemanticModuleId`s | Module bodies and transitive imports are external |
+| 1 | `public_inputs` | One declaration per ordinal with its exact `ValueType` | Invocation values are runtime data |
+| 2 | `verifier_private_inputs` | One declaration per ordinal with its exact `ValueType` | Verifier-private invocation values are runtime data |
+| 3 | `constants` | Exact `ValueType` and canonical datum | No host constant or printer spelling |
+| 4 | `derived_values` | Portable-algorithm reference, evaluation-contract reference, ordered `ValueRef`s, and result type | Algorithm and contract bodies are external dependencies |
+| 5 | `scopes` | Exact optional parent and `Initially`/`BeforeOccurrence` opening | No derived scope path cache |
+| 6 | `bindings` | Scope, exact `Statement`/`SessionContext`/`PublicParameter` tag, and value reference | Bound invocation values remain runtime data |
+| 7 | `challenges` | Scope, value type, domain declaration, fresh-law declaration, correlation, reduction-use policy, and ordered public conditions | No resolved challenge value or FS frame |
+| 8 | `oracles` | Scope, index and element types, maximum entries, and exact publication mode including its references | Oracle carrier and confidential witness are runtime data |
+| 9 | `checks` | Algorithm reference, evaluation-contract reference, and ordered inputs | Evaluator implementation and result are not identity fields |
+| 10 | `claims` | Contract, scope, usage, and exact initial-binding or reduction-output source | Claim liveness is derived execution state |
+| 11 | `reductions` | Contract, scope, ordered input claims, side inputs, challenges, publication requirements, and output contracts | Reduction result and theorem evidence are external |
+| 12 | `terminals` | Verdict, public outputs, required checks, and ordered claim dispositions | Reached terminal and outputs are runtime records |
+| 13 | `occurrences` | Scope, exact guard, and complete effect variant, including every `ModuleEffectRef` payload byte | Activity, outputs, receipts, and derived influence are not stored |
+
+Every nested product field, sum tag, optional tag, sequence length and order,
+typed ordinal, `ValueType`, canonical datum, `ContentRefV0`, and declaration
+reference is graph-carried. Empty sequences and absent optionals use their exact
+explicit K1/K2 form; omission is not a default.
+
+The following K2 objects are deliberately not part of `InteractiveCoreBody` or
+the graph:
+
+- `CoreInvocationBody` and concrete public or verifier-private values;
+- prover strategies, witness, advice, private randomness, private state, and
+  supplier material;
+- `RunRecord`, failure and challenge receipts, Oracle receipts, and partial
+  execution records;
+- `PublicCoinView`, dependency graphs, transcript prefixes, scope paths, and
+  other mechanically derived views; and
+- display names, source locations, diagnostics, provenance, evidence, and
+  compiler routes.
+
+### 2.3 `ProtocolBody`
+
+The Protocol part of the root carries exactly:
+
+```text
+ProtocolBody(P) = {
+  0: ContentRefV0(P.core_id),
+  1: Fresh
+     | FiatShamir(ContentRefV0(P.transcript_construction_id))
+}
+```
+
+The same physical `core_id` is the Protocol field and the claimed identity of
+the embedded Core. A second Core-ID spelling is forbidden. `ProtocolId` is a
+claimed root header checked against this exact body; it is not a field of its
+own preimage.
+
+Fresh and FS Protocols over one literal Core therefore have different
+`ProtocolId`s while sharing one `CoreId`.
+
+### 2.4 External `TranscriptConstructionBody`
+
+For FS, the graph carries only the exact typed `TranscriptConstructionId`.
+Authentication separately receives the complete K2 construction body:
+
+```text
+TranscriptConstruction = {
+  core_id,
+  transcript_state_type,
+  transcript_bytes_type,
+  natural_type,
+  initial_state,
+  absorb,
+  squeeze_bytes,
+  advance_state,
+  application_domain,
+  sampling_exhausted_failure,
+  ordered total challenge_rules
+}
+```
+
+Its strict K1 `MetaValueV0` decode/re-encode and ID law are independent of the
+Protocol graph. The body contains no self-ID; the K2
+`BindConstructionSelfId` instruction uses the resolved authenticated ID.
+
+Fresh accepts neither a construction reference nor construction preimage. FS
+requires exactly one construction whose recomputed ID equals the root reference
+and whose `core_id` equals the embedded Core. A missing construction is a
+missing dependency; an extra construction for Fresh is refused by exact input
+closure.
+
+### 2.5 K1 dependencies and module closure
+
+The graph carries typed references at the exact fields that own them. It does
+not carry a generic dependency table and does not nest dependency bodies.
+
+In particular:
+
+- `used_modules` is the exact direct owner set, not its transitive closure;
+- declaration references retain exact root/module owner, kind, and ordinal;
+- portable-algorithm and evaluation-contract references retain complete typed
+  content IDs;
+- a `ModuleEffectRef` retains its module ID, exact
+  `ModuleDeclarationRef<"pir.core-effect">`, and exact `MetaValueV0` payload;
+  and
+- primitive, value-domain, failure, algorithm, evaluation-contract, and module
+  bodies remain explicit external preimages.
+
+Authentication applies K1's typed-coordinate formation, strict body
+authentication, and least `RequiredModuleClosure_B` laws. Admission then
+requires `used_modules = DirectOwnerModules(core)`. Consequently an unrelated
+module cannot enter the request, changing a used module rotates dependent
+identities, and a shared import diamond authenticates each module once.
+
+### 2.6 Satellite exclusion
+
+`ProtocolInterface`, `ProverPlan`, Relations subjects, Analysis questions or
+results, Evidence, OIR programs, endpoint realizations, and source audits are
+separately identified or attributed objects. None occurs in the canonical
+Protocol graph, including as an optional root reference.
+
+A transport envelope may co-package separately encoded subjects, but package
+membership grants no authority and is not part of `CoreId` or `ProtocolId`.
+Changing only an Interface, Plan, relation subject, or realization must leave
+both IDs unchanged. Injecting such material into the canonical graph is a
+physical-form error.
+
+Consumer operations receive satellites explicitly:
+
+| Consumer | Additional admitted inputs |
+|---|---|
+| Verifier OIR projection | exact Interface and verifier role, plus only the exact admitted purpose-specific source view selected by K3-D |
+| Prover OIR projection | exact Interface and prover role, plus only the exact admitted purpose-specific source view selected by K3-D; neither a whole Plan nor `PlanWitnessSurface` is a default input |
+| `ProtocolRelationBinding` formation and admission | exact relation Interfaces and K1 dependencies reached by the candidate; no `ProtocolInterfaceId` |
+| Protocol-level mapped correspondence | exact admitted `CorrespondenceQuestion`, every admitted operand it names, and owner-issued views plus matching live authority for `ManifestFor(question)`; no `ProtocolInterfaceId` unless that exact question reads one |
+| External instance correspondence | the exact admitted external-instance question and operands, owner-issued views plus matching live authority for its manifest, exact `DecodedExternalAssignment`, and matching codec-evaluation authority |
+| Analysis and Evidence | only the exact subjects and views named by their own read manifests |
+
+The base binding relates K2 semantic Protocol coordinates to relation meaning;
+it does not read external names, containers, codecs, or ABI presentation.
+Only a question that follows an externally supplied instance through its
+presentation consumes the exact `ProtocolInterfaceId`. This distinction keeps
+Protocol-level relation meaning reusable across multiple lossless external
+Interfaces.
+
+## 3. Abstract canonical MLIR form
+
+### 3.1 Physical groups, not frozen spellings
+
+`CanonicalPirGraphV0` is one isolated root with one embedded Core. Its abstract
+physical groups occur in this order:
+
+```text
+root header
+core.used_modules
+core.public_inputs
+core.verifier_private_inputs
+core.constants
+core.derived_values
+core.scopes
+core.bindings
+core.challenges
+core.oracles
+core.checks
+core.claims
+core.reductions
+core.terminals
+core.occurrences
+protocol.challenge_interpretation
+```
+
+Each group has one finite ordered body. Each declaration occurs exactly once at
+its canonical ordinal. These are abstract carrier groups; the final dialect may
+choose operations, typed properties, and regions that realize them, but cannot
+merge fields, create shadow fields, or retain a pre-K2 constructor.
+
+A suitable realization uses structural operations for the root, Core, groups,
+and declarations, and strongly typed K1/K2 attributes for IDs, value types,
+datums, variants, and references. Encoding the entire Core as one opaque JSON,
+dictionary, byte string, or generic `MetaValue` attribute is not a production
+carrier: it would make MLIR unable to validate or transform its structure and
+would merely embed a second parser.
+
+### 3.2 Closed physical form
+
+The eventual physical profile must fix and check:
+
+- exactly one root, one embedded Core, and one instance of every field group;
+- the exact permitted PIR and minimal builtin operation/type/attribute set;
+- exact region and block counts;
+- canonical declaration order and explicit empty/absent values;
+- typed reference constructors, kind-specific ordinal spaces, and bounds;
+- canonical ordering for semantic sets and maps, with duplicate rejection;
+- absence of unknown operations, fields, properties, attributes, types, and
+  nested dialect material; and
+- absence of source locations and nonsemantic metadata inside the canonical
+  graph.
+
+MLIR operation pointers, block labels, symbol names, SSA names, host iteration
+order, text formatting, bytecode producer strings, and transport version are
+not semantic. SSA may appear only when a minimal carrier primitive requires it;
+alpha-renaming is then its sole permitted variation.
+
+Authoring IR may carry names, locations, and convenience syntax. It must erase
+or extract them before entering this closed graph. A discardable MLIR attribute
+is still forbidden here merely because a generic parser would ignore it.
+
+### 3.3 Stable coordinates
+
+Inside one Core, local references are typed dense ordinals into the exact
+canonical sequence owned by their kind. Bare integers from different kinds are
+never interchangeable.
+
+A portable reference is stable only together with its subject identity:
+
+```text
+CoreRef<K> = (CoreId, K, canonical_ordinal)
+
+ProtocolScopedRef<K> = (ProtocolId, CoreRef<K>)
+```
+
+Use `CoreRef<K>` for interpretation-independent Core facts and
+`ProtocolScopedRef<K>` when Fresh versus FS affects meaning. A downstream OIR
+source occurrence therefore uses `ProtocolScopedRef<occurrence>`, not a bare
+event-position integer.
+
+Inserting or reordering a declaration intentionally changes later ordinals and
+`CoreId`; the old complete coordinate cannot silently name the new entry.
+Renaming source labels, changing printer spelling, or alpha-renaming carrier SSA
+does not change any coordinate or semantic ID.
+
+## 4. Algebra-to-carrier correspondence
+
+### 4.1 Domain
+
+Fix candidate basis data `B` for lowering and later authentication. The
+structural reader itself is basis-independent and grants `B` no authority:
+
+```text
+ClaimedCanonicalPirSubjectPair = {
+  core_candidate: InteractiveCore,
+  protocol_candidate: Protocol
 }
 
-ExactCoreDependencyAuthenticationCapabilities =
-  ExactMap<
-    DependencyRef,
-    DependencyAuthenticationCapability restricted to the exact kind,
-    regime, content identity, ABI, and direct-edge declaration>
+Lower_B:
+  CanonicalPirSubjectPair_B
+    -> StructurallyCanonicalIdConsistentPirGraph_B
 
-ExactProtocolDependencyAuthenticationCapabilities = {
-  core: ExactCoreDependencyAuthenticationCapabilities,
-  transcript:
-    None | ExactTranscriptDependencyAuthenticationCapabilities
-}
-~~~
+ReadStructural:
+  StructurallyCanonicalPirGraph
+    -> ClaimedCanonicalPirSubjectPair // algebraic data only; no authority
 
-The preimage bundle is data, not authority. Checker implementations and live
-process capabilities are the exact third input to authentication and do not
-enter semantic identity.
+AuthenticateCanonicalPirGraph_B:
+  (StructurallyCanonicalPirGraph,
+   ClaimedCanonicalPirSubjectPair,
+   ExactCanonicalPirDependencyEnvironment_B,
+   exact K1 authentication and evaluator authority)
+    -> Qualified<AuthenticatedCanonicalPirGraphHandle_B>
 
-Fresh requires no transcript-construction candidate and no transcript
-capabilities. FS requires exactly one construction candidate whose recomputed
-ID equals the root reference and exactly the authentication capabilities for
-its algorithm dependency closure.
+Read_B:
+  AuthenticatedCanonicalPirGraphHandle_B
+    -> AuthenticatedCanonicalPirSubjectPairView_B
+```
 
-The Core preimage map contains every and only member of the candidate Core's
-least dependency closure. The Core capability map has exactly the same keys.
-Every capability is restricted to the exact dependency kind, contract regime,
-content ID, ABI, and direct edges that it authenticates. Missing, extra,
-wrong-kind, wrong-regime, wrong-identity, or widened authority is refused.
+`Lower_B` is defined only when the Protocol's `core_id` equals the recomputed ID
+of the supplied Core. `ReadStructural` recognizes only the closed physical
+grammar and reconstructs its claimed algebraic data before any basis has
+authority. It reads claimed headers only as graph fields for later comparison
+and does not authenticate them or add them to the semantic pair. It grants no
+identity, dependency, admission, or capability authority. The subscript-free
+domain is deliberate: parsing cannot assume the prior-meta basis that the next
+boundary must authenticate.
 
-### 4.2 Ordered authentication operation
+`ExactCanonicalPirDependencyEnvironment_B` is the exact request-local tuple of
+the authenticated prior-meta basis `B`; every and only Core dependency preimage
+derived from the structurally reconstructed body and K1 module closure; for FS,
+the one exact transcript-construction body and every and only dependency
+preimage derived from it; and no construction for Fresh. The authentication
+operation recomputes all claimed IDs, checks exact dependency-key closure, and
+uses the supplied K1 authority. On success it mints one opaque
+process-local `AuthenticatedCanonicalPirGraphHandle_B` bound to the identical
+immutable graph object, structural reconstruction, complete dependency
+environment, evaluator identity, authentication authority, and request-local
+hash-binding ledger. The handle has no canonical body, ID, Boolean surrogate,
+copy constructor, or serialized form. K2 admission receives fresh separate
+checker authority under Section 5.2; the graph handle neither contains nor
+serializes it.
 
-~~~text
-AuthenticateCanonicalPir_R(
-  raw,
-  ExactProtocolDependencyPreimageBundle,
-  ExactProtocolDependencyAuthenticationCapabilities)
-  -> AuthenticatedCanonicalProtocolCandidate
-~~~
+`Read_B` is admission-facing access through that live handle. Its returned
+immutable pair view retains the handle and exposes the exact authenticated Core
+and Protocol candidates needed by K2 admission; it is not an admitted Protocol
+and cannot outlive or detach from the handle. A graph, algebraically equal pair,
+stored ID, or prior authentication report cannot substitute for the handle.
 
-The operation performs these steps in order:
+### 4.2 Exact inverse laws
 
-1. decode the selected transport profile and parse MLIR structurally;
-2. check exactly one root and the closed operation/builtin allowlist;
-3. check fields, blocks, operation grouping, reference kinds and bounds,
-   explicit defaults, and canonical order;
-4. run `ReadUnchecked_R` to obtain an unauthoritative tentative Protocol;
-5. authenticate every named Core dependency preimage and verify the declared
-   least dependency closure;
-6. for FS, authenticate the exact construction preimage and every algorithm
-   dependency to the root's `TranscriptConstructionId`;
-7. recompute the Core and Protocol identities, including the exact
-   construction ID in the FS Protocol preimage; and
-8. establish `IdConsistentCanonicalPirGraph_R`, then and only then expose
-   `Read_R` and the immutable authenticated candidate.
+For every pair `S` in the lowering domain and every graph `G` in the
+structurally canonical, claimed-ID-consistent graph domain, the authority-free
+structural functions satisfy:
 
-Failure at any step yields no authenticated semantic candidate. Diagnostics
-may retain unauthoritative parse facts but cannot expose them as an admitted
-view.
+```text
+ReadStructural(Lower_B(S)) = S
 
-Authentication establishes structural form, dependency identity and closure,
-and semantic ID consistency. It does not establish `CoreAdmissible`,
-`ProtocolAdmissible`, relation truth, security, source-language correctness, or
-implementation conformance.
+Lower_B(ReadStructural(G)) = G
+  modulo only in-memory operation identity and unavoidable SSA alpha-renaming
+```
 
-## 5. Admission and live authority
+In the second equation, `G` is restricted mathematically to the structural
+domain whose claimed basis data is exactly `B` and whose claimed IDs recompute
+under that data. This restriction makes the pure encoding equation well typed;
+it does not authenticate `B` or `G`. Operational authority arises only at
+`AuthenticateCanonicalPirGraph_B`.
+
+The second equation permits no reordering, default insertion, unknown metadata,
+symbol renaming, alternate reference form, or inferred field.
+
+Additionally:
+
+```text
+InteractiveCoreBody(ReadStructural(G).core)
+  = the exact fourteen-field K2 MetaValueV0 body carried by G
+
+ProtocolBody(ReadStructural(G).protocol)
+  = the exact two-field K2 MetaValueV0 body carried by G
+```
+
+The structural inverse domain requires the recomputed `CoreId` and `ProtocolId`
+to equal the claimed root IDs; this requirement grants no authority. For FS,
+`ReadStructural` reconstructs the construction ID only. It cannot synthesize
+the external construction body, module body, algorithm body, Interface, Plan,
+or relation subject.
+
+Authentication adds no third representation and has no serialization inverse.
+For every successful
+`h = AuthenticateCanonicalPirGraph_B(G, S, D, A)`, where
+`S = ReadStructural(G)`, `D` is the exact dependency environment, and `A` is
+the required K1 authentication/evaluator authority, the graph and data
+preservation laws are exactly:
+
+```text
+UnderlyingGraph(h) = the identical immutable G object
+ForgetAuthentication(Read_B(h)) = ReadStructural(G)
+```
+
+Neither law permits dependency omission, substitution, or authority recovery
+from the right-hand side.
+
+### 4.3 Independent conformance
+
+The reader and lowerer must be independently implemented. They may share the
+declared K1 primitive types, but one must not call the other or share one table
+whose omitted field makes both implementations agree incorrectly.
+
+Conformance requires all of:
+
+1. both inverse laws;
+2. comparison with independent expected `InteractiveCoreBody` and
+   `ProtocolBody` K1 vectors;
+3. direct ID-vector comparison;
+4. mutation of every identity-bearing field; and
+5. negative formation and dependency cases.
+
+A printer/parser round trip alone is transport evidence, not this
+correspondence result.
+
+## 5. Authentication, admission, and live authority
 
 ### 5.1 Cross-owner capability contract and inert bindings
 
-Every PIR capability exported across an owner boundary conforms to the
-project-wide
-[`ExactSourceAuthorityBinding`](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings).
-PIR defines a closed family-indexed contract:
+PIR uses the project-wide
+[`ExactSourceAuthorityBinding`](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings)
+for admitted subjects, attenuated views, and checked results exported across an
+owner boundary. Each PIR family retains its exact family-indexed
+`PirCapabilityContractId`, ABI, consumer, purpose, source coordinate, and
+transitive operation-policy closure. The contract uses the explicit
+`OwnerDefinesNoOperationPolicy` disposition where PIR owns no separate policy.
 
-~~~text
-PirCapabilityContract<Family> {
-  exact exported admitted-subject/view or checked-result family,
-  exact capability ABI and operand/result binding schema,
-  exact permitted named consumers and typed purposes,
-  exact freshness, attenuation, and authority-lifetime rules,
-  declares_no_separate_owner_operation_policy = true
-}
+The portable binding is inert. It is neither an admission receipt nor a
+capability. A consumer reauthenticates the exact subject, contract, ABI, and
+dependencies, re-runs the owning admission or check, and separately obtains a
+fresh matching process-local capability. Attenuation cannot be widened, and
+serialization or process crossing destroys live authority.
 
-PirCapabilityContractId<Family> = H(
-  "zkc/pir-capability-contract",
-  Family,
-  CanonicalEncode(exact PirCapabilityContract<Family>))
-~~~
-
-The last field is an authenticated affirmative contract clause, never an
-omitted policy coordinate. Every exported PIR source binding therefore carries:
-
-~~~text
-OwnerDefinesNoOperationPolicy(
-  exact PirCapabilityContractId<Family> and capability ABI)
-~~~
-
-The contract itself still restricts consumers and purposes, and every
-transitive bound source policy remains conjunctive. A consumer must
-reauthenticate the exact contract and ABI, obtain fresh PIR admission or
-owner-mediated confirmation, and match the separately supplied live capability
-to the complete inert binding. No contract, binding, ID, or serialized record
-is authority.
-
-An admitted Protocol, Core view, Interface, Plan, or other PIR subject/view uses
-`ExactAdmittedSubjectAuthorityBinding`. Its portable semantic coordinate is the
-exact subject ID, semantic/admission regime, admission basis and dependency
-closure, and `PirCapabilityContractId<Family>`/ABI. This coordinate is not an
-admission receipt. The admitted capability retains it, and replay reconstructs
-and readmits the subject before requiring complete binding equality.
-For an attenuated view, the binding's owner-origin and fact fields additionally
-contain the complete concrete view contract, exact read manifest/attenuation,
-source subject coordinate, named consumer, and typed purpose. These fields do
-not change the underlying subject's semantic ID, but two differently attenuated
-views never share an authority binding.
-
-Every completed qualified PIR semantic result exported across an owner boundary
-uses the following contract. This includes A/N relations and other explicitly
-closed family outcome algebras such as Core execution:
-
-~~~text
-PirCheckedResultCoordinate<R> =
-    Portable(PirCheckedResultRecordId<R>)
-  | OwnerLocal(PirCheckedResultRecordRef<R>)
-
-PirCheckedResultRecord<R> {
-  exact PIR owner domain and result-family tag,
-  exact operands, question, regime, and prerequisites,
-  exact field-factored completed qualified result and polarity when applicable,
-  exact checker contract, implementation, ABI, dependency, and read closure,
-  exact qualification, assurance, and residual-trust closure,
-  exact OwnerDefinesNoOperationPolicy disposition,
-  exact canonical total transitive source-operation-policy closure,
-  exact OwnerCapabilityRequirement
-}
-
-PirCheckedResultRecordBody<R> = {
-  exact same completed checked-result fields required above,
-  exact PIR owner instance and process generation,
-  no PirCheckedResultRecordRef<R>
-}
-
-PirCheckedResultRecordAssociation<R>:
-  (exact PIR owner instance,
-   exact process generation,
-   fresh PirCheckedResultRecordRef<R>)
-    -> exact PirCheckedResultRecordBody<R>
-
-PirCheckedResultRecordId<R> = H(
-  "zkc/pir-checked-result",
-  R,
-  CanonicalEncode(exact PirCheckedResultRecord<R>))
-~~~
-
-The portable branch is selected only when every identity-bearing preimage is
-portable and the exact capability contract permits the named retention and
-consumer purpose. Otherwise PIR first constructs the complete local record
-body, independently allocates a fresh typed reference in the collision-free
-domain scoped by the exact PIR owner instance, process generation, and result
-family, and atomically installs exactly one immutable association from that
-reference to that body before exposing `OwnerLocal(the fresh reference)` as
-the result coordinate. The body does not select or contain its reference, and
-the reference is not derived from the body. An owner-local lookup is valid
-only in the identical owner-instance/process-generation scope and must recover
-a body exactly field-equal to the one retained by the checked-result binding;
-absence or any mismatch fails closed.
-
-The reference is an opaque typed local name, not a pointer, address, token,
-receipt, capability, or authority. Neither the body nor the association
-contains or derives live authority. Owner reset, process-generation change,
-or process crossing invalidates the reference, its retained association, and
-the corresponding live capability; the local coordinate is the fresh
-reference itself, never the body or association. The
-`OwnerCapabilityRequirement` contains the exact
-capability-contract identity, ABI, operand/result binding schema, and
-freshness/lifetime requirements, never a capability token or occurrence
-identity. The owner creates the inert binding as part of the same completed
-operation that mints the live capability, and the capability retains the exact
-binding. U/C/R/M/F creates neither. Portable replay reruns the source check,
-recreates the complete record, and requires exact binding equality before
-minting fresh authority; an owner-local result has no exact cold replay.
+This page adds no portable carrier-specific capability channel. The process-
+local graph handle remains inside authentication and admission and cannot cross
+an owner boundary. The detailed binding, portable/owner-local result-coordinate,
+reset, and replay laws remain those of the project authority model and the K1/K2
+subject lifecycles.
 
 ### 5.2 Separate checker authority
 
-~~~text
-ExactProtocolAdmissionCheckerCapabilities = {
-  core: ExactCoreAdmissionCheckerCapabilities,
-  transcript:
-    None | ExactTranscriptLawCheckerCapabilities
+Canonical authentication consumes unauthoritative graph and dependency data
+plus the exact live authentication operations required by K1. Admission then
+uses fresh exact K2 checker authority:
+
+```text
+authenticated embedded Core
+  -> AuthenticateCore / AdmitCore
+
+admitted Core + Fresh
+  -> AdmitFresh
+
+admitted Core + authenticated and admitted external construction
+  -> AdmitFS
+```
+
+The owning operations are exactly those specified by
+[Interactive Core](interactive-core.md) and
+[Fiat--Shamir interpretation](fiat-shamir.md). This page does not duplicate
+their scope, binding, strategy, Oracle, public-coin, transcript-influence,
+sampling, replay, or failure laws.
+
+Checker implementations, evaluator handles, capabilities, and admission
+witnesses never enter Core or Protocol identity and never serialize. A caller
+cannot supply claimed public-coin classes, transcript prefixes, occurrence
+maps, influence sets, or derived dependency closure in place of recomputation.
+
+### 5.3 Ordered boundaries and refusal taxonomy
+
+The ordered boundary is:
+
+1. decode the selected transport and parse MLIR;
+2. require the closed physical form and run authority-free `ReadStructural`;
+3. authenticate the complete prior-meta basis;
+4. authenticate every typed Core dependency and exact K1 module closure;
+5. for FS, authenticate the external construction and its dependencies;
+6. recompute `CoreId`, `TranscriptConstructionId` when present, and
+   `ProtocolId`;
+7. mint the operand-bound `AuthenticatedCanonicalPirGraphHandle_B` and expose
+   its immutable pair view through `Read_B`; and
+8. run the exact K2 Core and selected interpretation admission.
+
+The following distinctions are mandatory:
+
+| Condition | Qualified boundary |
+|---|---|
+| Bytes do not decode or MLIR does not parse | transport failure; no semantic candidate |
+| Unknown carrier op/attribute/type, missing or extra field/group/block, invalid local reference, noncanonical order, or implicit default | `Malformed` during canonical formation |
+| Formed typed reference has the wrong subject kind, regime, owner kind, or other required axis | `KindMismatch` |
+| Exact named construction, module, primitive, algorithm, contract, or other preimage is absent | `MissingDependency` |
+| Supplied body does not recompute to its carried ID | `Malformed`; two pair-authenticated bodies under one typed ID are `HashBindingConflict` |
+| Otherwise formed but unused extra dependency | `Refused` by exact key-set closure |
+| Known `ModuleEffectRef` carrier names same-kind semantics unsupported by the evaluator | `Unsupported` |
+| Supported effect payload fails strict owner-schema decoding | `Malformed` |
+| Authenticated, supported candidate fails an owner or K2 semantic law | `Refused` |
+| A declared deterministic bound is crossed | `DeterministicLimitExceeded` |
+| An advertised checker/evaluator operation disagrees with its exact contract | `CheckerFailure` |
+
+Unknown MLIR syntax is never semantic `Unsupported`. The known generic
+`ModuleEffectRef` is the extension boundary at which an authenticated but
+unimplemented same-kind meaning can produce `Unsupported` without guessing.
+
+## 6. Imported-verification pressure
+
+Recursive or imported proof verification must use the K2 extension mechanism,
+not a dedicated pre-K2 carrier constructor:
+
+```text
+Occurrence.effect = ModuleEffectRef {
+  module: imported-verification SemanticModuleId,
+  declaration: ModuleDeclarationRef<"pir.core-effect">,
+  payload: exact declaration-carried MetaValueV0
 }
+```
 
-AdmitProtocol(
-  AuthenticatedCanonicalProtocolCandidate,
-  retained exact Protocol dependency views,
-  exact ExactSourceAuthorityBinding for every authority-bearing admitted or
-    dependency view, with separately supplied fresh capabilities,
-  CompositionContextAuthority,
-  ExactProtocolAdmissionCheckerCapabilities)
-  -> ProtocolAdmissionAttemptOutcome
-~~~
+The authenticated module declaration fixes the payload schema, ordered inputs
+and outputs, actor-visible history, transition, guard behavior, required
+influence, replay, terminal interaction, decision class, dependency edges,
+public reconstruction, and deterministic bounds. The carrier preserves the
+payload exactly and supplies none of those laws itself.
 
-`AdmitProtocol` runs the complete semantic predicates in
-[Protocol semantic model](protocol-model.md). It internally mints a
-transaction-scoped `CoreAdmissionWitness`. For FS, it then admits the retained
-authenticated construction by invoking `AdmitTranscriptConstruction` with
-that witness, the exact context authority, retained algorithm dependency
-views, and an identity-matched transcript-law checker. It finally checks
-`ProtocolAdmissible` and discards the witness.
+Any future exact supported imported-verification effect contract must close its
+payload's external semantic citations to only:
 
-Before either completed outcome, admission matches every authority-bearing
-view to its exact source binding and separately supplied fresh capability,
-freshly validates every bound policy or explicit no-policy owner contract for
-the named admission purpose, and constructs the canonical total transitive
-source-policy closure. The admitted-subject or checked-non-admission binding
-retains that complete closure and every exact `OwnerCapabilityRequirement`.
+- independently specified and authenticated semantic verifier algorithms and
+  their exact K1 evaluation contracts;
+- module- or K1-owned proof-input ABI declarations, with actual proof material
+  entering through the effect's ordinary typed K2 `ValueRef` inputs;
+- the child `ProtocolId` and exact typed child Core or Protocol coordinates
+  needed to identify its Statement, checks, claims, or terminals;
+- nominal K1/K2 claim contracts, without importing a Relations-owned Interface
+  or correspondence result; and
+- exact K1 semantic parameters, either as admitted typed values or independently
+  identified parameter subjects.
 
-Fresh requires `transcript = None`. FS requires exactly the capability for its
-referenced construction. Missing, extra, wrong-construction, or widened
-checker capabilities are refused. Checker identity and live capability do not
-enter `ProtocolId` and are not retained as executable ambient authority.
+Such a supported payload must not cite or embed `ProtocolInterfaceId`,
+`RelationInterfaceId`, any Plan or Plan view, OIR, Evidence, a relation
+instance or correspondence result, an endpoint realization, or a concrete
+realization-artifact identity. Those objects are satellites or observations,
+not Core semantics. Their identities cannot select which verifier a Core
+executes.
 
-Standalone Fresh and FS admission use `NoCompositionContext`. A composed FS
-construction requires matching scoped formation or affirmative checked
-composition authority. Callers cannot supply provisional occurrence maps,
-challenge maps, transcript prefixes, failure maps, or identity claims; the
-owning construction and admission operations recompute them.
+If an operational verifier currently depends on a concrete artifact, a future
+supported effect contract must require that the semantics it relies on first be
+extracted into an independently specified,
+authenticated, and admitted semantic verifier algorithm or semantic parameter
+subject. The Core cites that semantic subject and the module declaration checks
+its exact ABI. Substituting the semantic verifier or parameter changes the
+`ModuleEffectRef` payload or used dependency and therefore rotates `CoreId`.
+A later correspondence result may relate a concrete realization to that
+semantic subject, but the realization artifact itself never enters the Core.
 
-Success constructs the exact admitted-subject source binding and mints an
-opaque immutable process-local `AdmittedProtocol` that retains it. The
-capability has no serialized form and no independent semantic identity.
-`CoreAdmissionWitness`
-cannot escape the admission transaction. An `AdmittedCoreView` can be
-attenuated from the admitted Protocol but cannot assert an interpretation or
-widen back to Protocol authority.
+That contract cannot use legacy label strings for `route` or `proof_slots` as
+coordinates. A legacy `unabsorbed` Boolean is not retained: the effect
+declaration's required-influence and framing law decides what must reach the
+transcript.
 
-### 5.3 Qualified failures
+K3-B validates only that the exact imported-verification reference and payload
+survive both authority-free carrier inverse laws and every identity-field
+mutation, and that a known same-kind declaration without an exact supported
+`pir.core-effect` contract reaches typed `Unsupported`. It does not claim that
+such a Core is admitted or standardize one universal imported-proof semantics.
+The unsupported payload is preserved as exact carrier material but is not
+decoded, classified, or granted the future contract's citation guarantees.
+Only a separately specified exact supported effect contract can enable positive
+Core admission. Until that contract and K3-D's complete projection, execution,
+and conformance rule exist, OIR projection returns typed `Unsupported` and emits
+no partial program.
 
-Boundary operations preserve distinct result classes when applicable:
+## 7. Authoring, persistence, and information loss
 
-~~~text
-Affirmative
-Negative(reason, retained_facts)
-Unsupported(exact unsupported construct or question)
-CannotAnswer(missing named semantic input or basis)
-Refused(missing authority or prohibited invocation)
-Malformed(exact framing or structural defect)
-CheckerFailure(operational failure with no semantic conclusion)
-~~~
+Rich MLIR, source languages, importers, and synthesis tools are outside
+canonical PIR. Their boundary may produce one Core/Protocol candidate and zero
+or more Interface, Plan, relation, source-map, or audit outputs. Success of one
+output neither authenticates nor admits another.
 
-Malformed transport or carrier structure is not a negative semantic
-admission judgment. Missing authority is refusal. An operational checker
-failure yields no conclusion. The exact admission operation returns:
+Before erasure, the normalizer must classify every distinction as:
 
-~~~text
-ProtocolAdmissionAttemptOutcome =
-    CompletedAdmitted(
-      exact ExactAdmittedSubjectAuthorityBinding,
-      fresh AdmittedProtocol)
-  | CompletedNonAdmission(
-      exact completed field-factored refutation of the total ProtocolAdmissible
-        predicate over the authenticated candidate,
-      exact ExactCheckedResultAuthorityBinding<PIR, ProtocolNonAdmission>,
-      fresh CheckedProtocolNonAdmission)
-  | Unsupported(exact unsupported regime or construct)
-  | CannotAnswer(exact missing semantic input or complete decision basis)
-  | Refused(exact missing authority or prohibited invocation)
-  | Malformed(exact framing or structural defect)
-  | CheckerFailure(exact failed operational boundary)
-~~~
+- retained in an exact K2 field;
+- extracted into one separately typed satellite or nonsemantic audit output;
+- eliminated under one named and checked source-language quotient; or
+- refused.
 
-`CompletedNonAdmission` is available only when the authenticated candidate and
-all required inputs are well formed, the exact authenticated target admission
-regime defines a total
-decidable `ProtocolAdmissible` predicate at this boundary, and the complete
-checker establishes its exact semantic negative. Its checked-result binding
-uses the exact `PirCheckedResultCoordinate<ProtocolNonAdmission>` selected by
-the common portable-or-owner-local rule and retains the candidate, regime,
-admission basis and dependencies, exact violated laws and unaffected facts,
-checker, assurance/trust, total source-policy closure, and
-`PirCapabilityContractId<ProtocolNonAdmission>`/ABI. A parse
-failure, missing dependency, unsupported rule, refusal, timeout, or checker
-failure never becomes non-admission. Only `CompletedAdmitted` mints
-`AdmittedProtocol`; only `CompletedNonAdmission` mints
-`CheckedProtocolNonAdmission`. Compiler may use the latter as a conclusive
-exclusion fact only with the exact checked-result binding and fresh capability.
+Names, locations, macros, partial schedules, implicit defaults, imported
+symbols, relation descriptions, private construction routes, and protected
+effects cannot simply disappear because the canonical carrier has no slot for
+them.
 
-## 6. Authoring normalization and pre-erasure audit
+Persisted graph bytes remain raw material. Cold replay decodes transport,
+reauthenticates the exact basis and dependency preimages, recomputes every ID,
+readmits the Core and interpretation with fresh authority, and reruns any later
+relation or projection. Equal bytes, equal IDs, or a prior affirmative result
+may locate material but grant no authority.
 
-### 6.1 Mandatory front-end contract
+## 8. Conformance fixtures and deferred realization work
 
-Rich MLIR authoring, import, synthesis, and source languages remain outside
-canonical PIR. Their mandatory boundary is:
+The minimum positively admitted carrier witness contains:
 
-~~~text
-NormalizeAuthoring(
-  AuthoringUnit,
-  exact resolved read-closure snapshot,
-  AuthoringNormalizerContract,
-  ProtocolSemanticRegime)
-  -> UnauthoritativeNormalizationBundle<
-       CanonicalProtocolCandidate,
-       InterfaceCandidate*,
-       ProverPlanCandidate*,
-       NormalizationAudit<ProtocolAuthoring>>
-~~~
+- a multi-scope Core with public and verifier-private inputs;
+- all public-binding classes, an exact guard, prover and deterministic-verifier
+  messages, challenges, the Oracle publish/query/answer lifecycle, a check,
+  initial and reduction-output claims, a reduction publication requirement, and
+  terminals;
+- Fresh and FS Protocols over the same Core;
+- an external construction with bounded retry and typed sampling failure; and
+- direct modules whose external transitive closure includes a shared diamond.
 
-`AuthoringNormalizerContract` names one language or profile, its finite
-declared syntax quotient, every pre-erasure check, the complete mapping into
-canonical Core constructs, and its exact immutable dependency closure. The
-operation is deterministic over those named inputs but remains an
-unauthoritative producer. It does not authenticate or admit any output.
+A separate carrier-only imported-verification witness carries one exact
+same-kind `ModuleEffectRef` and payload, checks both structural inverse laws and
+every identity-field mutation, then requires typed `Unsupported` and no admitted
+Core or partial OIR program while no exact supported `pir.core-effect` contract
+exists.
 
-Two authoring inputs may normalize to the same candidate only through the
-contract's finite declared quotient and identical resolved semantics. Unknown
-distinctions and changes to protected observations are refused.
+The negative matrix mutates every identity-bearing field and covers missing,
+extra, reordered, duplicate, wrong-kind, cross-regime, wrong-ID, unknown carrier
+syntax, unsupported module semantics, and deterministic-limit cases. It also
+checks that Interface/Plan/Relations changes leave Core and Protocol IDs stable,
+that injection of those satellites is malformed, and that imported verification
+reaches K3-D's typed refusal without a partial OIR artifact.
 
-### 6.2 Information-loss ledger
+The following remain later realization work and are not silently selected here:
 
-Every authoring distinction has exactly one checked disposition:
+- final operation mnemonics, TableGen classes, assembly syntax, builtin
+  allowlist, bytecode profile, and version negotiation;
+- standalone MLIR carriers for TranscriptConstruction, Interface, Plan, or
+  Relations rather than their exact K1 algebraic transports;
+- full OIR grammar, execution semantics, and projection correspondence;
+- a standardized imported-verification module and endpoint support;
+- K4 composition or protocol-family changes to the Core; and
+- migration from the current pre-K2 `pir`/`oir` dialects.
 
-| Authoring distinction | Required pre-erasure work | Canonical destination |
-|---|---|---|
-| partial or unspecified order | schedule selection and ambiguity checks | one total `schedule` |
-| macros, modules, synthesis requests | elaboration and termination checks | elaborated Core nodes only |
-| human and source names | duplicate and binding checks | Interface candidate, source map, or erased diagnostic |
-| implicit defaults | default-selection check | explicit canonical field |
-| imported symbols | exact resolution-closure check | typed dependency ID and ABI |
-| relation descriptions | binding classification | separate Relations candidates or opaque Core declarations |
-| prover construction routes | semantic-change classification | separate Plan candidate or Protocol behavior |
-| source locations and provenance | diagnostic/provenance capture | nonsemantic side output |
-| order claimed observer-inert | proof or exact check before erasure | canonical semantic-key order |
-| protected effect or observation | never erased | explicit event, edge, codec, failure, or terminal field |
-
-`NormalizationAudit` records each distinction as retained in Protocol,
-extracted into a typed satellite or side output, proved quotient-neutral under
-the named contract, or rejected before erasure. The normalizer may emit
-several separately typed outputs; success of one neither authenticates nor
-admits another.
-
-Admission of a directly supplied canonical graph establishes only the
-canonical Protocol subject. It cannot retroactively establish source
-well-formedness, provenance, macro expansion, resolution closure, or
-information preservation for an absent authoring input.
-
-## 7. Persistence, reopening, and cold replay
-
-### 7.1 Authority never serializes
-
-Official semantic persistence is admission-gated, but persisted bytes remain
-raw material. A canonical graph, semantic ID, digest, signature, provenance
-record, serialized admission marker, or prior checker result is never a live
-capability.
-
-After serialization, FFI, mutation, reopening, or a process boundary:
-
-~~~text
-persisted transport
-  -> decode and parse
-  -> reauthenticate exact dependency preimages with fresh live authority
-  -> recompute semantic IDs
-  -> rerun Core and Protocol admission with fresh exact checker authority
-  -> mint a new process-local AdmittedProtocol
-~~~
-
-Workbench caches and proposal packages are unmistakably unauthoritative.
-Reopening creates an independent mutable authoring branch and inherits no
-output authority. A later canonical candidate must traverse normalization,
-authentication, and admission again.
-
-A durable checked-result record is justified only for a named independent
-consumer and binds every subject, semantic regime, operation input, checker
-identity, qualified outcome, and stated residual trust. Its bytes still carry
-no live checked-result or Protocol capability.
-
-### 7.2 Cold Fresh and standalone FS replay
-
-Fresh replay authenticates the Core closure, checks Core and Fresh Protocol
-admission, and mints the new Protocol capability.
-
-Standalone FS replay is acyclic despite the Core/construction dependency:
-
-~~~text
-authenticate canonical Protocol graph and Core dependencies
-  -> check CoreAdmissible
-  -> mint transaction-scoped CoreAdmissionWitness
-  -> authenticate TranscriptConstruction and algorithm closure
-  -> admit construction against witness and NoCompositionContext
-  -> check FS Protocol admission and all IDs
-  -> mint AdmittedProtocol
-  -> discard CoreAdmissionWitness
-~~~
-
-The PIR root's `TranscriptConstructionId` locates and binds the construction;
-it does not authenticate or admit the construction by itself.
-
-### 7.3 Cold composed replay
-
-A construction with composed context cannot use the standalone path. Replay
-must recover exact admitted child Protocol views and the authenticated
-composition spec, reconstruct and recheck the target Core, compare it with the
-persisted canonical candidate, and mint one fresh same-invocation
-`ScopedCompositionFormationAuthority`. It then authenticates and admits the
-construction and enclosing Protocol in that closed transaction and reruns
-composition finalization. Only an affirmative checked-composition capability
-minted after that finalization may authorize later post-formation reuse; it
-cannot bootstrap the replay transaction that produces it.
-
-A serialized `CoreComposition` record is not a live
-`CheckedCoreComposition`. Child IDs, target IDs, or old result bytes cannot
-replace the current admitted child views, reconstruction, or identity-matched
-checker authority. The exact semantic transaction is specified by
-[Fiat--Shamir and Core composition](fiat-shamir-and-composition.md); its
-cross-domain ownership is governed by the
-[transition and bridge architecture](../project/transition-and-bridge-architecture.md).
-
-## 8. Residual trust and nonclaims
-
-### 8.1 Residual trust boundary
-
-This specification makes the trusted inputs explicit rather than eliminating
-them. A conforming deployment still relies on:
-
-- the concrete collision-resistant hash and byte grammar later selected for
-  the structurally fixed identity preimages;
-- correctness of transport decoders and the MLIR parser at the boundary, while
-  treating their output as unauthoritative until checks complete;
-- correctness and identity matching of dependency authentication, admission,
-  and execution capabilities;
-- faithful evaluation of regime-owned closed finite terms;
-- authenticated preimages and ABIs for content-addressed contracts;
-- retention of exact immutable dependency views through each operation; and
-- correct capability confinement across process and serialization boundaries.
-
-Directly recomputable structural facts should not be replaced by producer
-claims or universal registries. A heuristic producer may propose material,
-but the owning checker must independently recompute every executable
-predicate. Theorem-backed conclusions remain separate relations with their
-own assumptions and residual trust.
-
-### 8.2 Clean nonclaims
-
-Canonical form, authentication, normalization, or Protocol admission does not
-by itself establish:
-
-- conformance of the current codebase or any particular MLIR dialect
-  implementation;
-- source-language well-formedness or information preservation without the
-  exact authoring input, normalizer contract, resolved closure, and audit;
-- provenance, authorship, review, signature validity, or production readiness;
-- relation truth, satisfiability, or witness validity;
-- soundness, knowledge soundness, completeness, zero knowledge, or
-  Fiat--Shamir security;
-- compiler transformation preservation, optimization, or target selection;
-- Interface preservation, Plan realization, OIR projection, endpoint support,
-  or concrete runtime invocation correctness;
-- correctness of an external randomness producer beyond a checked explicit
-  replay transition;
-- compatibility across semantic regimes, transport profiles, MLIR versions,
-  or earlier artifact formats; or
-- a universal authoring IR, universal fact database, or portable
-  carrier-neutral Protocol package.
-
-Those conclusions belong to separately admitted subjects and checked
-relations. The [PIR domain index](README.md) and
-[Protocol IR architecture](../project/protocol-ir-architecture.md) route those
-owners without weakening this carrier boundary.
+Carrier formation, authentication, admission, or successful round trip does
+not establish source-language correctness, relation satisfaction, protocol
+soundness, completeness, knowledge, zero knowledge, Fiat--Shamir security,
+compiler preservation, endpoint support, implementation conformance, or
+production readiness. Those remain separately scoped checked conclusions.

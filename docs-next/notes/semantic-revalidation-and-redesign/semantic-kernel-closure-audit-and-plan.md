@@ -33,9 +33,10 @@ executable foundations and bounded K2 Protocol/FS closure completed on
 2026-08-26. K2 was then narrowly reopened for two exact canonical-body defects
 and evidence-claim reconciliation without reopening its architecture, and is
 reclosed at that bounded scope with the final green gates and focused follow-up
-recorded by its validation owner. K3-A consumer-boundary reconstruction is
-complete and K3-B dependent-surface and Relations co-design is next; the
-integrated kernel is not frozen. The R2 protocol-witness track
+recorded by its validation owner. K3-A consumer-boundary reconstruction and
+bounded K3-B dependent-surface, Relations, and carrier co-design completed on
+2026-08-27. K3-C minimum Analysis closure is next; the integrated kernel is
+not frozen. The R2 protocol-witness track
 remains an evidence source; a P02 probe may inform an earlier question, but
 P02 cannot close its portfolio gate before K1--K3 establish the substrate it
 is meant to test. Stage 4B remains inactive.
@@ -79,12 +80,12 @@ A pure reopening condition is not itself a closure test.
 | Area | Result | Closing owner | Executable falsifier or gate |
 |---|---|---|---|
 | Subject and authority factorization | Coherent | Project and PIR | Reopen if a bounded protocol needs ambient state, a shadow Protocol schema, or Interface/Plan variation changes a Protocol-only observation. |
-| Regime, value, portable-function ABI, typed-failure, totality, and bounded-evaluation foundations | K1 standalone closed; K3 extraction and integration open | Foundation owns the selected substrate; PIR, Relations, Analysis, and OIR own their exact semantic bodies and use-site admission | The independent identity/value oracle must agree with the K1 reference model, while the term evaluator exercises function steps, typed failures, totality, and bounds. Reopen K1 if exact law/vector parity breaks or a consumer requires an owner-specific escape or general virtual machine. K3 must demonstrate two aligned consumer extractions; a second term evaluator remains independent-freeze evidence rather than credited K1 evidence. |
+| Regime, value, portable-function ABI, typed-failure, totality, and bounded-evaluation foundations | K1 standalone closed; bounded K3-B Relations extraction closed; later integration open | Foundation owns the selected substrate; PIR, Relations, Analysis, and OIR own their exact semantic bodies and use-site admission | The independent identity/value oracle must agree with the K1 reference model, while the term evaluator exercises function steps, typed failures, totality, and bounds. Reopen K1 if exact law/vector parity breaks or a consumer requires an owner-specific escape or general virtual machine. K3-B supplied one aligned Relations extraction; K3-C/D and K3-E still own the remaining consumer extraction and integration gates. A second term evaluator remains independent-freeze evidence rather than credited K1 evidence. |
 | Core execution | K2 standalone closed; Analysis strategy classes open | PIR execution structure; Analysis strategy classes | The bounded K2 instrument makes honest online execution and replay agree, while a trace whose early prover move depends on a future challenge replays but cannot obtain causal-generation provenance. K3 must define the adversary and strategy classes used by property judgments. |
 | Strong Fiat--Shamir structure | K2 structural regression narrowly reclosed | PIR structural admission | [J1](invariant-ledger.md#71-semantic-guarantees) now rejects omitted or late Statement binding, Wire-only or missing required influence, wrong prefixes, reused challenge coordinates, and direct or transitive verifier-private influence. Exact full-prefix equality is the independent runtime law; the ordered required-influence projection is a derived audit view. K2 deliberately absorbs every active prior prover publication. A theorem-priced omission requires a separately identified checked construction and reopens this cone; K3 still owns theorem applicability and loss. |
 | Fresh/FS relation | K2 Schnorr control closed; portfolio pressure open | PIR construction; Analysis theorem applicability | K2 preserves one literal Core and identity occurrence map across Fresh and FS on its Schnorr control and rejects mismatched constructions. K4 must pressure the same relation with native FRI/IOR and the differentiated portfolio; K3 owns theorem meaning. |
 | Core algebra and extension model | K2 bounded selections closed | PIR | K2 fixes the finite base algebra, exact supported-module ownership, fail-closed unknown extensions, scope order, Oracle lifecycle, and identity effects. A later protocol that needs a semantically distinct effect or cannot inhabit the registered module boundary reopens only this cone. |
-| Relations boundary | Open co-design seam | PIR surfaces, Relations semantics, Analysis loss | A relation-bound R1CS/AIR or Sumcheck fixture must distinguish Statement, Witness, private nonwitness, grounding, lossless bridge, and priced lossy projection; an opaque carrier escape or unpriced projection fails. |
+| Relations boundary | Bounded K3-B surface closed; Analysis loss open | PIR surfaces and Relations semantics; Analysis owns theorem loss | K3-B distinguishes Statement, Witness, private nonwitness, grounding, equivalence, embedding, and directional lossy projection in durable candidate contracts and a finite instrument. K3-C must still establish any premise and quantitative loss; full R1CS/AIR proving, native FRI, folding execution, and protocol-family coverage remain outside this closure. |
 | Analysis boundary | Partially stable | Analysis, reading PIR-owned views | Instantiate one primary-source FS theorem over causal target execution and one relation-bound property; wrong model, strategy, correspondence, hypothesis, or loss occurrence must change the qualified result. |
 | OIR boundary | Inactive but relevant | PIR source obligations; OIR projection relation | Project both roles, then drop one required effect, add phantom provenance, change a discharge family, and exercise the bounded imported-verification shape with typed `Unsupported` where projection remains unimplemented. Local validity must not survive as source-relative correctness. |
 | Compiler, Realization, and Evidence | Deferrable | Their later domain owners | They remain outside kernel closure unless a concrete feasibility/cost counterexample shows that a frozen source fact is insufficient; no downstream result may add Protocol meaning by backflow. |
@@ -93,8 +94,9 @@ A pure reopening condition is not itself a closure test.
 No contradiction found in this audit invalidates the central factorization.
 K1 and K2 have repaired the previously missing Foundation and PIR definitions
 at bounded standalone resolution. The remaining closure risk is now the exact
-consumer seam: Relations, Analysis, and OIR must read those definitions without
-inventing parallel meaning or forcing hidden changes upstream. The current
+consumer seam: K3-B closed the bounded Relations and dependent-surface slice;
+Analysis and OIR must still read those definitions without inventing parallel
+meaning or forcing hidden changes upstream. The current
 target is therefore a detailed, executable candidate kernel, not yet a complete
 or frozen v0 specification.
 
