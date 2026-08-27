@@ -44,7 +44,7 @@ endpoint. Procedural adjacency alone is not a bridge-composition theorem.
 | `foundation/` | Constitutional encoding and typed identity, same-regime semantic modules, domain-indexed values, bounded portable functions, typed completed failures, and deterministic evaluation control | Accept only genuinely shared semantics; never become a universal domain algebra, transition runtime, judgment, authority, capability, or resource policy |
 | `relations/` | External relation identities and interfaces, artifact interpretation, statement and witness ports, adapters, and correspondence | Keep relation admission, artifact interpretation, correspondence, satisfaction, and source compilation distinct |
 | `pir/` | Canonical Protocol semantics and lifecycle, formation, authentication, admission, composition, carrier, obligations, independently identified Protocol Interface and Prover Plan subjects, and admitted source/target subjects | Do not mirror MLIR; fold Interface or Plan identity into Protocol identity; or absorb property analysis, compiler search, endpoint behavior, or realization merely by convenience |
-| `analysis/` | Qualified property judgments, `FSCompile`, and property-specific transport over exact admitted subjects | Do not collect every domain-local predicate or turn search failure into a negative judgment |
+| `analysis/` | Qualified property judgments, exact theorem applicability, and property-specific transport over exact admitted subjects | Do not collect every domain-local predicate, collapse applicability into theorem truth or transport, or turn search failure into a negative judgment |
 | `compiler/` | Proposal/search orchestration, constraints, objectives, and selection among already admitted relation-checked candidates | Do not authenticate/admit a target or make a source/target relation true by selecting it |
 | `oir/` | Protocol/Interface/role/basis projection, `ProjectionCorrect`, standalone `LocalOirValid`, canonical OIR, endpoint semantics, and abstract execution | Do not infer source coverage from source-free OIR or absorb concrete suppliers and runtime |
 | `realization/` | Exact supplier binding, production, `RealizesOir`, deployment preparation/activation, invocation binding/execution, and operational observations | Do not change endpoint semantics; keep portable configuration, live authority, content identity, occurrence identity, and partial effects distinct |
@@ -102,9 +102,10 @@ producer proposes successor
 ```
 
 Selection does not create validity, and an admitted successor may exist even
-when one proposed predecessor relation is refuted. `FSCompile` and
-property-specific `PropertyTransport` remain separate Analysis results from
-the PIR-owned construction and admission of an FS Protocol.
+when one proposed predecessor relation is refuted. Exact theorem applicability
+and property-specific transport remain separate Analysis results from the
+PIR-owned construction and admission of an FS Protocol; applicability excludes
+theorem truth and source-property authority.
 
 OIR projection consumes an admitted Protocol, admitted Interface, endpoint
 role, and explicit `InterfaceOnly` or `InterfaceAndPlan` basis. Standalone OIR
@@ -161,10 +162,10 @@ Evidence appraisal, and reliance at their actual authority cuts.
 | Authenticate and admit successor | `pir/` | Target admission remains independent of the claimed source relation |
 | Check exact predecessor/successor relation | Owner of the named relation | Consume exact admitted subjects, regimes, maps, assumptions, observers, and losses; a negative judgment need not invalidate either subject |
 | Select among admitted, checked candidates | `compiler/` | Selection names the candidate domain and objective; winner validity does not establish global optimality |
-| Construct and admit an FS Protocol | `pir/` | Three phases keep candidate construction, independent target authentication/admission, and exact A/N construction checking distinct; none is `FSCompile` |
+| Construct and admit an FS Protocol | `pir/` | Three phases keep candidate construction, independent target authentication/admission, and exact A/N construction checking distinct; none establishes theorem applicability or property transport |
 | Compose admitted Core views into a target Protocol | `pir/` | Admit the exact composition specification, independently form and admit the target, then recompute the A/N composition result; only A carries resolved maps or context authority, and no structural result implies a property theorem |
-| Fresh/FS Protocol pair to `FSCompile` | `analysis/` | Bind transcript construction, occurrence/prefix map, regime, and assumptions; transport no unrelated property automatically |
-| Source property plus checked relation to `PropertyTransport` | `analysis/` | Apply a property-specific rule; relation adjacency or an annotation is insufficient |
+| Fresh/FS Protocol pair to theorem applicability | `analysis/` | Bind one exact theorem profile, transcript construction, occurrence/prefix map, regime, and structural premises; exclude theorem truth and source-property authority |
+| Source property plus applicability to property-specific transport | `analysis/` | Apply one exact rule under theorem truth, hypotheses, maps, and losses; adjacency or an annotation is insufficient |
 | Protocol + Interface + role + tagged Plan basis to projected OIR | `oir/` | Plan-sensitive basis includes admitted Plan plus checked `PlanRealizes`; OIR owns distinct `LocalOirValid` and `ProjectionCorrect` results, exact coverage, target identity, and refusal |
 | Standalone OIR carrier to locally admitted OIR | `oir/` | `LocalOirValid` cannot mint omitted source coverage or restore a serialized projection capability |
 | Verifier endpoint to outer relation material (`descend`) | `relations/` | Endpoint identity and verifier semantics remain under `oir/` |
@@ -257,7 +258,8 @@ The selected authority cuts imply these later document moves:
 - keep Protocol structural judgments such as formation, closure, admission,
   and composition in `pir/`;
 - separate property calculus, soundness, knowledge, completeness, assumptions,
-  derivations, `FSCompile`, and property transport within `analysis/`;
+  derivations, theorem applicability, and property-specific transport within
+  `analysis/`;
 - separate transform proposal, target admission, relation checking, and
   compiler selection rather than treating them as one pass result;
 - keep endpoint projection and local OIR admission separate from supplier

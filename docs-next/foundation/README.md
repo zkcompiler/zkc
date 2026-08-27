@@ -24,7 +24,9 @@ It is not the place for every concept that several documents mention.
   domain-indexed values, portable algorithms, deterministic evaluation
   control, and the boundary between semantic completion and operational
   noncompletion. Domain regimes, predicates, judgments, and resource policies
-  remain with their owners. K3 still owes the two-consumer extraction test.
+  remain with their owners. Bounded K3-B Relations and K3-C Analysis have now
+  demonstrated two aligned consumer extractions; K3-E still owes integrated
+  closure.
 
 ## Owns
 

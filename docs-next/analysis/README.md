@@ -1,213 +1,179 @@
 # Protocol Property Analysis
 
 > **Document kind:** Domain index
-> **Document state:** Active target-domain index
-> **Target alignment:** Selected Stage 4A federated typed Analysis target
+> **Document state:** Active non-normative K3-C target
+> **Target alignment:** Bounded minimum Analysis kernel over K1, K2, and K3-B
 > **Provisional owner:** `analysis`
-> **Authority:** None during the transition. Current property calculus remains
-> governed principally by the [Soundness Kernel specification](../../docs/spec/soundness.md).
-> **Closure interpretation:** This index records a selected package-resolution
-> target. `Selected`, `target`, and `exact` describe intended role, scope, and
-> ownership; they do not assert integrated definition closure or semantic
-> freeze. The [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
-> owns the live gate.
+> **Authority:** None during transition. The current property calculus remains
+> governed by the [Soundness Kernel specification](../../docs/spec/soundness.md).
+> The pages in this directory define a redesign target only; they establish no
+> theorem, property, implementation support, migration result, or consumer
+> reliance.
 
 ## Purpose
 
-`analysis/` owns reusable post-admission evaluation of properties over exact
-subject tuples. Admitted semantic subjects, source-owned immutable views, and
-later-owned occurrence or model inputs remain separately typed; none is widened
-into a universal admitted fact root. The domain's center is a typed calculus of
-questions, subjects, indices, rules, hypotheses, derivation plans, checked
-derivations, and qualified judgments—not a generic home for every check or
-inference rule in zkc.
+`analysis/` owns conditional property judgments over exact admitted subjects.
+It does not own those subjects, their execution, relation satisfaction, or the
+truth of an imported theorem. Its minimum active pipeline is:
 
-The domain name describes the semantic service. `Judgment` remains the formal
-name for its typed conditional outputs; other domains retain ownership of their
-own structural, correspondence, compilation, and validity judgments.
+```text
+finite K2/K3-B subject S
+  -> finite relation-bound Fresh proposition and conditional judgment
+
+abstract asymptotic family F
+  + independently established family Fresh source-property judgment
+  + exact family theorem-applicability judgment
+  + retained theorem-truth premise
+  -> conditional family Fiat--Shamir target judgment
+
+conditional family target judgment
+  + exact pointwise correspondence (F,n0,S,ell0)
+  -> conditional finite-member target judgment
+```
+
+This is intentionally smaller than the earlier Stage 4A catalog. K3-C closes
+one reusable ingress and these typed seams; it does not finish every Analysis
+family. In particular, the finite judgment for `S` neither establishes the
+all-`n` source property of `F` nor enters the AFK family transport directly.
+K3-C defines no native proof basis that mints that family source-property
+capability, so the family transport currently returns `CannotAnswer` unless an
+independent proof authority supplies it.
 
 ## Owns
 
-- exact property subjects and analysis sites;
-- security tracks and notions, including soundness and knowledge variants;
-- completeness as a separate property track over shared typed machinery;
-- future zero-knowledge or other property tracks only if they fit the same
-  subject and derivation model;
-- typed result schemas, exact quantities, bounds, and resource variables;
-- hypotheses, assumptions, external propositions, and inherited obligations;
-- rule and signature schemas, premise bindings, catalogs, and application;
-- explicit derivation plans, plan checking, and independently re-checkable
-  results;
-- exact property-subject selection, including Interface, Plan, relation, OIR,
-  target, supplier, or later-owned occurrence inputs only when the question
-  names them and declares their complete read set;
-- `FSCompile` as a theorem- or model-backed judgment over exact admitted Fresh
-  and Fiat--Shamir Protocols, the exact `AdmittedTranscriptConstruction`, and
-  the affirmative exact `CheckedFSConstruction` that retains its maps and
-  regime, together with the question's model, rule, assumptions, and
-  quantitative parameters;
-- property-specific `PropertyTransport` over an exact source judgment, an exact
-  affirmative checked source/target relation, the property-specific rule,
-  hypotheses, substitutions, and losses;
-- property-specific composition over exact admitted children and target, an
-  exact admitted `CoreCompositionSpec`, and an affirmative exact
-  `CheckedCoreComposition`, without importing a property from structural
-  composition alone;
-- exact property-coverage accounting that preserves unproved, unsupported, and
-  inapplicable members instead of creating a universal verified state; and
-- purpose-bound persistence, cold replay, cache classification, disclosure,
-  local-taint propagation, and residual-trust closure for Analysis results.
+- finite, purpose-specific manifests selecting exact source-owned views and
+  checked results;
+- strategy classes, adversary interfaces, quantifier order, oracle and
+  public-coin models, scheduling, resources, outcomes, and failures;
+- the common question, hypothesis-free goal, conditional proposition, basis,
+  support, validation, qualified-result, and authority disciplines;
+- family-specific properties and their exact negative meaning;
+- theorem schemas and exact applicability questions;
+- typed quantitative expressions, theorem-specific transforms, and exact
+  imports of authenticated loss-bearing occurrences;
+- property transport over an affirmative source judgment and an affirmative
+  theorem-applicability result; and
+- Analysis cold replay of semantic/checker dependencies, kept separate from
+  Protocol replay and cryptographic rewind.
 
 ## Does not own
 
-- PIR formation, `WF`, linearity, binding, closure, authentication, admission,
-  or link;
-- relation interface correspondence merely because it is written as a
-  judgment;
-- compiler `DOMAIN`, legality, scoring, selection, or decision checking;
-- OIR validity, projection coverage, or abstract execution verdicts;
-- the truth of an external theorem or hypothesis named by a rule;
-- Protocol construction, including deterministic formation and admission of a
-  Fiat--Shamir Protocol;
-- the source-owned definitions or authenticated views from which analysis
-  reads facts;
-- formalization receipts, tests, or conformance observations; or
-- a universal “verified” state that collapses distinct properties.
+- K1 identity, value, algorithm, failure, evaluation, or capability mechanics;
+- `InteractiveCore`, Protocol, generated execution, deterministic replay,
+  transcript construction, or `CheckedFSConstruction`;
+- relation definitions, Interfaces, instances, satisfaction, Protocol/Plan
+  bindings, bridge-use enumeration, or occurrence-local loss export;
+- theorem truth, formal proof import, concrete hash security, or ROM
+  realization;
+- Compiler decisions, OIR validity, projection correctness, realization,
+  endpoints, Evidence appraisal, or reliance; or
+- a universal `Verified` state.
 
-## Dependencies
+Structural admission and property establishment never alias. In particular,
+an admitted FS Protocol or checked construction establishes no source property,
+no theorem applicability, and no transported target property.
 
-- `foundation/` for exact identity, authority, and admission mechanics;
-- `pir/` for exact admitted Protocol subjects and purpose-specific authenticated
-  views of their events, schedule, values, objects, randomness, challenges,
-  claims, checks, failures, terminals, obligations, dependencies, occurrences,
-  and challenge interpretation, plus an exact admitted
-  `TranscriptConstruction`, affirmative `CheckedFSConstruction`, admitted
-  `CoreCompositionSpec`, affirmative `CheckedCoreComposition`, or exact
-  Interface/Plan view only when the family question or rule names that
-  structural satellite or result;
-- `relations/` for exact admitted relation operands and exact question-scoped
-  A/N checked comparison, grounding, or correspondence capabilities whose read
-  closure contains every relation fact the question consumes, plus live
-  `CheckedRelationSatisfaction` authority and its distinct owner-private premise-
-  record and witness-occurrence references when a completeness, knowledge, or
-  other experiment reads confidential relation truth; and
-- conditionally, `evidence/` for exact attributable records and policy-qualified
-  appraisals when, and only when, an explicit family rule names those inputs.
+## Exact dependencies
 
-Evidence is not an ambient dependency of subject identity. A family that does
-not declare an exact Evidence-derived basis neither reads Evidence nor changes
-its question, proposition, or ordinary derivation semantics because Evidence
-records exist.
+The active minimum reads:
 
-The calculus must not read mutable or producer-asserted mirrors where its
-contract requires facts reconstructed from an admitted subject through its
-source-owned authenticated view.
+- [Executable Semantic Foundations](../foundation/executable-foundations.md)
+  for `SemanticContentId`, canonical values, evaluation outcomes, and
+  process-local authority;
+- [Interactive Core](../pir/interactive-core.md) for admitted Protocols,
+  `PublicBindingView`, `StrategyDecisionView`, `PublicCoinView`, `EffectView`,
+  `ClaimReductionView`, `ExecutionView`, generated execution, and replay;
+- [Fiat--Shamir](../pir/fiat-shamir.md) for
+  `TranscriptDeclarationView`, `RequiredInfluenceView`,
+  `ChallengeTransitionView`, `FSConstructionView`, and the checked same-Core
+  Fresh/FS construction;
+- [Interfaces and Plans](../pir/interfaces-and-plans.md) for exact external
+  Statement and prover Witness roles; and
+- [Relation Model](../relations/relation-model.md) plus
+  [Protocol Correspondence](../relations/protocol-correspondence.md) for
+  admitted relation meaning, checked Statement/claim/witness correspondence,
+  run-grounded occurrences, directional bridge uses, and qualified lossy-use
+  exports.
 
-Each source domain owns its narrow authenticated view and defines what every
-exported fact means. Analysis owns the question-specific adequacy requirement,
-logical evaluation, derivation checking, and resulting judgment. A view is not
-a universal fact root, and adding an ambient read changes the analysis
-contract.
+Every source remains owned by its producer. Analysis declares the exact fields
+it reads and checks adequacy; it cannot reconstruct a second Core, transcript,
+relation, occurrence graph, or authored loss count.
 
-## Consumers and outputs
+## Active K3-C profiles
 
-- `compiler/` consumes typed results and exact judgment capabilities in
-  constraints and objectives without reimplementing their meaning;
-- `project/` may summarize supported property tracks through global status;
-- `evidence/` records receipts, source readings, parity, and checks supporting
-  implementation or theorem-correspondence claims; and
-- guides explain how to request and interpret a result.
+The bounded active set is:
 
-A property result remains conditional on its stated hypotheses and exact
-subject. Consumers cannot widen the subject, erase inherited obligations, or
-use its authority outside the conjunction of the exact
-`FamilyOperationPolicyId` and every transitive source-owner operation policy
-bound to the result.
+1. **Finite relation-bound Schnorr special soundness.** The Statement, claim,
+   Witness role, relation instance, verifier equation, and accepting event come
+   from exact K2/K3-B sources. Its universal pair quantifier is over one finite
+   native profile, not an asymptotic family and not an AFK source theorem.
+2. **Abstract classical-ROM Fresh-to-FS transport.** One exact asymptotic
+   family description is matched to one exact theorem profile. The initial
+   profile is the three-move, adaptive-statement specialization of Attema,
+   Fehr, and Klooß for a `2`-special-sound family. It requires an independently
+   established uniform all-`n` source property, exact family experiment and
+   map correspondences, a finite bounded-bitstring oracle-index carrier, one
+   fixed challenge cardinality `N` shared by all family members, a total
+   uniform challenge process, an exact `0 <= Q < N` query domain, theorem
+   truth, and the theorem-specific
+   quantitative transform. This is an explicit restricted-query subprofile,
+   not the full all-`Q` Definition 10 property.
+3. **Pointwise family/member specialization.** A separately checked exact
+   correspondence relates one representable family member `(F,n0)` to one
+   native subject `(S,ell0)` and substitutes the family formulas pointwise. It
+   cannot generalize a finite subject to all `n`.
 
-Any result derived from a Relations owner-private premise record or witness-
-occurrence reference uses the corresponding Analysis `Local*Handle` values rather than portable
-content IDs. Compiler or another named consumer may use it only inside the same
-owner-authorized process and purpose. Compiler's own local-dependency taint then
-begins at the first Compiler value whose own preimage names that local result,
-normally a qualification projection, assessment portfolio or use record,
-constraint, objective, assessment, or decision. A candidate or domain is local
-only if its own transition, path, or domain preimage names a local semantic
-child. Every actually affected forward chain is nonpersistable and has no exact
-cold replay.
+These profiles are different propositions with different source authority. A
+concrete run may pressure-test their occurrence maps; it never proves any
+universal or asymptotic property.
 
-An occurrence-sensitive question cites the exact later-owned execution or
-observation occurrence and the exact Stage 3 invocation or observation tuple to
-which it is bound. Stage 3 mints no runtime-occurrence subject, and one observed
-execution cannot be generalized without a separately stated model and rule.
+## Qualified outcomes
 
-Outcomes are qualified rather than Boolean and preserve the common classes when
-applicable:
+Analysis preserves these outer distinctions:
 
 ```text
-Affirmative
-Negative(reason, retained_facts)
-Unsupported(exact unsupported question or construct)
-CannotAnswer(missing named semantic input or basis)
-Refused(missing authority or prohibited invocation)
-Malformed(exact input framing or structural defect)
-CheckerFailure(operational failure with no semantic conclusion)
+Affirmative(exact conditional judgment)
+Negative(family-defined semantic counterexample)
+Unsupported(exact family, model, or construct is outside the selected profile)
+CannotAnswer(missing named semantic premise or source authority)
+Refused(prohibited use or failed post-authentication applicability condition)
+Malformed(noncanonical or structurally invalid input)
+DeterministicLimitExceeded(no semantic answer)
+CheckerFailure(implementation or admitted-provider disagreement)
 ```
 
-A complete decidable query may return a successful negative judgment. Failure
-to find a derivation is not negative truth without a completeness theorem. Only
-completed A/N results mint their exact question-, polarity-, assurance-, family-
-operation-policy-, transitive-source-policy-closure-, and completed-judgment-
-binding-scoped capability. That capability also retains the complete
-`ExactCheckedResultAuthorityBinding<Analysis,F>` and its inert
-`OwnerCapabilityRequirement`; an affirmative-only premise requires the
-affirmative variant. Quantitative and conditional judgments retain their own
-result forms.
+Failed proof search is not a semantic negative. `Unsupported`,
+`CannotAnswer`, `Refused`, and `CheckerFailure` are not interchangeable.
 
-## Bridge ownership
+## Deliberate deferrals
 
-The source domain owns authenticated fact-view construction and every exported
-fact's definition. `analysis/` owns selection of the exact property subject,
-the finite read vocabulary required by the question and basis, derivation-plan
-checking, and the resulting judgment. Judgment consumption in compiler
-constraints belongs to `compiler/`, which must cite result meaning rather than
-restate it.
+The following earlier Stage 4A surfaces are not active K3-C contracts:
 
-Fiat--Shamir construction, `FSCompile`, and `PropertyTransport` are separate
-contracts. An admitted FS Protocol may exist without an `FSCompile` judgment,
-and `FSCompile` does not transport every property. Only an Analysis-owned,
-property-specific transport rule may derive the exact target judgment and its
-changed hypotheses or quantitative loss.
+- general Protocol equality, trace refinement, declared change,
+  distributional distance, and cost families;
+- plain soundness, zero knowledge, malicious-verifier games, QROM,
+  round-by-round and restoration families, and multi-prover independence;
+- generic property composition, structural Core composition, coverage,
+  persistence formats, caches, proof languages, theorem libraries, and
+  external certificate systems; and
+- whole-application security or artifact-wide discharge.
 
-## Target documents
+Adding one requires a separate family profile, exact source manifest,
+experiment, theorem or rule edge, quantitative semantics, falsifiers, and a
+named consumer. It is not achieved by adding a flag to either initial profile.
 
-- [Selected Analysis and Compiler Architecture](../project/analysis-and-compiler-architecture.md)
-- [Analysis Semantic Model](analysis-model.md)
-- [Semantic Relation Families](semantic-relations.md)
-- [Cryptographic Property Families](cryptographic-properties.md)
-- [Transport, Composition, and Replay](transport-composition-and-replay.md)
+## Documents
 
-These pages are durable non-normative Stage 4A candidate targets at package
-resolution. The current Soundness Kernel and related specifications under
-`docs/` remain authoritative until explicit normative consolidation and
-cutover.
+- [Analysis Semantic Model](analysis-model.md) owns the common minimum ingress,
+  experiment, identity, hypothesis, basis, authority, and outcome contracts.
+- [Semantic Relations](semantic-relations.md) owns the exact K3-B relation
+  source seam and the initial relation-bound property coordinates.
+- [Cryptographic Properties](cryptographic-properties.md) owns the two selected
+  experiment/property profiles and typed quantitative language.
+- [Transport and Replay](transport-composition-and-replay.md) owns theorem
+  applicability, property transport, loss-ledger consumption, and the three
+  non-interchangeable replay notions.
 
-## Reopened integrated-closure and later work
-
-Stage 4A selected a family-indexed question/proposition model, profile and
-basis boundaries, support and validation identities, qualified outcomes,
-property-family topology, Fiat--Shamir applicability, transport, composition,
-coverage, replay, trust, and extension law at its then-current package
-resolution. Post-selection revalidation reopened the causal strategy/history
-interface, primary-source theorem and model grounding, the single shared
-Fiat--Shamir structural read contract, and authenticated quantitative
-occurrence and loss hooks. Those are pre-freeze consumer questions; they do not
-require completing every theorem family. Later work still includes concrete
-theorem libraries, external proof systems, certificate formats, checker
-implementations, supported theorem instances, cryptographic assumptions, and
-implementation organization.
-
-Stage 4B may add exact OIR-, realization-, or endpoint-owned subjects only
-through explicit family profiles and complete read contracts. Stage 5 tests
-the joined capability surface. Evidence and reliance remain separately owned;
-Stages 7 and 8 retain normative consolidation, implementation architecture,
-conformance, and migration.
+The [Analysis and Compiler Architecture](../project/analysis-and-compiler-architecture.md)
+records the larger federated decision. Compiler remains downstream and cannot
+consume an unqualified or unsupported Analysis result.

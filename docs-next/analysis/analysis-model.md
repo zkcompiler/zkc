@@ -1,1381 +1,1588 @@
 # Analysis semantic model
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative target
-> **Target status:** Stage 4A durable promotion
+> **Document state:** Active non-normative K3-C target
+> **Target status:** Bounded minimum kernel; broader Analysis remains deferred
 > **Provisional owner:** `analysis`
-> **Authority:** This document specifies the selected target for `docs-next/`.
-> It is non-normative until explicit consolidation and cutover. The current
-> specifications under [`docs/`](../../docs/README.md) remain authoritative.
-> This document makes no implementation, migration, compatibility, theorem,
-> property-establishment, or consumer-reliance claim.
+> **Authority:** This page defines a redesign target for `docs-next/`. The
+> current specifications under [`docs/`](../../docs/README.md) remain
+> authoritative until explicit consolidation and cutover. This page establishes
+> no theorem truth, property, implementation, migration, or reliance claim.
 
-> **K1 transition notice — 2026-08-26:** The identity, canonical-value,
-> algorithm, dependency, and evaluation forms below predate
-> [Executable Semantic Foundations](../foundation/executable-foundations.md).
-> K3 must reconcile Analysis inputs and checked results with the exact K1
-> substrate and the K2 Protocol model; this page is not yet an integrated
-> K1-aligned Analysis calculus.
+## 1. Scope and fixed separations
 
-## 1. Scope and architectural position
+The minimum Analysis kernel evaluates exact conditional propositions over
+source-owned semantic subjects:
 
-Analysis owns reusable post-admission evaluation of exact semantic questions.
-Its target is a **federated typed calculus**:
+```text
+authenticated source manifests
+  + one closed strategy/experiment profile
+  + one hypothesis-free goal
+  + one canonical hypothesis context
+  + semantic basis and exact support
+  + independent validation basis
+  -> one qualified conditional judgment
+```
 
-~~~text
-exact admitted subjects and owner-created views
-  + one family-owned question and semantic model
-  + an exact typed hypothesis context
-  + a direct, internal, external, certificate, or Evidence-derived basis
-  -> a family-owned checked proposition
-  -> a qualified Analysis judgment
-~~~
+The following categories never alias:
 
-A small common layer owns lifecycle, identity categories, dependency closure,
-checking discipline, qualified outcomes, local capabilities, replay, and
-shared typed-expression primitives. It does not own a universal proposition
-or result payload. Each closed family owns its subject tuple, semantic model,
-question, conclusion, refutation meaning, valid basis lanes, and inference
-rules.
+```text
+source subject or checked result
+source manifest
+strategy class
+experiment profile
+question
+goal
+conditional proposition
+semantic basis
+support instantiation
+validation basis
+checking attempt
+qualified judgment record
+live result capability
+replay material
+```
 
-The companion specifications divide the family surface without changing this
-common contract:
+A citation is not theorem authority. A supplied run is not a strategy. A
+successful run is not a universal property. A semantic basis is not its
+checker. A record, digest, receipt, or replay bundle is not live authority.
 
-- [Semantic relation families](semantic-relations.md) owns equality, traces,
-  refinement, declared change, distribution, cost, and the exact seam to
-  Relations-owned satisfaction;
-- [Cryptographic property families](cryptographic-properties.md) owns the
-  completeness, soundness, knowledge, and zero-knowledge experiment families
-  and Fiat--Shamir theorem applicability; and
-- [Transport, composition, and replay](transport-composition-and-replay.md)
-  owns heterogeneous property transport, property composition, coverage,
-  cold replay, caches, residual trust, and extension law.
+## 2. Exact source ingress
 
-Analysis does not own PIR formation or admission, relation definition or
-satisfaction, Protocol-to-relation correspondence, Compiler decisions, OIR
-validity, endpoint facts, observations, or consumer reliance. It consumes
-only the exact admitted subjects, source-owned views, and checked capabilities
-provided by those owners.
+### 2.1 Source read slots
 
-## 2. Semantic categories and live authority
+Analysis imports the project-owned `ExactSourceAuthorityBinding`; it does not
+redefine that record. One manifest slot has the following Analysis-owned
+meaning:
 
-### 2.1 Categories that never alias
-
-The target distinguishes:
-
-~~~text
-semantic subject
-AnalysisQuestion                 // stable experiment or relation problem
-AnalysisGoal                     // exact hypothesis-free conclusion
-AnalysisProposition              // exact conditional truth-apt claim
-AnalysisRequest                  // one operational attempt specification
-AnalysisCheckingAttemptInput     // capability-neutral partial ingress
-AnalysisCheckingInvocation       // fully prepared occurrence-local input
-SemanticDerivationBasis          // inference meaning
-ValidationBasis                  // checker and translation meaning
-SupportInstantiation             // exact established premise occurrences
-CheckedDerivation                // proof, refutation, certificate, or check
-qualified JudgmentRecord         // inert completed outcome; durable only when policy permits
-checking or replay occurrence    // one operation, not semantic content
-process-local live capability    // current authority
-AnalysisReplayBundle             // inert reconstruction material
-~~~
-
-No category is an alias for another. In particular:
-
-- a theorem statement is not a zkc proposition;
-- a question has no truth value until paired with an exact conclusion and
-  hypothesis context;
-- a timeout, tactic, proof preference, or assurance request does not change
-  question or proposition meaning;
-- a semantic basis is not its checker implementation;
-- a proof, result record, ID, or replay bundle is not a live capability; and
-- failed proof search is not a semantic refutation.
-
-### 2.2 Authority topology
-
-Every authority-bearing input is a fresh, opaque, process-local capability
-minted by its semantic owner. Analysis receives exact admitted subject
-capabilities and owner-created purpose-specific views. A successful Analysis
-check may mint only:
-
-~~~text
-EstablishedAnalysisJudgment<
-  F, Affirmative, AssuranceClass, FamilyOperationPolicyId,
-  ExactSourceOperationPolicyDependencyClosure, NamedConsumer, OperationPurpose,
-  ExactJudgmentBinding, ExactCheckedResultAuthorityBinding<Analysis, F>>
-EstablishedAnalysisJudgment<
-  F, Negative, AssuranceClass, FamilyOperationPolicyId,
-  ExactSourceOperationPolicyDependencyClosure, NamedConsumer, OperationPurpose,
-  ExactJudgmentBinding, ExactCheckedResultAuthorityBinding<Analysis, F>>
-
-ExactRef<T> = PortableId<T> | LocalHandle<T>
-
-ExactJudgmentBinding = {
-  judgment_record: ExactRef<JudgmentRecord>,
-  basis_qualification: ExactRef<BasisQualification>,
-  derivation: ExactRef<Derivation>,
-  support_instantiation: ExactRef<SupportInstantiation>,
-  semantic_basis: ExactRef<SemanticBasis>,
-  validation_basis: ExactRef<ValidationBasis>
-}
-~~~
-
-Every cross-owner support input uses the project-wide
-[`ExactSourceAuthorityBinding`](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings):
-
-~~~text
-OwnerCapabilityRequirement {
-  exact owner capability-contract identity and ABI,
-  exact operand/result binding schema,
-  freshness and authority-lifetime requirements
+```text
+AnalysisSemanticReadSlot = {
+  owner_domain,
+  source_family,
+  exact_semantic_coordinate,
+  read_purpose: SemanticMeaning | PremiseSupport | OccurrenceEvidence,
+  selected_fields: CanonicalNonEmptySeq<OwnerFieldCoordinate>,
+  adequacy_requirement,
+  source_binding_schema,
+  required_authority_class: None | FreshSourceCapability,
+  failure_disposition
 }
 
-ExactSourceAuthorityBinding<Owner, CapabilityFamily> {
-  exact owner domain and capability family,
-  semantic_coordinate:
-      Portable(exact owner canonical subject/admission coordinate or
-               exact owner checked-result record identity)
-    | OwnerLocal(exact owner subject or premise/result-record reference),
-  complete owner result-origin coordinates required by the capability ABI,
-  exact admitted-subject facts or completed qualified outcome, polarity when
-    applicable, and semantic facts,
-  exact qualification, assurance, and residual trust,
-  exact authenticated owner-policy disposition,
-  exact source-result transitive policy-dependency closure,
-  exact OwnerCapabilityRequirement
+AnalysisFamilyRoleReadSlotSchema = {
+  abstract_role_coordinate: LocalAnalysisSourceFamilyRoleRef,
+  read_purpose: SemanticMeaning | PremiseSupport,
+  dependent_signature,
+  adequacy_requirement,
+  failure_disposition
 }
 
-ExactAdmittedSubjectAuthorityBinding =
-  ExactSourceAuthorityBinding with an admitted-subject semantic coordinate
+LocalAnalysisSourceFamilyRoleRef = {
+  local_role_ordinal: Natural,
+  exact_role_tag: ModuleDeclarationRef<"analysis.family-role-kind">
+}
 
-ExactCheckedResultAuthorityBinding =
-  ExactSourceAuthorityBinding with a checked-result semantic coordinate
+AnalysisFamilyRoleKindDeclarationBody = {
+  name: MetaSymbol,
+  signature_class:
+      ValueCarrier | Predicate | ExperimentProcess | VerifierProcess
+    | ResourceMeasure | PositivePolynomialProfile | QuantitativeValue
+}
 
-AnalysisAdmissionCapabilityContractId<S> = H(
-  "zkc/analysis-admission-capability-contract",
-  exact Analysis owner domain and admitted subject family S,
-  family-owned well-formedness/admission contract version,
-  exact capability ABI and operand/result binding schema,
-  freshness and authority-lifetime requirements)
-~~~
+AnalysisSourceReadSlotSchema =
+    OwnerSourceReadSlotSchema(AnalysisSemanticReadSlot schema)
+  | AbstractFamilyRoleSlotSchema(AnalysisFamilyRoleReadSlotSchema)
 
-`S` ranges over every Analysis-owned admitted family profile, basis registry,
-validation profile, operation policy, question, proposition, and owner-created
-Analysis view. The authenticated contract and ABI explicitly declare that an
-Analysis admission capability has no separate operation policy, so its source
-binding uses
-`OwnerDefinesNoOperationPolicy(AnalysisAdmissionCapabilityContractId<S>, ABI)`.
-This is especially important when `S` is `FamilyOperationPolicy`: binding the
-admission capability to the policy being admitted would create an authority
-cycle. A later semantic checking result remains bound to the exact admitted
-`FamilyOperationPolicyId`; only admission authority uses this acyclic no-policy
-contract.
+ExactOwnerFieldProjection(owner_body_schema,field_paths) =
+  the canonical sorted unique sequence of OwnerFieldCoordinate values obtained
+  by resolving every path in field_paths against owner_body_schema; formation
+  rejects an absent path, an interior record in place of a leaf, a duplicate,
+  or caller order different from ascending encoded OwnerFieldCoordinate order
 
-On successful family-owned admission, the owner atomically creates the exact
-`ExactAdmittedSubjectAuthorityBinding<Analysis,S>` and separately mints the
-fresh admission capability that retains it. For a dependent subject or view,
-the binding includes every exact upstream source binding and its total
-transitive policy closure; the admission operation separately receives and
-freshly validates the matching capabilities and dispositions. A failed,
-unsupported, refused, malformed, or checker-failed admission attempt exports
-neither binding nor capability.
+CompleteOwnerBodyProjection(owner_body_schema) =
+  ExactOwnerFieldProjection(
+    owner_body_schema,
+    the regime-derived sequence of every leaf path in owner_body_schema)
 
-This binding is inert. Its `OwnerCapabilityRequirement` contains neither a live
-capability token nor an occurrence identity. The source owner creates the
-checked-result binding atomically with each completed qualified semantic
-capability exposed as a premise and the capability retains it; a family-owned
-non-completed U/C/R/M/F outcome creates neither. An Analysis invocation
-receives the binding and fresh capability separately and checks complete field
-equality. A portable binding may enter a support identity. An owner-local
-coordinate makes only that support and its explicit downstream identity chain
-local. Portable replay reconstructs the result through its source owner and
-requires exact binding equality; a local rerun creates a fresh owner-local
-coordinate and is not exact cold replay.
+ResolvedOwnerSourceBodySchema(owner_domain,source_family) =
+  the one exact closed body schema resolved from the authenticated owner-domain
+  catalog for source_family
 
-Each coordinate independently uses its portable ID or local handle according to
-its own preimage. Only combinations induced by the declared identity edges are
-valid: for example, a local support may produce a local derivation and judgment
-while the proposition, semantic basis, validation basis, and basis qualification
-remain portable. A checker validates the complete mixed binding; it never
-forces unrelated public coordinates into the local lane.
+ResolvedOwnerSourceBindingSchema(owner_domain,source_family) =
+  the one exact immutable view, admitted-body, or checked-result binding schema
+  that the same owner declaration exposes for source_family
 
-There is no assurance- or policy-erased `EstablishedAnalysisJudgment<F>`
-capability. Attenuation for a consumer preserves the exact proposition,
-polarity, hypotheses, assurance class, residual-trust closure,
-`FamilyOperationPolicyId`, transitive source-operation-policy dependency
-closure, named consumer, typed `OperationPurpose`, and `ExactJudgmentBinding`.
-It also preserves the complete
-`ExactCheckedResultAuthorityBinding<Analysis,F>` unchanged, including its
-semantic coordinate, exact origins and qualified facts, policy disposition,
-transitive source-policy closure, assurance/trust coordinates, and inert
-`OwnerCapabilityRequirement`.
-The binding contains the exact
-`JudgmentRecordId` or `LocalJudgmentRecordHandle`, `BasisQualificationId` or
-local handle, derivation, support-instantiation, semantic-basis, and validation-
-basis ID or local handle. A capability for a different derivation or support
-record cannot satisfy that binding merely because its proposition and visible
-qualification coordinates match.
+ConcreteOwnerReadSlotSchema(
+    owner_domain,source_family,semantic_coordinate_schema,read_purpose,
+    selected_fields,adequacy_requirement,source_binding_schema,
+    required_authority_class,failure_disposition) =
+  OwnerSourceReadSlotSchema(AnalysisSemanticReadSlot schema {
+    owner_domain,
+    source_family,
+    exact_semantic_coordinate: semantic_coordinate_schema,
+    read_purpose,
+    selected_fields,
+    adequacy_requirement,
+    source_binding_schema,
+    required_authority_class,
+    failure_disposition
+  })
 
-An ID, byte sequence, value-shaped aggregate, theorem name, proof file, solver
-response, signature, cache entry, old result record, or serialized replay
-bundle never mints authority. `Unsupported`, `CannotAnswer`, `Refused`,
-`Malformed`, and `CheckerFailure` produce exact attempt records but no
-affirmative or negative semantic capability.
+AbstractFamilyRoleReadSlotSchema(
+    abstract_role_coordinate,read_purpose,dependent_signature,
+    adequacy_requirement,failure_disposition) =
+  AbstractFamilyRoleSlotSchema(AnalysisFamilyRoleReadSlotSchema {
+    abstract_role_coordinate,
+    read_purpose,
+    dependent_signature,
+    adequacy_requirement,
+    failure_disposition
+  })
+```
 
-## 3. Identity and regime law
+`selected_fields` is a projection, not copied fact values. The source owner
+defines every field and the schema of its immutable view or checked-result
+binding. Analysis owns only the semantic read selection, purpose, adequacy
+requirement, and proposition that uses it. A semantic slot contains no concrete
+source binding, origin, qualification, policy closure, capability requirement
+value, or live token.
 
-### 3.1 Canonical identity
+A semantic slot is invalid when the source kind, semantic coordinate, subject,
+expected polarity, binding schema, authority class, purpose, or field set
+differs. At invocation, a missing support binding or authority is
+`CannotAnswer`; a wrong authenticated subject, concrete binding, capability, or
+use is `Refused`; noncanonical structure is `Malformed`; an unsupported source
+kind or field is `Unsupported`.
 
-Every durable, portable identity-bearing Analysis value follows the shared
-target rule:
+An abstract family-role slot has no owner domain, concrete semantic coordinate,
+binding schema, or live authority class. It is legal only in a family read
+manifest schema, where the resolved family-language contract derives its value
+from one abstract member. Its local role ref is resolved only against the
+complete source-family declaration selected by the enclosing profile; it cannot
+escape that declaration, become a durable role ID, or refer to the source-family
+coordinate from inside that coordinate's own body. Family denotation and
+projection coherence remain
+ordinary hypotheses. Using an abstract slot in a concrete manifest, or an
+owner-source slot in an abstract family projection, is malformed.
 
-~~~text
-Id(T) = H(domain_tag, semantic_regime, CanonicalEncode_regime(T))
-~~~
+### 2.2 Finite manifests
 
-The preimage contains finite typed semantic data and exact typed content
-references. It contains no live capability, pointer, callback, mutable
-registry, search state, checker process, wall-clock timestamp, or incidental
-printer spelling. Canonical encoding is injective over the typed domain; sums
-carry variant tags, ordered products and sequences retain order, maps and sets
-have canonical order and reject duplicates, and references retain their
-subject family and regime.
+The source shape is independent of any experiment that later consumes it. Its
+family coordinate is an authenticated declaration, not a caller-authored tag:
 
-Analysis keeps independent identities for meaning, support, validation,
-execution, and persistence:
+```text
+AnalysisSourceFamilyCoordinate =
+  ModuleDeclarationRef<"analysis.source-family">
 
-~~~text
-AnalysisQuestionId
-AnalysisGoalId
-AnalysisPropositionId
-AnalysisRequestId
-SemanticBasisId
-ValidationBasisId
-BasisQualificationId
-SupportInstantiationId
-DerivationId
-JudgmentRecordId
-AnalysisAttemptRecordId
-AnalysisReplayBundleId
-~~~
+AnalysisSourceFamilyDeclarationBody = {
+  allowed_slot_variant: ConcreteOwnerSource | AbstractFamilyRole,
+  exact_slot_and_field_schema,
+  exact_adequacy_schema,
+  failure_classification
+}
 
-Changing one category does not silently change another. Several bases,
-checkers, and derivations may establish the same proposition. A different
-bound or residual hypothesis is a different proposition even if it answers
-the same question.
+AnalysisSourceFamilySemanticsContract = {
+  allowed_slot_variant: ConcreteOwnerSource | AbstractFamilyRole,
+  exact_slot_and_field_schema,
+  exact_adequacy_schema,
+  failure_classification
+}
 
-#### Confidential owner-local handle lane
+AnalysisSourceFamilySemanticsCatalog(B) =
+  the authenticated semantic-regime mapping from each complete resolved
+  AnalysisSourceFamilyCoordinate and declaration body to exactly one immutable
+  AnalysisSourceFamilySemanticsContract
 
-An owner-private nonserializable reference is not an exact typed content
-reference and therefore never enters the rule above. Any Analysis value whose
-own canonical identity preimage directly contains such a reference, or contains
-another local handle through an identity-bearing child field, receives no
-public content ID.
-Analysis instead uses the corresponding opaque owner-local handle:
+AnalysisSourceProfile = {
+  family_tag: AnalysisSourceFamilyCoordinate,
+  slot_schemas: CanonicalNonEmptySeq<AnalysisSourceReadSlotSchema>,
+  closed_field_read_set,
+  adequacy_predicate
+}
 
-~~~text
-LocalAnalysisQuestionHandle
-LocalAnalysisGoalHandle
-LocalAnalysisPropositionHandle
-LocalAnalysisRequestHandle
-LocalSemanticBasisHandle
-LocalSupportInstantiationHandle
-LocalValidationBasisHandle
-LocalBasisQualificationHandle
-LocalDerivationHandle
-LocalJudgmentRecordHandle
-LocalAttemptRecordHandle
-LocalAttemptInputHandle
-LocalSourceOperationPolicyDependencyClosureHandle
-~~~
+AnalysisSourceProfileId =
+  AnalysisId<"analysis.source-profile">(B, AnalysisSourceProfileBody)
+```
 
-These handles inhabit a collision-free domain scoped by the exact Analysis
-owner instance and process generation. The owner allocates them from an
-injective owner-internal canonical encoding of the complete typed local value,
-including every exact upstream owner-local reference. Equality is defined only
-inside that owner instance and generation. A handle is not a pointer, content
-hash, semantic-regime ID, serializable token, portable reference, or authority.
-Different owner instances or process generations never compare equal.
-When a local Analysis structure requires a map, set, deduplication, or canonical
-sequence, the owner uses one deterministic total order over the complete
-injective owner-internal encoding. That order is valid only inside the same
-owner instance and generation; local handles from different generations are
-incomparable and no ordering output is portable.
+A concrete slot schema fixes its owner domain, source family, purpose, field
+projection, authority class, and failure disposition. An abstract slot schema
+instead fixes one family role and dependent signature. Neither contains a
+concrete binding or capability. One source profile is uniformly concrete or
+abstract; mixing the variants refuses admission. An experiment may name an
+`AnalysisSourceProfileId`; the source profile never names the experiment. This
+direction prevents a manifest/profile/experiment identity cycle.
 
-Private-reference taint propagates forward only along explicit identity-preimage
-edges: a value that names a local handle in its own canonical preimage is itself
-local, even when all its other fields are public. It does not propagate backward
-from a private support or derivation into an otherwise independent public
-question, proposition, semantic basis, or validation basis. No `*Id` in the
-durable list above is emitted for a tainted value, and no digest of the handle or
-derived value may be used as a surrogate public identity. The owner-private
-source policy and named-consumer restriction apply to the complete forward
-local-handle closure.
+The complete source-family declaration and body must resolve in
+`AnalysisSourceFamilySemanticsCatalog(B)`, and its selected contract must admit
+the profile's slot variant and exact slot/field/adequacy schemas. A display
+name, free symbol, or declaration with the right spelling but another body is
+`Unsupported`; malformed payload or slot structure is `Malformed`. Adding or
+changing a source-family contract rotates the semantic regime.
 
-### 3.2 Family profile split
+```text
+AnalysisSemanticReadManifest = {
+  source_profile_id: AnalysisSourceProfileId,
+  exact_subjects: CanonicalNonEmptySeq<SemanticContentId>,
+  slots: CanonicalSortedUniqueSeq<AnalysisSemanticReadSlot>
+}
 
-Every supported family closes four independently identified profiles:
+AnalysisSemanticReadManifestId =
+  AnalysisId<"analysis.semantic-read-manifest">(
+    B, AnalysisSemanticReadManifestBody)
+```
 
-~~~text
-FamilySemanticProfile<F> {
-  family_semantic_profile_regime_id,
-  family_tag,
-  subject_tuple_schema,
-  semantic_view_contract_schemas,
-  model_schema,
-  experiment_and_occurrence_schema,
-  observer_and_direction_schema,
-  parameter_and_quantifier_schema,
-  hypothesis_schema,
+The manifest is admitted only when:
+
+1. every slot names an admitted owner source kind and exact semantic
+   coordinate;
+2. its selected fields are exactly the fields declared by the source profile;
+3. no two slots claim one coordinate under conflicting owners or purposes;
+4. every required field has exactly one authoritative source;
+5. every binding schema and required authority class matches the owner
+   declaration.
+
+Missing, extra, duplicated, wrong-purpose, or ambient reads fail. A view cannot
+be widened later without changing the manifest and every dependent question.
+
+Concrete authority belongs to support and invocation instead:
+
+```text
+AnalysisSourceSupport = {
+  semantic_read_manifest_id: AnalysisSemanticReadManifestId,
+  bindings: CanonicalSortedUniqueSeq<{
+    semantic_read_slot_ref,
+    exact_source_authority_binding,
+    owner_capability_requirement
+  }>,
+  owner_policy_dependency_closure
+}
+
+PortableAnalysisSourceSupportId =
+  AnalysisId<"analysis.source-support">(B, AnalysisSourceSupportBody)
+```
+
+`AnalysisSourceSupport` is portable only when every owner coordinate permits
+it; otherwise it is a collision-free `LocalAnalysisSourceSupportHandle` with
+no portable ID. Matching fresh capabilities are
+supplied separately at the checking occurrence and enter no portable identity.
+Changing a source check, result origin, qualification, or policy binding may
+change support without changing the semantic question.
+
+### 2.3 Asymptotic family ingress
+
+K1 authenticates finite semantic descriptions and K2 Protocols use finitely
+bounded `ValueType`s. Neither therefore becomes an asymptotic protocol family
+by quantifying over the lengths admitted by one fixed type. Analysis uses a
+separate, explicit mathematical family subject:
+
+```text
+LogicalNat = the unbounded natural-number binder sort of the Analysis logic
+
+AnalysisAsymptoticFamilyLanguageDeclarationBody(name,payload_type,
+                                                 contract_revision) =
+  MetaRecord {
+    0: MetaSymbol(name),
+    1: DeclarationValueTypeBody(payload_type),
+    2: MetaNatural(contract_revision)
+  }
+
+AnalysisFamilyLanguageSemanticsCatalog(B) =
+  the authenticated semantic-regime mapping from the complete resolved
+  ModuleDeclarationRef and exact declaration body to one immutable
+  AnalysisAsymptoticFamilyLanguageContract
+
+AnalysisAsymptoticFamilyLanguageContract = {
+  input: (the resolved declaration, one canonical value of its lifted
+          payload type, n : LogicalNat),
+  denotation_relation:
+    DenotesFamilyMember(language_ref,payload,n,abstract_member),
+  abstract_member_signature: {
+    mathematical Statement and Witness carriers,
+    relation and relation-membership predicate,
+    public setup and setup-selection schedule,
+    commitment, challenge, response, proof, and auxiliary-output carriers,
+    Fresh and Fiat--Shamir experiment schemas and verifier relations,
+    finite nonempty challenge set and cardinality,
+    prover, verifier, extractor, and oracle interface schemas,
+    statement-length and resource-measure functions,
+    failure, undefinedness, and nontermination laws
+  },
+  declaration_admission:
+    exact declaration grammar, a matching entry in
+    AnalysisFamilyLanguageSemanticsCatalog(B), successful lift of
+    payload_type, and an Analysis provider conforming to that catalog entry,
+  non_claims:
+    declaration admission establishes no member existence, uniqueness,
+    coherence, algorithm implementation, resource law, or theorem
+}
+
+AnalysisAsymptoticProtocolFamilyDefinitionBody(
+    language_ref:ModuleDeclarationRef<"analysis.asymptotic-family-language">,
+    payload) = {
+  family_language: language_ref,
+  canonical_family_payload:
+    CanonicalValue<resolved and lifted payload type of language_ref>(payload)
+}
+
+AnalysisAsymptoticProtocolFamilyDefinitionId(B,language_ref,payload) =
+  AnalysisId<"analysis.asymptotic-protocol-family">(
+    B,AnalysisAsymptoticProtocolFamilyDefinitionBody(language_ref,payload))
+
+FamilyMember(F,n:LogicalNat) =
+  the abstract mathematical member related to `(F,n)` by the one resolved
+  language contract; it is not a K1 `CanonicalValue`, K2 Protocol, K3
+  relation object, or portable algorithm
+
+AnalysisFamilyReadManifestSchemaBody = {
+  family_definition_id: AnalysisAsymptoticProtocolFamilyDefinitionId,
+  member_source_profile_id: AnalysisSourceProfileId
+}
+
+DerivedFamilyReadProjection(F,source_profile,n) =
+  the unique ordered projection of the fixed abstract-member roles named by
+  source_profile's closed slot schemas, interpreted through F's resolved
+  family-language contract
+
+AnalysisFamilyReadManifestSchemaId =
+  AnalysisId<"analysis.family-read-manifest-schema">(
+    B, AnalysisFamilyReadManifestSchemaBody)
+```
+
+The catalog is part of the exact semantic-regime descriptor in `B`, not a live
+provider registry. Each entry is keyed by the complete declaration coordinate
+and body and fixes the payload interpretation and mathematical denotation law.
+Changing an entry therefore rotates the semantic regime; provider code only
+implements the already selected law and disagreement is `CheckerFailure`.
+An unlisted declaration is `Unsupported`, not provider-defined meaning.
+
+The initial admitted catalog entry is the closed indexed-protocol-signature
+language `analysis.indexed-protocol-signature.v0`. Its exact lifted payload
+type is:
+
+```text
+IndexedProtocolSignatureV0Payload = CanonicalRecord {
+  0: statement_role: Symbol[1,128],
+  1: witness_role: Symbol[1,128],
+  2: relation_role: Symbol[1,128],
+  3: public_setup_role: Symbol[1,128],
+  4: commitment_role: Symbol[1,128],
+  5: challenge_role: Symbol[1,128],
+  6: response_role: Symbol[1,128],
+  7: proof_role: Symbol[1,128],
+  8: auxiliary_output_role: Symbol[1,128],
+  9: verifier_output_role: Symbol[1,128],
+  10: fresh_experiment_role: Symbol[1,128],
+  11: fiat_shamir_experiment_role: Symbol[1,128],
+  12: random_oracle_index_role: Symbol[1,128],
+  13: statement_length_role: Symbol[1,128],
+  14: resource_measure_role: Symbol[1,128]
+}
+```
+
+All fifteen values must be pairwise distinct. Missing, extra, duplicate, or
+empty role symbols are malformed. At `(payload,n)` the regime law
+denotes nominal dependent carriers and relations keyed by the complete family
+ID, `n`, and those role symbols. It supplies no algebraic equation,
+implementation, totality, efficiency, distribution, or theorem; all such laws
+are propositions. This exact nominal-signature entry is sufficient for K3-C; a
+computational or proof-assistant family language requires a new catalog entry
+and regime.
+
+The declaration kind above has exactly the three-field body grammar shown; a
+different record, payload type, or revision is malformed or unsupported. The
+catalog contract fixes the input and result signatures, while the selected
+declaration and payload fix the language-specific mathematical relation. That relation is
+not a K1 portable executable and is not evaluated by bounded K1 iteration.
+K1 authenticates only the finite declaration reference and payload.
+
+The family-read-manifest schema likewise has exactly the two fields shown.
+Its member projection and coherence obligation are derived from the closed
+source-profile slot catalog and the fixed abstract-member signature; they are
+not caller-authored expression fields. A missing role, duplicate role, or
+unsupported role interpretation refuses schema admission. The derived
+projection's agreement with the denotation remains a proposition below.
+
+The following remain ordinary Analysis propositions unless discharged by
+accepted proof authority:
+
+- total family denotation for every `n : LogicalNat`;
+- existence and uniqueness of one abstract member at every such `n`;
+- coherence of Statement, Witness, relation, Fresh/FS, challenge, setup, and
+  ABI projections; and
+- uniformity and asymptotic resource laws of the selected algorithm families.
+
+Formation of `F` proves none of those propositions. A family question retains
+them in its hypothesis context. `FamilyMember(F,n)` is a dependent logical
+subject inside that context. It is never required to be natively admitted at
+every `n`; such a requirement would make an unbounded family uninhabitable
+under K1's finite value and body limits. For one representable concrete `n0`,
+an admitted K1/K2/K3 subject `S` is related to the abstract member only through
+a separately checked `FamilyInstanceCorrespondence(F,n0,S)` proposition. `F`
+contains neither derived projections nor concrete members, theorem IDs,
+proposition IDs, or correspondence results, so the dependency direction is
+acyclic and callers cannot author parallel family fields that disagree.
+
+A fixed K2 subject can support finite tests and a specialized pointwise
+judgment. It cannot fill an asymptotic family slot, establish uniformity, or
+turn a finite length range into `LogicalNat`.
+
+### 2.4 Protocol source family
+
+An active Protocol manifest selects one admitted Protocol and only the exact
+subset of these owner views required by its family:
+
+```text
+PublicBindingView
+StrategyDecisionView
+PublicCoinView
+EffectView
+ClaimReductionView
+ExecutionView
+TranscriptDeclarationView
+RequiredInfluenceView
+ChallengeTransitionView
+FSConstructionView
+```
+
+The first six are derived from one K2 Core. A Fresh-only property need not and
+must not select transcript-construction or FS fields merely because a later
+transport may use them. `TranscriptDeclarationView`,
+`RequiredInfluenceView`, and `ChallengeTransitionView` are derived from one
+exact K2 transcript construction. `FSConstructionView` is derived only from the
+exact affirmative `CheckedFSConstruction` and carries the paired Fresh/FS
+Protocol IDs, shared Core, maps, and structural conclusion. The manifest checks
+the owner result schema plus the exact transcript-construction/Fresh/FS/Core
+subject coordinates. Its support binds the concrete qualified result record,
+and the checking invocation supplies the matching fresh capability; there is no
+`CheckedFSConstructionId`. The manifest checks that all source coordinates
+agree. It never contains a second event schedule, transcript declaration,
+influence graph, challenge sampler, or Protocol body.
+
+`ExecutionView` exposes the strategy-step boundary and generated-execution
+law. A concrete `RunRecord`, `RelationRunView`, `CausalGenerationCapability`,
+or `CheckedReplayMatch` enters only a separately declared occurrence slot.
+
+### 2.5 Relations source family
+
+When a property is relation-bound, its manifest selects exact Relations and
+PIR-owned coordinates for:
+
+```text
+admitted relation definition and RelationSemanticModel
+admitted relation Interface and RelationInstance
+admitted ProtocolRelationBinding and PlanWitnessBinding
+exact K3-B CorrespondenceQuestion IDs and owner refs for Statement,
+  claim, and Witness coordinates
+exact K2 CheckRef and CheckDecl algorithm/evaluation-contract/input fields
+exact K2 TerminalRef and TerminalDecl verdict/required-check/disposition fields
+exact Relations GroundingEquationId and EquationGrounding question coordinate
+bridge-use scope and selection schema
+occurrence-local loss-source and export schemas, when consumed
+```
+
+The universal acceptance correspondence is an Analysis proposition formed over
+this manifest and a deterministic correspondence experiment. It belongs in the
+property hypothesis context and support, never in the source profile or
+manifest. This preserves the one-way edge from owner semantic reads to an
+Analysis-owned proposition and avoids a manifest/proposition cycle.
+
+The concrete affirmative `CheckedCorrespondence` result bindings are support
+inputs for those exact questions, and their live capabilities are invocation
+inputs. Concrete bridge-use selections, loss-source/export results, and
+consumer-source joins follow the same rule. They do not enter the semantic read
+manifest or property identity.
+
+Analysis may consume a live `CheckedRelationSatisfaction` only when a selected
+occurrence premise explicitly requires it. The result remains owner-local and
+cannot be restated, serialized, or generalized. The initial special-soundness
+profile does not use a caller Boolean or remint `RelationSatisfies`.
+
+## 3. Strategy and experiment semantics
+
+### 3.1 Strategy class
+
+```text
+StrategyClassProfile = {
+  role,
+  dependent_parameter_schema,
+  strategy_abi,
+  private_state_type,
+  initial_advice_type,
+  allowed_views,
+  allowed_oracles_and_capabilities,
+  legal_move_relation,
+  stop_and_noncompletion_law,
+  resource_dimensions
+}
+
+AnalysisStrategyClassProfileId =
+  AnalysisId<"analysis.strategy-class">(B, StrategyClassProfileBody)
+```
+
+For a K2 prover, each interactive step must inhabit the exact K2 boundary:
+
+```text
+StrategyStep(ProverView, private_state, private_randomness)
+  -> ProverMove | Stop
+```
+
+`allowed_views` is the exact `StrategyDecisionView` projection. The strategy
+cannot read a future challenge, hidden verifier state, an oracle table behind
+its query capability, or an unlisted occurrence. A whole trace, `RunRecord`,
+move table containing future-dependent values, replay result, or serialized
+strategy observation cannot fill this slot.
+
+### 3.2 Quantifier prefix
+
+Quantifier order is semantic identity:
+
+```text
+Quantifier =
+    ForAllStrategy(
+      AnalysisStrategyClassProfileId, dependent_domain_predicate,
+      bound_variable)
+  | ExistsStrategy(
+      AnalysisStrategyClassProfileId, dependent_domain_predicate,
+      bound_variable)
+  | Sample(AnalysisDistributionProfileId, bound_variable)
+  | ForAllValue(ValueType, domain_predicate, bound_variable)
+  | ForAllFamilyValue(
+      AnalysisAsymptoticProtocolFamilyDefinitionId,
+      dependent_abstract_sort,
+      dependent_domain_predicate,
+      bound_variable)
+  | ForAllQuantitativeValue(
+      AnalysisQuantitativeSort, domain_predicate, bound_variable)
+  | ForAllLogicalNat(domain_predicate, bound_variable)
+  | ExistsPositivePolynomial(
+      AnalysisPositivePolynomialProfileId, bound_variable)
+  | ExistsExtractor(AnalysisExtractorProfileId, bound_variable)
+  | ExistsUniformBlackBoxExtractor(
+      AnalysisExtractorProfileId, bound_variable)
+  | ExistsUniformExtractorFamily(
+      AnalysisExtractorProfileId, bound_variable)
+
+QuantifierPrefix = NonEmptyOrderedSeq<Quantifier>
+```
+
+Reordering adaptive statement choice, setup, public coins, advice, strategy,
+oracle sampling, or extractor choice creates a different experiment. There is
+no normalization that commutes quantifiers merely because two fixtures happen
+to produce the same finite runs.
+
+`ForAllValue` ranges only over one admitted finite K1 `ValueType`.
+`ForAllFamilyValue` ranges over an abstract dependent mathematical carrier
+denoted by one family at the already bound `LogicalNat`; its denotation and
+domain predicate remain family hypotheses. The two constructors are not
+interchangeable, and a finite native value enumeration cannot establish a
+`ForAllFamilyValue` conclusion.
+
+The referenced profile kinds are closed Analysis semantic objects:
+
+```text
+AnalysisDistributionProfile = {
+  output_type,
+  exact support predicate,
+  exact probability mass or measure law,
+  parameter and security-parameter coordinates,
+  independence/correlation declarations,
+  sampling or oracle denotation,
+  failure and nontermination law
+}
+
+AnalysisExtractorProfile = {
+  input and output types,
+  private state and randomness types,
+  allowed source/oracle capabilities,
+  rerun, fork, rewind, and programming rights,
+  state-preservation relation,
+  output-distribution preservation relation,
+  witness-success relation,
+  termination and asymptotic resource law,
+  counterfactual capability contract and property-family scope
+}
+
+AnalysisPositivePolynomialProfile = {
+  input_sort: LogicalNat | StatementLength(statement_type),
+  coefficient_domain: Nat,
+  value_shape: CanonicalNonEmptySeq<Nat> in low-to-high order,
+  canonical_degree_rule: highest coefficient is nonzero unless degree is zero,
+  evaluation: exact checked-natural Horner evaluation,
+  positivity_rule: constant coefficient is at least one,
+  admitted coefficient and degree bounds
+}
+
+AnalysisPositivePolynomial = {
+  profile_id: AnalysisPositivePolynomialProfileId,
+  coefficients_low_to_high: CanonicalNonEmptySeq<Nat>
+}
+
+AnalysisDistributionProfileId =
+  AnalysisId<"analysis.distribution-profile">(B, body)
+
+AnalysisExtractorProfileId =
+  AnalysisId<"analysis.extractor-profile">(B, body)
+
+AnalysisPositivePolynomialProfileId =
+  AnalysisId<"analysis.positive-polynomial-profile">(B, body)
+
+AnalysisPositivePolynomialId =
+  AnalysisId<"analysis.positive-polynomial">(
+    B, AnalysisPositivePolynomialBody)
+```
+
+The initial uniform Fresh-coin and classical random-oracle profiles define
+their exact finite-output laws with these bodies. The initial AFK extractor
+profile alone grants its lazy-sampling, rerun, and programming rights. Naming
+an extractor algorithm or a distribution label without these laws does not
+form either profile. Extractor profiles are theorem-neutral; a theorem schema
+selects one exact profile, never the reverse, so their identities cannot cycle.
+The positive-polynomial profile is the bounded K3-C representation over which
+the existential ranges; each admitted polynomial value has its own ID. It is
+not a caller-supplied numerical bound or an ambient complexity claim. The
+selected `q_KS(n) = 1` witness is
+`AnalysisPositivePolynomialId(profile, [1])`. Broader polynomial
+representations require a new profile.
+
+### 3.3 Experiment profile
+
+```text
+AnalysisExperimentProfile = {
+  family,
+  source_profile_id: AnalysisSourceProfileId,
+  quantifier_prefix,
+  role_interfaces,
+  setup_and_input_sampling,
+  randomness_ownership_and_independence,
+  public_coin_or_oracle_model,
+  scheduler,
+  generated_execution_relation,
+  observation_and_win_event,
+  failure_abort_and_noncompletion_law,
+  termination_law,
+  resource_basis,
+  output_type
+}
+
+AnalysisExperimentProfileId =
+  AnalysisId<"analysis.experiment-profile">(
+    B, AnalysisExperimentProfileBody)
+```
+
+Semantically, an instantiated experiment maps parameters and legal strategy
+modules to a subdistribution over terminated records:
+
+```text
+(StructuredOutcome, ResourceVector, AuditTrace, Terminated)
+```
+
+Explicit abort and completed failure are structured outcomes. Missing
+probability mass denotes genuine nontermination; it is not also returned as an
+outcome. A step-indexed experiment may instead return its exact limit outcome,
+but that establishes only the bounded experiment. The common kernel imposes no
+global strategy-termination rule: each family profile selects its exact total,
+almost-sure, partial, or bounded completion law. In particular, the active AFK
+prover domain is total-output with no runtime bound, while future profiles may
+admit genuine missing mass. Expected-time resources are separate from worst-
+case resources.
+
+For an ordinary K2 run, `generated_execution_relation` invokes the K2
+generated-execution semantics. `StrategyStopped`, invalid moves, future reads,
+verifier failure, sampling exhaustion, and accepted/rejected terminals retain
+their exact source dispositions; a family profile states which contribute to
+its win event. It cannot silently drop an outcome that benefits its bound.
+
+### 3.4 Oracle and resource discipline
+
+Oracle access is capability-typed. An adversary receives query operations, not
+the hidden table. Lazy sampling, programming, rewind, or fork rights exist only
+inside an exact theorem experiment that grants them; they are not K2 replay
+capabilities.
+
+```text
+ResourceDimension = {
+  operation_role: ModuleDeclarationRef<"analysis.resource-operation">,
+  value_sort,
+  owner_subjects: CanonicalNonEmptySeq<TypedSemanticSubjectRef>,
+  dependent_parameter_schema: CanonicalSeq<AnalysisParameterSchemaEntry>,
+  capability_abi_or_algorithm_schema,
+  lifetime_scope,
+  aggregation: Sum | Maximum | Expected,
+  exact_counter_event
+}
+
+ResourceBasis = CanonicalSortedUniqueSeq<ResourceDimension>
+```
+
+Examples include adversary random-oracle queries, verifier calls, extractor
+invocations, expected time, memory, and communication. They never collapse to
+one ambient `cost` scalar. A count sort contains the complete resource-
+dimension body, including its owners, operation role, capability/algorithm
+schema, lifetime, aggregation, and counter event. Matching only a display
+name, natural-number carrier, or predicate is insufficient. In particular, a
+query count owned by a verifier, another oracle ABI, another subject, or
+another experiment cannot fill an adversary random-oracle-query parameter.
+
+## 4. K1-aligned semantic identities
+
+### 4.1 One identity algebra
+
+Every portable Analysis semantic object uses the exact authenticated K1 prior-
+meta basis `B` and the existing semantic-regime axis:
+
+```text
+AnalysisId<K>(B, body) = SemanticContentId<K>(B, body)
+```
+
+There is no separate `AnalysisSemanticRegimeId`, no free `H(...)`, and no
+identity derived from display text, a citation label, or a live capability.
+Each body is a closed `MetaValueV0` tagged record with canonical finite
+sequences and exact typed references.
+
+The common dependent types used below are not open metavariables. They are
+resolved through authenticated, regime-fixed catalogs:
+
+```text
+AnalysisFamilyCoordinate =
+  ModuleDeclarationRef<"analysis.property-family">
+
+AnalysisFamilySemanticsContract = {
+  exact_subject_schema,
+  exact_question_payload_meta_schema,
+  exact_hypothesis_free_conclusion_meta_schema,
+  question_to_conclusion_reconstruction_law,
+  allowed_question_context_variants,
+  exact_quantitative_result_schema,
+  affirmative_and_negative_meaning,
+  failure_classification
+}
+
+AnalysisFamilySemanticsCatalog(B) =
+  the authenticated semantic-regime mapping from each complete resolved
+  AnalysisFamilyCoordinate and declaration body to exactly one immutable
+  AnalysisFamilySemanticsContract
+
+ExactFamilyQuestionPayload<f> =
+  the canonical MetaValueV0 accepted by f's resolved question-payload schema
+
+ExactFamilyConclusion<f> =
+  the canonical MetaValueV0 accepted by f's resolved conclusion schema
+
+TypedSemanticSubjectRef<K> =
+  the exact ContentRefV0 of an authenticated SemanticContentId<K>, where K is
+  admitted by the consuming family contract and source profile
+
+TypedSemanticSubjectRef =
+  the closed kind-indexed union of TypedSemanticSubjectRef<K> admitted by the
+  active Analysis family and source catalogs
+
+AnalysisQuantitativeSort =
+    Nat
+  | Probability
+  | SignedProbabilityLowerBound
+  | ComputationalAdvantage(exact game subject)
+  | LogicalNat
+  | StatementLength(exact statement-type coordinate)
+  | ChallengeCardinality(exact challenge-domain subject)
+  | FamilyChallengeCardinality(
+      exact asymptotic-family subject, LogicalNat parameter ordinal)
+  | FamilyConstantChallengeCardinality(
+      exact asymptotic-family subject)
+  | QueryCount(
+      complete ResourceDimension body,
+      exact binding for every dependent parameter)
+  | ExpectedCount(
+      complete ResourceDimension body,
+      exact binding for every dependent parameter)
+
+AnalysisParameterSchemaEntry = {
+  local_ordinal: Natural,
+  sort: AnalysisQuantitativeSort
+}
+
+LocalParameterRef<S> =
+  an earlier in-range local ordinal whose declared sort is exactly S
+
+BasisNeutralQuantitativeExpr<S> =
+  a canonical typed MetaValueV0 expression admitted by the authenticated
+  Analysis quantitative-expression catalog for result sort S
+```
+
+The active expression constructors and their formation rules are closed in
+[`cryptographic-properties.md`](cryptographic-properties.md#6-exact-quantitative-forms).
+Display names such as `n`, `Q`, and `epsilon` are expository aliases for local
+ordinals and do not enter an identity body. An unknown family declaration,
+payload schema, conclusion schema, subject kind, quantitative sort, or
+expression constructor is `Unsupported`; a malformed or ill-typed instance is
+`Malformed`. Provider code cannot add meaning to these catalogs at runtime.
+
+The active K3-C property-family declaration set is exactly:
+
+```text
+KOutOfNSpecialSoundness
+FixedExtractorUniversalCorrectness
+AdaptiveKnowledgeExtractionAtFixedLengthQltN
+AsymptoticKOutOfNSpecialSoundness
+AdaptiveKnowledgeSoundnessQltN
+TheoremTruth
+TheoremApplicability
+FamilyInstanceCorrespondence
+ChallengeDomainCorrespondence
+AcceptanceRelationCorrespondence
+AlgebraAndCanonicalEncodingLaws
+PolynomialTimeRelationMembership
+PolynomialTimeSourceVerifier
+PolynomialTimeExtractor
+TotalSingleValuedFamilyDenotation
+FamilyProjectionCoherence
+UniformPrimeOrderSchnorrFamily
+UniformPolynomialTimeRelationMembership
+UniformPolynomialTimeVerifier
+FreshUniformIndependentPublicCoin
+ExactClassicalRandomOracleProcess
+FixedPublicSetupIndependence
+TotalUniformChallengeSamplerAdequacy
+FixedFamilyChallengeCardinality
+FiniteBoundedRandomOracleIndexAndEfficientOperations
+AFKExperimentObservationCorrespondence
+FamilyDenotationAtIndex
+FamilyProjectionAtIndex
+FamilyInstanceRoleMapAdequacy
+FamilyInstanceQuantitativeNormalizationAdequacy
+FamilyInstanceProcessCorrespondence
+```
+
+Each spelling above denotes one exact module declaration, not a string tag.
+The family owner page fixes its dependent payload and conclusion schemas. A
+new family or a changed schema requires a new declaration and a semantic-
+regime-supported catalog entry.
+
+The active `AnalysisFamilySemanticsCatalog(B)` is the canonical key-sorted union
+of the exact owner entry sets in this page's durable Analysis documents.
+Admission rejects a missing active key, an extra entry, duplicate coordinates
+across owner sets, or two contracts for the same complete declaration. Owner
+entry sets are specification partitions only: the resulting catalog is one
+authenticated semantic-regime value, not a runtime registry or search order.
+
+The active kinds and bodies are:
+
+```text
+analysis.strategy-class = {
+  strategy ABI, state/advice types, exact access capabilities,
+  legal-move relation, stop law, resource dimensions
+}
+
+analysis.experiment-profile = {
+  family, source-profile ID, quantifier prefix, role interfaces,
+  sampling/randomness/oracle/scheduler laws, generated execution,
+  outcomes, failures, termination, resources
+}
+
+analysis.distribution-profile = {
+  output type, support and probability law, parameters, independence,
+  sampling/oracle denotation, failure and nontermination
+}
+
+analysis.extractor-profile = {
+  exact ABI and state, allowed capabilities, counterfactual state laws,
+  distribution preservation, witness success, termination/resources,
+  counterfactual capability contract and property-family scope
+}
+
+analysis.positive-polynomial-profile = {
+  input and coefficient sorts, canonical representation, exact evaluation,
+  positivity, coefficient and degree bounds
+}
+
+analysis.positive-polynomial = {
+  positive-polynomial-profile ID, exact canonical coefficient sequence
+}
+
+analysis.quantitative-formula = {
+  result sort, exact parameter schema, closed basis-neutral typed formula AST
+}
+
+analysis.challenge-domain = {
+  exact owner nominal challenge-declaration coordinates, Analysis-owned finite
+  value model, canonical cardinality derivation and adequacy law
+}
+
+analysis.fixed-public-setup = {
+  exact public setup constituent coordinates/values and pre-experiment
+  independence schedule
+}
+
+analysis.asymptotic-protocol-family = {
+  exact admitted family-language ref and one canonical value of its resolved
+  payload type
+}
+
+analysis.family-read-manifest-schema = {
+  family-definition ID and member source-profile ID; the abstract role
+  projection and its coherence obligation are derived
+}
+
+analysis.logical-nat-literal = {
+  one finite MetaNatural syntax value used to select a representable family
+  index; it is not the unbounded LogicalNat quantifier domain
+}
+
+analysis.family-instance-role-map = {
+  family and logical-index IDs, concrete subject refs and native length,
+  closed role coordinate, abstract/concrete coordinates, exact map-clause
+  variant, and information-loss classification
+}
+
+analysis.semantic-read-manifest = {
+  source-profile ID, exact subjects, canonical semantic read slots
+}
+
+analysis.source-profile = {
+  family tag, canonical slot schemas, closed field read set,
+  adequacy predicate
+}
+
+analysis.source-support = {
+  semantic-read-manifest ID, exact portable source bindings and requirements,
+  source-policy dependency closure
+}
+
+analysis.question = {
+  family, exact subjects, source-free or semantic-experiment context,
+  family-owned question payload
+}
+
+analysis.goal = {
+  question ID, exact hypothesis-free family conclusion
+}
+
+analysis.hypothesis-context = {
+  canonical proposition DAG and exact root set
+}
+
+analysis.proposition = {
+  goal ID, hypothesis-context ID
+}
+
+analysis.semantic-basis = {
+  rule or theorem schema, exact premise schemas, source read purposes,
+  conclusion schema, typed transform program
+}
+
+analysis.theorem-schema = {
+  exact authority/revision and statement digest, source/target property and
+  experiment schemas, maps, side conditions, resources, typed transform,
+  conclusion reconstruction law
+}
+
+analysis.loss-semantic-import = {
+  exact Relations bridge and occurrence schema, direction, source premise and
+  quantitative export, Analysis sort and interpretation rule, substitution,
+  per-occurrence expression
+}
+
+analysis.support-instantiation = {
+  semantic-basis ID, proposition ID, exact non-hypothesis premise bindings,
+  exact established and assumed hypothesis-node bindings,
+  exact manifest-to-source-support bindings
+}
+
+analysis.validation-basis = {
+  admitted checker algorithms and ABIs, translations, finite controls,
+  residual-trust roots
+}
+
+analysis.operation-policy = {
+  supported family and model coordinates, named consumer/purpose permissions,
+  capability lifetime, disclosure, unknown-question disposition,
+  persistence and cold-replay rules
+}
+
+analysis.judgment-record = {
+  proposition ID, polarity, exact conclusion, inherited hypotheses,
+  quantitative result, semantic-basis ID, support ID,
+  validation-basis ID, qualification and policy closure
+}
+```
+
+The list above is exhaustive for the active K3-C kernel. It is a compact field
+catalog, not permission to invent a different preimage. The exact closed body
+types and nominal constructors that were not already formed in Sections 2 and
+3 are:
+
+```text
+AnalysisQuestionContext =
+    SourceFree(exact_source_free_family_reason)
+  | SemanticExperimentContext {
+      semantic_read_manifest_ids:
+        CanonicalNonEmptySeq<AnalysisSemanticReadManifestId>,
+      experiment_profile_ids:
+        CanonicalNonEmptySeq<AnalysisExperimentProfileId>
+    }
+  | FamilySemanticExperimentContext {
+      family_definition_id:
+        AnalysisAsymptoticProtocolFamilyDefinitionId,
+      family_read_manifest_schema_ids:
+        CanonicalNonEmptySeq<AnalysisFamilyReadManifestSchemaId>,
+      family_experiment_profile_ids:
+        CanonicalNonEmptySeq<AnalysisExperimentProfileId>
+    }
+  | FamilyInstanceContext {
+      family_definition_id:
+        AnalysisAsymptoticProtocolFamilyDefinitionId,
+      family_read_manifest_schema_ids:
+        CanonicalNonEmptySeq<AnalysisFamilyReadManifestSchemaId>,
+      concrete_semantic_read_manifest_ids:
+        CanonicalNonEmptySeq<AnalysisSemanticReadManifestId>,
+      family_experiment_profile_ids:
+        CanonicalNonEmptySeq<AnalysisExperimentProfileId>,
+      concrete_experiment_profile_ids:
+        CanonicalNonEmptySeq<AnalysisExperimentProfileId>
+    }
+
+AnalysisQuestionBody = {
+  family: AnalysisFamilyCoordinate,
+  exact_subjects: CanonicalNonEmptySeq<TypedSemanticSubjectRef>,
+  context: AnalysisQuestionContext,
+  family_payload: ExactFamilyQuestionPayload<family>
+}
+
+AnalysisGoalBody = {
+  question_id: AnalysisQuestionId,
+  conclusion_family: AnalysisFamilyCoordinate,
+  hypothesis_free_conclusion: ExactFamilyConclusion<conclusion_family>
+}
+
+AnalysisHypothesisNode = {
+  local_ordinal,
+  goal_id: AnalysisGoalId,
+  dependency_ordinals: CanonicalSortedUniqueSeq<EarlierLocalOrdinal>
+}
+
+AnalysisHypothesisContextBody = {
+  nodes: CanonicalSeq<AnalysisHypothesisNode>,
+  roots: CanonicalSortedUniqueSeq<LocalOrdinal>
+}
+
+AnalysisPropositionBody = {
+  goal_id: AnalysisGoalId,
+  hypothesis_context_id: AnalysisHypothesisContextId
+}
+
+AnalysisQuantitativeFormulaBody<S> = {
+  result_sort: S,
+  parameter_schema: CanonicalSeq<AnalysisParameterSchemaEntry>,
+  declared_parameter_independence:
+    CanonicalSortedUniqueSeq<LocalParameterOrdinal>,
+  expression: BasisNeutralQuantitativeExpr<S>
+}
+
+AnalysisNativeRuleCoordinate =
+  ModuleDeclarationRef<"analysis.native-rule">
+
+AnalysisNativeRuleSemanticsContract = {
+  exact_payload_meta_schema,
+  allowed_conclusion_families:
+    CanonicalNonEmptySeq<AnalysisFamilyCoordinate>,
+  exact_premise_requirement_schema,
+  exact_typed_transform_program_schema,
+  conclusion_reconstruction_law,
+  failure_classification
+}
+
+AnalysisNativeRuleSemanticsCatalog(B) =
+  the authenticated semantic-regime mapping from each complete resolved
+  AnalysisNativeRuleCoordinate and declaration body to exactly one immutable
+  AnalysisNativeRuleSemanticsContract
+
+NativeRuleSchema = {
+  rule_coordinate: AnalysisNativeRuleCoordinate,
+  canonical_rule_payload:
+    CanonicalValue<resolved and lifted payload type of rule_coordinate>
+}
+
+AnalysisRuleSource =
+    NativeRuleSource(NativeRuleSchema)
+  | ImportedTheoremRuleSource(AnalysisTheoremSchemaId)
+
+AnalysisQualificationRequirementCoordinate =
+  ModuleDeclarationRef<"analysis.qualification-requirement">
+
+AnalysisNamedConsumerCoordinate =
+  ModuleDeclarationRef<"analysis.named-consumer">
+
+AnalysisTypedPurposeCoordinate =
+  ModuleDeclarationRef<"analysis.typed-purpose">
+
+AnalysisUseSemanticsContract = {
+  accepted_subject_and_result_kinds,
+  qualification_predicate_or_exact_match,
+  capability_attenuation_law,
+  operation_policy_compatibility_law,
+  failure_classification
+}
+
+AnalysisUseSemanticsCatalog(B) =
+  the authenticated semantic-regime mapping from each complete resolved
+  qualification-requirement, named-consumer, and typed-purpose coordinate and
+  declaration body to exactly one immutable AnalysisUseSemanticsContract
+
+AnalysisExtractorWitnessQuantifierKind =
+    ExistsExtractor
+  | ExistsUniformBlackBoxExtractor
+  | ExistsUniformExtractorFamily
+
+AnalysisQuantifiedWitnessRole = {
+  experiment_profile_id: AnalysisExperimentProfileId,
+  quantifier_ordinal: Natural,
+  expected_quantifier_kind: AnalysisExtractorWitnessQuantifierKind
+}
+
+AnalysisPremiseRequirement =
+    HypothesisNodeRequirement {
+      hypothesis_context_id, node_ordinal, exact_goal_id
+    }
+  | AffirmativeJudgmentCapabilityRequirement {
+      proposition_id: AnalysisPropositionId,
+      conclusion_family: AnalysisFamilyCoordinate,
+      required_qualification: AnalysisQualificationRequirementCoordinate,
+      named_consumer: AnalysisNamedConsumerCoordinate,
+      typed_purpose: AnalysisTypedPurposeCoordinate
+    }
+  | ExactQuantifiedWitnessRequirement {
+      witness_coordinate: TypedSemanticSubjectRef,
+      exact_profile_id: AnalysisExtractorProfileId,
+      quantified_role: AnalysisQuantifiedWitnessRole
+    }
+
+AnalysisSemanticBasisBody = {
+  family: AnalysisFamilyCoordinate,
+  rule_source: AnalysisRuleSource,
+  exact_premise_schemas:
+    CanonicalSortedUniqueSeq<AnalysisPremiseRequirement>,
+  source_read_purposes,
   conclusion_schema,
-  family_outcome_and_refutation_schema,
-  quantitative_sorts_and_operators,
-  semantic_read_requirements
+  typed_transform_program
 }
 
-FamilyBasisRegistry<F> {
-  admitted_basis_lanes,
-  semantic_rule_and_theorem_contracts,
-  implication_transport_composition_and_coverage_port_schemas,
-  exact_semantic_basis_extension_boundary
+AnalysisSupportInstantiationBody = {
+  semantic_basis_id: AnalysisSemanticBasisId,
+  proposition_id: AnalysisPropositionId,
+  non_hypothesis_premise_bindings,
+  established_hypothesis_node_bindings,
+  assumed_hypothesis_node_bindings,
+  source_support_bindings: CanonicalSortedUniqueSeq<
+      ExactManifestSupportBinding {
+        semantic_read_manifest_id: AnalysisSemanticReadManifestId,
+        source_support_coordinate: AnalysisSourceSupportCoordinate
+      }
+    | FamilyManifestSupportSchemaBinding {
+        family_read_manifest_schema_id: AnalysisFamilyReadManifestSchemaId,
+        dependent_support_schema,
+        exact retained family-support hypotheses
+      }>
 }
 
-FamilyValidationProfile<F> {
-  validation_and_checker_contracts,
-  decoder_translation_and_proof_rule_contracts,
-  validation_trust_root_policy
+AnalysisValidationBasisBody = {
+  admitted_checker_contract_ids_and_abis,
+  exact_translation_contracts,
+  finite_control_contracts,
+  residual_trust_roots
 }
 
-FamilyOperationPolicy<F> {
-  capability_contract,
-  replay_contract,
-  disclosure_and_trust_contract,
-  operation_and_unknown_question_policy
+AnalysisJudgmentRecordBody = {
+  proposition_id: AnalysisPropositionId,
+  polarity,
+  exact_family_conclusion,
+  inherited_hypothesis_context_id: AnalysisHypothesisContextId,
+  typed_quantitative_result,
+  semantic_basis_id: AnalysisSemanticBasisId,
+  support_coordinate: AnalysisSupportInstantiationCoordinate,
+  validation_basis_id: AnalysisValidationBasisId,
+  qualification,
+  operation_policy_id: AnalysisOperationPolicyId,
+  source_policy_dependency_closure
 }
 
-SourceOperationPolicyDependencyClosure {
-  every direct and transitive admitted-subject and checked-result source
-    authority binding,
-  exact ExactSourceAuthorityBinding, including any source Analysis
-    ExactJudgmentBinding,
-  assurance, residual trust, and exact OwnerCapabilityRequirement,
-  exactly one owner-policy disposition:
-    BoundTo(exact owner operation-policy identity and authenticated contract)
-      | OwnerDefinesNoOperationPolicy(
-          exact owner capability-contract identity, exact capability ABI),
-  exact source-to-pre-result dependency edges whose targets include every
-    invocation admitted-subject, owner-created view, question, proposition,
-    family profile, basis-registry, validation-profile, target-policy,
-    semantic-basis premise, and correspondence-support slot, together with its
-    named operation purpose,
-  total coverage of every authority-bearing invocation slot and no extra edge,
-  exact named consumer and operation purposes already exercised,
-  canonical finite acyclic transitive closure
-}
-~~~
+AnalysisQuestionId =
+  AnalysisId<"analysis.question">(B, AnalysisQuestionBody)
 
-For `ExactProposition`, the pre-result proposition target above is the exact
-admitted proposition supplied by the request. For `DeriveWithin`, it is only the
-request's typed result-schema slot; the closure never names a proposition that
-does not yet exist. The later produced proposition and its admission binding
-enter the completion-time realization ledger and checked-result origin closure,
-not the pre-execution dependency closure.
+AnalysisGoalId =
+  AnalysisId<"analysis.goal">(B, AnalysisGoalBody)
 
-`SourceOperationPolicyDependencyClosureId` identifies this exact inert closure.
-It is not permission. Every mint, attenuation, use, disclosure, persistence,
-cache lookup, and replay must freshly satisfy the conjunction of the target
-`FamilyOperationPolicy` and every bound source-owner policy for its exact named
-consumer and purpose. A source prohibition or refusal prevents that operation;
-the target policy cannot replace, erase, or relax it. The
-`OwnerDefinesNoOperationPolicy` variant is legal only when that owner's admitted
-capability contract explicitly declares the absence, so omission is never
-ambient policy erasure.
+AnalysisHypothesisContextId =
+  AnalysisId<"analysis.hypothesis-context">(
+    B, AnalysisHypothesisContextBody)
 
-Closure edges never name the future `SupportInstantiationId`, `DerivationId`,
-`JudgmentRecordId`, completed result, or corresponding local handle whose
-preimage contains the closure. They terminate at cycle-free pre-result support
-slots and purposes, so policy provenance cannot create an identity cycle.
+AnalysisPropositionId =
+  AnalysisId<"analysis.proposition">(B, AnalysisPropositionBody)
 
-`ExactSourceOperationPolicyDependencyClosure` is the durable
-`SourceOperationPolicyDependencyClosureId` in the portable lane and the
-`LocalSourceOperationPolicyDependencyClosureHandle` when any dependency edge is
-owner-local. The latter obeys the same transitive nonpersistence rule as every
-other local handle.
+AnalysisQuantitativeFormulaId<S> =
+  AnalysisId<"analysis.quantitative-formula">(
+    B, AnalysisQuantitativeFormulaBody<S>)
 
-`semantic_view_contract_schemas` identifies source-fact meanings and complete
-read contracts, not concrete adapter implementations or live view tokens.
-Adding another adequate adapter for an unchanged contract therefore changes
-neither family semantics nor question identity.
+AnalysisSemanticBasisId =
+  AnalysisId<"analysis.semantic-basis">(B, AnalysisSemanticBasisBody)
 
-Only `FamilySemanticProfileId` enters `AnalysisQuestionId`. It fixes the
-subject, model, experiment, observer, parameters, conclusion, refutation,
-quantitative algebra, and semantic-read meaning. A rule catalog, theorem,
-checker, proof lane, assurance policy, capability policy, replay purpose, or
-trust policy cannot change question or proposition identity.
+PortableAnalysisSupportInstantiationId =
+  AnalysisId<"analysis.support-instantiation">(
+    B, AnalysisSupportInstantiationBody)
 
-`FamilyBasisRegistryId`, `FamilyValidationProfileId`, and
-`FamilyOperationPolicyId` enter only the basis, qualification, operation, or
-replay identity that reads them. A checker implementation is authenticated
-against the exact validation contract supplied to the invocation. Every check
-or replay also requires a fresh process-local checker-execution capability
-whose implementation identity, ABI, contract, and checked implementation-to-
-contract correspondence set exactly match the admitted `ValidationBasisId`.
+AnalysisValidationBasisId =
+  AnalysisId<"analysis.validation-basis">(B, AnalysisValidationBasisBody)
 
-The v0 family set and every meaning-bearing constructor are closed and
-versioned. An unknown family, model, rule, result, or refutation tag is
-`Unsupported`; an ambient plugin or host callback cannot give it meaning.
+PortableAnalysisJudgmentRecordId =
+  AnalysisId<"analysis.judgment-record">(B, AnalysisJudgmentRecordBody)
+```
 
-### 3.3 Thin common envelope
+Every native rule coordinate and body must resolve in
+`AnalysisNativeRuleSemanticsCatalog(B)`. Admission checks its canonical payload,
+allowed conclusion family, complete premise-requirement sequence, and typed
+transform program against that one contract. A native rule schema contains no
+future semantic-basis ID, proposition ID, support binding, checker, or live
+capability. An imported theorem uses the disjoint
+`ImportedTheoremRuleSource` variant; a theorem ID cannot be re-encoded as a
+native rule payload. Unknown rule declarations are `Unsupported`, malformed
+payloads are `Malformed`, and provider disagreement is `CheckerFailure`.
 
-Every family supplies:
+Every `AnalysisQuestionBody` first resolves its complete `family` declaration in
+`AnalysisFamilySemanticsCatalog(B)`. The family contract admits every and only
+the exact subject kinds, context variant, context members, and family payload
+that it specifies. Every referenced manifest and experiment profile must resolve,
+must have the subject domain required by that contract, and must be listed in the
+question context exactly once in canonical order. A family context's
+`family_definition_id` must equal the family definition used by every dependent
+manifest and experiment profile in that context. A family-instance context must
+add the exact concrete side selected by the family contract; it cannot use an
+abstract family carrier as a portable subject reference.
 
-- its exact admitted subject closure;
-- owner-created views and complete semantic and basis read closures;
-- its semantic model instantiation;
-- observer, direction, and occurrence coordinates when meaningful;
-- typed parameters and quantifiers; and
-- its question result schema and proposition-specific hypothesis,
-  conclusion, and refutation schemas.
+An `AnalysisGoalBody` is admitted only after resolving `question_id` to one exact
+question body. `conclusion_family` MUST equal that question's `family`, and
+`hypothesis_free_conclusion` MUST equal the unique conclusion reconstructed by
+that family's `question_to_conclusion_reconstruction_law`; accepting merely a
+value of the same conclusion meta-schema is insufficient. Thus a caller cannot
+pair one family's question with another family's conclusion, or choose a second
+conclusion admitted by the same carrier schema.
 
-The common layer does not manufacture universal optional fields. A family
-without an adversary, oracle, simulator, cost model, witness, or occurrence
-subject structurally omits that coordinate.
+Every qualification requirement, named consumer, and typed purpose must likewise
+resolve as a complete declaration in `AnalysisUseSemanticsCatalog(B)`. These
+coordinates select exact capability acceptance and attenuation laws; display
+text and caller-selected strings do not. For an
+`ExactQuantifiedWitnessRequirement`, admission resolves
+`quantified_role.experiment_profile_id`, selects the in-range quantifier at
+`quantifier_ordinal`, and requires its constructor and bound extractor profile
+to equal `expected_quantifier_kind` and `exact_profile_id`. The supplied witness
+must inhabit that exact quantified carrier. A display binder name, another
+existential in the same prefix, or a profile-equivalent algorithm cannot fill
+the requirement.
 
-## 4. Source-owned views and read closure
+Hypothesis nodes refer to goals and earlier local ordinals, never recursively
+to the proposition being formed. `roots` is the exact outward hypothesis
+frontier. Every dependency reachable from that frontier is also a required
+hypothesis; dependency edges order obligations but never establish them.
+For a nonempty context, `roots` is uniquely derived as the canonical sorted
+sequence of every node that is not reachable by a nonempty dependency path from
+another node. Equivalently, it is the unique set of all reachability-maximal
+nodes of the authenticated DAG; that set is an antichain at the outward edge. A
+root reachable from another root is redundant and malformed. Every node must be
+reachable from this derived frontier.
+Unreachable nodes, a caller-authored nonmaximal frontier, forward edges,
+duplicate goals, or noncanonical root order are malformed. The empty context
+has empty `nodes` and `roots`.
 
-Each source owner defines the view types Analysis may receive, the finite fact
-vocabulary they expose, and the adequacy predicate for each read contract.
-Analysis distinguishes:
+The domains of `established_hypothesis_node_bindings` and
+`assumed_hypothesis_node_bindings` are disjoint and partition exactly every
+node in the reachable closure of `roots`, not merely the roots themselves.
+An established entry supplies the exact affirmative judgment capability
+required by its node; an assumed entry retains that exact goal as a logical
+hypothesis. A dependency edge, proof-plan ordering, or duplicated goal cannot
+fill either binding.
 
-~~~text
-SemanticReadClosure<F> {
-  every source fact and direct semantic dependency used to define the
-  question's meaning
-}
+`non_hypothesis_premise_bindings` binds every and only the semantic basis's
+`AffirmativeJudgmentCapabilityRequirement` and
+`ExactQuantifiedWitnessRequirement` entries. It is disjoint from hypothesis-
+node treatment. Theorem truth is an ordinary exact goal node in the target
+context, so its established-versus-assumed treatment also belongs only in the
+two hypothesis-node maps. Missing, extra, duplicated, wrong-purpose, or wrong-
+qualification bindings are malformed or refused according to the common
+outcome rules.
 
-BasisReadClosure<B> {
-  every source fact and dependency used only to validate one theorem,
-  derivation, proof, certificate, direct procedure, or correspondence
-}
-~~~
+An `AnalysisSemanticBasisBody` is admitted only for one exact proposition goal:
+its `family` equals the resolved goal's conclusion family, its
+`conclusion_schema` reconstructs that exact goal body, and its rule source's
+resolved contract admits that family, the complete premise-requirement sequence,
+and the typed transform. Each hypothesis-node requirement names the proposition's
+exact hypothesis context and authenticated node; every non-hypothesis premise is
+disjoint from that node domain. A basis is a reusable semantic derivation schema,
+so it contains no support coordinate, live capability, established/assumed
+choice, or future judgment ID.
 
-`SemanticReadClosureId` enters `AnalysisQuestionId`.
-`BasisReadClosureId` enters the exact semantic or validation basis that reads
-it. Different adequate live view occurrences may reconstruct the same finite
-closure; view tokens and capabilities never enter content identity.
+An `AnalysisSupportInstantiationBody` resolves both its proposition and semantic
+basis and requires the exact proposition/family/goal triple admitted by that
+basis. Its non-hypothesis bindings fill every and only the corresponding premise
+requirements; its two hypothesis maps partition every reachable node; and its
+source-support domain equals the resolved question context as specified below.
+No binding for another proposition, family member, manifest, purpose, or local
+owner can be accepted by structural similarity.
 
-Family-profile admission checks that the semantic closure is permitted by
-every source-owned view schema. Every offered basis separately declares and
-checks its complete basis closure. A read that affects proposition meaning
-cannot be hidden in a checker. A proof-only read cannot be moved into the
-question merely to force two basis choices to have different propositions.
+An `AnalysisJudgmentRecordBody` resolves the proposition, basis, support, and
+validation basis before formation. Its inherited hypothesis context equals the
+proposition's context, its `exact_family_conclusion` equals the goal's unique
+hypothesis-free conclusion, its semantic basis and support coordinates equal the
+ones just resolved, and its typed quantitative result is admitted by that
+family's exact result schema and by the basis transform. Polarity,
+qualification, operation policy, and policy closure do not relax any of these
+equalities. A mismatch is `Malformed` when the body is noncanonical or
+ill-typed, and otherwise `Refused`; it never creates a second interpretation.
 
-At invocation time:
+For compact domain specifications, the following is one derived canonical
+constructor rather than prose shorthand:
 
-- a missing named view or required fact is `CannotAnswer` before semantic
-  evaluation;
-- a view-shaped value without matching source authority is `Refused`;
-- an ill-typed or undeclared read is `Malformed` or `Unsupported` under the
-  family policy; and
-- the checker cannot reopen carrier bytes, consult an ambient registry, or
-  infer an omitted fact.
+```text
+AllReachableHypothesisNodeRequirements(GammaId,GammaBody) =
+  CanonicalSeq, in GammaBody local-ordinal order, containing exactly
+  HypothesisNodeRequirement {
+    hypothesis_context_id: GammaId,
+    node_ordinal: node.local_ordinal,
+    exact_goal_id: node.goal_id
+  }
+  for every node reachable from GammaBody.roots
 
-Adding a semantic read changes the semantic profile, model, or question.
-Adding a proof-only read changes the corresponding basis. Neither change may
-be concealed in implementation behavior.
+UniqueOrdinalOfGoal(GammaBody,goal_id) =
+  the one local ordinal whose authenticated node has exactly goal_id; missing
+  or non-unique lookup is malformed
 
-## 5. Question, goal, proposition, and request
+OutwardFrontier(nodes) =
+  CanonicalSortedUniqueSeq of exactly those node ordinals that do not occur in
+  the nonempty transitive dependency closure of any other node
 
-### 5.1 Stable question
+CanonicalGoalDagUnion(
+    contexts: CanonicalNonEmptySeq<AnalysisHypothesisContextBody>) =
+  1. authenticate every input context, replace each local dependency ordinal by
+     its exact goal ID, and group nodes by complete goal ID;
+  2. for each goal ID, take the canonical set union of every grouped dependency
+     goal-ID set, preserving every input dependency;
+  3. reject a missing dependency, self-edge, or cycle;
+  4. assign fresh local ordinals by the unique canonical topological order that
+     repeatedly selects the least complete goal ID among nodes whose dependency
+     goal IDs have already been assigned;
+  5. rewrite dependency goal IDs to those fresh earlier ordinals; and
+  6. set roots to OutwardFrontier(the rewritten nodes).
+```
 
-~~~text
-AnalysisQuestion<F> {
-  analysis_semantic_regime_id,
-  family_semantic_profile_id,
-  exact_admitted_subject_closure,
-  exact_definition_and_occurrence_graph,
-  exact_subject_statement_witness_trace_and_construction_maps,
-  admitted_semantic_model_instance,
-  family_experiment_regime,
-  observer_visibility_and_direction_coordinates,
-  typed_parameter_and_quantifier_context,
-  semantic_read_closure,
-  family_result_schema
-}
-~~~
+`AllReachableHypothesisNodeRequirements` and `UniqueOrdinalOfGoal` first
+authenticate `GammaId` against `GammaBody` and refuse an unreachable node,
+duplicate ordinal or goal, forward edge, or cycle. Neither constructor
+establishes nor assumes any node; the support partition records that treatment.
+`CanonicalGoalDagUnion` never unions caller-supplied root lists. It derives the
+one maximal outward frontier after goal merging and dependency union. Equal goals
+with different dependency sets therefore acquire the exact canonical union of
+those dependencies; a cycle introduced by that merge is malformed. Input order,
+display names, and redundant roots cannot change the result.
+The domain of `source_support_bindings` is exactly the manifest sequence in an
+exact question context, with no missing or extra entry. For a family context it
+is a dependent support schema checked at each referenced family member. A
+concrete member binding enters only a `FamilyInstanceContext`, which requires
+both the family support schema and every concrete manifest support with no
+ambient bridge between them. The domain is empty for `SourceFree` questions and
+may contain both source and target supports for theorem applicability.
 
-`AnalysisQuestionId` identifies one stable relation or property experiment and
-its permitted conclusion shape:
+A quantitative formula is part of a family conclusion only through its
+basis-neutral formula ID. Its body may refer to family parameters, exact
+positive-polynomial values, and the closed native arithmetic constructors
+selected by the owning family, but never to a theorem schema, proof, semantic
+basis, loss-result occurrence, checker, or live capability. A theorem or native
+rule may establish a transform *to* an already formed formula in
+`AnalysisSemanticBasisBody.typed_transform_program`; it cannot make theorem
+provenance part of the formula or ordinary property-question identity.
+Admission derives the expression's exact free-parameter set and requires
+`declared_parameter_independence` to equal the ordered complement within
+`parameter_schema`; callers cannot hide a used parameter or pad the list.
 
-~~~text
-AnalysisQuestionId = H(
-  "zkc/analysis-question",
-  AnalysisSemanticRegimeId,
-  FamilySemanticProfileId,
-  exact semantic subject closure,
-  exact occurrence graph and semantic maps,
-  ModelInstantiationId,
-  experiment, observer, direction,
-  alpha-normalized typed parameters and quantifiers,
-  SemanticReadClosureId,
-  exact family_result_schema)
-~~~
+Potentially local values use one disjoint coordinate type:
 
-It contains no residual hypothesis context, exact claimed bound or result,
-theorem choice, proof bytes, checker version, timeout, worker limit, or trust
-acceptance policy.
+```text
+AnalysisCoordinate<T> =
+    Portable(T)
+  | OwnerLocal(LocalAnalysisHandle<kind(T), owner, owner_generation>)
 
-### 5.2 Exact conditional proposition
+AnalysisSourceSupportCoordinate =
+  AnalysisCoordinate<PortableAnalysisSourceSupportId>
 
-~~~text
-AnalysisGoal<F> {
-  question_id,
-  exact_typed_conclusion
-}
+AnalysisSupportInstantiationCoordinate =
+  AnalysisCoordinate<PortableAnalysisSupportInstantiationId>
 
-AnalysisProposition<F> {
-  goal_id,
-  hypotheses: CanonicalTypedHypothesisContext
-}
-~~~
+AnalysisJudgmentRecordCoordinate =
+  AnalysisCoordinate<PortableAnalysisJudgmentRecordId>
+```
 
-The identities are:
+Portable formation is legal only when the exact body and every transitive
+reference are portable and every governing policy permits portable addressing.
+A value that semantically depends on an owner-local occurrence, satisfaction,
+loss result, source support, or hypothesis receives only a collision-free local
+handle. Such a handle has no digest, serialization, equality by copied
+structure, or exact cold replay. A canonical collection containing local
+coordinates may compare them only within the same owner and generation.
 
-~~~text
-AnalysisGoalId = H(
-  "zkc/analysis-goal",
-  AnalysisQuestionId,
-  family-specific exact conclusion)
+`SourceFree` is admitted only for a family whose meaning requires no source
+read or experiment, initially exact theorem truth. It cannot be used to omit a
+required manifest or model from a property or applicability question.
 
-AnalysisPropositionId = H(
-  "zkc/analysis-proposition",
-  AnalysisGoalId,
-  HypothesisContextId)
-~~~
+The active universal Schnorr and AFK questions remain portable because their
+semantic manifests name only portable subjects and occurrence/map schemas.
+Concrete run views, checked correspondence or loss results, consumer joins,
+and live capabilities occur in support or invocation. A future family whose
+proposition itself names a concrete local occurrence propagates the local
+coordinate through its hypothesis, proposition, support, judgment, and every
+dependent value.
 
-`AnalysisGoalId` is a hypothesis-free conclusion subidentity. A theorem or
-correspondence assumption can therefore name the exact goal without a cyclic
-reference to the proposition whose context contains that assumption. A goal
-is not truth-apt and grants no authority.
+The hypothesis-free `AnalysisGoalId` is the sole target of correspondence
+questions. Concrete correspondence proposition IDs belong in the hypothesis
+context or support instantiation, never inside the goal. This breaks the
+applicability/correspondence identity cycle.
 
-The proposition has explicit conditional meaning:
+### 4.2 Identity sensitivity
 
-~~~text
-Gamma |-_model Conclusion<F>(subjects, parameters, result)
-~~~
+Changing any semantic subject, read manifest, quantifier order, strategy
+class, model, outcome law, theorem schema, property conclusion, parameter map,
+or typed transform changes the appropriate ID. Changing a checker
+implementation, proof search tactic, timeout, cache, request priority, or
+observation receipt does not change proposition meaning; it may change the
+validation basis or operational attempt.
 
-Rules may discharge, inherit, strengthen, or introduce hypotheses only through
-typed family operations. The final proposition contains every residual
-assumption. Different bounds, metric regimes, extractor guarantees, simulator
-regimes, cost values, or residual contexts produce different proposition IDs.
+Owner-local source coordinates and every Analysis value whose own body names
+them use process-local handles rather than portable IDs. Taint flows forward
+through actual dependency, not backward into an otherwise portable question.
+No value depending on an owner-local satisfaction or lossy-use capability has
+a portable digest or exact cold replay.
 
-### 5.3 Operational request
+## 5. Hypotheses, basis, support, and validation
 
-~~~text
-AnalysisRequest<F> {
-  exact_question: exact AnalysisQuestion<F> and
-    ExactAdmittedSubjectAuthorityBinding<Analysis, AnalysisQuestion<F>>,
-  target:
-      ExactProposition(
-        exact AnalysisProposition<F> and
-        ExactAdmittedSubjectAuthorityBinding<Analysis, AnalysisProposition<F>>)
-    | DeriveWithin(F::ExactResultSchema),
-  exact required owner-created semantic and offered-basis view contracts,
-    references, and semantic/basis read-closure coordinates,
-  offered_semantic_and_validation_bases,
-  exact_family_operation_policy: exact FamilyOperationPolicy<F> and
-    ExactAdmittedSubjectAuthorityBinding<Analysis, FamilyOperationPolicy<F>>,
-  exact_named_consumer: NamedConsumer,
-  operation_purpose: OperationPurpose,
-  requested_assurance_profile,
-  operational_resource_limits,
-  optional_named_persistence_purpose,
-  no live capability
-}
-~~~
+### 5.1 Hypothesis context
 
-~~~text
-AnalysisRequestId = H(
-  "zkc/analysis-request",
-  AnalysisQuestionId,
-  exact question admitted-subject authority binding,
-  exact target proposition or derive-within result schema,
-  exact proposition admitted-subject authority binding when present,
-  exact required view contract/reference and read-closure coordinates,
-  offered basis identities,
-  exact FamilyOperationPolicyId and policy admitted-subject authority binding,
-  exact named consumer and operation purpose,
-  requested assurance profile,
-  operational-limits profile,
-  named persistence purpose when present)
-~~~
+The canonical hypothesis DAG retains:
 
-A request is an unauthoritative attempt. A timeout, solver, proof assistant,
-tactic, worker limit, basis preference, or operation-policy change changes
-`AnalysisRequestId`, never the proposition. The exact policy governs
-capability minting, replay, disclosure, trust acceptance, and unknown-question
-behavior for the attempt; no ambient replacement may reinterpret the request.
-`DeriveWithin` may return newly authenticated exact propositions. Failure to
-find one is `CannotAnswer`, not a semantic negative.
+- unproved mathematical or cryptographic assumptions;
+- imported theorem truth when no accepted proof authority is supplied;
+- model and algorithm correspondences that are propositions rather than
+  definitional coordinates;
+- group, field, sampler, termination, and resource side conditions; and
+- occurrence-local loss premises.
 
-The request is wholly capability-neutral. Its admitted-subject bindings are
-inert exact source coordinates and requirements, not admission tokens. Request
-construction, content identity, attempt recording, persistence, and replay
-therefore never serialize authority. Preparation separately receives fresh
-question, exact-target proposition when present, and policy capabilities, plus
-the concrete owner-created view values, their exact bindings, and their fresh
-source capabilities. It requires complete equality with every request binding,
-view contract/reference, and read-closure coordinate before constructing an
-`AnalysisCheckingInvocation`. Concrete view occurrences and bytes never enter
-`AnalysisRequestId`.
+An assumption is represented once, in the canonical hypothesis context. A
+support ledger records how that proposition was treated; it does not duplicate
+the proposition in judgment identity.
 
-Questions and propositions themselves are authenticated, checked for exact
-identity, type, dependencies, maps, model, and read closure, then admitted by
-the family. A matching ID without the resulting process-local admitted
-capability is insufficient.
+Model coordinates are not removable hypotheses. Checker correctness,
+canonical decoding correctness, provider conformance, and runtime integrity are
+residual trust, not logical premises.
 
-## 6. Hypotheses, premises, and trust
+### 5.2 Four independent roles
 
-### 6.1 Canonical hypothesis graph
+```text
+SemanticBasis
+  defines the inference rule and exact conclusion transformation
 
-`AnalysisHypothesisContext` is a finite acyclic typed graph. Its leaves may be:
+SupportInstantiation
+  binds every established premise occurrence and every retained assumption
 
-- declared cryptographic or hardness assumptions;
-- exact unproved propositions admitted by the family;
-- termination, losslessness, state-separation, or oracle restrictions;
-- adversary, query, time, uniformity, or auxiliary-input restrictions;
-- quantitative side conditions; or
-- assumed model, statement, or subject-correspondence propositions.
+ValidationBasis
+  defines how this check was carried out and translated
 
-ROM, QROM, ideal-permutation, CRS/SRS, trace, cost, abort, termination, and
-similar coordinates that change the experiment belong to the question's
-model, not to removable metadata. A theorem inside that model may still carry
-exact residual hypotheses.
+AnalysisJudgmentRecord
+  states the exact qualified semantic result
+```
 
-Established Analysis judgments and owner-provided structural capabilities are
-derivation dependencies, not unresolved hypotheses. Their residual contexts
-are inherited through the applied rule. Every hypothesis edge names its
-substitution, direction, and discharge rule. Strings, theorem names, and
-citations cannot stand in for propositions.
+An admitted theorem schema says what an implication means. A paper citation or
+schema admission does not establish theorem truth. If theorem truth is assumed,
+its exact proposition remains in the result hypotheses. A future checked proof
+may discharge that same proposition without changing the question or theorem
+schema.
 
-Contexts use alpha-normalized typed binders and a canonical acyclic DAG.
-Logical equivalence is never guessed. Two differently expressed contexts have
-different identities unless an exact checked rule relates them. A proposition
-cannot be established solely by assuming itself, and proposition and
-derivation dependencies are cycle-free.
+Every inherited hypothesis is canonically unioned exactly once. A transform
+may discharge a hypothesis only through an exact affirmative premise binding
+authorized by its semantic basis.
 
-### 6.2 Total dependency disposition
+### 5.3 Operation policy
 
-Every semantic basis includes a total ledger over every imported definition,
-axiom, lemma assumption, theorem assumption, and proof-environment dependency:
-
-~~~text
-DependencyDisposition =
-    EstablishedPremise(exact proposition, polarity, and semantic facts)
-  | ResidualHypothesis(exact proposition)
-  | DefinitionalOrLogicTrustRoot(exact definition or logic root claim)
-~~~
-
-Every truth-apt unproved proposition becomes a `ResidualHypothesis` and is
-canonically unioned into the resulting proposition. An exact prior judgment
-may realize an `EstablishedPremise`; its proposition, polarity, and semantic
-facts affect basis meaning, while the selected record, assurance, and trust
-belong to the support instantiation. Only logic or definitional adequacy may
-terminate at `DefinitionalOrLogicTrustRoot`. A domain proposition cannot be
-hidden there for convenience.
-
-Logical premises and residual trust are distinct. A hardness assumption,
-unproved theorem, or assumed correspondence is part of proposition meaning. A
-checker, encoding, proof kernel, runtime, or normative-definition correctness
-obligation belongs to the validation trust DAG described in
-[Transport, composition, and replay](transport-composition-and-replay.md).
-
-## 7. Basis, support, validation, and derivation
-
-### 7.1 Exact structures
-
-~~~text
-SemanticDerivationBasis {
-  basis_lane,
-  family_semantic_profile_id and exact used semantic-profile slice,
-  admitted_family_basis_registry_id and exact used registry slice,
-  exact_rule_or_theorem_refs,
-  exact_model_subject_and_statement_correspondence_propositions,
-  exact_encodings_and_query_polarities,
-  total_dependency_disposition_ledger,
-  basis_read_closure,
-  exact_premise_proposition_polarity_and_semantic_fact_requirements,
-  substitutions_and_quantitative_transformer_contracts
+```text
+AnalysisOperationPolicy = {
+  supported_families_and_models,
+  named_consumer_and_typed_purpose_permissions,
+  capability_freshness_and_lifetime,
+  disclosure_policy,
+  unknown_question_disposition,
+  persistence_policy,
+  cold_replay_policy
 }
 
-SupportInstantiation {
-  semantic_basis: ExactRef<SemanticBasis>,
-  exact premise ExactCheckedResultAuthorityBinding values,
-  exact correspondence-support ExactCheckedResultAuthorityBinding values,
-  exact SourceOperationPolicyDependencyClosureId or local handle,
-  exact_dependency_disposition_realization
-}
+AnalysisOperationPolicyId =
+  AnalysisId<"analysis.operation-policy">(B, AnalysisOperationPolicyBody)
+```
 
-ValidationBasis {
-  admitted_family_validation_profile_id,
-  semantic_basis: ExactRef<SemanticBasis>,
-  exact_validation_and_checker_semantic_contracts,
-  exact_checker_implementation_and_abi_identities,
-  checker_implementation_and_contract_correspondence_identities,
-  decoder_elaborator_translation_and_proof_rule_closure,
-  validation_only_dependency_and_read_closure,
-  exact_trust_root_dag
-}
+Policy never changes proposition meaning. It governs whether an otherwise
+well-formed result may be minted, disclosed, persisted, replayed, or consumed
+for one named purpose.
 
-AnalysisBasisQualification {
-  semantic_basis: ExactRef<SemanticBasis>,
-  validation_basis: ExactRef<ValidationBasis>,
-  assurance_class,
-  residual_trust_closure_id
-}
+### 5.4 Live authority
 
-CheckedDerivation {
-  exact_proposition: ExactRef<AnalysisProposition>,
-  semantic_basis: ExactRef<SemanticBasis>,
-  validation_basis: ExactRef<ValidationBasis>,
-  support_instantiation: ExactRef<SupportInstantiation>,
-  derivation_body_or_direct_check_transcript,
-  premise_occurrences,
-  substitutions,
-  side_condition_results,
-  quantitative_transform_ledger
-}
+A completed affirmative or family-defined negative may mint a fresh,
+process-local capability bound to:
 
-PreExecutionRequestRealizationLedger<F> {
-  exact AnalysisRequest<F> and matching ID or local handle,
-  total no-missing/no-extra association of every admitted subject, model, view,
-    basis, policy, and source binding to its declared request/question slot,
-  target:
-      ExactPropositionReady(exact admitted proposition binding)
-    | DeriveWithinReserved(exact F::ExactResultSchema and no produced
-        proposition),
-  exact requested assurance profile,
-  exact operational resource limits, reserved resource envelope, and terminal
-    counter schema,
-  exact NamedConsumer and OperationPurpose
-}
+```text
+exact judgment record
+semantic basis
+support instantiation
+validation basis
+source authority bindings and policy closure
+Analysis operation-policy ID
+polarity and qualification
+named consumer and typed purpose
+```
 
-CompletedRequestRealizationLedger<F> {
-  exact PreExecutionRequestRealizationLedger<F>,
-  exact completed proposition and its
-    ExactAdmittedSubjectAuthorityBinding<Analysis, Proposition>,
-  exact target realization:
-      ExactPropositionEquality
-    | DeriveWithinSchemaMatchAndAdmission,
-  exact achieved assurance and acceptance against the requested profile,
-  exact terminal accounting for every and only declared resource counter,
-  total no-missing/no-extra completion coverage
-}
+The capability is nonserializable and nonreconstructible. An inert record may
+be authenticated and replayed, but cannot satisfy a live premise slot. Failed,
+unsupported, unanswered, refused, malformed, over-limit, or checker-failed
+attempts mint no partial capability.
 
-AnalysisCheckingOccurrenceHandle =
-  fresh owner-issued process-local nonserializable handle
+## 6. Qualified outcomes and negative meaning
 
-AnalysisCheckingInvocation {
-  exact authenticated AnalysisRequest value and matching ID or local handle,
-  exact admitted family-semantic-profile, question, and policy capabilities with
-    their exact ExactAdmittedSubjectAuthorityBinding values,
-  every exact admitted semantic subject and admitted model-instance value named
-    by AnalysisQuestion.exact_admitted_subject_closure or its semantic read
-    closure, each complete ExactAdmittedSubjectAuthorityBinding, and each
-    separately supplied fresh matching source-owner capability,
-  one total no-missing/no-extra association from those values and bindings to
-    the exact question subject/model closure,
-  for AnalysisRequest.target.ExactProposition only, the exact admitted
-    proposition capability and ExactAdmittedSubjectAuthorityBinding,
-  for AnalysisRequest.target.DeriveWithin, no initial proposition capability;
-    the produced proposition must later be authenticated and admitted with its
-    exact binding and fresh capability before Completed,
-  exact owner-created semantic and offered-basis view values, their exact
-    ExactAdmittedSubjectAuthorityBinding values, and separately supplied fresh
-    purpose-specific view capabilities,
-  exact admitted family basis-registry and validation-profile capabilities with
-    their exact ExactAdmittedSubjectAuthorityBinding values,
-  exact authenticated SemanticDerivationBasis value and matching ID or local handle,
-  exact authenticated SupportInstantiation value and matching ID or local handle,
-  exact authenticated SourceOperationPolicyDependencyClosure value and matching
-    ID or local handle,
-  exact named consumer: NamedConsumer and operation_purpose: OperationPurpose,
-  exact source bindings and separately supplied fresh premise and
-    correspondence capabilities,
-  exact authenticated source-owner policy dispositions matching every closure
-    entry: complete `BoundTo` policy preimages with fresh admitted policy or
-    owner-mediated purpose-check authority, or exact
-    `OwnerDefinesNoOperationPolicy` capability-contract and ABI preimages with
-    fresh contract admission or owner-mediated confirmation,
-  exact authenticated ValidationBasis value and matching ID or local handle,
-  exact PreExecutionRequestRealizationLedger<F>,
-  fresh CheckerExecutionCapability<
-    exact ValidationBasis ID or local handle,
-    CheckerImplementationId,
-    CheckerAbiId,
-    CheckerContractId,
-    ImplementationToContractCorrespondenceSetId>,
-  checking_occurrence_handle: AnalysisCheckingOccurrenceHandle allocated only
-    after successful preparation
-}
-
-AnalysisAttemptSlotStatus =
-    Authenticated(exact capability-neutral typed value, binding, contract,
-                  or reference required by that slot)
-  | OfferedCandidate(exact capability-neutral typed candidate and any claimed
-                     reference or binding)
-  | Missing
-  | OpaqueMalformed(exact normalized defect class,
-                    exact LocalAttemptInputHandle)
-
-AnalysisCheckingAttemptShape<F> =
-    RequestUnavailable(
-      exact request-slot status whose variant is Missing or OpaqueMalformed;
-      no request-derived child-slot obligation)
-  | RequestParsed(
-      exact capability-neutral AnalysisRequest<F>,
-      exact request-slot status whose variant is Authenticated or
-        OfferedCandidate,
-      exact required-slot schema derived from that request, including the exact
-        target variant,
-      exactly one AnalysisAttemptSlotStatus for every and only derived request
-        and AnalysisCheckingInvocation slot, excluding the request root and
-        owner-generated AnalysisCheckingOccurrenceHandle,
-      exact slot-to-schema association)
-
-AnalysisCheckingAttemptInput<F> {
-  exact expected family F and AnalysisSemanticRegimeId,
-  exact AnalysisCheckingAttemptShape<F>,
-  no live capability and no claim that an attempt occurrence happened
-}
-
-PrepareAnalysisCheckingInvocation(
-  exact AnalysisCheckingAttemptInput<F>,
-  occurrence-local capability offers for the declared authority slots, which
-    may be absent, stale, nonmatching, or prohibited and are never retained)
-  ->
-    Ready(allocate a fresh AnalysisCheckingOccurrenceHandle and construct the
-          exact AnalysisCheckingInvocation bound to it)
-  | Rejected(exact AnalysisAttemptDisposition<F>,
-             exact failed requirement and reached policy/contract checks)
-
-AttemptAnalysisChecking(
-  exact AnalysisCheckingAttemptInput<F>,
-  occurrence-local capability offers)
-  -> AnalysisAttemptOutcome<F>
-~~~
-
-The semantic basis identifies inference meaning. The support instantiation
-identifies the exact established source bindings and capability requirements that
-must realize its premises. Fresh matching capabilities are occurrence-local
-operation inputs and never enter the support content identity. The validation
-basis identifies how that basis and derivation were checked. None changes
-proposition meaning.
-
-`AnalysisCheckingAttemptInput<F>` is the capability-neutral outer carrier that
-makes missing, malformed, unauthenticated, stale, and prohibited offers
-representable without pretending a fully populated invocation already exists.
-Malformed material with no canonical typed identity is named only by a fresh
-owner-local `LocalAttemptInputHandle`; that handle is not portable, is not
-authority, and establishes no historical occurrence. `AttemptAnalysisChecking`
-first resolves the total slot ledger and separately supplied capability offers.
-Only `Ready` constructs an `AnalysisCheckingInvocation` and may proceed to
-semantic execution. Every `Rejected` branch constructs the matching
-capability-neutral attempt record and can never reach `Completed`.
-
-The freshly allocated `AnalysisCheckingOccurrenceHandle` identifies only the
-live prepared operation. It is excluded from request, proposition, derivation,
-judgment, completed-result, attempt-record, and replay identities; it is never
-serialized or persisted and does not establish a historical occurrence. Any
-policy-permitted audit association instead uses a separately allocated inert
-record-relative reference.
-
-`AnalysisCheckingInvocation` is the resulting occurrence-local fully typed
-input, not a serializable value or a content-identity preimage. Before
-execution, the family
-matches the admitted family semantic profile, question, and target operation
-policy to their exact admitted-subject bindings and separately supplied fresh
-capabilities. For `ExactProposition` it performs the same match for the offered
-proposition. It independently matches every underlying admitted semantic
-subject and model value to its complete owner-created binding and separately
-fresh source-owner capability. The association must cover every and only entry
-named by the question's admitted-subject and semantic-read closures; an
-Analysis-owned admitted-question capability is not a receipt for current PIR,
-Relations, or other source-owner authority. It also
-matches every source-owned semantic or offered-basis view value to its exact
-`ExactAdmittedSubjectAuthorityBinding` and separately supplied fresh view
-capability. The concrete view contract, read manifest/attenuation, source
-subject, named consumer, and typed purpose must all agree. View-shaped values
-offered at preparation time and inert view contracts, references, or read-
-closure coordinates stored in the request never substitute for this authority.
-
-Before execution, the family checks the complete
-`PreExecutionRequestRealizationLedger<F>`. The selected semantic and validation
-bases must be exact members of the request's offered set. Every subject/model
-entry must match exactly one admitted value, binding, fresh capability, and
-authenticated source-policy disposition, with no missing or ambient source.
-An `ExactProposition` target reserves its exact admitted proposition binding. A
-`DeriveWithin` target reserves only the exact result schema and explicitly
-contains no produced proposition. Requested assurance, the resource envelope,
-the terminal counter schema, the named consumer, and the operation purpose must
-all match the exact request. The ledger is rejected before checking if any
-association, reservation, or authority match is incomplete.
-
-After semantic and validation execution, but before `Completed`, the family
-seals the exact `CompletedRequestRealizationLedger<F>`. For
-`ExactProposition`, the checked proposition must equal the reserved target. For
-`DeriveWithin`, the produced proposition must answer the identical question,
-satisfy the reserved result schema, traverse its own authentication and
-admission lifecycle, and yield both an exact
-`ExactAdmittedSubjectAuthorityBinding<Analysis,Proposition>` and a separately
-fresh matching admitted-proposition capability. The family then checks achieved
-assurance against the requested profile and closes exact terminal accounting
-for every and only declared resource counter. A target, schema, admission,
-assurance, limit, or accounting failure yields the exact family-owned
-noncompleted branch and cannot construct a completed ledger, checked-result
-binding, or live judgment capability.
-
-It then
-checks every fresh premise and correspondence capability against the inert
-semantic-basis and support requirements, requiring exact equality among the
-semantic basis, support instantiation, validation basis, and checked derivation,
-including the selected judgment-record, basis-
-qualification, derivation, support, semantic-basis, validation-basis, assurance,
-trust, and source-operation-policy dependency binding. It freshly verifies that
-the target operation policy and every contributing source-owner policy permit
-this exact consumer and `OperationPurpose`; every explicit no-policy disposition
-must match its freshly validated owner capability contract. The request, authenticated source-
-policy closure, invocation, completed result, judgment record, and live
-capability must bind and compare exactly the same named consumer and purpose. It
-checks the fresh checker-execution
-capability against the stable implementation, ABI, contract, and correspondence
-identities in the validation basis. The completed live derivation occurrence and resulting live
-judgment capability retain this exact match. Durable semantic derivation and
-judgment records retain only their declared semantic, support, validation,
-policy, and trust fields. Separate policy-permitted attempt or audit records
-may retain the request ID and a separately allocated inert record-relative
-reference, never the checking occurrence handle. Neither record class encodes
-or rehydrates a live capability or authenticates actual run history.
-
-A target, offered-basis, assurance, or resource mismatch produces the exact
-family-owned `CannotAnswer`, `Refused`, `Malformed`, or `CheckerFailure` outcome
-appropriate to the failed boundary. It never becomes a semantic negative and
-no completed capability or judgment is attributed to that request.
-
-If a question, proposition, premise, support instantiation, or other value's own
-identity preimage contains an owner-local source coordinate or local handle,
-that value and every later value whose own preimage names its
-local handle use the owner-local lane defined in Section 3.1. Depending on the
-actual identity graph, this may affect a question, goal, proposition, request,
-semantic basis, support instantiation, validation basis, basis qualification,
-derivation, judgment, attempt record, or derived result; no category is tainted
-merely because a separate later support choice is private. The exact family
-operation policy must preserve the source owner's named-consumer disclosure
-restriction and prohibit persistence, public disclosure, public digesting, and
-any exact cold-replay claim for the entire chain. Same-process use is limited to
-the owner-authorized consumer.
-
-A later authorized confidential rerun creates a new private occurrence and
-therefore new local handles exactly for values whose own preimages name or
-forward-reference the new local coordinate, plus a fresh live capability.
-Public semantic values whose preimages do not read it remain equal. Relating either local proposition to
-another requires a separate checked family rule. A cross-process exact result
-would require a separately specified protected stable confidential-record
-identity and replay contract; this target does not infer one from a local
-reference.
-
-### 7.2 Exact record identities
-
-The following formulas apply only to the durable, untainted lane. A durable
-support instantiation may contain portable exact source bindings, but never an
-owner-local source coordinate or local handle.
-
-~~~text
-SemanticBasisId = H(
-  "zkc/analysis-semantic-basis",
-  exact basis_lane,
-  FamilySemanticProfileId and exact used semantic-profile slice,
-  admitted FamilyBasisRegistryId and exact used registry slice,
-  rules/theorems, correspondences, encodings, exact query polarities,
-  semantic-basis dependency closure, BasisReadClosureId,
-  exact premise PropositionIds, required polarities and semantic facts,
-  DependencyDispositionLedgerId, substitutions, transformers)
-
-SupportInstantiationId = H(
-  "zkc/analysis-support-instantiation",
-  SemanticBasisId,
-  exact portable premise ExactCheckedResultAuthorityBinding values,
-  exact portable correspondence-support ExactCheckedResultAuthorityBinding values,
-  SourceOperationPolicyDependencyClosureId,
-  exact total DependencyDispositionLedger realization)
-
-ValidationBasisId = H(
-  "zkc/analysis-validation-basis",
-  admitted FamilyValidationProfileId,
-  SemanticBasisId,
-  exact checker contracts, implementations, and CheckerAbiId values,
-  exact implementation-to-contract correspondence identities,
-  elaborator/decoder/translation/proof-rule closure,
-  validation-only read closure,
-  ResidualTrustClosureId)
-
-JudgmentRecordId = H(
-  "zkc/analysis-judgment",
-  answered AnalysisPropositionId,
-  exact semantic affirmative-answer projection or NegativeAnswerId,
-  DerivationId,
-  SupportInstantiationId,
-  SemanticBasisId,
-  ValidationBasisId,
-  FamilyOperationPolicyId,
-  SourceOperationPolicyDependencyClosureId,
-  assurance class,
-  ResidualTrustClosureId,
-  public family-retained facts)
-~~~
-
-The semantic answer projection excludes the
-`CompletedRequestRealizationLedger`, operational request/reservation/counter
-fields, named operational occurrence, and live capability. `NegativeAnswerId`
-is likewise the identity of the negative answer's semantic projection, as
-specified in Section 8.2. Policy, source-policy closure, assurance, trust,
-bases, derivation, and public semantic retained facts enter
-`JudgmentRecordId` only through the explicit fields above.
-
-For the confidential lane, each structurally corresponding value instead
-receives `LocalAnalysisHandle<T>` under the collision-free, owner-internal rule
-of Section 3.1. Its complete preimage remains available only to the exact owner
-instance for type and equality checking. It is never hashed or serialized into
-a public `SemanticBasisId`, `SupportInstantiationId`, `ValidationBasisId`,
-`BasisQualificationId`, `DerivationId`, or `JudgmentRecordId`.
-
-`BasisQualificationId` identifies the exact accepted pairing of semantic and
-validation basis, assurance class, and residual trust. Downstream shorthand
-`BasisId` means this qualification, never an erased proof-system label.
-
-One checking or replay occurrence is excluded from semantic identity. Its live
-derivation binding retains the exact checker-execution and support-capability
-matches only for that authority lifetime. Private retained facts use a family-
-owned opaque occurrence binding rather than a public content digest.
-
-### 7.3 External proof boundary
-
-An external proof contributes only after three separate checks:
-
-~~~text
-CheckedExternalStatementProof(exact statement, environment, proof, validation)
-
-CheckedSubjectModelCorrespondence(
-  exact zkc subjects and views,
-  exact external symbols and semantic objects,
-  exact occurrence and parameter substitutions,
-  explicit correspondence hypotheses)
-
-CheckedDirectionalStatementAdequacy(
-  external statement,
-  exact zkc AnalysisProposition,
-  exact sufficient implication direction,
-  maps, losses, and residual hypotheses)
-~~~
-
-The latter two are truth-apt Analysis propositions, not Boolean validation
-metadata. If either is assumed, that exact proposition remains in the final
-hypothesis context. Literal equality is unnecessary when a checked one-way
-implication suffices, but direction is mandatory, particularly for negative
-results. Kernel acceptance of an external theorem alone establishes only the
-external statement.
-
-Directional statement adequacy has the ordinary Analysis category split:
-
-~~~text
-CorrespondenceQuestionId = H(
-  "zkc/analysis-question",
-  AnalysisSemanticRegimeId,
-  CorrespondenceFamilySemanticProfileId,
-  exact external statement and environment identity,
-  exact target AnalysisGoalId,
-  exact subject, model, occurrence, and parameter maps)
-
-CorrespondenceGoalId = H(
-  "zkc/analysis-goal",
-  CorrespondenceQuestionId,
-  exact implication direction and quantitative loss)
-
-CorrespondencePropositionId = H(
-  "zkc/analysis-proposition",
-  CorrespondenceGoalId,
-  canonical correspondence hypothesis context)
-~~~
-
-The hypothesis-free target goal breaks a potential identity cycle. The
-correspondence proposition remains conditional and separately checkable; its
-proof and checker stay in derivation and validation identities.
-
-### 7.4 Supported checking lanes
-
-A family explicitly admits any subset of these lanes:
-
-1. A complete finite direct procedure that can establish the exact family
-   affirmative or family-negative proposition inside its declared domain.
-2. An internal finite acyclic `DerivationPlan<F>` whose nodes bind exact
-   premises, substitutions, models, side conditions, and quantitative
-   transformers. The checker performs no proof search.
-3. An external proof basis with checked statement, subject/model
-   correspondence, and directional adequacy.
-4. A certificate or solver basis with exact query, polarity, encoding, theory,
-   certificate language, semantic mapping rule, and validation roots.
-5. An Evidence-derived basis only through a family rule over exact attributable
-   Evidence records or policy-qualified appraisals that states why their
-   retained producer observation meaning, sampling plan, environment, and
-   uncertainty establish the proposition.
-
-Outside a direct procedure's complete domain, the result is `Unsupported` or
-`CannotAnswer`, never negative. Solver `sat`, `unsat`, `unknown`, invalid
-certificate, unsupported proof rule, and checker failure are interpreted first
-inside the exact encoded query. Only an explicit family rule maps a checked
-query result to an Analysis outcome. A solver-trusted lane remains a different
-assurance qualification from an independently checked certificate.
-
-## 8. Qualified outcomes and negative meaning
-
-### 8.1 Outcome algebra
-
-~~~text
-FamilyCompletedOutcome<F> =
-    F::Affirmative(
-      exact proposition,
-      checked derivation,
-      basis qualification,
-      assurance class,
-      residual trust closure,
-      family operation policy ID,
-      source operation-policy dependency closure,
-      exact CompletedRequestRealizationLedger<F>,
-      exact named consumer and operation_purpose: OperationPurpose,
-      exact derivation, support, semantic-basis, and validation-basis
-        coordinates,
-      family-retained facts)
-  | F::Negative(NegativeAnswer<F>)
-
-NegativeAnswer<F> = {
-  answered_proposition_id,
-  established_counter_proposition_id,
-  exact_family_refutation_or_decision_relation_id,
-  exact_refutation_scope,
-  checked_refutation_or_complete_decision_result,
-  basis_qualification,
-  assurance_class,
-  residual_trust_closure,
-  family_operation_policy_id,
-  source_operation_policy_dependency_closure,
-  exact CompletedRequestRealizationLedger<F>,
-  exact named consumer and operation_purpose: OperationPurpose,
-  exact derivation, support, semantic-basis, and validation-basis coordinates,
-  family_retained_refutation_facts
-}
-
-AnalysisAttemptDisposition<F> =
-    Unsupported(exact unsupported family, model, regime, or construct)
-  | CannotAnswer(exact missing semantic input, correspondence, or basis)
-  | Refused(exact missing authority or prohibited invocation)
-  | Malformed(exact framing, typing, identity, cycle, or structural defect)
-  | CheckerFailure(exact normalized operational-failure class)
-
-AnalysisAttemptRecord<F> = {
-  exact AnalysisCheckingAttemptInput<F>, including either its unavailable
-    request status or its parsed request, derived schema, and every
-    capability-neutral subject, view, basis, support, validation,
-    checker-contract, and source-binding slot actually offered or missing,
-  exact request and capability-neutral invocation projection when preparation
-    reached Ready, or exact rejected slot and normalization state otherwise,
-  exact missing, mismatched, stale, prohibited, malformed, or failed
-    requirement,
-  exact reached FamilyOperationPolicyId, authenticated immediate/transitive
-    source-policy dispositions, NamedConsumer, and OperationPurpose, or the
-    exact slot status showing why any such coordinate was unavailable,
-  exact AnalysisAttemptDisposition<F> and
-    Reached(exact residual trust)
-      | Unavailable(exact governing unavailable request-root or
-          validation/trust slot status and exact dependency path),
-  no ExactCheckedResultAuthorityBinding and no live capability
-}
-
-AnalysisAttemptRecordId<F> = H(
-  "zkc/analysis-attempt-record",
-  exact AnalysisCheckingAttemptInput<F>.AnalysisSemanticRegimeId,
-  exact expected family F,
-  CanonicalEncode(AnalysisAttemptRecord<F>))
-
-AnalysisAttemptRecordRef<F> =
-    Portable(exact AnalysisAttemptRecord<F>,
-             exact AnalysisAttemptRecordId<F>)
-  | OwnerLocal(exact AnalysisAttemptRecord<F>,
-               exact LocalAttemptRecordHandle)
-
+```text
 AnalysisAttemptOutcome<F> =
-    Completed(
-      exact FamilyCompletedOutcome<F>,
-      exact ExactCheckedResultAuthorityBinding<Analysis, F>,
-      fresh EstablishedAnalysisJudgment<
-        F, exact completed-outcome polarity, exact AssuranceClass,
-        exact FamilyOperationPolicyId,
-        exact ExactSourceOperationPolicyDependencyClosure,
-        exact NamedConsumer, exact OperationPurpose,
-        exact ExactJudgmentBinding,
-        exact ExactCheckedResultAuthorityBinding<Analysis, F>> bound to both
-        preceding values)
-  | Unsupported(exact AnalysisAttemptRecordRef<F> whose disposition is
-                Unsupported)
-  | CannotAnswer(exact AnalysisAttemptRecordRef<F> whose disposition is
-                 CannotAnswer)
-  | Refused(exact AnalysisAttemptRecordRef<F> whose disposition is Refused)
-  | Malformed(exact AnalysisAttemptRecordRef<F> whose disposition is Malformed)
-  | CheckerFailure(exact AnalysisAttemptRecordRef<F> whose disposition is
-                   CheckerFailure)
-~~~
+    Affirmative(EstablishedAnalysisJudgment<F>)
+  | Negative(EstablishedAnalysisNegative<F>)
+  | Unsupported(exact coordinate)
+  | CannotAnswer(missing exact source, premise, or authority)
+  | Refused(exact prohibited or failed applicability condition)
+  | Malformed(exact structural or canonical defect)
+  | DeterministicLimitExceeded(exact bounded operation)
+  | CheckerFailure(exact evaluator/provider disagreement)
+```
 
-The record body is constructed before its reference. `Portable` is legal only
-when the entire record preimage is portable and every applicable source and
-Analysis operation policy permits this disclosure; otherwise Analysis
-allocates a fresh collision-free `LocalAttemptRecordHandle` after constructing
-the body. Neither branch contains a capability. Checking or retaining the
-record can authenticate only its canonical record-relative request,
-association, offered-input, and disposition statement. It cannot establish an
-affirmative or negative proposition or authenticate that an attempt, failure,
-or historical occurrence happened. An actual occurrence claim requires a
-separate owner-authenticated occurrence/log result, which Stage 4A does not
-define. Reuse or replay of the record does not require the operational failure
-to recur and cannot satisfy any semantic premise.
+Only a family with a complete decision or refutation semantics may emit
+`Negative`. Failure to derive an affirmative result is not a negative.
+Theorem inapplicability is not a negative target property. A wrong model or
+map normally refuses the application; an unsupported family or oracle model
+is `Unsupported`.
 
-The displayed `*_id` fields and `NegativeAnswerId` describe the portable form of
-each coordinate. A mixed or local outcome substitutes a corresponding
-`Local*Handle` only for a coordinate whose own identity preimage is tainted;
-other proposition, basis-qualification, semantic-basis, or validation-basis IDs
-remain portable. An attempt uses a portable request/record ID or local
-request/attempt handle when preparation reaches those coordinates. Before that
-point a `RequestUnavailable` branch retains only its exact missing or opaque-
-malformed request-root status; a `RequestParsed` branch retains the exact
-capability-neutral request and every derived slot status. Any
-`OpaqueMalformed` slot forces the attempt record into the owner-local lane.
-Every affected coordinate inherits the exact same-process named-consumer and
-transitive source-policy restrictions.
+## 7. Requests, replay, and lifecycle
 
-A family without an exact refutation schema or complete decision procedure
-omits `F::Negative`. It does not inherit a generic Boolean false case. Every
-attempt record binds its exact outer attempt-input carrier. When request or
-policy preparation succeeds it additionally binds the exact portable
-`AnalysisRequestId` or local `LocalAnalysisRequestHandle` and
-`FamilyOperationPolicyId`; otherwise it binds the exact missing, candidate, or
-malformed slot status instead of inventing either coordinate. Only a completed
-outcome under an exact authenticated request and policy and
-the freshly checked conjunction of every transitive source-owner operation
-policy mints the family-, polarity-, assurance-, policy-, source-policy-
-closure-, named-consumer-, operation-purpose-, and exact-record-binding-bound
-live capability returned by that same `Completed` branch; changing policy does
-not change proposition meaning. U/C/R/M/F return neither a checked-result
-binding nor an `EstablishedAnalysisJudgment` capability.
+An operational request names the exact question or proposition, acceptable
+bases, resource limits, checker policy, named consumer, and typed purpose. It
+does not enter proposition identity. A checking invocation additionally
+contains every fresh source/checker capability and immutable dependency
+snapshot required for that occurrence.
 
-The family first seals the exact `CompletedRequestRealizationLedger<F>` from the
-invocation's exact pre-execution ledger and completion-time proposition,
-admission binding, target-realization proof, achieved assurance, and terminal
-accounting. It retains that completed ledger in either polarity of
-`FamilyCompletedOutcome<F>`. The operational request, reservation, and counters
-do not enter semantic `JudgmentRecordId`; that ID uses only the explicit
-semantic projection in Section 7.2. They do remain exact completed-result
-origin facts, so two operational completions may share a semantic judgment
-coordinate while retaining different complete checked-result bindings.
+Analysis cold replay reauthenticates the exact semantic bodies, reconstructs
+the source manifests, reruns the admitted basis/checker operations, and
+compares the inert result. It cannot recreate owner-local authority, K2 causal
+generation, strategy membership, random-oracle behavior, or cryptographic
+forking.
 
-The completed outcome body is constructed without a future `JudgmentRecordId`
-or `LocalJudgmentRecordHandle`. Its explicit semantic projection and derivation
-coordinates determine the judgment record or local handle. Only then may the
-owner construct the exact `ExactCheckedResultAuthorityBinding<Analysis,F>`.
-Its result coordinate is that judgment record or local handle, and its origin
-closure embeds the complete `ExactJudgmentBinding`, completed outcome and
-completed request-realization ledger, assurance/trust, family policy,
-transitive source-policy closure, named consumer, typed purpose, and inert
-`OwnerCapabilityRequirement`. The owner then atomically returns that complete
-binding and a separately fresh live capability carrying both the complete
-judgment binding and exact source binding in the same `Completed` outcome. No
-inert outcome or negative-answer preimage contains its own future record
-identity or live capability.
+## 8. Closure boundary
 
-### 8.2 Negative-result discipline
-
-`NegativeAnswerId` binds the semantic projection consisting of the proposition
-actually answered, the exact counter-proposition established, the family-owned
-refutation or complete-decision relation between them, its exact scope, the
-checked semantic refutation result, and public family-retained refutation
-facts. It excludes the completed request-realization ledger, operational
-request/reservation/counters, named operational occurrence, and every live
-capability. A family may define a canonical total `Negate_F(P)` and use that
-exact proposition. A narrower counter-proposition cannot refute a broader
-request without a checked family implication.
-
-A counterexample normally remains the refutation witness rather than entering
-either proposition identity. The result and capability retain its exact
-observer, model, occurrence, parameter, and hypothesis scope. It cannot be
-widened to another experiment.
-
-An invalid certificate is negative only for a separate `CertificateValid`
-question. Timeout, interrupted search, resource exhaustion, failed derivation
-search, or solver `unknown` is never semantic negative without an exact
-completeness theorem for that procedure and limit.
-
-## 9. Lifecycle, consumers, and nonclaims
-
-Question and proposition values follow:
-
-~~~text
-canonical candidate
-  -> identity, dependency, type, map, model, and read-closure authentication
-  -> family-owned well-formedness admission
-  -> opaque process-local admitted capability
-~~~
-
-Checking consumes admitted values, the exact admitted family operation policy,
-fresh support authority satisfying every premise and correspondence
-requirement, exact authenticated source-owner policy records with fresh admitted
-policy or owner-mediated purpose-check authority matching the complete source-
-policy closure, and the fresh identity/ABI/contract-matched checker-execution
-capability required by the exact validation basis. It first validates the exact
-pre-execution request realization and, only after execution and any
-`DeriveWithin` proposition admission, seals the exact completed realization.
-It returns one policy-bound qualified record and may mint one exact result
-capability only when every transitive source-owner policy permits that consumer
-and purpose. The completed outcome, binding, and capability retain the exact
-completed request-realization ledger, source-policy dependency closure and
-completed judgment binding, the complete
-`ExactCheckedResultAuthorityBinding<Analysis,F>`, and its inert
-`OwnerCapabilityRequirement`. Serialization, FFI,
-mutation, reset, or process crossing destroys every capability. A later
-consumer reconstructs, reauthenticates, re-admits, and rechecks under the exact
-recorded policy with newly minted support and checker-execution capabilities.
-
-Compiler may consume exact Analysis capabilities in typed constraints and
-objectives. It cannot reinterpret their propositions, erase their hypotheses,
-change polarity, widen subject scope, relabel assurance, or erase or exceed the
-exact family operation policy or any policy in the transitive source-policy
-dependency closure. It preserves and checks the exact completed
-`ExactJudgmentBinding`, including its record or local reference and exact
-derivation, support, semantic-basis, and validation-basis coordinates. Evidence
-may record check receipts and implementations, but such records do not
-establish the proposition. A relying consumer separately decides whether the
-exact hypotheses, bound, assurance class, immediate and transitive source
-operation policies, completed judgment binding, and residual roots are
-acceptable.
-
-This specification does not establish:
-
-- any cryptographic, semantic, cost, or correspondence proposition;
-- correctness or completeness of a rule, theorem, checker, model, encoding,
-  formalization, solver, or Evidence-derived inference;
-- a proposition from a question, goal, request, proof search, theorem name,
-  or persisted record alone;
-- a negative where the family lacks an exact refutation or complete decision
-  boundary;
-- persistence of live authority;
-- relation satisfaction, target admission, Compiler selection, endpoint
-  feasibility, or global verification; or
-- implementation support, migration feasibility, release readiness, or
-  consumer reliance.
+This page closes the reusable K3-C ingress and common calculus only for the
+active profiles named by the domain index. It does not select a universal
+proof language, theorem database, persistence format, cache, solver, or
+general composition algebra. New families must define their own exact source
+manifest, experiment, property, negative meaning, quantitative sort and
+operations, semantic basis, and validation boundary before admission.

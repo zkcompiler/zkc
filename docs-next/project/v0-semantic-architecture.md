@@ -65,6 +65,22 @@
 > carrier. It did not close Analysis, OIR, protocol-family coverage, or the
 > integrated kernel.
 
+> **K3-C integrated-closure update — 2026-08-27:** The bounded minimum
+> Analysis lane is now reconciled in the active `analysis/` targets. It keeps
+> three seams distinct: a finite native relation-bound Schnorr judgment; an
+> abstract-family AFK classical-ROM transport that requires an independently
+> established uniform all-`n` source-property capability and theorem truth; and
+> a pointwise family/member specialization from an already established family
+> target judgment. K3-C defines no native authority that mints the family source
+> capability, so the family transport returns `CannotAnswer` absent an external
+> proof authority; the finite native judgment cannot fill that slot, and the
+> pointwise seam cannot generalize it. The selected profiles retain the
+> Definition 10 quantifier order, a `q = 1` theorem instance, the raw Schnorr
+> public key with fixed public setup, the exact K2 logical-query carrier, signed
+> lower bounds, and every premise. A finite instrument pressures formation and
+> refusal only. K2 was not reopened, no cryptographic property was proved, and
+> K3-D/K3-E still own OIR and integrated closure.
+
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > is the sole durable owner of the current K0--K5 gate. This architecture page
@@ -507,7 +523,7 @@ Different transitions retain different mathematics and domain owners.
 | Property analysis | `analysis` | Check a qualified judgment over an exact subject tuple and explicit plan | Search failure is not a negative judgment |
 | Checked Protocol change | relation-specific bridge owner | Propose, authenticate, and admit the target before checking the predecessor/successor relation | Target admission and relation checking do not imply one another |
 | Compiler selection | `compiler` | Select among already admitted, relation-checked candidates over the exact domain | Winner validity proves no optimality over omitted candidates |
-| FS construction, `FSCompile`, property transport | `pir`, then `analysis` | Keep target construction, theorem-backed relation, and property-specific transport distinct | Adjacency or one checked relation transports no property automatically |
+| FS construction, theorem applicability, property transport | `pir`, then `analysis` | Keep target construction, exact structural applicability, theorem truth, source-property authority, and property-specific transport distinct | Adjacency, applicability, or one checked relation transports no property automatically |
 | OIR projection and local admission | `oir` | Project from exact Protocol, Interface, role, and any purpose-specific source view selected by K3-D; check `LocalOirValid` separately | Source-free local validity proves neither origin nor source coverage |
 | Supplier binding and realization | `realization` | Separate exact designation, live authority, effectful production, and target-specific correspondence | Binding or build success proves no semantic realization |
 | Deployment and invocation | `realization` | Separate configuration, activation, invocation binding, execution, and partial effects | Operational success cannot redefine Protocol or OIR meaning |
@@ -647,12 +663,16 @@ remain provisional:
    policy-derived `ComparisonAlternativeDomain`; every closed decision binds
    both and complete resolution/assessment ledgers.
 
-### 7.5 Research remaining after Stage 4A, updated by K3-B
+### 7.5 Research remaining after Stage 4A, updated by K3-C
 
 1. **Pre-freeze consumer closure.** K3-B reconciled Interface/Plan, Relations,
    value bridges, execution grounding, and the canonical carrier against the
-   K2 source. K3-C must now close the minimum Analysis strategy/experiment,
-   theorem-applicability, and quantitative-loss seams.
+   K2 source. K3-C then closed the bounded contracts separating the finite
+   native judgment, abstract-family transport, and pointwise member
+   specialization without reopening K2. It did not mint the all-`n` family
+   source capability: AFK transport remains `CannotAnswer` without independent
+   proof authority. K3-D must now close the minimum OIR source read and
+   projection contract, after which K3-E must audit the integrated boundary.
 
 2. **OIR behavior and correspondence.** First close the minimum source read
    and projection-obligation seam. After a separate Stage 4B activation,
@@ -818,7 +838,11 @@ satisfaction/correspondence boundary, and the four PIR semantic pages refined
 for owner-created source bindings and qualified outcomes. Those historical
 package results do not establish current integrated closure; the design program
 owns that gate. K3-B subsequently reconciled the dependent Interface/Plan,
-carrier, and Relations targets to K1/K2 without activating Stage 4B.
+carrier, and Relations targets to K1/K2. K3-C reconciled the bounded minimum
+Analysis profiles to those exact sources without reopening K2 or activating
+Stage 4B, while leaving AFK family transport unanswered unless independent
+proof authority supplies its uniform all-`n` source capability. K3-D is the
+next bounded integrated-closure phase.
 
 ## 12. Deliberate non-decisions
 

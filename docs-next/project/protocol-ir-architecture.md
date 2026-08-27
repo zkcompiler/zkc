@@ -158,8 +158,11 @@ A `TranscriptConstruction` is scoped to an exact Core and owns:
 - composition-context binding.
 
 Fresh-coin and Fiat--Shamir Protocols over one Core are distinct Protocols.
-Their relationship is a theorem-backed `FSCompile` judgment, not identity or
-an ordinary representation lowering.
+Their relationship may support exact Analysis theorem applicability followed
+by property-specific transport under separate theorem truth, source-property,
+hypothesis, map, and loss authority. It is not identity or an ordinary
+representation lowering. Earlier packages called this combined seam
+`FSCompile`; K3-C keeps the two Analysis judgments separate.
 
 ### 3.4 `Protocol`
 
@@ -434,10 +437,10 @@ The architecture reserves distinct relations for:
 - observer-indexed `TraceEq`;
 - `TraceRefines`;
 - distributional equality or closeness;
-- `FSCompile`;
+- theorem applicability;
 - `ProjectionCorrect`;
 - `PlanRealizes`;
-- `PropertyTransport`;
+- property-specific transport;
 - `IntentionalChange`; and
 - an orthogonal cost relation.
 

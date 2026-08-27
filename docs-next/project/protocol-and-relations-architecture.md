@@ -292,8 +292,9 @@ children, mints and consumes a fresh same-invocation scoped authority, admits
 the Protocol, and only then finalizes the A/N composition check. Only that
 final affirmative composition result may later supply checked-composition
 context authority. Separately, only an affirmative checked FS construction may
-feed later `FSCompile`; neither capability proves a theorem or property by
-itself.
+feed later exact theorem-applicability checking; neither capability proves a
+theorem or property by itself, and applicability remains separate from
+property-specific transport.
 
 ## 6. Semantic Core composition
 
@@ -569,8 +570,8 @@ bases, derivations, and judgments. The Stage 4A package candidate defines:
 
 - equivalence, refinement, intentional change, distributional, and property
   questions over exact admitted views;
-- theorem- or model-backed `FSCompile` and property-specific
-  `PropertyTransport` relations;
+- exact theorem- or model-applicability and property-specific transport
+  relations, kept separate from theorem truth and source-property authority;
 - consumption of exact Relations-owned occurrence-local satisfaction results
   inside family-specific property judgments, without redefining or widening
   satisfaction; and

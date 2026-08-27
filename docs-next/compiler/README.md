@@ -59,10 +59,11 @@ successor proposal; target realization implements an already fixed endpoint.
 - successor authentication or admission;
 - a source/target relation merely because the compiler proposed, scored, or
   selected a target;
-- `FSCompile` or another Analysis-owned semantic judgment;
+- theorem applicability, property transport, or another Analysis-owned
+  semantic judgment;
 - the meaning or truth of property judgments it consumes;
-- `PropertyTransport`, even when a compiler constraint requests a transported
-  property;
+- property-specific transport, even when a compiler constraint requests a
+  transported property;
 - PIR-to-OIR projection;
 - backend lowering, code generation, deployment, or invocation;
 - compiler UI and command-line behavior as semantic definitions; or

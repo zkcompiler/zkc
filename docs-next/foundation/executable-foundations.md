@@ -2,7 +2,8 @@
 
 > **Document kind:** Target semantic specification
 > **Document state:** Active non-normative target
-> **Target status:** K1 durable selection; K2/K3 integration remains open
+> **Target status:** K1 durable selection; two bounded K3 consumer extractions
+> demonstrated; K3-D/K3-E integration remains open
 > **Provisional owner:** `foundation`
 > **Authority:** None during the transition. Current normative identity,
 > encoding, admission, and execution rules remain under

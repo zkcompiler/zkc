@@ -157,8 +157,10 @@ remains normative until explicit consolidation and cutover.
 
 ## Remaining gates
 
-- K3-C must define the Analysis games, theorem-applicability rules, and
-  quantitative loss that consume these exact sources.
+- K3-C has selected bounded Analysis games, theorem-applicability rules, and
+  quantitative contracts that consume these exact sources without restating
+  them. Broader property families and concrete theorem discharge remain later
+  Analysis work.
 - K3-D must define any OIR-specific purpose view and projection identity effect;
   `PlanWitnessSurface` is Relations-specific and grants no OIR authority.
 - Native P02 FRI/IOR and P09 Nova/folding remain executable portfolio pressure

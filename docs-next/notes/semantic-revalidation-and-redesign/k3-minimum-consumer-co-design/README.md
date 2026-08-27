@@ -1,7 +1,7 @@
 # K3 Minimum Consumer Co-design
 
 > **Document kind:** Temporary bounded work-package charter
-> **Document state:** Active; K3-A and bounded K3-B complete
+> **Document state:** Active; K3-A through bounded K3-C complete
 > **Provisional owner:** `project`, coordinating `pir`, `relations`,
 > `analysis`, and the minimum `oir` seam
 > **Authority:** None. This package records reconstruction, research questions,
@@ -10,7 +10,8 @@
 > **Activated:** 2026-08-26
 > **K3-A completed:** 2026-08-26
 > **K3-B completed:** 2026-08-27
-> **Current gate:** K3-C minimum Analysis closure is next.
+> **K3-C completed:** 2026-08-27
+> **Current gate:** K3-D minimum OIR closure is next.
 > **Disposition:** Absorb selected results into exact durable owners, retain
 > only necessary rationale and deferred work, then delete this package before
 > cutover.
@@ -93,7 +94,7 @@ K3-A preserves these decisions unless a later discriminator falsifies them:
 |---|---|---|
 | **K3-A** | Intake, dependency reconstruction, renewed research pressure, phase ordering, and reopen rules | Complete. Every consumer conflict identified by this intake is routed to an owner and, where a selection remains open, a discriminator; no downstream schema is silently ratified. |
 | **K3-B** | K2-dependent Interface/Plan surfaces, K1-aligned Relations and correspondence, value bridges, execution grounding, and a parallel minimum carrier lane | Exact Statement and witness roles are inhabited; claim/reduction and grounding question grammars are closed and finitely pressured at their named boundaries; equivalence, embedding, and lossy lanes are distinct; the Plan/OIR projection-view factorization is selected; every K2 semantic subject and field has a carrier disposition. Full claim/reduction execution remains a later integration obligation. |
-| **K3-C** | Minimum Analysis source, strategy/experiment, theorem-applicability, and quantitative-loss contracts | One relation-bound property and one Fresh-to-FS property can be stated over exact K2/K3 sources without a shadow Protocol, supplied-trace adversary, hidden loss, or replay conflation. |
+| **K3-C** | Minimum Analysis source, strategy/experiment, theorem-applicability, and quantitative-loss contracts | Three propositions stay distinct: a finite native source judgment; abstract-family AFK transport requiring an independently established uniform all-`n` source capability and theorem truth; and pointwise family/member specialization. K3-C supplies no native authority for the family source, so transport is `CannotAnswer` absent external proof authority. |
 | **K3-D** | Minimum PIR-to-OIR read and projection-obligation contract | The exact source basis, protected effects, imported-verification refusal, outcomes, Plan read partition, OIR identity binding, and typed unsupported boundary are closed without full OIR design or Stage 4B activation. |
 | **K3-E** | Integrated closure and reopen audit | K1/K2/K3 identities, views, read closures, negative boundaries, and two consumer extractions agree; every residual issue is routed to K4, Stage 4B, or a later owner. |
 
@@ -104,10 +105,27 @@ three value-bridge lanes, and the fourteen-field carrier disposition have
 durable candidate owners. A separate 29-case finite boundary gate exercises
 the bounded legacy K2 executable carrier shape; it does not round-trip the
 durable fourteen-field carrier or execute the complete claim/reduction and
-grounding contracts. This closes neither K3 nor the semantic kernel. K3-C
-remains responsible for Analysis
-source, experiment, theorem-applicability, and quantitative-loss contracts;
-K3-D remains responsible for the minimum OIR seam.
+grounding contracts. At that checkpoint this closed neither K3 nor the
+semantic kernel: K3-C still owned Analysis source, experiment,
+theorem-applicability, and quantitative-loss contracts, and K3-D still owned
+the minimum OIR seam. The K3-C reconciliation below records the subsequent
+bounded result.
+
+**K3-C completion reconciliation — 2026-08-27.** Bounded K3-C selected exact
+source and target experiment profiles and support bindings for three separate
+seams: a finite native relation-bound Schnorr judgment; abstract-family AFK
+classical-ROM Fresh-to-Fiat--Shamir transport requiring an independently
+established uniform all-`n` source capability and theorem truth; and pointwise
+family/member specialization from an already established family target
+judgment. K3-C defines no native semantic basis that mints the family source
+capability. The transport therefore returns `CannotAnswer` absent external
+proof authority; the finite judgment cannot fill that premise, and the
+pointwise seam cannot generalize it. The selected theorem instance uses the
+Definition 10 quantifier order, `q = 1`, the raw Schnorr public key plus fixed
+public setup, the exact K2 logical-query carrier, and signed lower bounds. A
+finite instrument exercises formation and same-boundary refusals only; it
+proves no cryptographic property. K2 was not reopened, K3 is not complete, and
+the semantic kernel is not frozen. K3-D is next; it has not started here.
 
 K3-B through K3-D may use parallel research and falsifier construction, but
 selection follows semantic dependency. K3-C cannot ratify a relation-bound
@@ -152,6 +170,12 @@ This README owns the direct K3 inventory:
 - [K3-B Validation](k3-b-validation.md) records the bounded executable and
   documentation gates, repaired falsifiers, exact claim boundary, and K3-C
   handoff.
+- [K3-C Research and Selection](k3-c-research-and-selection.md) records the
+  exact profiles, primary-source theorem coordinates, alternatives, premises,
+  quantitative forms, and K2 reopen verdict.
+- [K3-C Validation](k3-c-validation.md) records the finite instrument,
+  same-boundary mutations, documentation gates, exact claim boundary, and K3-D
+  handoff.
 
 Later phases add records only when their question cannot be answered by
 updating this plan and their durable owners. A phase does not receive a large
@@ -165,7 +189,14 @@ Analysis catalog, compiler policy, full OIR semantics, realization, migration,
 or cutover readiness. K3-A performed reconstruction and static audits. K3-B
 selected a bounded downstream schema and exercised a finite reference
 instrument; it did not establish implementation conformance or prove that K2
-represents every protocol in the K4 portfolio.
+represents every protocol in the K4 portfolio. K3-C selected the bounded
+three-seam Analysis model and exercised its constructibility and refusal
+boundaries;
+it did not mint the abstract family's all-`n` source capability and therefore
+does not currently produce the AFK transport judgment without external proof
+authority. It also did not prove the imported theorem, Fresh uniformity or
+correspondence, the ROM, knowledge soundness, special soundness, or any concrete
+security claim.
 
 Current implementation behavior is regression and design evidence only. A
 current exact-coverage check, transcript interpreter, relation adapter, or

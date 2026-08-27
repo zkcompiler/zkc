@@ -3,8 +3,8 @@
 > **Document kind:** Target semantic specification
 > **Document state:** Active non-normative K2 target with K3-B consumer view
 > **Target status:** K2 identity-bearing Core and execution body complete;
-> K3-B execution-issued relation grounding view selected; K3-C/K3-D consumer
-> integration remains open
+> K3-B execution-issued relation grounding view and bounded K3-C Analysis
+> consumption selected; K3-D/K3-E consumer integration remains open
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Protocol
 > semantics remain under [`docs/`](../../docs/README.md).

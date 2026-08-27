@@ -17,14 +17,17 @@
 > equal-resolution candidate portfolio SHA-256
 > `a65bb0a9bbe49962377a28571874ba6f86a52e3f8c66a9ce766f36fa5a25cc61`.
 
-> **K3-A reconciliation notice — 2026-08-26:** The federated Analysis and
-> validated-decision Compiler factorization remains selected at its recorded
-> Stage 4A resolution. Its Analysis source contracts and the PIR owner routes
-> below predate the active K2 Core/Fiat--Shamir model and are not integrated
-> target contracts. K3-C must rebuild Analysis ingress, strategy/experiment,
-> theorem-applicability, and loss semantics over exact K2/K3 sources. This
-> notice does not reopen the Compiler architecture or allow Compiler to consume
-> unreconciled Analysis results.
+> **K3-C reconciliation notice — 2026-08-27:** The federated Analysis and
+> validated-decision Compiler factorization remains selected. K3-C replaces
+> the pre-K1/K2 Analysis ingress with one exact K1/K2/K3-B minimum kernel and
+> closes three non-collapsing seams: finite relation-bound Schnorr special
+> soundness, abstract-family AFK transport, and pointwise family/member
+> specialization. The finite judgment does not prove the all-`n` source
+> property. K3-C deliberately supplies no native authority for that source
+> theorem, so transport remains conditional and may be `CannotAnswer`.
+> Broader Stage 4A families remain deferred rather than partially integrated.
+> This bounded reconciliation does not reopen the Compiler architecture or
+> authorize Compiler consumption before an exact qualified result exists.
 
 ## 1. Decision
 
@@ -121,19 +124,28 @@ decision contracts apply to each producer.
 
 ### 2.1 Question, goal, proposition, and request
 
-The target separates four identities that are easy to conflate:
+The target separates three semantic identities from one operational request
+that is easy to conflate with them:
 
 | Identity | Meaning | Excludes |
 |---|---|---|
-| `AnalysisQuestionId` | One stable family experiment over exact subjects, model, observer, occurrences, maps, parameters, and semantic reads | Particular answer, residual hypotheses, theorem, proof, checker, or search limits |
+| `AnalysisQuestionId` | One stable family experiment or applicability question over exact subjects, model, observer, occurrences, maps, parameters, and semantic reads | Particular answer, residual hypotheses, proof, checker, or search limits. An ordinary property question excludes a theorem basis; a theorem-applicability family necessarily includes its exact theorem schema as one subject. |
 | `AnalysisGoalId` | One exact hypothesis-free family conclusion for that question | Truth authority and residual hypotheses |
 | `AnalysisPropositionId` | One truth-apt conclusion under one canonical typed hypothesis context | Proof technology, checker, producer, or replay occurrence |
-| `AnalysisRequestId` | One operational attempt or derive-within request | Semantic truth and live authority |
+| `AnalysisRequest` | One capability-neutral operational attempt or derive-within request; K3-C defines no portable semantic ID for it | Semantic truth and live authority |
 
 A different bound or residual hypothesis is a different proposition. Several
 proofs, checkers, or assurance classes may establish the same proposition.
 Failure to find a proof establishes nothing unless an exact complete procedure
 returns the family's exact semantic negative.
+
+An exact quantitative bound in a question or goal is referenced through a
+basis-neutral `AnalysisQuantitativeFormulaId`. The formula fixes parameters,
+sort, exact arithmetic denotation, and declared parameter independence, but
+contains no theorem, proof, loss occurrence, checker, or source binding. A
+theorem-local transform or native rule maps to that formula in the semantic
+basis. This preserves one property identity across different proof bases and
+prevents a theorem-schema/target-property identity cycle.
 
 Request realization is deliberately two-phase. Before execution, Analysis
 closes every input association and either reserves the exact admitted
@@ -147,7 +159,8 @@ bindings, view contracts/references, and read-closure coordinates; all live
 authority and concrete view occurrences are supplied and matched separately. A
 capability-neutral outer attempt envelope also makes missing or malformed
 request and invocation slots representable. Only successful preparation of the
-complete typed invocation can enter semantic checking or return `Completed`.
+complete typed invocation can enter semantic checking or return a qualified
+family outcome.
 
 The total-ingress rule is owner-wide at this seam. Analysis, Compiler, and
 Relations checked operations first receive a capability-neutral partial input
@@ -185,6 +198,14 @@ Only the semantic profile enters question identity. Adding a proof producer,
 checker implementation, theorem instance, replay consumer, or adequate adapter
 does not silently change an existing proposition. A change to model,
 experiment, observer, conclusion, refutation, or semantic read does.
+
+For the bounded K3-C kernel these roles are represented by exact K1 bodies for
+the semantic read manifest, strategy class, experiment profile, semantic
+basis, support instantiation, validation basis, operation policy, and judgment. K3-C
+does not introduce a second Analysis regime axis or preserve the earlier free
+`H(...)` placeholder identities. A family outside the two selected profiles
+has no active target body merely because its name appeared in the historical
+Stage 4A catalog.
 
 ### 2.3 Capability-neutral source bindings
 
@@ -252,7 +273,7 @@ authority as identity or inventing consumer-owned semantic receipts.
 
 ### 2.4 Basis, support, validation, and trust
 
-`SemanticBasisId` identifies inference meaning: exact rules or theorems,
+`AnalysisSemanticBasisId` identifies inference meaning: exact rules or theorems,
 correspondence propositions, encodings, premise proposition schemas,
 substitutions, quantitative transformers, and a total dependency-disposition
 ledger. Every imported truth-apt dependency is one of:
@@ -263,10 +284,11 @@ ledger. Every imported truth-apt dependency is one of:
 
 There is no generic import or axiom bucket. In the portable lane, concrete
 exact `ExactSourceAuthorityBinding` values and their inert
-`OwnerCapabilityRequirement` values belong to `SupportInstantiationId`, not
+`OwnerCapabilityRequirement` values belong to an
+`AnalysisSupportInstantiationCoordinate`, not
 semantic-basis or proposition identity. When a support preimage names an
 owner-local source coordinate, Analysis instead uses
-`LocalSupportInstantiationHandle` and
+the owner-local branch of that coordinate and
 every later value whose own preimage names that handle is local. Taint propagates
 only forward: an independent public question, proposition, semantic basis, or
 validation basis remains portable. No affected local chain has a public digest,
@@ -274,7 +296,7 @@ persistence, or exact cold replay. Fresh matching capabilities remain
 occurrence-local checking inputs and never enter either identity form. Checker
 contracts, exact `CheckerAbiId` values, stable implementations, and checked
 implementation-to-contract correspondence identities belong to
-`ValidationBasisId`; fresh checker execution authority remains occurrence
+`AnalysisValidationBasisId`; fresh checker execution authority remains occurrence
 local. Consumer-visible assurance and residual trust remain explicit in the
 basis qualification and completed judgment.
 
@@ -287,10 +309,11 @@ trusted computing bases are equal.
 
 Only a successful current check mints a process-local capability for one exact
 proposition, polarity, family result, assurance class, trust closure,
-`FamilyOperationPolicyId`, complete transitive source-operation-policy
-dependency closure, and completed `ExactJudgmentBinding` down to record or local
-reference, derivation, support, semantic-basis, and validation-basis
-coordinates, together with the exact
+`AnalysisOperationPolicyId`, complete transitive source-operation-policy
+dependency closure, and completed `AnalysisJudgmentRecordCoordinate` down to
+the proposition, `AnalysisSemanticBasisId`,
+`AnalysisSupportInstantiationCoordinate`, and `AnalysisValidationBasisId`,
+together with the exact
 `ExactCheckedResultAuthorityBinding<Analysis, F>`. That result binding carries
 the owner-defined result record or local reference, complete origin and
 completed-outcome facts, qualification and trust, owner-policy disposition and
@@ -303,11 +326,13 @@ responses, certificates, signatures, and replay bundles carry no authority.
 Every operation preserves:
 
 ```text
-Completed(FamilyAffirmative | FamilyNegative)
+Affirmative(EstablishedFamilyJudgment)
+Negative(EstablishedFamilyNegative)
 Unsupported
 CannotAnswer
 Refused
 Malformed
+DeterministicLimitExceeded
 CheckerFailure
 ```
 
@@ -327,33 +352,58 @@ relations remain separate families. Their exact maps, directions, observers,
 models, occurrences, schedulers, abort/termination rules, and quantitative
 coordinates enter the corresponding question rather than ambient metadata.
 
-An admitted intentional-change contract is not proof that a change conforms.
-`ChangeConforms` is a separate checked proposition. A structural relation does
-not imply property preservation without an exact family rule.
+These families are deliberate post-K3-C extensions, not active minimum
+contracts. Before activation, each needs an exact K1 body, source manifest,
+experiment or comparison relation, complete negative meaning, and executable
+falsifiers. An admitted intentional-change contract is not proof that a change
+conforms, and a structural relation does not imply property preservation
+without an exact family rule.
 
 ### 3.2 Cryptographic families
 
 Soundness, knowledge, completeness, zero knowledge, and any later property are
-not tags on one scalar result. Each family states its experiment, adversary or
-simulator/extractor interface, occurrence and oracle model, query and resource
-bounds, abort/retry/termination semantics, assumptions, conclusion, and
-quantitative loss algebra.
+not tags on one scalar result. Each family states its exact experiment,
+adversary or extractor interface, quantifier order, occurrence and oracle
+model, resource bounds, failure semantics, assumptions, conclusion, and typed
+quantitative program.
 
-Fiat--Shamir is factored into:
+The bounded active K3-C graph is deliberately heterogeneous:
 
-1. Stage 3 structural Fresh-to-Fiat--Shamir construction;
-2. an Analysis-owned theorem/model applicability result over exact source,
-   target, construction, correspondences, assumptions, and loss;
-3. property-specific transport from exact source premises to one exact target
-   property; and
-4. direct target analysis as an independent basis when available.
+```text
+finite native subject S
+  -> finite relation-bound 2-out-of-N special-soundness judgment
 
-No generic `FSCompile` or structural map transports all properties.
+abstract family F + independently established all-n source judgment
+  + exact AFK theorem applicability + retained theorem truth
+  -> abstract AFK adaptive knowledge-soundness judgment for 0 <= Q < N
 
-Composition follows the same rule. Structural Core composition is an input,
-not a property theorem. Every property family supplies operator-specific rules
-for sequential, parallel, interleaved, concurrent, shared-challenge, batched,
-repeated, failure-capturing, or other exact compositions it supports.
+abstract target judgment + exact pointwise (F,n0,S,ell0) correspondence
+  -> finite-member target judgment
+```
+
+The finite source uses exact K3-B Statement, claim, Witness-role, and relation
+correspondence, exact K2 check and terminal coordinates, and an explicit
+Analysis acceptance-correspondence hypothesis. It cannot be lifted to an
+asymptotic source judgment by enumeration or identity reuse. The abstract
+applicability path instead reads an authenticated finite family description
+and exact family-role schemas; its family laws and uniform source extractor
+remain ordinary premises. A separate pointwise correspondence may relate one
+abstract member to the finite subject without claiming all-index coherence.
+
+The AFK theorem profile fixes the Statement/commitment query-index maps, a
+finite bounded-bitstring oracle-index carrier, one challenge cardinality `N`
+shared by every family member, the total-uniform challenge process, query
+bound, side condition `Q < N`, and the theorem-specific `(Q + 1) / N`
+knowledge-error term for `k = 2`. The
+theorem remains an exact hypothesis until accepted proof authority discharges
+it. The selected target is a strict restricted-query subprofile of Definition
+10; it does not claim the full all-`Q` property.
+
+Fiat--Shamir therefore remains factored into structural construction, exact
+theorem applicability, and property-specific transport. No generic
+`FSCompile`, supplied run, deterministic replay, or structural map transports a
+property. Generic property/Core composition, QROM, malicious-verifier ZK, and
+restoration profiles remain deferred.
 
 ### 3.3 Relation satisfaction
 
@@ -734,20 +784,21 @@ not by itself a semantic reversal trigger.
 
 The package-resolution candidate target is split by meaning:
 
-- [Canonical PIR](../pir/canonical-pir.md), [Protocol semantic
-  model](../pir/protocol-model.md), [Interfaces and Prover
-  Plans](../pir/interfaces-and-plans.md), and [Fiat--Shamir construction and
-  semantic Core composition](../pir/fiat-shamir-and-composition.md) own the
-  PIR-specific admitted-subject/checked-result binding, qualified-outcome, and
-  total source-policy-closure specializations consumed by Stage 4A;
-- [Analysis model](../analysis/analysis-model.md) owns the common semantic and
-  authority envelope;
-- [semantic relations](../analysis/semantic-relations.md) owns equality,
-  refinement, change, distribution, cost, and the satisfaction seam;
-- [cryptographic properties](../analysis/cryptographic-properties.md) owns
-  notion-specific property and Fiat--Shamir reasoning;
-- [transport, composition, and replay](../analysis/transport-composition-and-replay.md)
-  owns cross-family derivation, persistence, and extension rules;
+- [Canonical PIR](../pir/canonical-pir.md), [Interactive
+  Core](../pir/interactive-core.md), [Interfaces and Prover
+  Plans](../pir/interfaces-and-plans.md), and
+  [Fiat--Shamir](../pir/fiat-shamir.md) own the current K2/K3-B PIR subjects,
+  source views, checked structural results, and authority bindings consumed by
+  the minimum Analysis kernel;
+- [Analysis model](../analysis/analysis-model.md) owns the exact common source
+  ingress, strategy/experiment, identity, basis, authority, and outcome kernel;
+- [semantic relations](../analysis/semantic-relations.md) owns the K3-B source
+  seam and initial relation-bound special-soundness coordinates;
+- [cryptographic properties](../analysis/cryptographic-properties.md) owns the
+  selected Schnorr and AFK experiment/property profiles and typed quantitative
+  language;
+- [theorem applicability, transport, and replay](../analysis/transport-composition-and-replay.md)
+  owns the separated applicability/transport operations and replay boundary;
 - [Compiler model](../compiler/compiler-model.md) owns the five-plane frame;
 - [proposals, relations, and domains](../compiler/proposals-relations-and-domains.md)
   owns scope, admission, transition, candidate, and closure semantics;
@@ -759,7 +810,9 @@ The package-resolution candidate target is split by meaning:
   reconciled structural/instance result bindings and preserves the boundary to
   Analysis property transport.
 
-The next unactivated branch remains Stage 4B: OIR, then Realization. A later
-cross-branch checkpoint must reconcile shared observations, occurrence maps,
-failure and terminal semantics, Plan reads, property versus projection claims,
-and explicit endpoint facts without merging the two authority graphs.
+Broader Analysis families and generic composition remain deferred. The next
+integrated semantic-kernel phase is the bounded K3-D OIR seam; Stage 4B itself
+remains unactivated. A later cross-branch checkpoint must reconcile shared
+observations, occurrence maps, failure and terminal semantics, Plan reads,
+property versus projection claims, and explicit endpoint facts without merging
+the two authority graphs.

@@ -8,9 +8,9 @@
 > Protocol/Fiat--Shamir closure completed on 2026-08-26 and was narrowly
 > reclosed after exact-body repair without an architectural change. K3-A
 > consumer-boundary reconstruction and bounded K3-B dependent-surface,
-> Relations, and carrier co-design completed on 2026-08-27. K3-C minimum
-> Analysis closure is next; the kernel is not frozen, and Stage 4B remains
-> unactivated.
+> Relations, and carrier co-design and bounded K3-C minimum Analysis closure
+> completed on 2026-08-27. K3-D minimum OIR closure is next; the kernel is not
+> frozen, and Stage 4B remains unactivated.
 > **Provisional owner:** `project`
 > **Authority:** This is the single execution plan for semantic redesign inside
 > `docs-next/`. It does not replace current product planning or roadmap
@@ -297,7 +297,8 @@ and composition semantics?
 - canonical PIR grammar and complete Protocol/carrier correspondence;
 - deterministic Fresh-public-coin and Fiat--Shamir Protocol construction,
   occurrence/transcript-prefix exports, and the exact seam and non-claims for
-  later Analysis-owned `FSCompile`;
+  later Analysis-owned theorem applicability and property-specific transport
+  (called `FSCompile` in the historical Stage 2/3 packages);
 - canonical identity, authentication, admission, and immutable capability
   contracts inherited from Stage 2;
 - committed-object declarations and grounding boundaries; and
@@ -359,8 +360,9 @@ Analysis determines:
 - internal derivability authority versus external theorem correspondence;
 - identity and portability of derivations and judgments;
 - assumption, hypothesis, and correspondence boundaries; and
-- the theorem- or model-backed `FSCompile` checker and property-specific
-  `PropertyTransport` rules over the Stage 3 seam; and
+- exact theorem- or model-applicability checking and property-specific
+  transport rules over the Stage 3 seam, without a generic `FSCompile`
+  judgment that implies preservation; and
 - extension rules for Analysis family data, judgment forms, bases, validation,
   operation policy, and property rules.
 
@@ -637,7 +639,7 @@ the promoted candidate is mutually closed and ready to freeze.
 | Stage 2 | Historical package complete | Selected [Transition and Bridge Architecture](transition-and-bridge-architecture.md), supported by the Stage 2 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
 | Stage 3 | Historical package complete | Selected [Protocol and Relations Architecture](protocol-and-relations-architecture.md), candidate PIR/Relations target owners at package resolution, research evidence, and separate Stage 4A/4B entry contracts |
 | Stage 4A | Historical package complete | Selected [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md), candidate Analysis/Compiler target owners at package resolution, Relations/PIR reconciliation, research evidence, and an unactivated Stage 4B peer boundary |
-| Integrated semantic-kernel closure K0--K5 | K0--K2 complete after narrow K2 reclosure; K3-A and bounded K3-B complete; K3-C next; not frozen | The regression baseline, bounded executable foundations, and bounded Protocol/FS kernel are complete at their stated scopes. K2's two exact canonical-body defects were repaired without changing the Core/interpretation architecture. K3-A reconstructed the minimum consumer cone. K3-B then selected and promoted the dependent Interface/Plan, Relations, correspondence, run-grounding, value-bridge, and fourteen-field carrier contracts. Its separate finite instrument exercises only the bounded legacy K2 executable carrier shape, not that durable fourteen-field carrier. K3-C/D still own Analysis and minimum OIR closure; K3-C--K3-E, the protocol portfolio, and independent freeze remain. |
+| Integrated semantic-kernel closure K0--K5 | K0--K2 complete after narrow K2 reclosure; K3-A through bounded K3-C complete; K3-D next; not frozen | The regression baseline, bounded executable foundations, and bounded Protocol/FS kernel are complete at their stated scopes. K2's two exact canonical-body defects were repaired without changing the Core/interpretation architecture. K3-A reconstructed the minimum consumer cone. K3-B selected and promoted the dependent Interface/Plan, Relations, correspondence, run-grounding, value-bridge, and fourteen-field carrier contracts. K3-C selected exact source/target experiment profiles and support bindings while keeping three seams separate: a finite native relation-bound Schnorr judgment; abstract-family AFK transport requiring an independently established uniform all-`n` source capability and theorem truth; and pointwise family/member specialization from the family result. The finite instrument exercises formation and refusal, but K3-C has no native authority that mints the family source capability, so AFK transport is `CannotAnswer` absent external proof authority. The finite judgment cannot substitute for that capability, and pointwise specialization cannot generalize it. No security proof follows and K2 was not reopened. K3-D/E still own minimum OIR and integrated closure; the protocol portfolio and independent freeze also remain. |
 | Stage 4B | Historical entry contract ready; activation blocked | OIR then Realization may activate only after integrated semantic-kernel freeze and a separate explicit decision. |
 | Stages 5--8 | Not started as decision packages | Later stages may be surveyed for design forces but cannot finalize contracts that depend on unresolved earlier-stage results |
 

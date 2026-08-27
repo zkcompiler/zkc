@@ -2976,9 +2976,11 @@ work:
    substituted-Plan controls; the causal `RelationRunView` issuance and
    grounding path; and exemplar derived-exhaustive and certificate-backed
    bridge-law bases without an ambient checker registry.
-3. K3-C owns selection of the Analysis profiles that consume relation
-   refinement, commitment, lossy-projection, and occurrence facts without
-   restating them.
+3. K3-C selected the initial relation-bound and Fresh-to-Fiat--Shamir Analysis
+   profiles and their exact source/support bindings without restating relation
+   facts. Broader refinement, commitment, and lossy-projection property
+   profiles remain later Analysis work; the concrete `sha256-216` reduction
+   and quantitative price are still open.
 
 These gates may falsify an implementation or expose a specification defect,
 but their pending execution does not make the bounded K3-B selection

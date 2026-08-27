@@ -386,9 +386,9 @@ language belongs to a different Protocol, not a Plan.
 | Property analysis | Analysis owns qualified judgments and explicit-plan checking | Search failure is not a negative judgment |
 | Checked Protocol change | A producer proposes; PIR authenticates/admit the target; the relation-specific bridge validates predecessor and successor | A target ID or structural legality proves no source/target relation |
 | Compiler selection | Compiler selects only among already admitted, relation-checked candidates over an exact domain | Winner validity does not establish optimality over an omitted candidate |
-| FS construction | PIR deterministically forms and ordinarily admits the FS Protocol | Construction is not `FSCompile` |
-| `FSCompile` | Analysis owns the theorem/model-backed judgment, co-designed against PIR semantics | It does not transport every property automatically |
-| `PropertyTransport` | Analysis checks a property-specific rule over a source judgment and exact relation | Relation adjacency or a preservation annotation is insufficient |
+| FS construction | PIR deterministically forms and ordinarily admits the FS Protocol | Construction establishes neither theorem applicability nor a transported property |
+| Theorem applicability | Analysis checks one exact theorem profile against exact source and target semantics | Applicability excludes theorem truth and source-property authority |
+| Property-specific transport | Analysis checks one exact rule over source authority, applicability, theorem truth, hypotheses, maps, and losses | Relation adjacency or a preservation annotation is insufficient |
 | OIR projection | OIR owns role projection over exact Protocol, Interface, and tagged Plan basis | Unsupported projection does not invalidate the source |
 | Standalone OIR admission | OIR owns `LocalOirValid` | Local validity cannot prove origin or omitted-source coverage |
 | Supplier binding | Realization closes exact provider designations and separately resolves live provider authority | A binding does not prove provider correctness or permanent availability |
@@ -425,12 +425,16 @@ Three contracts remain separate:
 
 1. deterministic construction and admission of an FS Protocol over an existing
    Core;
-2. theorem- or model-backed `FSCompile` over exact fresh and FS Protocols,
-   transcript construction, occurrence/prefix map, regime, and assumptions;
-3. property-specific `PropertyTransport` under its own hypotheses and losses.
+2. theorem- or model-applicability over exact fresh and FS Protocols,
+   transcript construction, occurrence/prefix map, regime, and structural
+   premises, excluding theorem truth; and
+3. property-specific transport under exact source-property authority, theorem
+   truth, hypotheses, maps, and losses.
 
-An FS Protocol may exist without an available `FSCompile` judgment. One
-`FSCompile` result does not transport every property.
+An FS Protocol may exist without an applicable theorem profile. Applicability
+alone does not transport any property. Earlier research packages used
+`FSCompile` as an umbrella for the latter two contracts; K3-C retires that name
+from the active contract surface.
 
 ### 12.3 Projection
 

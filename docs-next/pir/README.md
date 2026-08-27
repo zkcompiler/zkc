@@ -38,7 +38,9 @@ K3-B has now reconciled the canonical carrier, `ProtocolInterface`, and
 `ProverPlan` targets to the active K1/K2 definitions. It also selects the
 narrow source-ID-free `PlanWitnessSurface` needed for relation-witness
 attachment. This bounded closure does not freeze the integrated kernel;
-Analysis and OIR still own their K3-C and K3-D consumer contracts.
+K3-C has consumed the exact source views for its bounded minimum Analysis
+profiles without reopening K2, while OIR and integrated review still own their
+K3-D and K3-E contracts.
 
 ## Owns
 
@@ -76,7 +78,8 @@ Analysis and OIR still own their K3-C and K3-D consumer contracts.
 - separately admitted `TranscriptConstruction`, deterministic Fresh-to-Fiat--
   Shamir construction, independently admitted target Protocol, and exact
   `CheckedFSConstruction` structural result, while Analysis retains ownership
-  of `FSCompile` property meaning;
+  of exact theorem applicability and property-specific transport (the
+  historical packages' `FSCompile` umbrella);
 - PIR carrier semantics, the canonical Protocol identity projection, and
   artifact format; and
 - authenticated structural facts explicitly exported to later consumers.
@@ -175,8 +178,9 @@ bodies and evidence boundaries; its validation record owns the details.
 K3-B reconciled the carrier and Interface/Plan pages to the active K1/K2
 owners. They are the current non-normative target definitions at that bounded
 scope. The two explicitly marked snapshots remain research history, not
-parallel authority. Stage 4A's Analysis sources remain K3-C work, and exact
-OIR reads and identity effects remain K3-D work. The lifecycle page is the
+parallel authority. K3-C has now selected the bounded Analysis sources and
+profiles that consume these owners, while exact OIR reads and identity effects
+remain K3-D work. The lifecycle page is the
 superseded baseline candidate and remains useful for current-model
 reconstruction. None replaces the current Protocol Kernel, Carrier,
 Boundaries, Vocabularies, or Versioning specifications before normative
@@ -219,17 +223,21 @@ then-current resolution. Post-selection revalidation reopened the exact kernel
 closure. K1 and the narrowly reclosed K2 closed executable Foundation and PIR
 semantics at their bounded resolutions; K3-B has now reconciled the dependent
 Interface/Plan, carrier, and Relations seams without reopening the K2 Core.
-K3-C must close the minimum Analysis sources, K3-D the minimum OIR read and
-projection contract, and K3-E their integrated boundary. K4 and K5 must then
-complete the bounded protocol portfolio and independent freeze. Later work
-includes:
+K3-C has now closed the minimum Analysis source, experiment, applicability,
+and quantitative contracts at its bounded profile without reopening K2. K3-D
+must close the minimum OIR read and projection contract, and K3-E their
+integrated boundary. K4 and K5 must then complete the bounded protocol
+portfolio and independent freeze. Later work includes:
 
 - Stage 4A selected the exact Analysis model families and theorem/profile
-  architecture for `FSCompile`, composition properties, and property
-  transport, together with Compiler relations and selection boundaries, and
+  architecture for what its historical package called `FSCompile`, composition
+  properties, and property transport, together with Compiler relations and
+  selection boundaries, and
   reconciled the four PIR semantic pages with its exact cross-owner source-
   binding contract;
-  concrete theorem instances, profiles, checkers, and producers remain later
+  K3-C replaced that umbrella with separate structural applicability and
+  property-specific transport, selected one AFK profile, and left broader
+  profiles, independent proof authority, checkers, and producers as later
   work;
 - Stage 4B classifies Plan use, defines OIR behavior and projection, and then
   assigns concrete supplier, deployment, and runtime meaning in Realization;
