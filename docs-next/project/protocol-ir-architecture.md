@@ -12,7 +12,7 @@
 > The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns the live integrated-closure gate.
 
-> **K1/K2/K3-B reconciliation notice — 2026-08-27:** The architectural
+> **K1/K2/K3-D reconciliation notice — 2026-08-27:** The architectural
 > factorization remains a design input, but the body below predates
 > [Executable Semantic Foundations](../foundation/executable-foundations.md),
 > the active [Interactive Core](../pir/interactive-core.md), and the active
@@ -22,8 +22,11 @@
 > [Relations](../relations/relation-model.md) consumers to those owners. The
 > public-coin Core, port, abstract-prover-obligation, authored FS-map, and
 > whole-Plan endpoint examples below are historical where they conflict with
-> these active targets. K3-D still owns the exact endpoint read and identity
-> effect. This page is not an integrated semantic-kernel decision by itself.
+> these active targets. K3-D has selected whole-source-provenance-free purpose
+> views and a target-semantic `OirId`; the exact source tuple binds a separate
+> validation request and capability, while the semantic proposition binds the
+> source-view ID. This page is not an integrated semantic-kernel decision by
+> itself.
 
 ## 1. Decision
 
@@ -43,7 +46,7 @@ opaque immutable AdmittedProtocol capability
         +--> Analysis judgments
         +--> checked Protocol successors
         +--> ProtocolInterface- and role-bound OIR projection
-        +--> tagged ProverPlan basis at projection or realization
+        +--> reachable ProverPlan semantics at specialized projection
         `--> purpose-specific views or certificates when justified
 ```
 
@@ -318,16 +321,26 @@ presentation aliases remain outside semantic identity. An ABI-significant
 name belongs to `ProtocolInterfaceId`; a name that changes Protocol behavior
 was misclassified and belongs upstream.
 
-A durable endpoint reference is at least:
+A semantic endpoint projection proposition contains exactly:
 
 ```text
-EndpointContractRef = (ProtocolId, ProtocolInterfaceId, EndpointRole)
+ProjectionPropositionBody =
+  (EndpointProjectionPurpose,
+   EndpointSourceViewId,
+   OirId,
+   K3DProjectionRelationProfile)
 ```
 
-An `OirId` commits to that reference and the canonical OIR content. If a
-selected ProverPlan changes prover OIR rather than merely realizing it below
-OIR, `ProverPlanId` is also an explicit projection input; it cannot arrive as
-ambient plan state.
+An `OirId` commits to the canonical endpoint semantic body and exact used
+semantic dependencies, not whole source provenance. The separate validation
+request binds exact live Protocol and Interface, optional Plan plus affirmative
+`CheckedPlanRealizes`, exact read manifest and extraction authority, admitted
+OIR, checker, and limits. Thus equivalent exact sources yielding the
+same complete quotient may share one semantic proposition while their live
+validation capabilities remain source-bound. A plan-specialized prover OIR
+contains the whole-source-provenance-free transitive quotient reachable from Plan
+decisions and state roots; the full `ProverPlanId` is a validation join and
+cannot arrive as ambient endpoint state.
 
 ## 5. Canonical PIR contract
 

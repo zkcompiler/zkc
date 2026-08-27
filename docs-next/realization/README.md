@@ -26,11 +26,12 @@ authority to change that behavior.
 
 - target contracts, realization requests, and concrete capability
   descriptions;
-- exact supplier bindings for codecs, sponges, checks, holes, kernels,
-  services, or other abstract OIR requirements;
+- exact supplier bindings for codecs, transcript primitives, portable semantic
+  evaluators, kernels, services, or other abstract OIR requirements;
 - the distinction between portable supplier designation and live resolved
   provider authority;
-- concrete CheckContract and HoleContract supplier selection and execution;
+- concrete supplier selection and execution for exact OIR abstract
+  requirements;
 - effectful realization production, generated artifacts, content identity,
   provenance, and partial-production outcomes;
 - target-specific `RealizesOir` checking and admitted realization capability;
@@ -70,16 +71,7 @@ arrow:
 
 ```text
 AdmittedOir
-  + optional BelowOirPlanBasis(
-      source_link: affirmative ProjectedOirCapability retaining this exact OIR
-        and its Protocol/Interface/role basis,
-      plan: AdmittedPlan,
-      plan_realizes: affirmative CheckedPlanRealizes over exactly that Protocol
-        and Plan,
-      exact below-OIR field view and read set,
-      placement: affirmative CheckedBelowOirPlanPlacement over the exact source
-        link, Plan, Plan-realization result, field classification, adequacy,
-        regime, and checker)
+  + exact OIR abstract requirements
   + TargetContract
   -> exact SupplierBinding configuration
   -> AdmittedSupplierAuthority
@@ -101,28 +93,23 @@ external effects remain.
 Supplier binding is an exact closed designation, not ambient matching or
 negotiation. Every abstract OIR requirement has exactly one compatible binding
 entry, superfluous entries are rejected, and unrelated catalog growth cannot
-change the result. A below-OIR `ProverPlan` is an explicit tagged input only
-when binding or realization reads it. It must arrive through the complete
-`BelowOirPlanBasis`: the affirmative exact source-to-OIR capability, exact
-admitted Plan and affirmative `CheckedPlanRealizes`, complete field view and
-read set, and affirmative `CheckedBelowOirPlanPlacement`. Plan admission or
-`CheckedPlanRealizes` alone is insufficient, and a standalone OIR cannot acquire
-a Protocol-dependent Plan without that exact source-relative join.
+change the result. The binding key domain is every and only `OirRequirement`
+in the exact admitted endpoint.
 
-The binding key domain is a tagged disjoint union of every and only abstract OIR
-requirement and, when the below-OIR branch is present, every and only Plan
-`ExternalSupplyRequirement` that the affirmative placement result routes below
-OIR. `OirRequirement` and `BelowOirPlanSupplyRequirement(ProverPlanId, ...)`
-cannot alias. A `ProjectionRelevant` field cannot enter this union or be reread
-below OIR.
+The selected base `ProverPlan` has no below-OIR branch. Its reachable semantic
+facts have already entered the Plan-specialized prover OIR; dead recipe
+material and derived witness exports are inert for this purpose; concrete
+supplier choices were never Plan meaning. Realization cannot recover or reread
+a source Plan from an ID, source map, or projection capability. A future Plan
+extension may add an explicit checked placement relation, but that requires a
+new complete field disposition and is not part of this scaffold.
 
 The portable `SupplierBinding` identifies configuration and provider
 designations. It does not grant access to libraries, devices, services, keys,
 or processes. A separate process-local admitted supplier authority retains
-narrow live provider authority. Serialization preserves only the tagged binding
-data, never the source link, Plan-placement capability, or provider authority. A
-receiver must reconstruct the complete below-OIR basis when present and
-re-resolve and re-admit provider authority.
+narrow live provider authority. Serialization preserves only the binding data,
+never source-projection or provider authority. A receiver reauthenticates and
+readmits OIR and re-resolves and re-admits provider authority.
 
 Binding establishes exact requirement closure and ABI compatibility. It does
 not establish provider correctness, availability at a later activation,
@@ -236,12 +223,11 @@ generic handle supplies those semantics.
 
 - `foundation/` for identity, authentication, admission, encoding, capability,
   and lifecycle mechanisms;
-- `oir/` for admitted endpoint semantics, ABI, abstract requirements,
-  protected effects, and preservation obligations;
-- the PIR `ProverPlan` owner only through a complete `BelowOirPlanBasis` carrying
-  the exact affirmative source link, admitted Plan, affirmative
-  `CheckedPlanRealizes`, declared view/read set, and affirmative
-  `CheckedBelowOirPlanPlacement`;
+- `oir/` for admitted endpoint semantics, ABI, derived static contract, exact
+  abstract requirements, and preservation obligations; Stage 4B separately
+  owns dynamic execution semantics;
+- no direct `ProverPlan` dependency in the selected base path; reachable Plan
+  semantics is already present in a Plan-specialized prover OIR;
 - `relations/` only for an explicitly declared relation-facing realization or
   invocation variant that adds its exact admitted operands, owner-checked
   capability, and complete read set; and
@@ -266,14 +252,12 @@ contract.
 
 `realization/` owns these distinct transitions:
 
-1. admitted OIR and optional complete `BelowOirPlanBasis` containing the exact
-   affirmative source link, admitted Plan, affirmative `CheckedPlanRealizes`,
-   field view/read set, and affirmative `CheckedBelowOirPlanPlacement` to exact
-   tagged supplier binding;
+1. admitted OIR, its exact abstract requirements, and one target contract to
+   exact supplier binding;
 2. exact binding plus provider resolver snapshot, admission policy, and regime
    to narrow process-local live provider authority;
-3. OIR plus exact binding, reconstructed complete below-OIR basis when present,
-   and admitted live provider authority to an effectfully produced candidate;
+3. OIR plus exact binding and admitted live provider authority to an
+   effectfully produced candidate;
 4. admitted OIR, exact target and binding, candidate and artifacts, checker/
    model basis, regime, assumptions, and any named trusted-producer boundary to
    the full qualified realization result; only its affirmative variant mints
@@ -308,8 +292,8 @@ consumer owns any decision to act.
 
 - What exact abstract-requirement, target-contract, binding, provider, and
   capability schemas realize the selected supplier boundary?
-- Which `ProverPlan` fields remain explicit below OIR, and at which earliest
-  transition is each consumed?
+- Does a future Plan extension demonstrate a genuine below-OIR semantic field,
+  and if so what new checked placement relation prevents ambient rereads?
 - What target-specific facets and trusted assumptions define `RealizesOir`,
   and which backends have a genuinely smaller independent checker?
 - What artifact/package identity, atomic-publication, retry, and

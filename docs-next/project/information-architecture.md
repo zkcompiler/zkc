@@ -107,10 +107,13 @@ and property-specific transport remain separate Analysis results from the
 PIR-owned construction and admission of an FS Protocol; applicability excludes
 theorem truth and source-property authority.
 
-OIR projection consumes an admitted Protocol, admitted Interface, endpoint
-role, and explicit `InterfaceOnly` or `InterfaceAndPlan` basis. Standalone OIR
-admission establishes only `LocalOirValid`, not source-relative
-`ProjectionCorrect`. Realization consumes admitted OIR and then separates
+OIR projection consumes affirmative PIR-owned purpose-specific source views
+over an admitted Protocol and Interface and, for a plan-specialized prover, an
+admitted Plan plus affirmative `CheckedPlanRealizes`. The semantic proposition
+binds the complete source-view ID; whole source IDs and live handles bind its
+validation request and capability but do not enter target identity. Standalone OIR admission
+establishes only `LocalOirValid`, not source-relative `ProjectionCorrect`.
+Realization consumes admitted OIR and then separates
 supplier designation, live provider authority, production, preservation
 checking, deployment preparation, activation, invocation binding, and
 execution.
@@ -166,10 +169,10 @@ Evidence appraisal, and reliance at their actual authority cuts.
 | Compose admitted Core views into a target Protocol | `pir/` | Admit the exact composition specification, independently form and admit the target, then recompute the A/N composition result; only A carries resolved maps or context authority, and no structural result implies a property theorem |
 | Fresh/FS Protocol pair to theorem applicability | `analysis/` | Bind one exact theorem profile, transcript construction, occurrence/prefix map, regime, and structural premises; exclude theorem truth and source-property authority |
 | Source property plus applicability to property-specific transport | `analysis/` | Apply one exact rule under theorem truth, hypotheses, maps, and losses; adjacency or an annotation is insufficient |
-| Protocol + Interface + role + tagged Plan basis to projected OIR | `oir/` | Plan-sensitive basis includes admitted Plan plus checked `PlanRealizes`; OIR owns distinct `LocalOirValid` and `ProjectionCorrect` results, exact coverage, target identity, and refusal |
+| Affirmative checked `EndpointSourceView` plus independently admitted OIR to projected OIR | `oir/` | Plan-sensitive extraction separately requires admitted Plan plus checked `PlanRealizes`; OIR owns distinct `LocalOirValid` and `ProjectionCorrect` results, exact graph coverage, target identity, and refusal |
 | Standalone OIR carrier to locally admitted OIR | `oir/` | `LocalOirValid` cannot mint omitted source coverage or restore a serialized projection capability |
 | Verifier endpoint to outer relation material (`descend`) | `relations/` | Endpoint identity and verifier semantics remain under `oir/` |
-| OIR + optional below-OIR admitted Plan and checked `PlanRealizes` + target + proposal to exact supplier binding | `realization/` | Portable designation carries no live authority and proves no provider correctness or availability |
+| OIR abstract requirements + target + proposal to exact supplier binding | `realization/` | The selected base path rereads no Plan; portable designation carries no live authority and proves no provider correctness or availability |
 | Exact supplier binding + resolver snapshot + provider policy/regime to live provider authority | `realization/` | Resolution mints narrow process-local authority with explicit lifetime, revocation, unavailability, and refusal; serialization erases it |
 | OIR + exact binding + admitted live provider authority to realization candidate | `realization/` | Production is effectful and creates content plus an occurrence observation, not a preservation judgment |
 | Candidate + exact source/checker basis to `RealizesOir` | `realization/` | `DoesNotRealize`, checker refusal, producer refusal, and operational failure are distinct |
@@ -186,16 +189,18 @@ specification lists its complete inputs and read closure, source authorities,
 new postcondition, identity and capability effects, outcome taxonomy, replay
 class, composition rules, and non-claims.
 
-The CheckContract and HoleContract boundary remains three-part:
+The portable-algorithm and supported module-effect boundary remains
+three-part:
 
-- PIR owns each identity-bearing citation, protocol-facing ABI, and
-  route-or-attachment meaning;
-- OIR owns projected `check_call` or `hole_call` behavior and abstract supplier
-  requirements; and
+- PIR owns each identity-bearing semantic citation and its Protocol-facing
+  ABI, observation, decision, influence, replay, and terminal laws;
+- bounded K3-D OIR owns the corresponding static endpoint graph and derived
+  semantic requirements, while Stage 4B owns dynamic endpoint behavior; and
 - realization owns concrete supplier designation, live authority, binding,
   and execution.
 
-No domain may silently acquire the complete contract by convenience.
+The selected base Plan has no opaque hole. No domain may silently acquire a
+complete contract by convenience.
 
 ## 5. Physical layout rules
 

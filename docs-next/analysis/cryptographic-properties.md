@@ -3702,7 +3702,7 @@ source-property or theorem-truth slot.
 ### 7.2 Family property transport
 
 Use the one closed `CanonicalGoalDagUnion` constructor from
-[`analysis-model.md`](analysis-model.md#45-exact-common-bodies). The transported
+[`analysis-model.md`](analysis-model.md#41-one-identity-algebra). The transported
 proposition inherits, but does not duplicate, the source and applicability
 premises:
 

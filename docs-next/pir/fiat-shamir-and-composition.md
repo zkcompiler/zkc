@@ -1,11 +1,11 @@
 # Fiat--Shamir construction and semantic Core composition
 
-> **Document kind:** Target semantic specification
-> **Document state:** Active non-normative target
-> **Target status:** Stage 3.5 durable promotion
+> **Document kind:** Historical target snapshot
+> **Document state:** Superseded for K2; non-authoritative research input
+> **Target status:** Pre-K1/K2 Stage 3.5 snapshot
 > **Provisional owner:** `pir`
-> **Authority:** This document specifies the selected target for `docs-next/`.
-> It is not normative until explicit consolidation and cutover. The current
+> **Authority:** None for current target semantics. The K2 owners named in the
+> routing notice below supersede this snapshot. The current
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
 > This document makes no implementation, compatibility, or migration claim.
 
@@ -28,7 +28,7 @@
 > composition material remains historical input until its later dedicated
 > closure pass.
 
-## 1. Scope and design center
+## 1. Historical scope and design center
 
 This document defines two PIR-owned structural constructions:
 

@@ -69,8 +69,9 @@ sequencing. This is a documentation dependency, not a semantic dependency.
 
 The candidate v0 architecture began as the first semantic reconstruction
 result in this tree and now integrates the selected Stage 1 subject, Stage 2
-transition, Stage 3 Protocol-and-Relations backbone, and Stage 4A
-Analysis-and-Compiler architecture. It remains a
+transition, Stage 3 Protocol-and-Relations backbone, Stage 4A
+Analysis-and-Compiler architecture, and bounded K3-D endpoint-projection
+closure. It remains a
 non-normative decision surface: it records the reconstructed current model,
 the selected target spine, later-stage redesign questions, and the work
 sequence required before specification migration.
@@ -133,6 +134,13 @@ The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-con
 owns the reopened integrated-closure gate. Stage 4B remains unactivated, and
 none of these target pages claims semantic freeze, normative cutover, or
 implementation.
+
+K3-D's bounded result is owned by PIR's
+[Endpoint Projection Views](../pir/endpoint-projection-views.md) and OIR's
+[Endpoint and Projection Contract](../oir/projection-contract.md). It selects
+the minimum FS verifier and Plan-specialized prover read/relation seam without
+selecting a complete OIR language or activating Stage 4B. K3-E integrated
+review remains the next closure gate.
 
 Future durable documents may include a charter, current status, roadmap, and
 decision index. They will be created only when content is migrated and their

@@ -810,9 +810,9 @@ The package-resolution candidate target is split by meaning:
   reconciled structural/instance result bindings and preserves the boundary to
   Analysis property transport.
 
-Broader Analysis families and generic composition remain deferred. The next
-integrated semantic-kernel phase is the bounded K3-D OIR seam; Stage 4B itself
-remains unactivated. A later cross-branch checkpoint must reconcile shared
+Broader Analysis families and generic composition remain deferred. Bounded
+K3-D has selected the minimum OIR seam without activating Stage 4B. K3-E must
+now reconcile shared
 observations, occurrence maps, failure and terminal semantics, Plan reads,
 property versus projection claims, and explicit endpoint facts without merging
 the two authority graphs.

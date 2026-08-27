@@ -13,7 +13,7 @@
 > The [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > owns the live integrated-closure gate.
 
-> **K2/K3-B reconciliation notice — 2026-08-27:** The shared transition,
+> **K2/K3-D reconciliation notice — 2026-08-27:** The shared transition,
 > authority, recomputation, and outcome separations below remain design inputs.
 > Protocol, Interface, Plan, and projection examples that use pre-K2 ports,
 > abstract prover obligations, or authored event coordinates are historical
@@ -22,11 +22,11 @@
 > [Fiat--Shamir construction](../pir/fiat-shamir.md). K3-B reconciled the
 > dependent [Interface and Plan](../pir/interfaces-and-plans.md),
 > [Relations](../relations/relation-model.md), and
-> [canonical carrier](../pir/canonical-pir.md) targets. It rejected the rule
-> that plan-specialized OIR commits to the whole `ProverPlanId`; K3-D still owns
-> any OIR-specific view, its exact read partition, and its identity effect.
-> Those exact owners supersede conflicting Interface-sensitive relation and
-> whole-Plan examples below.
+> [canonical carrier](../pir/canonical-pir.md) targets. K3-D subsequently
+> selected whole-source-provenance-free purpose views and an exact OIR projection checker:
+> plan-specialized OIR commits to the reachable Plan semantic quotient, not
+> whole `ProverPlanId`. Those exact owners supersede conflicting
+> Interface-sensitive relation and whole-Plan examples below.
 
 ## 1. Decision
 
@@ -359,19 +359,31 @@ establishes structural coverage of the exact Protocol's abstract prover obligati
 does not establish honest-prover completeness, supplier correctness,
 performance, or verifier acceptance.
 
-A Plan enters the earliest transition that actually reads it:
+A Plan enters the earliest transition that actually reads it. For the selected
+base Plan, K3-D classifies every reachable decision recipe, private-material,
+randomness, and state fact as plan-specialized prover endpoint semantics:
 
 ```text
-if it changes canonical prover OIR:
-  projection uses InterfaceAndPlan and OirId includes ProverPlanId
+affirmative CheckedPlanRealizes
+  -> PIR derives one whole-source-provenance-free EndpointSourceView
+     whose graph contains the reachable Plan component
+  -> OIR endpoint body commits to exactly that semantic graph
+  -> semantic proposition binds purpose + source-view ID + OirId + relation
+  -> validation request/capability binds the exact Plan and checked extraction
 
-if it selects only below-OIR algorithms, scheduling, buffering, or suppliers:
-  OIR remains plan-independent and realization receives the Plan explicitly
+concrete algorithms or services not represented by the base Plan
+  -> OIR abstract requirement
+  -> Realization selects the supplier explicitly
 ```
 
 Verifier projection never consumes a Plan. A field that changes
 verifier-visible events, transcript actions, checks, proof ABI, or accepted
 language belongs to a different Protocol, not a Plan.
+
+The selected base Plan has no below-OIR field branch. A future Plan extension
+may add one only with a complete field disposition and checked placement
+relation; dead Plan fields and derived witness exports are inert for OIR rather
+than realization inputs.
 
 ## 11. Transition-family ownership
 
@@ -389,7 +401,7 @@ language belongs to a different Protocol, not a Plan.
 | FS construction | PIR deterministically forms and ordinarily admits the FS Protocol | Construction establishes neither theorem applicability nor a transported property |
 | Theorem applicability | Analysis checks one exact theorem profile against exact source and target semantics | Applicability excludes theorem truth and source-property authority |
 | Property-specific transport | Analysis checks one exact rule over source authority, applicability, theorem truth, hypotheses, maps, and losses | Relation adjacency or a preservation annotation is insufficient |
-| OIR projection | OIR owns role projection over exact Protocol, Interface, and tagged Plan basis | Unsupported projection does not invalidate the source |
+| OIR projection | PIR classifies support and derives exact purpose views; OIR owns target admission, semantic proposition, and request-specific validation over exact live Protocol, Interface, and optional Plan joins | Pre-view Unsupported does not invalidate the source; it cannot appear after proposition formation |
 | Standalone OIR admission | OIR owns `LocalOirValid` | Local validity cannot prove origin or omitted-source coverage |
 | Supplier binding | Realization closes exact provider designations and separately resolves live provider authority | A binding does not prove provider correctness or permanent availability |
 | Realization | Realization separates effectful production from target-specific `RealizesOir` checking | Emission or build success is not semantic realization |
@@ -442,15 +454,18 @@ Projection keeps these propositions distinct:
 
 ```text
 LocalOirValid(O)
-ProjectionCorrect(P, I, role, plan_basis, O)
+ProjectionCorrect(EndpointSourceView, O)
 ```
 
-A paired projection capability may authorize source-relative use while the
+A `ProjectedOirCapability` may authorize source-relative use while the
 admitted source subjects and OIR coexist. After serialization, standalone OIR
 can be re-admitted locally, but source coverage is unknown unless a consumer
 rechecks against the sources or verifies a sufficient source-bound result.
 `OirId`, an embedded source reference, or a digest cannot prove that no source
-obligation was omitted.
+obligation was omitted. `OirId` identifies endpoint semantics without whole
+source IDs; the source-view ID binds the semantic proposition, while the exact
+source tuple and live extraction authority bind the validation request and its
+process-local affirmative capability.
 
 ## 13. Composition and operational sequence
 

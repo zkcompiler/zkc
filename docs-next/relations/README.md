@@ -161,8 +161,9 @@ remains normative until explicit consolidation and cutover.
   quantitative contracts that consume these exact sources without restating
   them. Broader property families and concrete theorem discharge remain later
   Analysis work.
-- K3-D must define any OIR-specific purpose view and projection identity effect;
-  `PlanWitnessSurface` is Relations-specific and grants no OIR authority.
+- K3-D selected OIR-specific purpose views and the projection identity split;
+  `PlanWitnessSurface` remains Relations-specific and grants no OIR authority.
+  Full OIR syntax and protocol-family coverage remain later work.
 - Native P02 FRI/IOR and P09 Nova/folding remain executable portfolio pressure
   for commitment/opening and relation-changing reduction paths.
 - K3-E still owns integrated deduplication and freeze review; later stages own

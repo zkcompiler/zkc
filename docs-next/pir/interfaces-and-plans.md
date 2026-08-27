@@ -408,8 +408,10 @@ source/destination visibility, a unique target/role/value use, and this exact
 presence law. Absence can never decode as an active value.
 
 Whether `Inactive` is emitted as an omitted field, explicit tag, or fixed wire
-slot is not Interface semantics. K3-D OIR selects that representation and
-proves it implements this uniform semantic value. In particular, an FS
+slot is not Interface semantics. K3-D OIR preserves this uniform semantic
+value and its exact transport obligation; Stage 4B execution or a concrete
+Realization profile selects the wire representation and proves it implements
+that value. In particular, an FS
 challenge is locally derived and never an externally supplied challenge; a
 Fresh challenge is Verifier-sourced only after its exact receipt exists.
 
@@ -917,11 +919,15 @@ surface entry. Neither the surface nor its extraction claims correspondence,
 satisfaction, confidentiality, availability of a concrete value, or validity
 of a derived witness.
 
-Concrete Interface and Plan projections for OIR are deferred to K3-D. K3-D
-must define each closed purpose grammar, exact read manifest, view-local
-normalization, checked extraction, and identity effect; it may not use a
-generic `projected_facts` placeholder or bind a full source ID while claiming
-that unread source fields are nonsemantic.
+The OIR-specific quotients are now defined by
+[Endpoint Projection Views](endpoint-projection-views.md). They are distinct
+from this Relations-specific surface. The Interface quotient retains exactly
+the role ABI and transitive codec laws required by its endpoint purpose. The
+Plan-specialized prover quotient is the transitive closure reachable from
+every decision move and state-after root; it excludes derived witness exports,
+dead declarations and nodes, and full source IDs. Checked extraction retains
+the exact source authority privately. Neither quotient is a generic
+`projected_facts` constructor or an invitation for a consumer-selected read.
 
 ## 6. Exact canonical bodies
 
@@ -1072,14 +1078,20 @@ Interface admission, Plan admission, `PlanWitnessSurface` extraction, and
 - implementation correspondence, formal verification, evidence reliability,
   deployment, or production readiness.
 
+K3-D's selected consumer is one whole-source-provenance-free
+`EndpointSourceView`; its shared semantic graph contains the role-qualified
+Interface component and, for the specialized Prover, the reachable Plan
+component. Exact read and identity laws are owned by the endpoint-view
+specification.
+
 Reopen this page if a concrete bounded consumer shows that the
 `PlanWitnessSurface` cannot preserve a required role, type, or occurrence
 distinction without a Plan-local identity; that one Interface slot needs
 incompatible audiences; that the uniform transport semantic value cannot
 represent a required K2 occurrence state; or that one semantic Plan fact
 cannot be placed unambiguously in private ingress, randomness, persistent
-state, recipe, or witness export. A missing OIR-specific projection grammar is
-first a K3-D obligation, not evidence for a generic view constructor here.
+state, recipe, or witness export. A later missing consumer-specific projection
+grammar is not evidence for a generic view constructor here.
 
 Reopen K2 only if a concrete case needs verifier-observable invocation
 material not expressible as a public or verifier-private input, a

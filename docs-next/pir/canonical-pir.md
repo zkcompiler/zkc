@@ -227,8 +227,8 @@ Consumer operations receive satellites explicitly:
 
 | Consumer | Additional admitted inputs |
 |---|---|
-| Verifier OIR projection | exact Interface and verifier role, plus only the exact admitted purpose-specific source view selected by K3-D |
-| Prover OIR projection | exact Interface and prover role, plus only the exact admitted purpose-specific source view selected by K3-D; neither a whole Plan nor `PlanWitnessSurface` is a default input |
+| Verifier OIR projection | exact Interface, verifier purpose, and one affirmative checked `EndpointSourceView` from [Endpoint Projection Views](endpoint-projection-views.md) |
+| Plan-specialized prover OIR projection | exact Interface and Plan, affirmative `CheckedPlanRealizes`, specialized-prover purpose, and one affirmative checked `EndpointSourceView` whose graph contains the reachable Plan component; neither a whole Plan nor `PlanWitnessSurface` enters target identity |
 | `ProtocolRelationBinding` formation and admission | exact relation Interfaces and K1 dependencies reached by the candidate; no `ProtocolInterfaceId` |
 | Protocol-level mapped correspondence | exact admitted `CorrespondenceQuestion`, every admitted operand it names, and owner-issued views plus matching live authority for `ManifestFor(question)`; no `ProtocolInterfaceId` unless that exact question reads one |
 | External instance correspondence | the exact admitted external-instance question and operands, owner-issued views plus matching live authority for its manifest, exact `DecodedExternalAssignment`, and matching codec-evaluation authority |
@@ -611,9 +611,11 @@ such a Core is admitted or standardize one universal imported-proof semantics.
 The unsupported payload is preserved as exact carrier material but is not
 decoded, classified, or granted the future contract's citation guarantees.
 Only a separately specified exact supported effect contract can enable positive
-Core admission. Until that contract and K3-D's complete projection, execution,
-and conformance rule exist, OIR projection returns typed `Unsupported` and emits
-no partial program.
+Core admission. Until that contract exists, the carrier reaches typed
+`Unsupported` at Core admission and no endpoint-projection question can be
+formed. If a future exact module contract does admit the Core but the selected
+OIR profile has no discharge rule for it, that distinct well-formed question
+returns projection-level `Unsupported` and emits no partial program.
 
 ## 7. Authoring, persistence, and information loss
 
@@ -656,15 +658,19 @@ The minimum positively admitted carrier witness contains:
 A separate carrier-only imported-verification witness carries one exact
 same-kind `ModuleEffectRef` and payload, checks both structural inverse laws and
 every identity-field mutation, then requires typed `Unsupported` and no admitted
-Core or partial OIR program while no exact supported `pir.core-effect` contract
-exists.
+Core while no exact supported `pir.core-effect` contract exists. Because no
+admitted Protocol results, no OIR projection request or partial OIR can exist.
+K3-D separately tests an admitted synthetic module-effect coordinate with no
+OIR discharge rule as projection-level `Unsupported`; that synthetic case does
+not standardize imported-proof verification.
 
 The negative matrix mutates every identity-bearing field and covers missing,
 extra, reordered, duplicate, wrong-kind, cross-regime, wrong-ID, unknown carrier
 syntax, unsupported module semantics, and deterministic-limit cases. It also
 checks that Interface/Plan/Relations changes leave Core and Protocol IDs stable,
 that injection of those satellites is malformed, and that imported verification
-reaches K3-D's typed refusal without a partial OIR artifact.
+stops at PIR admission while a separately admitted unsupported module profile
+stops at K3-D projection without a partial OIR artifact.
 
 The following remain later realization work and are not silently selected here:
 

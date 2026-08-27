@@ -39,8 +39,9 @@ K3-B has now reconciled the canonical carrier, `ProtocolInterface`, and
 narrow source-ID-free `PlanWitnessSurface` needed for relation-witness
 attachment. This bounded closure does not freeze the integrated kernel;
 K3-C has consumed the exact source views for its bounded minimum Analysis
-profiles without reopening K2, while OIR and integrated review still own their
-K3-D and K3-E contracts.
+profiles without reopening K2. K3-D has now selected the purpose-specific PIR
+endpoint views and bounded source-to-OIR projection contract without reopening
+K1 or K2; integrated K3-E review remains open.
 
 ## Owns
 
@@ -50,8 +51,9 @@ K3-D and K3-E contracts.
 - claims, reductions, checks, challenges, material bindings, routes, and
   terminal closure;
 - protocol-specific vocabularies, profiles, policies, and extension points;
-- identity-bearing CheckContract and HoleContract citations, their
-  protocol-facing ABI, and route or attachment meaning;
+- exact portable verifier computations and supported module-effect citations,
+  their Protocol-facing ABI, observation, decision, influence, replay,
+  terminal, and dependency meaning; the selected base Plan has no opaque hole;
 - the direct typed declaration manifest, semantic-authority graph, and distinction
   from opaque referenced subjects;
 - the workbench transitions that author, import, resolve, and normalize
@@ -147,11 +149,11 @@ first being found by the optimizer or successfully projected to every target.
 - `compiler/` may propose successors, but PIR alone authenticates and admits
   each target; a separate relation-specific checker must then relate exact
   predecessor and successor subjects;
-- `oir/` consumes an admitted Protocol, an exact admitted Interface, its
-  projection obligations, and endpoint role. K3-D must select any additional
-  purpose-specific Interface or Plan view, its exact read manifest, and its
-  identity effect; neither a whole Plan nor the Relations-specific
-  `PlanWitnessSurface` is an ambient OIR input;
+- `oir/` consumes affirmative checked purpose-specific
+  [endpoint views](endpoint-projection-views.md) over an exact admitted
+  Protocol and Interface and, for a plan-specialized prover, an exact admitted
+  Plan plus affirmative `CheckedPlanRealizes`. Neither a whole source ID nor
+  the Relations-specific `PlanWitnessSurface` enters OIR semantics;
 - `evidence/` binds conformance observations to exact PIR subjects.
 
 ## Target documents
@@ -165,6 +167,7 @@ first being found by the optimizer or successfully projected to every target.
   transcript semantics and the same-Core Fresh/FS construction
 - [Canonical PIR](canonical-pir.md)
 - [Protocol Interfaces and Prover Plans](interfaces-and-plans.md)
+- [Endpoint Projection Views](endpoint-projection-views.md)
 - [Protocol Semantic Model](protocol-model.md) — pre-K2 semantic snapshot
 - [Fiat--Shamir Construction and Semantic Core Composition](fiat-shamir-and-composition.md)
   — pre-K2 FS snapshot and historical composition candidate
@@ -178,9 +181,10 @@ bodies and evidence boundaries; its validation record owns the details.
 K3-B reconciled the carrier and Interface/Plan pages to the active K1/K2
 owners. They are the current non-normative target definitions at that bounded
 scope. The two explicitly marked snapshots remain research history, not
-parallel authority. K3-C has now selected the bounded Analysis sources and
-profiles that consume these owners, while exact OIR reads and identity effects
-remain K3-D work. The lifecycle page is the
+parallel authority. K3-C selected the bounded Analysis sources and profiles
+that consume these owners. K3-D has selected exact OIR-purpose reads, quotient
+identities, adequacy, and checked extraction; the target relation remains
+independently owned by OIR. The lifecycle page is the
 superseded baseline candidate and remains useful for current-model
 reconstruction. None replaces the current Protocol Kernel, Carrier,
 Boundaries, Vocabularies, or Versioning specifications before normative
@@ -202,8 +206,9 @@ additional proposition:
 
 - a PIR-owned fact view plus an Analysis question is interpreted by
   `analysis/`;
-- admitted Protocol plus exact Interface and role, together with any
-  purpose-specific source view later selected by K3-D, belongs to `oir/`;
+- admitted Protocol plus exact Interface and role, together with the exact
+  affirmative purpose-specific endpoint views selected by K3-D, belongs to
+  `oir/`;
 - Protocol-to-relation correspondence and Plan-witness attachment belong to
   separate `relations/` bindings; an external Interface enters only a question
   that reads its presentation;
@@ -223,10 +228,11 @@ then-current resolution. Post-selection revalidation reopened the exact kernel
 closure. K1 and the narrowly reclosed K2 closed executable Foundation and PIR
 semantics at their bounded resolutions; K3-B has now reconciled the dependent
 Interface/Plan, carrier, and Relations seams without reopening the K2 Core.
-K3-C has now closed the minimum Analysis source, experiment, applicability,
-and quantitative contracts at its bounded profile without reopening K2. K3-D
-must close the minimum OIR read and projection contract, and K3-E their
-integrated boundary. K4 and K5 must then complete the bounded protocol
+K3-C closed the minimum Analysis source, experiment, applicability, and
+quantitative contracts at its bounded profile without reopening K2. K3-D has
+selected the bounded OIR source read, semantic skeleton, and projection
+contract without reopening K1 or K2. K3-E must now audit their integrated
+boundary. K4 and K5 must then complete the bounded protocol
 portfolio and independent freeze. Later work includes:
 
 - Stage 4A selected the exact Analysis model families and theorem/profile
@@ -239,8 +245,9 @@ portfolio and independent freeze. Later work includes:
   property-specific transport, selected one AFK profile, and left broader
   profiles, independent proof authority, checkers, and producers as later
   work;
-- Stage 4B classifies Plan use, defines OIR behavior and projection, and then
-  assigns concrete supplier, deployment, and runtime meaning in Realization;
+- Stage 4B completes OIR syntax and execution beyond the bounded K3-D skeleton,
+  then assigns concrete supplier, deployment, and runtime meaning in
+  Realization;
 - Stage 7 selects exact normative wording, stable semantic encodings, hash
   primitives, compatibility policy, and authority cutover; and
 - Stage 8 establishes implementation correspondence and migration work.

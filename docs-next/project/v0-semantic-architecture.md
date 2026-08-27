@@ -4,7 +4,7 @@
 > **Document state:** Active
 > **Design maturity:** Reconstruction with selected Stage 1--4A semantic,
 > transition, Protocol, canonical PIR, Relations, Analysis, and Compiler
-> backbone
+> backbone plus bounded K3-D endpoint-projection closure
 > **Provisional owner:** `project`
 > **Authority:** Non-normative. This page is a reconstruction and design
 > surface for `docs-next/`. The current specifications, status, architecture,
@@ -79,7 +79,21 @@
 > public key with fixed public setup, the exact K2 logical-query carrier, signed
 > lower bounds, and every premise. A finite instrument pressures formation and
 > refusal only. K2 was not reopened, no cryptographic property was proved, and
-> K3-D/K3-E still own OIR and integrated closure.
+> At that checkpoint K3-D/K3-E still owned OIR and integrated closure; the
+> following update records K3-D's bounded result.
+
+> **K3-D integrated-closure update — 2026-08-28:** The bounded minimum OIR
+> lane is now selected in
+> [Endpoint Projection Views](../pir/endpoint-projection-views.md) and the
+> [OIR Endpoint and Projection Contract](../oir/projection-contract.md). PIR
+> derives exact whole-source-provenance-free purpose views; OIR separately
+> authenticates and admits target semantics and validates exact graph/static-
+> contract correspondence. K3-D
+> supports FS verifier and Plan-specialized prover endpoints over base
+> non-Oracle, non-module K2 effects, with closed typed unsupported rows and no
+> partial target. It did not reopen K1 or K2, activate full Stage 4B, select a
+> concrete OIR carrier, or establish any cryptographic property. K3-E still
+> owns integrated closure.
 
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
@@ -351,7 +365,7 @@ flowchart LR
   CE[Relation-specific checked change]
   J[Conditional property judgment]
   I[Admitted Protocol Interface]
-  SV[K3-D purpose-specific source view, if any]
+  SV[Affirmative K3-D purpose-specific source views]
   ROLE[Endpoint role]
   PI[Exact projection input]
   O[OIR endpoint artifact]
@@ -417,13 +431,14 @@ Evidence result.
 The diagram omits each transition's exact closure to remain readable; it does
 not imply one universal registry. Every normative result closes over the
 semantic subjects, regimes, dependencies, policies, and capabilities that can
-change it. Projection consumes the admitted Protocol, exact dependent
-`ProtocolInterfaceId`, and endpoint role. If a prover projection needs Plan
-meaning, K3-D must select a purpose-specific source-owned view, its exact read
-manifest, and its effect on OIR identity and the source-relative projection
-result. K3-B's `PlanWitnessSurface` is Relations-specific and cannot substitute
-for that contract. A Plan fact used only below OIR enters realization
-explicitly instead.
+change it. Projection consumes affirmative PIR-owned purpose views over the
+admitted Protocol, exact dependent `ProtocolInterfaceId`, and endpoint role.
+A plan-specialized prover additionally requires the exact admitted Plan and
+affirmative `CheckedPlanRealizes`; only its reachable whole-source-provenance-free semantic
+quotient enters OIR. K3-B's `PlanWitnessSurface` is Relations-specific and
+cannot substitute for that contract. Concrete supplier choices are OIR
+requirements consumed explicitly by Realization rather than ambient Plan
+state.
 Bare possession of bytes, a source identifier, or a carrier label never
 substitutes for these inputs or preserves local authority.
 
@@ -467,7 +482,7 @@ not proposed wire identifiers.
 | Semantic regime | Typed, identified interpretation of intrinsic operations, canonical semantics, and admission rules for one subject family | Selected Stage 1 identity qualifier; implicit today |
 | Admitted Protocol capability | Process-local immutable capability rechecked against an exact admission basis and semantic regime | Current normative role and implementation correspondence, target qualification |
 | Protocol interface | Protocol-dependent mapping from exact K2 invocation inputs, scoped Statement bindings, and role-qualified transport and completion effects to one external ABI | Active bounded K3-B target with a separate `ProtocolInterfaceId`; it changes no Protocol meaning |
-| Prover plan | Protocol-dependent finite recipe system for the K2 prover-decision boundary, with witness ingress distinct from advice, confidential context, randomness, and persistent state | Active bounded K3-B target with a separate `ProverPlanId`, independent `PlanRealizes`, and narrow source-ID-free `PlanWitnessSurface`; OIR-specific views remain K3-D work |
+| Prover plan | Protocol-dependent finite recipe system for the K2 prover-decision boundary, with witness ingress distinct from advice, confidential context, randomness, and persistent state | Active bounded K3-B target with a separate `ProverPlanId`, independent `PlanRealizes`, Relations-specific `PlanWitnessSurface`, and K3-D reachable whole-source-provenance-free endpoint quotient |
 | Consumer view | Ephemeral facts mechanically derived for one consumer from admitted authority | Stage 1 provisional role; normally no independent identity |
 | Durable derived artifact or judgment | Independently meaningful OIR, relation result, derivation, or judgment produced by its owner | Current family of roles; not a mere Protocol view |
 | Analysis question and proposition | Exact family experiment separated from one truth-apt conclusion and residual hypotheses | Selected Stage 4A family-indexed identity boundary |
@@ -478,7 +493,7 @@ not proposed wire identifiers.
 | Candidate and comparison domains | Exact admitted relation-qualified semantic candidates plus a separate policy-qualified comparison carrier | Selected Stage 4A target with independent closure |
 | Qualified Compiler decision | Bounded best, complete Pareto, or no-eligible result over exact closed domains and complete ledgers | Selected Stage 4A target; persistence is purpose-bound replay material, never authority |
 | Qualified Compiler open report | Strictly weaker checked statement over an exact qualified subset and audit-record-relative accounting scope; never a closed-domain decision | Selected Stage 4A non-decision branch with separate capability, policy, and replay contract |
-| OIR endpoint artifact | Canonical verifier or prover endpoint semantics projected from exact Protocol, Interface, role, and any exact purpose-specific source view selected by OIR | Selected Stage 2 input boundary; the exact read basis and identity effect remain K3-D work, and full Stage 4B semantics remain inactive |
+| OIR endpoint artifact | Canonical target-semantic verifier or Plan-specialized prover endpoint, locally admitted independently and related to exact PIR-owned purpose views by a separate projection check | Active bounded K3-D target; full syntax, general execution, Fresh/Oracle/module profiles, and Stage 4B remain inactive |
 | Supplier binding | Exact immutable provider designation for OIR requirements, distinct from live provider authority | Selected Stage 2 boundary; exact schema remains Stage 4 work |
 | Realization candidate and admitted realization | Produced target artifact followed by a separate target-specific `RealizesOir` result or explicit trusted boundary | Selected Stage 2 categories; exact target contracts remain Stage 4 work |
 | Deployment binding and live capability | Immutable deployment configuration followed by effectful activation and scoped live authority | Selected Stage 2 categories; exact resource and revocation schemas remain Stage 4 work |
@@ -524,7 +539,7 @@ Different transitions retain different mathematics and domain owners.
 | Checked Protocol change | relation-specific bridge owner | Propose, authenticate, and admit the target before checking the predecessor/successor relation | Target admission and relation checking do not imply one another |
 | Compiler selection | `compiler` | Select among already admitted, relation-checked candidates over the exact domain | Winner validity proves no optimality over omitted candidates |
 | FS construction, theorem applicability, property transport | `pir`, then `analysis` | Keep target construction, exact structural applicability, theorem truth, source-property authority, and property-specific transport distinct | Adjacency, applicability, or one checked relation transports no property automatically |
-| OIR projection and local admission | `oir` | Project from exact Protocol, Interface, role, and any purpose-specific source view selected by K3-D; check `LocalOirValid` separately | Source-free local validity proves neither origin nor source coverage |
+| OIR projection and local admission | `oir` | Consume affirmative PIR-owned purpose views, admit target semantics under `LocalOirValid`, then check exact graph and derived-static-contract correspondence separately | Source-free local validity proves neither origin nor source coverage |
 | Supplier binding and realization | `realization` | Separate exact designation, live authority, effectful production, and target-specific correspondence | Binding or build success proves no semantic realization |
 | Deployment and invocation | `realization` | Separate configuration, activation, invocation binding, execution, and partial effects | Operational success cannot redefine Protocol or OIR meaning |
 | Observation, evidence, appraisal, reliance | producing domain, then `evidence`, then consuming domain | Preserve producer-owned observation meaning and completeness, form an attributable scoped record, appraise under policy, then decide one use | Provenance is not truth; appraisal is not permission |
@@ -663,7 +678,7 @@ remain provisional:
    policy-derived `ComparisonAlternativeDomain`; every closed decision binds
    both and complete resolution/assessment ledgers.
 
-### 7.5 Research remaining after Stage 4A, updated by K3-C
+### 7.5 Research remaining after Stage 4A, updated by K3-D
 
 1. **Pre-freeze consumer closure.** K3-B reconciled Interface/Plan, Relations,
    value bridges, execution grounding, and the canonical carrier against the
@@ -671,15 +686,15 @@ remain provisional:
    native judgment, abstract-family transport, and pointwise member
    specialization without reopening K2. It did not mint the all-`n` family
    source capability: AFK transport remains `CannotAnswer` without independent
-   proof authority. K3-D must now close the minimum OIR source read and
-   projection contract, after which K3-E must audit the integrated boundary.
+   proof authority. K3-D has now closed the bounded minimum OIR source read,
+   semantic skeleton, and projection relation. K3-E must audit the integrated
+   boundary.
 
-2. **OIR behavior and correspondence.** First close the minimum source read
-   and projection-obligation seam. After a separate Stage 4B activation,
-   define observable semantics for
-   verifier and prover OIR, including randomness, failure, resources,
-   completion, and proof ABI. Then state which refinement or equivalence a
-   realization must establish.
+2. **Full OIR behavior and realization correspondence.** After a separate
+   Stage 4B activation, extend the bounded semantic skeleton into a complete
+   grammar and execution model, add Fresh/Oracle/module/generic-prover support
+   deliberately, and state which target-specific refinement a realization
+   must establish.
 
 3. **Cross-system capability synthesis.** Pressure-test the joined Protocol,
    Relations, Analysis, Compiler, OIR, and Realization capability surface after
@@ -841,8 +856,9 @@ owns that gate. K3-B subsequently reconciled the dependent Interface/Plan,
 carrier, and Relations targets to K1/K2. K3-C reconciled the bounded minimum
 Analysis profiles to those exact sources without reopening K2 or activating
 Stage 4B, while leaving AFK family transport unanswered unless independent
-proof authority supplies its uniform all-`n` source capability. K3-D is the
-next bounded integrated-closure phase.
+proof authority supplies its uniform all-`n` source capability. K3-D has now
+selected the bounded endpoint-projection contract without activating Stage 4B;
+K3-E integrated review is next.
 
 ## 12. Deliberate non-decisions
 

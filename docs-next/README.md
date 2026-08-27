@@ -20,7 +20,8 @@ In this tree, a `completed` Stage 1--4A label records historical completion of
 one bounded research package at its selection gate. It does not mean the
 promoted candidate is mutually closed or semantically frozen. The
 [v0 Semantic Design Program](project/v0-design-program.md#14-progress-and-change-control)
-owns that live integrated-design gate; the kernel is not frozen and Stage 4B
+owns that live integrated-design gate. Bounded K3-D endpoint projection is
+complete at its stated scope, but the kernel is not frozen and full Stage 4B
 remains inactive.
 
 ## Where current truth lives
@@ -99,7 +100,8 @@ flowchart LR
   SC --> DC[Branchwise bounded Compiler decision]
   TP -->|any exact reached qualified subset + audit accounting| OR[Checked explicitly open report]
 
-  AP -->|reserved later boundary| O[Unactivated Stage 4B: OIR]
+  AP -->|affirmative purpose-specific source views| KO[Bounded K3-D OIR projection]
+  KO -->|reserved later completion| O[Unactivated full Stage 4B: OIR]
   O --> X[Unactivated Stage 4B: realization and operation]
   X --> OBS[Deferred producer-owned observation / external receipt]
   OBS --> ER[Deferred Evidence record]
@@ -162,7 +164,9 @@ Protocol, canonical PIR, Interface, Plan, Relations, Fiat--Shamir, and
 semantic-composition candidate at package resolution, promoted it into
 candidate target owners, and produced separate Stage 4A and Stage 4B entry
 contracts. Stage 4A selected the federated Analysis and validated-decision
-Compiler architecture and promoted candidate target owners. Stage 4B remains
+Compiler architecture and promoted candidate target owners. K3-D subsequently
+selected whole-source-provenance-free PIR endpoint views, a minimum target-semantic OIR body,
+and an independent projection relation while leaving full Stage 4B
 unactivated.
 
 The first semantic reconstruction result is the
@@ -212,6 +216,12 @@ relation satisfaction and Protocol-correspondence reconciliation owned by
 cross-owner admitted-subject/checked-result binding specializations owned by
 [`pir/`](pir/README.md). They remain
 non-normative until explicit consolidation and cutover.
+
+The bounded endpoint result is split between PIR-owned
+[Endpoint Projection Views](pir/endpoint-projection-views.md) and the
+[OIR Endpoint and Projection Contract](oir/projection-contract.md). It supports
+FS verifier and Plan-specialized prover pressure cases only; it is not a full
+OIR language, realization design, or implementation claim.
 
 The [temporary design workspace](notes/README.md) preserves the larger catalog
 behind those decisions while the design program is incomplete. It is not part

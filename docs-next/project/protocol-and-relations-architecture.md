@@ -16,7 +16,7 @@
 > equal-resolution candidate portfolio SHA-256
 > `ce4f71e88741f71d126c81ce8afeb2cb29da83f856bb13fdf032a702756b9923`.
 
-> **K1/K2/K3-B reconciliation notice — 2026-08-27:** K1 owns the
+> **K1/K2/K3-D reconciliation notice — 2026-08-28:** K1 owns the
 > executable Foundation and K2 owns the active Interactive Core and
 > Fiat--Shamir construction. They do not ratify this historical Stage 3
 > consumer model. Public-coin-Core, port, object, randomness,
@@ -28,8 +28,10 @@
 > [relation model](../relations/relation-model.md), and
 > [Protocol correspondence](../relations/protocol-correspondence.md), including
 > split Protocol/Plan bindings and the three distinct value-bridge lanes. Those
-> exact owners supersede conflicting Stage 3 examples without freezing the
-> integrated kernel.
+> exact owners supersede conflicting Stage 3 examples. K3-D additionally
+> selected [PIR-owned endpoint views](../pir/endpoint-projection-views.md) and
+> the bounded [OIR projection contract](../oir/projection-contract.md), without
+> freezing the integrated kernel or activating full Stage 4B.
 
 ## 1. Decision
 
@@ -148,53 +150,39 @@ ordinary owner authenticates and admits it.
 
 `ProtocolInterface[ProtocolId]` owns external naming and representation. It
 does not own verifier meaning. Several Interfaces may coexist for one
-Protocol, and substituting one cannot change the Core schedule, values,
+Protocol, and substituting one cannot change Core schedule, values,
 challenges, checks, terminal behavior, or transcript semantics.
 
-The Interface owns:
-
-- an identity-bearing algorithm-dependency description, whose pre-K1 closure
-  form must be replaced by exact per-algorithm module closure during K2/K3;
-- exact external ports and role entry points;
-- the sole statement byte language, whose successful decode is the dependent
-  total `ProtocolPublicAssignment` over every and only public Statement input
-  occurrence;
-- the sole proof byte language, whose presence conditions name exact
-  `ProofEventOccurrencePredicateRef`s—restricted action-occurrence
-  references—rather than activation guards;
-- total injective encoders and total tagged decoders whose pure result is only
-  `Decoded` or `Malformed`;
-- exactly one external outcome per terminal, with payload equal to that
-  terminal's ordered public outputs; and
-- application bindings that do not invent Protocol exposure.
-
-Continuing failures and `ProverDidNotProduce` have no Interface outcome tag.
-Terminating failures are represented only through their declared terminal.
-Nonterminal output ports acquire no external exposure merely by appearing in
-an Interface; Stage 4B must bind an exact OIR exposure occurrence and prove its
-availability.
+The active K3-B subject owns exact codecs and their law admission, total public
+plus verifier-private invocation assignment, scoped Statement presentation,
+role-qualified message/challenge/Oracle/module transport with uniform
+`Inactive | Active(T)` presence, and total Core-terminal plus FS-failure
+completion presentation. Admission checks declared presentation but does not
+assert that every endpoint role is projectable. K3-D therefore derives an
+exact role quotient and separately checks `InterfaceAdequateForEndpoint`; a
+missing proof transport or codec cannot be filled by OIR.
 
 ### 3.2 Prover Plan
 
-`ProverPlan[ProtocolId]` owns confidential construction descriptions, not
-verifier meaning or live providers. It contains typed private inputs,
-construction nodes, holes, private dependency contracts, supplier
-requirements, and proposed routes for exact prover obligations.
+`ProverPlan[ProtocolId]` owns finite recipes for the exact K2 prover-decision
+boundary, not verifier meaning or live providers. The active base subject
+contains typed witness ingress, advice and confidential context; private
+randomness availability; persistent strategy state; portable typed acyclic
+decision recipes; and separately exposed derived-witness outputs. It contains
+no opaque hole, supplier, resource, callback, artifact, or runtime value.
 
-Private Prover input occurrences enter only through their unique Plan-input
-binding. Raw Core private-randomness values cannot enter as ordinary or
-transitive operands; the only ingress is the ordered, owner-matched
-`UsesProtocolRandomness` effect channel. Route deadlines, basis-input maps,
-output bijections, singleton randomness ownership, and exact transitive
-randomness sequences are checked explicitly.
+Plan admission proves local grammar, typing, acyclicity, ABI and dependency
+closure. The separate `PlanRealizes` relation checks one recipe and legal move
+for every potential K2 decision. Neither proves witness truth, algorithm
+correctness, termination, honest-prover completeness, cost, secrecy, or proof
+acceptance.
 
-Plan admission proves local grammar, dependency, typing, acyclicity,
-private-ingress confinement, and deadline closure. `PlanRealizes` is a separate
-checked relation establishing exact private-input and obligation-route
-coverage. It does not prove value correctness, distributional fidelity, supplier behavior,
-termination, honest-prover success, completeness, cost, secrecy, or proof
-production. Stage 4B computes Plan-field placement from the exact OIR reader;
-the Plan cannot classify itself.
+K3-D derives a whole-source-provenance-free Plan-specialized endpoint quotient from the
+transitive closure reachable from decision moves and state-after roots. Dead
+declarations and nodes and derived witness exports do not rotate OIR; reachable
+algorithms, randomness, state and move semantics do. The selected base Plan
+has no below-OIR field branch. Stage 4B later completes execution and concrete
+realization; it does not reclassify the selected base Plan ambiently.
 
 ## 4. Relations and artifact ingress
 
@@ -588,26 +576,31 @@ and admitted before a checked source-to-target relation is issued.
 Stage 4A receives no pre-approved theorem: Stage 3 exports exact subjects,
 observers, regimes, maps, structural results, and qualified signatures only.
 
-### 13.2 Stage 4B: OIR, then Realization
+### 13.2 Bounded K3-D OIR seam, then Stage 4B
 
-OIR owns verifier and prover observable semantics, endpoint ABI and streams,
-witness capabilities, checks, decisions, completion, refusal, failure, local
-validity, source-relative projection, and OIR identity. It must:
+K3-D now gives OIR a minimum target-semantic endpoint body, local admission,
+source-relative projection, and identity split. It:
 
-- consume the exact Protocol, Interface, role, and explicitly classified Plan
-  basis;
+- consumes affirmative PIR-owned purpose views over exact admitted sources;
 - distinguish standalone `LocalOirValid` from source-relative
   `ProjectionCorrect` and coverage;
-- introduce exact exposure occurrences for outputs that Stage 3 intentionally
-  leaves unexposed; and
-- compute and report the precise Plan field read set and placement class.
+- derives exact static endpoint obligations and retains their source action and
+  anchored claim/reduction laws while deferring dynamic execution to Stage 4B;
+- identifies endpoint semantics independently from whole source provenance;
+  and
+- supports only FS verifier and Plan-specialized prover endpoints over the
+  bounded base effect/recipe profile, with explicit unsupported rows.
+
+Full Stage 4B must still select concrete OIR syntax and complete execution,
+optimization, Fresh/Oracle/module/generic-prover profiles, and preservation
+interfaces before Realization activates.
 
 Realization follows with suppliers, target artifacts, behavioral
 correspondence or refinement, deployment, invocation, sessions, results,
 resources, and operational refusal. Concrete suppliers and live runtime
 capabilities cannot flow backward and change OIR or Protocol meaning.
 
-Stage 4B receives no pre-approved endpoint or implementation claim. Stage 3
+Neither K3-D nor Stage 4B receives a pre-approved endpoint or implementation claim. Stage 3
 exports admitted source subjects, exact endpoint/prover obligations, failure
 and occurrence structure, Plan constraints, and explicit judgment signatures.
 
@@ -682,17 +675,18 @@ future Stage 4 and later schemas, and all eventual normative rules, belong with
 their domain owners under `pir/`, `relations/`, `analysis/`, `compiler/`,
 `oir/`, and `realization/`.
 
-The promoted Stage 3 package candidate is split across six durable owners:
+The reconciled candidate is split across exact durable owners:
 
-- [Protocol Semantic Model](../pir/protocol-model.md) owns Core, Protocol,
-  execution, failure, obligation, and admitted-view semantics;
+- [Interactive Core](../pir/interactive-core.md) owns active Core, Protocol,
+  execution, failure, claim/reduction, Oracle, and admitted-view semantics;
+- [Fiat--Shamir Construction](../pir/fiat-shamir.md) owns the active
+  challenge-interpretation and static construction views;
 - [Canonical PIR](../pir/canonical-pir.md) owns the closed MLIR profile,
   semantic/carrier bijection, authentication, admission, and replay;
 - [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md) owns
   the two dependent satellites and `PlanRealizes`;
-- [Fiat--Shamir Construction and Semantic Core
-  Composition](../pir/fiat-shamir-and-composition.md) owns transcript
-  construction, Fresh-to-FS checking, and semantic composition;
+- [Endpoint Projection Views](../pir/endpoint-projection-views.md) owns the
+  bounded OIR-purpose source quotients and checked extraction;
 - [Relation Model](../relations/relation-model.md) owns relation subjects,
   artifact ingress, binding, grounding, and the satisfaction boundary; and
 - [Protocol Correspondence](../relations/protocol-correspondence.md) owns

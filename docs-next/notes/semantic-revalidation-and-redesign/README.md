@@ -10,10 +10,10 @@
 > executable foundations, and the narrowly reclosed bounded K2
 > Protocol/Fiat--Shamir kernel are complete at their stated scopes; the final
 > K2 gates and focused follow-up are green in its validation record. K3-A
-> consumer-boundary reconstruction and bounded K3-B dependent-surface,
-> Relations, and carrier co-design and bounded K3-C minimum Analysis closure
-> completed on 2026-08-27; K3-D minimum OIR closure is next. R2 remains an evidence
-> track after the repaired
+> consumer-boundary reconstruction, bounded K3-B dependent-surface,
+> Relations, and carrier co-design, bounded K3-C minimum Analysis closure, and
+> bounded K3-D endpoint-projection closure completed on 2026-08-28. K3-E
+> integrated closure is next. R2 remains an evidence track after the repaired
 > `FRI-Grind-1` witness
 > and retained T3 `P01` Schnorr/Sigma result. `P02` is the next witness anchor
 > and may run early as a non-ratifying pressure probe, but its portfolio
@@ -81,7 +81,11 @@ below are reader cross-references rather than inventory edges.
   established all-`n` source capability and theorem truth, and pointwise
   family/member specialization. K3-C supplies no native family-source minting
   authority, so that transport is `CannotAnswer` absent external proof
-  authority. Minimum OIR closure remains K3-D work.
+  authority. Bounded K3-D then selected whole-source-provenance-free purpose views, a
+  target-semantic OIR identity and local admission, and a separate exact
+  source-relative projection relation for FS verifier and Plan-specialized
+  prover endpoints. Fresh, Oracle, module, and generic-prover cases remain
+  typed unsupported boundaries; K3-E integrated closure is next.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,

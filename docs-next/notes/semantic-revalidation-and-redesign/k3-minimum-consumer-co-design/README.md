@@ -1,7 +1,7 @@
 # K3 Minimum Consumer Co-design
 
 > **Document kind:** Temporary bounded work-package charter
-> **Document state:** Active; K3-A through bounded K3-C complete
+> **Document state:** Active; K3-A through bounded K3-D complete; K3-E next
 > **Provisional owner:** `project`, coordinating `pir`, `relations`,
 > `analysis`, and the minimum `oir` seam
 > **Authority:** None. This package records reconstruction, research questions,
@@ -11,7 +11,8 @@
 > **K3-A completed:** 2026-08-26
 > **K3-B completed:** 2026-08-27
 > **K3-C completed:** 2026-08-27
-> **Current gate:** K3-D minimum OIR closure is next.
+> **K3-D completed:** 2026-08-28
+> **Current gate:** K3-E integrated closure and reopen audit.
 > **Disposition:** Absorb selected results into exact durable owners, retain
 > only necessary rationale and deferred work, then delete this package before
 > cutover.
@@ -95,7 +96,7 @@ K3-A preserves these decisions unless a later discriminator falsifies them:
 | **K3-A** | Intake, dependency reconstruction, renewed research pressure, phase ordering, and reopen rules | Complete. Every consumer conflict identified by this intake is routed to an owner and, where a selection remains open, a discriminator; no downstream schema is silently ratified. |
 | **K3-B** | K2-dependent Interface/Plan surfaces, K1-aligned Relations and correspondence, value bridges, execution grounding, and a parallel minimum carrier lane | Exact Statement and witness roles are inhabited; claim/reduction and grounding question grammars are closed and finitely pressured at their named boundaries; equivalence, embedding, and lossy lanes are distinct; the Plan/OIR projection-view factorization is selected; every K2 semantic subject and field has a carrier disposition. Full claim/reduction execution remains a later integration obligation. |
 | **K3-C** | Minimum Analysis source, strategy/experiment, theorem-applicability, and quantitative-loss contracts | Three propositions stay distinct: a finite native source judgment; abstract-family AFK transport requiring an independently established uniform all-`n` source capability and theorem truth; and pointwise family/member specialization. K3-C supplies no native authority for the family source, so transport is `CannotAnswer` absent external proof authority. |
-| **K3-D** | Minimum PIR-to-OIR read and projection-obligation contract | The exact source basis, protected effects, imported-verification refusal, outcomes, Plan read partition, OIR identity binding, and typed unsupported boundary are closed without full OIR design or Stage 4B activation. |
+| **K3-D** | Minimum PIR-to-OIR read and projection-obligation contract | One exact source graph, independently admitted OIR, exact-equality projection, derived static contract, Plan read partition, identity binding, and typed support boundary close without activating Stage 4B execution or target-only pairing. |
 | **K3-E** | Integrated closure and reopen audit | K1/K2/K3 identities, views, read closures, negative boundaries, and two consumer extractions agree; every residual issue is routed to K4, Stage 4B, or a later owner. |
 
 **Completion reconciliation — 2026-08-27.** Bounded K3-B satisfied its stated
@@ -130,8 +131,45 @@ admitter now reproduces the full minting gate, and coherent small-index-domain
 and bounded-rejection-member substitutions are direct refusal regressions.
 Formula, operator, codomain, Statement-length, and native verifier-role
 bindings were tightened at the same seam. K2 was not reopened, K3 is not
-complete, and the semantic kernel is not frozen. K3-D is next; it has not
-started here.
+complete, and the semantic kernel is not frozen. The K3-D reconciliation below
+records the subsequent bounded result.
+
+**K3-D completion reconciliation — 2026-08-28.**
+Bounded K3-D selects a source-relative endpoint-projection contract without
+activating full OIR execution. PIR owns a fixed exhaustive five-root read law
+and one purpose-specific, whole-source-provenance-free `EndpointSourceView`.
+Its shared 11-field graph retains the role ABI, action spine, exact K2 FS laws,
+claims/anchors, and reachable Plan component. OIR independently constructs and
+admits the same graph under `LocalOirValid`.
+
+The exact profile uses canonical graph equality rather than the earlier six
+correspondence planes or a producer witness. The shared
+`EndpointContractLawV0` derives a non-identity static-obligation index, exact
+requirements, and completion interface. Runtime ports, guarded presence,
+path-sensitive state, draw instances, codec results, wire packaging, and
+reached outcomes are explicitly deferred to Stage 4B; all K2 FS laws remain in
+the identity-bearing graph. The semantic proposition binds purpose,
+source-view ID, `OirId`, and relation profile. Exact sources, manifest, live
+authorities, checker, and limits bind only the validation request and
+process-local capability.
+
+The bounded profile supports FS Verifier and Plan-specialized Prover endpoints
+over base non-Oracle, non-module effects. Fresh, generic Prover, every Oracle,
+and every module-effect case is typed Unsupported before extraction, with no
+partial target. Reachable Plan meaning enters the Prover graph while concrete
+suppliers remain Realization inputs. A first source-independent pair candidate
+was withdrawn: without exact normalized surface bodies, total duality tables,
+and pair-local bounds it could not be an authoritative decider. Target-only
+pairing is therefore an explicit Stage 4B OIR obligation, not a K3-D result.
+
+The 70-case finite instrument exercises source extraction, standalone OIR
+admission, exact graph mismatch partition, static-contract derivation,
+qualified outcomes, Plan quotient, and the support frontier. Its endpoint-pair
+comparison remains a non-authoritative pressure probe only. The instrument and
+all predecessor and documentation gates are green at the recorded validation
+snapshot. This completes only bounded K3-D: it is not a final OIR language,
+execution model, compiler-correctness proof, family-coverage result, or
+cryptographic claim. No selected result required reopening K1, K2, or K3-B.
 
 K3-B through K3-D may use parallel research and falsifier construction, but
 selection follows semantic dependency. K3-C cannot ratify a relation-bound
@@ -182,6 +220,13 @@ This README owns the direct K3 inventory:
 - [K3-C Validation](k3-c-validation.md) records the finite instrument,
   same-boundary mutations, documentation gates, exact claim boundary, and K3-D
   handoff.
+- [K3-D Research and Selection](k3-d-research-and-selection.md) records the
+  endpoint-projection research pressure, equal-resolution candidates, selected
+  source/OIR authority split, support frontier, identity partition, and reopen
+  verdict.
+- [K3-D Validation](k3-d-validation.md) records the three-lane finite
+  instrument, same-boundary mutations, documentation and predecessor gates,
+  exact bounded claim, and K3-E handoff.
 
 Later phases add records only when their question cannot be answered by
 updating this plan and their durable owners. A phase does not receive a large
@@ -202,7 +247,11 @@ it did not mint the abstract family's all-`n` source capability and therefore
 does not currently produce the AFK transport judgment without external proof
 authority. It also did not prove the imported theorem, Fresh uniformity or
 correspondence, the ROM, knowledge soundness, special soundness, or any concrete
-security claim.
+security claim. K3-D selected and finitely pressured only the P01 FS verifier
+and Plan-specialized prover projection profile. It did not select final OIR
+syntax or execution, prove source/target refinement, establish protocol-family
+coverage, support Fresh/Oracle/module/generic-prover endpoints, or activate
+Stage 4B.
 
 Current implementation behavior is regression and design evidence only. A
 current exact-coverage check, transcript interpreter, relation adapter, or

@@ -1,11 +1,11 @@
 # Protocol semantic model
 
-> **Document kind:** Target semantic specification
-> **Document state:** Active non-normative target
-> **Target status:** Stage 3.5 durable promotion
+> **Document kind:** Historical target snapshot
+> **Document state:** Superseded for K2; non-authoritative research input
+> **Target status:** Pre-K1/K2 Stage 3.5 snapshot
 > **Provisional owner:** `pir`
-> **Authority:** This document specifies the selected target for `docs-next/`.
-> It is non-normative until explicit consolidation and cutover. The current
+> **Authority:** None for current target semantics. The K2 owners named in the
+> routing notice below supersede this snapshot. The current
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
 > This document makes no implementation, compatibility, or migration claim.
 
@@ -27,7 +27,7 @@
 > definition source for those subjects. Carrier, Interface/Plan, and later
 > consumer integration remain separately open.
 
-## 1. Scope and architectural position
+## 1. Historical scope and architectural position
 
 This document defines the complete v0 Protocol semantic subject: a finite
 `InteractiveCore` plus exactly one interpretation of its public challenges.

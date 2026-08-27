@@ -808,7 +808,7 @@ BasisNeutralQuantitativeExpr<S> =
 ```
 
 The active expression constructors and their formation rules are closed in
-[`cryptographic-properties.md`](cryptographic-properties.md#6-exact-quantitative-forms).
+[`cryptographic-properties.md`](cryptographic-properties.md#6-typed-quantitative-language).
 Display names such as `n`, `Q`, and `epsilon` are expository aliases for local
 ordinals and do not enter an identity body. An unknown family declaration,
 payload schema, conclusion schema, subject kind, quantitative sort, or
