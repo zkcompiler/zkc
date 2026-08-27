@@ -24,10 +24,11 @@ The authority record independently pins:
 
 - the verified PDF SHA-256
   `93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c`;
-- Definition 4, Definitions 10--11, Lemma 4, the adaptive construction in
-  Section 6.3 immediately before Theorem 4, Remark 2 for deterministic
-  next-message access and rewinding, Remark 6 for consistent oracle answers
-  across reruns, and Theorem 4; and
+- Definition 4, Definitions 10--11, the Section 5 prose immediately before
+  Lemma 4 for already-defined oracle points, Lemma 4, the adaptive
+  construction in Section 6.3 immediately before Theorem 4, Remark 2 for
+  deterministic next-message access and rewinding, Remark 6 for consistent
+  oracle answers across subextractor reruns, and Theorem 4; and
 - SHA-256
   `f449dd9a41b8d4ef6f4ed7794d68398f81d562e31e828252fabd09ca551ae0bc`
   of this instrument's independently encoded selected-statement template.
@@ -96,12 +97,15 @@ member selectors, models, manifests, fixed public setup, full 20-role map,
 four formula correspondences, and exact K2 challenge-query encoding. The role
 coordinates are symbolic catalog positions, while separate resolved endpoints
 bind every abstract and native role to family or K1/K2/K3 content. The gate
-checks both endpoints and the exact twenty-entry shape. The
+checks both endpoints and the exact twenty-entry shape; the verifier and
+verifier-output roles resolve specifically to the K2 check and accepting
+terminal occurrences. The
 claim that those paired coordinates have the same denotation remains an
 explicit pointwise premise; structural equality is not promoted into semantic
 equivalence. The authenticated formula templates are parsed and normalized
 independently from the concrete typed expressions, then checked for exact
-canonical AST equality after substitution. The AFK
+canonical AST equality after substitution, and every member formula identity
+is re-derived from its ordinal, subject, and authenticated transform. The AFK
 Statement is raw `Y`; `(g,q,p,session,application-domain,namespace,framing)` is
 fixed public setup. Its timing flags are derived from the immutable K2 source
 objects and exact pre-challenge influence prefix; the remaining family-process
@@ -112,8 +116,9 @@ The family oracle index is finite bounded bitstrings. Its authenticated bound
 is a closed polynomial `u(n)`; at `n0`, the gate evaluates that polynomial and
 requires the result to match the bit length of K1's maximum raw canonical-datum
 encoding. This is the raw encoded query index, not the smaller payload capacity
-of a nested K1 `BytesValue`. Prover
-queries may be outside the
+of a nested K1 `BytesValue`. The selected native statement length is derived
+from the raw Statement and retained alongside an explicit pointwise length-
+embedding premise; it is not a free literal. Prover queries may be outside the
 verifier image but remain inside that bound, and all calls, including repeats
 and off-image calls, count toward `Q`. The local
 `lazy_random_function_trace` helper checks only realized finite-table behavior;
@@ -123,6 +128,13 @@ The stock modulus-11 bounded-rejection fixture is not selected for this
 specialization. Concrete SHA-256 execution is never random-oracle evidence.
 Programming, rerun, forking, and lazy sampling are theorem-level contracts,
 not K2 `ReplayRun` operations.
+
+Capability admission re-runs the complete correspondence formation gate and
+requires the reproduced capability to be exactly equal. It does not maintain a
+second hand-copied predicate list. In particular, a coherently re-fielded
+family with a smaller oracle-index bound and a modulus-11 bounded-rejection
+member are both refused at admission, even if every dependent identity is
+recomputed around the substitution.
 
 ## Quantitative boundary
 

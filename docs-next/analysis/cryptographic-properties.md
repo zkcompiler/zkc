@@ -23,11 +23,13 @@ preserves every property:
 
 The concrete theorem schema is pinned to the February 16, 2022 ePrint version 2
 of Attema, Fehr, and Klooß and uses Definition 4, Definition 10, Definition 11,
-Lemma 4, the adaptive construction in Section 6.3 immediately preceding
-Theorem 4, Remark 2 for deterministic next-message access and rewinding,
-Remark 6 for consistent oracle answers across reruns, and Theorem 4,
-[*Fiat--Shamir Transformation of Multi-Round Interactive Proofs (Extended
-Version)*](https://eprint.iacr.org/2021/1377.pdf). The corresponding published
+the Section 5 prose immediately before Lemma 4 for consistent answers at
+already defined oracle points in the three-move construction, Lemma 4, the
+adaptive construction in Section 6.3 immediately preceding Theorem 4,
+Remark 2 for deterministic next-message access and rewinding, Remark 6 for
+consistent oracle answers across subextractor reruns, and Theorem 4,
+[*Fiat--Shamir Transformation of Multi-Round Interactive
+Proofs*](https://eprint.iacr.org/2021/1377.pdf). The corresponding published
 article is [Journal of Cryptology 36, article 36
 (2023)](https://link.springer.com/article/10.1007/s00145-023-09478-y). A theorem
 schema for the journal revision must be formed separately with its own exact
@@ -2274,7 +2276,8 @@ AFKV2SelectedAuthority = {
   artifact_media_type: application/pdf,
   artifact_sha256:
     93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c,
-  exact_locators: [Definition 4, Definition 10, Definition 11, Lemma 4,
+  exact_locators: [Definition 4, Definition 10, Definition 11,
+    Section 5 prose immediately before Lemma 4, Lemma 4,
     Section 6.3 adaptive construction immediately before Theorem 4,
     Remark 2, Remark 6, Theorem 4]
 }

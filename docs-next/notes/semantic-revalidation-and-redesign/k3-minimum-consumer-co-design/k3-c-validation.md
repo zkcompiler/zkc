@@ -1,8 +1,8 @@
 # K3-C Validation
 
 > **Document kind:** Temporary bounded-validation record
-> **Document state:** Bounded validation complete; no independent final-PASS
-> claim
+> **Document state:** Bounded validation reclosed after a third adversarial
+> review; no post-repair independent final-PASS claim
 > **Provisional owner:** `project`, coordinating `analysis`, `pir`, and
 > `relations`
 > **Authority:** None. This page records finite design evidence and review; it
@@ -77,7 +77,8 @@ semantics. Those remain separately typed hypotheses/contracts.
 
 ## 4. Review and gates
 
-Two independent read-only adversarial review rounds returned `BLOCK`. The first
+Three independent read-only adversarial review rounds returned `BLOCK` at the
+checkpoint each reviewed. The first
 round found three critical formation or authority defects, six major binding or
 source-agreement defects, and non-blocking research suggestions. The critical
 findings were a dead malformed-input path, a family judgment that could shed
@@ -96,7 +97,7 @@ requires one fixed deterministic next-message prover. It also identified
 weaker typing, correspondence, setup-provenance, raw-index-carrier, and
 source-attribution surfaces.
 
-The final repair therefore:
+The second-round repair therefore:
 
 - parses and normalizes the authenticated family operator grammar separately
   from the concrete typed member formulas, with a direct member mutation that
@@ -113,10 +114,50 @@ The final repair therefore:
   without confusing it with a nested `BytesValue` payload bound.
 
 Two focused final-review invocations produced no review artifact because the
-external peer service timed out before inference. Consequently this record
-does **not** claim an independent final `PASS`. The two completed adversarial
-rounds and their repairs remain useful evidence; any later counterexample at
-the same boundary reopens K3-C under Section 5.
+external peer service timed out before inference. A later third review did
+complete. It independently rechecked the eight intended boundaries, reproduced
+the published gates and primary-source locators, and confirmed that most of the
+second-round repairs were effective. It nevertheless found one blocking
+architectural defect with two end-to-end exploits: the admission guard for a
+`ConcreteFamilyInstanceCorrespondence` maintained a weaker hand-copied check
+set than its formation gate. A caller could coherently recompute all dependent
+fields around either a 64-bit family index bound or the stock modulus-11,
+bounded-rejection member; admission accepted both and specialization minted an
+affirmative member judgment.
+
+The third-round reclosure:
+
+- makes admission re-run the complete formation gate and require exact
+  reproduction of the issued capability;
+- prevents the retained index-bound hypothesis from naming unequal checked
+  values and adds both coherent multi-field exploits as direct negative tests;
+- authenticates formula-role registration from the exact AFK transform, binds
+  invocation bounds to their experiment, actor, resource, formula, and subject,
+  and binds conclusions and pointwise formula identities to one exact subject;
+- consolidates and checks family operator signatures, bounds and cycle-checks
+  the closed operator grammar, and exercises the real AST guard directly;
+- parameterizes the extractor oracle contract by its exact challenge codomain,
+  adds the precise Section 5 locator, and adds executable coin-resampling
+  negatives;
+- derives and retains the selected native Statement length, bounds realized
+  raw oracle indices, checks the raw-versus-payload capacity difference, and
+  detects a mutable invocation map in the setup helper; and
+- resolves the native Verifier and VerifierOutput roles to the exact K2 check
+  and accepting terminal rather than proxy bindings or claim labels.
+
+The review also reported non-blocking hardening observations. They were not
+silently promoted to defects. The proposition identity already includes its
+canonical hypothesis context; the family source capability remains explicitly
+conditional; a degree-zero `u(n)` is permitted by the selected AFK source
+model; and role-map denotational equality remains an explicit premise rather
+than an executable equality test. Setup-timing flags remain evidence about this
+exact pinned member, not a general setup-provenance theorem. The query-table
+cache remains a performance device inside a reference instrument, not semantic
+or proof authority.
+
+Consequently this record claims a local bounded reclosure, not an independent
+post-repair `PASS`. Any later counterexample at the same boundary reopens K3-C
+under Section 5.
 
 The final local gates are:
 
@@ -125,7 +166,7 @@ The final local gates are:
 | K1 executable foundations | 116/116 passed |
 | K2 Protocol/Fiat--Shamir | 57/57 passed |
 | K3-B dependent surfaces | 29/29 passed |
-| K3-C Analysis closure | 87/87 passed |
+| K3-C Analysis closure | 100/100 passed |
 | P01 Schnorr/Sigma regression | 69/69 passed |
 | P01 frozen public replay | passed |
 | value-bridge probe | 18/18 passed |

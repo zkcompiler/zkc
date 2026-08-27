@@ -21,6 +21,7 @@ import importlib.util
 from pathlib import Path
 import re
 import sys
+from types import MappingProxyType
 from typing import Iterable
 
 
@@ -847,6 +848,7 @@ _FORMULA_PARAMETER_DOMAIN_REGISTRY: dict[
 ] = {}
 _FORMULA_RESULT_SORT_REGISTRY: dict[bytes, QuantitativeSort] = {}
 _FORMULA_ROLE_REGISTRY: dict[bytes, tuple[str, object]] = {}
+_FORMULA_PROFILE_REGISTRY: dict[bytes, QuantitativeFormulaProfile] = {}
 
 
 def _contains_probability_count_scale(expression: QuantitativeExpression) -> bool:
@@ -1025,6 +1027,10 @@ def quantitative_formula_id(profile: QuantitativeFormulaProfile) -> object:
     if prior_sort is not None and prior_sort is not profile.result_sort:
         raise QuantitativeError("formula identity was registered at two result sorts")
     _FORMULA_RESULT_SORT_REGISTRY[key] = profile.result_sort
+    prior_profile = _FORMULA_PROFILE_REGISTRY.get(key)
+    if prior_profile is not None and prior_profile != profile:
+        raise QuantitativeError("formula identity was registered with two bodies")
+    _FORMULA_PROFILE_REGISTRY[key] = profile
     return identifier
 
 
@@ -1054,6 +1060,9 @@ class ExpectedInvocationBound:
     rhs_formula_id: object
 
 
+_EXPECTED_INVOCATION_BOUND_REGISTRY: dict[bytes, ExpectedInvocationBound] = {}
+
+
 def expected_invocation_bound_id(bound: ExpectedInvocationBound) -> object:
     if type(bound) is not ExpectedInvocationBound:
         raise QuantitativeError("expected-invocation bound has the wrong shape")
@@ -1065,18 +1074,27 @@ def expected_invocation_bound_id(bound: ExpectedInvocationBound) -> object:
     _id_datum(bound.resource_dimension_id, "analysis.resource-dimension")
     _id_datum(bound.rhs_formula_id, "analysis.quantitative-formula")
     rhs_key = bound.rhs_formula_id.internal_reference()
+    rhs_profile = _FORMULA_PROFILE_REGISTRY.get(rhs_key)
     if (
         _FORMULA_RESULT_SORT_REGISTRY.get(rhs_key)
         is not QuantitativeSort.EXPECTED_COUNT_ADVERSARY_RUNNING_ALGORITHM
         or _FORMULA_ROLE_REGISTRY.get(rhs_key, (None, None))[0]
         != "expected-adversary-calls-upper-bound"
+        or rhs_profile is None
+        or type(rhs_profile.expression) is not QExpectedAdversaryCallsUpperBound
+        or rhs_profile.expression.resource_dimension_id != bound.resource_dimension_id
+        or rhs_profile.expression.actor_algorithm_id != bound.counted_algorithm_id
+        or bound.experiment_body_id
+        != subject_bound_experiment_body_id(
+            8, rhs_profile.exact_subject_id, "extractor-experiment"
+        )
     ):
         raise QuantitativeError(
-            "expected-invocation bound needs the registered expected-call formula role"
+            "expected-invocation bound is detached from its formula, actor, resource, or experiment"
         )
     if bound.comparator != "less-than-or-equal":
         raise QuantitativeError("expected-invocation bound needs <= orientation")
-    return _analysis_id(
+    identifier = _analysis_id(
         "analysis.expected-invocation-bound",
         k1.DatumRecord(
             (
@@ -1099,6 +1117,12 @@ def expected_invocation_bound_id(bound: ExpectedInvocationBound) -> object:
             )
         ),
     )
+    key = identifier.internal_reference()
+    prior = _EXPECTED_INVOCATION_BOUND_REGISTRY.get(key)
+    if prior is not None and prior != bound:
+        raise QuantitativeError("expected-invocation identity was registered twice")
+    _EXPECTED_INVOCATION_BOUND_REGISTRY[key] = bound
+    return identifier
 
 
 # ---------------------------------------------------------------------------
@@ -2256,31 +2280,36 @@ def random_oracle_capability_contract_id(
             profile.executable_scope,
         )
     )
-    if values not in (
-        (
-            "adaptive-prover",
-            "forbidden",
-            "not-applicable",
-            "not-applicable",
-            "all-oracle-calls-count-toward-Q",
-            "forbidden",
-            "not-applicable",
-            "not-applicable",
-            "analysis-process-admission",
-            "symbolic-contract-not-local-transition-execution",
-        ),
-        (
-            "uniform-black-box-extractor",
-            "theorem-granted",
-            "AFK-v2-Lemma-4-and-Remark-6-govern-existing-points",
-            "values-remain-in-exact-C8-random-function-codomain",
-            "all-adversary-oracle-calls-count-toward-Q",
-            "theorem-granted",
-            "AFK-v2-Remark-6-governs-table-coupling-across-reruns",
-            "AFK-v2-Remark-2-rewind-fixed-deterministic-prover-state-no-coin-resampling",
-            "AssumedTheorem-AFK-v2-Theorem-4-plus-process-correspondence",
-            "symbolic-contract-not-local-transition-execution",
-        ),
+    prover_values = (
+        "adaptive-prover",
+        "forbidden",
+        "not-applicable",
+        "not-applicable",
+        "all-oracle-calls-count-toward-Q",
+        "forbidden",
+        "not-applicable",
+        "not-applicable",
+        "analysis-process-admission",
+        "symbolic-contract-not-local-transition-execution",
+    )
+    extractor_match = re.fullmatch(
+        r"values-remain-in-exact-C([2-9]|[1-9][0-9]*)-random-function-codomain",
+        profile.programmed_value_rule,
+    )
+    extractor_values = (
+        "uniform-black-box-extractor",
+        "theorem-granted",
+        "AFK-v2-Section-5-before-Lemma-4-and-Remark-6-govern-existing-points",
+        profile.programmed_value_rule,
+        "all-adversary-oracle-calls-count-toward-Q",
+        "theorem-granted",
+        "AFK-v2-Remark-6-governs-table-coupling-across-reruns",
+        "AFK-v2-Remark-2-rewind-fixed-deterministic-prover-state-no-coin-resampling",
+        "AssumedTheorem-AFK-v2-Theorem-4-plus-process-correspondence",
+        "symbolic-contract-not-local-transition-execution",
+    )
+    if values != prover_values and (
+        extractor_match is None or values != extractor_values
     ):
         raise ExperimentError(
             "random-oracle programming/rerun contract was substituted"
@@ -2304,20 +2333,35 @@ AFK_PROVER_RO_CAPABILITY_CONTRACT_ID = random_oracle_capability_contract_id(
         "symbolic-contract-not-local-transition-execution",
     )
 )
-AFK_EXTRACTOR_RO_CAPABILITY_CONTRACT_ID = random_oracle_capability_contract_id(
-    RandomOracleCapabilityContractProfile(
-        "uniform-black-box-extractor",
-        "theorem-granted",
-        "AFK-v2-Lemma-4-and-Remark-6-govern-existing-points",
-        "values-remain-in-exact-C8-random-function-codomain",
-        "all-adversary-oracle-calls-count-toward-Q",
-        "theorem-granted",
-        "AFK-v2-Remark-6-governs-table-coupling-across-reruns",
-        "AFK-v2-Remark-2-rewind-fixed-deterministic-prover-state-no-coin-resampling",
-        "AssumedTheorem-AFK-v2-Theorem-4-plus-process-correspondence",
-        "symbolic-contract-not-local-transition-execution",
+_AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY: dict[bytes, int] = {}
+
+
+def afk_extractor_ro_capability_contract_id(challenge_count: int) -> object:
+    if type(challenge_count) is not int or challenge_count < 2:
+        raise ExperimentError("AFK extractor contract requires N >= 2")
+    identifier = random_oracle_capability_contract_id(
+        RandomOracleCapabilityContractProfile(
+            "uniform-black-box-extractor",
+            "theorem-granted",
+            "AFK-v2-Section-5-before-Lemma-4-and-Remark-6-govern-existing-points",
+            f"values-remain-in-exact-C{challenge_count}-random-function-codomain",
+            "all-adversary-oracle-calls-count-toward-Q",
+            "theorem-granted",
+            "AFK-v2-Remark-6-governs-table-coupling-across-reruns",
+            "AFK-v2-Remark-2-rewind-fixed-deterministic-prover-state-no-coin-resampling",
+            "AssumedTheorem-AFK-v2-Theorem-4-plus-process-correspondence",
+            "symbolic-contract-not-local-transition-execution",
+        )
     )
-)
+    key = identifier.internal_reference()
+    prior = _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY.get(key)
+    if prior is not None and prior != challenge_count:
+        raise ExperimentError("AFK extractor contract identity has two codomains")
+    _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY[key] = challenge_count
+    return identifier
+
+
+AFK_EXTRACTOR_RO_CAPABILITY_CONTRACT_ID = afk_extractor_ro_capability_contract_id(8)
 
 
 @dataclass(frozen=True)
@@ -2365,9 +2409,10 @@ def lazy_random_function_process_profile_id(
         "Q",
         "refuse-before-Q-plus-one-query",
         "symbolic-process-plus-finite-realized-trace-sanity-only",
-    ) or profile.capability_contract_id not in (
-        AFK_PROVER_RO_CAPABILITY_CONTRACT_ID,
-        AFK_EXTRACTOR_RO_CAPABILITY_CONTRACT_ID,
+    ) or (
+        profile.capability_contract_id != AFK_PROVER_RO_CAPABILITY_CONTRACT_ID
+        and profile.capability_contract_id.internal_reference()
+        not in _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY
     ):
         raise ExperimentError("lazy random-function process semantics were substituted")
     return _analysis_id(
@@ -2444,8 +2489,19 @@ def single_experiment_body_id(profile: SingleExperimentBodyProfile) -> object:
         expected_capability_contract_id = (
             AFK_PROVER_RO_CAPABILITY_CONTRACT_ID
             if profile.side == "prover-experiment"
-            else AFK_EXTRACTOR_RO_CAPABILITY_CONTRACT_ID
+            else profile.random_function_process.capability_contract_id
         )
+        if profile.side == "extractor-experiment":
+            contract_cardinality = _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY.get(
+                expected_capability_contract_id.internal_reference()
+            )
+            if (
+                contract_cardinality is None
+                or profile.oracle_query_abi_id != afk_query_abi_id(contract_cardinality)
+            ):
+                raise ExperimentError(
+                    "AFK extractor contract codomain disagrees with its query ABI"
+                )
         if (
             profile.random_function_process.query_abi_id != profile.oracle_query_abi_id
             or profile.random_function_process.capability_contract_id
@@ -3562,7 +3618,7 @@ def afk_extractor_experiment_body_profile(
             "increment-on-every-call-including-repeat-and-off-image",
             "Q",
             "refuse-before-Q-plus-one-query",
-            AFK_EXTRACTOR_RO_CAPABILITY_CONTRACT_ID,
+            afk_extractor_ro_capability_contract_id(challenge_count),
             "symbolic-process-plus-finite-realized-trace-sanity-only",
         ),
     )
@@ -3826,7 +3882,7 @@ def lazy_random_function_trace(
 ) -> tuple[int, ...]:
     """Execute one realized adaptive lazy-random-function trace.
 
-    `query_indices` may contain any canonical byte strings, including indices
+    `query_indices` may contain any raw byte strings, including indices
     outside the verifier image.  A fresh draw is consumed only for the first
     occurrence of each byte-equal index; repeats return the stored value.
     This executes the ideal finite law only and says nothing about SHA-256 or
@@ -3835,8 +3891,11 @@ def lazy_random_function_trace(
 
     if type(challenge_count) is not int or challenge_count < 2:
         raise ExperimentError("lazy random function requires N >= 2")
-    if any(type(index) is not bytes for index in query_indices):
-        raise ExperimentError("random-oracle query indices must be exact bytes")
+    if any(
+        type(index) is not bytes or len(index) > k1.MAX_CANONICAL_BYTES
+        for index in query_indices
+    ):
+        raise ExperimentError("random-oracle query indices must be bounded exact bytes")
     if any(
         type(draw) is not int or not 0 <= draw < challenge_count for draw in fresh_draws
     ):
@@ -4562,10 +4621,43 @@ def _property_conclusion_body(conclusion: PropertyConclusion) -> object:
             raise PropertyError(
                 "AFK conclusion formulas do not carry their exact roles on one subject"
             )
+        formula_subject = formula_roles[0][1]
+        if (
+            conclusion.extractor_profile_id
+            != subject_bound_afk_extractor_profile_id(formula_subject)
+            or conclusion.distribution_law_id
+            != subject_bound_afk_distribution_law_id(8, formula_subject)
+            or conclusion.success_event_id
+            != subject_bound_relation_success_event_id(formula_subject)
+        ):
+            raise PropertyError(
+                "AFK conclusion formulas are detached from its extractor, law, or event"
+            )
         _id_datum(
             conclusion.expected_invocation_bound_id,
             "analysis.expected-invocation-bound",
         )
+        invocation_bound = _EXPECTED_INVOCATION_BOUND_REGISTRY.get(
+            conclusion.expected_invocation_bound_id.internal_reference()
+        )
+        if (
+            invocation_bound is None
+            or invocation_bound.experiment_body_id
+            != subject_bound_experiment_body_id(
+                8, formula_subject, "extractor-experiment"
+            )
+            or invocation_bound.counted_algorithm_id
+            != subject_bound_afk_adversary_running_algorithm_id(8, formula_subject)
+            or invocation_bound.resource_dimension_id
+            != AFK_ADVERSARY_RUNNING_CALL_DIMENSION_ID
+            or _FORMULA_ROLE_REGISTRY.get(
+                invocation_bound.rhs_formula_id.internal_reference()
+            )
+            != ("expected-adversary-calls-upper-bound", formula_subject)
+        ):
+            raise PropertyError(
+                "AFK conclusion invocation bound is detached from its exact subject"
+            )
         if conclusion.prover_output_law != ("x", "pi", "aux", "v"):
             raise PropertyError("AFK prover-output law must preserve (x,pi,aux,v)")
         if conclusion.extractor_output_law != ("x", "pi", "aux", "v", "w"):
@@ -5031,8 +5123,6 @@ def price_loss_uses(
         )
     except AuthorityError as error:
         return AttemptOutcome(AttemptKind.REFUSED, detail=str(error))
-    except (k2.ModelError, k3.K3Error) as error:
-        return AttemptOutcome(AttemptKind.MALFORMED, detail=str(error))
     except (AnalysisError, k2.ModelError, k3.K3Error) as error:
         return AttemptOutcome(AttemptKind.MALFORMED, detail=str(error))
 
@@ -5911,14 +6001,16 @@ def _derive_fixed_setup_provenance(
     }
     actual_atoms = set(transcript_prefix_map)
     prefix_binds_setup = required_atoms <= actual_atoms
-    immutable_inputs = all(
-        getattr(type(item), "__dataclass_params__", None) is not None
-        and type(item).__dataclass_params__.frozen
-        for item in (
-            source.case.core,
-            source.case.construction,
-            source.case.invocation,
-        )
+    immutable_inputs = (
+        type(source.case.invocation.values) is MappingProxyType
+        and type(source.case.core.inputs) is tuple
+        and type(source.case.core.scopes) is tuple
+        and type(source.case.core.schedule) is tuple
+        and type(source.case.core.extensions) is tuple
+        and type(source.case.core.reductions) is tuple
+        and type(source.case.core.claim_uses) is tuple
+        and type(source.case.construction.application_domain) is bytes
+        and type(source.case.construction.version) is str
     )
     exact_challenge_position = (
         type(challenge_ordinal) is int
@@ -6675,6 +6767,7 @@ def afk_quantitative_formula_ids(
 ) -> dict[str, object]:
     """Form neutral formula identities consumed by the target proposition."""
 
+    _afk_transform_body(transform)
     source_er_parameters = (("N", "challenge-count"),)
     expected_call_parameters = (("Q", QuantitativeSort.QUERY_COUNT_ADVERSARY_RO.value),)
     formulas = {
@@ -7034,6 +7127,7 @@ AFK_PRIMARY_SOURCE_LOCATORS = (
     "Definition-4",
     "Definition-10",
     "Definition-11",
+    "Section-5-prose-immediately-before-Lemma-4",
     "Lemma-4",
     "Section-6.3-adaptive-construction-immediately-before-Theorem-4",
     "Theorem-4",
@@ -7250,6 +7344,24 @@ AFK_LOCAL_OPERATOR_CATALOG = (
         "ExpectedCount(LocalAdversaryInvocation(1))",
         "expected-count(Q+2)",
     ),
+)
+AFK_FAMILY_OPERATOR_SIGNATURES = (
+    (("n:LogicalNat", "Q:QueryCount"), "Probability"),
+    (
+        ("epsilon:Probability", "n:LogicalNat", "Q:QueryCount"),
+        "SignedProbabilityLowerBound",
+    ),
+    (
+        ("epsilon:Probability", "n:LogicalNat", "Q:QueryCount"),
+        "SignedProbabilityLowerBound",
+    ),
+    (("Q:QueryCount",), "ExpectedCount(AdversaryInvocations)"),
+)
+AFK_MEMBER_FORMULA_ROLES = (
+    "knowledge-error",
+    "knowledge-success-lower-bound",
+    "lemma4-transcript-extraction-lower-bound",
+    "expected-adversary-calls-upper-bound",
 )
 AFK_TRANSFORM_PROGRAM_COMPONENT = TheoremTemplateComponent(
     "transform-program",
@@ -7802,10 +7914,16 @@ LocalOperatorAst = tuple[object, ...]
 
 
 def _parse_local_operator_template(
-    operator: LocalOperatorTemplate, challenge_cardinality: int
+    operator: LocalOperatorTemplate,
+    challenge_cardinality: int,
+    *,
+    _active_ordinals: frozenset[int] = frozenset(),
 ) -> LocalOperatorAst:
     """Parse the authenticated, deliberately tiny AFK local-expression grammar."""
 
+    if operator.ordinal in _active_ordinals:
+        raise TheoremError("AFK local operator catalog contains a cycle")
+    active_ordinals = _active_ordinals | {operator.ordinal}
     text = operator.template_ast
     bounded = re.fullmatch(
         r"bounded-ratio\(\(([A-Za-z_][A-Za-z0-9_]*)\+(\d+)\),N\);"
@@ -7813,10 +7931,13 @@ def _parse_local_operator_template(
         text,
     )
     if bounded is not None:
+        offset = int(bounded.group(2))
+        if offset > MAX_EXPRESSION_NODES:
+            raise TheoremError("AFK local operator literal exceeds the finite bound")
         return (
             "bounded-ratio",
             bounded.group(1),
-            int(bounded.group(2)),
+            offset,
             challenge_cardinality,
             challenge_cardinality,
         )
@@ -7830,7 +7951,9 @@ def _parse_local_operator_template(
         return (
             "difference",
             _parse_local_operator_template(
-                AFK_LOCAL_OPERATOR_CATALOG[referenced], challenge_cardinality
+                AFK_LOCAL_OPERATOR_CATALOG[referenced],
+                challenge_cardinality,
+                _active_ordinals=active_ordinals,
             ),
         )
     scaled = re.fullmatch(
@@ -7839,8 +7962,10 @@ def _parse_local_operator_template(
     if scaled is not None:
         decrement = int(scaled.group(1))
         referenced = int(scaled.group(2))
-        if decrement >= challenge_cardinality or referenced not in range(
-            len(AFK_LOCAL_OPERATOR_CATALOG)
+        if (
+            decrement > MAX_EXPRESSION_NODES
+            or decrement >= challenge_cardinality
+            or referenced not in range(len(AFK_LOCAL_OPERATOR_CATALOG))
         ):
             raise TheoremError("AFK local scaling template is not total")
         return (
@@ -7850,12 +7975,17 @@ def _parse_local_operator_template(
                 challenge_cardinality - decrement,
             ),
             _parse_local_operator_template(
-                AFK_LOCAL_OPERATOR_CATALOG[referenced], challenge_cardinality
+                AFK_LOCAL_OPERATOR_CATALOG[referenced],
+                challenge_cardinality,
+                _active_ordinals=active_ordinals,
             ),
         )
     expected = re.fullmatch(r"expected-count\(([A-Za-z_][A-Za-z0-9_]*)\+(\d+)\)", text)
     if expected is not None:
-        return ("expected-count", expected.group(1), int(expected.group(2)))
+        offset = int(expected.group(2))
+        if offset > MAX_EXPRESSION_NODES:
+            raise TheoremError("AFK local operator literal exceeds the finite bound")
+        return ("expected-count", expected.group(1), offset)
     raise TheoremError("AFK local operator template is outside the closed grammar")
 
 
@@ -7904,27 +8034,9 @@ def _family_formula_body(
     family_id = family_definition_id(family)
     q_dimension = family_query_dimension_id(family)
     invocation_dimension = family_invocation_dimension_id(family)
-    signatures = {
-        0: (
-            ("n:LogicalNat", "Q:QueryCount"),
-            "Probability",
-        ),
-        1: (
-            ("epsilon:Probability", "n:LogicalNat", "Q:QueryCount"),
-            "SignedProbabilityLowerBound",
-        ),
-        2: (
-            ("epsilon:Probability", "n:LogicalNat", "Q:QueryCount"),
-            "SignedProbabilityLowerBound",
-        ),
-        3: (
-            ("Q:QueryCount",),
-            "ExpectedCount(AdversaryInvocations)",
-        ),
-    }
-    if operator.ordinal not in signatures:
+    if operator.ordinal not in range(len(AFK_FAMILY_OPERATOR_SIGNATURES)):
         raise TheoremError("family operator ordinal is outside the AFK catalog")
-    parameters, result_sort = signatures[operator.ordinal]
+    parameters, result_sort = AFK_FAMILY_OPERATOR_SIGNATURES[operator.ordinal]
     expression = _instantiate_local_operator_ast(operator, family.challenge_cardinality)
     return k1.DatumRecord(
         (
@@ -7957,24 +8069,7 @@ def family_operator_bindings(
     for operator in AFK_LOCAL_OPERATOR_CATALOG:
         body = _family_formula_body(family, operator)
         formula_id = _analysis_id("analysis.quantitative-formula", body)
-        parameters, result_sort = {
-            0: (
-                ("n:LogicalNat", "Q:QueryCount"),
-                "Probability",
-            ),
-            1: (
-                ("epsilon:Probability", "n:LogicalNat", "Q:QueryCount"),
-                "SignedProbabilityLowerBound",
-            ),
-            2: (
-                ("epsilon:Probability", "n:LogicalNat", "Q:QueryCount"),
-                "SignedProbabilityLowerBound",
-            ),
-            3: (
-                ("Q:QueryCount",),
-                "ExpectedCount(AdversaryInvocations)",
-            ),
-        }[operator.ordinal]
+        parameters, result_sort = AFK_FAMILY_OPERATOR_SIGNATURES[operator.ordinal]
         bindings.append(
             AFKFamilyOperatorBinding(
                 operator.ordinal,
@@ -7996,9 +8091,15 @@ def family_operator_bindings(
 
 
 def family_operator_binding_id(binding: AFKFamilyOperatorBinding) -> object:
+    if type(binding) is not AFKFamilyOperatorBinding:
+        raise TheoremError("family operator binding has the wrong exact shape")
+    expected_parameters, expected_result = (
+        AFK_FAMILY_OPERATOR_SIGNATURES[binding.local_ordinal]
+        if type(binding.local_ordinal) is int and binding.local_ordinal in range(4)
+        else ((), "")
+    )
     if (
-        type(binding) is not AFKFamilyOperatorBinding
-        or binding.local_ordinal not in range(4)
+        binding.local_ordinal not in range(4)
         or binding.source_operator != AFK_LOCAL_OPERATOR_CATALOG[binding.local_ordinal]
         or type(binding.challenge_cardinality) is not int
         or binding.challenge_cardinality < 2
@@ -8007,6 +8108,8 @@ def family_operator_binding_id(binding: AFKFamilyOperatorBinding) -> object:
             binding.source_operator,
             binding.challenge_cardinality,
         )
+        or binding.parameter_sorts != expected_parameters
+        or binding.result_sort != expected_result
     ):
         raise TheoremError("family operator binding has the wrong exact shape")
     return _analysis_id(
@@ -8909,7 +9012,7 @@ def transport_afk_family_knowledge(
         if type(source_capability) is not FamilySourcePropertyCapability:
             return AttemptOutcome(
                 AttemptKind.REFUSED,
-                detail="a fixed n0 judgment cannot fill the all-n family source slot",
+                detail="source carrier is not an all-n family source capability",
             )
         require_family_source_capability(family, source_capability)
         if theorem_truth is None:
@@ -9510,29 +9613,8 @@ def family_instance_role_maps(
             )
         ),
         _symbol_seq(correspondence.auxiliary_distribution_map),
-        k1.DatumRecord(
-            (
-                (
-                    0,
-                    _id_datum(
-                        correspondence.fresh_binding_id, "relations.protocol-binding"
-                    ),
-                ),
-                (
-                    1,
-                    _id_datum(
-                        correspondence.fiat_shamir_binding_id,
-                        "relations.protocol-binding",
-                    ),
-                ),
-            )
-        ),
-        k1.DatumSeq(
-            tuple(
-                k1.DatumSeq(tuple(k1.Symbol(x) for x in item))
-                for item in correspondence.claim_map
-            )
-        ),
+        occurrence_payload("verify"),
+        occurrence_payload("terminal"),
         k1.DatumRecord(
             (
                 (
@@ -9553,7 +9635,7 @@ def family_instance_role_maps(
         ),
         k1.DatumRecord(
             (
-                (0, k1.Nat(1)),
+                (0, k1.Nat(native_statement_octet_length(source))),
                 (1, k1.Symbol("octet")),
                 (2, _id_datum(projection_id, "analysis.native-subject-projection")),
             )
@@ -9840,12 +9922,7 @@ def pointwise_formula_correspondences(
         subject_id=concrete_subject_id,
     )
     concrete = afk_quantitative_formula_ids(transform)
-    member_by_ordinal = (
-        concrete["knowledge-error"],
-        concrete["knowledge-success-lower-bound"],
-        concrete["lemma4-transcript-extraction-lower-bound"],
-        concrete["expected-adversary-calls-upper-bound"],
-    )
+    member_by_ordinal = tuple(concrete[role] for role in AFK_MEMBER_FORMULA_ROLES)
     return tuple(
         PointwiseFormulaCorrespondence(
             binding.local_ordinal,
@@ -9867,14 +9944,56 @@ def pointwise_formula_correspondences(
 
 def _pointwise_formula_correspondence_id(
     correspondence: PointwiseFormulaCorrespondence,
+    family: AFKAsymptoticFamily,
+    concrete_subject_id: object,
 ) -> object:
+    if type(correspondence) is not PointwiseFormulaCorrespondence:
+        raise TheoremError(
+            "pointwise formula correspondence is detached from its exact formulas or AST"
+        )
+    family_definition_id(family)
+    _id_datum(concrete_subject_id, "analysis.concrete-family-member-subject")
+    ordinal = correspondence.local_ordinal
+    expected_binding = (
+        family_operator_bindings(family)[ordinal]
+        if type(ordinal) is int and ordinal in range(4)
+        else None
+    )
+    transform = afk_quantitative_transform(
+        k=2,
+        challenge_count=family.challenge_cardinality,
+        subject_id=concrete_subject_id,
+    )
+    expected_member_formula = (
+        afk_quantitative_formula_ids(transform)[AFK_MEMBER_FORMULA_ROLES[ordinal]]
+        if expected_binding is not None
+        else None
+    )
+    expected_member_ast = (
+        _member_operator_normal_form(transform, ordinal)
+        if expected_binding is not None
+        else None
+    )
+    expected_substitution = (
+        "member-index-n0=1",
+        "statement-length=1-octet",
+        f"N={family.challenge_cardinality}",
+        "qKS-profile=constant-one",
+        "checked-independent-canonical-AST-equality-after-substitution",
+    )
     if (
-        type(correspondence) is not PointwiseFormulaCorrespondence
-        or correspondence.local_ordinal not in range(4)
+        expected_binding is None
+        or correspondence.family_formula_id != expected_binding.formula_id
+        or correspondence.member_formula_id != expected_member_formula
+        or correspondence.family_instantiated_ast != expected_binding.instantiated_ast
+        or correspondence.member_normalized_ast != expected_member_ast
         or correspondence.family_instantiated_ast
         != correspondence.member_normalized_ast
+        or correspondence.exact_substitution != expected_substitution
     ):
-        raise TheoremError("pointwise formula correspondence lacks exact AST equality")
+        raise TheoremError(
+            "pointwise formula correspondence is detached from its exact formulas or AST"
+        )
     return _analysis_id(
         "analysis.pointwise-formula-correspondence",
         k1.DatumRecord(
@@ -10002,7 +10121,9 @@ def fixed_member_formula_adequacy_hypothesis_id(
                     k1.DatumSeq(
                         tuple(
                             _id_datum(
-                                _pointwise_formula_correspondence_id(item),
+                                _pointwise_formula_correspondence_id(
+                                    item, family, concrete_subject_id
+                                ),
                                 "analysis.pointwise-formula-correspondence",
                             )
                             for item in pointwise_formula_correspondences(
@@ -10049,6 +10170,54 @@ class ConcreteFamilyInstanceCorrespondence:
 _MEMBER_CORRESPONDENCE_ISSUER = object()
 
 
+def native_statement_octet_length(source: FreshFsRelationSource) -> int:
+    require_fresh_fs_relation_source(source)
+    statement = source.case.invocation.values.get("statement")
+    if type(statement) is not int or statement < 0:
+        raise TheoremError("native statement must be a nonnegative integer")
+    return max(1, (statement.bit_length() + 7) // 8)
+
+
+def fixed_member_length_embedding_hypothesis_id(
+    family: AFKAsymptoticFamily,
+    source: FreshFsRelationSource,
+    concrete_subject_id: object,
+) -> object:
+    native_length = native_statement_octet_length(source)
+    _id_datum(concrete_subject_id, "analysis.concrete-family-member-subject")
+    if native_length != 1:
+        raise TheoremError("selected n0 member requires one native statement octet")
+    return _analysis_id(
+        "analysis.hypothesis",
+        k1.DatumRecord(
+            (
+                (
+                    0,
+                    _id_datum(
+                        family_definition_id(family),
+                        "analysis.asymptotic-family-definition",
+                    ),
+                ),
+                (
+                    1,
+                    _id_datum(
+                        concrete_subject_id,
+                        "analysis.concrete-family-member-subject",
+                    ),
+                ),
+                (2, k1.Nat(1)),
+                (3, k1.Nat(native_length)),
+                (
+                    4,
+                    k1.Symbol(
+                        "checked-native-octet-length-with-assumed-family-index-embedding"
+                    ),
+                ),
+            )
+        ),
+    )
+
+
 def fixed_member_index_bound_hypothesis_id(
     family: AFKAsymptoticFamily,
     concrete_subject_id: object,
@@ -10061,8 +10230,12 @@ def fixed_member_index_bound_hypothesis_id(
         or type(native_index_bound) is not int
         or family_index_bound_at_n0 <= 0
         or native_index_bound <= 0
+        or family_index_bound_at_n0 != family_ro_index_bound_at(family, 1)
+        or family_index_bound_at_n0 != native_index_bound
     ):
-        raise TheoremError("pointwise oracle-index bounds must be positive integers")
+        raise TheoremError(
+            "pointwise oracle-index bounds must be positive and exactly agree"
+        )
     return _analysis_id(
         "analysis.hypothesis",
         k1.DatumRecord(
@@ -10127,6 +10300,9 @@ def fixed_member_required_hypotheses(
             fixed_member_process_hypothesis_id(family, correspondence),
             fixed_member_role_adequacy_hypothesis_id(family, source, correspondence),
             fixed_member_formula_adequacy_hypothesis_id(family, concrete_subject_id),
+            fixed_member_length_embedding_hypothesis_id(
+                family, source, concrete_subject_id
+            ),
             fixed_member_index_bound_hypothesis_id(
                 family,
                 concrete_subject_id,
@@ -10164,7 +10340,7 @@ def _member_correspondence_id(
                     ),
                 ),
                 (1, k1.Nat(1)),
-                (2, k1.Nat(1)),
+                (2, k1.Nat(native_statement_octet_length(source))),
                 (
                     3,
                     _id_datum(
@@ -10227,7 +10403,9 @@ def _member_correspondence_id(
                     k1.DatumSeq(
                         tuple(
                             _id_datum(
-                                _pointwise_formula_correspondence_id(item),
+                                _pointwise_formula_correspondence_id(
+                                    item, family, concrete_subject_id
+                                ),
                                 "analysis.pointwise-formula-correspondence",
                             )
                             for item in formula_correspondences
@@ -10266,9 +10444,11 @@ def form_concrete_family_instance_correspondence(
         _require_exact_special_soundness_model(source_model)
         _require_exact_adaptive_knowledge_model(target_model)
         profile = derive_schnorr_special_soundness_profile(source)
+        native_statement_length = native_statement_octet_length(source)
         if (
             family.challenge_cardinality != 8
             or profile.challenge_count != 8
+            or native_statement_length != 1
             or _model_parameters(source_model) != {"N": 8, "k": 2}
             or _model_parameters(target_model) != {"N": 8, "k": 2}
         ):
@@ -10345,13 +10525,13 @@ def form_concrete_family_instance_correspondence(
             if formula_correspondences is None
             else formula_correspondences
         )
+        for mapping in selected_formulas:
+            _pointwise_formula_correspondence_id(mapping, family, concrete_subject_id)
         if selected_formulas != expected_formulas:
             return AttemptOutcome(
                 AttemptKind.MALFORMED,
                 detail="pointwise formula substitution is not exact AST equality",
             )
-        for mapping in selected_formulas:
-            _pointwise_formula_correspondence_id(mapping)
         hypotheses = canonical_hypotheses(assumptions)
         required = fixed_member_required_hypotheses(
             family,
@@ -10392,7 +10572,7 @@ def form_concrete_family_instance_correspondence(
                 family,
                 family_definition_id(family),
                 1,
-                1,
+                native_statement_length,
                 source,
                 native_subject_projection_id(source),
                 concrete_subject_id,
@@ -10419,79 +10599,31 @@ def form_concrete_family_instance_correspondence(
 def require_concrete_family_instance_correspondence(
     capability: ConcreteFamilyInstanceCorrespondence,
 ) -> None:
-    if type(capability) is not ConcreteFamilyInstanceCorrespondence:
-        raise AuthorityError(
-            "pointwise family/member correspondence is forged or detached"
-        )
-    require_fresh_fs_relation_source(capability.source)
-    _require_exact_special_soundness_model(capability.source_model)
-    _require_exact_adaptive_knowledge_model(capability.target_model)
-    expected_correspondence = derive_fs_correspondence(
-        capability.source, capability.source_model, capability.target_model
-    )
-    expected_subject_id = concrete_member_subject_id(
-        capability.family,
-        capability.source,
-        expected_correspondence,
-        capability.source_member_selector_id,
-        capability.target_member_selector_id,
-    )
     if (
-        capability._issuer is not _MEMBER_CORRESPONDENCE_ISSUER
-        or capability.logical_index != 1
-        or capability.native_statement_length != 1
-        or capability.family.challenge_cardinality != 8
-        or capability.family_index_bound_at_n0
-        != family_ro_index_bound_at(capability.family, capability.logical_index)
-        or capability.native_index_bound != native_raw_query_index_bit_bound()
-        or capability.family_definition_id != family_definition_id(capability.family)
-        or capability.native_subject_projection_id
-        != native_subject_projection_id(capability.source)
-        or capability.concrete_member_subject_id != expected_subject_id
-        or capability.fs_correspondence != expected_correspondence
-        or capability.fs_correspondence_id
-        != fs_correspondence_id(capability.fs_correspondence)
-        or capability.source_member_selector_id
-        != fixed_family_member_selector_id(capability.source, "fresh")
-        or capability.target_member_selector_id
-        != fixed_family_member_selector_id(capability.source, "fiat-shamir")
-        or capability.role_maps
-        != family_instance_role_maps(
-            capability.family, capability.source, capability.fs_correspondence
-        )
-        or capability.formula_correspondences
-        != pointwise_formula_correspondences(capability.family, expected_subject_id)
+        type(capability) is not ConcreteFamilyInstanceCorrespondence
+        or capability._issuer is not _MEMBER_CORRESPONDENCE_ISSUER
     ):
         raise AuthorityError(
             "pointwise family/member correspondence is forged or detached"
         )
-    required = fixed_member_required_hypotheses(
+    expected_outcome = form_concrete_family_instance_correspondence(
         capability.family,
         capability.source,
         capability.source_model,
         capability.target_model,
-        capability.fs_correspondence,
-        family_index_bound_at_n0=capability.family_index_bound_at_n0,
-    )
-    if capability.retained_hypotheses != required:
-        raise TheoremError("pointwise correspondence premise support was substituted")
-    expected_id = _member_correspondence_id(
-        capability.family,
-        capability.source,
-        capability.source_model,
-        capability.target_model,
-        capability.fs_correspondence,
-        capability.concrete_member_subject_id,
-        capability.family_index_bound_at_n0,
-        capability.native_index_bound,
-        capability.source_member_selector_id,
-        capability.target_member_selector_id,
-        capability.role_maps,
-        capability.formula_correspondences,
         capability.retained_hypotheses,
+        correspondence=capability.fs_correspondence,
+        family_index_bound_at_n0=capability.family_index_bound_at_n0,
+        role_maps=capability.role_maps,
+        formula_correspondences=capability.formula_correspondences,
     )
-    if capability.correspondence_capability_id != expected_id:
-        raise TheoremError("pointwise correspondence identity was substituted")
+    if (
+        expected_outcome.kind is not AttemptKind.AFFIRMATIVE
+        or expected_outcome.value != capability
+    ):
+        raise AuthorityError(
+            "pointwise family/member correspondence does not reproduce its minting gate"
+        )
 
 
 @dataclass(frozen=True)
@@ -10547,14 +10679,6 @@ def specialize_afk_family_judgment(
             formula_map["lemma4-transcript-extraction-lower-bound"],
             formula_map["expected-adversary-calls-upper-bound"],
         )
-        expected_from_correspondence = tuple(
-            item.member_formula_id for item in correspondence.formula_correspondences
-        )
-        if formula_ids != expected_from_correspondence:
-            return AttemptOutcome(
-                AttemptKind.REFUSED,
-                detail="family target formulas do not specialize pointwise",
-            )
         conclusion = afk_knowledge_soundness_conclusion(transform)
         transform_id = afk_quantitative_transform_id(transform)
         conclusion_id = afk_target_conclusion_id(conclusion)

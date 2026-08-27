@@ -124,8 +124,14 @@ pointwise seam cannot generalize it. The selected theorem instance uses the
 Definition 10 quantifier order, `q = 1`, the raw Schnorr public key plus fixed
 public setup, the exact K2 logical-query carrier, and signed lower bounds. A
 finite instrument exercises formation and same-boundary refusals only; it
-proves no cryptographic property. K2 was not reopened, K3 is not complete, and
-the semantic kernel is not frozen. K3-D is next; it has not started here.
+proves no cryptographic property. A third adversarial review subsequently found
+that pointwise capability admission was weaker than formation; the repaired
+admitter now reproduces the full minting gate, and coherent small-index-domain
+and bounded-rejection-member substitutions are direct refusal regressions.
+Formula, operator, codomain, Statement-length, and native verifier-role
+bindings were tightened at the same seam. K2 was not reopened, K3 is not
+complete, and the semantic kernel is not frozen. K3-D is next; it has not
+started here.
 
 K3-B through K3-D may use parallel research and falsifier construction, but
 selection follows semantic dependency. K3-C cannot ratify a relation-bound

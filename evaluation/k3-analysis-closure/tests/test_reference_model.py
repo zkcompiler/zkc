@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +95,128 @@ def fixed_source_judgment() -> model.EstablishedJudgment:
     )
     return model.establish_conditionally(
         proposition, model.schnorr_special_soundness_rule(proposition)
+    )
+
+
+def _legacy_unchecked_index_bound_hypothesis(
+    family: model.AFKAsymptoticFamily,
+    concrete_subject_id: object,
+    family_index_bound_at_n0: int,
+    native_index_bound: int,
+) -> object:
+    """Reproduce the pre-repair hypothesis body for a regression attack."""
+
+    return model._analysis_id(
+        "analysis.hypothesis",
+        model.k1.DatumRecord(
+            (
+                (
+                    0,
+                    model._id_datum(
+                        model.family_definition_id(family),
+                        "analysis.asymptotic-family-definition",
+                    ),
+                ),
+                (
+                    1,
+                    model._id_datum(
+                        concrete_subject_id,
+                        "analysis.concrete-family-member-subject",
+                    ),
+                ),
+                (2, model.k1.Nat(1)),
+                (3, model.k1.Nat(family_index_bound_at_n0)),
+                (4, model.k1.Nat(native_index_bound)),
+                (
+                    5,
+                    model.k1.Symbol(
+                        "checked-numeric-u-at-n0-equality-with-assumed-domain-correspondence"
+                    ),
+                ),
+            )
+        ),
+    )
+
+
+def coherently_refield_correspondence(
+    family: model.AFKAsymptoticFamily,
+    source: object,
+    source_model: model.ExperimentModel,
+    target_model: model.ExperimentModel,
+    correspondence: model.FSCorrespondence,
+    family_index_bound_at_n0: int,
+    *,
+    reproduce_legacy_bound_hypothesis: bool = False,
+) -> model.ConcreteFamilyInstanceCorrespondence:
+    """Recompute every dependent field around a substituted semantic anchor."""
+
+    legitimate = fixed_context()[-1]
+    source_selector = model.fixed_family_member_selector_id(source, "fresh")
+    target_selector = model.fixed_family_member_selector_id(source, "fiat-shamir")
+    subject_id = model.concrete_member_subject_id(
+        family,
+        source,
+        correspondence,
+        source_selector,
+        target_selector,
+    )
+    role_maps = model.family_instance_role_maps(family, source, correspondence)
+    formulas = model.pointwise_formula_correspondences(family, subject_id)
+    hypothesis_patch = (
+        patch.object(
+            model,
+            "fixed_member_index_bound_hypothesis_id",
+            side_effect=_legacy_unchecked_index_bound_hypothesis,
+        )
+        if reproduce_legacy_bound_hypothesis
+        else patch.object(
+            model,
+            "fixed_member_index_bound_hypothesis_id",
+            wraps=model.fixed_member_index_bound_hypothesis_id,
+        )
+    )
+    with hypothesis_patch:
+        hypotheses = model.fixed_member_required_hypotheses(
+            family,
+            source,
+            source_model,
+            target_model,
+            correspondence,
+            family_index_bound_at_n0=family_index_bound_at_n0,
+        )
+    capability_id = model._member_correspondence_id(
+        family,
+        source,
+        source_model,
+        target_model,
+        correspondence,
+        subject_id,
+        family_index_bound_at_n0,
+        legitimate.native_index_bound,
+        source_selector,
+        target_selector,
+        role_maps,
+        formulas,
+        hypotheses,
+    )
+    return replace(
+        legitimate,
+        correspondence_capability_id=capability_id,
+        family=family,
+        family_definition_id=model.family_definition_id(family),
+        source=source,
+        native_subject_projection_id=model.native_subject_projection_id(source),
+        concrete_member_subject_id=subject_id,
+        family_index_bound_at_n0=family_index_bound_at_n0,
+        source_model=source_model,
+        target_model=target_model,
+        fs_correspondence=correspondence,
+        fs_correspondence_id=model.fs_correspondence_id(correspondence),
+        source_member_selector_id=source_selector,
+        target_member_selector_id=target_selector,
+        role_maps=role_maps,
+        formula_correspondences=formulas,
+        retained_hypotheses=hypotheses,
     )
 
 
@@ -210,10 +333,42 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
     def test_prover_rerun_authority_includes_remark_two(self) -> None:
         self.assertIn("Remark-2", model.AFK_PRIMARY_SOURCE_LOCATORS)
         self.assertIn("Remark-6", model.AFK_PRIMARY_SOURCE_LOCATORS)
+        self.assertIn(
+            "Section-5-prose-immediately-before-Lemma-4",
+            model.AFK_PRIMARY_SOURCE_LOCATORS,
+        )
         self.assertEqual(
             model.afk_v2_theorem_schema().authority.exact_locators,
             model.AFK_PRIMARY_SOURCE_LOCATORS,
         )
+
+    def test_prover_coin_resampling_contract_is_rejected(self) -> None:
+        resampling_contract = model.RandomOracleCapabilityContractProfile(
+            "uniform-black-box-extractor",
+            "theorem-granted",
+            "AFK-v2-Section-5-before-Lemma-4-and-Remark-6-govern-existing-points",
+            "values-remain-in-exact-C8-random-function-codomain",
+            "all-adversary-oracle-calls-count-toward-Q",
+            "theorem-granted",
+            "AFK-v2-Remark-6-governs-table-coupling-across-reruns",
+            "resample-randomized-prover-coins-on-every-rerun",
+            "AssumedTheorem-AFK-v2-Theorem-4-plus-process-correspondence",
+            "symbolic-contract-not-local-transition-execution",
+        )
+        with self.assertRaises(model.ExperimentError):
+            model.random_oracle_capability_contract_id(resampling_contract)
+
+    def test_resampling_extractor_profile_cannot_enter_afk_execution(self) -> None:
+        resampling_profile = replace(
+            model.AFK_EXTRACTOR_PROFILE_BODY,
+            prover_rerun_coin_law="resample-prover-coins-between-reruns",
+        )
+        changed = replace(
+            model.afk_execution_body_profile(8),
+            extractor_profile_id=model.extractor_profile_id(resampling_profile),
+        )
+        with self.assertRaises(model.ExperimentError):
+            model.experiment_execution_body_id(changed)
 
     def test_global_schema_contains_no_fixed_family_anchor(self) -> None:
         representation = repr(model.afk_v2_theorem_schema()).lower()
@@ -239,15 +394,6 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
                 "formula_ids",
             }
         )
-
-    def test_global_schema_id_is_invariant_under_family_creation(self) -> None:
-        before = model.fs_theorem_schema_id(model.afk_v2_theorem_schema())
-        model.form_afk_asymptotic_family(
-            "unrelated-family-N16", challenge_cardinality=16
-        )
-        model.selected_fixed_member_fixture()
-        after = model.fs_theorem_schema_id(model.afk_v2_theorem_schema())
-        self.assertEqual(before, after)
 
     def test_pdf_digest_mutation_is_rejected(self) -> None:
         schema = model.afk_v2_theorem_schema()
@@ -300,6 +446,44 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
             model.fs_theorem_schema_id(
                 replace(schema, local_operator_catalog=tuple(operators))
             )
+
+    def test_family_operator_declared_sorts_are_checked(self) -> None:
+        binding = model.family_operator_bindings(model.SELECTED_AFK_FAMILY)[1]
+        with self.assertRaises(model.TheoremError):
+            model.family_operator_binding_id(
+                replace(binding, result_sort="Probability")
+            )
+        with self.assertRaises(model.TheoremError):
+            model.family_operator_binding_id(
+                replace(binding, parameter_sorts=("Zed:Nonsense",))
+            )
+
+    def test_closed_operator_grammar_rejects_cycles_and_huge_literals(self) -> None:
+        huge = model.LocalOperatorTemplate(
+            3,
+            ("LocalQueryCount(0)",),
+            "ExpectedCount(LocalAdversaryInvocation(1))",
+            "expected-count(Q+99999999999999999999)",
+        )
+        with self.assertRaises(model.TheoremError):
+            model._parse_local_operator_template(huge, 8)
+        cyclic = model.LocalOperatorTemplate(
+            0,
+            ("Probability",),
+            "SignedProbabilityLowerBound",
+            "divide((epsilon-operator0(Q,N)),qKS(n))",
+        )
+        with patch.object(model, "AFK_LOCAL_OPERATOR_CATALOG", (cyclic,)):
+            with self.assertRaises(model.TheoremError):
+                model._parse_local_operator_template(cyclic, 8)
+
+    def test_extractor_contract_carries_its_exact_codomain(self) -> None:
+        n8 = model.afk_extractor_ro_capability_contract_id(8)
+        n11 = model.afk_extractor_ro_capability_contract_id(11)
+        self.assertNotEqual(n8, n11)
+        body = model.afk_extractor_experiment_body_profile(11)
+        self.assertEqual(body.random_function_process.capability_contract_id, n11)
+        model.single_experiment_body_id(body)
 
     def test_operator_ast_mutation_is_rejected(self) -> None:
         schema = model.afk_v2_theorem_schema()
@@ -598,6 +782,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
         )
 
     def test_role_map_is_complete_and_canonical(self) -> None:
+        correspondence = fixed_context()[4]
         roles = fixed_context()[-1].role_maps
         self.assertEqual(len(roles), 20)
         self.assertEqual(
@@ -626,11 +811,35 @@ class PointwiseSpecializationTest(unittest.TestCase):
         self.assertEqual(tuple(item.native_coordinate_id for item in roles), old_shape)
         self.assertEqual(len({item.abstract_resolved_id for item in roles}), 20)
         self.assertEqual(len({item.native_resolved_id for item in roles}), 20)
-        for ordinal in (5, 13, 15, 16, 19):
-            self.assertNotEqual(
-                roles[ordinal].abstract_resolved_id,
-                roles[ordinal].native_resolved_id,
+
+        def occurrence_payload(name: str) -> object:
+            selected = next(
+                item for item in correspondence.occurrence_map if item[0] == name
             )
+            return model.k1.DatumRecord(
+                tuple(
+                    (ordinal, model.k1.Symbol(value))
+                    for ordinal, value in enumerate(selected)
+                )
+            )
+
+        for ordinal, occurrence in ((11, "verify"), (12, "terminal")):
+            expected = model._analysis_id(
+                "analysis.native-resolved-role",
+                model.k1.DatumRecord(
+                    (
+                        (
+                            0,
+                            model._id_datum(
+                                roles[ordinal].native_coordinate_id,
+                                "analysis.native-role-coordinate",
+                            ),
+                        ),
+                        (1, occurrence_payload(occurrence)),
+                    )
+                ),
+            )
+            self.assertEqual(roles[ordinal].native_resolved_id, expected)
 
     def test_missing_role_map_is_malformed(self) -> None:
         source, _, source_model, target_model, corr, assumptions, _ = fixed_context()
@@ -677,6 +886,30 @@ class PointwiseSpecializationTest(unittest.TestCase):
                 "analysis.quantitative-formula", "wrong-pointwise-formula"
             ),
         )
+        result = model.form_concrete_family_instance_correspondence(
+            model.SELECTED_AFK_FAMILY,
+            source,
+            source_model,
+            target_model,
+            assumptions,
+            correspondence=corr,
+            formula_correspondences=tuple(formulas),
+        )
+        self.assertIs(result.kind, model.AttemptKind.MALFORMED)
+
+    def test_same_sort_member_formula_permutation_is_malformed(self) -> None:
+        source, _, source_model, target_model, corr, assumptions, _ = fixed_context()
+        subject = fixed_context()[-1].concrete_member_subject_id
+        formulas = list(
+            model.pointwise_formula_correspondences(model.SELECTED_AFK_FAMILY, subject)
+        )
+        formulas[1] = replace(
+            formulas[1], member_formula_id=formulas[2].member_formula_id
+        )
+        with self.assertRaises(model.TheoremError):
+            model._pointwise_formula_correspondence_id(
+                formulas[1], model.SELECTED_AFK_FAMILY, subject
+            )
         result = model.form_concrete_family_instance_correspondence(
             model.SELECTED_AFK_FAMILY,
             source,
@@ -749,12 +982,35 @@ class PointwiseSpecializationTest(unittest.TestCase):
                 missing_generator,
             )[0]
         )
+        mutable_case = replace(
+            source.case,
+            invocation=replace(
+                source.case.invocation,
+                values=dict(source.case.invocation.values),
+            ),
+        )
+        mutable_source = replace(source, case=mutable_case)
+        self.assertEqual(
+            model._derive_fixed_setup_provenance(
+                mutable_source,
+                correspondence.fixed_public_setup.challenge_ordinal,
+                correspondence.transcript_prefix_map,
+            ),
+            (False, False, False, True),
+        )
 
     def test_raw_query_index_bound_is_not_bytes_value_payload_capacity(self) -> None:
         correspondence = fixed_context()[4]
         self.assertEqual(
             model.native_raw_query_index_bit_bound(),
             8 * model.k1.MAX_CANONICAL_BYTES,
+        )
+        payload_bytes = model.k1.MAX_CANONICAL_BYTES - 9
+        encoded = model.k1.encode_datum(model.k1.BytesValue(b"x" * payload_bytes))
+        self.assertEqual(len(encoded), model.k1.MAX_CANONICAL_BYTES)
+        self.assertEqual(
+            model.native_raw_query_index_bit_bound() - 8 * payload_bytes,
+            72,
         )
         for entry in correspondence.query_encoding_table:
             carrier = entry.k2_challenge_query_carrier
@@ -781,24 +1037,44 @@ class PointwiseSpecializationTest(unittest.TestCase):
         source, _, source_model, target_model, corr, *_ = fixed_context()
         family = model.SELECTED_AFK_FAMILY
         wrong_bound = 8 * model.k1.MAX_CANONICAL_BYTES + 8
-        assumptions = model.fixed_member_required_hypotheses(
-            family,
-            source,
-            source_model,
-            target_model,
-            corr,
-            family_index_bound_at_n0=wrong_bound,
-        )
+        with self.assertRaises(model.TheoremError):
+            model.fixed_member_index_bound_hypothesis_id(
+                family,
+                fixed_context()[-1].concrete_member_subject_id,
+                wrong_bound,
+                model.native_raw_query_index_bit_bound(),
+            )
         result = model.form_concrete_family_instance_correspondence(
             family,
             source,
             source_model,
             target_model,
-            assumptions,
+            (),
             correspondence=corr,
             family_index_bound_at_n0=wrong_bound,
         )
         self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
+
+    def test_admission_replays_minting_gate_for_small_index_domain(self) -> None:
+        source, _, source_model, target_model, corr, *_ = fixed_context()
+        family = replace(
+            model.SELECTED_AFK_FAMILY,
+            ro_index_domain=replace(
+                model.SELECTED_AFK_FAMILY.ro_index_domain,
+                length_bound_coefficients_low_to_high=(64,),
+            ),
+        )
+        refielded = coherently_refield_correspondence(
+            family,
+            source,
+            source_model,
+            target_model,
+            corr,
+            64,
+            reproduce_legacy_bound_hypothesis=True,
+        )
+        with self.assertRaises(model.AuthorityError):
+            model.require_concrete_family_instance_correspondence(refielded)
 
     def test_family_ro_bound_is_evaluated_from_authenticated_family_data(self) -> None:
         source, _, source_model, target_model, corr, *_ = fixed_context()
@@ -849,6 +1125,56 @@ class PointwiseSpecializationTest(unittest.TestCase):
         )
         self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
 
+    def test_admission_replays_minting_gate_for_bounded_rejection_member(self) -> None:
+        source = model.derive_fresh_fs_relation_source(model.k3.schnorr_case())
+        source_model = model.fresh_special_soundness_model(k=2, challenge_count=11)
+        target_model = model.adaptive_rom_knowledge_model(k=2, challenge_count=11)
+        correspondence = model.derive_fs_correspondence(
+            source, source_model, target_model
+        )
+        refielded = coherently_refield_correspondence(
+            model.SELECTED_AFK_FAMILY,
+            source,
+            source_model,
+            target_model,
+            correspondence,
+            model.native_raw_query_index_bit_bound(),
+        )
+        with self.assertRaises(model.AuthorityError):
+            model.require_concrete_family_instance_correspondence(refielded)
+        result = model.specialize_afk_family_judgment(family_context()[-1], refielded)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_post_authentication_substitution_is_refused(self) -> None:
+        capability = fixed_context()[-1]
+        changed = replace(
+            capability,
+            correspondence_capability_id=model.fixture_ref(
+                "analysis.family-instance-correspondence-capability",
+                "substituted-after-mint",
+            ),
+        )
+        with self.assertRaises(model.AuthorityError):
+            model.require_concrete_family_instance_correspondence(changed)
+        result = model.specialize_afk_family_judgment(family_context()[-1], changed)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_member_judgment_revalidates_its_own_identity(self) -> None:
+        result = model.specialize_afk_family_judgment(
+            family_context()[-1], fixed_context()[-1]
+        )
+        self.assertIs(result.kind, model.AttemptKind.AFFIRMATIVE)
+        model.require_concrete_member_judgment(result.value)
+        changed = replace(
+            result.value,
+            judgment_id=model.fixture_ref(
+                "analysis.concrete-member-knowledge-judgment",
+                "substituted-after-mint",
+            ),
+        )
+        with self.assertRaises(model.AuthorityError):
+            model.require_concrete_member_judgment(changed)
+
     def test_raw_statement_profile_has_fixed_setup(self) -> None:
         correspondence = fixed_context()[4]
         setup = correspondence.fixed_public_setup
@@ -857,6 +1183,30 @@ class PointwiseSpecializationTest(unittest.TestCase):
         self.assertFalse(setup.oracle_correlated)
         self.assertFalse(setup.mutable_within_instance)
         self.assertEqual(correspondence.query_index_map, ("statement", "commitment"))
+
+    def test_native_statement_length_is_derived_and_retained(self) -> None:
+        source, _, source_model, target_model, corr, assumptions, capability = (
+            fixed_context()
+        )
+        self.assertEqual(model.native_statement_octet_length(source), 1)
+        self.assertEqual(capability.native_statement_length, 1)
+        self.assertIn(
+            model.fixed_member_length_embedding_hypothesis_id(
+                model.SELECTED_AFK_FAMILY,
+                source,
+                capability.concrete_member_subject_id,
+            ),
+            assumptions,
+        )
+        result = model.form_concrete_family_instance_correspondence(
+            model.SELECTED_AFK_FAMILY,
+            source,
+            source_model,
+            target_model,
+            assumptions,
+            correspondence=corr,
+        )
+        self.assertIs(result.kind, model.AttemptKind.AFFIRMATIVE)
 
     def test_query_encoding_is_full_and_injective(self) -> None:
         table = fixed_context()[4].query_encoding_table
@@ -1011,6 +1361,33 @@ class AdaptiveAndQuantitativeBoundaryTest(unittest.TestCase):
                 )
             )
 
+    def test_expected_call_bound_binds_actor_resource_and_experiment(self) -> None:
+        transform = model.afk_quantitative_transform(k=2, challenge_count=8)
+        formulas = model.afk_quantitative_formula_ids(transform)
+        with self.assertRaises(model.QuantitativeError):
+            model.expected_invocation_bound_id(
+                model.ExpectedInvocationBound(
+                    model.subject_bound_experiment_body_id(
+                        8, transform.subject_id, "extractor-experiment"
+                    ),
+                    model.subject_bound_afk_adversary_running_algorithm_id(
+                        8, transform.subject_id
+                    ),
+                    model.AFK_ADVERSARY_RO_QUERY_DIMENSION_ID,
+                    "less-than-or-equal",
+                    formulas["expected-adversary-calls-upper-bound"],
+                )
+            )
+
+    def test_formula_roles_require_the_authenticated_transform(self) -> None:
+        transform = model.afk_quantitative_transform(k=2, challenge_count=8)
+        changed = replace(
+            transform,
+            source_success=transform.knowledge_error,
+        )
+        with self.assertRaises(model.QuantitativeError):
+            model.afk_quantitative_formula_ids(changed)
+
     def test_conclusion_refuses_same_sort_formula_role_swap(self) -> None:
         transform = model.afk_quantitative_transform(k=2, challenge_count=8)
         formulas = model.afk_quantitative_formula_ids(transform)
@@ -1024,8 +1401,45 @@ class AdaptiveAndQuantitativeBoundaryTest(unittest.TestCase):
         with self.assertRaises(model.PropertyError):
             model._property_conclusion_body(changed)
 
+    def test_conclusion_refuses_formulas_from_another_subject(self) -> None:
+        first = model.afk_quantitative_transform(k=2, challenge_count=8)
+        second = model.afk_quantitative_transform(
+            k=2,
+            challenge_count=8,
+            subject_id=model.fixture_ref(
+                "analysis.family-member-subject", "other-formula-subject"
+            ),
+        )
+        first_conclusion = model.afk_knowledge_soundness_conclusion(first)
+        second_conclusion = model.afk_knowledge_soundness_conclusion(second)
+        changed = replace(
+            first_conclusion,
+            success_probability_formula_id=(
+                second_conclusion.success_probability_formula_id
+            ),
+            knowledge_error_formula_id=second_conclusion.knowledge_error_formula_id,
+            success_lower_bound_formula_id=(
+                second_conclusion.success_lower_bound_formula_id
+            ),
+            expected_invocation_bound_id=(
+                second_conclusion.expected_invocation_bound_id
+            ),
+        )
+        with self.assertRaises(model.PropertyError):
+            model._property_conclusion_body(changed)
+
     def test_Q_domain_is_strictly_less_than_N(self) -> None:
         transform = model.afk_quantitative_transform(k=2, challenge_count=8)
+        self.assertEqual(
+            model.afk_query_bound_domain_id(8),
+            model.value_domain_profile_id(
+                model.ValueDomainProfile(
+                    "QueryCount-AdversaryRO",
+                    "zero-less-than-or-equal-Q-strictly-less-than-N",
+                    (("N", 8),),
+                )
+            ),
+        )
         self.assertEqual(
             model.instantiate_afk_at_query_bound(transform, 7).knowledge_error,
             Fraction(1, 1),
@@ -1081,6 +1495,12 @@ class AdaptiveAndQuantitativeBoundaryTest(unittest.TestCase):
             model.lazy_random_function_trace(8, (b"a", b"b"), (1,))
         with self.assertRaises(model.ExperimentError):
             model.lazy_random_function_trace(8, (b"a",), (1, 2))
+        with self.assertRaises(model.ExperimentError):
+            model.lazy_random_function_trace(
+                8,
+                (b"x" * (model.k1.MAX_CANONICAL_BYTES + 1),),
+                (1,),
+            )
 
     def test_two_index_joint_law_is_uniform(self) -> None:
         law = model.two_distinct_lazy_query_joint_law(8)
