@@ -30,7 +30,7 @@ from typing import Any
 
 from .commitment import CommitmentTree, build_commitment
 from .committed import verify_committed_fri
-from .field import Fp, Fp2, canonical_polynomial, evaluate_polynomial
+from .field import Fp2, canonical_polynomial, evaluate_polynomial
 from .native import (
     LayerQueryAnswerOccurrence,
     NativeFriTrace,
@@ -90,6 +90,7 @@ EXECUTION_SCHEMA = "zkc.fri-ior.checked-concrete-construction-execution.v1"
 VALIDATION_LAW = "fri-ior.concrete-native-commit-grind-fs-commutation.v1"
 
 _GENERATION_VALIDATION_SOURCES = (
+    "__init__.py",
     "commitment.py",
     "committed.py",
     "field.py",
@@ -103,26 +104,9 @@ _GENERATION_VALIDATION_SOURCES = (
     "transcript.py",
 )
 
-# This public material is shared with the existing committed-verifier vector.
-PRIMARY_STATEMENT = {
-    "schema": "zkc.fri-ior.statement.v1",
-    "profile": "f97-binary-two-round",
-    "initial_oracle_role": "relation-supplied",
-}
-PRIMARY_APPLICATION_CONTEXT = {
-    "application": "native-fri-ior-validation",
-    "case": "primary",
-    "suffix": 71394,
-}
-PRIMARY_COEFFICIENTS = (3, 5, 7, 11, 13, 17, 19, 23)
-
 # One coefficient fold performs one extension multiplication and addition per
 # target coefficient, matching the native evaluator's abstract cost basis.
 COEFFICIENT_FOLD_FIELD_OPERATIONS = 2
-
-
-def _fp2(value: int) -> Fp2:
-    return Fp2(Fp.reduce(value), Fp(0))
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,31 +143,6 @@ class PrivateFriGenerationMaterial:
                     "FRI-IOR-GENERATION-002",
                     "each private commitment layer requires its exact sequence of sixteen-byte salts",
                 )
-
-
-def primary_private_generation_material() -> PrivateFriGenerationMaterial:
-    """Return the deterministic, explicitly non-production private vector."""
-
-    return PrivateFriGenerationMaterial(
-        coefficients=tuple(_fp2(value) for value in PRIMARY_COEFFICIENTS),
-        initial_layer_salts=tuple(
-            bytes((0x10 + index,)) * 16 for index in range(D0.order // 2)
-        ),
-        first_fold_layer_salts=tuple(
-            bytes((0x40 + index,)) * 16 for index in range(D1.order // 2)
-        ),
-    )
-
-
-def primary_public_inputs() -> CommittedFriPublicInputs:
-    """Return the primary raw public statement and application context."""
-
-    return CommittedFriPublicInputs(
-        EXACT_PROFILE,
-        CANONICAL_CONSTRUCTION_PLAN,
-        PRIMARY_STATEMENT,
-        PRIMARY_APPLICATION_CONTEXT,
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1294,14 +1253,9 @@ __all__ = [
     "CompiledOccurrenceMapEntry",
     "FrozenResourceSnapshot",
     "NativeToCommittedExecutionCandidate",
-    "PRIMARY_APPLICATION_CONTEXT",
-    "PRIMARY_COEFFICIENTS",
-    "PRIMARY_STATEMENT",
     "PrivateFriGenerationMaterial",
     "PublicFriArtifacts",
     "ValidationSourceArtifact",
     "check_native_to_committed_execution",
     "generate_honest_native_to_committed_execution",
-    "primary_private_generation_material",
-    "primary_public_inputs",
 ]

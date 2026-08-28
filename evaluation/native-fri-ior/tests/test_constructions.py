@@ -52,6 +52,7 @@ from friiormodel.provenance import (  # noqa: E402
     ValidationBasisId,
     artifact_content_id,
 )
+from friiormodel.report import _source_closure  # noqa: E402
 from friiormodel.subjects import (  # noqa: E402
     CHECKED_FIAT_SHAMIR_CONSTRUCTION,
     WORK_AUGMENTED_COMMITTED_FRI_CORE,
@@ -83,8 +84,8 @@ def _other_id(label: str = "other") -> SemanticId:
 def _private_material() -> PrivateFriGenerationMaterial:
     fixture = load_fixture(
         LOADED_REPOSITORY_ROOT,
-        "evaluation/native-fri-ior/cases/private-generation.json",
-        "owner-local-private-generation",
+        "evaluation/native-fri-ior/cases/owner-generation-input.json",
+        "owner-generation-input",
     )
     parsed = parse_private_generation(fixture.value)
     return PrivateFriGenerationMaterial(
@@ -392,10 +393,19 @@ class PositiveConstructionEvidenceTest(unittest.TestCase):
         self.assertIsNotNone(composition)
         receipts = (self.compilation, self.grinding, composition)
         source_root = Path(__file__).resolve().parents[1] / "friiormodel"
+        expected_source_closure = _source_closure(
+            LOADED_REPOSITORY_ROOT,
+            ("constructions.py",),
+        )
         for receipt in receipts:
             with self.subTest(receipt=type(receipt).__name__):
                 self.assertIsInstance(receipt.validation_basis_id, ValidationBasisId)
-                self.assertTrue(receipt.validation_source_manifest)
+                self.assertEqual(
+                    tuple(
+                        source.path for source in receipt.validation_source_manifest
+                    ),
+                    expected_source_closure,
+                )
                 for source in receipt.validation_source_manifest:
                     raw = (source_root / source.path).read_bytes()
                     self.assertEqual(

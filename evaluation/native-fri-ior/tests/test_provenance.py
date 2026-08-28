@@ -36,11 +36,11 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = PACKAGE_ROOT / "cases" / "source-ledger.json"
 
 EXPECTED_LEDGER_ARTIFACT_ID = (
-    "sha256:a767b8ba1526d86b2214f6b4127065e4d3707a6d1c43e76a965d71c222da42b4"
+    "sha256:ba4dada5a922a782e701aec30f3c336f99d09a615098786197d7c2f43e2b48d6"
 )
 EXPECTED_LEDGER_CANONICAL_ID = (
     "canonical-sha256:"
-    "b0240e40602156ead345260d442a263a0d9fa2e299c027a34c11ae59bed9624c"
+    "21052df00223647824a877e5a23941aadd8295658f29dda3e1e1537d2ed62839"
 )
 
 EXPECTED_PAPERS = {
@@ -239,7 +239,7 @@ class SourceLedgerFixtureTest(unittest.TestCase):
         cls.raw = LEDGER_PATH.read_bytes()
         cls.ledger = load_source_ledger(LEDGER_PATH)
 
-    def test_fixture_has_exact_constructive_scope_and_frozen_identity(self) -> None:
+    def test_fixture_has_exact_consulted_input_scope_and_frozen_identity(self) -> None:
         self.assertEqual(self.ledger.normalized_value["scope"], SOURCE_LEDGER_SCOPE)
         self.assertEqual(str(self.ledger.artifact_id), EXPECTED_LEDGER_ARTIFACT_ID)
         self.assertEqual(str(self.ledger.canonical_id), EXPECTED_LEDGER_CANONICAL_ID)
@@ -305,6 +305,28 @@ class SourceLedgerFixtureTest(unittest.TestCase):
         )
         for name in ("AFK", "Concrete FRI", "DEEP-FRI", "STIR", "WHIR"):
             self.assertIn(name, exclusions)
+
+    def test_usage_and_claim_boundary_do_not_overclaim_correspondence(self) -> None:
+        papers = {
+            entry["id"]: entry
+            for entry in self.ledger.normalized_value["papers"]
+        }
+        self.assertEqual(
+            papers["bcs-iop-2016-116-r2"]["usage"],
+            ["integrated-commitment-fiat-shamir-reference"],
+        )
+        for identifier in ("eccc-fri-tr17-134-r2", "icalp-fri-2018-14"):
+            self.assertIn("native-fri-design-reference", papers[identifier]["usage"])
+
+        boundary = self.ledger.normalized_value["claim_boundary"]
+        self.assertTrue(
+            all("consulted" in statement for statement in boundary["establishes"])
+        )
+        self.assertIn(
+            "exact correspondence between the executable witness and any cited source "
+            "algorithm, theorem instance, or implementation profile",
+            boundary["does_not_establish"],
+        )
 
     def test_binding_term_contains_value_and_both_distinct_content_ids(self) -> None:
         binding = self.ledger.binding_term()
@@ -523,6 +545,23 @@ class StrictLoadingTest(unittest.TestCase):
             OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
         )
         self.assertEqual(raised.exception.code, "FRI-IOR-PROVENANCE-018")
+
+    def test_bounded_json_rejects_non_scalar_text_and_in_memory_huge_ints(
+        self,
+    ) -> None:
+        for raw in (b'"\\ud800"', b'{"\\ud800":null}'):
+            with self.subTest(raw=raw), self.assertRaises(ModelFailure) as raised:
+                load_bounded_json_bytes(raw)
+            self.assertIs(raised.exception.outcome, OutcomeClass.MALFORMED)
+            self.assertEqual(raised.exception.code, "FRI-IOR-PROVENANCE-020")
+
+        with self.assertRaises(ModelFailure) as raised:
+            canonical_content_id(10**5000)
+        self.assertIs(
+            raised.exception.outcome,
+            OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+        )
+        self.assertEqual(raised.exception.code, "FRI-IOR-PROVENANCE-010")
 
 
 class OfflineAndDiagnosticTest(unittest.TestCase):

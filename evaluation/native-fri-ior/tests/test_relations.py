@@ -27,7 +27,15 @@ from friiormodel.native import (  # noqa: E402
     NativeFriTrace,
     OracleEntry,
 )
-from friiormodel.profile import D0, EXACT_PROFILE  # noqa: E402
+from friiormodel.profile import (  # noqa: E402
+    D0,
+    DEFAULT_VALIDATION_LIMITS,
+    EXACT_PROFILE,
+)
+from friiormodel.provenance import (  # noqa: E402
+    ValidationBasisId,
+    artifact_content_id,
+)
 from friiormodel.proof import (  # noqa: E402
     CommittedFriPublicInputs,
     PublicFriProof,
@@ -52,6 +60,7 @@ from friiormodel.relations import (  # noqa: E402
     infer_outer_computation_relation,
     logical_oracle_material_id,
 )
+from friiormodel.report import _source_closure  # noqa: E402
 from friiormodel.subjects import CHECKED_FIAT_SHAMIR_CONSTRUCTION  # noqa: E402
 from friiormodel.terms import (  # noqa: E402
     CheckResult,
@@ -79,6 +88,8 @@ APPLICATION_CONTEXT = {
     "suffix": 71394,
 }
 COEFFICIENT_VALUES = (3, 5, 7, 11, 13, 17, 19, 23)
+PACKAGE = Path(__file__).resolve().parents[1]
+ROOT = PACKAGE.parents[1]
 
 
 def _fp2(real: int, imaginary: int = 0) -> Fp2:
@@ -324,6 +335,166 @@ class RelationGroundingPositiveTest(unittest.TestCase):
             0,
         )
 
+    def test_semantic_grounding_is_stable_while_validation_receipt_rotates(
+        self,
+    ) -> None:
+        alternate_limits = replace(
+            DEFAULT_VALIDATION_LIMITS,
+            proof_bytes=DEFAULT_VALIDATION_LIMITS.proof_bytes + 1,
+        )
+        alternate_admission = check_fri_relation_grounding(
+            self.case.request,
+            self.case.relation_initial_oracle,
+            self.case.commitment_receipt,
+            self.case.composition_receipt,
+            self.case.public_inputs,
+            self.case.proof,
+            alternate_limits,
+        )
+        self.assertIs(alternate_admission.result.outcome, OutcomeClass.AFFIRMATIVE)
+        alternate = alternate_admission.checked_grounding
+        self.assertIsNotNone(alternate)
+        assert alternate is not None
+        self.assertEqual(
+            alternate.semantic_grounding_id,
+            self.checked.semantic_grounding_id,
+        )
+        self.assertNotEqual(
+            alternate.validation_basis_id,
+            self.checked.validation_basis_id,
+        )
+        self.assertNotEqual(alternate.identity, self.checked.identity)
+
+    def test_semantic_grounding_survives_upstream_validation_rotation(self) -> None:
+        alternate_limits = replace(
+            DEFAULT_VALIDATION_LIMITS,
+            proof_bytes=DEFAULT_VALIDATION_LIMITS.proof_bytes + 1,
+        )
+        private_material = PrivateFriGenerationMaterial(
+            self.case.source_coefficients,
+            _salts(0x10, D0.order // 2),
+            _salts(0x40, 4),
+        )
+        concrete_admission = generate_honest_native_to_committed_execution(
+            private_material,
+            self.case.public_inputs,
+            alternate_limits,
+        )
+        self.assertIs(concrete_admission.result.outcome, OutcomeClass.AFFIRMATIVE)
+        concrete = concrete_admission.checked_execution
+        self.assertIsNotNone(concrete)
+        assert concrete is not None
+
+        query_indices = tuple(
+            occurrence.initial_domain_index
+            for occurrence in self.case.transcript.query_occurrences
+        )
+        commitment_admission = generate_native_to_committed_fresh(
+            private_material,
+            STATEMENT,
+            APPLICATION_CONTEXT,
+            self.case.transcript.beta0,
+            self.case.transcript.beta1,
+            query_indices,
+            alternate_limits,
+        )
+        self.assertIs(commitment_admission.result.outcome, OutcomeClass.AFFIRMATIVE)
+        commitment = commitment_admission.checked_receipt
+        self.assertIsNotNone(commitment)
+        assert commitment is not None
+        self.assertEqual(
+            commitment.semantic_execution_id,
+            self.case.commitment_receipt.semantic_execution_id,
+        )
+        self.assertNotEqual(commitment.identity, self.case.commitment_receipt.identity)
+
+        grinding_admission = generate_committed_to_work_fresh(
+            commitment,
+            self.case.transcript.work_seed,
+            self.case.proof.grinding_nonce,
+            alternate_limits,
+        )
+        self.assertIs(grinding_admission.result.outcome, OutcomeClass.AFFIRMATIVE)
+        grinding = grinding_admission.checked_receipt
+        self.assertIsNotNone(grinding)
+        assert grinding is not None
+        composition_admission = compose_checked_constructions(
+            commitment,
+            grinding,
+            CHECKED_FIAT_SHAMIR_CONSTRUCTION,
+            concrete,
+            alternate_limits,
+        )
+        self.assertIs(composition_admission.result.outcome, OutcomeClass.AFFIRMATIVE)
+        composition = composition_admission.checked_receipt
+        self.assertIsNotNone(composition)
+        assert composition is not None
+        self.assertEqual(
+            composition.semantic_composition_id,
+            self.case.composition_receipt.semantic_composition_id,
+        )
+        self.assertNotEqual(composition.identity, self.case.composition_receipt.identity)
+
+        request = canonical_relation_grounding_request(
+            self.case.statement,
+            self.case.relation_initial_oracle,
+            commitment,
+            composition,
+            self.case.public_inputs,
+            self.case.proof,
+        )
+        self.assertNotEqual(request.identity, self.case.request.identity)
+        admission = check_fri_relation_grounding(
+            request,
+            self.case.relation_initial_oracle,
+            commitment,
+            composition,
+            self.case.public_inputs,
+            self.case.proof,
+        )
+        self.assertIs(admission.result.outcome, OutcomeClass.AFFIRMATIVE)
+        alternate = admission.checked_grounding
+        self.assertIsNotNone(alternate)
+        assert alternate is not None
+        self.assertEqual(alternate.semantic_term(), self.checked.semantic_term())
+        self.assertEqual(
+            alternate.semantic_grounding_id,
+            self.checked.semantic_grounding_id,
+        )
+        self.assertEqual(
+            alternate.occurrence_map_identity,
+            self.checked.occurrence_map_identity,
+        )
+        self.assertNotEqual(alternate.identity, self.checked.identity)
+
+    def test_validation_basis_binds_the_exact_relation_checker_source_closure(
+        self,
+    ) -> None:
+        self.assertIsInstance(self.checked.validation_basis_id, ValidationBasisId)
+        manifest = self.checked.validation_source_manifest
+        self.assertEqual(
+            tuple(source.path for source in manifest),
+            _source_closure(ROOT, ("relations.py",)),
+        )
+        self.assertIn("__init__.py", tuple(source.path for source in manifest))
+        source_root = PACKAGE / "friiormodel"
+        for source in manifest:
+            raw = (source_root / source.path).read_bytes()
+            self.assertEqual(
+                source.artifact_content_id,
+                str(artifact_content_id(raw)),
+            )
+            self.assertEqual(source.byte_length, len(raw))
+        validation = self.checked.to_term()["validation"]
+        self.assertEqual(
+            validation["basis_id"],
+            str(self.checked.validation_basis_id),
+        )
+        self.assertEqual(
+            validation["selected_resource_limits"],
+            DEFAULT_VALIDATION_LIMITS.to_term(),
+        )
+
     def test_portable_request_contains_no_oracle_carrier_or_generation_data(
         self,
     ) -> None:
@@ -345,6 +516,7 @@ class RelationGroundingPositiveTest(unittest.TestCase):
                 "composition_receipt",
                 "public_inputs",
                 "proof",
+                "limits",
             ),
         )
         self.assertEqual(
@@ -393,6 +565,20 @@ class ExactGroundingNegativeTest(unittest.TestCase):
         )
         self.assertIsNone(admission.checked_grounding)
         return admission.result
+
+    def test_relation_checker_requires_exact_immutable_limits(self) -> None:
+        admission = check_fri_relation_grounding(
+            self.case.request,
+            self.case.relation_initial_oracle,
+            self.case.commitment_receipt,
+            self.case.composition_receipt,
+            self.case.public_inputs,
+            self.case.proof,
+            object(),
+        )
+        self.assertIsNone(admission.checked_grounding)
+        self.assertIs(admission.result.outcome, OutcomeClass.MALFORMED)
+        self.assertEqual(admission.result.code, "FRI-IOR-RELATION-080")
 
     def test_statement_substitution_refuses_before_execution(self) -> None:
         statement = RelationStatementOccurrence(
@@ -500,7 +686,7 @@ class ExactGroundingNegativeTest(unittest.TestCase):
                 self.assertIs(result.outcome, OutcomeClass.REFUSED)
                 self.assertEqual(result.code, code)
 
-    def test_relation_oracle_is_supplied_independently_from_the_trace(self) -> None:
+    def test_separately_supplied_relation_oracle_must_match_the_trace(self) -> None:
         entries = list(self.case.relation_initial_oracle.entries)
         entries[-1] = OracleEntry(entries[-1].point, entries[-1].value + _fp2(1))
         changed_oracle = replace(
@@ -521,6 +707,22 @@ class ExactGroundingNegativeTest(unittest.TestCase):
         )
         self.assertIs(result.outcome, OutcomeClass.REFUSED)
         self.assertEqual(result.code, "FRI-IOR-RELATION-078")
+
+        accepted = check_fri_relation_grounding(
+            self.case.request,
+            self.case.relation_initial_oracle,
+            self.case.commitment_receipt,
+            self.case.composition_receipt,
+            self.case.public_inputs,
+            self.case.proof,
+        )
+        self.assertIsNotNone(accepted.checked_grounding)
+        self.assertTrue(
+            accepted.result.evidence["relation_side_oracle_supplied_separately"]
+        )
+        self.assertFalse(
+            accepted.result.evidence["establishes_independent_oracle_provenance"]
+        )
 
     def test_two_live_receipts_must_form_the_checked_join(self) -> None:
         changed_coefficients = list(self.case.source_coefficients)
@@ -742,7 +944,7 @@ class OuterRelationBoundaryTest(unittest.TestCase):
     def test_id_shaped_pseudo_grounding_is_rejected_at_formation(self) -> None:
         pseudo = semantic_id(
             "checked-fri-relation-grounding",
-            "fri-ior.relations.checked-grounding.v2",
+            "fri-ior.relations.checked-grounding.v3",
             {"looks": "plausible"},
         )
         with self.assertRaises(ModelFailure) as caught:
@@ -850,6 +1052,7 @@ class RelationCarrierFormationTest(unittest.TestCase):
                 None,
                 None,
                 (),
+                None,
                 None,
                 {},
                 _token=object(),

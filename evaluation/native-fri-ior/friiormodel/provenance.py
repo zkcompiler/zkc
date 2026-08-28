@@ -1,10 +1,12 @@
 """Strict, network-free provenance for the native FRI/IOR witness.
 
 The source ledger is a bounded public input.  It records identifiers and
-metadata for exact paper and selected Git-source bytes; it does not by itself
-retrieve or authenticate those upstream bytes, a theorem, an interpretation,
-a remote server, or an implementation-conformance claim.  Its own bytes are
-externally bound only when the caller supplies an expected artifact identity.
+metadata for exact paper and selected Git-source bytes consulted as design or
+comparison inputs; it does not claim exact executable correspondence and does
+not by itself retrieve or authenticate those upstream bytes, a theorem, an
+interpretation, a remote server, or an implementation-conformance claim.  Its
+own bytes are externally bound only when the caller supplies an expected
+artifact identity.
 
 This module deliberately keeps four identity lanes apart.  ``SemanticId`` is
 owned by :mod:`friiormodel.terms` and is never constructed here.
@@ -41,7 +43,7 @@ from .terms import (
 
 
 SOURCE_LEDGER_SCHEMA = "zkc.native-fri-ior.source-ledger.v1"
-SOURCE_LEDGER_SCOPE = "constructive-execution-basis"
+SOURCE_LEDGER_SCOPE = "consulted-design-input-manifest"
 
 MAX_LEDGER_BYTES = 1 << 16
 MAX_CANONICAL_JSON_BYTES = 1 << 16
@@ -107,10 +109,10 @@ _CLAIM_KEYS = (
 )
 
 _REQUIRED_ESTABLISHES = (
-    "declared exact-byte bindings for the five paper artifacts used by the executable "
-    "construction",
-    "declared exact Git revisions and selected implementation-source byte bindings used as "
-    "comparison inputs",
+    "declared exact-byte identities and metadata for five paper artifacts consulted as "
+    "design inputs",
+    "declared exact Git revisions and selected implementation-source byte identities "
+    "consulted as comparison inputs",
 )
 _REQUIRED_EXCLUSIONS = (
     "AFK multi-round Fiat-Shamir and other analysis-only theorem sources",
@@ -122,6 +124,8 @@ _REQUIRED_EXCLUSIONS = (
 _REQUIRED_NONCLAIMS = (
     "correct interpretation of a source",
     "theorem truth or applicability",
+    "exact correspondence between the executable witness and any cited source algorithm, "
+    "theorem instance, or implementation profile",
     "implementation conformance",
     "cryptographic security",
 )
@@ -293,6 +297,24 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def _bounded_json_tree(value: Any) -> JsonValue:
     nodes = 0
 
+    def bounded_text(current: str) -> str:
+        try:
+            encoded = current.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise _malformed(
+                "FRI-IOR-PROVENANCE-020",
+                "JSON text contains a non-scalar Unicode value",
+                boundary="provenance:json-parse",
+            ) from error
+        if len(encoded) > MAX_STRING_BYTES:
+            raise _failure(
+                OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+                "provenance:json-parse",
+                "FRI-IOR-PROVENANCE-013",
+                "a JSON string exceeds its byte bound",
+            )
+        return current
+
     def visit(current: Any, depth: int) -> JsonValue:
         nonlocal nodes
         nodes += 1
@@ -306,16 +328,16 @@ def _bounded_json_tree(value: Any) -> JsonValue:
         if current is None or isinstance(current, bool):
             return current
         if isinstance(current, int):
-            return current
-        if isinstance(current, str):
-            if len(current.encode("utf-8")) > MAX_STRING_BYTES:
+            if not -(1 << 63) <= current < 1 << 64:
                 raise _failure(
                     OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
                     "provenance:json-parse",
-                    "FRI-IOR-PROVENANCE-013",
-                    "a JSON string exceeds its byte bound",
+                    "FRI-IOR-PROVENANCE-010",
+                    "a JSON integer exceeds the evaluator's bounded integer carrier",
                 )
             return current
+        if isinstance(current, str):
+            return bounded_text(current)
         if isinstance(current, list):
             return [visit(item, depth + 1) for item in current]
         if isinstance(current, Mapping):
@@ -326,7 +348,7 @@ def _bounded_json_tree(value: Any) -> JsonValue:
                     boundary="provenance:json-parse",
                 )
             return {
-                key: visit(item, depth + 1)
+                bounded_text(key): visit(item, depth + 1)
                 for key, item in current.items()
             }
         raise _malformed(
@@ -644,7 +666,7 @@ def _reject_local_locators(value: JsonValue) -> None:
 
 @dataclass(frozen=True, slots=True)
 class PaperArtifact:
-    """Typed content binding for one selected primary paper artifact."""
+    """Typed content identity for one consulted primary paper artifact."""
 
     identifier: str
     artifact_content_id: ArtifactContentId
@@ -690,7 +712,7 @@ class SourceLedger:
         return deepcopy(self._normalized_value)
 
     def binding_term(self) -> dict[str, Any]:
-        """Return the complete public report binding for this ledger."""
+        """Return the complete public report binding for this declared ledger."""
 
         return {
             "scope": SOURCE_LEDGER_SCOPE,
@@ -910,7 +932,8 @@ def _validate_ledger_value(value: JsonValue) -> tuple[
     if paper_ids != PAPER_IDS:
         raise _malformed(
             "FRI-IOR-PROVENANCE-050",
-            "the constructive basis must contain exactly the five ordered paper IDs",
+            "the consulted design-input manifest must contain exactly the five ordered "
+            "paper IDs",
             boundary="provenance:ledger-formation",
         )
 
@@ -967,7 +990,8 @@ def _validate_ledger_value(value: JsonValue) -> tuple[
     ):
         raise _malformed(
             "FRI-IOR-PROVENANCE-053",
-            "the constructive ledger must retain its exact claim and exclusion boundary",
+            "the consulted design-input ledger must retain its exact claim and exclusion "
+            "boundary",
             boundary="provenance:ledger-formation",
         )
     return ledger, papers, snapshots
@@ -1136,10 +1160,10 @@ def check_source_ledger(
             "provenance:ledger-admission",
             "FRI-IOR-PROVENANCE-100",
             (
-                "the constructive source ledger is formed and matches the expected "
+                "the consulted design-input ledger is formed and matches the expected "
                 "exact-byte identity"
                 if externally_bound
-                else "the constructive source ledger is formed and self-identified"
+                else "the consulted design-input ledger is formed and self-identified"
             ),
             artifact_content_id=str(ledger.artifact_id),
             canonical_content_id=str(ledger.canonical_id),

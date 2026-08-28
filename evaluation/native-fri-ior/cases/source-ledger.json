@@ -1,6 +1,6 @@
 {
   "schema": "zkc.native-fri-ior.source-ledger.v1",
-  "scope": "constructive-execution-basis",
+  "scope": "consulted-design-input-manifest",
   "frozen_on": "2026-08-28",
   "papers": [
     {
@@ -18,7 +18,7 @@
         "byte_length": 3809663
       },
       "usage": [
-        "oracle-commitment-compilation"
+        "integrated-commitment-fiat-shamir-reference"
       ]
     },
     {
@@ -36,7 +36,7 @@
         "byte_length": 1140342
       },
       "usage": [
-        "native-fri-source"
+        "native-fri-design-reference"
       ]
     },
     {
@@ -91,7 +91,7 @@
         "byte_length": 562655
       },
       "usage": [
-        "native-fri-source",
+        "native-fri-design-reference",
         "verifier-query-semantics"
       ]
     }
@@ -282,8 +282,8 @@
   ],
   "claim_boundary": {
     "establishes": [
-      "declared exact-byte bindings for the five paper artifacts used by the executable construction",
-      "declared exact Git revisions and selected implementation-source byte bindings used as comparison inputs"
+      "declared exact-byte identities and metadata for five paper artifacts consulted as design inputs",
+      "declared exact Git revisions and selected implementation-source byte identities consulted as comparison inputs"
     ],
     "excluded_from_this_ledger": [
       "AFK multi-round Fiat-Shamir and other analysis-only theorem sources",
@@ -294,6 +294,7 @@
     "does_not_establish": [
       "correct interpretation of a source",
       "theorem truth or applicability",
+      "exact correspondence between the executable witness and any cited source algorithm, theorem instance, or implementation profile",
       "implementation conformance",
       "cryptographic security"
     ]

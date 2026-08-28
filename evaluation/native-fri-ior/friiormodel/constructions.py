@@ -95,6 +95,7 @@ GRINDING_VALIDATION_LAW = "fri-ior.committed-to-work-fresh-execution.v1"
 COMPOSITION_VALIDATION_LAW = "fri-ior.concrete-fresh-fs-composition.v1"
 
 _CONSTRUCTION_VALIDATION_SOURCES = (
+    "__init__.py",
     "commitment.py",
     "committed.py",
     "constructions.py",

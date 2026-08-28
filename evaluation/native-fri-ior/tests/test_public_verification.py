@@ -133,12 +133,8 @@ def _assemble_proof(
     selectors = tuple(
         OccurrenceSelector(
             occurrence.ordinal,
-            table_index[
-                (0, occurrence.initial_domain_index % (D0.order // 2))
-            ],
-            table_index[
-                (1, occurrence.initial_domain_index % (D1.order // 2))
-            ],
+            table_index[(0, occurrence.initial_domain_index % (D0.order // 2))],
+            table_index[(1, occurrence.initial_domain_index % (D1.order // 2))],
         )
         for occurrence in transcript.query_occurrences
     )
@@ -156,8 +152,8 @@ def _assemble_proof(
 def _build_case(
     coefficient_values: tuple[int, ...] = PRIMARY_COEFFICIENTS,
     *,
-    expected_beta0: tuple[int, int] = (10, 34),
-    expected_beta1: tuple[int, int] = (23, 31),
+    expected_beta0: tuple[int, int] = (1, 59),
+    expected_beta1: tuple[int, int] = (0, 54),
     corrupt_first_fold_index: int | None = None,
     terminal_transform=None,
 ) -> _PublicCase:
@@ -185,9 +181,9 @@ def _build_case(
         evaluate_polynomial(first_fold_coefficients, point) for point in D1.points()
     )
     if corrupt_first_fold_index is not None:
-        first_fold_evaluations[corrupt_first_fold_index] = (
-            first_fold_evaluations[corrupt_first_fold_index] + _fp2(1)
-        )
+        first_fold_evaluations[corrupt_first_fold_index] = first_fold_evaluations[
+            corrupt_first_fold_index
+        ] + _fp2(1)
     tree1 = build_commitment(
         D1,
         tuple(first_fold_evaluations),
@@ -240,7 +236,9 @@ class PublicCarrierTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.case = _build_case()
 
-    def test_verifier_surface_accepts_only_public_carriers_and_one_counter(self) -> None:
+    def test_verifier_surface_accepts_only_public_carriers_and_one_counter(
+        self,
+    ) -> None:
         self.assertEqual(
             tuple(inspect.signature(committed_model.verify_committed_fri).parameters),
             ("public_inputs", "proof", "resources"),
@@ -360,35 +358,29 @@ class PublicVerificationTest(unittest.TestCase):
         self.assertEqual(result.evidence["verdict"], "Accept")
         self.assertEqual(result.evidence["random_draw_count"], 4)
         self.assertEqual(result.evidence["logical_layer_query_occurrences"], 8)
-        self.assertEqual(result.evidence["unique_authenticated_openings"], 4)
+        self.assertEqual(result.evidence["unique_authenticated_openings"], 5)
         self.assertEqual(result.evidence["first_fold_checks"], 4)
         self.assertEqual(result.evidence["second_fold_checks"], 4)
         self.assertFalse(result.evidence["establishes_outer_relation"])
         self.assertFalse(result.evidence["establishes_proximity_theorem"])
         self.assertEqual(counter.logical_query_occurrences, 8)
-        self.assertEqual(counter.unique_openings, 4)
+        self.assertEqual(counter.unique_openings, 5)
         self.assertEqual(counter.proof_bytes, self.case.proof.canonical_byte_length)
 
-    def test_known_transcript_retains_duplicate_and_opposite_query_occurrences(
+    def test_known_transcript_retains_antipodal_query_occurrences(
         self,
     ) -> None:
         queries = tuple(
             occurrence.initial_domain_index
             for occurrence in self.case.transcript.query_occurrences
         )
-        self.assertEqual(queries, (6, 6, 1, 9))
+        self.assertEqual(queries, (3, 15, 11, 10))
         selectors = self.case.proof.occurrence_selectors
-        self.assertEqual(tuple(selector.ordinal for selector in selectors), (0, 1, 2, 3))
-        self.assertEqual(selectors[0], replace(selectors[1], ordinal=0))
         self.assertEqual(
-            selectors[2].layer0_opening_index,
-            selectors[3].layer0_opening_index,
+            tuple(selector.ordinal for selector in selectors), (0, 1, 2, 3)
         )
-        self.assertEqual(
-            selectors[2].layer1_opening_index,
-            selectors[3].layer1_opening_index,
-        )
-        self.assertEqual(len(self.case.proof.opening_table), 4)
+        self.assertEqual(selectors[0], replace(selectors[2], ordinal=0))
+        self.assertEqual(len(self.case.proof.opening_table), 5)
 
     def test_reordered_and_duplicate_opening_tables_are_refused(self) -> None:
         reordered = replace(
@@ -510,7 +502,7 @@ class PublicVerificationTest(unittest.TestCase):
 
     def test_authenticated_inconsistent_first_fold_is_refused(self) -> None:
         case = _build_case(
-            expected_beta1=(17, 10),
+            expected_beta1=(31, 57),
             corrupt_first_fold_index=0,
         )
         self.assertEqual(
@@ -518,7 +510,7 @@ class PublicVerificationTest(unittest.TestCase):
                 occurrence.initial_domain_index
                 for occurrence in case.transcript.query_occurrences
             ),
-            (1, 7, 0, 3),
+            (6, 5, 8, 7),
         )
         result = committed_model.verify_committed_fri(
             case.public_inputs,
@@ -565,11 +557,13 @@ class PublicVerificationTest(unittest.TestCase):
         self.assertIs(result.outcome, OutcomeClass.REFUSED)
         self.assertEqual(result.code, "FRI-IOR-COMMITTED-022")
 
-    def test_coherent_alternate_commitments_verify_without_source_comparison(self) -> None:
+    def test_coherent_alternate_commitments_verify_without_source_comparison(
+        self,
+    ) -> None:
         alternate = _build_case(
             (4, 5, 7, 11, 13, 17, 19, 23),
-            expected_beta0=(31, 75),
-            expected_beta1=(7, 75),
+            expected_beta0=(55, 38),
+            expected_beta1=(11, 64),
         )
         self.assertEqual(alternate.public_inputs, self.case.public_inputs)
         self.assertNotEqual(alternate.proof.cap0, self.case.proof.cap0)

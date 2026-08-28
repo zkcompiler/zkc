@@ -1,0 +1,21 @@
+{
+  "authority": "repository-frozen-report-local-operational-policy",
+  "claims": {
+    "part_of_protocol_semantics": false,
+    "proves_resource_optimality": false,
+    "semantic_authority": false
+  },
+  "limits": {
+    "field_operations": 1024,
+    "grinding_trials": 65536,
+    "hash_bytes": 32768,
+    "hash_calls": 128,
+    "logical_query_occurrences": 64,
+    "merkle_nodes": 128,
+    "proof_bytes": 65536,
+    "sampler_attempts": 1024,
+    "transcript_frames": 128,
+    "unique_openings": 64
+  },
+  "schema": "zkc.native-fri-ior.public-replay-policy.v1"
+}

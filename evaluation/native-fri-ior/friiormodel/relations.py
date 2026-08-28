@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+import stat
 from types import MappingProxyType
 from typing import Any, ClassVar
 
@@ -29,6 +31,7 @@ from .committed import verify_committed_fri
 from .constructions import (
     CheckedConstructionComposition,
     CheckedNativeToCommittedFreshRun,
+    ExactResourceUsage,
 )
 from .native import (
     INITIAL_ORACLE_NAME,
@@ -42,13 +45,20 @@ from .native import (
     resolve_layer_query_answers,
     verify_native_trace,
 )
-from .profile import D0, EXACT_PROFILE, admit_exact_profile
+from .profile import (
+    D0,
+    DEFAULT_VALIDATION_LIMITS,
+    EXACT_PROFILE,
+    admit_exact_profile,
+)
 from .proof import CommittedFriPublicInputs, PublicFriProof
+from .provenance import ValidationBasisId, artifact_content_id, validation_basis_id
 from .terms import (
     CheckResult,
     ModelFailure,
     OutcomeClass,
     ResourceCounter,
+    ResourceLimits,
     SemanticId,
     affirmative,
     checker_failure,
@@ -65,7 +75,28 @@ from .transcript import FiatShamirTranscript, derive_fiat_shamir_transcript
 RELATION_STATEMENT_SCHEMA = "zkc.fri-ior.relation-statement-occurrence.v1"
 INITIAL_ORACLE_BINDING_SCHEMA = "zkc.fri-ior.initial-oracle-material-binding.v1"
 GROUNDING_REQUEST_SCHEMA = "zkc.fri-ior.relation-grounding-request.v1"
-GROUNDING_RESULT_SCHEMA = "zkc.fri-ior.checked-relation-grounding.v1"
+GROUNDING_RESULT_SCHEMA = "zkc.fri-ior.relation-grounding.v1"
+CHECKED_GROUNDING_RECEIPT_SCHEMA = (
+    "zkc.fri-ior.checked-relation-grounding-receipt.v1"
+)
+RELATION_VALIDATION_LAW = "fri-ior.exact-relation-grounding.v1"
+
+_RELATION_VALIDATION_SOURCES = (
+    "__init__.py",
+    "commitment.py",
+    "committed.py",
+    "constructions.py",
+    "field.py",
+    "generation.py",
+    "native.py",
+    "profile.py",
+    "proof.py",
+    "provenance.py",
+    "relations.py",
+    "subjects.py",
+    "terms.py",
+    "transcript.py",
+)
 
 
 class FriOracleLayer(str, Enum):
@@ -727,6 +758,61 @@ class FriTerminalResidualBoundary:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class RelationValidationSource:
+    """One exact source file in the relation-grounding checker basis."""
+
+    path: str
+    artifact_content_id: str
+    byte_length: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.path) is not str
+            or self.path not in _RELATION_VALIDATION_SOURCES
+            or type(self.artifact_content_id) is not str
+            or not self.artifact_content_id.startswith("sha256:")
+            or type(self.byte_length) is not int
+            or self.byte_length <= 0
+        ):
+            raise malformed(
+                "relations:validation-source-formation",
+                "FRI-IOR-RELATION-081",
+                "a validation source requires an exact path, digest, and byte length",
+            )
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "path": self.path,
+            "artifact_content_id": self.artifact_content_id,
+            "byte_length": self.byte_length,
+        }
+
+
+def _relation_source_manifest() -> tuple[RelationValidationSource, ...]:
+    root = Path(__file__).resolve().parent
+    manifest: list[RelationValidationSource] = []
+    for relative in _RELATION_VALIDATION_SOURCES:
+        path = root / relative
+        metadata = path.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            raise ModelFailure(
+                OutcomeClass.MISSING_DEPENDENCY,
+                "relations:validation-source-load",
+                "FRI-IOR-RELATION-082",
+                "a required relation-checker source is not a regular non-symlink file",
+            )
+        raw = path.read_bytes()
+        manifest.append(
+            RelationValidationSource(
+                relative,
+                str(artifact_content_id(raw)),
+                len(raw),
+            )
+        )
+    return tuple(manifest)
+
+
 _GROUNDING_RECEIPT_TOKEN = object()
 
 
@@ -743,13 +829,19 @@ class CheckedFriRelationGrounding:
     statement_grounding_id: SemanticId
     initial_oracle_binding_id: SemanticId
     relation_initial_oracle_material_id: SemanticId
+    commitment_semantic_execution_id: SemanticId
+    construction_semantic_composition_id: SemanticId
     commitment_receipt_id: SemanticId
     construction_composition_receipt_id: SemanticId
     construction_input_occurrence_ids: tuple[SemanticId, ...]
     cap_occurrence_ids: tuple[SemanticId, ...]
     opening_occurrence_groundings: tuple[OpeningOccurrenceGrounding, ...]
     terminal_residual_boundary: FriTerminalResidualBoundary
-    resource_usage: tuple[tuple[str, int], ...]
+    semantic_grounding_id: SemanticId
+    validation_basis_id: ValidationBasisId
+    validation_source_manifest: tuple[RelationValidationSource, ...]
+    validation_limits: ResourceLimits
+    resource_usage: ExactResourceUsage
 
     def __init__(
         self,
@@ -759,7 +851,8 @@ class CheckedFriRelationGrounding:
         composition_receipt: CheckedConstructionComposition,
         opening_occurrence_groundings: tuple[OpeningOccurrenceGrounding, ...],
         terminal_residual_boundary: FriTerminalResidualBoundary,
-        resource_usage: dict[str, int],
+        validation_limits: ResourceLimits,
+        resource_usage: ExactResourceUsage,
         *,
         _token: object,
     ) -> None:
@@ -776,6 +869,12 @@ class CheckedFriRelationGrounding:
             "initial_oracle_binding_id": request.initial_oracle_binding.identity,
             "relation_initial_oracle_material_id": (
                 relation_initial_oracle_material_id
+            ),
+            "commitment_semantic_execution_id": (
+                commitment_receipt.semantic_execution_id
+            ),
+            "construction_semantic_composition_id": (
+                composition_receipt.semantic_composition_id
             ),
             "commitment_receipt_id": commitment_receipt.identity,
             "construction_composition_receipt_id": composition_receipt.identity,
@@ -804,19 +903,59 @@ class CheckedFriRelationGrounding:
         )
         object.__setattr__(
             self,
+            "semantic_grounding_id",
+            semantic_id(
+                "fri-relation-grounding",
+                "fri-ior.relations.semantic-grounding.v1",
+                self.semantic_term(),
+            ),
+        )
+        validation_source_manifest = _relation_source_manifest()
+        object.__setattr__(
+            self,
+            "validation_basis_id",
+            validation_basis_id(
+                "relation-grounding-checker",
+                {
+                    "law": RELATION_VALIDATION_LAW,
+                    "selected_resource_limits": validation_limits.to_term(),
+                    "sources": [
+                        source.to_term() for source in validation_source_manifest
+                    ],
+                },
+            ),
+        )
+        object.__setattr__(
+            self,
+            "validation_source_manifest",
+            validation_source_manifest,
+        )
+        object.__setattr__(self, "validation_limits", validation_limits)
+        object.__setattr__(
+            self,
             "resource_usage",
-            tuple(sorted(resource_usage.items())),
+            resource_usage,
         )
 
     @property
     def occurrence_map_identity(self) -> SemanticId:
-        """Identity of the exact checked selected-occurrence correspondence."""
+        """Semantic identity of the selected-occurrence correspondence."""
 
         return semantic_id(
             "fri-opening-occurrence-map",
             "fri-ior.relations.opening-occurrence-map.v1",
             {
-                "request_id": _semantic_ref(self.request_id),
+                "statement_grounding_id": _semantic_ref(
+                    self.statement_grounding_id
+                ),
+                "semantic_execution_joins": {
+                    "native_to_committed_fresh_execution_id": _semantic_ref(
+                        self.commitment_semantic_execution_id
+                    ),
+                    "construction_composition_id": _semantic_ref(
+                        self.construction_semantic_composition_id
+                    ),
+                },
                 "ordered_groundings": [
                     item.to_term() for item in self.opening_occurrence_groundings
                 ],
@@ -826,20 +965,17 @@ class CheckedFriRelationGrounding:
     def semantic_term(self) -> dict[str, Any]:
         return {
             "schema": GROUNDING_RESULT_SCHEMA,
-            "request_id": _semantic_ref(self.request_id),
             "statement_grounding_id": _semantic_ref(self.statement_grounding_id),
-            "initial_oracle_binding_id": _semantic_ref(
-                self.initial_oracle_binding_id
-            ),
+            "initial_oracle_binding_id": _semantic_ref(self.initial_oracle_binding_id),
             "relation_initial_oracle_material_id": _semantic_ref(
                 self.relation_initial_oracle_material_id
             ),
-            "live_receipt_joins": {
-                "commitment_receipt_id": _semantic_ref(
-                    self.commitment_receipt_id
+            "semantic_execution_joins": {
+                "native_to_committed_fresh_execution_id": _semantic_ref(
+                    self.commitment_semantic_execution_id
                 ),
-                "construction_composition_receipt_id": _semantic_ref(
-                    self.construction_composition_receipt_id
+                "construction_composition_id": _semantic_ref(
+                    self.construction_semantic_composition_id
                 ),
             },
             "construction_input_occurrence_ids": [
@@ -849,19 +985,15 @@ class CheckedFriRelationGrounding:
             "cap_occurrence_ids": [
                 _semantic_ref(identity) for identity in self.cap_occurrence_ids
             ],
-            "opening_occurrence_map_id": _semantic_ref(
-                self.occurrence_map_identity
-            ),
+            "opening_occurrence_map_id": _semantic_ref(self.occurrence_map_identity),
             "opening_occurrence_groundings": [
                 item.to_term() for item in self.opening_occurrence_groundings
             ],
-            "terminal_residual_boundary": (
-                self.terminal_residual_boundary.to_term()
-            ),
+            "terminal_residual_boundary": (self.terminal_residual_boundary.to_term()),
             "construction_relation_class": (
                 RepresentationClass.NON_ISOMORPHIC_CONSTRUCTION_RELATION.value
             ),
-            "scope": "one-checked-finite-execution-grounding",
+            "scope": "one-finite-execution-grounding",
             "nonclaims": [
                 "general-or-full-commitment-compilation",
                 "statement-to-oracle-derivation-predicate",
@@ -874,9 +1006,26 @@ class CheckedFriRelationGrounding:
 
     def to_term(self) -> dict[str, Any]:
         return {
+            "schema": CHECKED_GROUNDING_RECEIPT_SCHEMA,
+            "semantic_grounding_id": self.semantic_grounding_id.to_term(),
             "semantic_grounding": self.semantic_term(),
             "validation": {
-                "resource_usage": dict(self.resource_usage),
+                "law": RELATION_VALIDATION_LAW,
+                "basis_id": str(self.validation_basis_id),
+                "checked_request_id": _semantic_ref(self.request_id),
+                "live_receipt_joins": {
+                    "commitment_receipt_id": _semantic_ref(
+                        self.commitment_receipt_id
+                    ),
+                    "construction_composition_receipt_id": _semantic_ref(
+                        self.construction_composition_receipt_id
+                    ),
+                },
+                "source_manifest": [
+                    source.to_term() for source in self.validation_source_manifest
+                ],
+                "selected_resource_limits": self.validation_limits.to_term(),
+                "exact_resource_usage": self.resource_usage.to_term(),
                 "authority": "live-private-token-checker-issued-capability",
             },
         }
@@ -885,8 +1034,8 @@ class CheckedFriRelationGrounding:
     def identity(self) -> SemanticId:
         return semantic_id(
             "checked-fri-relation-grounding",
-            "fri-ior.relations.checked-grounding.v2",
-            self.semantic_term(),
+            "fri-ior.relations.checked-grounding.v3",
+            self.to_term(),
         )
 
 
@@ -1289,6 +1438,7 @@ def check_fri_relation_grounding(
     composition_receipt: object,
     public_inputs: object,
     proof: object,
+    limits: object = DEFAULT_VALIDATION_LIMITS,
 ) -> FriRelationGroundingAdmission:
     """Check one finite grounding using two live construction capabilities."""
 
@@ -1347,9 +1497,18 @@ def check_fri_relation_grounding(
                 "FRI grounding requires a public FRI proof",
             )
         )
+    if type(limits) is not ResourceLimits:
+        return _failed_grounding(
+            CheckResult(
+                OutcomeClass.MALFORMED,
+                boundary,
+                "FRI-IOR-RELATION-080",
+                "the relation checker requires exact immutable resource limits",
+            )
+        )
 
     try:
-        resources = ResourceCounter()
+        resources = ResourceCounter(limits)
         trace = commitment_receipt.candidate.source_trace
         target_run = commitment_receipt.target_run
         profile_admission = admit_exact_profile(public_inputs.profile)
@@ -1363,9 +1522,7 @@ def check_fri_relation_grounding(
                     "the relation statement names a profile outside this finite case",
                 )
             )
-        if encode_term(request.statement.value) != encode_term(
-            public_inputs.statement
-        ):
+        if encode_term(request.statement.value) != encode_term(public_inputs.statement):
             return _failed_grounding(
                 refused(
                     "relations:statement-grounding",
@@ -1395,8 +1552,7 @@ def check_fri_relation_grounding(
                 )
             )
         if (
-            composition_receipt.fiat_shamir_public_inputs_id
-            != public_inputs.identity
+            composition_receipt.fiat_shamir_public_inputs_id != public_inputs.identity
             or composition_receipt.fiat_shamir_public_proof_id != proof.identity
         ):
             return _failed_grounding(
@@ -1571,18 +1727,27 @@ def check_fri_relation_grounding(
             composition_receipt,
             opening_groundings,
             residual,
-            resources.snapshot(),
+            limits,
+            ExactResourceUsage.from_counter(resources),
             _token=_GROUNDING_RECEIPT_TOKEN,
         )
         result = affirmative(
             boundary,
             "FRI-IOR-RELATION-102",
             (
-                "the exact Statement, independently supplied Oracle material, "
+                "the exact Statement, separately supplied Oracle material, "
                 "live construction receipts, and selected run occurrences are grounded"
             ),
             subject=checked.identity,
+            semantic_grounding_id=checked.semantic_grounding_id,
+            validation_basis_id=str(checked.validation_basis_id),
             request_id=request.identity,
+            commitment_semantic_execution_id=(
+                commitment_receipt.semantic_execution_id
+            ),
+            construction_semantic_composition_id=(
+                composition_receipt.semantic_composition_id
+            ),
             statement_grounding_id=request.statement.identity,
             initial_oracle_binding_id=binding.identity,
             relation_initial_oracle_material_id=relation_material_id,
@@ -1608,7 +1773,8 @@ def check_fri_relation_grounding(
             resource_scope="one-private-counter-for-the-complete-operation",
             uses_live_checked_commitment_receipt=True,
             uses_live_checked_composition_receipt=True,
-            relation_side_oracle_supplied_independently=True,
+            relation_side_oracle_supplied_separately=True,
+            establishes_independent_oracle_provenance=False,
             establishes_selected_oracle_material_equality=True,
             establishes_one_checked_construction_execution=True,
             establishes_statement_to_oracle_predicate=False,
@@ -1677,6 +1843,7 @@ __all__ = [
     "OuterInferencePremise",
     "OuterRelationInferenceRequest",
     "RelationStatementOccurrence",
+    "RelationValidationSource",
     "RepresentationBoundary",
     "RepresentationBoundaryDeclaration",
     "RepresentationClass",

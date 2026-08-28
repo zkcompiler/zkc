@@ -36,7 +36,6 @@ MAX_OPENING_TABLE_ENTRIES = 8
 MAX_TERM_BYTES = 1 << 16
 MAX_TERM_NODES = 2048
 MAX_TERM_DEPTH = 24
-MAX_REJECTION_ATTEMPTS = 64
 GRINDING_BITS = 2
 
 _RESOURCE_FIELDS = (
@@ -250,7 +249,137 @@ def canonical_term_bytes(value: Any) -> bytes:
     return encode(value, 0)
 
 
-def _exact_profile() -> dict[str, Any]:
+def _same_canonical_term(first: Any, second: Any) -> bool:
+    """Compare closed terms without Python's boolean/integer coercion."""
+
+    return hmac.compare_digest(
+        canonical_term_bytes(first),
+        canonical_term_bytes(second),
+    )
+
+
+_SEMANTIC_REGIME_TERM = {
+    "name": "zkc.fri-ior.closed-finite-term",
+    "version": 1,
+    "hash": "sha256",
+    "term_abi": "tagged-length-delimited-sorted-text-map.v1",
+    "max_bytes": MAX_TERM_BYTES,
+    "max_nodes": MAX_TERM_NODES,
+    "max_depth": MAX_TERM_DEPTH,
+}
+_SEMANTIC_REGIME_ID = (
+    "zkc.fri-ior.closed-finite-term.v1.sha256."
+    + hashlib.sha256(
+        b"zkc.fri-ior.semantic-regime\x00" + canonical_term_bytes(_SEMANTIC_REGIME_TERM)
+    ).hexdigest()
+)
+
+
+def _semantic_id(subject_kind: str, domain: str, preimage: Any) -> dict[str, Any]:
+    """Independently derive one exact semantic-identity term."""
+
+    regime = _SEMANTIC_REGIME_ID.encode("ascii")
+    kind = subject_kind.encode("ascii")
+    identity_domain = domain.encode("ascii")
+    digest = hashlib.sha256(
+        b"zkc.fri-ior.identity\x00"
+        + _u64(len(regime))
+        + regime
+        + _u64(len(kind))
+        + kind
+        + _u64(len(identity_domain))
+        + identity_domain
+        + canonical_term_bytes(preimage)
+    ).hexdigest()
+    return {
+        "kind": "SemanticId",
+        "version": 1,
+        "subject_kind": subject_kind,
+        "domain": domain,
+        "semantic_regime": _SEMANTIC_REGIME_ID,
+        "digest": digest,
+    }
+
+
+def _known_semantic_law_id(
+    digest: str,
+    *,
+    subject_kind: str = "fri-ior-semantic-law",
+    domain: str = "fri-ior.semantic-law.v1",
+) -> dict[str, Any]:
+    """Form a specification-pinned semantic-law reference.
+
+    The independent verifier pins these law identities instead of importing
+    executable law objects from the producer.  Profile and plan identities are
+    then recomputed locally from their complete public terms.
+    """
+
+    return {
+        "kind": "SemanticId",
+        "version": 1,
+        "subject_kind": subject_kind,
+        "domain": domain,
+        "semantic_regime": _SEMANTIC_REGIME_ID,
+        "digest": digest,
+    }
+
+
+_ALGEBRA_LAW_IDS = (
+    _known_semantic_law_id(
+        "6d20f8e6dc7832f9c79195b805163b67bd4831aeee1bdb580851d2091cf8d05f"
+    ),
+    _known_semantic_law_id(
+        "6ff532985bf3474bb1267f3f7d655f1dffb19490f628dd290284007b329a2f86"
+    ),
+    _known_semantic_law_id(
+        "ff2cb9d83d37796c8ccfd2f33d7ad6f57826a9d58f87540381b581abfe9bfb6b",
+        subject_kind="fri-occurrence-map-law",
+        domain="fri-ior.occurrence-map-law.v1",
+    ),
+    _known_semantic_law_id(
+        "aee8a67406e77366a502f52452bb6f842ac74a37c78637fdf29e50c9e3e291a5"
+    ),
+)
+
+_COMMITMENT_LAW_IDS = (
+    _known_semantic_law_id(
+        "8e1e710fb93eb812026679b5258a07b9924ff559dd27e8e58340babb7b4a6f06"
+    ),
+    _known_semantic_law_id(
+        "c96dd83431ee06097b2f1431ef2f58d6e3b50b75a308b0797450198626ffe3b2"
+    ),
+    _known_semantic_law_id(
+        "195c9828a890839e627b26e79a09c0f14a13664e9b64af1be3060f7127cab7ee"
+    ),
+)
+
+_WORK_LAW_ID = _known_semantic_law_id(
+    "f3040131d698aa7459decad2baf51045b0f13823581460750917527a487e892e"
+)
+
+_TRANSCRIPT_LAW_IDS = (
+    _known_semantic_law_id(
+        "8a8b3bff1a322eeecffd0ed75885ed38237e85d4382a5fb29952458b389d22d5"
+    ),
+    _known_semantic_law_id(
+        "f380acb7edd4942ad4b98373dffdfedec061a472edb6f5a4df0a6f2f829661e0"
+    ),
+    _known_semantic_law_id(
+        "eb4291ce129d4e60665597e673c5a874039c4f51ff144d2e452776f9615fa774"
+    ),
+    _known_semantic_law_id(
+        "d112768c7e02cd28b69ee7d32ace7f05cbddae46848709ed85fc16230c730624"
+    ),
+    _known_semantic_law_id(
+        "0cfbd5571687649b947a839a7c61e9b61cc4745900929b88fb548eb83d707ad9"
+    ),
+    _known_semantic_law_id(
+        "bd70f6ca03f24315f724120a583130b86c38c10704828b29cabba54b27ca0563"
+    ),
+)
+
+
+def _exact_algebra_profile() -> dict[str, Any]:
     domains = [
         {
             "name": name,
@@ -264,7 +393,7 @@ def _exact_profile() -> dict[str, Any]:
         )
     ]
     return {
-        "name": "zkc.fri-ior.f97-binary-two-round.v1",
+        "name": "zkc.fri-ior.f97-binary-two-round-algebra.v1",
         "field": {
             "modulus": MODULUS,
             "primitive_generator": 5,
@@ -282,13 +411,55 @@ def _exact_profile() -> dict[str, Any]:
         "round_count": 2,
         "ordered_query_count": QUERY_COUNT,
         "query_occurrences_preserve_order_and_multiplicity": True,
-        "commitment": {
-            "hash": "sha256",
-            "salt_bytes": SALT_BYTES,
-            "cap_size": CAP_SIZE,
-            "leaf_layout": "ordered-antipodal-evaluation-pair",
-        },
+        "semantic_law_ids": [dict(identity) for identity in _ALGEBRA_LAW_IDS],
     }
+
+
+def _exact_algebra_profile_id() -> dict[str, Any]:
+    return _semantic_id(
+        "fri-algebra-profile",
+        "fri-ior.algebra-profile.v1",
+        _exact_algebra_profile(),
+    )
+
+
+def _exact_commitment_profile() -> dict[str, Any]:
+    return {
+        "name": "zkc.fri-ior.salted-antipodal-merkle-cap.v1",
+        "algebra_profile_id": _exact_algebra_profile_id(),
+        "hash": "sha256",
+        "digest_bytes": 32,
+        "salt_bytes": SALT_BYTES,
+        "cap_size": CAP_SIZE,
+        "leaf_layout": "ordered-antipodal-evaluation-pair",
+        "semantic_law_ids": [dict(identity) for identity in _COMMITMENT_LAW_IDS],
+    }
+
+
+def _exact_commitment_profile_id() -> dict[str, Any]:
+    return _semantic_id(
+        "fri-commitment-profile",
+        "fri-ior.commitment-profile.v1",
+        _exact_commitment_profile(),
+    )
+
+
+def _exact_grinding_profile() -> dict[str, Any]:
+    return {
+        "name": "zkc.fri-ior.sha256-leading-zero-work.v1",
+        "hash_suite": "sha256.v1",
+        "nonce_bytes": 4,
+        "difficulty_leading_zero_bits": GRINDING_BITS,
+        "work_law_id": dict(_WORK_LAW_ID),
+    }
+
+
+def _exact_grinding_profile_id() -> dict[str, Any]:
+    return _semantic_id(
+        "fri-grinding-profile",
+        "fri-ior.grinding-profile.v1",
+        _exact_grinding_profile(),
+    )
 
 
 def _step(
@@ -314,24 +485,10 @@ def _step(
 def _exact_plan() -> dict[str, Any]:
     return {
         "model": "FriIorTypedSha256FiatShamir.v1",
-        "profile_name": "zkc.fri-ior.f97-binary-two-round.v1",
-        "profile_id": {
-            "kind": "SemanticId",
-            "version": 1,
-            "subject_kind": "fri-ior-profile",
-            "domain": "fri-ior.profile.v1",
-            "semantic_regime": (
-                "zkc.fri-ior.closed-finite-term.v1.sha256."
-                "ef96aaf009ec016e122fb2135d1b8f104ee539eb463a5e35109b9e7bbbc52cd4"
-            ),
-            "digest": "65be87b5873b968cee3a04f53d2a8fb0fb87af2f27121c941064dce76d2e19a3",
-        },
-        "hash_suite": "sha256.v1",
-        "framing": "typed-length-delimited-big-endian.v1",
-        "grinding_bits": GRINDING_BITS,
-        "grinding_nonce_bytes": 4,
-        "grinding_search_attempt_bound": 256,
-        "rejection_attempt_bound": MAX_REJECTION_ATTEMPTS,
+        "algebra_profile_id": _exact_algebra_profile_id(),
+        "commitment_profile_id": _exact_commitment_profile_id(),
+        "grinding_profile_id": _exact_grinding_profile_id(),
+        "semantic_law_ids": [dict(identity) for identity in _TRANSCRIPT_LAW_IDS],
         "query_domain_size": DOMAIN_ORDERS[0],
         "query_count": QUERY_COUNT,
         "steps": [
@@ -562,14 +719,20 @@ def _parse_fp2(value: Any, boundary: str) -> tuple[int, int]:
 
 
 def _parse_cap(value: Any, boundary: str) -> tuple[bytes, bytes]:
-    cap = _require_object(value, {"hash", "cap_size", "nodes"}, boundary)
+    cap = _require_object(value, {"commitment_profile_id", "nodes"}, boundary)
     nodes = _require_list(cap["nodes"], boundary)
-    if cap["hash"] != "sha256" or cap["cap_size"] != CAP_SIZE or len(nodes) != CAP_SIZE:
+    if (
+        not _same_canonical_term(
+            cap["commitment_profile_id"],
+            _exact_commitment_profile_id(),
+        )
+        or len(nodes) != CAP_SIZE
+    ):
         _failure(
             "Malformed",
             boundary,
             "FRI-IOR-INDEPENDENT-010",
-            "the exact profile requires a two-node SHA-256 cap",
+            "the cap does not select the exact two-node commitment profile",
         )
     return (_hex_bytes(nodes[0], 32, boundary), _hex_bytes(nodes[1], 32, boundary))
 
@@ -604,6 +767,7 @@ def _parse_opening(value: Any) -> dict[str, Any]:
     opening = _require_object(
         value,
         {
+            "commitment_profile_id",
             "domain",
             "pair_index",
             "positive",
@@ -613,6 +777,16 @@ def _parse_opening(value: Any) -> dict[str, Any]:
         },
         boundary,
     )
+    if not _same_canonical_term(
+        opening["commitment_profile_id"],
+        _exact_commitment_profile_id(),
+    ):
+        _failure(
+            "Malformed",
+            boundary,
+            "FRI-IOR-INDEPENDENT-013",
+            "the opening does not select the exact commitment profile",
+        )
     if type(opening["domain"]) is not str:
         _failure(
             "Malformed",
@@ -665,14 +839,14 @@ def _parse_public_values(
             "FRI-IOR-INDEPENDENT-016",
             "the public-input schema is unsupported or malformed",
         )
-    if inputs["profile"] != _exact_profile():
+    if not _same_canonical_term(inputs["profile"], _exact_algebra_profile()):
         _failure(
             "Unsupported",
             "independent:profile-admission",
             "FRI-IOR-INDEPENDENT-017",
             "the public input does not select the one exact finite profile",
         )
-    if inputs["transcript_plan"] != _exact_plan():
+    if not _same_canonical_term(inputs["transcript_plan"], _exact_plan()):
         _failure(
             "Unsupported",
             "independent:plan-admission",
@@ -817,7 +991,10 @@ def _sample_fp2(
 ) -> tuple[tuple[int, int], bytes]:
     cardinality = MODULUS * MODULUS
     ceiling = ((1 << 16) // cardinality) * cardinality
-    for attempt in range(MAX_REJECTION_ATTEMPTS):
+    remaining_attempts = (
+        counter.limits["sampler_attempts"] - counter.used["sampler_attempts"]
+    )
+    for attempt in range(remaining_attempts):
         counter.reserve(sampler_attempts=1)
         digest = _squeeze(state, namespace, _FP2_SAMPLER, attempt, counter)
         candidate = int.from_bytes(digest[:2], "big")
@@ -828,7 +1005,7 @@ def _sample_fp2(
         "DeterministicLimitExceeded",
         "independent:transcript",
         "FRI-IOR-INDEPENDENT-025",
-        "the intrinsic extension-field sampler bound was exhausted",
+        "the selected sampler-attempt resource limit was exhausted",
     )
 
 
@@ -842,9 +1019,12 @@ def _derive_transcript(
 ) -> dict[str, Any]:
     genesis_term = {
         "model": "FriIorTypedSha256FiatShamir.v1",
-        "profile": _exact_profile(),
-        "hash_suite": "sha256.v1",
-        "framing": "typed-length-delimited-big-endian.v1",
+        "algebra_profile_id": _exact_algebra_profile_id(),
+        "commitment_profile_id": _exact_commitment_profile_id(),
+        "grinding_profile_id": _exact_grinding_profile_id(),
+        "transcript_semantic_law_ids": [
+            dict(identity) for identity in _TRANSCRIPT_LAW_IDS
+        ],
     }
     state = counter.hash(_GENESIS_DOMAIN + canonical_term_bytes(genesis_term))
     state = _absorb(

@@ -1,0 +1,61 @@
+{
+  "authority": "owner-generation-input-not-public-report-input",
+  "coefficients": [
+    [
+      3,
+      0
+    ],
+    [
+      5,
+      0
+    ],
+    [
+      7,
+      0
+    ],
+    [
+      11,
+      0
+    ],
+    [
+      13,
+      0
+    ],
+    [
+      17,
+      0
+    ],
+    [
+      19,
+      0
+    ],
+    [
+      23,
+      0
+    ]
+  ],
+  "disclosure": {
+    "classification": "declassified-public-test-vector-populates-private-semantic-roles",
+    "contains_real_secret": false
+  },
+  "first_fold_layer_salts": [
+    "40404040404040404040404040404040",
+    "41414141414141414141414141414141",
+    "42424242424242424242424242424242",
+    "43434343434343434343434343434343"
+  ],
+  "initial_layer_salts": [
+    "10101010101010101010101010101010",
+    "11111111111111111111111111111111",
+    "12121212121212121212121212121212",
+    "13131313131313131313131313131313",
+    "14141414141414141414141414141414",
+    "15151515151515151515151515151515",
+    "16161616161616161616161616161616",
+    "17171717171717171717171717171717"
+  ],
+  "nonclaims": [
+    "does-not-establish-confidentiality-or-secure-randomness"
+  ],
+  "schema": "zkc.native-fri-ior.private-generation.v1"
+}
