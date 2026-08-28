@@ -1,7 +1,7 @@
 # K3 Minimum Consumer Co-design
 
 > **Document kind:** Temporary bounded work-package charter
-> **Document state:** Active; K3-A through bounded K3-D complete; K3-E next
+> **Document state:** Active; K3-A through bounded K3-E complete; K4 next
 > **Provisional owner:** `project`, coordinating `pir`, `relations`,
 > `analysis`, and the minimum `oir` seam
 > **Authority:** None. This package records reconstruction, research questions,
@@ -12,7 +12,9 @@
 > **K3-B completed:** 2026-08-27
 > **K3-C completed:** 2026-08-27
 > **K3-D completed:** 2026-08-28
-> **Current gate:** K3-E integrated closure and reopen audit.
+> **K3-E completed:** 2026-08-28
+> **Current gate:** K4 bounded protocol-portfolio pressure; K5 independent
+> freeze remains pending.
 > **Disposition:** Absorb selected results into exact durable owners, retain
 > only necessary rationale and deferred work, then delete this package before
 > cutover.
@@ -97,7 +99,7 @@ K3-A preserves these decisions unless a later discriminator falsifies them:
 | **K3-B** | K2-dependent Interface/Plan surfaces, K1-aligned Relations and correspondence, value bridges, execution grounding, and a parallel minimum carrier lane | Exact Statement and witness roles are inhabited; claim/reduction and grounding question grammars are closed and finitely pressured at their named boundaries; equivalence, embedding, and lossy lanes are distinct; the Plan/OIR projection-view factorization is selected; every K2 semantic subject and field has a carrier disposition. Full claim/reduction execution remains a later integration obligation. |
 | **K3-C** | Minimum Analysis source, strategy/experiment, theorem-applicability, and quantitative-loss contracts | Three propositions stay distinct: a finite native source judgment; abstract-family AFK transport requiring an independently established uniform all-`n` source capability and theorem truth; and pointwise family/member specialization. K3-C supplies no native authority for the family source, so transport is `CannotAnswer` absent external proof authority. |
 | **K3-D** | Minimum PIR-to-OIR read and projection-obligation contract | One exact source graph, independently admitted OIR, exact-equality projection, derived static contract, Plan read partition, identity binding, and typed support boundary close without activating Stage 4B execution or target-only pairing. |
-| **K3-E** | Integrated closure and reopen audit | K1/K2/K3 identities, views, read closures, negative boundaries, and two consumer extractions agree; every residual issue is routed to K4, Stage 4B, or a later owner. |
+| **K3-E** | Integrated closure and reopen audit | Complete at the selected finite P01/Schnorr scope. Exact shared identities, owner views, read closures, qualified boundaries, and the Analysis/OIR consumer paths agree; every residual is routed to K4, K5, Stage 4B, implementation correspondence, or its exact owner. |
 
 **Completion reconciliation — 2026-08-27.** Bounded K3-B satisfied its stated
 exit at the selected resolution: the dependent Interface/Plan and Relations
@@ -130,9 +132,10 @@ that pointwise capability admission was weaker than formation; the repaired
 admitter now reproduces the full minting gate, and coherent small-index-domain
 and bounded-rejection-member substitutions are direct refusal regressions.
 Formula, operator, codomain, Statement-length, and native verifier-role
-bindings were tightened at the same seam. K2 was not reopened, K3 is not
-complete, and the semantic kernel is not frozen. The K3-D reconciliation below
-records the subsequent bounded result.
+bindings were tightened at the same seam. At that K3-C checkpoint, K2 had not
+been reopened, K3 was not complete, and the semantic kernel was not frozen.
+The K3-D and K3-E reconciliations below record the subsequent bounded results;
+the kernel still is not frozen.
 
 **K3-D completion reconciliation — 2026-08-28.**
 Bounded K3-D selects a source-relative endpoint-projection contract without
@@ -162,14 +165,48 @@ was withdrawn: without exact normalized surface bodies, total duality tables,
 and pair-local bounds it could not be an authoritative decider. Target-only
 pairing is therefore an explicit Stage 4B OIR obligation, not a K3-D result.
 
-The 70-case finite instrument exercises source extraction, standalone OIR
+At the K3-D checkpoint, the 70-case finite instrument exercised source
+extraction, standalone OIR
 admission, exact graph mismatch partition, static-contract derivation,
 qualified outcomes, Plan quotient, and the support frontier. Its endpoint-pair
 comparison remains a non-authoritative pressure probe only. The instrument and
 all predecessor and documentation gates are green at the recorded validation
 snapshot. This completes only bounded K3-D: it is not a final OIR language,
 execution model, compiler-correctness proof, family-coverage result, or
-cryptographic claim. No selected result required reopening K1, K2, or K3-B.
+cryptographic claim. At this K3-D checkpoint, no selected result had required
+reopening K1, K2, or K3-B.
+
+**K3-E completion reconciliation — 2026-08-28.** The joined audit found that
+the predecessor surfaces were not mutually constructible without local repair.
+K1 gained the exact semantic-language-profile mechanism and inert common
+authority envelope; its selected regime rotated. K2 and K3-B gained exact
+profile dependencies, field-addressed producer views, and owner-issued
+authority bindings. K3-C locally repaired its source manifests, body/profile
+formation, authority use, and outcome partition. K3-D made OIR the single
+owner of the endpoint graph/contract schema and separated source/target
+construction failures from semantic projection `Negative`.
+
+The final finite witness starts from one P01/Schnorr source and verifies exact
+shared K1/K2/K3-B implementations before joining the K3-C and K3-D paths. Its
+endpoint authority basis keeps K2 static views, one affirmative
+`CheckedFSConstruction` and its issued FS view, the K3-B Interface
+correspondence view, and Prover-only `CheckedPlanRealizes` distinct; it does
+not call a Plan a view. The Analysis lane deterministically rederives the
+selected records and checks stable semantic IDs. No live Analysis capability
+crosses into K3-D or is exercised by K3-E.
+
+The executable K2/K3-B carriers still omit richer facts selected by K3-D.
+Their explicit future-owner supplement is therefore admitted only through a
+purpose-bound adapter checked against every overlapping live owner fact.
+Absence is `MissingDependency`; the adapter is bounded integration evidence,
+not proof that current carriers already expose the final owner-view surface.
+Those facts remain an implementation/owner-carrier residual. The joined result
+preserves verifier-observable Core, Fresh/Fiat--Shamir meaning, and the central
+factorization, but it is not a freeze, protocol-family result, theorem or
+security proof, or Stage 4B activation. K4 is next and K5 remains pending.
+After the K3-E repairs and Foundation-regime rotation, the expanded K3-D gate
+passes 94/94. The K3-E record owns that current result; the 70-case table in
+the K3-D validation page remains an explicitly historical checkpoint.
 
 K3-B through K3-D may use parallel research and falsifier construction, but
 selection follows semantic dependency. K3-C cannot ratify a relation-bound
@@ -226,7 +263,11 @@ This README owns the direct K3 inventory:
   verdict.
 - [K3-D Validation](k3-d-validation.md) records the three-lane finite
   instrument, same-boundary mutations, documentation and predecessor gates,
-  exact bounded claim, and K3-E handoff.
+  exact bounded claim, and historical K3-E handoff.
+- [K3-E Integrated Closure](k3-e-integrated-closure.md) fixes the joined
+  dependency, identity, read-closure, non-substitution, mutation, executable,
+  and reopen audit, preserves the initial seven blockers, and records their
+  final bounded disposition and residual routing.
 
 Later phases add records only when their question cannot be answered by
 updating this plan and their durable owners. A phase does not receive a large
@@ -252,6 +293,12 @@ and Plan-specialized prover projection profile. It did not select final OIR
 syntax or execution, prove source/target refinement, establish protocol-family
 coverage, support Fresh/Oracle/module/generic-prover endpoints, or activate
 Stage 4B.
+
+K3-E establishes only finite joined constructibility and mutation locality for
+the selected P01/Schnorr path. It does not prove the adequacy of the future-
+owner supplement beyond that adapter, generalize the exercised Analysis
+capability boundary, close the typed-law/executable correspondence gaps, cover
+the K4 portfolio, or satisfy the K5 independent-freeze gate.
 
 Current implementation behavior is regression and design evidence only. A
 current exact-coverage check, transcript interpreter, relation adapter, or

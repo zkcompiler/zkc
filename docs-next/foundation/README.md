@@ -20,26 +20,39 @@ It is not the place for every concept that several documents mention.
 ## Selected documents
 
 - [Executable Semantic Foundations](executable-foundations.md) defines the
-  selected K1 candidate for bootstrap, typed identity, semantic modules,
-  domain-indexed values, portable algorithms, deterministic evaluation
-  control, and the boundary between semantic completion and operational
-  noncompletion. Domain regimes, predicates, judgments, and resource policies
-  remain with their owners. Bounded K3-B Relations and K3-C Analysis have now
-  demonstrated two aligned consumer extractions; K3-E still owes integrated
-  closure.
+  selected K1 candidate for bootstrap, typed identity, exact semantic-language
+  profiles, semantic modules, domain-indexed values, portable algorithms,
+  deterministic evaluation control, inert source-authority envelopes, and the
+  boundary between semantic completion and operational noncompletion. Domain
+  language contents, predicates, judgments, policy derivations, live
+  capabilities, and resource policies remain with their owners. Bounded K3-B
+  Relations, K3-C Analysis, and K3-D OIR have demonstrated three aligned
+  consumer extractions, and K3-E has exercised their joined profile and inert-
+  envelope boundary over one finite witness. This satisfies the bounded
+  extraction gate only; it does not move owner predicates or live authority
+  into Foundation and does not freeze the kernel.
 
 ## Owns
 
 - reusable content-identity and canonicalization mechanisms where their
   meaning is independent of the subject domain;
+- the exact standalone semantic-language-profile envelope, authenticated
+  profile-import closure, profiled-subject wrapper, and effective-context
+  equality law selected by K1, including the exact disjoint standalone catalog
+  for canonical values, evaluation contracts, external-operation contracts,
+  portable algorithms, semantic-language profiles, semantic modules, and
+  semantic primitives, while each domain owns its actual profiled language;
 - reusable vocabulary and mechanisms for the project-owned distinctions among
   representation, authentication, admission, immutable local authority, and
   qualified rejection, once the extraction test below passes;
 - reusable typed subject-reference, closure-manifest, identity-effect,
   capability-effect, outcome, and replay mechanisms whose semantics are shown
   to be identical across domains;
-- reusable authority, citation, registry-envelope, and fail-closed mechanics
-  that pass the extraction test;
+- the minimal inert source-authority envelope that preserves exact
+  owner-profiled references, owner/family agreement, and same-regime shape
+  without interpreting or transporting authority;
+- reusable citation, registry-envelope, and fail-closed mechanics that pass
+  the extraction test;
 - reusable serialization and transport mechanisms that, once the extraction
   test passes, enforce the project-owned rule that content and references never
   carry continued process-local admission or resource authority;
@@ -53,10 +66,12 @@ It is not the place for every concept that several documents mention.
   domain-specific, while Project retains the global policy; and
 - a terminology index that routes each semantic term to its actual owner.
 
-Foundation fixes the common canonical-value encoding and typed identity-
-preimage framing selected by K1. Each artifact-owning domain still defines its
-exact domain-specific semantic body and regime contents, dependency meaning,
-admission predicate, capability behavior, outcomes, and domain policy.
+Foundation fixes the common canonical-value encoding, typed identity-preimage
+framing, profile envelope, and inert authority envelope selected by K1. Each
+artifact-owning domain still defines its exact domain-specific semantic body,
+profile contents and exact-use derivation, subject-specific dependency
+meaning, admission predicate, complete policy-closure derivation, capability
+behavior, outcomes, and domain policy.
 
 ## Does not own
 
@@ -67,6 +82,11 @@ admission predicate, capability behavior, outcomes, and domain policy.
 - OIR programs, endpoint kinds, holes, or execution behavior;
 - realization providers, deployments, or invocations; or
 - evidence conclusions and current support claims.
+
+Foundation also does not own a global language-profile registry, one composite
+project-wide semantic regime, domain policy facts, an authored aggregate
+policy closure, owner admission, or any live capability. Subject-specific
+ordinary modules remain separate from the generic effective language context.
 
 Foundation also does not own a universal `Transition` runtime type,
 `TransitionId`, wire envelope, checker registry, fact root, portable admission
@@ -104,11 +124,12 @@ that owns an artifact.
 
 ## Identity and authority boundary
 
-Foundation may define how an extracted canonical-identity or capability
-mechanism works. Project owns the cross-domain conditions and completeness
-discipline; each domain decides what its subject means, which exact predicate
-admits it, how its capability copies or expires, and which domain-specific
-facts a consumer may derive from it.
+Foundation may define how an extracted canonical-identity, exact-profile
+closure, or capability-neutral authority-envelope mechanism works. Project
+owns the cross-domain conditions and completeness discipline; each domain
+decides what its subject means, which exact language and policy dependencies
+are complete, which exact predicate admits it, how its capability copies or
+expires, and which domain-specific facts a consumer may derive from it.
 
 The intended split is:
 
@@ -125,10 +146,13 @@ and provenance may preserve an identity claim or citation, but they do not
 carry authority. A receiver must decode, authenticate, close the exact
 dependencies, and re-admit the subject before minting new local authority.
 
-Foundation may eventually expose a capability-neutral catalog projection for
-linting contract completeness. That projection must remain descriptive: it
-cannot execute every transition, own domain truth, or introduce a global
-composition algebra.
+Foundation now exposes only a capability-neutral source-authority envelope.
+Its exact owner-profiled IDs are descriptive inputs to the named owner. The
+owner authenticates their preimages and derives the complete policy closure;
+an aggregate consumer derives a canonical union rather than authoring a second
+summary. The envelope cannot execute transitions, own domain truth, validate a
+policy derivation, mint a capability, or introduce a global composition
+algebra.
 
 ## Downstream schema topics
 
@@ -146,11 +170,13 @@ These are topics, not directories to create in advance.
 
 - Which later subject families require refinements of the selected typed
   identity without becoming a universal transition envelope?
-- Which capability traits are genuinely common while copy, borrow, threading,
-  attenuation, revocation, expiry, and single-use rules remain domain-owned?
+- After the selected nonserialization rule, are any additional capability
+  traits genuinely common while borrow, threading, attenuation, revocation,
+  expiry, and single-use rules remain domain-owned?
 - Which parts of diagnostic allocation are semantic evolution rules and which
   are project contribution policy?
-- What minimum registry envelope remains independent of the concrete
-  vocabularies and admission predicates it cites?
+- What minimum registry envelope, if any beyond exact supplied profile and
+  dependency bundles, remains independent of the concrete vocabularies and
+  admission predicates it cites?
 - What exact shared vocabulary enumerates lifecycle and qualified-outcome terms
   without collapsing domain-local result variants?

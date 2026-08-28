@@ -6,9 +6,11 @@ an admission authority.
 
 ## Contents
 
-- `reference_model.py` implements `FoundationMetaProfileV0` structural encoding, typed
-  content IDs, domain-indexed values, a bounded first-order term calculus,
-  exact fixture primitives, deterministic charging, and qualified outcomes.
+- `reference_model.py` implements `FoundationMetaProfileV0` structural
+  encoding, typed content IDs, exact semantic-language profiles and effective
+  contexts, inert source-authority envelopes, domain-indexed values, a bounded
+  first-order term calculus, exact fixture primitives, deterministic charging,
+  and qualified outcomes.
 - `oracle/` is separately written. It imports no reference-model code and
   independently checks the constitutional value encoding and typed content identity against
   frozen JSONL vectors.
@@ -21,21 +23,21 @@ Run the bounded gate from the repository root:
 python3 -B evaluation/k1-executable-foundations/run.py --check
 ```
 
-The final bounded gate runs 90 reference/parity tests and 26
-independent-oracle tests over 20 frozen oracle vectors: 116/116 pass. The
-reference/parity lane contains 88 direct `reference_model` tests, one
+The final bounded gate runs 103 reference/parity tests and 26
+independent-oracle tests over 24 frozen oracle vectors: 129/129 pass. The
+reference/parity lane contains 101 direct `reference_model` tests, one
 record-by-record cross-check, and one exact durable-law transcription check.
 The record cross-check recomputes exact shared positive
 constructions and checks bounded contrasts or declared projections for the
 remaining records; it is not an equivalent reference implementation of every
 raw oracle request. The package covers exact finite fixtures only.
 
-The frozen semantic-core law source is exactly 39,468 bytes with SHA-256
-`4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3`.
-The complete encoded regime descriptor is exactly 40,383 bytes with SHA-256
-`e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0`.
+The frozen semantic-core law source is exactly 45,669 bytes with SHA-256
+`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`.
+The complete encoded regime descriptor is exactly 46,606 bytes with SHA-256
+`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`.
 Its semantic-regime digest is
-`bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77`.
+`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`.
 
 ## Evidence boundary
 
@@ -45,6 +47,14 @@ The instrument demonstrates, over its frozen cases:
   constructors;
 - authentication of exact presented typed ID/preimage pairs, including profile,
   hash suite, kind, semantic regime, and body axes;
+- standalone exact semantic-language-profile identities, exact no-extra
+  profile-import closures, profile-qualified subjects, exact-ID evaluator
+  support, local/imported profile-declaration resolution, and exhaustive
+  refusal of every standalone Foundation semantic kind and every prior-meta
+  kind in profile formation, profiled-ID formation, and profiled
+  authentication;
+- fixed-lane canonical-value identities with identity-bearing caller purpose,
+  and the exact standalone external-operation-contract identity equation;
 - exact root and module declaration references, derived direct primitive
   references and module roots, and authenticated same-regime required module
   closure;
@@ -58,8 +68,12 @@ The instrument demonstrates, over its frozen cases:
   domain-failure outcomes, including strict-decode versus post-decode owner
   admission and structural versus typing failure;
 - rejection of one failure declaration carrying conflicting payload types;
-- rejection as `Malformed` of host subclasses that attempt to override authenticated algorithm,
-  term, module, contract, or primitive-cost-formula semantics; and
+- inert portable authority-envelope formation, owner/family and same-regime
+  checks, field sensitivity, and refusal to serialize, hash, copy, deep-copy,
+  or pickle an owner-local binding;
+- rejection as `Malformed` of host subclasses that attempt to override
+  authenticated profile, algorithm, term, module, contract, or
+  primitive-cost-formula semantics; and
 - cumulative wide-value refusal before aggregate encoding.
 
 The oracle is independent only for canonical values and typed identity. There
@@ -76,10 +90,12 @@ It therefore does not falsify:
 - raw algorithm direct-primitive field omission, padding, or reordering;
 - separately supplied asserted-ID/body mismatch for an algorithm, contract,
   or module;
-- duplicate or unsorted raw module-map carriers or noncanonical raw module
-  bodies, because the module bundle is an exact built-in `dict` or the
-  package's exact immutable fixture-mapping singleton; or
-- the optional `CanonicalValueId` surface.
+- duplicate or unsorted raw profile/module-map carriers or noncanonical raw
+  profile/module bodies, because these bundles use exact built-in `dict`
+  carriers, with the package's immutable fixture-mapping singleton additionally
+  accepted for modules; or
+- arbitrary application-defined value domains beyond the fixed
+  `CanonicalValueId` fixtures.
 
 Global one-ID/one-preimage binding is conditional on the digest law governing
 each constructor: constitutional SHA-256 for prior-meta IDs and the
@@ -91,8 +107,8 @@ Each evaluator call that passes boundary 1 creates one fresh ledger. It
 observes only the request-supplied and immutable support bodies whose
 validation boundaries it reaches. Runtime uses the same admitted resolver
 snapshot rather than consulting a mutable replacement. The ledger has a
-derived host cap of 20,486 entries--the exact
-sum of the selected prior-meta, contract, algorithm, request-module,
+derived host cap of 36,870 entries--the exact sum of the selected prior-meta,
+contract, algorithm, maximum profile closure, maximum request-module closure,
 evaluator primitive-support-module, and maximum distinct direct-primitive
 constituents--so it adds no valid semantic refusal.
 After request-basis authentication succeeds, the evaluator co-observes its
@@ -108,12 +124,15 @@ snapshot. Evaluator support registries must be exact tuples and are capped at
 `2^14` entries before member inspection; that is realization evidence rather
 than a new semantic-identity axis.
 
-The package also cannot construct an authenticated cyclic module graph without
-finding a hash fixed point or collision. Its forged-cycle case confirms that
-the claimed preimage is rejected before traversal, while the
-authenticated-cycle branch is specified but unexercised. It does not establish
+The package also cannot construct an authenticated cyclic profile or module
+graph without finding a hash fixed point or collision. Its forged-cycle cases
+confirm that a claimed preimage is rejected before traversal, while the
+authenticated-cycle branches are specified but unexercised. Authority tests
+do not authenticate owner objects, derive a policy closure, execute owner
+admission, or exercise a live capability. The package does not establish
 SHA-256 correctness, primitive-provider conformance, protocol expressiveness,
 PIR admission, strong Fiat--Shamir, cryptographic security, formal correctness,
 constant-time behavior, production readiness, or integrated-kernel closure.
-The bounded standalone K1 candidate is complete and green; K2/K3 integration
-remains open.
+The bounded standalone K1 candidate is complete and green. K3-E subsequently
+exercised one bounded finite K1/K2/K3 consumer join; general durable
+integration, broader protocol coverage, and kernel freeze remain open.

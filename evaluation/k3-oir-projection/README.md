@@ -18,16 +18,70 @@ K1 and K2 are reached only through K3-B. K3-C is never imported.
 
 ## Authoritative executable gates
 
-The model keeps three independently implemented lanes:
+The model keeps three independently implemented lanes. Before either graph
+lane starts, `check_projection_owner_adapter` joins purpose-bound live owner
+authority:
 
-1. source extraction reads an admitted future-owner Core, Construction,
-   Interface, and, for the prover, Plan and derives an
-   `EndpointSemanticGraph`;
-2. target construction walks those owner surfaces independently and emits an
-   unauthoritative OIR candidate, which `local_admit` validates without a PIR
-   source object; and
+- K2 owner-issued static views for public binding, public coin, effects,
+  claims/reductions, transcript declaration, required influence, and
+  challenge transition, plus StrategyDecision for the Prover;
+- the checked K2 FS construction and its owner-issued FS view;
+- the K3-B owner-issued Interface correspondence view; and
+- for the Prover, an affirmative `CheckedPlanRealizes` result.
+
+Each issued K2/K3-B capability names the same typed K3-D consumer and the
+source- and role-specific projection purpose. The adapter revalidates every
+live issuance and checks every overlap against the candidate future-owner
+facts before it can mint a process-local, noncopyable adapter.
+
+The current K2/K3-B carriers do not yet issue every rich fact needed by the
+endpoint graph. `future_owner_supplement` therefore builds an inert candidate
+for only that residual surface. `issue_future_owner_supplement` validates its
+closed shape and root-level overlap, assigns a source-profiled supplement ID,
+and forms an exact K1 `PortableSourceAuthorityBinding` with no hidden operation
+policy. That first bearer is provisional and inert. Only
+`check_projection_owner_adapter`, after validating the complete live K2/K3-B
+overlap and checked Plan, activates the identical supplement bearer and mints
+the adapter. Duplicate or extra closed-table keys and claim re-anchoring are
+refused before activation. Raw candidates, provisional bearers, and copied or
+reconstructed authorities are not consumable. Missing authority is
+`MissingDependency`; a stale or disagreeing authority is `Refused`.
+
+This authenticates the selected bounded supplement law, not universal future
+K2/K3-B coverage. Supplement-only facts are claim/reduction contract detail,
+terminal detail, rich FS evaluators and challenge laws, structural codec and
+fibre detail, public-derivation transports and completions, and rich Plan
+recipe/evaluation/export detail. As owners expose those families, they must
+move behind owner-issued views and leave the supplement rather than create a
+second source of truth.
+
+After that authority join, the model keeps three independently implemented
+lanes:
+
+1. `classify_support` mints one exact live `SupportedExtractionBasis`, and
+   source extraction uses that basis to derive an `EndpointSemanticGraph`;
+2. `project_supported_endpoint` consumes the identical basis and adapter,
+   walks the owner surfaces through an independent implementation, and emits
+   an unauthoritative OIR candidate, which `local_admit` validates without a
+   PIR source-view object; and
 3. `check_projection` compares the checked source graph and admitted OIR graph
    by exact canonical equality.
+
+`project(request)` is only a convenience wrapper around classification and
+`project_supported_endpoint`. The explicit basis-taking entry point lets the
+joined K3-E witness show that both independent graph constructors consumed the
+same live authority chain without adding a PIR source ID or source view to OIR
+identity.
+
+Every authority boundary in that chain is an identical, process-local,
+noncopyable bearer. `CheckedEndpointSourceView` retains its exact live
+`SupportedExtractionBasis` and owner adapter; the validation request retains
+that same chain plus the exact locally admitted OIR and formed proposition;
+and the final `CheckedProjection` retains the exact live validation request.
+The instrument's profiled subject and probe-local validation identifiers are
+recomputed at every consumer boundary, so a structurally equal
+`dataclasses.replace` reconstruction is not authority. This says nothing about
+durable MetaValue preimage parity.
 
 Projection does not permit event fusion, splitting, reordering, optimization,
 or existential witness maps in this v0 profile. A negative result is the exact
@@ -103,12 +157,13 @@ P01 carrier is `MissingDependency` because it does not inhabit the richer
 future-owner fixture schema. The latter is an implementation/evaluation-
 carrier limitation, not a claim that the target K3-B design lacks codec DAGs,
 slots, fibres, Statement flow, transports, completions, or typed Plan recipes.
-Positive P01 cases therefore use an explicit future-owner contract fixture and
-never synthesize missing carrier facts silently.
+Positive P01 cases therefore use an explicit owner-admitted future supplement
+and never synthesize missing carrier facts silently. `live_p01_request`
+deliberately omits that authority and remains `MissingDependency`.
 
 General codecs require a separate certificate at local admission. That
 certificate does not enter OIR identity. The fixed owner-schema set and
-purpose-specific read-manifest bodies are exposed and checked against 188
+purpose-specific read-manifest bodies are exposed and checked against 190
 selected Python carrier paths; unknown fields fail closed.
 
 ## Deliberate non-claims and residual surrogates
@@ -125,14 +180,23 @@ authoritative source-independent endpoint-pair relation is deferred because it
 needs its own exact normalization and duality language.
 
 Canonical IDs use deterministic JSON structural bytes as a probe-local
-surrogate. The 188-path reflection is a bounded Python-carrier check. Neither
+surrogate. The 190-path reflection is a bounded Python-carrier check. Neither
 claims byte parity with K1 `MetaValueV0` nor implements a recursive durable
-five-root owner grammar.
+five-root owner grammar. In particular, the checker-basis and validation-
+request identifiers are bounded validation identities only: the durable target
+has not selected typed portable domain bodies for them. They do not establish
+durable semantic identity, authority, or exact preimage parity.
 
 Qualified answers keep `Affirmative`, `Negative`, `Unsupported`,
 `MissingDependency`, `KindMismatch`, `Malformed`, `Refused`,
 `DeterministicLimitExceeded`, and `CheckerFailure` distinct. Unsupported or
-unanswerable attempts never return a partial OIR target.
+unanswerable attempts never return a partial OIR target. `Negative` is emitted
+only by exact comparison of a formed projection proposition. Owner-profile
+inadequacy is `Refused`, while a contradiction in an already admitted
+extractor or target builder is `CheckerFailure`. The convenience
+`ProjectionPipelineRun` uses absent optional stage results for stages not
+attempted after an earlier nonaffirmative answer; it does not fabricate
+downstream refusals.
 
 ## Run
 

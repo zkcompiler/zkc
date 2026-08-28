@@ -2,7 +2,8 @@
 
 > **Document kind:** Target semantic architecture
 > **Document state:** Active non-normative target
-> **Target status:** Selected Stage 4A Compiler target; durable promotion
+> **Target status:** Selected Stage 4A Compiler factorization; K1 authority
+> reconciliation deferred
 > **Provisional owner:** `compiler`
 > **Authority:** This document specifies the selected Compiler target for
 > `docs-next/`. It is non-normative until explicit consolidation, review, and
@@ -20,7 +21,14 @@
 > [Executable Semantic Foundations](../foundation/executable-foundations.md).
 > K1 does not ratify this Compiler consumer model. Exact reconciliation remains
 > a post-kernel integration obligation and cannot add meaning back into PIR or
-> Foundation.
+> Foundation. Foundation is now the sole owner of the common inert authority
+> envelope. Every `ExactSourceAuthorityBinding`, `ExactOwner...Binding`, and
+> `OwnerCapabilityRequirement` display below is a pre-K1 schematic inventory of
+> owner payload requirements, not a second carrier, constructible target type,
+> or authority input. Compiler integration must map those requirements into the
+> exact K1 portable/local variants before any such operation can activate. The
+> bounded K3-E witness does not exercise Compiler; this deferral therefore does
+> not weaken that result, but Compiler activation and K5 freeze remain blocked.
 
 ## 1. Scope and selected architecture
 
@@ -108,16 +116,23 @@ The semantic owner of each input mints its exact live capability. Compiler may
 consume that capability and record its exact identity and basis; it cannot
 mint, widen, serialize, or reinterpret it.
 
-Every cross-owner capability is supplied with the exact capability-neutral
-binding selected by the [project-wide source-binding
-contract](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings).
-An admitted subject or view uses `ExactOwnerAdmittedSubjectBinding`; a completed
-checked result uses `ExactOwnerResultBinding`. Compiler receives each binding
-and its actual fresh capability separately and requires complete equality. A
-Compiler-owned capability instead matches its complete owner-created
+Under the deferred K1 reconciliation, every cross-owner capability must be
+supplied with the exact capability-neutral binding selected by the
+[project-wide source-binding contract](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings).
+An admitted subject or view will satisfy
+`ExactOwnerAdmittedSubjectBinding`; a completed checked result will satisfy
+`ExactOwnerResultBinding`. Compiler must receive each exact K1 binding and its
+actual fresh capability separately and require complete equality. A
+Compiler-owned capability must instead match its complete owner-created
 `CompilerCheckedResult`, including the result body/coordinate and exact output
-binding, through the `CompilerResultUseAuthority` contract below. It does not
+binding, through the `CompilerResultUseAuthority` contract below. It cannot
 invent a cross-owner alias or inspect data out of a live capability.
+
+The display below preserves the Stage 4A distinction between admitted-subject
+and checked-result inputs only. Until the deferred Compiler integration pass,
+each alias is an uninstantiated predicate over exactly one K1
+`PortableSourceAuthorityBinding` or `OwnerLocalSourceAuthorityBinding`; it has
+no independent body, ID, constructor, ledger encoding, or live bearer.
 
 ~~~text
 ExactOwnerAdmittedSubjectBinding<Owner, SubjectFamily> =
@@ -144,13 +159,16 @@ Every source has exactly one authenticated owner-policy disposition:
 ~~~text
 OwnerOperationPolicyDisposition =
     BoundTo(exact owner operation-policy identity and authenticated contract)
-  | OwnerDefinesNoOperationPolicy(
-      exact owner capability-contract identity, exact capability ABI)
+  | OwnerDefinesNoPolicy(exact owner-defined no-policy declaration identity)
 ~~~
 
 The second variant is legal only when the exact owner capability contract and
-ABI explicitly declare the absence of a separate operation policy. Unknown,
-missing, or omitted policy information is never treated as “not applicable.”
+ABI in that declaration's authenticated preimage explicitly declare the
+absence of a separate operation policy. The former
+`OwnerDefinesNoOperationPolicy(contract, ABI)` spelling is schema-local
+shorthand for this owner-defined preimage, not another Foundation variant.
+Unknown, missing, or omitted policy information is never treated as “not
+applicable.”
 Every Compiler use preserves this disposition, the complete exact source-
 authority binding, the immediate policy when bound, the transitive source-
 policy closure, and the matching inert `OwnerCapabilityRequirement`. A use proceeds only when the
@@ -325,8 +343,9 @@ Compiler-owned subject authentication/admission lifecycle under the exact
 Compiler semantic regime. Each family-indexed admission contract is an exact
 acyclic regime-root contract, not a subject admitted through itself. It fixes
 the admission ABI before the subject exists and explicitly uses
-`OwnerDefinesNoOperationPolicy(exact CompilerAdmissionCapabilityContractId<S>,
-exact capability ABI)`.
+`OwnerDefinesNoPolicy(exact Compiler no-policy declaration ID)`, whose
+authenticated preimage names the exact
+`CompilerAdmissionCapabilityContractId<S>` and capability ABI.
 Its `OwnerCapabilityRequirement` names that exact contract, ABI, binding schema,
 freshness, and lifetime.
 

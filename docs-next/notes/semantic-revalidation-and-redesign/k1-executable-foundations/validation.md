@@ -53,10 +53,13 @@ means separately written code paths for canonical values and IDs, not runtime,
 compiler, or cryptographic diversity. There is only one portable-term
 evaluator in K1.
 
-The strict runner executed 90 reference/parity tests and 26 independently
-written oracle tests, for 116/116 passing tests. The 90-test lane contains 88
-direct `reference_model` tests, one record-by-record cross-check, and one exact
-durable-law transcription check. The record cross-check independently
+At the initial standalone checkpoint, the strict runner executed 90
+reference/parity tests and 26 independently written oracle tests, for 116/116
+passing tests. That checkpoint and its `bfe22f86...` regime are historical and
+superseded. The post-K3-E repair gate executes 103 reference/parity tests and
+26 oracle tests, for 129/129 passing tests. The current 103-test lane contains
+101 direct `reference_model` tests, one record-by-record cross-check, and one
+exact durable-law transcription check. The record cross-check independently
 recomputes exact shared positive constructions and
 checks bounded contrasts or declared projections for the remaining records;
 it is not an equivalent reference implementation of every raw oracle request.
@@ -132,12 +135,13 @@ There is no optional or null regime. `id_type`, nested axis kind, subject kind,
 and digest are all checked. Semantic modules, primitives, algorithms, value
 domains, and evaluation contracts are ordinary semantic subjects.
 
-The frozen semantic-core law source is exactly 39,468 bytes with SHA-256
-`4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3`.
-The complete encoded regime descriptor is exactly 40,383 bytes with SHA-256
-`e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0`.
+The current frozen semantic-core law source is exactly 45,669 bytes with
+SHA-256
+`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`.
+The complete encoded regime descriptor is exactly 46,606 bytes with SHA-256
+`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`.
 The resulting semantic-regime digest is
-`bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77`.
+`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`.
 
 ### 3.3 Regime root and modules
 
@@ -314,13 +318,13 @@ and unexercised surfaces above have been tested. The reconciled matrix contains
 
 | Gate | Command or artifact | Final count/result |
 |---|---|---|
-| reference and parity suite | `python3 -B evaluation/k1-executable-foundations/run.py --check` | 90/90; 88 direct reference-model tests plus one all-record parity test and one durable-law transcription check |
+| reference and parity suite | `python3 -B evaluation/k1-executable-foundations/run.py --check` | 103/103; 101 direct reference-model tests plus one all-record parity test and one durable-law transcription check |
 | independent oracle suite | same strict runner | 26/26 |
-| complete strict gate | same strict runner | 116/116 |
-| frozen-vector replay | 20-request declared expected projection | passed against the deliberately rotated K1 regime baseline |
-| frozen law source | exact bytes and SHA-256 | 39,468 bytes; `4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3` |
-| frozen regime descriptor | exact bytes and SHA-256 | 40,383 bytes; `e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0` |
-| frozen regime identity | semantic-regime digest | `bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77` |
+| complete strict gate | same strict runner | 129/129 |
+| frozen-vector replay | 24-request declared expected projection | passed against the deliberately rotated K1 regime baseline |
+| frozen law source | exact bytes and SHA-256 | 45,669 bytes; `96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc` |
+| frozen regime descriptor | exact bytes and SHA-256 | 46,606 bytes; `01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f` |
+| frozen regime identity | semantic-regime digest | `a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c` |
 
 The gate above closes only the bounded standalone K1 candidate. Repository
 lint, durable-document reconciliation, consumer integration, and cold review

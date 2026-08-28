@@ -73,6 +73,199 @@ An experiment name such as `ROM`, `adaptive`, or `Schnorr` is not an adequate
 model identity. Wrong quantifier order, visibility, query API, randomness
 ownership, failure treatment, or resource scope creates a different profile.
 
+This page uses one compact convention for its long closed profiles:
+
+```text
+K3CCryptographicLawRef(P,body_schema,field_ordinal,signature) =
+  the unique AnalysisProfileLawRef<signature> at that body-schema field in the
+  exact direct profile P selected by that body's constructor case
+
+K3CCryptographicLawTerm(P,body_schema,field_ordinal,arguments) =
+  AnalysisLawTerm whose law_ref is the corresponding
+  K3CCryptographicLawRef and whose canonical_arguments are arguments
+```
+
+In a body display below, a mathematical formula or English expansion in a
+law-, schema-, predicate-, denotation-, schedule-, event-, failure-, resource-,
+map-, transform-, or conclusion-valued field denotes that exact profile ref or
+term at the field's written ordinal. The profile argument may be omitted in a
+later display only after the named concrete constructor and its authenticated
+predecessors have fixed one direct profile. The expansion is reader-facing and
+is not encoded. Coordinate, ID, enum, natural, canonical value, sequence, map,
+and record fields remain the literal typed values displayed. The selected
+profile law source fixes every ref's full signature and exact law bytes; an
+absent, duplicate, wrong-profile, or wrong-signature ref is malformed. Thus no
+sentence, citation text, display label, or runtime provider supplies an
+identity field.
+
+A concrete bounded Schnorr/property constructor whose complete predecessor
+closure is property-owned uses `K3CCryptographicPropertyLanguageProfileId`.
+Every concrete asymptotic-family constructor that defines `F`, an
+`F`-dependent experiment or theorem subject, or an AFK abstract-family
+language declaration uses `K3CAFKTransportLanguageProfileId`; this includes
+the all-`n` source-property result rather than creating a property-to-transport
+back-edge. The one selected ownership exception is
+`analysis.challenge-domain`: it is a property-owned finite projection from one
+authenticated transport-owned family, not an `F`-parametric experiment,
+theorem, or transport constructor. Its body retains the exact family ID as an
+ordinary predecessor, while the property profile neither imports transport
+declarations nor restates family semantics. A theorem-source validation body,
+or an AFK support/validation/operation-policy/judgment body that consumes or
+governs one, uses
+`K3CAFKTheoremSourceValidationLanguageProfileId`. This is a total named-
+constructor classification with that one enumerated boundary case, not an open
+default: a concrete body not admitted by exactly one authenticated constructor
+case is malformed. Each profile reaches the common kernel through its exact
+import chain, but none copies upstream catalogs or resolves a declaration by a
+family/revision label.
+
+### 2.1 Exact property-family contracts
+
+The active family catalog is finite. Direct profile ownership is exactly:
+
+```text
+K3CCryptographicPropertyFamilyCoordinates = CanonicalSeq [
+  KOutOfNSpecialSoundness,
+  FixedExtractorUniversalCorrectness,
+  AdaptiveKnowledgeExtractionAtFixedLengthQltN,
+  ChallengeDomainCorrespondence,
+  AcceptanceRelationCorrespondence,
+  AlgebraAndCanonicalEncodingLaws,
+  PolynomialTimeRelationMembership,
+  PolynomialTimeSourceVerifier,
+  PolynomialTimeExtractor
+]
+
+K3CAFKTransportFamilyCoordinates = CanonicalSeq [
+  AsymptoticKOutOfNSpecialSoundness,
+  AdaptiveKnowledgeSoundnessQltN,
+  TheoremTruth,
+  TheoremApplicability,
+  FamilyInstanceCorrespondence,
+  TotalSingleValuedFamilyDenotation,
+  FamilyProjectionCoherence,
+  UniformPrimeOrderSchnorrFamily,
+  UniformPolynomialTimeRelationMembership,
+  UniformPolynomialTimeVerifier,
+  FreshUniformIndependentPublicCoin,
+  ExactClassicalRandomOracleProcess,
+  FixedPublicSetupIndependence,
+  TotalUniformChallengeSamplerAdequacy,
+  FixedFamilyChallengeCardinality,
+  FiniteBoundedRandomOracleIndexAndEfficientOperations,
+  AFKExperimentObservationCorrespondence,
+  FamilyDenotationAtIndex,
+  FamilyProjectionAtIndex,
+  FamilyInstanceRoleMapAdequacy,
+  FamilyInstanceQuantitativeNormalizationAdequacy,
+  FamilyInstanceProcessCorrespondence
+]
+
+K3CActiveFamilyCoordinates =
+  CanonicalAppend(
+    K3CCryptographicPropertyFamilyCoordinates,
+    K3CAFKTransportFamilyCoordinates)
+```
+
+The two sequences are duplicate-free and their union is exactly the active
+family set listed in `analysis-model.md`; an omitted, extra, or multiply owned
+coordinate refuses either profile. For a coordinate `f`, let `OwnerProfile(f)`
+be the property profile for the first sequence and the semantic transport
+profile for the second. The following names are exact declaration/law refs in
+that profile, indexed by the complete coordinate rather than its spelling:
+
+```text
+K3CFamilySubjectSchemaRef(f) =
+  AnalysisProfileLawRef<ClosedFamilySubjectSchema> for exactly f
+K3CFamilyQuestionPayloadSchemaRef(f) =
+  AnalysisProfileLawRef<ClosedFamilyQuestionPayloadSchema> for exactly f
+K3CFamilyConclusionSchemaRef(f) =
+  AnalysisProfileLawRef<ClosedFamilyConclusionSchema> for exactly f
+K3CFamilyQuestionToConclusionLaw(f) =
+  AnalysisLawTerm<TotalQuestionToConclusionReconstruction> for exactly f
+K3CFamilyPolarityMeaningRef(f) =
+  AnalysisProfileLawRef<FamilyPolarityMeaning> for exactly f
+K3CFamilyFailurePartitionRef(f) =
+  AnalysisProfileLawRef<AnalysisAttemptFailurePartition> for exactly f
+K3CNoQuantitativeResultSchemaRef(f) =
+  AnalysisProfileLawRef<ClosedFamilyQuantitativeResultSchema> admitting
+  exactly NoQuantitativeResult for f
+K3CAdaptiveFormulaTripleResultSchemaRef(f) =
+  AnalysisProfileLawRef<ClosedFamilyQuantitativeResultSchema> admitting
+  exactly the ordered error/success/expected-call formula-ID triple selected
+  by f, with the exact dependent sorts fixed by that family's payload
+```
+
+The allowed context sequence is the following total case split:
+
+```text
+K3CFamilyAllowedContexts(f) =
+  [SemanticExperimentContext] when f is in
+    K3CCryptographicPropertyFamilyCoordinates;
+  [FamilySemanticExperimentContext] when f is one of
+    AsymptoticKOutOfNSpecialSoundness,
+    AdaptiveKnowledgeSoundnessQltN,
+    TotalSingleValuedFamilyDenotation,
+    FamilyProjectionCoherence,
+    UniformPrimeOrderSchnorrFamily,
+    UniformPolynomialTimeRelationMembership,
+    UniformPolynomialTimeVerifier,
+    FreshUniformIndependentPublicCoin,
+    ExactClassicalRandomOracleProcess,
+    FixedPublicSetupIndependence,
+    TotalUniformChallengeSamplerAdequacy,
+    FixedFamilyChallengeCardinality,
+    FiniteBoundedRandomOracleIndexAndEfficientOperations,
+    AFKExperimentObservationCorrespondence;
+  [SourceFree(TheoremTruthSourceFreeReasonRef)] when f is TheoremTruth;
+  [SemanticExperimentContext,FamilySemanticExperimentContext]
+    when f is TheoremApplicability;
+  [FamilyInstanceContext] when f is one of
+    FamilyInstanceCorrespondence,
+    FamilyDenotationAtIndex,
+    FamilyProjectionAtIndex,
+    FamilyInstanceRoleMapAdequacy,
+    FamilyInstanceQuantitativeNormalizationAdequacy,
+    FamilyInstanceProcessCorrespondence;
+  undefined otherwise
+
+K3CFamilyQuantitativeResultSchema(f) =
+  K3CAdaptiveFormulaTripleResultSchemaRef(f) when f is
+    AdaptiveKnowledgeExtractionAtFixedLengthQltN or
+    AdaptiveKnowledgeSoundnessQltN;
+  K3CNoQuantitativeResultSchemaRef(f) for every other active f;
+  undefined otherwise
+
+K3CAnalysisFamilySemanticsContract(f) = AnalysisFamilySemanticsContract {
+  exact_subject_schema: K3CFamilySubjectSchemaRef(f),
+  exact_question_payload_meta_schema:
+    K3CFamilyQuestionPayloadSchemaRef(f),
+  exact_hypothesis_free_conclusion_meta_schema:
+    K3CFamilyConclusionSchemaRef(f),
+  question_to_conclusion_reconstruction_law:
+    K3CFamilyQuestionToConclusionLaw(f),
+  allowed_question_context_variants: K3CFamilyAllowedContexts(f),
+  exact_quantitative_result_schema:
+    K3CFamilyQuantitativeResultSchema(f),
+  affirmative_and_negative_meaning: K3CFamilyPolarityMeaningRef(f),
+  failure_classification: K3CFamilyFailurePartitionRef(f)
+}
+
+K3CAnalysisFamilyContractCatalog(P) =
+  CanonicalKeySortedMap {
+    f -> K3CAnalysisFamilySemanticsContract(f)
+    for every f in K3CActiveFamilyCoordinates with OwnerProfile(f) = P
+  }
+```
+
+For `TheoremTruth` and `TheoremApplicability`, the two expanded rows in
+`transport-composition-and-replay.md` must be byte-identical to the result of
+this constructor; they are explanations, not duplicate contracts. For every
+other family, the exact profile law source contains the indexed schema and law
+refs above. Admission requires the catalog key set to equal the owning family
+sequence exactly and verifies every question body against its one row. Host
+code, a display family name, or a future family cannot add another case.
+
 ## 3. Relation-bound Fresh special soundness
 
 All active nominal constructors below are parameterized by one exact subject
@@ -84,33 +277,119 @@ K3CSubjectTuple S = {
   fiat_shamir_protocol_id,
   shared_core_id,
   transcript_construction_id,
-  fs_construction_result_schema,
+  checked_fs_construction_result_ref,
   relation_definition_id,
   relation_semantic_model_id,
   relation_interface_id,
   relation_instance_id,
-  protocol_relation_binding_id,
-  plan_witness_binding_id,
-  statement_correspondence_question_id_and_StatementEdgeRef,
-  claim_correspondence_question_id_and_ClaimMeaningRef,
-  witness_correspondence_question_id_and_PlanWitnessEdgeRef,
+  relation_axis_ingress: {
+    fresh: {
+      protocol_relation_binding_id,
+      plan_witness_binding_id,
+      statement_correspondence_question_id_and_StatementEdgeRef,
+      claim_correspondence_question_id_and_ClaimMeaningRef,
+      witness_correspondence_question_id_and_PlanWitnessEdgeRef,
+      grounding_equation_id,
+      equation_grounding_question_id
+    },
+    fiat_shamir: {
+      protocol_relation_binding_id,
+      plan_witness_binding_id,
+      statement_correspondence_question_id_and_StatementEdgeRef,
+      claim_correspondence_question_id_and_ClaimMeaningRef,
+      witness_correspondence_question_id_and_PlanWitnessEdgeRef,
+      grounding_equation_id,
+      equation_grounding_question_id
+    }
+  },
   k2_check_ref,
   k2_accept_terminal_ref,
-  grounding_equation_id,
-  equation_grounding_question_id,
   challenge_ref,
   challenge_value_type,
   challenge_domain_ref,
   challenge_fresh_law_ref,
   analysis_challenge_values:
     CanonicalNonEmptySortedUniqueSeq<CanonicalValue<challenge_value_type>>,
-  fixed_setup_sources: {
-    exact relation/group-parameter source coordinate,
-    exact K2 PublicParameter and selected fixed SessionContext BindingRefs plus
-      typed invocation assignments, excluding the prover-output Statement,
-    exact transcript-construction application_domain nominal ref
+  public_setup_invocation_views: {
+    fresh: PublicSetupInvocationViewId,
+    fiat_shamir: PublicSetupInvocationViewId
+  },
+  fixed_setup_static_sources: {
+    relation_group_parameter_fields:
+      CanonicalNonEmptySortedUniqueSeq<ConcreteOwnerField(
+        OwnerFieldCoordinate<Relations,RelationDefinitionBody>)>,
+    transcript_application_domain_field:
+      PIRStaticViewFieldCoordinate<TranscriptDeclarationViewBody>
   }
 }
+
+K3CRelationAxisIngressAdequacyEvaluatorId,
+K3CFreshFsRelationShapeAdequacyEvaluatorId, and
+K3CFixedSetupStaticSourcesAdequacyEvaluatorId
+  = three pairwise-distinct exact `AnalysisAdequacyEvaluatorId` values in
+    `K3CCryptographicPropertyLanguageProfileId`; their closed input schemas are
+    respectively one complete axis-ingress record plus its Protocol, the two
+    complete admitted axis records, and the complete static-source record plus
+    its authenticated owner bodies
+
+K3CRelationAxisIngressWellFormed(S,axis) iff
+  K3CRelationAxisIngressAdequacyEvaluatorId returns Success(true) and
+  the selected ProtocolRelationBinding names the ProtocolId for axis,
+  the selected PlanWitnessBinding names a Plan Witness surface for that same
+    Protocol,
+  every Statement, claim, Witness, and EquationGrounding question names the
+    exact selected binding, Plan binding, equation, and owner ref for axis,
+  every selected affirmative owner binding answers that exact question, and
+  the grounding equation's Protocol run slots name that same Protocol
+
+K3CFreshFsRelationShapeAgrees(S) iff
+  K3CFreshFsRelationShapeAdequacyEvaluatorId returns Success(true) and
+  replacing only S.relation_axis_ingress.fiat_shamir's ProtocolId-qualified
+  owner coordinates with their Fresh-axis counterparts yields the exact Fresh
+  binding, Plan surface, occurrence-edge, claim, Witness, and grounding shapes
+  under the Relations-owned comparison law
+
+K3CFixedSetupStaticSourcesWellFormed(S) iff
+  K3CFixedSetupStaticSourcesAdequacyEvaluatorId returns Success(true) and
+  every relation_group_parameter_fields entry names S.relation_definition_id
+    and is exactly one owner-schema leaf used by the selected group law, and
+  transcript_application_domain_field is exactly the application_domain leaf
+    below ConstructionView(S.transcript_construction_id,
+                           TranscriptDeclarationView)
+
+K3CRelationAxisIngressInput = {
+  subject: K3CSubjectTuple,
+  axis: Fresh | FiatShamir
+}
+
+K3CFreshFsRelationShapeInput = {subject: K3CSubjectTuple}
+
+K3CFixedSetupStaticSourcesInput = {subject: K3CSubjectTuple}
+
+K3CRelationAxisIngressAdequacyEvaluatorId =
+  the exact `AnalysisAdequacyEvaluatorId<K3CRelationAxisIngressInput>` in
+  K3CCryptographicPropertyLanguageProfileId
+
+K3CFreshFsRelationShapeAdequacyEvaluatorId =
+  the distinct exact `AnalysisAdequacyEvaluatorId<
+    K3CFreshFsRelationShapeInput>` in that same profile
+
+K3CFixedSetupStaticSourcesAdequacyEvaluatorId =
+  the distinct exact `AnalysisAdequacyEvaluatorId<
+    K3CFixedSetupStaticSourcesInput>` in that same profile
+
+Each of the three bodies names the exact no-extra supported input profiles
+reached from the property profile's authenticated K3-B/K2 import closure, the
+complete owner field-coordinate schema it reads, a portable checker and
+evaluation contract, exact direct module roots, `Success(true)` as its sole
+affirmative value, and the common K3-C source-ingress failure partition. Their
+complete declaration coordinates and bodies are pairwise distinct.
+
+The bounded K3-C executable currently reuses the smaller generic property-
+profile adequacy surrogate described in the Analysis model. It does not yet
+encode these three pairwise-distinct evaluator declarations or derive their
+complete owner-profile sets. Its finite checks therefore do not establish this
+target catalog or its no-extra input-profile rule.
 
 K3CStatementType(S) =
   the one ValueType whose equality is checked across the selected K2 Statement
@@ -140,65 +419,101 @@ K3CChallengeDomainBody(S) = {
   value_type: S.challenge_value_type,
   source_nominal_domain_ref: S.challenge_domain_ref,
   model_values: S.analysis_challenge_values,
-  adequacy_law: every member has one canonical value representation and the
-    ModelCardinality derivation is the length of this exact canonical nonempty
-    sorted-unique sequence, is total under the K1 finite-term bound, and is
-    cardinality >= 2 for this K3-C family,
+  adequacy_evaluator_id: K3CChallengeDomainAdequacyEvaluatorId,
   semantic_status:
-    Analysis-owned finite model requiring an ordinary correspondence premise
-    to the owner-qualified nominal domain ref and K2 value type
+    K3CChallengeSemanticStatus.FiniteModelRequiringOrdinaryOwnerCorrespondence
 }
+
+K3CChallengeSemanticStatus =
+  FiniteModelRequiringOrdinaryOwnerCorrespondence
+
+K3CChallengeDomainInput = {
+  source_challenge_ref: TypeOf(K3CSubjectTuple.challenge_ref),
+  value_type: ValueType,
+  source_nominal_domain_ref: TypeOf(K3CSubjectTuple.challenge_domain_ref),
+  model_values: CanonicalNonEmptySeq<CanonicalValue<value_type>>,
+  semantic_status: exactly
+    K3CChallengeSemanticStatus.FiniteModelRequiringOrdinaryOwnerCorrespondence
+}
+
+K3CChallengeDomainAdequacyEvaluatorId =
+  the exact AnalysisAdequacyEvaluatorId<K3CChallengeDomainInput> in the selected
+  cryptographic profile; it checks canonical member representations, exact
+  sorted uniqueness, ModelCardinality equal to sequence length, K1 bounded
+  totality, and cardinality at least 2
 
 K3CChallengeDomainId(S) =
   AnalysisId<"analysis.challenge-domain">(B, K3CChallengeDomainBody(S))
 
 AFKFixedPublicSetupBody(S) = {
-  exact_sources: [S.shared_core_id, S.transcript_construction_id,
-                  S.challenge_ref, S.fixed_setup_sources],
+  exact_static_sources: [S.shared_core_id, S.transcript_construction_id,
+                         S.challenge_ref,S.fixed_setup_static_sources],
+  exact_public_invocation_sources: S.public_setup_invocation_views,
   derived_projection:
-    deterministically derive the exact CoreHeader, ConstructionHeader,
+    AnalysisLawTerm<AFKFixedPublicSetupProjection> that first requires the
+    Fresh and Fiat--Shamir `PublicSetupInvocationViewBody.entries` to be
+    byte-identical and then combines that common entry sequence with the
+    CoreHeader, ConstructionHeader,
     ApplicationDomainHeader, scope/opening frames, public-parameter frames,
     challenge-condition framing schema, prefix-construction function, and
     ChallengeNamespace schema from those owner sources under the K2
     construction law; the concrete DerivedPrefix additionally takes the later
     prover outputs Y and A and is not fixed setup,
   required_selection_schedule:
-    fixed before and independent of P^a and both random-oracle spaces,
+    AnalysisProfileLawRef<PreProverAndOracleFixedSelectionSchedule>,
   visibility_map:
-    coordinate-by-coordinate public visibility through the exact
-    PublicBindingView and transcript-construction views
+    AnalysisLawTerm<CoordinateByCoordinatePublicVisibilityMap>
 }
 
 AFKFixedPublicSetupId(S) =
   AnalysisId<"analysis.fixed-public-setup">(B, AFKFixedPublicSetupBody(S))
 ```
 
-Every top-level field other than `analysis_challenge_values` and the grouping
-record `fixed_setup_sources` is a typed owner semantic coordinate or an exact
-owner-declared field projection. The
+Every leaf other than `analysis_challenge_values` is a typed owner semantic
+coordinate or an exact owner-declared field projection; `relation_axis_ingress`,
+`public_setup_invocation_views`, and `fixed_setup_static_sources` are closed
+grouping records only. The
 finite challenge-value sequence is an Analysis-owned model coordinate bound by
 `K3CChallengeDomainId(S)`; formation proves only its canonical finite shape.
 An ordinary hypothesis must relate the K2 nominal domain ref and value type to
 that model. The separate AFK applicability hypotheses relate the nominal
-fresh-law ref and correlation fields to the required uniform process. The fixed-setup
-body and ID are an Analysis-owned exact projection of their listed owner source
-coordinates and values, not copied derived headers, a new owner fact, or an
-owner-issued view. Ordinary
+fresh-law ref and correlation fields to the required uniform process. The
+fixed-setup body and ID are an Analysis-owned exact projection of their listed
+static owner coordinates and the two PIR-issued
+`PublicSetupInvocationViewId` values; they do not copy caller-authored invocation
+assignments, derived headers, or owner facts. Ordinary
 applicability hypotheses establish its visibility, fixedness, and independence.
-Formation requires the two Protocols to name
-`shared_core_id`, every relation/binding/ref coordinate to agree, and the exact
-transcript-construction/result schema to name those Fresh/FS subjects. The
+Formation authenticates both entries of `S.public_setup_invocation_views`
+against their exact `PublicSetupInvocationViewBody` values. Their Protocol IDs
+must equal `S.fresh_protocol_id` and `S.fiat_shamir_protocol_id` respectively;
+both Core IDs must equal `S.shared_core_id`; and both entry sequences must be
+byte-identical and contain exactly every `PublicParameter` and `SessionContext`
+binding in owner `BindingRef` order. The views exclude Statement, Witness,
+prover-private, and verifier-private assignments by owner construction. Each
+matching `ExactPublicSetupInvocationViewAuthorityBinding` belongs to source
+support and each fresh `PublicSetupInvocationViewCapability` belongs only to
+the checking invocation. A copied assignment sequence, unequal Fresh/FS setup,
+a subset of public bindings, or a view from another Core/Protocol is malformed
+or refused and cannot form this fixed-setup ID.
+Formation also evaluates `K3CFixedSetupStaticSourcesWellFormed`; a display
+label, free path, interior subtree, field under another relation definition or
+construction, or copied parameter value cannot occupy either static-source
+field. Formation requires the two Protocols to name `shared_core_id`, both
+relation-axis ingress records to satisfy their exact owner checks, and the
+exact transcript construction and checked-result ref to name those Fresh/FS subjects. The
 selected terminal must have verdict `Accept`, must list `k2_check_ref` in
 `required_true_checks`, and both refs must have their unique K2 occurrence
-backlinks. The selected correspondence question must be exactly the
-`EquationGrounding` variant over `grounding_equation_id`.
+backlinks. Each selected axis correspondence question must have its declared
+tag and exact binding, Plan-binding, owner-ref, or grounding-equation operand.
 `K3CChallengeDomainBody(S)` formation additionally rejects cardinality below
 `2`; an empty pair domain cannot inhabit `KOutOfNSpecialSoundness(k = 2)`.
-The
-concrete `CheckedFSConstruction` result binding and fresh capability belong to
-support and invocation; no `CheckedFSConstructionId` exists. Replacing,
-omitting, or reordering a field changes or malforms every dependent manifest,
-question, or derived setup/domain ID. In the remaining displays, a bare
+PIR consumes the concrete `CheckedFSConstruction` result binding and fresh
+capability when it issues `FSConstructionView`. Analysis support retains only
+the resulting exact view binding, and its invocation receives only the matching
+view capability; no `CheckedFSConstructionId` exists and the consumed owner
+capability is not forwarded. Replacing, omitting, or reordering a field changes
+or malforms every dependent manifest, question, or derived setup/domain ID. In
+the remaining displays, a bare
 `...Id` whose body depends on subjects means `...Id(S)` under an explicitly
 bound `S`; use outside that scope is malformed.
 
@@ -206,40 +521,69 @@ Owner-qualified view coordinates are derived, never supplied:
 
 ```text
 K3COwnerViewCoordinate(S, PublicBindingView) =
-  OwnerViewCoordinate(PIR,S.shared_core_id,PublicBindingView)
+  CoreView(S.shared_core_id,PublicBindingView)
 K3COwnerViewCoordinate(S, StrategyDecisionView | PublicCoinView | EffectView |
-                           ClaimReductionView | ExecutionView) =
-  OwnerViewCoordinate(PIR,S.shared_core_id,the selected view kind)
+                           ClaimReductionView) =
+  CoreView(S.shared_core_id,the selected view kind)
+K3COwnerViewCoordinate(S, FreshExecutionView) =
+  ProtocolView(S.fresh_protocol_id,ExecutionView)
+K3COwnerViewCoordinate(S, FiatShamirExecutionView) =
+  ProtocolView(S.fiat_shamir_protocol_id,ExecutionView)
 K3COwnerViewCoordinate(S, TranscriptDeclarationView | RequiredInfluenceView |
                            ChallengeTransitionView) =
-  OwnerViewCoordinate(
-    PIR,S.transcript_construction_id,the selected construction-view kind)
+  ConstructionView(S.transcript_construction_id,the selected construction-view kind)
 K3COwnerViewCoordinate(S, FSConstructionView) =
-  OwnerResultViewCoordinate(
-    PIR,S.fs_construction_result_schema,
-    [S.fresh_protocol_id,S.fiat_shamir_protocol_id,S.shared_core_id,
-     S.transcript_construction_id])
+  FSResultView(S.checked_fs_construction_result_ref,FSConstructionView)
+
+K3CPublicSetupInvocationCoordinate(S,Fresh) =
+  PublicSetupInvocationViewCoordinate(
+    S.fresh_protocol_id,S.public_setup_invocation_views.fresh)
+K3CPublicSetupInvocationCoordinate(S,FiatShamir) =
+  PublicSetupInvocationViewCoordinate(
+    S.fiat_shamir_protocol_id,S.public_setup_invocation_views.fiat_shamir)
 
 SchnorrRelationSubjectProjection(S) = CanonicalSeq [
   S.fresh_protocol_id,
   S.shared_core_id,
+  S.public_setup_invocation_views.fresh,
   S.relation_definition_id,
   S.relation_semantic_model_id,
   S.relation_interface_id,
   S.relation_instance_id,
-  S.protocol_relation_binding_id,
-  S.plan_witness_binding_id,
-  QuestionIdOf(S.statement_correspondence_question_id_and_StatementEdgeRef),
-  QuestionIdOf(S.claim_correspondence_question_id_and_ClaimMeaningRef),
-  QuestionIdOf(S.witness_correspondence_question_id_and_PlanWitnessEdgeRef),
-  S.grounding_equation_id,
-  S.equation_grounding_question_id
+  S.relation_axis_ingress.fresh.protocol_relation_binding_id,
+  S.relation_axis_ingress.fresh.plan_witness_binding_id,
+  QuestionIdOf(
+    S.relation_axis_ingress.fresh.
+      statement_correspondence_question_id_and_StatementEdgeRef),
+  QuestionIdOf(
+    S.relation_axis_ingress.fresh.
+      claim_correspondence_question_id_and_ClaimMeaningRef),
+  QuestionIdOf(
+    S.relation_axis_ingress.fresh.
+      witness_correspondence_question_id_and_PlanWitnessEdgeRef),
+  S.relation_axis_ingress.fresh.grounding_equation_id,
+  S.relation_axis_ingress.fresh.equation_grounding_question_id
 ]
 
 AFKTargetSubjectProjection(S) = CanonicalSeq [
   every entry of SchnorrRelationSubjectProjection(S) in the same order,
   S.fiat_shamir_protocol_id,
-  S.transcript_construction_id
+  S.transcript_construction_id,
+  S.public_setup_invocation_views.fiat_shamir,
+  S.relation_axis_ingress.fiat_shamir.protocol_relation_binding_id,
+  S.relation_axis_ingress.fiat_shamir.plan_witness_binding_id,
+  QuestionIdOf(
+    S.relation_axis_ingress.fiat_shamir.
+      statement_correspondence_question_id_and_StatementEdgeRef),
+  QuestionIdOf(
+    S.relation_axis_ingress.fiat_shamir.
+      claim_correspondence_question_id_and_ClaimMeaningRef),
+  QuestionIdOf(
+    S.relation_axis_ingress.fiat_shamir.
+      witness_correspondence_question_id_and_PlanWitnessEdgeRef),
+  S.relation_axis_ingress.fiat_shamir.grounding_equation_id,
+  S.relation_axis_ingress.fiat_shamir.equation_grounding_question_id,
+  AFKFixedPublicSetupId(S)
 ]
 ```
 
@@ -251,11 +595,20 @@ remain selected fields of the identified Core or construction sources and are
 not smuggled into `exact_subjects` as non-ID values. A missing field, a
 different order, or an additional subject is malformed.
 
+Subject formation evaluates `K3CRelationAxisIngressWellFormed` for both axes
+and `K3CFreshFsRelationShapeAgrees`. The latter consumes the producer's exact
+checked comparison; it does not make the two Protocol-qualified IDs equal.
+Consequently the Fresh source identity contains only the Fresh axis, while the
+AFK target identity contains both bindings, both Plan surfaces, both exact
+correspondence sets, and both grounding coordinates. Replacing the
+Fiat--Shamir binding with a same-Core Fresh binding is malformed even when all
+unqualified occurrence shapes coincide.
+
 The active slot catalogs use these exact ordered field projections:
 
 ```text
 K3CFamilyRoleKindRef(name,signature_class) =
-  the one exact ModuleDeclarationRef<"analysis.family-role-kind"> whose
+  the one exact AnalysisProfileDeclarationRef<"analysis.family-role-kind"> whose
   resolved body is AnalysisFamilyRoleKindDeclarationBody {
     name: MetaSymbol(name), signature_class
   }
@@ -271,88 +624,196 @@ Their complete declaration bodies and the exact active source-family catalog
 are formed after the concrete and abstract slot catalogs below; these four
 names alone are not admissible coordinates.
 
-K3CPIRSourceSlot(view_kind,coordinate_schema,field_paths,purpose,adequacy) =
+K3CPIRSourceSlot(view_kind,coordinate_schema,field_projection,purpose,
+                 adequacy_evaluator_id,binding_schema,
+                 required_authority_class) =
   ConcreteOwnerReadSlotSchema(
     PIR,view_kind,
     DependentForAll([subject : K3CSubjectTuple],coordinate_schema),purpose,
-    ExactOwnerFieldProjection(
-      ResolvedOwnerSourceBodySchema(PIR,view_kind),field_paths),
-    adequacy,ResolvedOwnerSourceBindingSchema(PIR,view_kind),None,
+    field_projection,adequacy_evaluator_id,binding_schema,
+    required_authority_class,
     common K3-C source-ingress failure partition)
+
+K3CStaticViewFields(subject,view_kind,subtree_paths) =
+  RequiredPIRViewReadClosure(
+    K3COwnerViewCoordinate(subject,view_kind),
+    ExactPIRAtomicLeavesUnder(
+      K3COwnerViewCoordinate(subject,view_kind),subtree_paths))
+
+K3CExecutionViewFields(subject,axis,subtree_paths) =
+  RequiredPIRViewReadClosure(
+    K3COwnerViewCoordinate(subject,axis),
+    ExactPIRAtomicLeavesUnder(
+      K3COwnerViewCoordinate(subject,axis),subtree_paths))
+
+ExactPIRAtomicLeavesUnder(coordinate,subtree_paths) =
+  the canonical sorted-unique sequence of every atomic
+  `PIRStaticViewFieldCoordinate` below the exact ordinal subtree paths selected
+  from the closed owner schema for coordinate; the displayed field names below
+  are expository aliases for those fixed ordinal paths and do not enter a body
+
+K3CPublicBindingAdequacy,
+K3CFreshPublicSetupInvocationAdequacy,
+K3CFiatShamirPublicSetupInvocationAdequacy,
+K3CStrategyDecisionAdequacy,
+K3CPublicCoinAdequacy,
+K3CAcceptanceEffectAdequacy,
+K3CClaimReductionAdequacy,
+K3CFreshExecutionBoundaryAdequacy,
+K3CFiatShamirExecutionBoundaryAdequacy,
+K3CTranscriptDeclarationAdequacy,
+K3CRequiredInfluenceAdequacy,
+K3CChallengeTransitionAdequacy,
+K3CFSConstructionAdequacy
+  = pairwise-distinct exact AnalysisAdequacyEvaluatorId values in
+    `K3CCryptographicPropertyLanguageProfileId`, each with the complete typed
+    input schema implied by its slot below and the exact no-extra
+    `supported_input_profile_ids` consisting of
+    `K3CCryptographicPropertyLanguageProfileId` plus the owner profile selected
+    by that slot
+
+The bounded K3-C executable currently represents this list through generic
+profile-level evaluator-schema rows and singleton Analysis-profile input sets.
+It exercises the listed owner reads through host-side checks, but does not yet
+authenticate one distinct evaluator body and the exact Analysis-plus-owner
+profile set for every slot. Passing that instrument is not evidence for the
+stronger evaluator identity and input-closure claims above.
+
+K3CCommonSourceIngressFailurePartition =
+  the exact AnalysisProfileLawRef<AnalysisAttemptFailurePartition> in that same
+  profile; every occurrence of “common K3-C source-ingress failure partition”
+  below denotes this ref and never a prose or caller-selected value
 
 K3CPIRFreshSourceSlotFragment = CanonicalSeq [
   K3CPIRSourceSlot(PublicBindingView,
     K3COwnerViewCoordinate(subject,PublicBindingView),
-    [scope_openings,binding_ref.class,binding_ref.value_type,
-     binding_ref.value_origin,public_parameter_assignments,
-     fixed_session_context_assignments],SemanticMeaning,
-    exact Statement binding and public-role typing),
+    K3CStaticViewFields(subject,PublicBindingView,
+      [scope_openings,bindings]),SemanticMeaning,
+    K3CPublicBindingAdequacy,
+    ExactPIRStaticViewAuthorityBinding<PublicBindingView>,FreshSourceCapability),
+  ConcreteOwnerReadSlotSchema(
+    PIR,PublicSetupInvocationView,
+    DependentForAll([subject : K3CSubjectTuple],
+      K3CPublicSetupInvocationCoordinate(subject,Fresh)),OccurrenceEvidence,
+    CompleteOwnerBodyProjection(PublicSetupInvocationViewBody),
+    K3CFreshPublicSetupInvocationAdequacy,
+    ExactPublicSetupInvocationViewAuthorityBinding,FreshSourceCapability,
+    common K3-C source-ingress failure partition),
   K3CPIRSourceSlot(StrategyDecisionView,
     K3COwnerViewCoordinate(subject,StrategyDecisionView),
-    [decision_points,prover_view_formation,legal_move_types],SemanticMeaning,
-    exact prover-controlled move surface),
+    K3CStaticViewFields(subject,StrategyDecisionView,
+      [decision_points,prover_view_formation,guaranteed_prover_reads,
+       legal_move_types]),SemanticMeaning,
+    K3CStrategyDecisionAdequacy,
+    ExactPIRStaticViewAuthorityBinding<StrategyDecisionView>,FreshSourceCapability),
   K3CPIRSourceSlot(PublicCoinView,
     K3COwnerViewCoordinate(subject,PublicCoinView),
-    [challenge_ref.value_type,challenge_ref.domain,
-     challenge_ref.reduction_use,challenge_ref.public_conditions,
-     structural_public_coin_eligibility],SemanticMeaning,
-    exact selected Fresh challenge and public-coin structure),
+    K3CStaticViewFields(subject,PublicCoinView,
+      [structural_public_coin_eligibility,
+       verifier_private_dependency_closure,challenges]),SemanticMeaning,
+    K3CPublicCoinAdequacy,
+    ExactPIRStaticViewAuthorityBinding<PublicCoinView>,FreshSourceCapability),
   K3CPIRSourceSlot(EffectView,
     K3COwnerViewCoordinate(subject,EffectView),
-    [check_ref.algorithm,check_ref.evaluation_contract,check_ref.inputs,
-     check_ref.unique_invoke_occurrence,terminal_ref.verdict,
-     terminal_ref.required_true_checks,terminal_ref.claim_dispositions,
-     terminal_ref.unique_occurrence],SemanticMeaning,
-    exact selected verifier check and accepting terminal),
+    K3CAcceptanceProducerProjection(subject),SemanticMeaning,
+    K3CAcceptanceEffectAdequacy,
+    ExactPIRStaticViewAuthorityBinding<EffectView>,FreshSourceCapability),
   K3CPIRSourceSlot(ClaimReductionView,
     K3COwnerViewCoordinate(subject,ClaimReductionView),
-    [claim.contract,claim.usage,claim.source,terminal.claim_disposition],
-    SemanticMeaning,exact selected knowledge-claim meaning),
+    K3CStaticViewFields(subject,ClaimReductionView,
+      [claims,reductions,terminal_dispositions]),
+    SemanticMeaning,K3CClaimReductionAdequacy,
+    ExactPIRStaticViewAuthorityBinding<ClaimReductionView>,FreshSourceCapability),
   K3CPIRSourceSlot(ExecutionView,
-    K3COwnerViewCoordinate(subject,ExecutionView),
-    [generated_execution_law,run_record_schema,replay_qualification_law],
-    OccurrenceEvidence,exact execution/replay evidence boundary)
+    K3COwnerViewCoordinate(subject,FreshExecutionView),
+    K3CExecutionViewFields(subject,FreshExecutionView,
+      [protocol_id,core_id,challenge_interpretation,visible_history_law,
+       resolver_coordinates,generated_execution_law,run_record_schema,
+       replay_qualification_law,relation_run_view_issuance_law]),
+    SemanticMeaning,K3CFreshExecutionBoundaryAdequacy,
+    ExactPIRStaticViewAuthorityBinding<ExecutionView>,FreshSourceCapability)
 ]
 
 SchnorrSourceSlotCatalog = CanonicalConcat(
   K3CPIRFreshSourceSlotFragment,
-  K3BRelationSourceSlotFragment)
+  K3BSharedRelationSourceSlotFragment,
+  K3BProtocolAxisRelationSourceSlotFragment(Fresh))
 
-AFKAdditionalSourceSlotCatalog = CanonicalSeq [
+AFKAdditionalSourceSlotCatalog = CanonicalConcat(CanonicalSeq [
+  ConcreteOwnerReadSlotSchema(
+    PIR,PublicSetupInvocationView,
+    DependentForAll([subject : K3CSubjectTuple],
+      K3CPublicSetupInvocationCoordinate(subject,FiatShamir)),
+    OccurrenceEvidence,
+    CompleteOwnerBodyProjection(PublicSetupInvocationViewBody),
+    K3CFiatShamirPublicSetupInvocationAdequacy,
+    ExactPublicSetupInvocationViewAuthorityBinding,FreshSourceCapability,
+    common K3-C source-ingress failure partition),
+  K3CPIRSourceSlot(ExecutionView,
+    K3COwnerViewCoordinate(subject,FiatShamirExecutionView),
+    K3CExecutionViewFields(subject,FiatShamirExecutionView,
+      [protocol_id,core_id,challenge_interpretation,visible_history_law,
+       resolver_coordinates,generated_execution_law,run_record_schema,
+       replay_qualification_law,relation_run_view_issuance_law]),
+    SemanticMeaning,K3CFiatShamirExecutionBoundaryAdequacy,
+    ExactPIRStaticViewAuthorityBinding<ExecutionView>,FreshSourceCapability),
   K3CPIRSourceSlot(TranscriptDeclarationView,
     K3COwnerViewCoordinate(subject,TranscriptDeclarationView),
-    [construction_frames,event_declarations,challenge_namespace,
-     application_domain_nominal_ref],
-    SemanticMeaning,exact selected construction declaration),
+    K3CStaticViewFields(subject,TranscriptDeclarationView,
+      [transcript_construction_id,core_id,state_type,absorbed_bytes_type,
+       initial_state,initialize_algorithm_and_contract,
+       absorb_algorithm_and_contract,squeeze_bytes_algorithm_and_contract,
+       advance_state_algorithm_and_contract,application_domain,
+       sampling_failure_coordinate,frame_body_law,
+       exact_frame_schedule_coordinates]),SemanticMeaning,
+    K3CTranscriptDeclarationAdequacy,
+    ExactPIRStaticViewAuthorityBinding<TranscriptDeclarationView>,FreshSourceCapability),
   K3CPIRSourceSlot(RequiredInfluenceView,
     K3COwnerViewCoordinate(subject,RequiredInfluenceView),
-    [challenge_indexed_required_influence_sets],PremiseSupport,
-    exact selected challenge influence law),
+    K3CStaticViewFields(subject,RequiredInfluenceView,
+      [transcript_construction_id,core_id,influence_atom_algebra,
+       scope_binding_requirements,per_challenge_ordered_required_influence_sets,
+       reduction_and_module_additions,exact_prefix_law]),SemanticMeaning,
+    K3CRequiredInfluenceAdequacy,
+    ExactPIRStaticViewAuthorityBinding<RequiredInfluenceView>,FreshSourceCapability),
   K3CPIRSourceSlot(ChallengeTransitionView,
     K3COwnerViewCoordinate(subject,ChallengeTransitionView),
-    [prefix_transition,sampler,challenge_decoding_coordinates],
-    SemanticMeaning,exact selected FS challenge transition),
-  K3CPIRSourceSlot(PublicCoinView,
-    K3COwnerViewCoordinate(subject,PublicCoinView),
-    [challenge_ref.fresh_law,challenge_ref.correlation],PremiseSupport,
-    exact selected Fresh distribution declaration),
+    K3CStaticViewFields(subject,ChallengeTransitionView,
+      [transcript_construction_id,core_id,challenge_namespace_derivation,
+       acceptance_abi,decoder_abi,draw_bounds,exact_length_law,
+       state_update_before_decode_law,retry_law,sampling_failure_law,
+       challenge_decoding_coordinates]),SemanticMeaning,
+    K3CChallengeTransitionAdequacy,
+    ExactPIRStaticViewAuthorityBinding<ChallengeTransitionView>,FreshSourceCapability),
   K3CPIRSourceSlot(FSConstructionView,
     K3COwnerViewCoordinate(subject,FSConstructionView),
-    [result_schema,fresh_protocol_id,fiat_shamir_protocol_id,shared_core_id,
-     transcript_construction_id,exact_maps,structural_conclusion],
-    PremiseSupport,exact selected Fresh/FS construction result schema)
-]
+    K3CStaticViewFields(subject,FSConstructionView,
+      [result_ref,result_schema,fresh_protocol_id,fiat_shamir_protocol_id,
+       shared_core_id,transcript_construction_id,occurrence_map,value_map,
+       challenge_map,structural_conclusion]),
+    PremiseSupport,K3CFSConstructionAdequacy,
+    ExactPIRStaticViewAuthorityBinding<FSConstructionView>,FreshSourceCapability)
+],K3BProtocolAxisRelationSourceSlotFragment(FiatShamir))
 ```
 
 The closed source/profile bodies are:
 
 ```text
+SchnorrRelationSourceProfileAdequacy and
+AFKFreshFsSourceProfileAdequacy
+  = pairwise-distinct exact AnalysisAdequacyEvaluatorId values in
+    `K3CCryptographicPropertyLanguageProfileId`
+
+AFKFamilyFreshSourceProfileAdequacy and
+AFKFamilyTargetSourceProfileAdequacy
+  = pairwise-distinct exact AnalysisAdequacyEvaluatorId values in
+    `K3CAFKTransportLanguageProfileId`
+
 SchnorrRelationSourceProfileBody = {
   family_tag: SchnorrRelationSpecialSoundnessSource,
   slot_schemas: SchnorrSourceSlotCatalog,
   closed_field_read_set: exact derived union of those owner schema fields,
-  adequacy_predicate: one shared Fresh Protocol/Core, one exact relation seam,
-    and complete Statement/claim/Witness/check/terminal agreement
+  adequacy_evaluator_id: SchnorrRelationSourceProfileAdequacy
 }
 
 SchnorrRelationSemanticReadManifestBody(S) = {
@@ -366,8 +827,7 @@ AFKFreshFsSourceProfileBody = {
   slot_schemas:
     CanonicalAppend(SchnorrSourceSlotCatalog,AFKAdditionalSourceSlotCatalog),
   closed_field_read_set: exact derived union of those owner schema fields,
-  adequacy_predicate: Schnorr source adequacy plus exact same-Core Fresh/FS
-    construction and complete fixed-setup/query-index agreement
+  adequacy_evaluator_id: AFKFreshFsSourceProfileAdequacy
 }
 
 AFKTargetSemanticReadManifestBody(S) = {
@@ -390,9 +850,11 @@ later construction without changing its question identity. Those fields enter
 only `AFKTargetSemanticReadManifestBody(S)` and AFK applicability.
 
 The source property and its finite transcript-pair carrier are owned here; the
-manifest imports only `K3BRelationSourceSlotFragment` from
+Fresh manifest imports `K3BSharedRelationSourceSlotFragment` plus
+`K3BProtocolAxisRelationSourceSlotFragment(Fresh)` from
 [the relation-source boundary](semantic-relations.md#3-exact-relation-source-projection).
-Its source manifest binds:
+The AFK target additionally imports the exact Fiat--Shamir axis fragment. Its
+source manifest binds:
 
 ```text
 one admitted Fresh Protocol and K2 source views
@@ -401,6 +863,13 @@ checked Statement, claim, and Witness-role edges
 commitment, challenge, response, verifier check, and accepting event
 the exact challenge set C with cardinality N >= k = 2
 ```
+
+The AFK target extension additionally binds the exact Fiat--Shamir
+`ProtocolRelationBinding`, Plan Witness binding, Statement/claim/Witness
+correspondence results, grounding equation, and EquationGrounding result. It
+requires the producer-checked Fresh/Fiat--Shamir shape agreement while retaining
+both Protocol-qualified IDs. Neither the checked construction nor a shared
+Core derives this target relation ingress.
 
 The experiment and `Gamma_special(S)`, rather than the source manifest, bind the
 quantified extractor profile, group laws, efficiency premises, and other
@@ -435,7 +904,8 @@ admitted_pair_predicate(S,pair) iff
   both challenges inhabit ModelValues(K3CChallengeDomainId(S)),
   the two canonical challenge values are unequal, and
   both transcript tuples satisfy the exact accepting predicate reconstructed
-    from S.k2_check_ref, S.k2_accept_terminal_ref, S.grounding_equation_id, and
+    from S.k2_check_ref, S.k2_accept_terminal_ref,
+    S.relation_axis_ingress.fresh.grounding_equation_id, and
     the selected relation/verifier correspondence schemas
 ```
 
@@ -461,9 +931,24 @@ membership requirement.
 The active source experiment body closes the common profile fields as follows:
 
 ```text
+ExactSubjectSequenceUnion(left,right) =
+  require each input to be a canonical sequence of exact typed semantic
+  subject refs with no duplicate within that input; return `left` followed by
+  exactly those entries of `right` whose complete ContentRefV0 is absent from
+  `left`, preserving each input's order; require the output nonempty
+```
+
+Equality for this constructor is byte equality of complete typed content refs,
+not display labels. It is the only union elaborator used for ordered
+`AnalysisQuestionBody.exact_subjects`; it rejects an ill-typed input and never
+sorts subjects behind the family contract's declared order.
+
+```text
 SchnorrDeterministicExtractorProfileBody(S: K3CSubjectTuple) = {
-  input_types: [SchnorrSpecialSoundnessPair(S)],
-  output_types: [K3CWitnessType(S)],
+  input_and_output_types: {
+    inputs: [SchnorrSpecialSoundnessPair(S)],
+    outputs: [K3CWitnessType(S)]
+  },
   private_state_and_randomness_types: [Unit, Unit],
   allowed_source_oracle_capabilities: [],
   rerun_fork_rewind_programming_rights: none,
@@ -474,9 +959,11 @@ SchnorrDeterministicExtractorProfileBody(S: K3CSubjectTuple) = {
   termination_and_asymptotic_resource_law:
     polynomial-time field/group algorithm under separately supplied exact
     primitive and resource premise schemas,
-  counterfactual_capability_contract: none,
-  property_family_scope: FixedExtractorUniversalCorrectness and
-    KOutOfNSpecialSoundness(k = 2)
+  counterfactual_capability_contract_and_property_family_scope: {
+    counterfactual_capability_contract: none,
+    property_family_scope: FixedExtractorUniversalCorrectness and
+      KOutOfNSpecialSoundness(k = 2)
+  }
 }
 
 SchnorrDeterministicExtractorProfileId(S: K3CSubjectTuple) =
@@ -488,9 +975,11 @@ SchnorrSpecialSoundnessExperimentProfile(S: K3CSubjectTuple) = {
   source_profile_id: SchnorrRelationSourceProfileId,
   quantifier_prefix: [
     ExistsExtractor(
-      SchnorrDeterministicExtractorProfileId(S), Ext),
+      binding_ordinal: 0,
+      SchnorrDeterministicExtractorProfileId(S)),
     ForAllValue(
-      SchnorrSpecialSoundnessPair(S), admitted_pair_predicate(S), pair)
+      binding_ordinal: 1,
+      SchnorrSpecialSoundnessPair(S), admitted_pair_predicate(S))
   ],
   role_interfaces: [Ext: deterministic_extractor_abi],
   setup_and_input_sampling: none,
@@ -515,7 +1004,7 @@ SchnorrSpecialSoundnessExperimentProfile(S: K3CSubjectTuple) = {
 
 SchnorrSpecialSoundnessQuestion(S: K3CSubjectTuple) = AnalysisQuestionBody {
   family: KOutOfNSpecialSoundness,
-  exact_subjects: CanonicalUnion(
+  exact_subjects: ExactSubjectSequenceUnion(
     SchnorrRelationSubjectProjection(S), [K3CChallengeDomainId(S)]),
   context: SemanticExperimentContext {
     semantic_read_manifest_ids: [SchnorrRelationSemanticReadManifestId(S)],
@@ -530,11 +1019,7 @@ SchnorrSpecialSoundnessQuestion(S: K3CSubjectTuple) = AnalysisQuestionBody {
 }
 
 SchnorrSpecialSoundnessGoal(S: K3CSubjectTuple) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B, SchnorrSpecialSoundnessQuestion(S)),
-  conclusion_family: KOutOfNSpecialSoundness,
-  hypothesis_free_conclusion:
-    there exists one admitted polynomial-time Ext such that, for every
-    admitted pair, Ext returns an exact Witness satisfying the relation
+  question_id: AnalysisQuestionId(B, SchnorrSpecialSoundnessQuestion(S))
 }
 
 SchnorrFixedExtractorUniversalExperimentProfile(S: K3CSubjectTuple) = {
@@ -542,7 +1027,8 @@ SchnorrFixedExtractorUniversalExperimentProfile(S: K3CSubjectTuple) = {
   source_profile_id: SchnorrRelationSourceProfileId,
   quantifier_prefix: [
     ForAllValue(
-      SchnorrSpecialSoundnessPair(S), admitted_pair_predicate(S), pair)
+      binding_ordinal: 0,
+      SchnorrSpecialSoundnessPair(S), admitted_pair_predicate(S))
   ],
   role_interfaces: [
     candidate_extractor_subject: deterministic_extractor_abi
@@ -572,7 +1058,7 @@ AnalysisQuestionBody {
   family: FixedExtractorUniversalCorrectness,
   exact_subjects:
     CanonicalAppend(
-      CanonicalUnion(SchnorrRelationSubjectProjection(S),
+      ExactSubjectSequenceUnion(SchnorrRelationSubjectProjection(S),
                      [K3CChallengeDomainId(S)]), [Ext]),
   context: SemanticExperimentContext {
     semantic_read_manifest_ids: [SchnorrRelationSemanticReadManifestId(S)],
@@ -591,11 +1077,7 @@ AnalysisQuestionBody {
 SchnorrFixedExtractorWorksGoal(
   S: K3CSubjectTuple, Ext: PortableAlgorithmRef) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(
-    B, SchnorrFixedExtractorWorksQuestion(S, Ext)),
-  conclusion_family: FixedExtractorUniversalCorrectness,
-  hypothesis_free_conclusion:
-    for every admitted pair, this exact Ext returns an exact Witness
-    satisfying the relation
+    B, SchnorrFixedExtractorWorksQuestion(S, Ext))
 }
 ```
 
@@ -634,9 +1116,9 @@ constructor does not mint a new premise language:
 SchnorrSourcePremiseQuestion(S, family, payload, extra_subjects) =
   AnalysisQuestionBody {
     family,
-    exact_subjects: CanonicalUnion(
+    exact_subjects: ExactSubjectSequenceUnion(
       SchnorrRelationSubjectProjection(S),
-      [K3CChallengeDomainId(S)] + extra_subjects),
+      CanonicalAppend([K3CChallengeDomainId(S)],extra_subjects)),
     context: SemanticExperimentContext {
       semantic_read_manifest_ids:
         [SchnorrRelationSemanticReadManifestId(S)],
@@ -649,9 +1131,7 @@ SchnorrSourcePremiseQuestion(S, family, payload, extra_subjects) =
 SchnorrSourcePremiseGoal(S, family, payload, extra_subjects) =
   AnalysisGoalBody {
     question_id: AnalysisQuestionId(
-      B, SchnorrSourcePremiseQuestion(S,family,payload,extra_subjects)),
-    conclusion_family: family,
-    hypothesis_free_conclusion: payload.exact_proposition
+      B, SchnorrSourcePremiseQuestion(S,family,payload,extra_subjects))
   }
 
 SchnorrChallengeModelGoal(S) = SchnorrSourcePremiseGoal(
@@ -665,11 +1145,14 @@ SchnorrChallengeModelGoal(S) = SchnorrSourcePremiseGoal(
 
 SchnorrAcceptanceRelationGoal(S) = SchnorrSourcePremiseGoal(
   S, AcceptanceRelationCorrespondence, {
-    K2_source: S.k2_check_ref, its unique InvokeCheck occurrence, exact
-      CheckDecl fields, S.k2_accept_terminal_ref, and exact TerminalDecl fields,
-    Relations_source: S.relation_instance_id, S.grounding_equation_id, and
-      S.equation_grounding_question_id whose variant is exactly
-      EquationGrounding(S.grounding_equation_id,...),
+    K2_source: K3CAcceptanceProducerProjection(S), including S.k2_check_ref,
+      its unique InvokeCheck occurrence, S.k2_accept_terminal_ref, and every
+      owner-derived producer/guard/scope/effect dependency,
+    Relations_source: S.relation_instance_id,
+      S.relation_axis_ingress.fresh.grounding_equation_id, and
+      S.relation_axis_ingress.fresh.equation_grounding_question_id whose
+      variant is exactly EquationGrounding(
+        S.relation_axis_ingress.fresh.grounding_equation_id,...),
     exact_proposition:
       for every structurally complete admitted transcript projection, reaching
       the selected Accept terminal iff the selected K2 check returns true iff
@@ -731,11 +1214,14 @@ SchnorrSpecialSoundnessProposition(S,Ext) = AnalysisPropositionBody {
 }
 ```
 
-The algebra/encoding premise reads no `fixed_setup_sources` field. Its group
+The algebra/encoding premise reads no `fixed_setup_static_sources` field. Its group
 and encoding meaning is owned by the relation definition/model already present
 in `SchnorrSourceSlotCatalog`; the Analysis challenge model supplies only its
-finite challenge-value correspondence. AFK fixed-setup sources enter only the
-target manifest and applicability path.
+finite challenge-value correspondence. The PIR public-setup invocation view is
+already a Fresh source because it fixes the concrete public parameters under
+which acceptance is interpreted; the Analysis-owned `AFKFixedPublicSetupId`
+and transcript-construction additions enter only the target manifest and
+applicability path.
 
 The deterministic conclusion does not use a challenge probability law. Fresh
 uniformity, independence, and their K2-to-experiment correspondence are
@@ -756,6 +1242,15 @@ DependentFamilyMemberSpecializationRuleRef
 ExactInheritedConditionalQualificationRef =
   one exact AnalysisQualificationRequirementCoordinate declaration
 
+FiniteSpecialSoundnessQualificationRef,
+AFKFamilyApplicabilityQualificationRef,
+AFKFamilyInstanceCorrespondenceQualificationRef,
+AFKFamilyTransportQualificationRef, and
+AFKMemberSpecializationQualificationRef
+  = five pairwise-distinct exact AnalysisQualificationCoordinate declarations;
+    the first is property-profiled, the next two transport-profiled, and the
+    latter two source-validation-profiled
+
 FiniteSpecialSoundnessConsumerRef,
 AFKFamilyPropertyTransportConsumerRef, and
 AFKMemberSpecializationConsumerRef
@@ -768,8 +1263,8 @@ AFKFamilyTargetSpecializationPurposeRef, and
 AFKExactFamilyMemberSpecializationPurposeRef
   = five pairwise-distinct exact AnalysisTypedPurposeCoordinate declarations
 
-AnalysisNativeRuleSemanticsCatalog(B) contains exactly these active K3-C
-entries:
+K3CCryptographicNativeRuleProfileContracts contains exactly these active K3-C
+entries in the directly selected cryptographic semantic-language profile:
   ExistentialExtractorIntroductionRuleRef ->
     AnalysisNativeRuleSemanticsContract {
       exact_payload_meta_schema: {
@@ -847,18 +1342,31 @@ ExactAFKFamilyMemberRulePayload = {
   concrete_subjects: CanonicalNonEmptySeq<TypedSemanticSubjectRef>,
   native_statement_length: StatementLength(exact statement-type coordinate),
   exact_role_catalog_ref:
-    ModuleDeclarationRef<"analysis.afk-family-role-catalog">
+    AnalysisProfileDeclarationRef<"analysis.afk-family-role-catalog">
 }
 
 K3CUseDeclarationBody(kind,tag) = MetaRecord {
   0: MetaSymbol(kind), 1: MetaSymbol(tag), 2: MetaNatural(0)
 }
+```
 
-The nine use coordinates above resolve exactly these pairwise-distinct bodies:
+The fourteen use and qualification coordinates above resolve exactly these
+pairwise-distinct bodies in their stated direct profiles:
 
 ```text
 ExactInheritedConditionalQualificationRef ->
   K3CUseDeclarationBody("qualification","exact-inherited-conditional")
+FiniteSpecialSoundnessQualificationRef ->
+  K3CUseDeclarationBody("qualification","finite-special-soundness-result")
+AFKFamilyApplicabilityQualificationRef ->
+  K3CUseDeclarationBody("qualification","afk-family-applicability-result")
+AFKFamilyInstanceCorrespondenceQualificationRef ->
+  K3CUseDeclarationBody(
+    "qualification","afk-family-instance-correspondence-result")
+AFKFamilyTransportQualificationRef ->
+  K3CUseDeclarationBody("qualification","afk-family-transport-result")
+AFKMemberSpecializationQualificationRef ->
+  K3CUseDeclarationBody("qualification","afk-member-specialization-result")
 FiniteSpecialSoundnessConsumerRef ->
   K3CUseDeclarationBody("consumer","finite-special-soundness")
 AFKFamilyPropertyTransportConsumerRef ->
@@ -877,6 +1385,52 @@ AFKExactFamilyMemberSpecializationPurposeRef ->
   K3CUseDeclarationBody("purpose","afk-exact-family-member-specialization")
 ```
 
+The corresponding qualification catalog is closed as follows. Each displayed
+`meaning_law` and `inherited_context_law` is an exact profile-local
+`AnalysisProfileLawRef`, not prose in the declaration body:
+
+```text
+K3CQualificationProfileContracts = CanonicalKeySortedSeq [
+  {FiniteSpecialSoundnessQualificationRef,
+   {allowed_family: KOutOfNSpecialSoundness,
+    polarity: Affirmative,
+    meaning_law: exact finite special-soundness conclusion with one admitted
+      extractor witness,
+    inherited_context_law: exactly GammaSpecialId(S,Ext)}},
+  {AFKFamilyApplicabilityQualificationRef,
+   {allowed_family: TheoremApplicability,
+    polarity: Affirmative,
+    meaning_law: structural applicability only,
+    inherited_context_law: exactly GammaAFKApplicabilityId(F)}},
+  {AFKFamilyInstanceCorrespondenceQualificationRef,
+   {allowed_family: FamilyInstanceCorrespondence,
+    polarity: Affirmative,
+    meaning_law: conditional correspondence for exactly one family member,
+    inherited_context_law:
+      exactly GammaFamilyInstanceId(F,n0_literal,S,ell0)}},
+  {AFKFamilyTransportQualificationRef,
+   {allowed_family: AdaptiveKnowledgeSoundnessQltN,
+    polarity: Affirmative,
+    meaning_law: conditional theorem-family transport,
+    inherited_context_law: exactly GammaAFKFamilyTargetId(F)}},
+  {AFKMemberSpecializationQualificationRef,
+   {allowed_family: AdaptiveKnowledgeExtractionAtFixedLengthQltN,
+    polarity: Affirmative,
+    meaning_law: conditional one-member specialization only,
+    inherited_context_law:
+      exactly GammaAFKMemberSpecializationId(F,n0_literal,S,ell0)}}
+]
+```
+
+The property profile owns the first row, the semantic transport profile owns
+the next two, and the source-validation child owns the last two. The exact
+declaration body and resolved contract are both authenticated before a result
+may name a qualification. An absent row, duplicate tag, wrong-profile row, or
+qualification whose family, polarity, or inherited context differs from the
+resolved judgment refuses formation. `ExactInheritedConditionalQualificationRef`
+is a requirement declaration only and cannot be substituted for any of these
+five actual-result qualifications.
+
 ```text
 K3CUseContract(accepted_kinds,exact_qualification,attenuation,policy) =
   AnalysisUseSemanticsContract {
@@ -887,7 +1441,7 @@ K3CUseContract(accepted_kinds,exact_qualification,attenuation,policy) =
     failure_classification: common K3-C outcome partition
   }
 
-CryptographicAnalysisUseSemanticsEntries = CanonicalKeySortedSeq [
+K3CPropertyUseProfileContracts = CanonicalKeySortedSeq [
   {ExactInheritedConditionalQualificationRef,
    K3CUseContract(
      every active K3-C conditional affirmative judgment,
@@ -900,6 +1454,14 @@ CryptographicAnalysisUseSemanticsEntries = CanonicalKeySortedSeq [
      [KOutOfNSpecialSoundness with FiniteSpecialSoundnessPurposeRef],
      ExactInheritedConditionalQualificationRef,
      one exact finite-property use only,exact finite-analysis policy)},
+  {FiniteSpecialSoundnessPurposeRef,
+   K3CUseContract(
+     [KOutOfNSpecialSoundness by FiniteSpecialSoundnessConsumerRef],
+     ExactInheritedConditionalQualificationRef,
+     no family or theorem transport,exact finite-analysis policy)}
+]
+
+K3CTransportUseProfileContracts = CanonicalKeySortedSeq [
   {AFKFamilyPropertyTransportConsumerRef,
    K3CUseContract([
      AsymptoticKOutOfNSpecialSoundness with AFKTheoremSourcePropertyPurposeRef,
@@ -916,11 +1478,6 @@ CryptographicAnalysisUseSemanticsEntries = CanonicalKeySortedSeq [
      ExactInheritedConditionalQualificationRef,
      single use by one exact `(F,n0_literal,S,ell0)` specialization,
      exact member-specialization policy)},
-  {FiniteSpecialSoundnessPurposeRef,
-   K3CUseContract(
-     [KOutOfNSpecialSoundness by FiniteSpecialSoundnessConsumerRef],
-     ExactInheritedConditionalQualificationRef,
-     no family or theorem transport,exact finite-analysis policy)},
   {AFKTheoremSourcePropertyPurposeRef,
    K3CUseContract([
      AsymptoticKOutOfNSpecialSoundness by
@@ -944,10 +1501,17 @@ CryptographicAnalysisUseSemanticsEntries = CanonicalKeySortedSeq [
      pointwise-correspondence input only,exact member-specialization policy)}
 ]
 
-AnalysisUseSemanticsCatalog(B) contains exactly
-`CryptographicAnalysisUseSemanticsEntries` in the active K3-C regime. Each
-entry is keyed by the complete resolved coordinate and declaration body, not
-its display tag. A missing, extra, cross-consumer, cross-purpose, cross-family,
+The cryptographic property semantic-language profile contains exactly
+`K3CPropertyUseProfileContracts`. The AFK semantic-transport profile contains
+exactly `K3CTransportUseProfileContracts` and imports the property profile, so
+it resolves `ExactInheritedConditionalQualificationRef` without copying or
+reissuing that declaration. The theorem-source-validation child imports the
+transport profile and may therefore resolve the member-specialization
+consumer and purposes without a reverse import into the property profile.
+Each entry is keyed by the complete resolved coordinate and declaration body,
+not its display tag. Its fields are exact `AnalysisProfileLawRef` values in the
+profile that owns the entry, not the explanatory phrases in the display. A
+missing, extra supplied profile, cross-consumer, cross-purpose, cross-family,
 weakened-qualification, or body-mismatched entry refuses use.
 
 K3CNativeRule(rule_coordinate,payload) =
@@ -1001,7 +1565,11 @@ SchnorrSpecialSoundnessSupportBody(
     semantic_basis_id: SchnorrSpecialSoundnessSemanticBasisId(S,Ext),
     proposition_id: AnalysisPropositionId(
       B, SchnorrSpecialSoundnessProposition(S,Ext)),
-    non_hypothesis_premise_bindings: [exact_witness_binding],
+    non_hypothesis_premise_bindings:
+      ExactNonHypothesisPremiseBindingMap(
+        SchnorrSpecialSoundnessSemanticBasisId(S,Ext),
+        SchnorrSpecialSoundnessSemanticBasisBody(S,Ext),
+        [exact_witness_binding]),
     established_hypothesis_node_bindings: established_node_bindings,
     assumed_hypothesis_node_bindings: assumed_node_bindings,
     source_support_bindings: [ExactManifestSupportBinding {
@@ -1011,18 +1579,70 @@ SchnorrSpecialSoundnessSupportBody(
     }]
   }
 
+SchnorrSpecialSoundnessSupportId(
+    S,Ext,exact_witness_binding,established_node_bindings,
+    assumed_node_bindings,source_support) =
+  AnalysisId<"analysis.support-instantiation">(B,
+    SchnorrSpecialSoundnessSupportBody(
+      S,Ext,exact_witness_binding,established_node_bindings,
+      assumed_node_bindings,source_support))
+
+SchnorrSpecialSoundnessValidationBasisBody(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  ExactAnalysisValidationBasisBody(
+    checker_contracts,translations,finite_controls,[],residual_trust_roots)
+
+SchnorrSpecialSoundnessValidationBasisId(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  AnalysisId<"analysis.validation-basis">(B,
+    SchnorrSpecialSoundnessValidationBasisBody(
+      checker_contracts,translations,finite_controls,residual_trust_roots))
+
+SchnorrSpecialSoundnessOperationPolicyBody(S,Ext) =
+  ExactAnalysisOperationPolicyBody(
+    AnalysisPropositionId(B,SchnorrSpecialSoundnessProposition(S,Ext)),
+    CanonicalMap {
+      FiniteSpecialSoundnessConsumerRef:
+        CanonicalSingleton(FiniteSpecialSoundnessPurposeRef)
+    },
+    SchnorrSpecialSoundnessPolicyLawBundleRef)
+
+SchnorrSpecialSoundnessOperationPolicyId(S,Ext) =
+  AnalysisId<"analysis.operation-policy">(
+    B,SchnorrSpecialSoundnessOperationPolicyBody(S,Ext))
+
+SchnorrSpecialSoundnessJudgmentBody(
+    S,Ext,support_id,validation_basis_id) =
+  ExactAffirmativeAnalysisJudgmentBody(
+    AnalysisPropositionId(B,SchnorrSpecialSoundnessProposition(S,Ext)),
+    NoQuantitativeResult,
+    SchnorrSpecialSoundnessSemanticBasisId(S,Ext),
+    support_id,validation_basis_id,
+    FiniteSpecialSoundnessQualificationRef,
+    SchnorrSpecialSoundnessOperationPolicyId(S,Ext))
+
+SchnorrSpecialSoundnessJudgmentId(
+    S,Ext,support_id,validation_basis_id) =
+  AnalysisId<"analysis.judgment-record">(B,
+    SchnorrSpecialSoundnessJudgmentBody(
+      S,Ext,support_id,validation_basis_id))
+
 SchnorrSpecialSoundnessJudgmentSchema(S,Ext) = {
-  exact proposition: SchnorrSpecialSoundnessProposition(S,Ext),
-  exact quantified witness: Ext,
-  semantic basis: SchnorrSpecialSoundnessSemanticBasisId(S,Ext),
-  support: exact admitted support body above,
-  result: Affirmative conditional KOutOfNSpecialSoundness judgment inheriting
+  exact_judgment_constructor: SchnorrSpecialSoundnessJudgmentId,
+  exact_quantified_witness: Ext,
+  result: Affirmative conditional KOutOfNSpecialSoundness inheriting exactly
     GammaSpecialId(S,Ext),
-  live capability purpose:
-    FiniteSpecialSoundnessPurposeRef for
-    FiniteSpecialSoundnessConsumerRef only; no family-transport use
+  live_capability_permission:
+    FiniteSpecialSoundnessConsumerRef -> FiniteSpecialSoundnessPurposeRef
 }
 ```
+
+`SchnorrSpecialSoundnessPolicyLawBundleRef` is the one exact property-profile
+`AnalysisOperationPolicyLawBundle` admitted for this result class. It requires
+fresh single-invocation capabilities, conditional-result disclosure, refusal
+of unknown questions, portable persistence only when every source coordinate
+is portable, and exact cold replay. None of those explanatory phrases is
+encoded; the five exact law refs in the bundle are.
 
 The established and assumed hypothesis-node maps must be disjoint and their
 domains must partition every and only the seven reachable DAG nodes. Each established entry supplies an
@@ -1117,7 +1737,7 @@ AFKAdversaryBlackBoxInvocationOperationRef,
 AFKFamilyAdversaryRandomOracleQueryOperationRef, and
 AFKFamilyAdversaryBlackBoxInvocationOperationRef
   = four pairwise-distinct exact declarations under
-    ModuleDeclarationRef<"analysis.resource-operation">
+    AnalysisProfileDeclarationRef<"analysis.resource-operation">
 
 AFKClassicalRandomOracleProfileBody(S: K3CSubjectTuple) = {
   output_type: ModelValue(K3CChallengeDomainId(S)),
@@ -1182,9 +1802,11 @@ AFKAdaptiveQQueryProverProfileBody(S: K3CSubjectTuple) = {
 }
 
 AFKExtractorProfileBody(S: K3CSubjectTuple) = {
-  input_types: [StatementLength(K3CStatementType(S))],
-  output_types: [K3CStatementType(S), AFKProofType(S), BitString,
-                 TerminalVerdict, K3CWitnessType(S)],
+  input_and_output_types: {
+    inputs: [StatementLength(K3CStatementType(S))],
+    outputs: [K3CStatementType(S), AFKProofType(S), BitString,
+              TerminalVerdict, K3CWitnessType(S)]
+  },
   private_state_and_randomness_types:
     [extractor state, extractor coins, lazy random-function state],
   allowed_source_oracle_capabilities:
@@ -1200,9 +1822,11 @@ AFKExtractorProfileBody(S: K3CSubjectTuple) = {
   termination_and_asymptotic_resource_law:
     for a concrete member, only the exact expected-call/resource proposition;
     this profile makes no asymptotic-uniformity claim,
-  counterfactual_capability_contract:
-    Analysis-owned AFK oracle/fork interface, never K2 ReplayRun,
-  property_family_scope: AdaptiveKnowledgeExtractionAtFixedLengthQltN
+  counterfactual_capability_contract_and_property_family_scope: {
+    counterfactual_capability_contract:
+      Analysis-owned AFK oracle/fork interface, never K2 ReplayRun,
+    property_family_scope: AdaptiveKnowledgeExtractionAtFixedLengthQltN
+  }
 }
 
 AdaptiveQQueryProver(S, n, Q, RO_ABI) = {
@@ -1329,13 +1953,18 @@ AFKMemberKnowledgeExperimentProfile(
   family: AdaptiveKnowledgeExtractionAtFixedLengthQltN,
   source_profile_id: AFKFreshFsSourceProfileId,
   quantifier_prefix: [
-    ExistsUniformBlackBoxExtractor(AFKExtractorProfileId(S), E),
+    ExistsUniformBlackBoxExtractor(
+      binding_ordinal: 0,AFKExtractorProfileId(S)),
     ForAllQuantitativeValue(
+      binding_ordinal: 1,
       AFKAdversaryROQueryCount(S),
-      0 <= Q < ModelCardinality(K3CChallengeDomainId(S)), Q),
+      0 <= CurrentQuantifiedValue <
+        ModelCardinality(K3CChallengeDomainId(S))),
     ForAllStrategy(
+      binding_ordinal: 2,
       AFKAdaptiveQQueryProverProfileId(S),
-      AdaptiveQQueryProver(S, ell0, Q, exact RO ABI), P^a)
+      AdaptiveQQueryProver(
+        S,ell0,EarlierQuantifierRef(1),exact RO ABI))
   ],
   role_interfaces: [P^a_random_oracle_query, V_random_oracle_query,
                     E_black_box_prover, E_programmable_random_oracle],
@@ -1370,7 +1999,7 @@ AFKMemberKnowledgeQuestion(
     S: K3CSubjectTuple,
     ell0: StatementLength(K3CStatementType(S))) = AnalysisQuestionBody {
   family: AdaptiveKnowledgeExtractionAtFixedLengthQltN,
-  exact_subjects: CanonicalUnion(
+  exact_subjects: ExactSubjectSequenceUnion(
     AFKTargetSubjectProjection(S),
     [K3CChallengeDomainId(S), AFKFixedPublicSetupId(S)]),
   context: SemanticExperimentContext {
@@ -1393,14 +2022,7 @@ AFKMemberKnowledgeQuestion(
 AFKMemberKnowledgeGoal(
     S: K3CSubjectTuple,
     ell0: StatementLength(K3CStatementType(S))) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B, AFKMemberKnowledgeQuestion(S,ell0)),
-  conclusion_family: AdaptiveKnowledgeExtractionAtFixedLengthQltN,
-  hypothesis_free_conclusion:
-    the exact IdenticalMarginalLaw holds and
-    extractor_witness_success(S,ell0,Q,P^a,E) is at least the application of
-      AFKKnowledgeSuccessFormulaId(S) to
-      (epsilon(S,ell0,Q,P^a), ell0, Q), and the expected invocation count is at
-      most AFKExpectedCallsFormulaId(S)(Q)
+  question_id: AnalysisQuestionId(B, AFKMemberKnowledgeQuestion(S,ell0))
 }
 ```
 
@@ -1578,12 +2200,26 @@ sequence of native K1/K2 objects. The family ID therefore authenticates only
 one finite language reference and one finite payload:
 
 ```text
-AFKSchnorrFamilyDefinitionBody(language_ref,payload) =
-  AnalysisAsymptoticProtocolFamilyDefinitionBody(language_ref,payload)
+AFKSchnorrFamilyLanguageDeclarationBody =
+  AnalysisAsymptoticFamilyLanguageDeclarationBody(
+    MetaSymbol("afk-v2-three-move-public-coin-family"),Unit,0)
 
-AFKSchnorrFamilyDefinitionId(language_ref,payload) =
+AFKSchnorrFamilyLanguageRef =
+  the one exact AnalysisProfileDeclarationRef<
+    "analysis.asymptotic-family-language"> in
+  K3CAFKTransportLanguageProfileId whose complete declaration body is
+  AFKSchnorrFamilyLanguageDeclarationBody and whose resolved contract is the
+  exact abstract-member signature and denotation law on this page
+
+AFKSchnorrFamilyPayloadV0 = CanonicalValue<Unit>(Unit)
+
+AFKSchnorrFamilyDefinitionBody =
+  AnalysisAsymptoticProtocolFamilyDefinitionBody(
+    AFKSchnorrFamilyLanguageRef,AFKSchnorrFamilyPayloadV0)
+
+AFKSchnorrFamilyDefinitionId =
   AnalysisAsymptoticProtocolFamilyDefinitionId(
-    B,language_ref,payload)
+    B,AFKSchnorrFamilyLanguageRef,AFKSchnorrFamilyPayloadV0)
 
 AFKAbstractMember(F,n:LogicalNat) = FamilyMember(F,n) with abstract fields {
   Statement_F(n), Witness_F(n), Relation_F(n),
@@ -1678,9 +2314,7 @@ AFKFamilyFreshSourceProfileBody = {
   slot_schemas: AFKFamilyFreshAbstractSlotCatalog,
   closed_field_read_set:
     exact projections of those roles from one abstract family member,
-  adequacy_predicate:
-    every projection comes from the same member and has the declared dependent
-    carrier or relation signature
+  adequacy_evaluator_id: AFKFamilyFreshSourceProfileAdequacy
 }
 
 AFKFamilyTargetSourceProfileBody = {
@@ -1690,9 +2324,7 @@ AFKFamilyTargetSourceProfileBody = {
                     AFKFamilyTargetAdditionalAbstractSlotCatalog),
   closed_field_read_set:
     exact projections of those roles from one abstract family member,
-  adequacy_predicate:
-    Fresh/FS roles share the same interaction, relation, setup, and role
-    carriers and every target projection comes from that one member
+  adequacy_evaluator_id: AFKFamilyTargetSourceProfileAdequacy
 }
 
 AFKFamilyFreshSourceProfileId =
@@ -1700,13 +2332,17 @@ AFKFamilyFreshSourceProfileId =
 AFKFamilyTargetSourceProfileId =
   AnalysisSourceProfileId(B,AFKFamilyTargetSourceProfileBody)
 
+RequiredAnalysisLanguageProfile(AFKFamilyFreshSourceProfileBody) =
+  K3CAFKTransportLanguageProfileId
+RequiredAnalysisLanguageProfile(AFKFamilyTargetSourceProfileBody) =
+  K3CAFKTransportLanguageProfileId
+
 SchnorrRelationSpecialSoundnessSourceDeclarationBody =
   AnalysisSourceFamilyDeclarationBody {
     allowed_slot_variant: ConcreteOwnerSource,
     exact_slot_and_field_schema: SchnorrSourceSlotCatalog,
-    exact_adequacy_schema:
-      one shared Fresh Protocol/Core, one exact relation seam, and complete
-      Statement/claim/Witness/check/terminal agreement,
+    exact_adequacy_evaluator_schema:
+      SchemaOf(SchnorrRelationSourceProfileAdequacy),
     failure_classification: common K3-C source-ingress failure partition
   }
 
@@ -1715,9 +2351,8 @@ AFKAdaptiveFreshFsSourceDeclarationBody =
     allowed_slot_variant: ConcreteOwnerSource,
     exact_slot_and_field_schema:
       CanonicalConcat(SchnorrSourceSlotCatalog,AFKAdditionalSourceSlotCatalog),
-    exact_adequacy_schema:
-      Schnorr source adequacy plus exact same-Core Fresh/FS construction and
-      complete fixed-setup/query-index agreement,
+    exact_adequacy_evaluator_schema:
+      SchemaOf(AFKFreshFsSourceProfileAdequacy),
     failure_classification: common K3-C source-ingress failure partition
   }
 
@@ -1725,9 +2360,8 @@ AFKAbstractFreshFamilySourceDeclarationBody =
   AnalysisSourceFamilyDeclarationBody {
     allowed_slot_variant: AbstractFamilyRole,
     exact_slot_and_field_schema: AFKFamilyFreshAbstractSlotCatalog,
-    exact_adequacy_schema:
-      all projections resolve from one member with their exact dependent
-      signatures,
+    exact_adequacy_evaluator_schema:
+      SchemaOf(AFKFamilyFreshSourceProfileAdequacy),
     failure_classification: common K3-C source-ingress failure partition
   }
 
@@ -1737,39 +2371,44 @@ AFKAbstractFreshFsFamilySourceDeclarationBody =
     exact_slot_and_field_schema:
       CanonicalConcat(AFKFamilyFreshAbstractSlotCatalog,
                       AFKFamilyTargetAdditionalAbstractSlotCatalog),
-    exact_adequacy_schema:
-      all projections resolve from one member and Fresh/FS share the same
-      interaction, relation, setup, and role carriers,
+    exact_adequacy_evaluator_schema:
+      SchemaOf(AFKFamilyTargetSourceProfileAdequacy),
     failure_classification: common K3-C source-ingress failure partition
   }
 
 SchnorrRelationSpecialSoundnessSource =
-  the one exact AnalysisSourceFamilyCoordinate whose resolved body is
+  the one exact AnalysisSourceFamilyCoordinate resolved by
+  K3CCryptographicPropertyLanguageProfileId whose body is
   SchnorrRelationSpecialSoundnessSourceDeclarationBody
 AFKAdaptiveFreshFsSource =
-  the one exact AnalysisSourceFamilyCoordinate whose resolved body is
-  AFKAdaptiveFreshFsSourceDeclarationBody
+  the one exact AnalysisSourceFamilyCoordinate resolved by that same profile
+  whose body is AFKAdaptiveFreshFsSourceDeclarationBody
 AFKAbstractFreshFamilySource =
-  the one exact AnalysisSourceFamilyCoordinate whose resolved body is
-  AFKAbstractFreshFamilySourceDeclarationBody
+  the one exact AnalysisSourceFamilyCoordinate resolved by
+  K3CAFKTransportLanguageProfileId
+  whose body is AFKAbstractFreshFamilySourceDeclarationBody
 AFKAbstractFreshFsFamilySource =
-  the one exact AnalysisSourceFamilyCoordinate whose resolved body is
-  AFKAbstractFreshFsFamilySourceDeclarationBody
+  the one exact AnalysisSourceFamilyCoordinate resolved by that same transport
+  profile
+  whose body is AFKAbstractFreshFsFamilySourceDeclarationBody
 
 K3CSourceFamilyContract(body) = AnalysisSourceFamilySemanticsContract {
   allowed_slot_variant: body.allowed_slot_variant,
   exact_slot_and_field_schema: body.exact_slot_and_field_schema,
-  exact_adequacy_schema: body.exact_adequacy_schema,
+  exact_adequacy_evaluator_schema: body.exact_adequacy_evaluator_schema,
   failure_classification: body.failure_classification
 }
 
-CryptographicAnalysisSourceFamilySemanticsEntries = CanonicalKeySortedSeq [
+K3CPropertySourceFamilyProfileContracts = CanonicalKeySortedSeq [
   {SchnorrRelationSpecialSoundnessSource,
    SchnorrRelationSpecialSoundnessSourceDeclarationBody,
    K3CSourceFamilyContract(
      SchnorrRelationSpecialSoundnessSourceDeclarationBody)},
   {AFKAdaptiveFreshFsSource,AFKAdaptiveFreshFsSourceDeclarationBody,
-   K3CSourceFamilyContract(AFKAdaptiveFreshFsSourceDeclarationBody)},
+   K3CSourceFamilyContract(AFKAdaptiveFreshFsSourceDeclarationBody)}
+]
+
+K3CTransportSourceFamilyProfileContracts = CanonicalKeySortedSeq [
   {AFKAbstractFreshFamilySource,
    AFKAbstractFreshFamilySourceDeclarationBody,
    K3CSourceFamilyContract(AFKAbstractFreshFamilySourceDeclarationBody)},
@@ -1778,16 +2417,32 @@ CryptographicAnalysisSourceFamilySemanticsEntries = CanonicalKeySortedSeq [
    K3CSourceFamilyContract(AFKAbstractFreshFsFamilySourceDeclarationBody)}
 ]
 
-AnalysisSourceFamilySemanticsCatalog(B) =
-  the authenticated mapping with exactly
-  CryptographicAnalysisSourceFamilySemanticsEntries for the active K3-C regime;
-  a missing, extra, duplicate, or body-mismatched entry rejects regime support
+K3CCryptographicPropertyLanguageProfileId =
+  the exact profile defined in `analysis-model.md` whose authenticated inline
+  catalogs and law source contain exactly
+  K3CPropertySourceFamilyProfileContracts plus the bounded property,
+  concrete-source/body, experiment, quantitative, native-rule, use, and
+  adequacy contracts in this page
+
+K3CAFKTransportLanguageProfileId =
+  the exact importing profile defined in `analysis-model.md` whose
+  authenticated inline catalogs and law source contain exactly
+  K3CTransportSourceFamilyProfileContracts plus the AFK asymptotic-family,
+  abstract-source/body, F-dependent experiment and quantitative,
+  theorem-transport, specialization, native-rule, use, and adequacy contracts
+  in this page
 ```
 
-The selected language declaration must resolve under the exact three-field
-grammar in [`analysis-model.md`](analysis-model.md#23-asymptotic-family-ingress),
-its lifted payload type must contain `payload`, and its contract must denote
-the abstract fields above. None of those fields is a `K3CSubjectTuple`,
+Each profile's imports are exactly those fixed in the K3-C profile bundle. A
+missing, unused, extra, duplicate, reverse, or body-mismatched entry rejects
+profile support. Ordinary algorithm and owner-module roots are authenticated
+separately by their exact subject-specific dependency closures.
+
+The selected language declaration resolves under the exact three-field grammar
+in [`analysis-model.md`](analysis-model.md#23-asymptotic-family-ingress), its
+lifted payload type admits exactly `AFKSchnorrFamilyPayloadV0`, and its contract
+denotes the abstract fields above. There is no caller label, binder spelling,
+law string, or alternative payload in this constructor. None of those fields is a `K3CSubjectTuple`,
 `ValueType`, `ProtocolId`, `RelationInstanceId`, or `PortableAlgorithmRef`.
 Formation of `F` authenticates the description but proves neither that the
 denotation is total and single-valued nor that its members satisfy any law.
@@ -1918,8 +2573,10 @@ portable algorithms and do not inherit K1's finite iteration limit:
 
 ```text
 AFKFamilySourceExtractorProfileBody(F) = {
-  input_types: [n : LogicalNat, AFKSpecialSoundnessPair_F(n)],
-  output_types: [Witness_F(n)],
+  input_and_output_types: {
+    inputs: [n : LogicalNat, AFKSpecialSoundnessPair_F(n)],
+    outputs: [Witness_F(n)]
+  },
   private_state_and_randomness_types: [Unit,Unit],
   allowed_source_oracle_capabilities: [],
   rerun_fork_rewind_programming_rights: none,
@@ -1929,8 +2586,10 @@ AFKFamilySourceExtractorProfileBody(F) = {
     every admitted pair maps to a Witness satisfying Relation_F(n),
   termination_and_asymptotic_resource_law:
     total and polynomial in the exact family length measure,
-  counterfactual_capability_contract: none,
-  property_family_scope: AsymptoticKOutOfNSpecialSoundness(k=2)
+  counterfactual_capability_contract_and_property_family_scope: {
+    counterfactual_capability_contract: none,
+    property_family_scope: AsymptoticKOutOfNSpecialSoundness(k=2)
+  }
 }
 
 AFKFamilyAdaptiveProverProfileBody(F) = {
@@ -1942,7 +2601,9 @@ AFKFamilyAdaptiveProverProfileBody(F) = {
   ],
   strategy_abi:
     Unit -> (Statement_F(n),Proof_F(n),Aux_F(n)) with
-      statement_length_F(Statement)=n,
+      statement_length_F(Statement)=n; the prover coin tape is sampled once at
+      the outer experiment boundary and fixed into the resulting deterministic
+      next-message strategy for every extractor rerun,
   private_state_type: family-declared prover state,
   initial_advice_type: family-declared private advice quantified with P^a,
   allowed_views: own private state, advice, randomness, and prior query answers,
@@ -1951,10 +2612,6 @@ AFKFamilyAdaptiveProverProfileBody(F) = {
   legal_move_relation:
     every query inhabits RandomOracleIndex_F(n), at most Q counted calls occur
     including repeats and off-image calls, and the final output has length n,
-  extractor_rerun_coin_law:
-    sample a prover coin tape once at the outer experiment boundary, fix it
-    into the deterministic next-message strategy of Remark 2, and retain it
-    across every extractor rerun,
   stop_and_noncompletion_law:
     exactly one total output; no polynomial-time requirement,
   resource_dimensions:
@@ -1962,9 +2619,11 @@ AFKFamilyAdaptiveProverProfileBody(F) = {
 }
 
 AFKFamilyTargetExtractorProfileBody(F) = {
-  input_types: [n : LogicalNat],
-  output_types:
-    [(Statement_F(n),Proof_F(n),Aux_F(n),VerifierOutput_F(n),Witness_F(n))],
+  input_and_output_types: {
+    inputs: [n : LogicalNat],
+    outputs:
+      [(Statement_F(n),Proof_F(n),Aux_F(n),VerifierOutput_F(n),Witness_F(n))]
+  },
   private_state_and_randomness_types:
     [family extractor state,fresh extractor coins],
   allowed_source_oracle_capabilities:
@@ -1987,12 +2646,14 @@ AFKFamilyTargetExtractorProfileBody(F) = {
   termination_and_asymptotic_resource_law:
     expected polynomial in n and actual Q, counting one P^a invocation as one
     step in AFKFamilyAdversaryInvocationDimension(F),
-  counterfactual_capability_contract:
-    exact classical lazy-RO simulation/programming contract for restricted
-    adaptive knowledge soundness; the input ABI excludes Q, epsilon, prover
-    code, and the oracle table,
-  property_family_scope:
-    AdaptiveKnowledgeSoundnessQltN; QROM and generic restoration are unsupported
+  counterfactual_capability_contract_and_property_family_scope: {
+    counterfactual_capability_contract:
+      exact classical lazy-RO simulation/programming contract for restricted
+      adaptive knowledge soundness; the input ABI excludes Q, epsilon, prover
+      code, and the oracle table,
+    property_family_scope:
+      AdaptiveKnowledgeSoundnessQltN; QROM and generic restoration are unsupported
+  }
 }
 
 AFKFamilySourceExtractorProfileId(F) =
@@ -2010,10 +2671,13 @@ AFKFamilySpecialSoundnessExperimentProfileBody(F) = {
   family: AsymptoticKOutOfNSpecialSoundness,
   source_profile_id: AFKFamilyFreshSourceProfileId,
   quantifier_prefix: [
-    ExistsUniformExtractorFamily(AFKFamilySourceExtractorProfileId(F),Ext_F),
-    ForAllLogicalNat(true,n),
+    ExistsUniformExtractorFamily(
+      binding_ordinal: 0,AFKFamilySourceExtractorProfileId(F)),
+    ForAllLogicalNat(binding_ordinal: 1,true),
     ForAllFamilyValue(
-      F,AFKSpecialSoundnessPair_F(n),admitted_pair_F(n),pair)
+      binding_ordinal: 2,F,
+      AFKSpecialSoundnessPair_F(EarlierQuantifierRef(1)),
+      admitted_pair_F(EarlierQuantifierRef(1)))
   ],
   role_interfaces: [Ext_F: AFKFamilySourceExtractorProfileId(F)],
   setup_and_input_sampling: none,
@@ -2043,15 +2707,19 @@ AFKFamilyAdaptiveKnowledgeExperimentProfileBody(F) = {
   source_profile_id: AFKFamilyTargetSourceProfileId,
   quantifier_prefix: [
     ExistsPositivePolynomial(
-      AFKLogicalNatPositivePolynomialProfileId,q_KS),
-    ExistsUniformBlackBoxExtractor(AFKFamilyTargetExtractorProfileId(F),E),
-    ForAllLogicalNat(true,n),
+      binding_ordinal: 0,AFKLogicalNatPositivePolynomialProfileId),
+    ExistsUniformBlackBoxExtractor(
+      binding_ordinal: 1,AFKFamilyTargetExtractorProfileId(F)),
+    ForAllLogicalNat(binding_ordinal: 2,true),
     ForAllQuantitativeValue(
+      binding_ordinal: 3,
       QueryCount<AFKFamilyROQueryDimension(F)>,
-      0 <= Q < AFKFamilyConstantChallengeCardinality(F),Q),
+      0 <= CurrentQuantifiedValue <
+        AFKFamilyConstantChallengeCardinality(F)),
     ForAllStrategy(
+      binding_ordinal: 4,
       AFKFamilyAdaptiveProverProfileId(F),
-      exact total-output adaptive Q-query member strategy,P^a)
+      exact total-output adaptive EarlierQuantifierRef(3)-query member strategy)
   ],
   role_interfaces: [
     P^a: AFKFamilyAdaptiveProverProfileId(F),
@@ -2123,11 +2791,7 @@ AFKFamilySpecialSoundnessQuestion(F) = AnalysisQuestionBody {
 }
 
 AFKFamilySpecialSoundnessGoal(F) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B,AFKFamilySpecialSoundnessQuestion(F)),
-  conclusion_family: AsymptoticKOutOfNSpecialSoundness,
-  hypothesis_free_conclusion:
-    one uniform polynomial-time Ext_F extracts a valid Witness_F(n) from every
-    admitted two-transcript pair for every n : LogicalNat
+  question_id: AnalysisQuestionId(B,AFKFamilySpecialSoundnessQuestion(F))
 }
 
 AFKFamilyAdaptiveKnowledgeQuestion(F) = AnalysisQuestionBody {
@@ -2149,13 +2813,7 @@ AFKFamilyAdaptiveKnowledgeQuestion(F) = AnalysisQuestionBody {
 }
 
 AFKFamilyAdaptiveKnowledgeGoal(F) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B,AFKFamilyAdaptiveKnowledgeQuestion(F)),
-  conclusion_family: AdaptiveKnowledgeSoundnessQltN,
-  hypothesis_free_conclusion:
-    Definition 10's marginal equality, witness-success inequality, and
-    expected-polynomial extractor law hold under
-    0 <= Q < AFKFamilyConstantChallengeCardinality(F) for every
-    n and every admitted P^a
+  question_id: AnalysisQuestionId(B,AFKFamilyAdaptiveKnowledgeQuestion(F))
 }
 ```
 
@@ -2180,9 +2838,7 @@ AFKFamilyPremiseQuestion(F,family,payload,extra_subjects) =
 AFKFamilyPremiseGoal(F,family,payload,extra_subjects) =
   AnalysisGoalBody {
     question_id: AnalysisQuestionId(
-      B,AFKFamilyPremiseQuestion(F,family,payload,extra_subjects)),
-    conclusion_family: family,
-    hypothesis_free_conclusion: payload.exact_proposition
+      B,AFKFamilyPremiseQuestion(F,family,payload,extra_subjects))
   }
 
 AFKFamilyDenotationGoal(F) = AFKFamilyPremiseGoal(
@@ -2269,20 +2925,44 @@ It authenticates one exact theorem statement and local typed transform
 templates:
 
 ```text
-AFKV2SelectedAuthority = {
-  publication_kind: IACR ePrint archive PDF,
-  stable_source_id: "iacr-eprint:2021/1377",
-  bibliographic_revision: version 2, 2022-02-16,
-  artifact_media_type: application/pdf,
-  artifact_sha256:
-    93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c,
-  exact_locators: [Definition 4, Definition 10, Definition 11,
-    Section 5 prose immediately before Lemma 4, Lemma 4,
-    Section 6.3 adaptive construction immediately before Theorem 4,
-    Remark 2, Remark 6, Theorem 4]
+AFKV2IACREPrintPDFSourceKindRef =
+  the exact AnalysisProfileDeclarationRef<"analysis.theorem-source-kind">
+  for an IACR ePrint archive PDF in
+  K3CAFKTheoremSourceValidationLanguageProfileId
+
+ASCIIBytes(s) =
+  the exact byte sequence of the displayed ASCII literal `s`; formation
+  rejects a non-ASCII code point and the display delimiters are not bytes
+
+Bytes32FromLowerHex(s) =
+  the exact 32-byte value decoded from a 64-character lowercase hexadecimal
+  ASCII literal `s`; a wrong length, uppercase character, non-hex character,
+  or trailing byte is malformed
+
+AFKV2SelectedSourceAuthority = {
+  publication_kind: AFKV2IACREPrintPDFSourceKindRef,
+  stable_source_id: ASCIIBytes("iacr-eprint:2021/1377"),
+  bibliographic_revision: {
+    version: ASCIIBytes("2"),
+    date: ASCIIBytes("2022-02-16")
+  },
+  artifact_media_type: ASCIIBytes("application/pdf"),
+  artifact_sha256: Bytes32FromLowerHex(
+    "93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c"),
+  exact_locators: [
+    ASCIIBytes("Definition 4"),
+    ASCIIBytes("Definition 10"),
+    ASCIIBytes("Definition 11"),
+    ASCIIBytes("Section 5 prose immediately before Lemma 4"),
+    ASCIIBytes("Lemma 4"),
+    ASCIIBytes(
+      "Section 6.3 adaptive construction immediately before Theorem 4"),
+    ASCIIBytes("Remark 2"),
+    ASCIIBytes("Remark 6"),
+    ASCIIBytes("Theorem 4")]
 }
 
-AFKV2SelectedStatementTemplateBody = {
+AFKV2SelectedStatementTemplateSummary = {
   source:
     one uniform polynomial-time 2-special-sound extractor for an asymptotic
     three-move public-coin protocol family,
@@ -2295,65 +2975,69 @@ AFKV2SelectedStatementTemplateBody = {
   conclusion:
     identical `(x,pi,aux,v)` marginals, relation-witness success at least
     `epsilon-(Q+1)/N`, and at most `Q+2` black-box P^a invocations,
-  theorem_status:
-    exact k=2 restricted-query consequence justified by the listed lemma,
-    adaptive construction, and theorem; not the paper's full all-Q profile
+  statement_scope:
+    exact k=2 restricted-query implication; not an all-Q target profile
 }
 
-AFKV2SelectedStatementContentDigest =
-  SHA256(M(AFKV2SelectedStatementTemplateBody))
+AFKV2LocalDenotationSchemaRef(i) =
+  the unique K3CAFKTransportLanguageProfileId-local
+  AnalysisProfileLawRef<TheoremLocalDenotationSchema> at ordinal i; its
+  authenticated law-source row is keyed by the complete binding kind and
+  dependency sequence at ordinal i below and admits exactly that typed AFK-v2
+  local denotation, with no display binder or prose payload
 
 AFKV2LocalBindingCatalog = CanonicalSeq [
-  {0,AsymptoticFamilyParameter,[],
-    `one theorem-application family F`},
+  {0,AsymptoticFamilyParameter,[],AFKV2LocalDenotationSchemaRef(0)},
   {1,LogicalNatParameter(LocalTheoremBindingRef(0)),[0],
-    `the same LogicalNat n at source quantifier ordinal 1 and target ordinal 2`},
+    AFKV2LocalDenotationSchemaRef(1)},
   {2,PositivePolynomialParameter(LogicalNat),[],
-    `target ordinal 0; the exact singleton positive-polynomial profile [1]`},
+    AFKV2LocalDenotationSchemaRef(2)},
   {3,QuantifiedStrategyParameter(UniformSourceExtractor),[0],
-    `source ordinal 0; one uniform polynomial-time two-transcript extractor`},
+    AFKV2LocalDenotationSchemaRef(3)},
   {4,SemanticRole(AcceptingDistinctTranscriptPair),[0,1],
-    `source ordinal 2; one accepted same-prefix distinct-challenge pair`},
+    AFKV2LocalDenotationSchemaRef(4)},
   {5,QuantifiedStrategyParameter(UniformBlackBoxTargetExtractor),[0],
-    `target ordinal 1; one uniform black-box extractor family`},
-  {6,SemanticRole(Statement),[0,1],`the family Statement role`},
-  {7,SemanticRole(RelationWitness),[0,1],`the family Witness role`},
-  {8,SemanticRole(Commitment),[0,1],`the first prover-message role`},
-  {9,SemanticRole(Challenge),[0,1],`the public challenge role`},
-  {10,SemanticRole(Response),[0,1],`the final prover-message role`},
-  {11,SemanticRole(Acceptance),[0,1],`the verifier acceptance predicate`},
-  {12,SemanticRole(FixedPublicSetup),[0,1],`the fixed public setup role`},
-  {13,SemanticRole(FreshInteraction),[0,1],`the Fresh experiment role`},
-  {14,SemanticRole(FiatShamirInteraction),[0,1],`the FS experiment role`},
+    AFKV2LocalDenotationSchemaRef(5)},
+  {6,SemanticRole(Statement),[0,1],AFKV2LocalDenotationSchemaRef(6)},
+  {7,SemanticRole(RelationWitness),[0,1],AFKV2LocalDenotationSchemaRef(7)},
+  {8,SemanticRole(Commitment),[0,1],AFKV2LocalDenotationSchemaRef(8)},
+  {9,SemanticRole(Challenge),[0,1],AFKV2LocalDenotationSchemaRef(9)},
+  {10,SemanticRole(Response),[0,1],AFKV2LocalDenotationSchemaRef(10)},
+  {11,SemanticRole(Acceptance),[0,1],AFKV2LocalDenotationSchemaRef(11)},
+  {12,SemanticRole(FixedPublicSetup),[0,1],
+    AFKV2LocalDenotationSchemaRef(12)},
+  {13,SemanticRole(FreshInteraction),[0,1],
+    AFKV2LocalDenotationSchemaRef(13)},
+  {14,SemanticRole(FiatShamirInteraction),[0,1],
+    AFKV2LocalDenotationSchemaRef(14)},
   {15,SemanticRole(FullRandomOracleProcess),[0,1],
-    `the complete classical lazy-random-function process`},
-  {16,SemanticRole(Proof),[0,1],`the Fiat--Shamir proof role`},
-  {17,SemanticRole(AuxiliaryOutput),[0,1],`the auxiliary-output role`},
-  {18,SemanticRole(VerifierOutput),[0,1],`the verifier-output role`},
-  {19,SemanticRole(Relation),[0,1],`the relation predicate role`},
-  {20,SemanticRole(RandomOracleIndex),[0,1],`the complete oracle-index role`},
+    AFKV2LocalDenotationSchemaRef(15)},
+  {16,SemanticRole(Proof),[0,1],AFKV2LocalDenotationSchemaRef(16)},
+  {17,SemanticRole(AuxiliaryOutput),[0,1],
+    AFKV2LocalDenotationSchemaRef(17)},
+  {18,SemanticRole(VerifierOutput),[0,1],
+    AFKV2LocalDenotationSchemaRef(18)},
+  {19,SemanticRole(Relation),[0,1],AFKV2LocalDenotationSchemaRef(19)},
+  {20,SemanticRole(RandomOracleIndex),[0,1],
+    AFKV2LocalDenotationSchemaRef(20)},
   {21,SemanticRole(RandomOracleStatementIndex),[0,1],
-    `the injectively encoded Statement component of an oracle index`},
+    AFKV2LocalDenotationSchemaRef(21)},
   {22,SemanticRole(RandomOracleCommitmentIndex),[0,1],
-    `the injectively encoded commitment component of an oracle index`},
-  {23,SemanticRole(Verifier),[0,1],`the source and target verifier role`},
+    AFKV2LocalDenotationSchemaRef(22)},
+  {23,SemanticRole(Verifier),[0,1],AFKV2LocalDenotationSchemaRef(23)},
   {24,SemanticRole(ChallengeSampler),[0,1],
-    `the exact uniform challenge-sampling role`},
+    AFKV2LocalDenotationSchemaRef(24)},
   {25,SemanticRole(BoundedBitStringIndexContract),[0,1,20],
-    `RandomOracleIndex is exactly a finite bounded-bitstring domain with one
-     canonical injective Statement/commitment encoding and efficient index and
-     challenge operations; every table access has the declared query count`},
+    AFKV2LocalDenotationSchemaRef(25)},
   {26,ChallengeCardinalityRole(LocalTheoremBindingRef(0)),[0],
-    `one fixed finite cardinality N shared by every logical n, with N >= 2`},
+    AFKV2LocalDenotationSchemaRef(26)},
   {27,ResourceRole(QueryCount),[0,15,20,25],
-    `every adversary random-oracle table lookup, including repeats and
-     off-image indices`},
-  {28,ResourceRole(ExpectedCount),[0],
-    `one complete black-box adversary invocation`},
+    AFKV2LocalDenotationSchemaRef(27)},
+  {28,ResourceRole(ExpectedCount),[0],AFKV2LocalDenotationSchemaRef(28)},
   {29,QuantitativeParameter(QueryCount(LocalTheoremBindingRef(27))),
-    [0,1,26,27],`target ordinal 3; 0 <= Q < N`},
+    [0,1,26,27],AFKV2LocalDenotationSchemaRef(29)},
   {30,QuantifiedStrategyParameter(InputFreeAdaptiveOracleProver),
-    [0,1,20,27,29],`target ordinal 4; one total-output Q-query prover`}
+    [0,1,20,27,29],AFKV2LocalDenotationSchemaRef(30)}
 ]
 
 AFKLocalFamilyRef =
@@ -2412,69 +3096,39 @@ AFKLocalAdaptiveProverRef =
   LocalTheoremBindingRef<QuantifiedStrategyParameter>(30)
 
 AFKV2TheoremComponentDeclarationCatalog = {
-  authority:
-    AFKV2AuthorityContractRef :
-      ModuleDeclarationRef<"analysis.theorem-authority">,
-  proof_status:
-    AFKV2ProofStatusContractRef :
-      ModuleDeclarationRef<"analysis.theorem-proof-status">,
   property:
     AFKV2PropertySchemaContractRef :
-      ModuleDeclarationRef<"analysis.theorem-property-schema">,
+      AnalysisProfileDeclarationRef<"analysis.theorem-property-schema">,
   experiment:
     AFKV2ExperimentSchemaContractRef :
-      ModuleDeclarationRef<"analysis.theorem-experiment-schema">,
+      AnalysisProfileDeclarationRef<"analysis.theorem-experiment-schema">,
   source_view:
     AFKV2SourceViewSchemaContractRef :
-      ModuleDeclarationRef<"analysis.theorem-source-view-schema">,
+      AnalysisProfileDeclarationRef<"analysis.theorem-source-view-schema">,
   map:
     AFKV2MapSchemaContractRef :
-      ModuleDeclarationRef<"analysis.theorem-map-schema">,
+      AnalysisProfileDeclarationRef<"analysis.theorem-map-schema">,
   side_condition:
     AFKV2SideConditionSchemaContractRef :
-      ModuleDeclarationRef<"analysis.theorem-side-condition-schema">,
+      AnalysisProfileDeclarationRef<"analysis.theorem-side-condition-schema">,
   transform:
     AFKV2TransformProgramContractRef :
-      ModuleDeclarationRef<"analysis.theorem-transform-program">,
+      AnalysisProfileDeclarationRef<"analysis.theorem-transform-program">,
   conclusion:
     AFKV2ConclusionLawContractRef :
-      ModuleDeclarationRef<"analysis.theorem-conclusion-law">
+      AnalysisProfileDeclarationRef<"analysis.theorem-conclusion-law">
 }
 
-AnalysisTheoremComponentSemanticsCatalog(B) contains exactly these active K3-C
-entries, keyed by the complete declaration references above:
+The semantic transport profile supports `analysis.theorem-schema`. The narrow
+`K3CAFKTheoremSourceValidationLanguageProfileId` imports it and supports
+`analysis.theorem-source-validation`; only that child profile's inline catalogs
+include `AFKV2IACREPrintPDFSourceKindRef` and the exact closed validation body
+schema. Source-kind declarations are not theorem-schema components and no
+source authority or proof-status field occurs in the theorem semantic body.
 
-  AFKV2AuthorityContractRef ->
-    AnalysisTheoremComponentSemanticsContract<"analysis.theorem-authority"> {
-      exact_component_payload_meta_schema: CanonicalRecord {
-        selected_authority: exact AFK authority record,
-        selected_statement_content_digest: Bytes32
-      },
-      admitted_local_binding_kinds_and_occurrence_paths: [],
-      exact_component_interpretation_law:
-        select exactly the pinned artifact, locator set, and restricted statement
-        digest; establish no theorem truth,
-      cross_component_coherence_law:
-        the digest is exactly AFKV2SelectedStatementContentDigest,
-      failure_classification: common K3-C outcome partition
-    },
-
-  AFKV2ProofStatusContractRef ->
-    AnalysisTheoremComponentSemanticsContract<"analysis.theorem-proof-status"> {
-      exact_component_payload_meta_schema: CanonicalRecord {
-        authority_class: exactly ImportedPaperOnly,
-        admitted_proof_artifact: exactly None,
-        truth_discharge_mode:
-          exactly ExternalPostFormationTheoremTruthProposition,
-        schema_admission_establishes_truth: exactly false
-      },
-      admitted_local_binding_kinds_and_occurrence_paths: [],
-      exact_component_interpretation_law:
-        theorem truth can enter only through TheoremTruthGoal after formation,
-      cross_component_coherence_law:
-        the authority component has the same restricted statement digest,
-      failure_classification: common K3-C outcome partition
-    },
+AFKV2TheoremLanguageProfileContracts contains exactly these active K3-C
+entries in the exact AFK-v2 theorem semantic-language profile, keyed by the
+complete declaration references above:
 
   AFKV2PropertySchemaContractRef ->
     AnalysisTheoremComponentSemanticsContract<"analysis.theorem-property-schema"> {
@@ -2587,33 +3241,20 @@ entries, keyed by the complete declaration references above:
       failure_classification: common K3-C outcome partition
     }.
 
-The phrase “displayed below” in this catalog is a same-page grammar reference:
-admission expands the referenced canonical record fields and tags before hashing
-or comparison. It is not a label accepted in place of the body. A missing,
+The phrase “displayed below” in this profile-law display is a same-page grammar
+reference: the profile's exact law-source bytes encode the corresponding
+`AnalysisProfileLawRef` schemas and laws, and admission expands the referenced
+canonical record fields and tags before hashing or comparison. It is not a
+label accepted in place of the body. A missing,
 extra, reordered, differently typed, or payload-less variant is malformed; a
 different complete declaration coordinate is unsupported.
 
-AFKV2Component<C>(contract_ref:ModuleDeclarationRef<C>,payload) =
+AFKV2Component<C>(contract_ref:AnalysisProfileDeclarationRef<C>,payload) =
   TheoremSchemaComponent<C> {
     contract_ref: contract_ref,
     canonical_payload:
       CanonicalValue<resolved and lifted payload type of contract_ref>(payload)
   }
-
-AFKV2AuthorityComponent = AFKV2Component(
-  AFKV2AuthorityContractRef,{
-    selected_authority: AFKV2SelectedAuthority,
-    selected_statement_content_digest:
-      AFKV2SelectedStatementContentDigest
-  })
-
-AFKV2ProofStatusComponent = AFKV2Component(
-  AFKV2ProofStatusContractRef,{
-    authority_class: ImportedPaperOnly,
-    admitted_proof_artifact: None,
-    truth_discharge_mode: ExternalPostFormationTheoremTruthProposition,
-    schema_admission_establishes_truth: false
-  })
 
 AFKV2SourcePropertyComponent = AFKV2Component(
   AFKV2PropertySchemaContractRef,{
@@ -2876,8 +3517,6 @@ AFKV2ConclusionLawComponent = AFKV2Component(
 
 AFKV2TheoremSchemaBody = AnalysisTheoremSchemaBody {
   local_binding_catalog: AFKV2LocalBindingCatalog,
-  authority_coordinate: AFKV2AuthorityComponent,
-  authority_and_proof_status_contract: AFKV2ProofStatusComponent,
   source_property_schema: AFKV2SourcePropertyComponent,
   target_property_schema: AFKV2TargetPropertyComponent,
   source_experiment_schema: AFKV2SourceExperimentComponent,
@@ -2894,13 +3533,34 @@ AFKV2TheoremSchemaBody = AnalysisTheoremSchemaBody {
 
 AFKV2TheoremSchemaId =
   AnalysisTheoremSchemaId(B,AFKV2TheoremSchemaBody)
+
+AFKV2SelectedStatementContentDigest =
+  TheoremStatementDigest(AFKV2TheoremSchemaId)
+
+AFKV2TheoremSourceValidationBody = AnalysisTheoremSourceValidationBody {
+  theorem_schema_id: AFKV2TheoremSchemaId,
+  source_authority: AFKV2SelectedSourceAuthority,
+  truth_discharge_metadata: {
+    authority_class: ImportedPaperOnly,
+    admitted_proof_artifact: None,
+    truth_discharge_mode: RetainedTheoremTruthAssumption,
+    schema_admission_establishes_truth: false
+  }
+}
+
+AFKV2TheoremSourceValidationId =
+  AnalysisTheoremSourceValidationId(
+    B,AFKV2TheoremSourceValidationBody)
 ```
 
-The PDF digest identifies the selected source artifact; the separately derived
-statement-content digest identifies the exact restricted theorem statement
-that this schema claims. A journal revision, all-query target, different
-quantifier order, changed expected-call unit, or changed map forms a different
-schema.
+The derived statement-content digest identifies the exact admitted profiled
+semantic theorem body and cannot be supplied independently. The PDF digest and
+locators identify only the selected source artifact. A source correction or
+bibliographic revision therefore forms a different
+`AFKV2TheoremSourceValidationId` without changing the theorem schema. An
+all-query target, different quantifier order, changed expected-call unit, map,
+or other semantic statement change forms a different theorem schema and, since
+the validation body names that schema ID, a different source-validation ID.
 
 For `k=2`, Lemma 4 gives the stronger transcript-extraction lower bound
 
@@ -3264,33 +3924,59 @@ ApplicableTheoremQuantitativeBinding = {
 }
 ```
 
+This summary is explanatory only and has no `AnalysisBodyV0` arm. The exact
+semantic statement is solely `AFKV2TheoremSchemaBody` below.
+
 For family `F`, the AFK applicability basis binds ordinals `0..3` to
 `AFKFamilyKnowledgeErrorFormulaId(F)`,
 `AFKFamilyKnowledgeSuccessFormulaId(F)`,
 `AFKFamilyTranscriptExtractionFormulaId(F)`, and
 `AFKFamilyExpectedCallsFormulaId(F)`. The concrete-member specialization binds
 the same templates to the four `S` formulas. A different body, dimension,
-domain, parameter order, or polynomial refuses applicability. Theorem
-authority and proof status therefore occur in the semantic basis and
-hypothesis context, never in ordinary property or formula identity.
+domain, parameter order, or polynomial refuses applicability. The theorem's
+restricted statement occurs in the semantic basis and hypothesis context.
+Source authority and proof status occur only in the distinct theorem-source
+validation body and in the exact support or validation treatment that consumes
+it; they never enter theorem, property, formula, question, or goal identity.
 
 ### 6.3 Loss imports
 
 ```text
 AnalysisLossSemanticImport = {
-  exact Relations bridge ID,
-  exact lossy-use scope and occurrence-coordinate schema,
-  exact direction,
-  exact source-premise proposition and quantitative-export ID,
-  declared Analysis result sort,
-  admitted interpretation rule,
-  exact parameter substitution,
-  per-occurrence expression
+  relations_bridge_id: ValueBridgeId,
+  lossy_use_scope_and_occurrence_coordinate_schema:
+    AnalysisProfileLawRef<RelationsLossyUseScopeAndCoordinateSchema>,
+  direction: exactly Forward,
+  source_semantics: {
+    source_premise_proposition_id: AnalysisPropositionId,
+    quantitative_export_id: TypedSemanticSubjectRef
+  },
+  declared_result_sort: AnalysisQuantitativeSort,
+  admitted_interpretation_rule:
+    AnalysisProfileLawRef<LossExportInterpretationRule>,
+  exact_parameter_substitution:
+    CanonicalMap<AnalysisParameterSchemaEntry,TypedSemanticSubjectRef>,
+  per_occurrence_expression:
+    BasisNeutralQuantitativeExpr<declared_result_sort>
 }
+
+AnalysisLossSemanticImportBody = AnalysisLossSemanticImport
 
 AnalysisLossSemanticImportId =
   AnalysisId<"analysis.loss-semantic-import">(
     B, AnalysisLossSemanticImportBody)
+
+RequiredAnalysisLanguageProfile(AnalysisLossSemanticImportBody(x)) =
+  let P = NarrowestExactImportingProfileOfAuthenticatedPredecessors(
+    x.relations_bridge_id,
+    x.source_semantics.source_premise_proposition_id,
+    x.source_semantics.quantitative_export_id,
+    x.admitted_interpretation_rule,
+    x.per_occurrence_expression);
+  require P in {
+    K3CCryptographicPropertyLanguageProfileId,
+    K3CAFKTransportLanguageProfileId};
+  return P; otherwise undefined
 
 AnalysisLossSupport = {
   semantic_import_id,
@@ -3301,6 +3987,13 @@ AnalysisLossSupport = {
   owner policy dependency closure
 }
 ```
+
+For the active bounded Schnorr loss import this resolver returns the property
+profile. An import whose premise proposition or quantitative export is
+F-dependent returns the transport profile; it cannot form under the property
+profile and create a reverse dependency. A validation-bearing result binding
+is support, not semantic-import input, and therefore cannot force this semantic
+constructor into the theorem-source-validation profile.
 
 The complete ledger is derived from the exact K3-B selection. Missing,
 duplicated, extra, backward, ungrounded, wrong-sort, wrong-source, or stale
@@ -3522,9 +4215,7 @@ AFKApplicabilityPremiseQuestion(F,family,payload) = AnalysisQuestionBody {
 
 AFKApplicabilityPremiseGoal(F,family,payload) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(
-    B,AFKApplicabilityPremiseQuestion(F,family,payload)),
-  conclusion_family: family,
-  hypothesis_free_conclusion: payload.exact_proposition
+    B,AFKApplicabilityPremiseQuestion(F,family,payload))
 }
 
 AFKFamilyFreshDistributionGoal(F) = AFKApplicabilityPremiseGoal(
@@ -3660,36 +4351,89 @@ AFKFamilyApplicabilitySupportSchemaBody(
     semantic_basis_id: AFKFamilyApplicabilitySemanticBasisId(F),
     proposition_id: AnalysisPropositionId(
       B,AFKFamilyApplicabilityPropositionBody(F)),
-    non_hypothesis_premise_bindings: [],
+    non_hypothesis_premise_bindings:
+      ExactNonHypothesisPremiseBindingMap(
+        AFKFamilyApplicabilitySemanticBasisId(F),
+        AFKFamilyApplicabilitySemanticBasisBody(F),[]),
     established_hypothesis_node_bindings: established_nodes,
     assumed_hypothesis_node_bindings: assumed_nodes,
     source_support_bindings: [
       FamilyManifestSupportSchemaBinding {
         family_read_manifest_schema_id: AFKFamilyFreshReadManifestSchemaId(F),
         dependent_support_schema: fresh_support,
-        exact retained family-support hypotheses:
-          GammaAFKApplicabilityId(F)
+        exact_retained_family_support_hypotheses:
+          ReachableHypothesisGoalIds(
+            GammaAFKApplicabilityId(F),GammaAFKApplicabilityBody(F))
       },
       FamilyManifestSupportSchemaBinding {
         family_read_manifest_schema_id: AFKFamilyTargetReadManifestSchemaId(F),
         dependent_support_schema: target_support,
-        exact retained family-support hypotheses:
-          GammaAFKApplicabilityId(F)
+        exact_retained_family_support_hypotheses:
+          ReachableHypothesisGoalIds(
+            GammaAFKApplicabilityId(F),GammaAFKApplicabilityBody(F))
       }
     ]
   }
 
+AFKFamilyApplicabilitySupportId(
+    F,established_nodes,assumed_nodes,fresh_support,target_support) =
+  AnalysisId<"analysis.support-instantiation">(B,
+    AFKFamilyApplicabilitySupportSchemaBody(
+      F,established_nodes,assumed_nodes,fresh_support,target_support))
+
+AFKFamilyApplicabilityValidationBasisBody(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  ExactAnalysisValidationBasisBody(
+    checker_contracts,translations,finite_controls,[],residual_trust_roots)
+
+AFKFamilyApplicabilityValidationBasisId(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  AnalysisId<"analysis.validation-basis">(B,
+    AFKFamilyApplicabilityValidationBasisBody(
+      checker_contracts,translations,finite_controls,residual_trust_roots))
+
+AFKFamilyApplicabilityOperationPolicyBody(F) =
+  ExactAnalysisOperationPolicyBody(
+    AnalysisPropositionId(B,AFKFamilyApplicabilityPropositionBody(F)),
+    CanonicalMap {
+      AFKFamilyPropertyTransportConsumerRef:
+        CanonicalSingleton(AFKExactTheoremFamilyTransportPurposeRef)
+    },
+    AFKFamilyApplicabilityPolicyLawBundleRef)
+
+AFKFamilyApplicabilityOperationPolicyId(F) =
+  AnalysisId<"analysis.operation-policy">(
+    B,AFKFamilyApplicabilityOperationPolicyBody(F))
+
+AFKFamilyApplicabilityJudgmentBody(
+    F,support_id,validation_basis_id) =
+  ExactAffirmativeAnalysisJudgmentBody(
+    AnalysisPropositionId(B,AFKFamilyApplicabilityPropositionBody(F)),
+    NoQuantitativeResult,
+    AFKFamilyApplicabilitySemanticBasisId(F),
+    support_id,validation_basis_id,
+    AFKFamilyApplicabilityQualificationRef,
+    AFKFamilyApplicabilityOperationPolicyId(F))
+
+AFKFamilyApplicabilityJudgmentId(F,support_id,validation_basis_id) =
+  AnalysisId<"analysis.judgment-record">(B,
+    AFKFamilyApplicabilityJudgmentBody(
+      F,support_id,validation_basis_id))
+
 AFKFamilyApplicabilityJudgmentSchema(F) = {
-  proposition: AFKFamilyApplicabilityPropositionBody(F),
-  semantic_basis: AFKFamilyApplicabilitySemanticBasisId(F),
-  support: the exact support schema above,
-  result:
-    conditional affirmative theorem-applicability judgment inheriting
+  exact_judgment_constructor: AFKFamilyApplicabilityJudgmentId,
+  result: conditional affirmative theorem applicability inheriting exactly
     GammaAFKApplicabilityId(F),
-  live_port:
-    attenuated to AFK family property transport for this exact `(T,F)` only
+  live_capability_permission:
+    AFKFamilyPropertyTransportConsumerRef ->
+      AFKExactTheoremFamilyTransportPurposeRef
 }
 ```
+
+`AFKFamilyApplicabilityPolicyLawBundleRef` is the one exact transport-profile
+operation-policy law bundle for this result. It permits only the displayed
+attenuated family-transport use and otherwise applies the common K3-C
+freshness, disclosure, persistence, unknown-question, and replay laws.
 
 The established and assumed maps are disjoint and partition all nine
 reachable nodes; the unique outward root frontier is `[8]`. The native rule
@@ -3762,56 +4506,168 @@ AFKFamilyTransportSemanticBasisBody(F) = AnalysisSemanticBasisBody {
 AFKFamilyTransportSemanticBasisId(F) =
   AnalysisSemanticBasisId(B,AFKFamilyTransportSemanticBasisBody(F))
 
+AFKTheoremTruthNodeTreatment =
+    EstablishedTheoremTruth {
+      exact_affirmative_binding:
+        ExactAffirmativeJudgmentCapabilityBinding<
+          TheoremTruthPropositionId(AFKV2TheoremSchemaId)>,
+      theorem_source_validation_id: AnalysisTheoremSourceValidationId,
+      requirement:
+        the binding's authenticated judgment validation basis contains
+        exactly this validation ID, whose body names AFKV2TheoremSchemaId and
+        selects EstablishedByCheckedProof; formation separately consumes the
+        matching fresh capability and does not serialize it
+    }
+  | AssumedTheoremTruth {
+      exact_goal_id:
+        AnalysisGoalId(B,TheoremTruthGoal(AFKV2TheoremSchemaId)),
+      theorem_source_validation_id: AFKV2TheoremSourceValidationId,
+      requirement:
+        the resolved validation body selects ImportedPaperOnly and
+        RetainedTheoremTruthAssumption
+    }
+
 InheritedAFKFamilyTargetSupportPartition(
-    F,source_property_capability,applicability_port,
-    theorem_truth_node_treatment) =
-  authenticate the exact support records bound to both live inputs; project
+    F,source_property_binding,applicability_binding,
+    theorem_truth_node_treatment:AFKTheoremTruthNodeTreatment) =
+  authenticate the exact support records named by both portable bindings and
+  separately require their matching fresh invocation capabilities; project
   their treatment of every node in GammaAFKFamilySpecialBody(F) and
   GammaAFKApplicabilityBody(F); add the exact theorem-truth node treatment; map
   equal goals through GammaAFKFamilyTargetBody(F); mark a merged node
   established when at least one exact affirmative node capability establishes
   it and otherwise Assumed when at least one authenticated input retains it;
+  encode the theorem-truth assumed entry as `ExactlyAssumedGoal` with
+  `ImportedTheoremSourceValidation(AFKV2TheoremSourceValidationId)` and every
+  ordinary assumed entry with `NoExternalSourceValidation`;
   reject a missing node, unrelated capability, unsupported treatment, or any
-  output domain other than every node of GammaAFKFamilyTargetBody(F)
+  source-validation ID naming another theorem, and reject any output domain
+  other than every node of GammaAFKFamilyTargetBody(F); return
+  ExactHypothesisTreatmentPartition(
+    GammaAFKFamilyTargetId(F),GammaAFKFamilyTargetBody(F),
+    the derived complete treatment map)
+
+RequiredAnalysisLanguageProfile(AFKFamilyTransportSemanticBasisBody) =
+  K3CAFKTransportLanguageProfileId
+RequiredAnalysisLanguageProfile(AFKFamilyAdaptiveKnowledgePropositionBody) =
+  K3CAFKTransportLanguageProfileId
+RequiredAnalysisLanguageProfile(AFKFamilyTransportSupportBody) =
+  K3CAFKTheoremSourceValidationLanguageProfileId
+RequiredAnalysisLanguageProfile(AFKFamilyTransportValidationBasisBody) =
+  K3CAFKTheoremSourceValidationLanguageProfileId
+RequiredAnalysisLanguageProfile(AFKFamilyTransportJudgmentBody) =
+  K3CAFKTheoremSourceValidationLanguageProfileId
 
 AFKFamilyTransportSupportBody(
-    F,source_property_capability,applicability_port,
+    F,source_property_binding,applicability_binding,
     theorem_truth_node_treatment,
     target_family_support_schema) =
   AnalysisSupportInstantiationBody {
     semantic_basis_id: AFKFamilyTransportSemanticBasisId(F),
     proposition_id: AnalysisPropositionId(
       B,AFKFamilyAdaptiveKnowledgePropositionBody(F)),
-    non_hypothesis_premise_bindings: [
-      source_property_capability,applicability_port
-    ],
+    non_hypothesis_premise_bindings:
+      ExactNonHypothesisPremiseBindingMap(
+        AFKFamilyTransportSemanticBasisId(F),
+        AFKFamilyTransportSemanticBasisBody(F),
+        [source_property_binding,applicability_binding]),
     established_hypothesis_node_bindings:
       EstablishedPartitionOf(InheritedAFKFamilyTargetSupportPartition(
-        F,source_property_capability,applicability_port,
+        F,source_property_binding,applicability_binding,
         theorem_truth_node_treatment)),
     assumed_hypothesis_node_bindings:
       AssumedPartitionOf(InheritedAFKFamilyTargetSupportPartition(
-        F,source_property_capability,applicability_port,
+        F,source_property_binding,applicability_binding,
         theorem_truth_node_treatment)),
     source_support_bindings: [FamilyManifestSupportSchemaBinding {
       family_read_manifest_schema_id: AFKFamilyTargetReadManifestSchemaId(F),
       dependent_support_schema: target_family_support_schema,
-      exact retained family-support hypotheses:
-        GammaAFKFamilyTargetId(F)
+      exact_retained_family_support_hypotheses:
+        ReachableHypothesisGoalIds(
+          GammaAFKFamilyTargetId(F),GammaAFKFamilyTargetBody(F))
     }]
   }
 
+AFKFamilyTransportSupportId(
+    F,source_property_binding,applicability_binding,
+    theorem_truth_node_treatment,target_family_support_schema) =
+  AnalysisId<"analysis.support-instantiation">(
+    B,AFKFamilyTransportSupportBody(
+      F,source_property_binding,applicability_binding,
+      theorem_truth_node_treatment,target_family_support_schema))
+
+AFKFamilyTransportValidationBasisBody(
+    theorem_truth_node_treatment,
+    admitted_transport_checker_contracts,
+    exact_translation_contracts,
+    finite_control_contracts,
+    residual_trust_roots) =
+  ExactAnalysisValidationBasisBody(
+    admitted_transport_checker_contracts,
+    exact_translation_contracts,
+    finite_control_contracts,
+    DirectlyConsumedTheoremSourceValidationIds(
+      theorem_truth_node_treatment),
+    residual_trust_roots)
+
+DirectlyConsumedTheoremSourceValidationIds(treatment) =
+  CanonicalSingleton(treatment.theorem_source_validation_id)
+    when treatment is EstablishedTheoremTruth and the checking attempt
+      consumes its exact CheckedProofArtifact validation;
+  [] when treatment is AssumedTheoremTruth, because that exact imported-paper
+      validation ID already occurs solely in the assumed support binding;
+  undefined for any other or incoherent treatment
+
+AFKFamilyTransportValidationBasisId(
+    theorem_truth_node_treatment,
+    admitted_transport_checker_contracts,
+    exact_translation_contracts,
+    finite_control_contracts,
+    residual_trust_roots) =
+  AnalysisId<"analysis.validation-basis">(
+    B,AFKFamilyTransportValidationBasisBody(
+      theorem_truth_node_treatment,
+      admitted_transport_checker_contracts,
+      exact_translation_contracts,
+      finite_control_contracts,
+      residual_trust_roots))
+
+AFKFamilyTransportOperationPolicyBody(F) =
+  ExactAnalysisOperationPolicyBody(
+    AnalysisPropositionId(B,AFKFamilyAdaptiveKnowledgePropositionBody(F)),
+    CanonicalMap {
+      AFKMemberSpecializationConsumerRef:
+        CanonicalSingleton(AFKFamilyTargetSpecializationPurposeRef)
+    },
+    AFKFamilyTransportPolicyLawBundleRef)
+
+AFKFamilyTransportOperationPolicyId(F) =
+  AnalysisId<"analysis.operation-policy">(
+    B,AFKFamilyTransportOperationPolicyBody(F))
+
+AFKFamilyTransportJudgmentBody(
+    F,transport_support_id,transport_validation_basis_id) =
+  ExactAffirmativeAnalysisJudgmentBody(
+    AnalysisPropositionId(B,AFKFamilyAdaptiveKnowledgePropositionBody(F)),
+    [
+      AFKFamilyKnowledgeErrorFormulaId(F),
+      AFKFamilyKnowledgeSuccessFormulaId(F),
+      AFKFamilyExpectedCallsFormulaId(F)
+    ],
+    AFKFamilyTransportSemanticBasisId(F),
+    transport_support_id,transport_validation_basis_id,
+    AFKFamilyTransportQualificationRef,
+    AFKFamilyTransportOperationPolicyId(F))
+
+AFKFamilyTransportJudgmentId(
+    F,transport_support_id,transport_validation_basis_id) =
+  AnalysisId<"analysis.judgment-record">(
+    B,AFKFamilyTransportJudgmentBody(
+      F,transport_support_id,transport_validation_basis_id))
+
 AFKFamilyTransportJudgmentSchema(F) = {
-  proposition: AFKFamilyAdaptiveKnowledgePropositionBody(F),
-  semantic_basis: AFKFamilyTransportSemanticBasisId(F),
-  support: exact support above,
-  quantitative_result: [
-    AFKFamilyKnowledgeErrorFormulaId(F),
-    AFKFamilyKnowledgeSuccessFormulaId(F),
-    AFKFamilyExpectedCallsFormulaId(F)
-  ],
-  result:
-    conditional affirmative AdaptiveKnowledgeSoundnessQltN judgment,
+  judgment_id: the exact AFKFamilyTransportJudgmentId above,
+  result: conditional affirmative AdaptiveKnowledgeSoundnessQltN judgment,
   live_capability:
     bound to this exact family proposition, hypotheses, model, and purpose
 }
@@ -3821,6 +4677,23 @@ A source judgment for a different family, a structural FS result,
 an applicability port for another family, or a target proposition supplied by
 the caller refuses. Transport never discharges theorem truth, family laws, or
 the ROM assumptions merely because they were retained by both inputs.
+Formation derives `derived_source_policy_closure` from exactly the source-
+property, applicability, and theorem-truth authority bindings; it is never a
+caller assertion. The validation body admits at least one exact checker
+contract, authenticates every translation, finite-control, and residual-trust
+entry, and contains the selected theorem-source-validation ID exactly for an
+established checked-proof treatment and no such ID for an assumed treatment;
+the assumed support binding already authenticates it. The support, validation,
+judgment, checked-result coordinate,
+and authority envelope therefore select the source-validation child profile,
+while the proposition and semantic basis remain under the transport parent.
+Fresh capabilities are required to form and use the result but have no
+`AnalysisBodyV0` encoding and never enter any ID above.
+
+`AFKFamilyTransportPolicyLawBundleRef` is the exact source-validation-profile
+operation-policy bundle for this result. It permits only the displayed
+member-specialization consumer/purpose pair and applies the exact common
+freshness, disclosure, unknown-question, persistence, and cold-replay laws.
 
 ## 8. Concrete member correspondence and specialization
 
@@ -3834,6 +4707,9 @@ AnalysisLogicalNatLiteralBody(n0) = MetaRecord {0: MetaNatural(n0)}
 AnalysisLogicalNatLiteralId(n0) =
   AnalysisId<"analysis.logical-nat-literal">(
     B,AnalysisLogicalNatLiteralBody(n0))
+
+RequiredAnalysisLanguageProfile(AnalysisLogicalNatLiteralBody) =
+  K3CAFKTransportLanguageProfileId
 
 AFKFamilyRoleCatalog = CanonicalSeq [
   {0,Statement},
@@ -3866,7 +4742,8 @@ AFKFamilyRoleCatalogDeclarationBody = {
 }
 
 AFKFamilyRoleCatalogRef =
-  the one exact ModuleDeclarationRef<"analysis.afk-family-role-catalog"> whose
+  the one exact AnalysisProfileDeclarationRef<
+    "analysis.afk-family-role-catalog"> whose
   resolved declaration body is AFKFamilyRoleCatalogDeclarationBody
 
 AFKFamilyRoleCoordinate(i) = {
@@ -3955,7 +4832,7 @@ AFKFamilyRoleMapClauseKind =
   | PositivePolynomialProfileSpecialization
   | PositivePolynomialValueCorrespondence
 
-AFKFamilyRoleMapClauseCatalog = CanonicalSeq [
+AFKFamilyRoleMapClauseKinds = CanonicalSeq [
   {0,TypedCarrierEquivalence},{1,TypedCarrierEquivalence},
   {2,PredicateEquivalence},{3,ExactValueCorrespondence},
   {4,TypedCarrierEquivalence},{5,TypedCarrierEquivalence},
@@ -3970,16 +4847,58 @@ AFKFamilyRoleMapClauseCatalog = CanonicalSeq [
   {19,ExactValueCorrespondence}
 ]
 
+AFKAbstractRoleSchemaRef(i) =
+  the exact K3CAFKTransportLanguageProfileId-local
+  AnalysisProfileLawRef<AFKAbstractResolvedRoleSchema> at ordinal i whose
+  closed schema admits exactly ResolveAFKAbstractRole(F,n0_literal,role_i)
+
+AFKNativeRoleSchemaRef(i) =
+  the exact K3CAFKTransportLanguageProfileId-local
+  AnalysisProfileLawRef<AFKNativeResolvedRoleSchema> at ordinal i whose closed
+  schema admits exactly ResolveAFKNativeRole(S,ell0,role_i)
+
+AFKRoleCorrespondenceLawRef(i) =
+  the exact K3CAFKTransportLanguageProfileId-local
+  AnalysisProfileLawRef<AFKRoleCorrespondenceLaw> at ordinal i, typed from
+  AFKAbstractRoleSchemaRef(i) to AFKNativeRoleSchemaRef(i) and implementing
+  exactly AFKFamilyRoleMapClauseKinds[i].clause_kind
+
+K3CCommonAttemptFailurePartitionRef =
+  the exact K3CAFKTransportLanguageProfileId-resolved
+  AnalysisProfileLawRef<AnalysisAttemptFailurePartition> imported from the
+  kernel profile; its law is exactly the common K3-C outcome partition
+
+ExactNaturalRange(start_inclusive,end_exclusive) =
+  require `0 <= start_inclusive <= end_exclusive` and the difference to fit
+  the selected K1 sequence bound; return `[]` when the endpoints are equal and
+  otherwise return `[start_inclusive]` concatenated with
+  `ExactNaturalRange(start_inclusive + 1,end_exclusive)`
+
+AFKFamilyRoleMapClauseDeclarationBody(i) = {
+  local_clause_ordinal: i,
+  clause_kind: AFKFamilyRoleMapClauseKinds[i].clause_kind,
+  exact_abstract_source_schema: AFKAbstractRoleSchemaRef(i),
+  exact_native_target_schema: AFKNativeRoleSchemaRef(i),
+  refinement_or_correspondence_law: AFKRoleCorrespondenceLawRef(i),
+  information_loss: ExactEquivalence,
+  failure_classification: K3CCommonAttemptFailurePartitionRef
+}
+
+AFKFamilyRoleMapClauseCatalog =
+  CanonicalSeq [AFKFamilyRoleMapClauseDeclarationBody(i)
+    for i in ExactNaturalRange(start_inclusive:0,end_exclusive:20)]
+
 AFKFamilyRoleMapClauseCatalogRef =
-  the one exact ModuleDeclarationRef<"analysis.afk-family-role-map-clause"> whose
-  resolved declaration body is exactly AFKFamilyRoleMapClauseCatalog with the
-  common typed source/target/refinement and failure fields
+  the one exact AnalysisProfileDeclarationRef<
+    "analysis.afk-family-role-map-clause"> whose
+  resolved declaration body is exactly AFKFamilyRoleMapClauseCatalog
 
 AFKFamilyRoleMapClauseCoordinate(role) = {
   catalog_ref: AFKFamilyRoleMapClauseCatalogRef,
   local_clause_ordinal: role.local_role_ordinal,
   exact_clause_kind:
-    AFKFamilyRoleMapClauseCatalog[role.local_role_ordinal].clause_kind
+    AFKFamilyRoleMapClauseDeclarationBody(
+      role.local_role_ordinal).clause_kind
 }
 
 The role catalog, symbolic reference forms, resolution tables, and clause table
@@ -4018,6 +4937,9 @@ FamilyInstanceRoleMapProposalId(F,n0_literal,S,ell0,role) =
   AnalysisId<"analysis.family-instance-role-map">(
     B,FamilyInstanceRoleMapProposalBody(F,n0_literal,S,ell0,role))
 
+RequiredAnalysisLanguageProfile(FamilyInstanceRoleMapProposalBody) =
+  K3CAFKTransportLanguageProfileId
+
 RequiredAFKFamilyInstanceRoleMaps(F,n0_literal,S,ell0) =
   CanonicalSeq, in AFKFamilyRoleCatalog ordinal order, of exactly one
   FamilyInstanceRoleMapProposalId for every role in AFKFamilyRoleCatalog
@@ -4045,8 +4967,14 @@ AFKPointwiseQuantitativeNormalizationContractBody(
     quantitative formulas, preserve exact typed count/probability coercions and
     declared domains, then canonicalize under the closed quantitative AST rules,
   required_equal_normal_forms: [
-    family/member error, family/member success,
-    family/member transcript extraction, family/member expected calls
+    {family_formula_id: AFKFamilyKnowledgeErrorFormulaId(F),
+     member_formula_id: AFKKnowledgeErrorFormulaId(S)},
+    {family_formula_id: AFKFamilyKnowledgeSuccessFormulaId(F),
+     member_formula_id: AFKKnowledgeSuccessFormulaId(S)},
+    {family_formula_id: AFKFamilyTranscriptExtractionFormulaId(F),
+     member_formula_id: AFKTranscriptExtractionFormulaId(S)},
+    {family_formula_id: AFKFamilyExpectedCallsFormulaId(F),
+     member_formula_id: AFKExpectedCallsFormulaId(S)}
   ]
 }
 
@@ -4054,6 +4982,10 @@ AFKPointwiseQuantitativeNormalizationContractId(F,n0_literal,S,ell0) =
   AnalysisId<"analysis.pointwise-quantitative-normalization">(
     B,AFKPointwiseQuantitativeNormalizationContractBody(
       F,n0_literal,S,ell0))
+
+RequiredAnalysisLanguageProfile(
+    AFKPointwiseQuantitativeNormalizationContractBody) =
+  K3CAFKTransportLanguageProfileId
 
 FamilyInstanceCorrespondenceQuestion(
     F,n0_literal:AnalysisLogicalNatLiteralId,
@@ -4097,11 +5029,7 @@ FamilyInstanceCorrespondenceQuestion(
 
 FamilyInstanceCorrespondenceGoal(F,n0_literal,S,ell0) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(
-    B,FamilyInstanceCorrespondenceQuestion(F,n0_literal,S,ell0)),
-  conclusion_family: FamilyInstanceCorrespondence,
-  hypothesis_free_conclusion:
-    FamilyMember(F,Value(n0_literal)) and S at ell0 correspond under every
-    exact role proposal, experiment/model law, resource map, and formula map
+    B,FamilyInstanceCorrespondenceQuestion(F,n0_literal,S,ell0))
 }
 
 FamilyInstancePremiseQuestion(
@@ -4114,9 +5042,7 @@ FamilyInstancePremiseQuestion(
 FamilyInstancePremiseGoal(
     F,n0_literal,S,ell0,family,payload) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(B,FamilyInstancePremiseQuestion(
-    F,n0_literal,S,ell0,family,payload)),
-  conclusion_family: family,
-  hypothesis_free_conclusion: payload.exact_proposition
+    F,n0_literal,S,ell0,family,payload))
 }
 
 FamilyInstanceDenotationAtIndexGoal(F,n0_literal,S,ell0) =
@@ -4242,21 +5168,30 @@ FamilyInstanceCorrespondenceSupportBody(
       FamilyInstanceCorrespondenceSemanticBasisId(F,n0_literal,S,ell0),
     proposition_id: AnalysisPropositionId(B,
       FamilyInstanceCorrespondencePropositionBody(F,n0_literal,S,ell0)),
-    non_hypothesis_premise_bindings: [],
+    non_hypothesis_premise_bindings:
+      ExactNonHypothesisPremiseBindingMap(
+        FamilyInstanceCorrespondenceSemanticBasisId(
+          F,n0_literal,S,ell0),
+        FamilyInstanceCorrespondenceSemanticBasisBody(
+          F,n0_literal,S,ell0),[]),
     established_hypothesis_node_bindings: established_nodes,
     assumed_hypothesis_node_bindings: assumed_nodes,
     source_support_bindings: [
       FamilyManifestSupportSchemaBinding {
         family_read_manifest_schema_id: AFKFamilyFreshReadManifestSchemaId(F),
         dependent_support_schema: family_fresh_support,
-        exact retained family-support hypotheses:
-          GammaFamilyInstanceId(F,n0_literal,S,ell0)
+        exact_retained_family_support_hypotheses:
+          ReachableHypothesisGoalIds(
+            GammaFamilyInstanceId(F,n0_literal,S,ell0),
+            GammaFamilyInstanceBody(F,n0_literal,S,ell0))
       },
       FamilyManifestSupportSchemaBinding {
         family_read_manifest_schema_id: AFKFamilyTargetReadManifestSchemaId(F),
         dependent_support_schema: family_target_support,
-        exact retained family-support hypotheses:
-          GammaFamilyInstanceId(F,n0_literal,S,ell0)
+        exact_retained_family_support_hypotheses:
+          ReachableHypothesisGoalIds(
+            GammaFamilyInstanceId(F,n0_literal,S,ell0),
+            GammaFamilyInstanceBody(F,n0_literal,S,ell0))
       },
       ExactManifestSupportBinding {
         semantic_read_manifest_id:
@@ -4270,21 +5205,80 @@ FamilyInstanceCorrespondenceSupportBody(
     ]
   }
 
+FamilyInstanceCorrespondenceSupportId(
+    F,n0_literal,S,ell0,established_nodes,assumed_nodes,
+    family_fresh_support,family_target_support,
+    concrete_fresh_support,concrete_target_support) =
+  AnalysisId<"analysis.support-instantiation">(B,
+    FamilyInstanceCorrespondenceSupportBody(
+      F,n0_literal,S,ell0,established_nodes,assumed_nodes,
+      family_fresh_support,family_target_support,
+      concrete_fresh_support,concrete_target_support))
+
+FamilyInstanceCorrespondenceValidationBasisBody(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  ExactAnalysisValidationBasisBody(
+    checker_contracts,translations,finite_controls,[],residual_trust_roots)
+
+FamilyInstanceCorrespondenceValidationBasisId(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  AnalysisId<"analysis.validation-basis">(B,
+    FamilyInstanceCorrespondenceValidationBasisBody(
+      checker_contracts,translations,finite_controls,residual_trust_roots))
+
+FamilyInstanceCorrespondenceOperationPolicyBody(
+    F,n0_literal,S,ell0) =
+  ExactAnalysisOperationPolicyBody(
+    AnalysisPropositionId(B,
+      FamilyInstanceCorrespondencePropositionBody(
+        F,n0_literal,S,ell0)),
+    CanonicalMap {
+      AFKMemberSpecializationConsumerRef:
+        CanonicalSingleton(AFKExactFamilyMemberSpecializationPurposeRef)
+    },
+    AFKFamilyInstanceCorrespondencePolicyLawBundleRef)
+
+FamilyInstanceCorrespondenceOperationPolicyId(F,n0_literal,S,ell0) =
+  AnalysisId<"analysis.operation-policy">(B,
+    FamilyInstanceCorrespondenceOperationPolicyBody(
+      F,n0_literal,S,ell0))
+
+FamilyInstanceCorrespondenceJudgmentBody(
+    F,n0_literal,S,ell0,support_id,validation_basis_id) =
+  ExactAffirmativeAnalysisJudgmentBody(
+    AnalysisPropositionId(B,
+      FamilyInstanceCorrespondencePropositionBody(
+        F,n0_literal,S,ell0)),
+    NoQuantitativeResult,
+    FamilyInstanceCorrespondenceSemanticBasisId(
+      F,n0_literal,S,ell0),
+    support_id,validation_basis_id,
+    AFKFamilyInstanceCorrespondenceQualificationRef,
+    FamilyInstanceCorrespondenceOperationPolicyId(
+      F,n0_literal,S,ell0))
+
+FamilyInstanceCorrespondenceJudgmentId(
+    F,n0_literal,S,ell0,support_id,validation_basis_id) =
+  AnalysisId<"analysis.judgment-record">(B,
+    FamilyInstanceCorrespondenceJudgmentBody(
+      F,n0_literal,S,ell0,support_id,validation_basis_id))
+
 FamilyInstanceCorrespondenceJudgmentSchema(F,n0_literal,S,ell0) = {
-  proposition:
-    FamilyInstanceCorrespondencePropositionBody(F,n0_literal,S,ell0),
-  semantic_basis:
-    FamilyInstanceCorrespondenceSemanticBasisId(F,n0_literal,S,ell0),
-  support:
-    exact support body above; matching live CheckedFSConstruction and K3-B
-    correspondence capabilities are checking-invocation inputs attached to
-    their owner support bindings, not semantic premise facts,
-  result:
-    conditional affirmative FamilyInstanceCorrespondence judgment,
-  live_capability:
-    attenuated to specialization of this exact `(F,n0_literal,S,ell0)` only
+  exact_judgment_constructor: FamilyInstanceCorrespondenceJudgmentId,
+  result: conditional affirmative FamilyInstanceCorrespondence inheriting
+    exactly GammaFamilyInstanceId(F,n0_literal,S,ell0),
+  live_capability_permission:
+    AFKMemberSpecializationConsumerRef ->
+      AFKExactFamilyMemberSpecializationPurposeRef
 }
 ```
+
+`AFKFamilyInstanceCorrespondencePolicyLawBundleRef` is the one exact
+transport-profile operation-policy law bundle for the pointwise result. The
+matching live FS-construction-view and K3-B correspondence capabilities are
+checking-invocation inputs attached to their owner support bindings, not
+semantic premise facts; PIR does not forward the consumed checked-construction
+capability.
 
 The established and assumed maps are disjoint and partition all nine reachable
 nodes; the unique outward root frontier is `[7,8]`. The checker establishes only
@@ -4372,7 +5366,11 @@ InheritedAFKMemberSupportPartition(
   GammaAFKMemberSpecializationBody(F,n0_literal,S,ell0); prefer an exact
   established node capability over an Assumed occurrence and otherwise retain
   Assumed; reject a missing node, unrelated capability, or output domain other
-  than the complete specialization-context node set
+  than the complete specialization-context node set; return
+  ExactHypothesisTreatmentPartition(
+    GammaAFKMemberSpecializationId(F,n0_literal,S,ell0),
+    GammaAFKMemberSpecializationBody(F,n0_literal,S,ell0),
+    the derived complete treatment map)
 
 AFKMemberSpecializationSupportBody(
     F,n0_literal,S,ell0,
@@ -4384,9 +5382,11 @@ AnalysisSupportInstantiationBody {
   proposition_id: AnalysisPropositionId(
     B,AFKMemberSpecializationPropositionBody(
       F,n0_literal,S,ell0)),
-  non_hypothesis_premise_bindings: [
-    family_property_capability,instance_capability
-  ],
+  non_hypothesis_premise_bindings:
+    ExactNonHypothesisPremiseBindingMap(
+      AFKMemberSpecializationSemanticBasisId(F,n0_literal,S,ell0),
+      AFKMemberSpecializationSemanticBasisBody(F,n0_literal,S,ell0),
+      [family_property_capability,instance_capability]),
   established_hypothesis_node_bindings:
     EstablishedPartitionOf(InheritedAFKMemberSupportPartition(
       F,n0_literal,S,ell0,
@@ -4401,17 +5401,66 @@ AnalysisSupportInstantiationBody {
   }]
 }
 
-AFKMemberSpecializationJudgmentSchema(F,n0_literal,S,ell0) = {
-  proposition:
-    AFKMemberSpecializationPropositionBody(F,n0_literal,S,ell0),
-  semantic_basis:
+AFKMemberSpecializationSupportId(
+    F,n0_literal,S,ell0,
+    family_property_capability,instance_capability,member_target_support) =
+  AnalysisId<"analysis.support-instantiation">(B,
+    AFKMemberSpecializationSupportBody(
+      F,n0_literal,S,ell0,
+      family_property_capability,instance_capability,member_target_support))
+
+AFKMemberSpecializationValidationBasisBody(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  ExactAnalysisValidationBasisBody(
+    checker_contracts,translations,finite_controls,[],residual_trust_roots)
+
+AFKMemberSpecializationValidationBasisId(
+    checker_contracts,translations,finite_controls,residual_trust_roots) =
+  AnalysisId<"analysis.validation-basis">(B,
+    AFKMemberSpecializationValidationBasisBody(
+      checker_contracts,translations,finite_controls,residual_trust_roots))
+
+AFKMemberSpecializationOperationPolicyBody(F,n0_literal,S,ell0) =
+  ExactAnalysisOperationPolicyBody(
+    AnalysisPropositionId(B,
+      AFKMemberSpecializationPropositionBody(F,n0_literal,S,ell0)),
+    CanonicalMap {},
+    AFKMemberSpecializationPolicyLawBundleRef)
+
+AFKMemberSpecializationOperationPolicyId(F,n0_literal,S,ell0) =
+  AnalysisId<"analysis.operation-policy">(B,
+    AFKMemberSpecializationOperationPolicyBody(F,n0_literal,S,ell0))
+
+AFKMemberSpecializationJudgmentBody(
+    F,n0_literal,S,ell0,support_id,validation_basis_id) =
+  ExactAffirmativeAnalysisJudgmentBody(
+    AnalysisPropositionId(B,
+      AFKMemberSpecializationPropositionBody(F,n0_literal,S,ell0)),
+    [AFKKnowledgeErrorFormulaId(S),AFKKnowledgeSuccessFormulaId(S),
+     AFKExpectedCallsFormulaId(S)],
     AFKMemberSpecializationSemanticBasisId(F,n0_literal,S,ell0),
-  support: AFKMemberSpecializationSupportBody with the exact two live premise
-    capabilities and their derived canonical support partition,
-  result:
-    conditional affirmative fixed-length member judgment only
+    support_id,validation_basis_id,
+    AFKMemberSpecializationQualificationRef,
+    AFKMemberSpecializationOperationPolicyId(F,n0_literal,S,ell0))
+
+AFKMemberSpecializationJudgmentId(
+    F,n0_literal,S,ell0,support_id,validation_basis_id) =
+  AnalysisId<"analysis.judgment-record">(B,
+    AFKMemberSpecializationJudgmentBody(
+      F,n0_literal,S,ell0,support_id,validation_basis_id))
+
+AFKMemberSpecializationJudgmentSchema(F,n0_literal,S,ell0) = {
+  exact_judgment_constructor: AFKMemberSpecializationJudgmentId,
+  result: conditional affirmative fixed-length member judgment inheriting
+    exactly GammaAFKMemberSpecializationId(F,n0_literal,S,ell0),
+  live_capability_permissions: none in the selected K3-C profile
 }
 ```
+
+`AFKMemberSpecializationPolicyLawBundleRef` is the one exact source-validation-
+profile operation-policy law bundle for this terminal result. Its empty
+consumer map forbids issuing a downstream premise capability; it does not erase
+the judgment, support, validation, persistence, disclosure, or replay policy.
 
 The finite reference instrument may form these bodies, exercise exact
 arithmetic at one `(n0_literal,ell0)`, and reject a changed role, query domain, formula,

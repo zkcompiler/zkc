@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from copy import copy, deepcopy
 from dataclasses import fields, replace
 import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 
 NAME = "_zkc_k3_oir_projection"
@@ -114,6 +116,13 @@ FROZEN_PROVER_NONFRAME_OBLIGATIONS = (
 
 def p01(role=m.EndpointRole.VERIFIER):
     return m.p01_request(role)
+
+
+def bind_supplement(request):
+    answer = m.bind_future_owner_supplement(request)
+    if answer.kind is not m.OutcomeKind.AFFIRMATIVE:
+        raise AssertionError(answer)
+    return answer.value
 
 
 def target(request):
@@ -461,7 +470,7 @@ class FrozenContractTests(unittest.TestCase):
 
 class SupportAndManifestTests(unittest.TestCase):
     def test_owner_schema_is_exact_and_reflected(self):
-        self.assertEqual(len(m.OWNER_SCHEMA_PATHS), 188)
+        self.assertEqual(len(m.OWNER_SCHEMA_PATHS), 190)
         self.assertEqual(m.OWNER_SCHEMA_PATHS, m.reflected_owner_schema_paths())
         self.assertIs(m.audit_owner_schema().kind, m.OutcomeKind.AFFIRMATIVE)
 
@@ -708,7 +717,11 @@ class StaticFsAndAdmissionTests(unittest.TestCase):
         endpoint = target(p01())
         graph = endpoint.semantic_graph
         codecs = list(graph.role_abi_graph.codec_nodes)
-        codecs[0] = m.CodecNode(m.CodecKind.GENERAL, general_law_dependency=0)
+        codecs[0] = m.CodecNode(
+            m.CodecKind.GENERAL,
+            general_law_dependency=0,
+            interface_codec_id=codecs[0].interface_codec_id,
+        )
         changed = graph_with(
             endpoint,
             role_abi_graph=replace(graph.role_abi_graph, codec_nodes=tuple(codecs)),
@@ -790,18 +803,34 @@ class PlanAndPublicClosureTests(unittest.TestCase):
         extra = m.k3.PrivateMaterialDecl(
             "unused", m.k3.PrivateMaterialKind.ADVICE, m.k3.NAT
         )
-        dead = replace(
-            request,
-            plan=replace(plan, private_material=plan.private_material + (extra,)),
+        dead_plan = replace(plan, private_material=plan.private_material + (extra,))
+        dead = bind_supplement(
+            replace(
+                request,
+                plan=dead_plan,
+                future_owner=m.future_owner_supplement(
+                    request.core,
+                    request.construction,
+                    request.interface,
+                    dead_plan,
+                ),
+                supplement_authority=None,
+            )
         )
         export = m.k3.PlanExport("copy", "response", m.k3.NAT)
         exported_plan = replace(plan, exports=(export,))
-        exported = replace(
-            request,
-            plan=exported_plan,
-            future_owner=m._future_owner(
-                request.core, request.construction, exported_plan
-            ),
+        exported = bind_supplement(
+            replace(
+                request,
+                plan=exported_plan,
+                future_owner=m.future_owner_supplement(
+                    request.core,
+                    request.construction,
+                    request.interface,
+                    exported_plan,
+                ),
+                supplement_authority=None,
+            )
         )
         self.assertEqual(target(request).asserted_id, target(dead).asserted_id)
         self.assertEqual(target(request).asserted_id, target(exported).asserted_id)
@@ -813,10 +842,18 @@ class PlanAndPublicClosureTests(unittest.TestCase):
             routes[0], implementation_algorithm_id=m._algorithm("changed-route")
         )
         plan = replace(request.plan, decision_routes=tuple(routes))
-        changed = replace(
-            request,
-            plan=plan,
-            future_owner=m._future_owner(request.core, request.construction, plan),
+        changed = bind_supplement(
+            replace(
+                request,
+                plan=plan,
+                future_owner=m.future_owner_supplement(
+                    request.core,
+                    request.construction,
+                    request.interface,
+                    plan,
+                ),
+                supplement_authority=None,
+            )
         )
         self.assertNotEqual(target(request).asserted_id, target(changed).asserted_id)
 
@@ -1054,7 +1091,7 @@ class NonAuthoritativePairPressureProbeTests(unittest.TestCase):
         verifier = admit(self.verifier)
         with self.assertRaises(ValueError):
             m.pressure_probe_p01_endpoint_pair(verifier, verifier)
-        forged = m.AdmittedOir(object(), self.prover, self.prover.asserted_id)
+        forged = replace(admit(self.prover))
         with self.assertRaises(TypeError):
             m.pressure_probe_p01_endpoint_pair(verifier, forged)
 
@@ -1134,7 +1171,866 @@ class NonAuthoritativePairPressureProbeTests(unittest.TestCase):
         self.assertFalse(hasattr(observations, "capability"))
 
 
+class OwnerAdapterAndProfileTests(unittest.TestCase):
+    def _with_interface(self, request, interface):
+        raw = m.future_owner_supplement(
+            request.core,
+            request.construction,
+            interface,
+            request.plan,
+        )
+        return bind_supplement(
+            replace(
+                request,
+                interface=interface,
+                future_owner=raw,
+                supplement_authority=None,
+            )
+        )
+
+    def test_checked_adapter_exposes_exact_live_authorities_and_residuals(self):
+        verifier = p01()
+        result = m.check_projection_owner_adapter(verifier)
+        self.assertIs(result.kind, m.OutcomeKind.AFFIRMATIVE)
+        adapter = result.value
+        self.assertIs(adapter.request, verifier)
+        self.assertIs(adapter.supplement, verifier.supplement_authority)
+        self.assertEqual(
+            adapter.supplement_only_paths,
+            m.FUTURE_OWNER_SUPPLEMENT_ONLY_PATHS,
+        )
+        consumer_id = adapter.supplement.capability.consumer_id
+        purpose_id = adapter.supplement.capability.purpose_id
+        for issued in (*adapter.k2_static_views, adapter.fs_construction_view):
+            self.assertTrue(
+                m.k2.validate_issued_pir_static_view(
+                    issued,
+                    expected_consumer_id=consumer_id,
+                    expected_purpose_id=purpose_id,
+                )
+            )
+        self.assertEqual(
+            adapter.checked_fs_construction.capability.consumer_id,
+            consumer_id,
+        )
+        self.assertEqual(
+            adapter.checked_fs_construction.capability.purpose_id,
+            purpose_id,
+        )
+        self.assertTrue(
+            m.k3.validate_issued_protocol_interface_correspondence_view(
+                adapter.interface_view,
+                expected_consumer_id=consumer_id,
+                expected_purpose_id=purpose_id,
+            )
+        )
+        self.assertEqual(len(adapter.k2_static_views), 7)
+        self.assertIsNone(adapter.checked_plan)
+        prover = m.check_projection_owner_adapter(p01(m.EndpointRole.PROVER)).value
+        self.assertEqual(len(prover.k2_static_views), 8)
+        self.assertIs(type(prover.checked_plan), m.k3.CheckedPlanRealizes)
+
+    def test_raw_stale_and_reconstructed_supplements_cannot_be_consumed(self):
+        request = p01()
+        raw = replace(request, supplement_authority=None)
+        self.assertIs(
+            m.check_projection_owner_adapter(raw).kind,
+            m.OutcomeKind.MISSING_DEPENDENCY,
+        )
+        self.assertIs(m.project(raw).kind, m.OutcomeKind.MISSING_DEPENDENCY)
+
+        reconstructed = replace(request.supplement_authority)
+        forged_request = replace(request, supplement_authority=reconstructed)
+        self.assertIs(
+            m.check_projection_owner_adapter(forged_request).kind,
+            m.OutcomeKind.REFUSED,
+        )
+        with self.assertRaises(ValueError):
+            copy(request.supplement_authority)
+        with self.assertRaises(ValueError):
+            deepcopy(request.supplement_authority)
+        with self.assertRaises(ValueError):
+            copy(request.supplement_authority.capability)
+        with self.assertRaises(ValueError):
+            deepcopy(request.supplement_authority.capability)
+
+        reconstructed_capability = replace(
+            request.supplement_authority.capability
+        )
+        reconstructed_with_capability = replace(
+            request.supplement_authority,
+            capability=reconstructed_capability,
+        )
+        with patch.dict(
+            m._LIVE_SUPPLEMENT_AUTHORITIES,
+            {id(reconstructed_with_capability): reconstructed_with_capability},
+        ):
+            self.assertIs(
+                m.check_projection_owner_adapter(
+                    replace(
+                        request,
+                        supplement_authority=reconstructed_with_capability,
+                    )
+                ).kind,
+                m.OutcomeKind.REFUSED,
+            )
+
+        owner = request.future_owner
+        stale_owner = replace(
+            owner,
+            core=replace(
+                owner.core,
+                terminal=replace(owner.core.terminal, verdict="changed"),
+            ),
+        )
+        stale = replace(request, future_owner=stale_owner)
+        self.assertIs(
+            m.check_projection_owner_adapter(stale).kind,
+            m.OutcomeKind.REFUSED,
+        )
+
+    def test_external_coordinate_rotates_source_oir_and_proposition(self):
+        request = p01()
+        assignments = list(request.interface.inputs)
+        assignments[0] = replace(
+            assignments[0],
+            external_coordinate=assignments[0].external_coordinate + ".v2",
+        )
+        changed = self._with_interface(
+            request,
+            replace(request.interface, inputs=tuple(assignments)),
+        )
+        original_source = source(request)
+        changed_source = source(changed)
+        original_target = target(request)
+        changed_target = target(changed)
+        self.assertNotEqual(original_source.view_id, changed_source.view_id)
+        self.assertNotEqual(original_target.asserted_id, changed_target.asserted_id)
+        original = m.form_projection_proposition(
+            original_source,
+            admit(original_target),
+        ).value
+        rotated = m.form_projection_proposition(
+            changed_source,
+            admit(changed_target),
+        ).value
+        self.assertNotEqual(original.proposition_id, rotated.proposition_id)
+
+        transports = list(request.interface.transports)
+        transports[0] = replace(
+            transports[0],
+            external_coordinate=transports[0].external_coordinate + ".v2",
+        )
+        transported = self._with_interface(
+            request,
+            replace(request.interface, transports=tuple(transports)),
+        )
+        self.assertNotEqual(source(request).view_id, source(transported).view_id)
+        self.assertNotEqual(target(request).asserted_id, target(transported).asserted_id)
+
+    def test_statement_name_and_codec_identity_are_not_erased(self):
+        request = p01()
+        statements = list(request.interface.statements)
+        statements[0] = replace(
+            statements[0],
+            external_statement=statements[0].external_statement + ".v2",
+        )
+        renamed = self._with_interface(
+            request,
+            replace(request.interface, statements=tuple(statements)),
+        )
+        self.assertNotEqual(source(request).view_id, source(renamed).view_id)
+        self.assertNotEqual(target(request).asserted_id, target(renamed).asserted_id)
+
+        assignments = list(request.interface.inputs)
+        assignments[0] = replace(
+            assignments[0],
+            codec_id=m._algorithm("alternate-interface-codec"),
+        )
+        recoded = self._with_interface(
+            request,
+            replace(request.interface, inputs=tuple(assignments)),
+        )
+        recoded_graph = target(recoded).semantic_graph
+        self.assertNotEqual(target(request).asserted_id, target(recoded).asserted_id)
+        self.assertIn(
+            assignments[0].codec_id,
+            tuple(
+                item.interface_codec_id
+                for item in recoded_graph.role_abi_graph.codec_nodes
+            ),
+        )
+
+    def test_profile_mutation_locality_is_exact(self):
+        baseline = m.K3D_SEMANTIC_PROFILES
+        validation_only = m.make_k3d_semantic_profiles(
+            validation_law=b"changed-validation-law"
+        )
+        self.assertEqual(validation_only.endpoint_graph, baseline.endpoint_graph)
+        self.assertEqual(validation_only.source_view, baseline.source_view)
+        self.assertEqual(validation_only.projection, baseline.projection)
+        self.assertNotEqual(validation_only.validation, baseline.validation)
+
+        relations_only = m.k3.make_k3b_semantic_profiles(
+            relations_law=b"changed-relations-law"
+        )
+        downstream = m.make_k3d_semantic_profiles(k3b_profiles=relations_only)
+        self.assertEqual(downstream, baseline)
+        self.assertNotIn(
+            relations_only.relations_correspondence.identity,
+            downstream.bundle,
+        )
+
+        interface_changed = m.k3.make_k3b_semantic_profiles(
+            interface_plan_law=b"changed-interface-plan-law"
+        )
+        rotated = m.make_k3d_semantic_profiles(k3b_profiles=interface_changed)
+        self.assertNotEqual(rotated.endpoint_graph, baseline.endpoint_graph)
+        self.assertNotEqual(rotated.source_view, baseline.source_view)
+        self.assertNotEqual(rotated.projection, baseline.projection)
+        self.assertNotEqual(rotated.validation, baseline.validation)
+
+    def test_every_k3d_root_uses_its_exact_no_extra_import_closure(self):
+        profiles = m.K3D_SEMANTIC_PROFILES
+        roots = (
+            (profiles.endpoint_graph, profiles.endpoint_graph_bundle, 4),
+            (profiles.source_view, profiles.source_view_bundle, 5),
+            (profiles.projection, profiles.projection_bundle, 6),
+            (profiles.validation, profiles.validation_bundle, 7),
+        )
+        for profile, bundle, expected_count in roots:
+            with self.subTest(profile=profile.profile_family.value):
+                context = m.k1.effective_semantic_context(
+                    profile.identity,
+                    bundle,
+                    semantic_regime=m.k1.SEMANTIC_REGIME_ID,
+                )
+                self.assertEqual(
+                    len(context.authenticated_profiles),
+                    expected_count,
+                )
+                self.assertEqual(
+                    {item for item, _ in context.authenticated_profiles},
+                    set(bundle),
+                )
+
+        self.assertNotIn(
+            profiles.k3b_profiles.relations_correspondence.identity,
+            profiles.validation_bundle,
+        )
+        self.assertNotIn(
+            profiles.k3b_profiles.k2_profiles.public_view.identity,
+            profiles.validation_bundle,
+        )
+
+
+class SupplementClosureTests(unittest.TestCase):
+    def _issue_with_owner(self, request, owner):
+        return m.issue_future_owner_supplement(
+            replace(
+                request,
+                future_owner=owner,
+                supplement_authority=None,
+            )
+        )
+
+    def _authority_binding(self):
+        authority = p01().supplement_authority
+        self.assertIs(type(authority), m.IssuedFutureOwnerSupplement)
+        return authority
+
+    def test_authority_binding_formation_authenticates_the_exact_source_context(self):
+        authenticator = m.k1.authenticate_profiled_semantic_content
+        with patch.object(
+            m.k1,
+            "authenticate_profiled_semantic_content",
+            wraps=authenticator,
+        ) as authenticated:
+            authority = self._authority_binding()
+
+        matching_calls = tuple(
+            call
+            for call in authenticated.call_args_list
+            if call.args and call.args[0] == authority.authority_binding_id
+        )
+        self.assertEqual(len(matching_calls), 1)
+        formation_call = matching_calls[0]
+        self.assertEqual(formation_call.args[1], m.SOURCE_PROFILE)
+        self.assertEqual(formation_call.args[2], authority.authority_binding.body())
+        self.assertEqual(
+            formation_call.args[3],
+            m.K3D_SEMANTIC_PROFILES.source_view_bundle,
+        )
+        self.assertEqual(
+            formation_call.kwargs,
+            {"supported_profiles": (m.SOURCE_PROFILE,)},
+        )
+
+    def test_authority_binding_authenticates_exactly_five_profiles(self):
+        authority = self._authority_binding()
+        bundle = m.K3D_SEMANTIC_PROFILES.source_view_bundle
+        context = m.k1.authenticate_profiled_semantic_content(
+            authority.authority_binding_id,
+            m.SOURCE_PROFILE,
+            authority.authority_binding.body(),
+            bundle,
+            supported_profiles=(m.SOURCE_PROFILE,),
+        )
+        self.assertEqual(context.selected_profile, m.SOURCE_PROFILE)
+        self.assertEqual(len(context.authenticated_profiles), 5)
+        self.assertEqual(
+            {profile_id for profile_id, _ in context.authenticated_profiles},
+            set(bundle),
+        )
+
+    def test_authority_binding_refuses_a_missing_source_profile_preimage(self):
+        authority = self._authority_binding()
+        incomplete = dict(m.K3D_SEMANTIC_PROFILES.source_view_bundle)
+        incomplete.pop(m.K3D_SEMANTIC_PROFILES.endpoint_graph.identity)
+        with self.assertRaises(m.k1._Control) as caught:
+            m.k1.authenticate_profiled_semantic_content(
+                authority.authority_binding_id,
+                m.SOURCE_PROFILE,
+                authority.authority_binding.body(),
+                incomplete,
+                supported_profiles=(m.SOURCE_PROFILE,),
+            )
+        self.assertIs(caught.exception.outcome, m.k1.Outcome.MISSING_DEPENDENCY)
+        self.assertEqual(caught.exception.code, "K1-MISSING-PROFILE")
+
+    def test_authority_binding_refuses_an_extra_source_profile_preimage(self):
+        authority = self._authority_binding()
+        overcomplete = dict(m.K3D_SEMANTIC_PROFILES.source_view_bundle)
+        validation = m.K3D_SEMANTIC_PROFILES.validation
+        self.assertNotIn(validation.identity, overcomplete)
+        overcomplete[validation.identity] = validation
+        with self.assertRaises(m.k1._Control) as caught:
+            m.k1.authenticate_profiled_semantic_content(
+                authority.authority_binding_id,
+                m.SOURCE_PROFILE,
+                authority.authority_binding.body(),
+                overcomplete,
+                supported_profiles=(m.SOURCE_PROFILE,),
+            )
+        self.assertIs(caught.exception.outcome, m.k1.Outcome.REFUSED)
+        self.assertEqual(caught.exception.code, "K1-REFUSED-EXTRA-PROFILE")
+
+    def test_authority_binding_has_no_generic_json_identity_route(self):
+        with self.assertRaisesRegex(TypeError, "has no language profile"):
+            m._semantic_id(
+                "pir.endpoint-owner-supplement-authority-binding",
+                m.k1.BytesValue(b"alternate-body"),
+            )
+
+    def test_provisional_supplement_activates_only_after_the_live_owner_join(self):
+        request = p01()
+        authority = request.supplement_authority
+        self.assertIs(
+            m._PROVISIONAL_SUPPLEMENT_AUTHORITIES.get(id(authority)), authority
+        )
+        self.assertNotIn(id(authority), m._LIVE_SUPPLEMENT_AUTHORITIES)
+        checked = m.check_projection_owner_adapter(request)
+        self.assertIs(checked.kind, m.OutcomeKind.AFFIRMATIVE)
+        self.assertIs(checked.value.supplement, authority)
+        self.assertNotIn(id(authority), m._PROVISIONAL_SUPPLEMENT_AUTHORITIES)
+        self.assertIs(m._LIVE_SUPPLEMENT_AUTHORITIES.get(id(authority)), authority)
+
+    def test_every_closed_supplement_table_rejects_duplicate_keys(self):
+        verifier = p01()
+        owner = verifier.future_owner
+        assert owner is not None
+        mutations = {
+            "claims": replace(
+                owner,
+                core=replace(
+                    owner.core,
+                    claims=owner.core.claims + (owner.core.claims[0],),
+                ),
+            ),
+            "reductions": replace(
+                owner,
+                core=replace(
+                    owner.core,
+                    reductions=owner.core.reductions + (owner.core.reductions[0],),
+                ),
+            ),
+            "challenges": replace(
+                owner,
+                fs=replace(
+                    owner.fs,
+                    challenges=owner.fs.challenges + (owner.fs.challenges[0],),
+                ),
+            ),
+            "statement-aliases": replace(
+                owner,
+                interface=replace(
+                    owner.interface,
+                    statement_aliases=(
+                        owner.interface.statement_aliases
+                        + (owner.interface.statement_aliases[0],)
+                    ),
+                ),
+            ),
+            "transports": replace(
+                owner,
+                interface=replace(
+                    owner.interface,
+                    transports=(
+                        owner.interface.transports
+                        + (owner.interface.transports[0],)
+                    ),
+                ),
+            ),
+            "completions": replace(
+                owner,
+                interface=replace(
+                    owner.interface,
+                    completions=(
+                        owner.interface.completions
+                        + (owner.interface.completions[0],)
+                    ),
+                ),
+            ),
+        }
+        for label, changed in mutations.items():
+            with self.subTest(label=label):
+                self.assertIs(
+                    self._issue_with_owner(verifier, changed).kind,
+                    m.OutcomeKind.REFUSED,
+                )
+
+        prover = p01(m.EndpointRole.PROVER)
+        prover_owner = prover.future_owner
+        assert prover_owner is not None and prover_owner.plan is not None
+        duplicate_recipe = replace(
+            prover_owner,
+            plan=replace(
+                prover_owner.plan,
+                recipes=prover_owner.plan.recipes + (prover_owner.plan.recipes[0],),
+            ),
+        )
+        self.assertIs(
+            self._issue_with_owner(prover, duplicate_recipe).kind,
+            m.OutcomeKind.REFUSED,
+        )
+
+        exported_plan = replace(
+            prover.plan,
+            exports=(m.k3.PlanExport("copy", "response", m.k3.NAT),),
+        )
+        exported_owner = m.future_owner_supplement(
+            prover.core,
+            prover.construction,
+            prover.interface,
+            exported_plan,
+        )
+        assert exported_owner.plan is not None
+        duplicate_export = replace(
+            exported_owner,
+            plan=replace(
+                exported_owner.plan,
+                derived_exports=(
+                    exported_owner.plan.derived_exports
+                    + (exported_owner.plan.derived_exports[0],)
+                ),
+            ),
+        )
+        exported_request = replace(
+            prover,
+            plan=exported_plan,
+            future_owner=duplicate_export,
+            supplement_authority=None,
+        )
+        self.assertIs(
+            m.issue_future_owner_supplement(exported_request).kind,
+            m.OutcomeKind.REFUSED,
+        )
+
+    def test_claim_origins_are_exact_owner_overlap_not_just_name_and_arity(self):
+        request = p01()
+        owner = request.future_owner
+        assert owner is not None
+        initial = owner.core.claims[0]
+        reanchored = replace(initial, source_name="g")
+        changed = replace(
+            owner,
+            core=replace(
+                owner.core,
+                claims=(reanchored,) + owner.core.claims[1:],
+            ),
+        )
+        answer = self._issue_with_owner(request, changed)
+        self.assertIs(answer.kind, m.OutcomeKind.REFUSED)
+        self.assertIn("claim origin", answer.reason)
+
+    def test_unique_rows_outside_each_closed_owner_set_are_refused(self):
+        verifier = p01()
+        owner = verifier.future_owner
+        assert owner is not None
+        extra_claim = replace(owner.core.claims[0], claim_key="phantom-claim")
+        extra_reduction = replace(
+            owner.core.reductions[0], reduction_name="phantom-reduction"
+        )
+        extra_challenge = replace(
+            owner.fs.challenges[0], occurrence="terminal"
+        )
+        extra_statement = replace(
+            owner.interface.statement_aliases[0],
+            external_statement="phantom-statement",
+            binding_input="g",
+            slot_key="input:g",
+            invocation_input="g",
+        )
+        extra_transport = replace(
+            owner.interface.transports[0],
+            occurrence="terminal",
+            source=m.TransportActor.PUBLIC_DERIVATION,
+            destination=m.TransportDestination.EXTERNAL_APPLICATION,
+        )
+        extra_completion = replace(
+            owner.interface.completions[0],
+            target="phantom-completion",
+            external_tag="phantom-completion",
+        )
+        mutations = {
+            "claim": replace(
+                owner,
+                core=replace(
+                    owner.core,
+                    claims=owner.core.claims + (extra_claim,),
+                ),
+            ),
+            "reduction": replace(
+                owner,
+                core=replace(
+                    owner.core,
+                    reductions=owner.core.reductions + (extra_reduction,),
+                ),
+            ),
+            "challenge": replace(
+                owner,
+                fs=replace(
+                    owner.fs,
+                    challenges=owner.fs.challenges + (extra_challenge,),
+                ),
+            ),
+            "statement": replace(
+                owner,
+                interface=replace(
+                    owner.interface,
+                    statement_aliases=(
+                        owner.interface.statement_aliases + (extra_statement,)
+                    ),
+                ),
+            ),
+            "transport": replace(
+                owner,
+                interface=replace(
+                    owner.interface,
+                    transports=owner.interface.transports + (extra_transport,),
+                ),
+            ),
+            "completion": replace(
+                owner,
+                interface=replace(
+                    owner.interface,
+                    completions=owner.interface.completions + (extra_completion,),
+                ),
+            ),
+        }
+        for label, changed in mutations.items():
+            with self.subTest(label=label):
+                self.assertIs(
+                    self._issue_with_owner(verifier, changed).kind,
+                    m.OutcomeKind.REFUSED,
+                )
+
+        prover = p01(m.EndpointRole.PROVER)
+        prover_owner = prover.future_owner
+        assert prover_owner is not None and prover_owner.plan is not None
+        extra_recipe = replace(
+            prover_owner.plan.recipes[0],
+            decision="challenge",
+        )
+        with_extra_recipe = replace(
+            prover_owner,
+            plan=replace(
+                prover_owner.plan,
+                recipes=prover_owner.plan.recipes + (extra_recipe,),
+            ),
+        )
+        self.assertIs(
+            self._issue_with_owner(prover, with_extra_recipe).kind,
+            m.OutcomeKind.REFUSED,
+        )
+        extra_export = (
+            "phantom-export",
+            "response",
+            m.OwnerPlanOperand(m.PlanOperandKind.NODE_OUTPUT, node_ordinal=0),
+            m.k3.NAT,
+        )
+        with_extra_export = replace(
+            prover_owner,
+            plan=replace(
+                prover_owner.plan,
+                derived_exports=prover_owner.plan.derived_exports + (extra_export,),
+            ),
+        )
+        self.assertIs(
+            self._issue_with_owner(prover, with_extra_export).kind,
+            m.OutcomeKind.REFUSED,
+        )
+
+    def test_generic_prover_is_unsupported_before_supplement_admission(self):
+        request = replace(
+            p01(m.EndpointRole.PROVER),
+            plan=None,
+            future_owner=None,
+            supplement_authority=None,
+        )
+        answer = m.classify_support(request)
+        self.assertIs(answer.kind, m.OutcomeKind.UNSUPPORTED)
+        self.assertEqual(
+            answer.unsupported_reasons,
+            (m.SupportReason.GENERIC_PROVER_ENDPOINT,),
+        )
+
+
+class AuthoritySealingTests(unittest.TestCase):
+    def setUp(self):
+        self.request = p01()
+        support = m.classify_support(self.request)
+        self.assertIs(support.kind, m.OutcomeKind.AFFIRMATIVE)
+        self.basis = support.value
+        extracted = m.extract_endpoint_source_view(self.basis)
+        self.assertIs(extracted.kind, m.OutcomeKind.AFFIRMATIVE)
+        self.source = extracted.value
+        projected = m.project_supported_endpoint(self.basis)
+        self.assertIs(projected.kind, m.OutcomeKind.AFFIRMATIVE)
+        self.endpoint = projected.value
+        self.admitted = admit(self.endpoint)
+        formed = m.form_projection_proposition(self.source, self.admitted)
+        self.assertIs(formed.kind, m.OutcomeKind.AFFIRMATIVE)
+        self.formed = formed.value
+        validation_answer = m.form_projection_validation_request(
+            self.source,
+            self.admitted,
+        )
+        self.assertIs(validation_answer.kind, m.OutcomeKind.AFFIRMATIVE)
+        self.validation = validation_answer.value
+        checked = m.check_projection(self.validation)
+        self.assertIs(checked.kind, m.OutcomeKind.AFFIRMATIVE)
+        self.checked = checked.value
+
+    def test_exact_basis_and_adapter_chain_is_retained_through_validation(self):
+        self.assertIs(self.source.basis, self.basis)
+        self.assertIs(self.source.adapter, self.basis.adapter)
+        self.assertIs(self.validation.basis, self.basis)
+        self.assertIs(self.validation.adapter, self.basis.adapter)
+        self.assertIs(self.checked.validation, self.validation)
+        self.assertTrue(m._is_live_checked_projection(self.checked))
+        self.assertIs(
+            m.project_supported_endpoint(replace(self.basis)).kind,
+            m.OutcomeKind.REFUSED,
+        )
+
+    def test_copy_and_replace_reconstruction_fails_at_every_consumed_boundary(self):
+        carriers = (
+            self.basis,
+            self.source,
+            self.admitted,
+            self.formed,
+            self.validation,
+            self.checked,
+        )
+        for carrier in carriers:
+            with self.subTest(copy=type(carrier).__name__):
+                with self.assertRaises(ValueError):
+                    copy(carrier)
+                with self.assertRaises(ValueError):
+                    deepcopy(carrier)
+
+        self.assertIs(
+            m.extract_endpoint_source_view(replace(self.basis)).kind,
+            m.OutcomeKind.REFUSED,
+        )
+        self.assertIs(
+            m.form_projection_proposition(replace(self.source), self.admitted).kind,
+            m.OutcomeKind.REFUSED,
+        )
+        self.assertIs(
+            m.form_projection_proposition(self.source, replace(self.admitted)).kind,
+            m.OutcomeKind.REFUSED,
+        )
+        forged_formed = replace(self.formed)
+        forged_validation = replace(self.validation, proposition=forged_formed)
+        with patch.dict(
+            m._LIVE_VALIDATION_REQUESTS,
+            {id(forged_validation): forged_validation},
+        ):
+            self.assertIs(
+                m.check_projection(forged_validation).kind,
+                m.OutcomeKind.REFUSED,
+            )
+        self.assertIs(
+            m.check_projection(replace(self.validation)).kind,
+            m.OutcomeKind.REFUSED,
+        )
+        self.assertFalse(m._is_live_checked_projection(replace(self.checked)))
+
+    def test_coherent_graph_mutations_cannot_reconstruct_source_or_admission(self):
+        changed_endpoint = graph_with(
+            self.endpoint,
+            static_fs_semantics=replace(
+                self.endpoint.semantic_graph.static_fs_semantics,
+                application_domain=b"coherent-authority-forgery",
+            ),
+        )
+        changed_admitted = admit(changed_endpoint)
+        changed_view = replace(
+            self.source.view,
+            semantic_graph=changed_endpoint.semantic_graph,
+        )
+        reconstructed_source = replace(
+            self.source,
+            view=changed_view,
+            view_id=m.endpoint_source_view_id(changed_view),
+        )
+        self.assertIs(
+            m.form_projection_proposition(
+                reconstructed_source,
+                changed_admitted,
+            ).kind,
+            m.OutcomeKind.REFUSED,
+        )
+
+        reconstructed_admission = replace(
+            self.admitted,
+            endpoint=changed_endpoint,
+            oir_id=changed_endpoint.asserted_id,
+        )
+        self.assertIs(
+            m.form_projection_proposition(self.source, reconstructed_admission).kind,
+            m.OutcomeKind.REFUSED,
+        )
+
+    def test_validation_request_recomputes_every_derived_audit_field(self):
+        mutations = {
+            "source-handles": {
+                "source_handles": self.validation.source_handles + ("forged",)
+            },
+            "schema-set": {"schema_set_id": object()},
+            "manifest": {"manifest_id": object()},
+            "provenance": {"provenance": "forged-provenance"},
+            "source-label": {"source_label": "forged-source"},
+        }
+        for label, change in mutations.items():
+            forged = replace(self.validation, **change)
+            with self.subTest(label=label), patch.dict(
+                m._LIVE_VALIDATION_REQUESTS,
+                {id(forged): forged},
+            ):
+                self.assertIs(
+                    m.check_projection(forged).kind,
+                    m.OutcomeKind.REFUSED,
+                )
+
+
 class QualifiedOutcomeTests(unittest.TestCase):
+    def test_pipeline_records_unattempted_stages_without_fake_refusals(self):
+        run = m.project_admit_check(m.live_p01_request())
+        self.assertIs(run.produced.kind, m.OutcomeKind.MISSING_DEPENDENCY)
+        self.assertIsNone(run.admitted)
+        self.assertIsNone(run.checked)
+
+    def test_invalid_owner_is_refused_before_proposition_formation(self):
+        request = p01()
+        owner = request.future_owner
+        assert owner is not None
+        bad_interface = replace(
+            owner.interface,
+            codecs=owner.interface.codecs + (owner.interface.codecs[0],),
+        )
+        answer = m.project(
+            replace(request, future_owner=replace(owner, interface=bad_interface))
+        )
+        self.assertIs(answer.kind, m.OutcomeKind.REFUSED)
+        self.assertNotEqual(answer.kind, m.OutcomeKind.NEGATIVE)
+
+    def test_extractor_and_target_faults_are_checker_failures_not_negatives(self):
+        request = p01()
+        support = m.classify_support(request)
+        self.assertIs(support.kind, m.OutcomeKind.AFFIRMATIVE)
+        with patch.object(
+            m, "_extract_source_graph", side_effect=ValueError("injected extractor fault")
+        ):
+            extracted = m.extract_endpoint_source_view(support.value)
+        self.assertIs(extracted.kind, m.OutcomeKind.CHECKER_FAILURE)
+
+        with patch.object(
+            m, "_construct_target_graph", side_effect=ValueError("injected target fault")
+        ):
+            produced = m.project(request)
+        self.assertIs(produced.kind, m.OutcomeKind.CHECKER_FAILURE)
+
+    def test_unexpected_owner_checker_faults_are_not_semantic_failures(self):
+        interface_request = p01()
+        owner_plan_request = p01(m.EndpointRole.PROVER)
+        core_request = p01()
+        protocol_request = p01()
+        interface_admission_request = p01()
+        plan_request = p01(m.EndpointRole.PROVER)
+
+        with patch.object(
+            m.k3,
+            "required_protocol_interface_read_closure",
+            side_effect=RuntimeError("injected checker fault"),
+        ):
+            interface_closure = m.classify_support(interface_request)
+        self.assertIs(interface_closure.kind, m.OutcomeKind.CHECKER_FAILURE)
+
+        with patch.object(
+            m.k3,
+            "check_plan_realizes",
+            side_effect=RuntimeError("injected checker fault"),
+        ):
+            owner_plan = m.check_projection_owner_adapter(
+                owner_plan_request
+            )
+        self.assertIs(owner_plan.kind, m.OutcomeKind.CHECKER_FAILURE)
+
+        with patch.object(
+            m.k2,
+            "admit_core",
+            side_effect=RuntimeError("injected checker fault"),
+        ):
+            core_admission = m.classify_support(core_request)
+        self.assertIs(core_admission.kind, m.OutcomeKind.CHECKER_FAILURE)
+
+        with patch.object(
+            m.k3,
+            "protocol_id",
+            side_effect=RuntimeError("injected checker fault"),
+        ):
+            protocol_admission = m.classify_support(protocol_request)
+        self.assertIs(protocol_admission.kind, m.OutcomeKind.CHECKER_FAILURE)
+
+        with patch.object(
+            m.k3,
+            "admit_interface",
+            side_effect=RuntimeError("injected checker fault"),
+        ):
+            interface_admission = m.classify_support(interface_admission_request)
+        self.assertIs(interface_admission.kind, m.OutcomeKind.CHECKER_FAILURE)
+
+        with patch.object(
+            m.k3,
+            "check_plan_realizes",
+            side_effect=RuntimeError("injected checker fault"),
+        ):
+            plan_realizes = m.classify_support(plan_request)
+        self.assertIs(plan_realizes.kind, m.OutcomeKind.CHECKER_FAILURE)
+
     def test_all_declared_outcomes_are_exercised(self):
         observed = {m.OutcomeKind.AFFIRMATIVE}
         request = p01()
@@ -1168,7 +2064,7 @@ class QualifiedOutcomeTests(unittest.TestCase):
                 )
             ).kind
         )
-        forged = m.AdmittedOir(object(), endpoint, endpoint.asserted_id)
+        forged = replace(admit(endpoint))
         observed.add(m.form_projection_proposition(source(request), forged).kind)
         limited = m.form_projection_validation_request(
             source(request), admit(endpoint), work_limit=1

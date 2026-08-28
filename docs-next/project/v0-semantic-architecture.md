@@ -4,7 +4,7 @@
 > **Document state:** Active
 > **Design maturity:** Reconstruction with selected Stage 1--4A semantic,
 > transition, Protocol, canonical PIR, Relations, Analysis, and Compiler
-> backbone plus bounded K3-D endpoint-projection closure
+> backbone plus bounded K3-E integrated closure; K4 next and K5 freeze pending
 > **Provisional owner:** `project`
 > **Authority:** Non-normative. This page is a reconstruction and design
 > surface for `docs-next/`. The current specifications, status, architecture,
@@ -79,7 +79,7 @@
 > public key with fixed public setup, the exact K2 logical-query carrier, signed
 > lower bounds, and every premise. A finite instrument pressures formation and
 > refusal only. K2 was not reopened, no cryptographic property was proved, and
-> At that checkpoint K3-D/K3-E still owned OIR and integrated closure; the
+> at that checkpoint K3-D/K3-E still owned OIR and integrated closure; the
 > following update records K3-D's bounded result.
 
 > **K3-D integrated-closure update — 2026-08-28:** The bounded minimum OIR
@@ -92,8 +92,25 @@
 > supports FS verifier and Plan-specialized prover endpoints over base
 > non-Oracle, non-module K2 effects, with closed typed unsupported rows and no
 > partial target. It did not reopen K1 or K2, activate full Stage 4B, select a
-> concrete OIR carrier, or establish any cryptographic property. K3-E still
-> owns integrated closure.
+> concrete OIR carrier, or establish any cryptographic property. At that
+> checkpoint K3-E still owned integrated closure; the following update records
+> its bounded result.
+
+> **K3-E integrated-closure update — 2026-08-28:** The bounded joined
+> P01/Schnorr path now composes across exact shared K1/K2/K3-B implementations,
+> K3-C Analysis, and K3-D endpoint projection. The repair locally rotated the
+> K1 profile/regime and inert authority envelope, added exact K2/K3-B profiles
+> and owner exports, and reclosed the affected K3-C and K3-D boundaries while
+> preserving the verifier-observable Core, Fresh/Fiat--Shamir interpretation,
+> and transcript-construction architecture. The endpoint authority join keeps
+> K2 static views, an affirmative checked FS construction and its issued view,
+> the K3-B Interface view, and Prover-only `CheckedPlanRealizes` distinct. A
+> purpose-bound adapter closes only the selected finite path; its richer
+> future-owner facts remain a carrier residual. The Analysis lane
+> deterministically rederives its selected records and checks stable IDs; no
+> live Analysis capability crosses into K3-D or is exercised by K3-E. K4
+> portfolio pressure is next, K5 independent freeze remains pending, and
+> Stage 4B remains inactive.
 
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
@@ -678,7 +695,7 @@ remain provisional:
    policy-derived `ComparisonAlternativeDomain`; every closed decision binds
    both and complete resolution/assessment ledgers.
 
-### 7.5 Research remaining after Stage 4A, updated by K3-D
+### 7.5 Research remaining after bounded K3-E
 
 1. **Pre-freeze consumer closure.** K3-B reconciled Interface/Plan, Relations,
    value bridges, execution grounding, and the canonical carrier against the
@@ -686,9 +703,11 @@ remain provisional:
    native judgment, abstract-family transport, and pointwise member
    specialization without reopening K2. It did not mint the all-`n` family
    source capability: AFK transport remains `CannotAnswer` without independent
-   proof authority. K3-D has now closed the bounded minimum OIR source read,
-   semantic skeleton, and projection relation. K3-E must audit the integrated
-   boundary.
+   proof authority. K3-D closed the bounded minimum OIR source read, semantic
+   skeleton, and projection relation. K3-E then reclosed the joined finite
+   profile, view, read, and authority boundary. K4 must now pressure that
+   selection with the differentiated protocol portfolio; K5 remains the
+   independent freeze gate.
 
 2. **Full OIR behavior and realization correspondence.** After a separate
    Stage 4B activation, extend the bounded semantic skeleton into a complete
@@ -858,7 +877,9 @@ Analysis profiles to those exact sources without reopening K2 or activating
 Stage 4B, while leaving AFK family transport unanswered unless independent
 proof authority supplies its uniform all-`n` source capability. K3-D has now
 selected the bounded endpoint-projection contract without activating Stage 4B;
-K3-E integrated review is next.
+K3-E has reclosed the joined finite boundary. K4 protocol-portfolio pressure
+is next; K5 independent freeze remains pending, and this architecture is not
+yet frozen or normative.
 
 ## 12. Deliberate non-decisions
 

@@ -211,12 +211,13 @@ encoding and identity substrate, same-regime semantic modules,
 domain-indexed canonical values, bounded portable semantic functions, typed
 completed failures, and deterministic evaluation control. It does not absorb
 domain predicates, admission judgments, authorities, resource policies, or
-theorem conclusions. Bounded K3-B Relations and K3-C Analysis have satisfied
-the two-consumer extraction test at their stated contract and refusal
-resolutions without changing that ownership boundary. K3-C supplies no native
-authority for the AFK all-`n` family source premise, so abstract-family
-transport remains `CannotAnswer` absent independent proof authority; K3-E
-still owes integrated closure.
+theorem conclusions. Bounded K3-B Relations, K3-C Analysis, and K3-D OIR have
+satisfied three consumer extractions at their stated contract and refusal
+resolutions without changing that ownership boundary. K3-E has exercised
+their joined profile and inert-envelope boundary over one finite witness. K3-C
+still supplies no native authority for the AFK all-`n` family source premise,
+so abstract-family transport remains `CannotAnswer` absent independent proof
+authority. K4 portfolio pressure and K5 independent freeze remain.
 
 ### Producer definitions and bridge contracts
 

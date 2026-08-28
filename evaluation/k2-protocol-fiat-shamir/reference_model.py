@@ -92,6 +92,387 @@ class FutureReadError(ModelError):
     """A strategy attempted to observe an occurrence not yet available."""
 
 
+class UnsupportedSemanticProfileError(ModelError):
+    """A formed profile bundle is not supported by the selected evaluator."""
+
+
+class MalformedSemanticProfileError(ModelError):
+    """A profile bundle or exact import closure has malformed shape."""
+
+
+class RefusedSemanticProfileError(ModelError):
+    """A formed profile cannot issue the requested subject kind."""
+
+
+def _language_profile_catalog(
+    catalog_kind: str,
+    declarations: tuple[str, ...],
+) -> object:
+    return k1.DatumSeq(
+        (
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol(catalog_kind)),
+                    (
+                        1,
+                        k1.DatumSeq(
+                            tuple(k1.Symbol(item) for item in declarations)
+                        ),
+                    ),
+                )
+            ),
+        )
+    )
+
+
+def _sorted_profile_imports(*profiles: object) -> tuple[object, ...]:
+    return tuple(
+        sorted(
+            (profile.identity for profile in profiles),
+            key=lambda identifier: identifier.internal_reference(),
+        )
+    )
+
+
+@dataclass(frozen=True)
+class K2SemanticProfiles:
+    interaction: object
+    transcript_fs: object
+    public_view: object
+
+    def __post_init__(self) -> None:
+        if any(
+            type(item) is not k1.SemanticLanguageProfile
+            for item in (self.interaction, self.transcript_fs, self.public_view)
+        ):
+            raise ModelError("K2 semantic profiles have the wrong exact shape")
+        if self.transcript_fs.profile_imports != _sorted_profile_imports(
+            self.interaction
+        ):
+            raise ModelError("the Transcript/FS profile must import Interaction")
+        if self.public_view.profile_imports != _sorted_profile_imports(
+            self.interaction,
+            self.transcript_fs,
+        ):
+            raise ModelError("the public-view profile must import both K2 languages")
+
+    @property
+    def bundle(self) -> dict[object, object]:
+        return {
+            profile.identity: profile
+            for profile in (
+                self.interaction,
+                self.transcript_fs,
+                self.public_view,
+            )
+        }
+
+
+def make_k2_semantic_profiles(
+    *,
+    interaction_law: bytes = b"zkc-k2-interaction-core-fresh-law-v0",
+    transcript_fs_law: bytes = b"zkc-k2-transcript-fs-law-v0",
+    public_view_law: bytes = b"zkc-k2-public-view-export-law-v0",
+) -> K2SemanticProfiles:
+    interaction = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.pir.interaction-core-fresh"),
+        0,
+        (),
+        tuple(
+            k1.Symbol(item)
+            for item in sorted(
+                (
+                    "pir.interactive-core",
+                    "pir.invocation",
+                    "pir.protocol",
+                    "pir.source-binding-payload",
+                    "pir.source-capability-requirement",
+                    "pir.source-consumer",
+                    "pir.source-no-policy",
+                    "pir.source-policy-closure",
+                    "pir.source-purpose",
+                )
+            )
+        ),
+        _language_profile_catalog(
+            "pir.interaction-declaration",
+            (
+                "core-body-v1",
+                "fresh-protocol-body-v1",
+                "pir-core-and-execution-view-catalog-v0",
+                "pir-source-authority-envelope-specialization-v0",
+                "core-invocation-body-v1",
+            ),
+        ),
+        interaction_law,
+    )
+    transcript_fs = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.pir.transcript-fs"),
+        0,
+        _sorted_profile_imports(interaction),
+        tuple(
+            k1.Symbol(item)
+            for item in sorted(
+                (
+                    "pir.protocol",
+                    "pir.source-binding-payload",
+                    "pir.source-capability-requirement",
+                    "pir.source-consumer",
+                    "pir.source-no-policy",
+                    "pir.source-policy-closure",
+                    "pir.source-purpose",
+                    "pir.transcript-construction",
+                )
+            )
+        ),
+        _language_profile_catalog(
+            "pir.transcript-declaration",
+            (
+                "fs-protocol-body-v1",
+                "pir-transcript-and-fs-view-catalog-v0",
+                "pir-source-authority-envelope-specialization-v0",
+                "transcript-construction-body-v1",
+            ),
+        ),
+        transcript_fs_law,
+    )
+    public_view = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.pir.public-view-export"),
+        0,
+        _sorted_profile_imports(interaction, transcript_fs),
+        tuple(
+            k1.Symbol(item)
+            for item in sorted(
+                (
+                    "pir.public-setup-invocation-view",
+                    "pir.source-binding-payload",
+                    "pir.source-capability-requirement",
+                    "pir.source-consumer",
+                    "pir.source-no-policy",
+                    "pir.source-policy-closure",
+                    "pir.source-purpose",
+                )
+            )
+        ),
+        _language_profile_catalog(
+            "pir.public-view-declaration",
+            (
+                "pir-source-authority-envelope-specialization-v0",
+                "public-setup-invocation-view-body-v1",
+            ),
+        ),
+        public_view_law,
+    )
+    return K2SemanticProfiles(interaction, transcript_fs, public_view)
+
+
+K2_SEMANTIC_PROFILES = make_k2_semantic_profiles()
+K2_PROFILE_BUNDLE = K2_SEMANTIC_PROFILES.bundle
+PIR_INTERACTION_PROFILE = K2_SEMANTIC_PROFILES.interaction
+PIR_INTERACTION_PROFILE_ID = PIR_INTERACTION_PROFILE.identity
+PIR_TRANSCRIPT_PROFILE = K2_SEMANTIC_PROFILES.transcript_fs
+PIR_TRANSCRIPT_PROFILE_ID = PIR_TRANSCRIPT_PROFILE.identity
+# The selected K2 split deliberately uses one Transcript/FS profile.  These
+# aliases expose the FS-facing name without pretending there is a second law.
+PIR_FS_PROFILE = PIR_TRANSCRIPT_PROFILE
+PIR_FS_PROFILE_ID = PIR_TRANSCRIPT_PROFILE_ID
+PIR_PUBLIC_SETUP_PROFILE = K2_SEMANTIC_PROFILES.public_view
+PIR_PUBLIC_SETUP_PROFILE_ID = PIR_PUBLIC_SETUP_PROFILE.identity
+
+
+def k2_root_profile_preimages(
+    profiles: K2SemanticProfiles,
+) -> Mapping[object, Mapping[object, object]]:
+    if type(profiles) is not K2SemanticProfiles:
+        raise ModelError("K2 root closures need one exact profile bundle")
+    interaction = {profiles.interaction.identity: profiles.interaction}
+    transcript = {
+        **interaction,
+        profiles.transcript_fs.identity: profiles.transcript_fs,
+    }
+    public_view = {
+        **transcript,
+        profiles.public_view.identity: profiles.public_view,
+    }
+    return MappingProxyType(
+        {
+            profiles.interaction.identity: interaction,
+            profiles.transcript_fs.identity: transcript,
+            profiles.public_view.identity: public_view,
+        }
+    )
+
+
+K2_ROOT_PROFILE_PREIMAGES = k2_root_profile_preimages(K2_SEMANTIC_PROFILES)
+PIR_INTERACTION_PROFILE_PREIMAGES = K2_ROOT_PROFILE_PREIMAGES[
+    PIR_INTERACTION_PROFILE_ID
+]
+PIR_TRANSCRIPT_PROFILE_PREIMAGES = K2_ROOT_PROFILE_PREIMAGES[
+    PIR_TRANSCRIPT_PROFILE_ID
+]
+PIR_PUBLIC_SETUP_PROFILE_PREIMAGES = K2_ROOT_PROFILE_PREIMAGES[
+    PIR_PUBLIC_SETUP_PROFILE_ID
+]
+# Convenience superset for consumers that need all K2 profile preimages.  It is
+# the exact closure only for the public-view root; use the root-specific maps
+# above for Interaction or Transcript/FS authentication.
+K2_PROFILE_PREIMAGES = K2_PROFILE_BUNDLE
+
+
+@dataclass(frozen=True)
+class K2SemanticProfileSupport:
+    supported_profile_ids: frozenset[object]
+
+    def __post_init__(self) -> None:
+        if type(self.supported_profile_ids) is not frozenset:
+            raise ModelError("K2 profile support must be one exact frozen ID set")
+        for identifier in self.supported_profile_ids:
+            if (
+                type(identifier) is not k1.TypedContentId
+                or identifier.subject_kind
+                != k1.SEMANTIC_LANGUAGE_PROFILE_KIND
+                or identifier.semantic_regime != k1.SEMANTIC_REGIME_ID
+            ):
+                raise ModelError("K2 profile support contains a non-profile ID")
+
+
+def make_k2_profile_support(
+    *bundles: K2SemanticProfiles,
+) -> K2SemanticProfileSupport:
+    if not bundles or any(type(item) is not K2SemanticProfiles for item in bundles):
+        raise ModelError("K2 profile support needs exact profile bundles")
+    return K2SemanticProfileSupport(
+        frozenset(
+            identifier
+            for bundle in bundles
+            for identifier in bundle.bundle
+        )
+    )
+
+
+K2_PROFILE_SUPPORT = make_k2_profile_support(K2_SEMANTIC_PROFILES)
+
+
+def make_k2_selected_profile_support(
+    *profiles: object,
+) -> K2SemanticProfileSupport:
+    if not profiles or any(
+        type(profile) is not k1.SemanticLanguageProfile for profile in profiles
+    ):
+        raise ModelError("K2 selected-profile support needs exact profiles")
+    return K2SemanticProfileSupport(
+        frozenset(profile.identity for profile in profiles)
+    )
+
+
+K2_INTERACTION_PROFILE_SUPPORT = make_k2_selected_profile_support(
+    PIR_INTERACTION_PROFILE
+)
+K2_TRANSCRIPT_PROFILE_SUPPORT = make_k2_selected_profile_support(
+    PIR_TRANSCRIPT_PROFILE
+)
+K2_PUBLIC_SETUP_PROFILE_SUPPORT = make_k2_selected_profile_support(
+    PIR_PUBLIC_SETUP_PROFILE
+)
+
+_PIR_SOURCE_AUTHORITY_SUBJECT_KINDS = frozenset(
+    {
+        "pir.source-binding-payload",
+        "pir.source-capability-requirement",
+        "pir.source-consumer",
+        "pir.source-no-policy",
+        "pir.source-policy-closure",
+        "pir.source-purpose",
+    }
+)
+
+
+def _require_supported_k2_profiles(
+    profiles: K2SemanticProfiles,
+    profile_support: K2SemanticProfileSupport,
+    selected_profile: object,
+    *,
+    required_subject_kinds: frozenset[str] = frozenset(),
+) -> None:
+    if (
+        type(profiles) is not K2SemanticProfiles
+        or type(profile_support) is not K2SemanticProfileSupport
+    ):
+        raise MalformedSemanticProfileError(
+            "K2 issuance needs exact profiles and evaluator support"
+        )
+    profiles.__post_init__()
+    profile_support.__post_init__()
+    root_preimages = k2_root_profile_preimages(profiles)
+    if (
+        type(selected_profile) is not k1.SemanticLanguageProfile
+        or selected_profile.identity not in root_preimages
+    ):
+        raise MalformedSemanticProfileError(
+            "K2 issuance selected no profile from its exact bundle"
+        )
+    preimages = root_preimages[selected_profile.identity]
+    try:
+        context = k1.effective_semantic_context(
+            selected_profile.identity,
+            preimages,
+            semantic_regime=k1.SEMANTIC_REGIME_ID,
+        )
+        authenticated_ids = {
+            identifier for identifier, _profile in context.authenticated_profiles
+        }
+        if authenticated_ids != set(preimages):
+            raise RefusedSemanticProfileError(
+                "K2 root profile bundle is not its exact no-extra closure"
+            )
+    except (k1.ModelError, k1.CanonicalError) as error:
+        raise MalformedSemanticProfileError(
+            "K2 profile import closure is not authenticated"
+        ) from error
+    if selected_profile.identity not in profile_support.supported_profile_ids:
+        raise UnsupportedSemanticProfileError(
+            "K2 evaluator does not support the selected root profile"
+        )
+    supported_subject_kinds = {
+        item.value for item in selected_profile.supported_subject_kinds
+    }
+    if not required_subject_kinds.issubset(supported_subject_kinds):
+        raise RefusedSemanticProfileError(
+            "K2 selected profile does not support every issued subject kind"
+        )
+
+
+def _authenticate_k2_profiled_subject(
+    identifier: object,
+    subject_kind: str,
+    domain_body: object,
+    *,
+    profiles: K2SemanticProfiles,
+    profile_support: K2SemanticProfileSupport,
+    selected_profile: object,
+) -> None:
+    _require_supported_k2_profiles(
+        profiles,
+        profile_support,
+        selected_profile,
+        required_subject_kinds=frozenset({subject_kind}),
+    )
+    datum = k1.decode_datum(domain_body) if type(domain_body) is bytes else domain_body
+    supported_profiles = tuple(
+        sorted(
+            profile_support.supported_profile_ids,
+            key=lambda item: item.internal_reference(),
+        )
+    )
+    k1.authenticate_profiled_semantic_content(
+        identifier,
+        selected_profile.identity,
+        datum,
+        k2_root_profile_preimages(profiles)[selected_profile.identity],
+        supported_profiles=supported_profiles,
+    )
+
+
 @dataclass(frozen=True)
 class SamplingExhausted(ModelError):
     namespaces: tuple[bytes, ...]
@@ -744,11 +1125,30 @@ def core_body(core: Core) -> bytes:
     return k1.encode_datum(datum)
 
 
-def core_id(core: Core) -> object:
-    return k1.content_id(
-        "pir.interactive-core",
-        core_body(core),
+def _profiled_identity(
+    subject_kind: str,
+    profile: object,
+    encoded_domain_body: bytes,
+) -> object:
+    if type(profile) is not k1.SemanticLanguageProfile:
+        raise ModelError("semantic identity needs one exact language profile")
+    return k1.profiled_content_id(
+        subject_kind,
+        profile.identity,
+        k1.decode_datum(encoded_domain_body),
         semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+
+
+def core_id(
+    core: Core,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+) -> object:
+    return _profiled_identity(
+        "pir.interactive-core",
+        profiles.interaction,
+        core_body(core),
     )
 
 
@@ -772,11 +1172,16 @@ def invocation_body(core: Core, invocation: Invocation) -> bytes:
     return k1.encode_datum(datum)
 
 
-def invocation_id(core: Core, invocation: Invocation) -> object:
-    return k1.content_id(
-        "pir.protocol-invocation",
+def invocation_id(
+    core: Core,
+    invocation: Invocation,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+) -> object:
+    return _profiled_identity(
+        "pir.invocation",
+        profiles.interaction,
         invocation_body(core, invocation),
-        semantic_regime=k1.SEMANTIC_REGIME_ID,
     )
 
 
@@ -1366,14 +1771,24 @@ class ChallengeSample:
 INITIAL_TRANSCRIPT_STATE = hashlib.sha256(b"zkc/k2/initial-state/v1").digest()
 
 
-def construction_body(core: Core, construction: TranscriptConstruction) -> bytes:
+def construction_body(
+    core: Core,
+    construction: TranscriptConstruction,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+) -> bytes:
     admit_core(core)
     construction.admit()
     return k1.encode_datum(
         k1.DatumRecord(
             (
                 (0, k1.Symbol("k2.transcript-construction.v1")),
-                (1, k1.BytesValue(core_id(core).internal_reference())),
+                (
+                    1,
+                    k1.BytesValue(
+                        core_id(core, profiles=profiles).internal_reference()
+                    ),
+                ),
                 (2, k1.BytesValue(INITIAL_TRANSCRIPT_STATE)),
                 (3, k1.BytesValue(construction.application_domain)),
                 (4, k1.Nat(construction.sample_bytes)),
@@ -1390,11 +1805,2159 @@ def construction_body(core: Core, construction: TranscriptConstruction) -> bytes
     )
 
 
-def construction_id(core: Core, construction: TranscriptConstruction) -> object:
-    return k1.content_id(
+def construction_id(
+    core: Core,
+    construction: TranscriptConstruction,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+) -> object:
+    return _profiled_identity(
         "pir.transcript-construction",
-        construction_body(core, construction),
+        profiles.transcript_fs,
+        construction_body(core, construction, profiles=profiles),
+    )
+
+
+def _content_ref_datum(identifier: object, expected_kind: str) -> object:
+    if type(identifier) is not k1.TypedContentId:
+        raise ModelError("semantic reference must be one exact K1 TypedContentId")
+    identifier.__post_init__()
+    if (
+        identifier.semantic_regime != k1.SEMANTIC_REGIME_ID
+        or identifier.subject_kind != expected_kind
+    ):
+        raise ModelError("semantic reference has the wrong regime or subject kind")
+    return k1.BytesValue(identifier.internal_reference())
+
+
+def protocol_body(
+    core: Core,
+    construction: TranscriptConstruction | None,
+    interpretation: ChallengeInterpretation,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+) -> object:
+    """Form the exact bounded Protocol domain body."""
+
+    admit_core(core)
+    if interpretation is ChallengeInterpretation.FRESH:
+        if construction is not None:
+            raise AdmissionError("Fresh Protocol does not carry a construction")
+        interpretation_body = k1.DatumVariant(0, k1.UNIT)
+    elif interpretation is ChallengeInterpretation.FIAT_SHAMIR:
+        if construction is None:
+            raise AdmissionError("Fiat--Shamir Protocol requires a construction")
+        construction.admit()
+        if not is_public_coin_eligible(core):
+            raise AdmissionError("Fiat--Shamir Protocol requires public-coin eligibility")
+        interpretation_body = k1.DatumVariant(
+            1,
+            _content_ref_datum(
+                construction_id(core, construction, profiles=profiles),
+                "pir.transcript-construction",
+            ),
+        )
+    else:
+        raise AdmissionError("unsupported challenge interpretation")
+    return k1.DatumRecord(
+        (
+            (
+                0,
+                _content_ref_datum(
+                    core_id(core, profiles=profiles),
+                    "pir.interactive-core",
+                ),
+            ),
+            (1, interpretation_body),
+        )
+    )
+
+
+def protocol_id(
+    core: Core,
+    construction: TranscriptConstruction | None,
+    interpretation: ChallengeInterpretation,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+) -> object:
+    """Form the exact bounded Protocol identity used by every downstream lane."""
+
+    profile = (
+        profiles.interaction
+        if interpretation is ChallengeInterpretation.FRESH
+        else profiles.transcript_fs
+    )
+    return k1.profiled_content_id(
+        "pir.protocol",
+        profile.identity,
+        protocol_body(
+            core,
+            construction,
+            interpretation,
+            profiles=profiles,
+        ),
         semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exact owner-issued static and public-setup views
+# ---------------------------------------------------------------------------
+
+
+class StaticViewKind(str, Enum):
+    PUBLIC_BINDING = "public-binding-view"
+    STRATEGY_DECISION = "strategy-decision-view"
+    PUBLIC_COIN = "public-coin-view"
+    EFFECT = "effect-view"
+    CLAIM_REDUCTION = "claim-reduction-view"
+    EXECUTION = "execution-view"
+    TRANSCRIPT_DECLARATION = "transcript-declaration-view"
+    REQUIRED_INFLUENCE = "required-influence-view"
+    CHALLENGE_TRANSITION = "challenge-transition-view"
+    FS_CONSTRUCTION = "fs-construction-view"
+
+
+class StaticViewOwnerKind(str, Enum):
+    CORE = "core"
+    PROTOCOL = "protocol"
+    CONSTRUCTION = "construction"
+    FS_RESULT = "fs-result"
+
+
+class StaticViewField(str, Enum):
+    PB_CORE_ID = "public-binding.core-id"
+    PB_SCOPE_OPENINGS = "public-binding.scope-openings"
+    PB_BINDINGS = "public-binding.bindings"
+    SD_CORE_ID = "strategy-decision.core-id"
+    SD_DECISION_POINTS = "strategy-decision.decision-points"
+    SD_PROVER_VIEW_FORMATION = "strategy-decision.prover-view-formation"
+    SD_GUARANTEED_READS = "strategy-decision.guaranteed-reads"
+    SD_LEGAL_MOVE_TYPES = "strategy-decision.legal-move-types"
+    PC_CORE_ID = "public-coin.core-id"
+    PC_ELIGIBILITY = "public-coin.eligibility"
+    PC_PRIVATE_CLOSURE = "public-coin.verifier-private-closure"
+    PC_CHALLENGES = "public-coin.challenges"
+    EF_CORE_ID = "effect.core-id"
+    EF_OCCURRENCE_SCHEDULE = "effect.occurrence-schedule"
+    EF_VALUE_PRODUCER_GRAPH = "effect.value-producer-graph"
+    EF_MESSAGES = "effect.messages"
+    EF_ORACLES = "effect.oracles"
+    EF_CHECKS = "effect.checks"
+    EF_TERMINALS = "effect.terminals"
+    EF_EXTENSIONS = "effect.extensions"
+    CR_CORE_ID = "claim-reduction.core-id"
+    CR_CLAIMS = "claim-reduction.claims"
+    CR_REDUCTIONS = "claim-reduction.reductions"
+    CR_TERMINAL_DISPOSITIONS = "claim-reduction.terminal-dispositions"
+    EX_PROTOCOL_ID = "execution.protocol-id"
+    EX_CORE_ID = "execution.core-id"
+    EX_INTERPRETATION = "execution.interpretation"
+    EX_VISIBLE_HISTORY = "execution.visible-history-law"
+    EX_RESOLVER = "execution.resolver-coordinates"
+    EX_GENERATION = "execution.generated-execution-law"
+    EX_RUN_RECORD = "execution.run-record-schema"
+    EX_REPLAY = "execution.replay-law"
+    EX_RELATION_RUN = "execution.relation-run-view-law"
+    TD_CONSTRUCTION_ID = "transcript-declaration.construction-id"
+    TD_CORE_ID = "transcript-declaration.core-id"
+    TD_ALGORITHMS = "transcript-declaration.algorithms"
+    TD_APPLICATION_DOMAIN = "transcript-declaration.application-domain"
+    TD_FRAME_SCHEDULE = "transcript-declaration.frame-schedule"
+    RI_CONSTRUCTION_ID = "required-influence.construction-id"
+    RI_CORE_ID = "required-influence.core-id"
+    RI_REQUIREMENTS = "required-influence.requirements"
+    RI_PREFIX_LAW = "required-influence.prefix-law"
+    CT_CONSTRUCTION_ID = "challenge-transition.construction-id"
+    CT_CORE_ID = "challenge-transition.core-id"
+    CT_NAMESPACE = "challenge-transition.namespace"
+    CT_SAMPLER = "challenge-transition.sampler"
+    CT_RETRY_FAILURE = "challenge-transition.retry-failure"
+    FS_RESULT_REF = "fs-construction.result-ref"
+    FS_RESULT_SCHEMA = "fs-construction.result-schema"
+    FS_SOURCE_PROTOCOL = "fs-construction.source-protocol"
+    FS_TARGET_PROTOCOL = "fs-construction.target-protocol"
+    FS_SHARED_CORE = "fs-construction.shared-core"
+    FS_CONSTRUCTION_ID = "fs-construction.construction-id"
+    FS_MAPS = "fs-construction.maps"
+    FS_CONCLUSION = "fs-construction.conclusion"
+
+
+_VIEW_FIELDS: Mapping[StaticViewKind, tuple[StaticViewField, ...]] = MappingProxyType(
+    {
+        StaticViewKind.PUBLIC_BINDING: (
+            StaticViewField.PB_CORE_ID,
+            StaticViewField.PB_SCOPE_OPENINGS,
+            StaticViewField.PB_BINDINGS,
+        ),
+        StaticViewKind.STRATEGY_DECISION: (
+            StaticViewField.SD_CORE_ID,
+            StaticViewField.SD_DECISION_POINTS,
+            StaticViewField.SD_PROVER_VIEW_FORMATION,
+            StaticViewField.SD_GUARANTEED_READS,
+            StaticViewField.SD_LEGAL_MOVE_TYPES,
+        ),
+        StaticViewKind.PUBLIC_COIN: (
+            StaticViewField.PC_CORE_ID,
+            StaticViewField.PC_ELIGIBILITY,
+            StaticViewField.PC_PRIVATE_CLOSURE,
+            StaticViewField.PC_CHALLENGES,
+        ),
+        StaticViewKind.EFFECT: (
+            StaticViewField.EF_CORE_ID,
+            StaticViewField.EF_OCCURRENCE_SCHEDULE,
+            StaticViewField.EF_VALUE_PRODUCER_GRAPH,
+            StaticViewField.EF_MESSAGES,
+            StaticViewField.EF_ORACLES,
+            StaticViewField.EF_CHECKS,
+            StaticViewField.EF_TERMINALS,
+            StaticViewField.EF_EXTENSIONS,
+        ),
+        StaticViewKind.CLAIM_REDUCTION: (
+            StaticViewField.CR_CORE_ID,
+            StaticViewField.CR_CLAIMS,
+            StaticViewField.CR_REDUCTIONS,
+            StaticViewField.CR_TERMINAL_DISPOSITIONS,
+        ),
+        StaticViewKind.EXECUTION: (
+            StaticViewField.EX_PROTOCOL_ID,
+            StaticViewField.EX_CORE_ID,
+            StaticViewField.EX_INTERPRETATION,
+            StaticViewField.EX_VISIBLE_HISTORY,
+            StaticViewField.EX_RESOLVER,
+            StaticViewField.EX_GENERATION,
+            StaticViewField.EX_RUN_RECORD,
+            StaticViewField.EX_REPLAY,
+            StaticViewField.EX_RELATION_RUN,
+        ),
+        StaticViewKind.TRANSCRIPT_DECLARATION: (
+            StaticViewField.TD_CONSTRUCTION_ID,
+            StaticViewField.TD_CORE_ID,
+            StaticViewField.TD_ALGORITHMS,
+            StaticViewField.TD_APPLICATION_DOMAIN,
+            StaticViewField.TD_FRAME_SCHEDULE,
+        ),
+        StaticViewKind.REQUIRED_INFLUENCE: (
+            StaticViewField.RI_CONSTRUCTION_ID,
+            StaticViewField.RI_CORE_ID,
+            StaticViewField.RI_REQUIREMENTS,
+            StaticViewField.RI_PREFIX_LAW,
+        ),
+        StaticViewKind.CHALLENGE_TRANSITION: (
+            StaticViewField.CT_CONSTRUCTION_ID,
+            StaticViewField.CT_CORE_ID,
+            StaticViewField.CT_NAMESPACE,
+            StaticViewField.CT_SAMPLER,
+            StaticViewField.CT_RETRY_FAILURE,
+        ),
+        StaticViewKind.FS_CONSTRUCTION: (
+            StaticViewField.FS_RESULT_REF,
+            StaticViewField.FS_RESULT_SCHEMA,
+            StaticViewField.FS_SOURCE_PROTOCOL,
+            StaticViewField.FS_TARGET_PROTOCOL,
+            StaticViewField.FS_SHARED_CORE,
+            StaticViewField.FS_CONSTRUCTION_ID,
+            StaticViewField.FS_MAPS,
+            StaticViewField.FS_CONCLUSION,
+        ),
+    }
+)
+_FIELD_ORDER = MappingProxyType(
+    {field: index for index, field in enumerate(StaticViewField)}
+)
+
+
+@dataclass(frozen=True)
+class StaticViewCoordinate:
+    owner_kind: StaticViewOwnerKind
+    owner_id: object
+    view_kind: StaticViewKind
+    semantic_profile_id: object
+
+
+@dataclass(frozen=True)
+class StaticViewEntry:
+    field: StaticViewField
+    value: object
+
+
+@dataclass(frozen=True)
+class StaticViewProjection:
+    coordinate: StaticViewCoordinate
+    manifest: tuple[StaticViewField, ...]
+    entries: tuple[StaticViewEntry, ...]
+
+
+class _NonTransferableAuthority:
+    """Process-local bearer state: identity, not structural equality, matters."""
+
+    __hash__ = None
+
+    def __copy__(self) -> object:
+        raise ModelError("live authority cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> object:
+        raise ModelError("live authority cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ModelError("live authority cannot be serialized")
+
+
+def _any_content_ref(identifier: object, what: str) -> object:
+    if type(identifier) is not k1.TypedContentId:
+        raise ModelError(f"{what} must be one exact typed content ID")
+    identifier.__post_init__()
+    if identifier.semantic_regime != k1.SEMANTIC_REGIME_ID:
+        raise ModelError(f"{what} belongs to another semantic regime")
+    return k1.BytesValue(identifier.internal_reference())
+
+
+def _authority_id(profile: object, subject_kind: str, body: object) -> object:
+    if type(profile) is not k1.SemanticLanguageProfile:
+        raise ModelError("authority identity needs one exact semantic profile")
+    return k1.profiled_content_id(
+        subject_kind,
+        profile.identity,
+        body,
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+
+
+def _authority_components(
+    profile: object,
+    owner_domain: str,
+    capability_family: str,
+    source_body: object,
+    manifest_body: object,
+    purpose_label: str,
+    consumer_id: object | None,
+    purpose_id: object | None,
+    *,
+    profiles: K2SemanticProfiles,
+    profile_support: K2SemanticProfileSupport,
+) -> tuple[object, object, object, object, object, object]:
+    family = _symbol(capability_family, "capability family")
+    if consumer_id is None:
+        default_consumer_body = k1.DatumRecord(
+            ((0, family), (1, k1.Symbol("bounded-downstream-consumer")))
+        )
+        consumer_id = _authority_id(
+            profile,
+            "pir.source-consumer",
+            default_consumer_body,
+        )
+        _authenticate_k2_profiled_subject(
+            consumer_id,
+            "pir.source-consumer",
+            default_consumer_body,
+            profiles=profiles,
+            profile_support=profile_support,
+            selected_profile=profile,
+        )
+    owner_consumer_body = k1.DatumRecord(
+        (
+            (0, family),
+            (
+                1,
+                k1.DatumVariant(
+                    1,
+                    _any_content_ref(consumer_id, "authority consumer"),
+                ),
+            ),
+        )
+    )
+    owner_consumer_id = _authority_id(
+        profile,
+        "pir.source-consumer",
+        owner_consumer_body,
+    )
+    _authenticate_k2_profiled_subject(
+        owner_consumer_id,
+        "pir.source-consumer",
+        owner_consumer_body,
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profile,
+    )
+    if purpose_id is None:
+        default_purpose_body = k1.DatumRecord(
+            (
+                (0, family),
+                (1, _symbol(purpose_label, "authority purpose")),
+            )
+        )
+        purpose_id = _authority_id(
+            profile,
+            "pir.source-purpose",
+            default_purpose_body,
+        )
+        _authenticate_k2_profiled_subject(
+            purpose_id,
+            "pir.source-purpose",
+            default_purpose_body,
+            profiles=profiles,
+            profile_support=profile_support,
+            selected_profile=profile,
+        )
+    owner_purpose_body = k1.DatumRecord(
+        (
+            (0, family),
+            (
+                1,
+                k1.DatumVariant(
+                    1,
+                    _any_content_ref(purpose_id, "authority purpose"),
+                ),
+            ),
+        )
+    )
+    owner_purpose_id = _authority_id(
+        profile,
+        "pir.source-purpose",
+        owner_purpose_body,
+    )
+    _authenticate_k2_profiled_subject(
+        owner_purpose_id,
+        "pir.source-purpose",
+        owner_purpose_body,
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profile,
+    )
+    consumer_ref = _any_content_ref(owner_consumer_id, "authority consumer role")
+    purpose_ref = _any_content_ref(owner_purpose_id, "authority purpose role")
+    payload_body = k1.DatumRecord(
+        (
+            (0, k1.Symbol(owner_domain)),
+            (1, family),
+            (2, source_body),
+            (3, manifest_body),
+            (4, consumer_ref),
+            (5, purpose_ref),
+        )
+    )
+    payload_id = _authority_id(
+        profile,
+        "pir.source-binding-payload",
+        payload_body,
+    )
+    _authenticate_k2_profiled_subject(
+        payload_id,
+        "pir.source-binding-payload",
+        payload_body,
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profile,
+    )
+    no_policy_body = k1.DatumRecord(
+        (
+            (0, family),
+            (1, _any_content_ref(payload_id, "authority payload")),
+            (2, k1.Symbol("owner-defines-no-additional-operation-policy")),
+        )
+    )
+    no_policy_id = _authority_id(
+        profile,
+        "pir.source-no-policy",
+        no_policy_body,
+    )
+    _authenticate_k2_profiled_subject(
+        no_policy_id,
+        "pir.source-no-policy",
+        no_policy_body,
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profile,
+    )
+    requirement_body = k1.DatumRecord(
+        (
+            (0, family),
+            (1, _any_content_ref(payload_id, "authority payload")),
+            (2, consumer_ref),
+            (3, purpose_ref),
+            (4, k1.Symbol("fresh-identical-bearer-capability")),
+        )
+    )
+    requirement_id = _authority_id(
+        profile,
+        "pir.source-capability-requirement",
+        requirement_body,
+    )
+    _authenticate_k2_profiled_subject(
+        requirement_id,
+        "pir.source-capability-requirement",
+        requirement_body,
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profile,
+    )
+    closure_body = k1.DatumRecord(
+        (
+            (0, family),
+            (1, _any_content_ref(payload_id, "authority payload")),
+            (2, _any_content_ref(no_policy_id, "no-policy declaration")),
+            (3, _any_content_ref(requirement_id, "capability requirement")),
+        )
+    )
+    closure_id = _authority_id(
+        profile,
+        "pir.source-policy-closure",
+        closure_body,
+    )
+    _authenticate_k2_profiled_subject(
+        closure_id,
+        "pir.source-policy-closure",
+        closure_body,
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profile,
+    )
+    requirement = k1.OwnerCapabilityRequirement(
+        k1.Symbol(owner_domain),
+        family,
+        requirement_id,
+    )
+    return (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    )
+
+
+def _static_authority_source_body(coordinate: StaticViewCoordinate) -> object:
+    owner = (
+        k1.DatumVariant(
+            0,
+            _any_content_ref(coordinate.owner_id, "static-view owner"),
+        )
+        if type(coordinate.owner_id) is k1.TypedContentId
+        else k1.DatumVariant(1, k1.UNIT)
+    )
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol(coordinate.owner_kind.value)),
+            (1, owner),
+            (2, k1.Symbol(coordinate.view_kind.value)),
+            (
+                3,
+                _any_content_ref(
+                    coordinate.semantic_profile_id,
+                    "static-view semantic profile",
+                ),
+            ),
+        )
+    )
+
+
+def _static_manifest_body(manifest: tuple[StaticViewField, ...]) -> object:
+    return k1.DatumSeq(tuple(k1.Symbol(item.value) for item in manifest))
+
+
+def _static_authority_profile(
+    coordinate: StaticViewCoordinate,
+    profiles: K2SemanticProfiles,
+) -> object:
+    if coordinate.semantic_profile_id == profiles.interaction.identity:
+        profile = profiles.interaction
+    elif coordinate.semantic_profile_id == profiles.transcript_fs.identity:
+        profile = profiles.transcript_fs
+    else:
+        raise ModelError("static-view coordinate selects no K2 owner profile")
+    if (
+        coordinate.owner_kind is StaticViewOwnerKind.CORE
+        and profile is not profiles.interaction
+    ):
+        raise ModelError("Core static views must select the Interaction profile")
+    if (
+        coordinate.owner_kind
+        in {StaticViewOwnerKind.CONSTRUCTION, StaticViewOwnerKind.FS_RESULT}
+        and profile is not profiles.transcript_fs
+    ):
+        raise ModelError("Transcript and checked-FS views need the Transcript profile")
+    return profile
+
+
+ExactPIRStaticViewAuthorityBinding = k1.OwnerLocalSourceAuthorityBinding
+
+
+_STATIC_VIEW_ISSUER = object()
+_STATIC_VIEW_LIVE_CAPABILITIES: dict[int, object] = {}
+_STATIC_VIEW_LIVE_ISSUANCES: dict[int, object] = {}
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class PIRStaticViewCapability(_NonTransferableAuthority):
+    coordinate: StaticViewCoordinate
+    projection: StaticViewProjection
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    consumer_id: object
+    purpose_id: object
+    _source: object
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _STATIC_VIEW_ISSUER:
+            raise ModelError("only PIR may issue a static-view capability")
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class IssuedPIRStaticView(_NonTransferableAuthority):
+    projection: StaticViewProjection
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    capability: PIRStaticViewCapability
+    _issuer: object
+
+
+class QualifiedViewOutcomeKind(str, Enum):
+    AFFIRMATIVE = "affirmative"
+    NEGATIVE = "negative"
+    UNSUPPORTED = "unsupported"
+    MISSING_DEPENDENCY = "missing-dependency"
+    KIND_MISMATCH = "kind-mismatch"
+    MALFORMED = "malformed"
+    REFUSED = "refused"
+    DETERMINISTIC_LIMIT_EXCEEDED = "deterministic-limit-exceeded"
+    CHECKER_FAILURE = "checker-failure"
+
+
+@dataclass(frozen=True)
+class QualifiedViewOutcome:
+    kind: QualifiedViewOutcomeKind
+    value: object | None = None
+    detail: tuple[object, ...] = ()
+
+
+_VIEW_REQUIRED: Mapping[StaticViewField, frozenset[StaticViewField]] = MappingProxyType(
+    {
+        StaticViewField.PB_BINDINGS: frozenset(
+            {StaticViewField.PB_CORE_ID, StaticViewField.PB_SCOPE_OPENINGS}
+        ),
+        StaticViewField.SD_DECISION_POINTS: frozenset(
+            {StaticViewField.SD_CORE_ID}
+        ),
+        StaticViewField.SD_PROVER_VIEW_FORMATION: frozenset(
+            {StaticViewField.SD_CORE_ID, StaticViewField.SD_DECISION_POINTS}
+        ),
+        StaticViewField.SD_GUARANTEED_READS: frozenset(
+            {
+                StaticViewField.SD_CORE_ID,
+                StaticViewField.SD_DECISION_POINTS,
+                StaticViewField.SD_PROVER_VIEW_FORMATION,
+            }
+        ),
+        StaticViewField.SD_LEGAL_MOVE_TYPES: frozenset(
+            {StaticViewField.SD_CORE_ID, StaticViewField.SD_DECISION_POINTS}
+        ),
+        StaticViewField.PC_CHALLENGES: frozenset(
+            {
+                StaticViewField.PC_CORE_ID,
+                StaticViewField.PC_ELIGIBILITY,
+                StaticViewField.PC_PRIVATE_CLOSURE,
+            }
+        ),
+        StaticViewField.EF_MESSAGES: frozenset(
+            {
+                StaticViewField.EF_CORE_ID,
+                StaticViewField.EF_OCCURRENCE_SCHEDULE,
+                StaticViewField.EF_VALUE_PRODUCER_GRAPH,
+            }
+        ),
+        StaticViewField.EF_ORACLES: frozenset(
+            {
+                StaticViewField.EF_CORE_ID,
+                StaticViewField.EF_OCCURRENCE_SCHEDULE,
+                StaticViewField.EF_VALUE_PRODUCER_GRAPH,
+            }
+        ),
+        StaticViewField.EF_CHECKS: frozenset(
+            {
+                StaticViewField.EF_CORE_ID,
+                StaticViewField.EF_OCCURRENCE_SCHEDULE,
+                StaticViewField.EF_VALUE_PRODUCER_GRAPH,
+            }
+        ),
+        StaticViewField.EF_TERMINALS: frozenset(
+            {
+                StaticViewField.EF_CORE_ID,
+                StaticViewField.EF_OCCURRENCE_SCHEDULE,
+                StaticViewField.EF_VALUE_PRODUCER_GRAPH,
+                StaticViewField.EF_CHECKS,
+            }
+        ),
+        StaticViewField.CR_REDUCTIONS: frozenset(
+            {StaticViewField.CR_CORE_ID, StaticViewField.CR_CLAIMS}
+        ),
+        StaticViewField.CR_TERMINAL_DISPOSITIONS: frozenset(
+            {
+                StaticViewField.CR_CORE_ID,
+                StaticViewField.CR_CLAIMS,
+                StaticViewField.CR_REDUCTIONS,
+            }
+        ),
+        StaticViewField.EX_VISIBLE_HISTORY: frozenset(
+            {
+                StaticViewField.EX_PROTOCOL_ID,
+                StaticViewField.EX_CORE_ID,
+                StaticViewField.EX_INTERPRETATION,
+            }
+        ),
+        StaticViewField.EX_RESOLVER: frozenset(
+            {
+                StaticViewField.EX_PROTOCOL_ID,
+                StaticViewField.EX_CORE_ID,
+                StaticViewField.EX_INTERPRETATION,
+            }
+        ),
+        StaticViewField.EX_GENERATION: frozenset(
+            {
+                StaticViewField.EX_PROTOCOL_ID,
+                StaticViewField.EX_CORE_ID,
+                StaticViewField.EX_INTERPRETATION,
+                StaticViewField.EX_VISIBLE_HISTORY,
+            }
+        ),
+        StaticViewField.EX_RUN_RECORD: frozenset(
+            {
+                StaticViewField.EX_PROTOCOL_ID,
+                StaticViewField.EX_CORE_ID,
+                StaticViewField.EX_INTERPRETATION,
+            }
+        ),
+        StaticViewField.EX_REPLAY: frozenset(
+            {
+                StaticViewField.EX_PROTOCOL_ID,
+                StaticViewField.EX_CORE_ID,
+                StaticViewField.EX_INTERPRETATION,
+                StaticViewField.EX_RUN_RECORD,
+            }
+        ),
+        StaticViewField.EX_RELATION_RUN: frozenset(
+            {
+                StaticViewField.EX_PROTOCOL_ID,
+                StaticViewField.EX_CORE_ID,
+                StaticViewField.EX_INTERPRETATION,
+                StaticViewField.EX_RUN_RECORD,
+                StaticViewField.EX_REPLAY,
+            }
+        ),
+        StaticViewField.TD_APPLICATION_DOMAIN: frozenset(
+            {
+                StaticViewField.TD_CONSTRUCTION_ID,
+                StaticViewField.TD_CORE_ID,
+                StaticViewField.TD_ALGORITHMS,
+            }
+        ),
+        StaticViewField.TD_FRAME_SCHEDULE: frozenset(
+            {
+                StaticViewField.TD_CONSTRUCTION_ID,
+                StaticViewField.TD_CORE_ID,
+                StaticViewField.TD_ALGORITHMS,
+                StaticViewField.TD_APPLICATION_DOMAIN,
+            }
+        ),
+        StaticViewField.RI_REQUIREMENTS: frozenset(
+            {StaticViewField.RI_CONSTRUCTION_ID, StaticViewField.RI_CORE_ID}
+        ),
+        StaticViewField.RI_PREFIX_LAW: frozenset(
+            {
+                StaticViewField.RI_CONSTRUCTION_ID,
+                StaticViewField.RI_CORE_ID,
+                StaticViewField.RI_REQUIREMENTS,
+            }
+        ),
+        StaticViewField.CT_NAMESPACE: frozenset(
+            {StaticViewField.CT_CONSTRUCTION_ID, StaticViewField.CT_CORE_ID}
+        ),
+        StaticViewField.CT_SAMPLER: frozenset(
+            {
+                StaticViewField.CT_CONSTRUCTION_ID,
+                StaticViewField.CT_CORE_ID,
+                StaticViewField.CT_NAMESPACE,
+            }
+        ),
+        StaticViewField.CT_RETRY_FAILURE: frozenset(
+            {
+                StaticViewField.CT_CONSTRUCTION_ID,
+                StaticViewField.CT_CORE_ID,
+                StaticViewField.CT_NAMESPACE,
+                StaticViewField.CT_SAMPLER,
+            }
+        ),
+        StaticViewField.FS_MAPS: frozenset(
+            {
+                StaticViewField.FS_RESULT_REF,
+                StaticViewField.FS_RESULT_SCHEMA,
+                StaticViewField.FS_SOURCE_PROTOCOL,
+                StaticViewField.FS_TARGET_PROTOCOL,
+                StaticViewField.FS_SHARED_CORE,
+                StaticViewField.FS_CONSTRUCTION_ID,
+            }
+        ),
+        StaticViewField.FS_CONCLUSION: frozenset(
+            {StaticViewField.FS_MAPS}
+        ),
+    }
+)
+
+
+def required_static_view_read_closure(
+    kind: StaticViewKind,
+    requested: tuple[StaticViewField, ...],
+) -> tuple[StaticViewField, ...]:
+    allowed = set(_VIEW_FIELDS[kind])
+    closure = set(requested)
+    if not closure <= allowed:
+        raise ModelError("view manifest contains a field from another owner schema")
+    changed = True
+    while changed:
+        changed = False
+        for field in tuple(closure):
+            for required in _VIEW_REQUIRED.get(field, ()):
+                if required not in closure:
+                    closure.add(required)
+                    changed = True
+    return tuple(sorted(closure, key=_FIELD_ORDER.__getitem__))
+
+
+def _validate_static_view_manifest(
+    kind: StaticViewKind,
+    manifest: tuple[StaticViewField, ...],
+) -> QualifiedViewOutcome | None:
+    if type(manifest) is not tuple or not manifest:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    if any(type(field) is not StaticViewField for field in manifest):
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    expected_order = tuple(sorted(set(manifest), key=_FIELD_ORDER.__getitem__))
+    if manifest != expected_order:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    try:
+        closure = required_static_view_read_closure(kind, manifest)
+    except (KeyError, ModelError):
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.KIND_MISMATCH)
+    if closure != manifest:
+        missing = tuple(field for field in closure if field not in manifest)
+        return QualifiedViewOutcome(
+            QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+            detail=missing,
+        )
+    return None
+
+
+def _decision_occurrences(core: Core) -> tuple[Occurrence, ...]:
+    return tuple(
+        item
+        for item in core.schedule
+        if item.kind in {OccurrenceKind.PROVER_MESSAGE, OccurrenceKind.ORACLE_PUBLISH}
+    )
+
+
+def _value_producer_graph(core: Core) -> tuple[object, ...]:
+    sorts: dict[ValueRef, ValueSort] = {
+        ValueRef.input(item.name): item.value_sort for item in core.inputs
+    }
+    result: list[object] = [
+        ("input", item.name, item.role, item.scope, item.value_sort)
+        for item in core.inputs
+    ]
+    for item in core.schedule:
+        sort = _occurrence_sort(item, sorts)
+        result.append(
+            (
+                "occurrence",
+                item.name,
+                item.kind,
+                item.scope,
+                item.dependencies,
+                item.guard,
+                sort,
+            )
+        )
+        sorts[ValueRef.occurrence(item.name)] = sort
+    return tuple(result)
+
+
+def _core_static_payload(
+    core: Core,
+    kind: StaticViewKind,
+    profiles: K2SemanticProfiles,
+) -> Mapping[StaticViewField, object]:
+    admit_core(core)
+    cid = core_id(core, profiles=profiles)
+    if kind is StaticViewKind.PUBLIC_BINDING:
+        bindings = tuple(
+            (
+                item.scope,
+                item.name,
+                item.role,
+                item.value_sort,
+                "invocation-public-input",
+            )
+            for item in core.inputs
+            if item.role is not InputRole.VERIFIER_PRIVATE
+        )
+        return MappingProxyType(
+            {
+                StaticViewField.PB_CORE_ID: cid,
+                StaticViewField.PB_SCOPE_OPENINGS: core.scopes,
+                StaticViewField.PB_BINDINGS: bindings,
+            }
+        )
+    if kind is StaticViewKind.STRATEGY_DECISION:
+        decisions = _decision_occurrences(core)
+        schedule_index = {
+            occurrence.name: index
+            for index, occurrence in enumerate(core.schedule)
+        }
+
+        def visible_public_inputs(decision: Occurrence) -> tuple[str, ...]:
+            decision_index = schedule_index[decision.name]
+            open_scope_names = {
+                scope.name
+                for scope in core.scopes
+                if scope.open_before is None
+                or schedule_index[scope.open_before] <= decision_index
+            }
+            return tuple(
+                item.name
+                for item in core.inputs
+                if item.role is not InputRole.VERIFIER_PRIVATE
+                and item.scope in open_scope_names
+            )
+
+        reads = tuple(
+            (
+                decision.name,
+                visible_public_inputs(decision),
+                tuple(
+                    item.name
+                    for item in core.schedule[: schedule_index[decision.name]]
+                    if item.guard.kind is PredicateKind.ALWAYS
+                ),
+            )
+            for decision in decisions
+        )
+        return MappingProxyType(
+            {
+                StaticViewField.SD_CORE_ID: cid,
+                StaticViewField.SD_DECISION_POINTS: decisions,
+                StaticViewField.SD_PROVER_VIEW_FORMATION: "prefix-only-public-k2-v1",
+                StaticViewField.SD_GUARANTEED_READS: reads,
+                StaticViewField.SD_LEGAL_MOVE_TYPES: tuple(
+                    (item.name, _occurrence_sort(item, {})) for item in decisions
+                ),
+            }
+        )
+    if kind is StaticViewKind.PUBLIC_COIN:
+        challenges = tuple(
+            item for item in core.schedule if item.kind is OccurrenceKind.CHALLENGE
+        )
+        return MappingProxyType(
+            {
+                StaticViewField.PC_CORE_ID: cid,
+                StaticViewField.PC_ELIGIBILITY: is_public_coin_eligible(core),
+                StaticViewField.PC_PRIVATE_CLOSURE: tuple(
+                    item.name
+                    for item in core.inputs
+                    if item.role is InputRole.VERIFIER_PRIVATE
+                ),
+                StaticViewField.PC_CHALLENGES: challenges,
+            }
+        )
+    if kind is StaticViewKind.EFFECT:
+        def by_kind(kinds: set[OccurrenceKind]) -> tuple[Occurrence, ...]:
+            return tuple(item for item in core.schedule if item.kind in kinds)
+
+        return MappingProxyType(
+            {
+                StaticViewField.EF_CORE_ID: cid,
+                StaticViewField.EF_OCCURRENCE_SCHEDULE: core.schedule,
+                StaticViewField.EF_VALUE_PRODUCER_GRAPH: _value_producer_graph(core),
+                StaticViewField.EF_MESSAGES: by_kind(
+                    {OccurrenceKind.PROVER_MESSAGE, OccurrenceKind.VERIFIER_MESSAGE}
+                ),
+                StaticViewField.EF_ORACLES: by_kind(
+                    {
+                        OccurrenceKind.ORACLE_PUBLISH,
+                        OccurrenceKind.ORACLE_QUERY,
+                        OccurrenceKind.ORACLE_ANSWER,
+                    }
+                ),
+                StaticViewField.EF_CHECKS: by_kind({OccurrenceKind.CHECK}),
+                StaticViewField.EF_TERMINALS: by_kind({OccurrenceKind.TERMINAL}),
+                StaticViewField.EF_EXTENSIONS: core.extensions,
+            }
+        )
+    if kind is StaticViewKind.CLAIM_REDUCTION:
+        return MappingProxyType(
+            {
+                StaticViewField.CR_CORE_ID: cid,
+                StaticViewField.CR_CLAIMS: core.initial_claims,
+                StaticViewField.CR_REDUCTIONS: core.reductions,
+                StaticViewField.CR_TERMINAL_DISPOSITIONS: core.claim_uses,
+            }
+        )
+    raise ModelError("view kind is not Core-owned")
+
+
+def _issue_static_projection(
+    coordinate: StaticViewCoordinate,
+    manifest: tuple[StaticViewField, ...],
+    payload: Mapping[StaticViewField, object],
+    source: object,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> QualifiedViewOutcome:
+    try:
+        profile = _static_authority_profile(coordinate, profiles)
+        owner_subject_kind = {
+            StaticViewOwnerKind.CORE: "pir.interactive-core",
+            StaticViewOwnerKind.PROTOCOL: "pir.protocol",
+            StaticViewOwnerKind.CONSTRUCTION: "pir.transcript-construction",
+        }.get(coordinate.owner_kind)
+        required_subject_kinds = _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS | (
+            frozenset()
+            if owner_subject_kind is None
+            else frozenset({owner_subject_kind})
+        )
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profile,
+            required_subject_kinds=required_subject_kinds,
+        )
+    except UnsupportedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.UNSUPPORTED)
+    except RefusedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    except (MalformedSemanticProfileError, ModelError):
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    refusal = _validate_static_view_manifest(coordinate.view_kind, manifest)
+    if refusal is not None:
+        return refusal
+    try:
+        entries = tuple(StaticViewEntry(field, payload[field]) for field in manifest)
+    except KeyError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.CHECKER_FAILURE)
+    projection = StaticViewProjection(coordinate, manifest, entries)
+    (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    ) = _authority_components(
+        profile,
+        "pir",
+        "static-view",
+        _static_authority_source_body(coordinate),
+        _static_manifest_body(manifest),
+        coordinate.view_kind.value,
+        consumer_id,
+        purpose_id,
+        profiles=profiles,
+        profile_support=profile_support,
+    )
+    binding = k1.OwnerLocalSourceAuthorityBinding(
+        k1.Symbol("pir"),
+        k1.Symbol("static-view"),
+        projection,
+        payload_id,
+        k1.OwnerDefinesNoOperationPolicy(no_policy_id),
+        closure_id,
+        requirement,
+    )
+    k1.validate_owner_local_source_authority_binding(binding)
+    capability = PIRStaticViewCapability(
+        coordinate,
+        projection,
+        binding,
+        consumer_id,
+        purpose_id,
+        source,
+        _STATIC_VIEW_ISSUER,
+    )
+    _STATIC_VIEW_LIVE_CAPABILITIES[id(capability)] = capability
+    issued = IssuedPIRStaticView(
+        projection,
+        binding,
+        capability,
+        _STATIC_VIEW_ISSUER,
+    )
+    _STATIC_VIEW_LIVE_ISSUANCES[id(issued)] = issued
+    return QualifiedViewOutcome(
+        QualifiedViewOutcomeKind.AFFIRMATIVE,
+        issued,
+    )
+
+
+def validate_issued_pir_static_view(
+    issued: object,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    expected_consumer_id: object | None = None,
+    expected_purpose_id: object | None = None,
+) -> bool:
+    """Validate the exact K1 envelope and identical live bearer objects."""
+
+    if (
+        type(issued) is not IssuedPIRStaticView
+        or _STATIC_VIEW_LIVE_ISSUANCES.get(id(issued)) is not issued
+        or issued._issuer is not _STATIC_VIEW_ISSUER
+        or type(issued.capability) is not PIRStaticViewCapability
+        or _STATIC_VIEW_LIVE_CAPABILITIES.get(id(issued.capability))
+        is not issued.capability
+        or issued.capability._issuer is not _STATIC_VIEW_ISSUER
+        or issued.capability.source_binding is not issued.source_binding
+        or issued.capability.projection is not issued.projection
+        or issued.capability.coordinate is not issued.projection.coordinate
+        or type(issued.source_binding) is not k1.OwnerLocalSourceAuthorityBinding
+        or issued.source_binding.owner_local_coordinate is not issued.projection
+    ):
+        return False
+    consumer_id = (
+        issued.capability.consumer_id
+        if expected_consumer_id is None
+        else expected_consumer_id
+    )
+    purpose_id = (
+        issued.capability.purpose_id
+        if expected_purpose_id is None
+        else expected_purpose_id
+    )
+    if (
+        issued.capability.consumer_id != consumer_id
+        or issued.capability.purpose_id != purpose_id
+    ):
+        return False
+    try:
+        profile = _static_authority_profile(issued.projection.coordinate, profiles)
+        owner_subject_kind = {
+            StaticViewOwnerKind.CORE: "pir.interactive-core",
+            StaticViewOwnerKind.PROTOCOL: "pir.protocol",
+            StaticViewOwnerKind.CONSTRUCTION: "pir.transcript-construction",
+        }.get(issued.projection.coordinate.owner_kind)
+        required_subject_kinds = _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS | (
+            frozenset()
+            if owner_subject_kind is None
+            else frozenset({owner_subject_kind})
+        )
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profile,
+            required_subject_kinds=required_subject_kinds,
+        )
+        k1.validate_owner_local_source_authority_binding(issued.source_binding)
+        (
+            _,
+            _,
+            payload_id,
+            no_policy_id,
+            closure_id,
+            requirement,
+        ) = _authority_components(
+            profile,
+            "pir",
+            "static-view",
+            _static_authority_source_body(issued.projection.coordinate),
+            _static_manifest_body(issued.projection.manifest),
+            issued.projection.coordinate.view_kind.value,
+            consumer_id,
+            purpose_id,
+            profiles=profiles,
+            profile_support=profile_support,
+        )
+    except (ModelError, k1.ModelError, k1.CanonicalError):
+        return False
+    binding = issued.source_binding
+    return (
+        binding.owner_domain == k1.Symbol("pir")
+        and binding.capability_family == k1.Symbol("static-view")
+        and binding.owner_binding_payload == payload_id
+        and type(binding.operation_policy) is k1.OwnerDefinesNoOperationPolicy
+        and binding.operation_policy.owner_no_policy_declaration == no_policy_id
+        and binding.owner_policy_closure == closure_id
+        and binding.capability_requirement == requirement
+    )
+
+
+def issue_core_static_view(
+    core: Core,
+    kind: StaticViewKind,
+    manifest: tuple[StaticViewField, ...],
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> QualifiedViewOutcome:
+    if kind not in {
+        StaticViewKind.PUBLIC_BINDING,
+        StaticViewKind.STRATEGY_DECISION,
+        StaticViewKind.PUBLIC_COIN,
+        StaticViewKind.EFFECT,
+        StaticViewKind.CLAIM_REDUCTION,
+    }:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.KIND_MISMATCH)
+    try:
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profiles.interaction,
+            required_subject_kinds=frozenset({"pir.interactive-core"}),
+        )
+        cid = core_id(core, profiles=profiles)
+        _authenticate_k2_profiled_subject(
+            cid,
+            "pir.interactive-core",
+            core_body(core),
+            profiles=profiles,
+            profile_support=profile_support,
+            selected_profile=profiles.interaction,
+        )
+        payload = _core_static_payload(core, kind, profiles)
+    except UnsupportedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.UNSUPPORTED)
+    except RefusedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    except ModelError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    coordinate = StaticViewCoordinate(
+        StaticViewOwnerKind.CORE,
+        cid,
+        kind,
+        profiles.interaction.identity,
+    )
+    return _issue_static_projection(
+        coordinate,
+        manifest,
+        payload,
+        core,
+        profiles=profiles,
+        profile_support=profile_support,
+        consumer_id=consumer_id,
+        purpose_id=purpose_id,
+    )
+
+
+def issue_execution_view(
+    core: Core,
+    construction: TranscriptConstruction | None,
+    interpretation: ChallengeInterpretation,
+    manifest: tuple[StaticViewField, ...],
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> QualifiedViewOutcome:
+    owner_profile = (
+        profiles.interaction
+        if interpretation is ChallengeInterpretation.FRESH
+        else profiles.transcript_fs
+    )
+    try:
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            owner_profile,
+            required_subject_kinds=frozenset({"pir.protocol"}),
+        )
+        pid = protocol_id(
+            core,
+            construction,
+            interpretation,
+            profiles=profiles,
+        )
+        _authenticate_k2_profiled_subject(
+            pid,
+            "pir.protocol",
+            protocol_body(
+                core,
+                construction,
+                interpretation,
+                profiles=profiles,
+            ),
+            profiles=profiles,
+            profile_support=profile_support,
+            selected_profile=owner_profile,
+        )
+    except UnsupportedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.UNSUPPORTED)
+    except RefusedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    except ModelError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    payload = MappingProxyType(
+        {
+            StaticViewField.EX_PROTOCOL_ID: pid,
+            StaticViewField.EX_CORE_ID: core_id(core, profiles=profiles),
+            StaticViewField.EX_INTERPRETATION: interpretation,
+            StaticViewField.EX_VISIBLE_HISTORY: "prefix-only-visible-history-v1",
+            StaticViewField.EX_RESOLVER: (
+                "fresh-request" if interpretation is ChallengeInterpretation.FRESH else "fs-transition"
+            ),
+            StaticViewField.EX_GENERATION: "online-strategy-step-v1",
+            StaticViewField.EX_RUN_RECORD: RunRecord,
+            StaticViewField.EX_REPLAY: "exact-record-replay-v1",
+            StaticViewField.EX_RELATION_RUN: "public-relation-run-view-v1",
+        }
+    )
+    coordinate = StaticViewCoordinate(
+        StaticViewOwnerKind.PROTOCOL,
+        pid,
+        StaticViewKind.EXECUTION,
+        owner_profile.identity,
+    )
+    return _issue_static_projection(
+        coordinate,
+        manifest,
+        payload,
+        (core, construction, interpretation),
+        profiles=profiles,
+        profile_support=profile_support,
+        consumer_id=consumer_id,
+        purpose_id=purpose_id,
+    )
+
+
+def _construction_static_payload(
+    core: Core,
+    construction: TranscriptConstruction,
+    kind: StaticViewKind,
+    profiles: K2SemanticProfiles,
+) -> Mapping[StaticViewField, object]:
+    admit_core(core)
+    construction.admit()
+    cid = core_id(core, profiles=profiles)
+    tid = construction_id(core, construction, profiles=profiles)
+    if kind is StaticViewKind.TRANSCRIPT_DECLARATION:
+        return MappingProxyType(
+            {
+                StaticViewField.TD_CONSTRUCTION_ID: tid,
+                StaticViewField.TD_CORE_ID: cid,
+                StaticViewField.TD_ALGORITHMS: (
+                    construction.version,
+                    INITIAL_TRANSCRIPT_STATE,
+                    construction.state_bytes,
+                ),
+                StaticViewField.TD_APPLICATION_DOMAIN: construction.application_domain,
+                StaticViewField.TD_FRAME_SCHEDULE: tuple(
+                    (index, item.name, item.kind) for index, item in enumerate(core.schedule)
+                ),
+            }
+        )
+    if kind is StaticViewKind.REQUIRED_INFLUENCE:
+        requirements = tuple(
+            (
+                index,
+                item.name,
+                tuple(
+                    (scope.name, scope.parent, scope.open_before)
+                    for scope in core.scopes
+                    if scope.open_before is None
+                    or core.schedule.index(item) >= (
+                        0
+                        if scope.open_before is None
+                        else next(
+                            position
+                            for position, occurrence in enumerate(core.schedule)
+                            if occurrence.name == scope.open_before
+                        )
+                    )
+                ),
+                tuple(
+                    (
+                        prior.name,
+                        required_influence_kinds(prior),
+                        prior.guard.kind is not PredicateKind.ALWAYS,
+                    )
+                    for prior in core.schedule[:index]
+                ),
+                item.dependencies,
+                tuple(
+                    (reduction.name, publication.publication)
+                    for reduction in core.reductions
+                    for publication in reduction.required_publications
+                    if publication.next_challenge == item.name
+                ),
+            )
+            for index, item in enumerate(core.schedule)
+            if item.kind is OccurrenceKind.CHALLENGE
+        )
+        return MappingProxyType(
+            {
+                StaticViewField.RI_CONSTRUCTION_ID: tid,
+                StaticViewField.RI_CORE_ID: cid,
+                StaticViewField.RI_REQUIREMENTS: requirements,
+                StaticViewField.RI_PREFIX_LAW: "ordered-required-influence-subtrace-v1",
+            }
+        )
+    if kind is StaticViewKind.CHALLENGE_TRANSITION:
+        return MappingProxyType(
+            {
+                StaticViewField.CT_CONSTRUCTION_ID: tid,
+                StaticViewField.CT_CORE_ID: cid,
+                StaticViewField.CT_NAMESPACE: "core-construction-occurrence-draw-v1",
+                StaticViewField.CT_SAMPLER: (
+                    construction.sample_bytes,
+                    construction.max_attempts,
+                    "big-endian-rejection",
+                ),
+                StaticViewField.CT_RETRY_FAILURE: (
+                    "advance-before-decode",
+                    SamplingExhausted,
+                ),
+            }
+        )
+    raise ModelError("view kind is not construction-owned")
+
+
+def issue_construction_static_view(
+    core: Core,
+    construction: TranscriptConstruction,
+    kind: StaticViewKind,
+    manifest: tuple[StaticViewField, ...],
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> QualifiedViewOutcome:
+    if kind not in {
+        StaticViewKind.TRANSCRIPT_DECLARATION,
+        StaticViewKind.REQUIRED_INFLUENCE,
+        StaticViewKind.CHALLENGE_TRANSITION,
+    }:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.KIND_MISMATCH)
+    try:
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profiles.transcript_fs,
+            required_subject_kinds=frozenset({"pir.transcript-construction"}),
+        )
+        payload = _construction_static_payload(core, construction, kind, profiles)
+        tid = construction_id(core, construction, profiles=profiles)
+        _authenticate_k2_profiled_subject(
+            tid,
+            "pir.transcript-construction",
+            construction_body(core, construction, profiles=profiles),
+            profiles=profiles,
+            profile_support=profile_support,
+            selected_profile=profiles.transcript_fs,
+        )
+    except UnsupportedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.UNSUPPORTED)
+    except RefusedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    except ModelError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    coordinate = StaticViewCoordinate(
+        StaticViewOwnerKind.CONSTRUCTION,
+        tid,
+        kind,
+        profiles.transcript_fs.identity,
+    )
+    return _issue_static_projection(
+        coordinate,
+        manifest,
+        payload,
+        (core, construction),
+        profiles=profiles,
+        profile_support=profile_support,
+        consumer_id=consumer_id,
+        purpose_id=purpose_id,
+    )
+
+
+class FSConstructionDefect(str, Enum):
+    SHARED_CORE_MISMATCH = "shared-core-mismatch"
+    PUBLIC_COIN_INELIGIBLE = "public-coin-ineligible"
+
+
+@dataclass(frozen=True)
+class CheckedFSConstruction:
+    source_protocol_id: object
+    target_protocol_id: object
+    shared_core_id: object
+    transcript_construction_id: object
+    occurrence_map: tuple[tuple[str, str], ...]
+    value_map: tuple[tuple[str, str], ...]
+    challenge_map: tuple[tuple[str, str], ...]
+    conclusion: str = "structurally-constructed"
+
+
+ExactCheckedFSConstructionAuthorityBinding = k1.OwnerLocalSourceAuthorityBinding
+
+
+_FS_CONSTRUCTION_CHECK_ISSUER = object()
+_FS_CONSTRUCTION_LIVE_CAPABILITIES: dict[int, object] = {}
+_FS_CONSTRUCTION_LIVE_ISSUES: dict[int, object] = {}
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class CheckedFSConstructionCapability(_NonTransferableAuthority):
+    result_ref: object
+    result: CheckedFSConstruction
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    consumer_id: object
+    purpose_id: object
+    _sources: object
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _FS_CONSTRUCTION_CHECK_ISSUER:
+            raise ModelError("only the FS checker may issue checked authority")
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class CheckedFSConstructionIssue(_NonTransferableAuthority):
+    result_ref: object
+    result: CheckedFSConstruction
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    capability: CheckedFSConstructionCapability
+    _issuer: object
+
+
+def _checked_fs_source_body(result: CheckedFSConstruction) -> object:
+    def name_map(items: tuple[tuple[str, str], ...]) -> object:
+        return k1.DatumSeq(
+            tuple(
+                k1.DatumRecord(
+                    (
+                        (0, _symbol(source, "FS source name")),
+                        (1, _symbol(target, "FS target name")),
+                    )
+                )
+                for source, target in items
+            )
+        )
+
+    return k1.DatumRecord(
+        (
+            (0, _any_content_ref(result.source_protocol_id, "FS source protocol")),
+            (1, _any_content_ref(result.target_protocol_id, "FS target protocol")),
+            (2, _any_content_ref(result.shared_core_id, "FS shared core")),
+            (
+                3,
+                _any_content_ref(
+                    result.transcript_construction_id,
+                    "FS transcript construction",
+                ),
+            ),
+            (4, name_map(result.occurrence_map)),
+            (5, name_map(result.value_map)),
+            (6, name_map(result.challenge_map)),
+            (7, _symbol(result.conclusion, "FS conclusion")),
+        )
+    )
+
+
+def _checked_fs_manifest_body() -> object:
+    return k1.DatumSeq(
+        tuple(
+            k1.Symbol(field.value)
+            for field in _VIEW_FIELDS[StaticViewKind.FS_CONSTRUCTION]
+        )
+    )
+
+
+def check_fs_construction(
+    source_core: Core,
+    target_core: Core,
+    construction: TranscriptConstruction,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> QualifiedViewOutcome:
+    try:
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profiles.transcript_fs,
+            required_subject_kinds=(
+                _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"pir.protocol", "pir.transcript-construction"})
+            ),
+        )
+        admit_core(source_core)
+        admit_core(target_core)
+        construction.admit()
+    except UnsupportedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.UNSUPPORTED)
+    except RefusedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    except ModelError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    defects: list[FSConstructionDefect] = []
+    source_core_id = core_id(source_core, profiles=profiles)
+    target_core_id = core_id(target_core, profiles=profiles)
+    if source_core_id != target_core_id:
+        defects.append(FSConstructionDefect.SHARED_CORE_MISMATCH)
+    if not is_public_coin_eligible(source_core) or not is_public_coin_eligible(target_core):
+        defects.append(FSConstructionDefect.PUBLIC_COIN_INELIGIBLE)
+    if defects:
+        return QualifiedViewOutcome(
+            QualifiedViewOutcomeKind.NEGATIVE,
+            detail=tuple(defects),
+        )
+    source_protocol = protocol_id(
+        source_core,
+        None,
+        ChallengeInterpretation.FRESH,
+        profiles=profiles,
+    )
+    target_protocol = protocol_id(
+        target_core,
+        construction,
+        ChallengeInterpretation.FIAT_SHAMIR,
+        profiles=profiles,
+    )
+    _authenticate_k2_profiled_subject(
+        target_protocol,
+        "pir.protocol",
+        protocol_body(
+            target_core,
+            construction,
+            ChallengeInterpretation.FIAT_SHAMIR,
+            profiles=profiles,
+        ),
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profiles.transcript_fs,
+    )
+    transcript_construction_id = construction_id(
+        source_core,
+        construction,
+        profiles=profiles,
+    )
+    _authenticate_k2_profiled_subject(
+        transcript_construction_id,
+        "pir.transcript-construction",
+        construction_body(source_core, construction, profiles=profiles),
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profiles.transcript_fs,
+    )
+    challenges = tuple(
+        item.name
+        for item in source_core.schedule
+        if item.kind is OccurrenceKind.CHALLENGE
+    )
+    occurrences = tuple(item.name for item in source_core.schedule)
+    nonchallenge_values = tuple(item.name for item in source_core.inputs) + tuple(
+        item.name
+        for item in source_core.schedule
+        if item.kind is not OccurrenceKind.CHALLENGE
+    )
+    result = CheckedFSConstruction(
+        source_protocol,
+        target_protocol,
+        source_core_id,
+        transcript_construction_id,
+        tuple((name, name) for name in occurrences),
+        tuple((name, name) for name in nonchallenge_values),
+        tuple((name, name) for name in challenges),
+    )
+    result_ref = object()
+    (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    ) = _authority_components(
+        profiles.transcript_fs,
+        "pir",
+        "checked-fs-construction",
+        _checked_fs_source_body(result),
+        _checked_fs_manifest_body(),
+        "issue-fs-construction-view",
+        consumer_id,
+        purpose_id,
+        profiles=profiles,
+        profile_support=profile_support,
+    )
+    binding = k1.OwnerLocalSourceAuthorityBinding(
+        k1.Symbol("pir"),
+        k1.Symbol("checked-fs-construction"),
+        result_ref,
+        payload_id,
+        k1.OwnerDefinesNoOperationPolicy(no_policy_id),
+        closure_id,
+        requirement,
+    )
+    k1.validate_owner_local_source_authority_binding(binding)
+    capability = CheckedFSConstructionCapability(
+        result_ref,
+        result,
+        binding,
+        consumer_id,
+        purpose_id,
+        (source_core, target_core, construction),
+        _FS_CONSTRUCTION_CHECK_ISSUER,
+    )
+    _FS_CONSTRUCTION_LIVE_CAPABILITIES[id(capability)] = capability
+    issued = CheckedFSConstructionIssue(
+        result_ref,
+        result,
+        binding,
+        capability,
+        _FS_CONSTRUCTION_CHECK_ISSUER,
+    )
+    _FS_CONSTRUCTION_LIVE_ISSUES[id(issued)] = issued
+    return QualifiedViewOutcome(
+        QualifiedViewOutcomeKind.AFFIRMATIVE,
+        issued,
+    )
+
+
+def issue_fs_construction_view(
+    checked: object,
+    manifest: tuple[StaticViewField, ...],
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    expected_consumer_id: object | None = None,
+    expected_purpose_id: object | None = None,
+    view_consumer_id: object | None = None,
+    view_purpose_id: object | None = None,
+) -> QualifiedViewOutcome:
+    if type(checked) is not CheckedFSConstructionIssue:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MISSING_DEPENDENCY)
+    consumer_id = (
+        checked.capability.consumer_id
+        if expected_consumer_id is None
+        else expected_consumer_id
+    )
+    purpose_id = (
+        checked.capability.purpose_id
+        if expected_purpose_id is None
+        else expected_purpose_id
+    )
+    if (
+        _FS_CONSTRUCTION_LIVE_ISSUES.get(id(checked)) is not checked
+        or checked._issuer is not _FS_CONSTRUCTION_CHECK_ISSUER
+        or type(checked.capability) is not CheckedFSConstructionCapability
+        or _FS_CONSTRUCTION_LIVE_CAPABILITIES.get(id(checked.capability))
+        is not checked.capability
+        or checked.capability._issuer is not _FS_CONSTRUCTION_CHECK_ISSUER
+        or checked.capability.result_ref is not checked.result_ref
+        or checked.capability.result is not checked.result
+        or checked.capability.source_binding is not checked.source_binding
+        or checked.capability.consumer_id != consumer_id
+        or checked.capability.purpose_id != purpose_id
+        or type(checked.source_binding) is not k1.OwnerLocalSourceAuthorityBinding
+        or checked.source_binding.owner_local_coordinate is not checked.result_ref
+    ):
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    try:
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profiles.transcript_fs,
+            required_subject_kinds=(
+                _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"pir.protocol", "pir.transcript-construction"})
+            ),
+        )
+        k1.validate_owner_local_source_authority_binding(checked.source_binding)
+        (
+            _,
+            _,
+            payload_id,
+            no_policy_id,
+            closure_id,
+            requirement,
+        ) = _authority_components(
+            profiles.transcript_fs,
+            "pir",
+            "checked-fs-construction",
+            _checked_fs_source_body(checked.result),
+            _checked_fs_manifest_body(),
+            "issue-fs-construction-view",
+            consumer_id,
+            purpose_id,
+            profiles=profiles,
+            profile_support=profile_support,
+        )
+    except UnsupportedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.UNSUPPORTED)
+    except RefusedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    except MalformedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    except (ModelError, k1.ModelError, k1.CanonicalError):
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    binding = checked.source_binding
+    if not (
+        binding.owner_domain == k1.Symbol("pir")
+        and binding.capability_family == k1.Symbol("checked-fs-construction")
+        and binding.owner_binding_payload == payload_id
+        and type(binding.operation_policy) is k1.OwnerDefinesNoOperationPolicy
+        and binding.operation_policy.owner_no_policy_declaration == no_policy_id
+        and binding.owner_policy_closure == closure_id
+        and binding.capability_requirement == requirement
+    ):
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    result = checked.result
+    payload = MappingProxyType(
+        {
+            StaticViewField.FS_RESULT_REF: checked.result_ref,
+            StaticViewField.FS_RESULT_SCHEMA: CheckedFSConstruction,
+            StaticViewField.FS_SOURCE_PROTOCOL: result.source_protocol_id,
+            StaticViewField.FS_TARGET_PROTOCOL: result.target_protocol_id,
+            StaticViewField.FS_SHARED_CORE: result.shared_core_id,
+            StaticViewField.FS_CONSTRUCTION_ID: result.transcript_construction_id,
+            StaticViewField.FS_MAPS: (
+                result.occurrence_map,
+                result.value_map,
+                result.challenge_map,
+            ),
+            StaticViewField.FS_CONCLUSION: result.conclusion,
+        }
+    )
+    coordinate = StaticViewCoordinate(
+        StaticViewOwnerKind.FS_RESULT,
+        checked.result_ref,
+        StaticViewKind.FS_CONSTRUCTION,
+        profiles.transcript_fs.identity,
+    )
+    return _issue_static_projection(
+        coordinate,
+        manifest,
+        payload,
+        checked,
+        profiles=profiles,
+        profile_support=profile_support,
+        consumer_id=view_consumer_id,
+        purpose_id=view_purpose_id,
+    )
+
+
+@dataclass(frozen=True)
+class PublicSetupBindingRef:
+    scope: str
+    input_name: str
+
+
+@dataclass(frozen=True)
+class PublicSetupInvocationEntry:
+    binding_ref: PublicSetupBindingRef
+    role: InputRole
+    value_sort: ValueSort
+    value: Value
+
+
+@dataclass(frozen=True)
+class PublicSetupInvocationView:
+    protocol_id: object
+    core_id: object
+    entries: tuple[PublicSetupInvocationEntry, ...]
+
+
+ExactPublicSetupInvocationViewAuthorityBinding = k1.PortableSourceAuthorityBinding
+
+
+_PUBLIC_SETUP_VIEW_ISSUER = object()
+_PUBLIC_SETUP_LIVE_CAPABILITIES: dict[int, object] = {}
+_PUBLIC_SETUP_LIVE_ISSUANCES: dict[int, object] = {}
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class PublicSetupInvocationViewCapability(_NonTransferableAuthority):
+    view_id: object
+    view: PublicSetupInvocationView
+    source_binding: k1.PortableSourceAuthorityBinding
+    consumer_id: object
+    purpose_id: object
+    _invocation: Invocation
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _PUBLIC_SETUP_VIEW_ISSUER:
+            raise ModelError("only PIR may issue a public-setup view capability")
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class IssuedPublicSetupInvocationView(_NonTransferableAuthority):
+    view_id: object
+    view: PublicSetupInvocationView
+    source_binding: k1.PortableSourceAuthorityBinding
+    capability: PublicSetupInvocationViewCapability
+    _issuer: object
+
+
+def public_setup_invocation_view_body(view: PublicSetupInvocationView) -> bytes:
+    return k1.encode_datum(
+        k1.DatumRecord(
+            (
+                (0, _content_ref_datum(view.protocol_id, "pir.protocol")),
+                (1, _content_ref_datum(view.core_id, "pir.interactive-core")),
+                (
+                    2,
+                    k1.DatumSeq(
+                        tuple(
+                            k1.DatumRecord(
+                                (
+                                    (0, _symbol(item.binding_ref.scope, "setup scope")),
+                                    (1, _symbol(item.binding_ref.input_name, "setup input")),
+                                    (
+                                        2,
+                                        k1.DatumVariant(
+                                            0 if item.role is InputRole.PUBLIC_CONTEXT else 1,
+                                            k1.UNIT,
+                                        ),
+                                    ),
+                                    (3, _symbol(item.value_sort.value, "setup value sort")),
+                                    (4, _datum(item.value)),
+                                )
+                            )
+                            for item in view.entries
+                        )
+                    ),
+                ),
+            )
+        )
+    )
+
+
+def public_setup_invocation_view_id(
+    view: PublicSetupInvocationView,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+) -> object:
+    return _profiled_identity(
+        "pir.public-setup-invocation-view",
+        profiles.public_view,
+        public_setup_invocation_view_body(view),
+    )
+
+
+def _public_setup_authority_source_body(
+    view_id: object,
+    view: PublicSetupInvocationView,
+) -> object:
+    return k1.DatumRecord(
+        (
+            (0, _any_content_ref(view_id, "public-setup view")),
+            (1, _any_content_ref(view.protocol_id, "public-setup protocol")),
+            (2, _any_content_ref(view.core_id, "public-setup core")),
+        )
+    )
+
+
+def _public_setup_manifest_body() -> object:
+    return k1.DatumSeq(
+        (
+            k1.Symbol("protocol-id"),
+            k1.Symbol("core-id"),
+            k1.Symbol("public-context-and-parameter-entries"),
+        )
+    )
+
+
+def issue_public_setup_invocation_view(
+    core: Core,
+    construction: TranscriptConstruction | None,
+    interpretation: ChallengeInterpretation,
+    invocation: Invocation,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> QualifiedViewOutcome:
+    try:
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profiles.public_view,
+            required_subject_kinds=(
+                _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"pir.public-setup-invocation-view"})
+            ),
+        )
+        values = admit_invocation(core, invocation)
+        pid = protocol_id(
+            core,
+            construction,
+            interpretation,
+            profiles=profiles,
+        )
+    except UnsupportedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.UNSUPPORTED)
+    except RefusedSemanticProfileError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.REFUSED)
+    except ModelError:
+        return QualifiedViewOutcome(QualifiedViewOutcomeKind.MALFORMED)
+    entries = tuple(
+        PublicSetupInvocationEntry(
+            PublicSetupBindingRef(item.scope, item.name),
+            item.role,
+            item.value_sort,
+            values[item.name],
+        )
+        for item in core.inputs
+        if item.role in {InputRole.PUBLIC_CONTEXT, InputRole.PUBLIC_PARAMETER}
+    )
+    view = PublicSetupInvocationView(pid, core_id(core, profiles=profiles), entries)
+    view_id = public_setup_invocation_view_id(view, profiles=profiles)
+    _authenticate_k2_profiled_subject(
+        view_id,
+        "pir.public-setup-invocation-view",
+        public_setup_invocation_view_body(view),
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profiles.public_view,
+    )
+    (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    ) = _authority_components(
+        profiles.public_view,
+        "pir",
+        "public-setup-invocation-view",
+        _public_setup_authority_source_body(view_id, view),
+        _public_setup_manifest_body(),
+        "consume-public-setup-invocation-view",
+        consumer_id,
+        purpose_id,
+        profiles=profiles,
+        profile_support=profile_support,
+    )
+    binding = k1.PortableSourceAuthorityBinding(
+        k1.Symbol("pir"),
+        k1.Symbol("public-setup-invocation-view"),
+        view_id,
+        payload_id,
+        k1.OwnerDefinesNoOperationPolicy(no_policy_id),
+        closure_id,
+        requirement,
+    )
+    binding.body()
+    capability = PublicSetupInvocationViewCapability(
+        view_id,
+        view,
+        binding,
+        consumer_id,
+        purpose_id,
+        invocation,
+        _PUBLIC_SETUP_VIEW_ISSUER,
+    )
+    _PUBLIC_SETUP_LIVE_CAPABILITIES[id(capability)] = capability
+    issued = IssuedPublicSetupInvocationView(
+        view_id,
+        view,
+        binding,
+        capability,
+        _PUBLIC_SETUP_VIEW_ISSUER,
+    )
+    _PUBLIC_SETUP_LIVE_ISSUANCES[id(issued)] = issued
+    return QualifiedViewOutcome(
+        QualifiedViewOutcomeKind.AFFIRMATIVE,
+        issued,
+    )
+
+
+def validate_issued_public_setup_invocation_view(
+    issued: object,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    expected_consumer_id: object | None = None,
+    expected_purpose_id: object | None = None,
+) -> bool:
+    """Validate portable metadata plus the exact live PIR bearer capability."""
+
+    if (
+        type(issued) is not IssuedPublicSetupInvocationView
+        or _PUBLIC_SETUP_LIVE_ISSUANCES.get(id(issued)) is not issued
+        or issued._issuer is not _PUBLIC_SETUP_VIEW_ISSUER
+        or type(issued.capability) is not PublicSetupInvocationViewCapability
+        or _PUBLIC_SETUP_LIVE_CAPABILITIES.get(id(issued.capability))
+        is not issued.capability
+        or issued.capability._issuer is not _PUBLIC_SETUP_VIEW_ISSUER
+        or issued.capability.view_id is not issued.view_id
+        or issued.capability.view is not issued.view
+        or issued.capability.source_binding is not issued.source_binding
+        or type(issued.source_binding) is not k1.PortableSourceAuthorityBinding
+        or issued.source_binding.owner_source_coordinate != issued.view_id
+    ):
+        return False
+    consumer_id = (
+        issued.capability.consumer_id
+        if expected_consumer_id is None
+        else expected_consumer_id
+    )
+    purpose_id = (
+        issued.capability.purpose_id
+        if expected_purpose_id is None
+        else expected_purpose_id
+    )
+    if (
+        issued.capability.consumer_id != consumer_id
+        or issued.capability.purpose_id != purpose_id
+    ):
+        return False
+    try:
+        _require_supported_k2_profiles(
+            profiles,
+            profile_support,
+            profiles.public_view,
+            required_subject_kinds=(
+                _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"pir.public-setup-invocation-view"})
+            ),
+        )
+        issued.source_binding.body()
+        (
+            _,
+            _,
+            payload_id,
+            no_policy_id,
+            closure_id,
+            requirement,
+        ) = _authority_components(
+            profiles.public_view,
+            "pir",
+            "public-setup-invocation-view",
+            _public_setup_authority_source_body(issued.view_id, issued.view),
+            _public_setup_manifest_body(),
+            "consume-public-setup-invocation-view",
+            consumer_id,
+            purpose_id,
+            profiles=profiles,
+            profile_support=profile_support,
+        )
+    except (ModelError, k1.ModelError, k1.CanonicalError):
+        return False
+    binding = issued.source_binding
+    return (
+        binding.owner_domain == k1.Symbol("pir")
+        and binding.capability_family
+        == k1.Symbol("public-setup-invocation-view")
+        and binding.owner_binding_payload == payload_id
+        and type(binding.operation_policy) is k1.OwnerDefinesNoOperationPolicy
+        and binding.operation_policy.owner_no_policy_declaration == no_policy_id
+        and binding.owner_policy_closure == closure_id
+        and binding.capability_requirement == requirement
     )
 
 
@@ -1452,6 +4015,8 @@ def derive_occurrence_namespace(
     construction: TranscriptConstruction,
     ordinal: int,
     draw_ordinal: int = 0,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
 ) -> bytes:
     """Derive a collision-free canonical occurrence namespace.
 
@@ -1484,11 +4049,20 @@ def derive_occurrence_namespace(
     return k1.encode_datum(
         k1.DatumRecord(
             (
-                (0, k1.BytesValue(core_id(core).internal_reference())),
+                (
+                    0,
+                    k1.BytesValue(
+                        core_id(core, profiles=profiles).internal_reference()
+                    ),
+                ),
                 (
                     1,
                     k1.BytesValue(
-                        construction_id(core, construction).internal_reference()
+                        construction_id(
+                            core,
+                            construction,
+                            profiles=profiles,
+                        ).internal_reference()
                     ),
                 ),
                 (2, k1.DatumSeq(tuple(k1.Nat(index) for index in path))),
@@ -1532,6 +4106,8 @@ def squeeze_and_sample(
     occurrence_ordinal: int,
     domain: ChallengeDomain,
     construction: TranscriptConstruction,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
 ) -> ChallengeSample:
     construction.admit()
     if type(state) is not bytes or len(state) != construction.state_bytes:
@@ -1559,6 +4135,7 @@ def squeeze_and_sample(
             construction,
             occurrence_ordinal,
             attempt,
+            profiles=profiles,
         )
         namespaces.append(namespace)
         block = _squeeze_block(current, namespace, width)
@@ -1683,6 +4260,8 @@ def required_influence_atoms(
     construction: TranscriptConstruction,
     challenge_ordinal: int,
     prior_entries: tuple[RunEntry, ...],
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
 ) -> tuple[InfluenceAtom, ...]:
     """Derive all finite obligations for one challenge from Core structure."""
 
@@ -1690,10 +4269,17 @@ def required_influence_atoms(
     if occurrence.kind is not OccurrenceKind.CHALLENGE:
         raise AdmissionError("required influence is defined only for challenges")
     required: list[InfluenceAtom] = [
-        _atom("core-header", core_id(core).internal_reference().hex()),
+        _atom(
+            "core-header",
+            core_id(core, profiles=profiles).internal_reference().hex(),
+        ),
         _atom(
             "construction-header",
-            construction_id(core, construction).internal_reference().hex(),
+            construction_id(
+                core,
+                construction,
+                profiles=profiles,
+            ).internal_reference().hex(),
         ),
         _atom("application-domain", construction.application_domain.hex()),
     ]
@@ -1939,6 +4525,8 @@ def _execute(
     strategy: ProverStrategy | None,
     expected_record: RunRecord | None,
     fresh_resolver: FreshChallengeResolver | None,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
 ) -> GenerationResult:
     admit_core(core)
     is_fs = interpretation is ChallengeInterpretation.FIAT_SHAMIR
@@ -1959,9 +4547,13 @@ def _execute(
             core,
         )
 
-    cid = core_id(core)
-    tid = construction_id(core, construction) if is_fs else None
-    iid = invocation_id(core, invocation)
+    cid = core_id(core, profiles=profiles)
+    tid = (
+        construction_id(core, construction, profiles=profiles)
+        if is_fs
+        else None
+    )
+    iid = invocation_id(core, invocation, profiles=profiles)
     if expected_record is not None:
         if (
             expected_record.core_id != cid
@@ -2168,6 +4760,7 @@ def _execute(
                     construction,
                     ordinal,
                     tuple(entries),
+                    profiles=profiles,
                 )
                 influence = compare_influence(required, observed)
                 if influence.missing:
@@ -2181,6 +4774,7 @@ def _execute(
                     ordinal,
                     occurrence.challenge_domain,
                     construction,
+                    profiles=profiles,
                 )
                 value = sample.value
                 state = sample.state
@@ -2266,6 +4860,7 @@ def generate(
     strategy: ProverStrategy,
     *,
     fresh_resolver: FreshChallengeResolver | None = None,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
 ) -> GenerationResult:
     if strategy is None:
         raise ModelError("generation requires a prover strategy")
@@ -2277,6 +4872,7 @@ def generate(
         strategy,
         None,
         fresh_resolver,
+        profiles=profiles,
     )
 
 
@@ -2285,6 +4881,8 @@ def replay(
     construction: TranscriptConstruction,
     invocation: Invocation,
     record: RunRecord,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
 ) -> RunRecord:
     result = _execute(
         core,
@@ -2294,6 +4892,7 @@ def replay(
         None,
         record,
         None,
+        profiles=profiles,
     )
     if type(result) is not Completed:  # pragma: no cover - replay has no strategy
         raise ReplayError("replay unexpectedly did not complete")
@@ -2314,10 +4913,16 @@ def check_fresh_fs_pair(
     invocation: Invocation,
     fresh: RunRecord,
     fiat_shamir: RunRecord,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
 ) -> FreshFsPairEvidence:
     """Check both runs and their exact same-Core structural relation."""
 
-    expected_construction = construction_id(core, construction)
+    expected_construction = construction_id(
+        core,
+        construction,
+        profiles=profiles,
+    )
     if fresh.core_id != fiat_shamir.core_id:
         raise ReplayError("Fresh/FS relation requires the same literal Core")
     if fresh.construction_id is not None:
@@ -2352,8 +4957,8 @@ def check_fresh_fs_pair(
     )
     if len(set(namespaces)) != len(namespaces):
         raise ReplayError("Fiat--Shamir challenge namespaces are not unique")
-    replay(core, construction, invocation, fresh)
-    replay(core, construction, invocation, fiat_shamir)
+    replay(core, construction, invocation, fresh, profiles=profiles)
+    replay(core, construction, invocation, fiat_shamir, profiles=profiles)
     fresh_terminal = fresh.entries[-1].value is True
     fs_terminal = fiat_shamir.entries[-1].value is True
     return FreshFsPairEvidence(fresh.core_id, fresh_terminal, fs_terminal, fresh_topology)

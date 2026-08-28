@@ -1,8 +1,11 @@
 # Protocol Property Analysis
 
 > **Document kind:** Domain index
-> **Document state:** Active non-normative K3-C target
-> **Target alignment:** Bounded minimum Analysis kernel over K1, K2, and K3-B
+> **Document state:** Active non-normative K3-C target; its finite executable
+> join was exercised by bounded K3-E, while owner profile preimages remain open
+> **Target alignment:** Bounded minimum Analysis kernel over K1, K2, and K3-B;
+> its selected finite P01/Schnorr path has K3-E executable join evidence, while
+> broader Analysis families remain deferred
 > **Provisional owner:** `analysis`
 > **Authority:** None during transition. The current property calculus remains
 > governed by the [Soundness Kernel specification](../../docs/spec/soundness.md).
@@ -43,6 +46,8 @@ independent proof authority supplies it.
 
 - finite, purpose-specific manifests selecting exact source-owned views and
   checked results;
+- the exact Analysis language-profile contents, total bounded
+  `AnalysisBodyV0` compiler, body-formation laws, and adequacy evaluators;
 - strategy classes, adversary interfaces, quantifier order, oracle and
   public-coin models, scheduling, resources, outcomes, and failures;
 - the common question, hypothesis-free goal, conditional proposition, basis,
@@ -78,8 +83,9 @@ no theorem applicability, and no transported target property.
 The active minimum reads:
 
 - [Executable Semantic Foundations](../foundation/executable-foundations.md)
-  for `SemanticContentId`, canonical values, evaluation outcomes, and
-  process-local authority;
+  for `SemanticContentId`, standalone `SemanticLanguageProfileId`, exact
+  profile-import closure, canonical values, evaluation outcomes, the inert
+  source-authority envelope, and process-local authority;
 - [Interactive Core](../pir/interactive-core.md) for admitted Protocols,
   `PublicBindingView`, `StrategyDecisionView`, `PublicCoinView`, `EffectView`,
   `ClaimReductionView`, `ExecutionView`, generated execution, and replay;
@@ -96,8 +102,89 @@ The active minimum reads:
   exports.
 
 Every source remains owned by its producer. Analysis declares the exact fields
-it reads and checks adequacy; it cannot reconstruct a second Core, transcript,
-relation, occurrence graph, or authored loss count.
+it reads through owner field coordinates, invokes one exact adequacy evaluator,
+and consumes the owner's inert binding plus any separately fresh capability;
+it cannot reconstruct a second Core, transcript, relation, occurrence graph,
+or authored loss count.
+
+## Profile topology and K3-E evidence boundary
+
+The target Analysis identities are profile-qualified. A standalone common
+kernel profile owns only the shared calculus; a bounded cryptographic-property
+profile directly imports that kernel and the exact-used K3-B Relations profile;
+the latter's exact closure reaches the Interface/Plan and K2 PIR/FS profiles;
+an AFK semantic-transport profile imports the property profile; and a narrow
+theorem-source-validation profile imports that semantic-transport profile.
+Redundant direct K2 edges are forbidden. Once their owner-local preimages are
+published, these are exact profile IDs with exact no-extra import closures, not
+family/revision labels. Dependency flows kernel -> property -> semantic
+transport -> theorem-source validation and never backward. An unrelated future
+profile therefore does not rotate an existing body; changing an actually used
+upstream profile intentionally rotates its downstream consumers.
+
+K3-E supplies bounded executable evidence only for this finite profile
+topology, exact authentication, and expected local/downstream rotation. It does
+not own Analysis semantics or publish the final profile identities. In
+particular, the current symbolic-law and host-dispatch profile objects are
+correspondence surrogates and must not become the ideal typed Analysis
+preimages. Each Analysis owner must publish its complete six-field profile
+preimage, exact typed law-source bytes, and independently reconstructible full
+typed ID before any dependent K4 ID is treated as persistent and before K5
+freeze.
+
+The AFK semantic theorem schema, questions, goals, propositions, and semantic
+bases remain under the semantic-transport profile. The child profile governs
+the theorem-source-validation body and the exact support, validation-basis,
+operation-policy, and judgment bodies that consume or govern the resulting
+validation-bearing result. This makes validation evolution flow into
+validation-bearing descendants without feeding back into theorem meaning.
+
+Every active portable body has one total, bounded `AnalysisBodyV0` encoding.
+Question, goal, and proposition remain distinct: the question owns family,
+subjects, context, and payload; the goal contains only its question ID and
+derives the hypothesis-free conclusion; the proposition adds exactly one
+hypothesis-context ID. Semantic and validation identities remain separate.
+Live capabilities, evaluator processes, observations, and owner-local handles
+have no portable encoding arm.
+
+The active kind table is intentionally small. Experiment-local records,
+theorem-local binders, resource entries, role-map clauses, and quantitative
+subterms remain nested in their nearest durable owner. Foreign objects retain
+their producer-owned IDs rather than receiving `analysis.*` aliases. Probe-only
+fixtures use `probe.k3c.*` and may not enter an Analysis identity, judgment,
+authority binding, support record, or closure claim. A new `analysis.*` kind is
+therefore a specification change requiring an exact body, profile assignment,
+compiler arm, formation law, and locality tests; it is not a convenience for a
+host-language helper class.
+
+That separation also applies to imported theorems. An
+`AnalysisTheoremSchemaId` commits only the exact restricted semantic statement,
+typed templates, and conclusion reconstruction law. Bibliographic revision,
+PDF digest and locators, ImportedPaperOnly or checked-proof status, and
+truth-discharge metadata live in a distinct
+`AnalysisTheoremSourceValidationId`. Source-only changes rotate validation or
+support, not theorem-truth questions or goals; a semantic statement change
+rotates the theorem ID and every downstream validation/support reference.
+
+The K2/K3-B ingress is similarly exact:
+
+- invocation values come only from the Fresh and Fiat--Shamir PIR
+  `PublicSetupInvocationView` values, whose public-entry sequences must agree;
+  never from a static binding declaration or a copied caller assignment;
+- every PIR static-view read uses `PIRStaticViewFieldCoordinate`, the owner
+  `RequiredPIRViewReadClosure`, an exact inert view binding, and a matching
+  fresh capability;
+- the acceptance premise closes the selected Check/Terminal leaves through
+  the complete producer/guard/scope/effect dependency set;
+- Fresh and Fiat--Shamir target semantics retain distinct Protocol-qualified
+  relation bindings, Plan Witness bindings, correspondence results, and
+  grounding coordinates; a producer-checked shape comparison never aliases or
+  derives one axis from the other;
+- Relations ingress reads the one tagged `CorrespondenceQuestionBody` and an
+  exact checked-result binding; it has no variant-specific shadow body; and
+- source and judgment policy summaries are derived from authenticated exact-used
+  bindings and owner-profiled closure preimages, never supplied as independent
+  claims and never treated as authority.
 
 ## Active K3-C profiles
 

@@ -24,7 +24,7 @@ imports K3-B canonically and reaches K1/K2 only through it.  K3-C is absent.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, is_dataclass, replace
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from enum import Enum
 import hashlib
 import importlib.util
@@ -32,7 +32,7 @@ import json
 from pathlib import Path
 import sys
 from types import MappingProxyType
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 
 _K3_NAME = "_zkc_k3_dependent_surfaces"
@@ -52,10 +52,183 @@ k2 = k3.k2
 k1 = k3.k1
 
 
-SOURCE_PROFILE = "k3d.projection-source.v0"
-OIR_PROFILE = "oir.endpoint-semantic-profile.v0"
-RELATION_PROFILE = "k3d.exact-endpoint-graph.v0"
-CHECKER_BASIS = "k3d.exact-equality-checker.v0"
+def _profile_catalog(kind: str, *declarations: str) -> object:
+    return k1.DatumSeq(
+        (
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol(kind)),
+                    (
+                        1,
+                        k1.DatumSeq(
+                            tuple(k1.Symbol(item) for item in declarations)
+                        ),
+                    ),
+                )
+            ),
+        )
+    )
+
+
+def _profile_imports(*profiles: object) -> tuple[object, ...]:
+    return tuple(
+        sorted(
+            (profile.identity for profile in profiles),
+            key=lambda identifier: identifier.internal_reference(),
+        )
+    )
+
+
+@dataclass(frozen=True)
+class K3DSemanticProfiles:
+    endpoint_graph: object
+    source_view: object
+    projection: object
+    validation: object
+    k3b_profiles: object = field(compare=False, repr=False)
+
+    def __post_init__(self) -> None:
+        profiles = (
+            self.endpoint_graph,
+            self.source_view,
+            self.projection,
+            self.validation,
+        )
+        if any(type(item) is not k1.SemanticLanguageProfile for item in profiles):
+            raise TypeError("K3-D semantic profiles have the wrong exact shape")
+        if self.endpoint_graph.profile_imports != _profile_imports(
+            self.k3b_profiles.interface_plan
+        ):
+            raise ValueError("the endpoint-graph profile must import Interface/Plan")
+        if self.source_view.profile_imports != _profile_imports(self.endpoint_graph):
+            raise ValueError("the source-view profile must import the endpoint graph")
+        if self.projection.profile_imports != _profile_imports(self.source_view):
+            raise ValueError("the projection profile must import the source view")
+        if self.validation.profile_imports != _profile_imports(self.projection):
+            raise ValueError("the validation profile must import projection meaning")
+
+    @property
+    def endpoint_graph_bundle(self) -> dict[object, object]:
+        upstream = k3.k3b_root_profile_preimages(self.k3b_profiles)[
+            self.k3b_profiles.interface_plan.identity
+        ]
+        return {**upstream, self.endpoint_graph.identity: self.endpoint_graph}
+
+    @property
+    def source_view_bundle(self) -> dict[object, object]:
+        return {**self.endpoint_graph_bundle, self.source_view.identity: self.source_view}
+
+    @property
+    def projection_bundle(self) -> dict[object, object]:
+        return {**self.source_view_bundle, self.projection.identity: self.projection}
+
+    @property
+    def validation_bundle(self) -> dict[object, object]:
+        return {**self.projection_bundle, self.validation.identity: self.validation}
+
+    @property
+    def bundle(self) -> dict[object, object]:
+        return self.validation_bundle
+
+
+def make_k3d_semantic_profiles(
+    *,
+    k3b_profiles: object = None,
+    endpoint_graph_law: bytes = b"zkc-k3d-endpoint-graph-law-v0",
+    source_view_law: bytes = b"zkc-k3d-pir-source-view-law-v0",
+    projection_law: bytes = b"zkc-k3d-source-relative-projection-law-v0",
+    validation_law: bytes = b"zkc-k3d-projection-validation-law-v0",
+) -> K3DSemanticProfiles:
+    upstream = (
+        k3.K3B_SEMANTIC_PROFILES if k3b_profiles is None else k3b_profiles
+    )
+    endpoint_graph = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.oir.endpoint-graph"),
+        0,
+        _profile_imports(upstream.interface_plan),
+        (k1.Symbol("oir.endpoint"),),
+        _profile_catalog("oir.endpoint-declaration", "endpoint-graph-body-v0"),
+        endpoint_graph_law,
+    )
+    source_view = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.pir.endpoint-source-view"),
+        0,
+        _profile_imports(endpoint_graph),
+        tuple(
+            k1.Symbol(item)
+            for item in sorted(
+                (
+                    "pir.endpoint-owner-schema-set",
+                    "pir.endpoint-owner-adapter-consumer",
+                    "pir.endpoint-owner-adapter-purpose",
+                    "pir.endpoint-owner-supplement",
+                    "pir.endpoint-owner-supplement-authority-binding",
+                    "pir.endpoint-owner-supplement-binding-payload",
+                    "pir.endpoint-owner-supplement-no-policy",
+                    "pir.endpoint-owner-supplement-policy-closure",
+                    "pir.endpoint-owner-supplement-requirement",
+                    "pir.endpoint-read-manifest",
+                    "pir.endpoint-source-view",
+                )
+            )
+        ),
+        _profile_catalog(
+            "pir.endpoint-source-declaration",
+            "owner-schema-set-body-v0",
+            "owner-supplement-body-v0",
+            "owner-supplement-authority-v0",
+            "read-manifest-body-v0",
+            "source-view-body-v0",
+        ),
+        source_view_law,
+    )
+    projection = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.oir.endpoint-projection"),
+        0,
+        _profile_imports(source_view),
+        (k1.Symbol("oir.projection-proposition"),),
+        _profile_catalog(
+            "oir.projection-declaration",
+            "source-relative-exact-graph-equality-v0",
+        ),
+        projection_law,
+    )
+    validation = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.oir.projection-validation"),
+        0,
+        _profile_imports(projection),
+        tuple(
+            k1.Symbol(item)
+            for item in sorted(
+                (
+                    "oir.projection-checker-basis",
+                    "oir.projection-validation-request",
+                )
+            )
+        ),
+        _profile_catalog(
+            "oir.projection-validation-declaration",
+            "exact-equality-checker-basis-v0",
+            "validation-request-body-v0",
+        ),
+        validation_law,
+    )
+    return K3DSemanticProfiles(
+        endpoint_graph,
+        source_view,
+        projection,
+        validation,
+        upstream,
+    )
+
+
+K3D_SEMANTIC_PROFILES = make_k3d_semantic_profiles()
+K3D_PROFILE_BUNDLE = K3D_SEMANTIC_PROFILES.bundle
+SOURCE_PROFILE = K3D_SEMANTIC_PROFILES.source_view.identity
+OIR_PROFILE = K3D_SEMANTIC_PROFILES.endpoint_graph.identity
+RELATION_PROFILE = K3D_SEMANTIC_PROFILES.projection.identity
+VALIDATION_PROFILE = K3D_SEMANTIC_PROFILES.validation.identity
+CHECKER_BASIS_LABEL = "k3d.exact-equality-checker.v0"
 ENDPOINT_CONTRACT_LAW = "EndpointContractLawV0"
 MAX_GRAPH_ITEMS = 1 << 14
 MAX_WORK = 1 << 17
@@ -373,6 +546,7 @@ class CodecNode:
     semantic_type_ref: int | None = None
     children: tuple[tuple[int, int], ...] = ()
     general_law_dependency: int | None = None
+    interface_codec_id: object | None = None
 
 
 @dataclass(frozen=True)
@@ -399,6 +573,7 @@ class StatementAlias:
     binding_spine_ref: int
     flow: StatementFlowKind
     invocation_target_ref: int | None
+    external_statement: str = ""
 
 
 @dataclass(frozen=True)
@@ -731,14 +906,14 @@ class DerivedEndpointContract:
 
 @dataclass(frozen=True)
 class EndpointSourceView:
-    profile: str
+    profile: object
     purpose: ProjectionPurpose
     semantic_graph: EndpointSemanticGraph
 
 
 @dataclass(frozen=True)
 class OirEndpoint:
-    semantic_profile: str
+    semantic_profile: object
     semantic_graph: EndpointSemanticGraph
     asserted_id: object
 
@@ -757,6 +932,7 @@ class OwnerCodec:
     semantic_type: object | None = None
     children: tuple[tuple[int, str], ...] = ()
     general_law_id: object | None = None
+    interface_codec_id: object | None = None
 
 
 @dataclass(frozen=True)
@@ -778,6 +954,7 @@ class OwnerStatementAlias:
     binding_input: str
     flow: StatementFlowKind
     invocation_input: str | None
+    external_statement: str = ""
 
 
 @dataclass(frozen=True)
@@ -911,10 +1088,84 @@ class OwnerPlanSurface:
 
 @dataclass(frozen=True)
 class FutureOwnerSurface:
+    """Future-only facts admitted under the bounded K3-D supplement law.
+
+    This inert carrier is not authority.  Projection may consume it only
+    through an ``IssuedFutureOwnerSupplement`` minted by the owner-side
+    admission boundary and then joined to live K2/K3-B owner views.
+    """
+
     core: OwnerCoreSurface
     fs: OwnerFsSurface
     interface: OwnerInterfaceSurface
     plan: OwnerPlanSurface | None
+
+
+FutureOwnerSupplement = FutureOwnerSurface
+
+
+_FUTURE_OWNER_SUPPLEMENT_ISSUER = object()
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class FutureOwnerSupplementCapability:
+    supplement_id: object
+    authority_binding: object
+    consumer_id: object
+    purpose_id: object
+    purpose: ProjectionPurpose
+    source_fingerprint: bytes
+    supplement: FutureOwnerSurface
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _FUTURE_OWNER_SUPPLEMENT_ISSUER:
+            raise ValueError("only the bounded future owner may mint a capability")
+
+    def __copy__(self) -> "FutureOwnerSupplementCapability":
+        raise ValueError("live supplement capabilities cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "FutureOwnerSupplementCapability":
+        raise ValueError("live supplement capabilities cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("live supplement capabilities cannot be serialized")
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class IssuedFutureOwnerSupplement:
+    supplement_id: object
+    authority_binding: object
+    authority_binding_id: object
+    purpose: ProjectionPurpose
+    source_fingerprint: bytes
+    supplement: FutureOwnerSurface
+    capability: FutureOwnerSupplementCapability
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _FUTURE_OWNER_SUPPLEMENT_ISSUER:
+            raise ValueError("only the bounded future owner may issue a supplement")
+
+    def __repr__(self) -> str:
+        return "IssuedFutureOwnerSupplement(<live>)"
+
+    def __copy__(self) -> "IssuedFutureOwnerSupplement":
+        raise ValueError("live supplement authority cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "IssuedFutureOwnerSupplement":
+        raise ValueError("live supplement authority cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("live supplement authority cannot be serialized")
+
+
+_PROVISIONAL_SUPPLEMENT_CAPABILITIES: dict[
+    int, FutureOwnerSupplementCapability
+] = {}
+_PROVISIONAL_SUPPLEMENT_AUTHORITIES: dict[int, IssuedFutureOwnerSupplement] = {}
+_LIVE_SUPPLEMENT_CAPABILITIES: dict[int, FutureOwnerSupplementCapability] = {}
+_LIVE_SUPPLEMENT_AUTHORITIES: dict[int, IssuedFutureOwnerSupplement] = {}
 
 
 @dataclass(frozen=True)
@@ -930,6 +1181,23 @@ class ProjectionRequest:
     source_label: str = "source"
     runtime_receipt: object | None = None
     admitted_module_effect: bool = False
+    supplement_authority: IssuedFutureOwnerSupplement | None = None
+
+
+FUTURE_OWNER_SUPPLEMENT_ONLY_PATHS = (
+    "core.claims[*].contract_ref/usage/source-law",
+    "core.reductions[*].contract_ref/output_contracts",
+    "core.terminal.verdict/public_outputs",
+    "fs.state-and-scalar-types",
+    "fs.absorb/squeeze/advance-algorithm-and-evaluation",
+    "fs.challenges[*].domain/fresh/correlation/reduction/evaluator-laws",
+    "interface.codecs[*].shape/type-tree/general-law",
+    "interface.invocation_fibres",
+    "interface.public-derivation-transports",
+    "interface.completions",
+    "plan.recipes[*].evaluation-and-multi-node-graph",
+    "plan.derived_exports[*].value-expression",
+)
 
 
 @dataclass(frozen=True)
@@ -977,11 +1245,60 @@ def canonical_bytes(value: object) -> bytes:
 
 
 def _semantic_id(subject_kind: str, value: object) -> object:
-    return k1.content_id(
+    profile_by_kind = {
+        "pir.endpoint-owner-schema-set": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-owner-adapter-consumer": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-owner-adapter-purpose": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-owner-supplement": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-owner-supplement-binding-payload": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-owner-supplement-no-policy": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-owner-supplement-policy-closure": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-owner-supplement-requirement": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-read-manifest": K3D_SEMANTIC_PROFILES.source_view,
+        "pir.endpoint-source-view": K3D_SEMANTIC_PROFILES.source_view,
+        "oir.endpoint": K3D_SEMANTIC_PROFILES.endpoint_graph,
+        "oir.projection-proposition": K3D_SEMANTIC_PROFILES.projection,
+        "oir.projection-checker-basis": K3D_SEMANTIC_PROFILES.validation,
+        "oir.projection-validation-request": K3D_SEMANTIC_PROFILES.validation,
+    }
+    try:
+        profile = profile_by_kind[subject_kind]
+    except KeyError as error:
+        raise TypeError(f"K3-D subject kind {subject_kind!r} has no language profile") from error
+    identifier = k1.profiled_content_id(
         subject_kind,
-        k1.encode_datum(k1.BytesValue(canonical_bytes(value))),
+        profile.identity,
+        k1.BytesValue(canonical_bytes(value)),
         semantic_regime=k1.SEMANTIC_REGIME_ID,
     )
+    profile_bundle = {
+        K3D_SEMANTIC_PROFILES.endpoint_graph.identity: (
+            K3D_SEMANTIC_PROFILES.endpoint_graph_bundle
+        ),
+        K3D_SEMANTIC_PROFILES.source_view.identity: (
+            K3D_SEMANTIC_PROFILES.source_view_bundle
+        ),
+        K3D_SEMANTIC_PROFILES.projection.identity: (
+            K3D_SEMANTIC_PROFILES.projection_bundle
+        ),
+        K3D_SEMANTIC_PROFILES.validation.identity: (
+            K3D_SEMANTIC_PROFILES.validation_bundle
+        ),
+    }[profile.identity]
+    k1.authenticate_profiled_semantic_content(
+        identifier,
+        profile.identity,
+        k1.BytesValue(canonical_bytes(value)),
+        profile_bundle,
+        supported_profiles=(profile.identity,),
+    )
+    return identifier
+
+
+CHECKER_BASIS = _semantic_id(
+    "oir.projection-checker-basis",
+    CHECKER_BASIS_LABEL,
+)
 
 
 def _id_text(value: object, expected_kind: str | None = None) -> str:
@@ -1002,7 +1319,13 @@ def _type_body(value_type: object) -> str:
 
 
 def _fixed_ref(subject_kind: str, label: str) -> object:
-    return k3.fixture_semantic_ref(subject_kind, f"k3d:{label}")
+    return k1.content_id(
+        subject_kind,
+        k1.encode_datum(
+            k1.DatumRecord(((0, k1.Symbol(f"k3d:{label}")),))
+        ),
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
 
 
 def _algorithm(label: str) -> object:
@@ -1136,60 +1459,122 @@ def _owner_fs(core: object, construction: object) -> OwnerFsSurface:
     )
 
 
-def _codec_for_type(value_type: object) -> OwnerCodec:
+def _codec_for_type(
+    value_type: object,
+    interface_codec_id: object = None,
+) -> OwnerCodec:
+    codec_id = k3.IDENTITY_CODEC if interface_codec_id is None else interface_codec_id
     body = _type_body(value_type)
-    return OwnerCodec(f"identity:{body}", CodecKind.IDENTITY, value_type=value_type)
+    identity = codec_id == k3.IDENTITY_CODEC
+    return OwnerCodec(
+        f"interface:{_id_text(codec_id)}:{body}",
+        CodecKind.IDENTITY if identity else CodecKind.GENERAL,
+        value_type=value_type,
+        general_law_id=(
+            None
+            if identity
+            else _fixed_ref(
+                "foundation.codec-law",
+                f"interface-codec:{_id_text(codec_id)}",
+            )
+        ),
+        interface_codec_id=codec_id,
+    )
 
 
 def _future_interface(
     core: object,
+    interface: object | None = None,
     *,
     public_derivations: Sequence[str] = (),
 ) -> OwnerInterfaceSurface:
-    owner_types: list[object] = [_sort_type(item.value_sort) for item in core.inputs]
-    owner_types.extend(_occurrence_type(core, item) for item in core.schedule)
-    owner_types.extend((k3.BYTES, k3.NAT, k3.BYTES32))
-    codecs_by_body = {_type_body(item): _codec_for_type(item) for item in owner_types}
-    codecs = tuple(codecs_by_body[key] for key in sorted(codecs_by_body))
+    if interface is None:
+        interface = k3.default_interface(
+            core,
+            None,
+            k2.ChallengeInterpretation.FRESH,
+            expose_all_transports=True,
+        )
+    input_assignment = {item.core_input: item for item in interface.inputs}
+    transport_exposure = {item.occurrence: item for item in interface.transports}
 
-    def codec_key(value_type: object) -> str:
-        return codecs_by_body[_type_body(value_type)].codec_key
+    codec_uses: list[tuple[object, object]] = [
+        (_sort_type(item.value_sort), input_assignment[item.name].codec_id)
+        for item in core.inputs
+    ]
+    codec_uses.extend(
+        (
+            _occurrence_type(core, item),
+            transport_exposure[item.name].codec_id,
+        )
+        for item in core.schedule
+        if item.kind
+        in {
+            k2.OccurrenceKind.PROVER_MESSAGE,
+            k2.OccurrenceKind.VERIFIER_MESSAGE,
+        }
+    )
+    codec_uses.extend(
+        (item, k3.IDENTITY_CODEC) for item in (k3.BYTES, k3.NAT, k3.BYTES32)
+    )
+    codecs_by_use = {
+        (_type_body(value_type), _id_text(codec_id)): _codec_for_type(
+            value_type, codec_id
+        )
+        for value_type, codec_id in codec_uses
+    }
+    codecs = tuple(codecs_by_use[key] for key in sorted(codecs_by_use))
+
+    def codec_key(
+        value_type: object,
+        codec_id: object = k3.IDENTITY_CODEC,
+    ) -> str:
+        return codecs_by_use[(_type_body(value_type), _id_text(codec_id))].codec_key
 
     slots: list[OwnerSlot] = []
     fibres: list[OwnerInvocationFibre] = []
     aliases: list[OwnerStatementAlias] = []
     transports: list[OwnerTransport] = []
     for item in core.inputs:
+        assignment = input_assignment[item.name]
         key = f"input:{item.name}"
         slots.append(
             OwnerSlot(
                 key,
-                f"input.{item.name}",
-                codec_key(_sort_type(item.value_sort)),
+                assignment.external_coordinate,
+                codec_key(_sort_type(item.value_sort), assignment.codec_id),
             )
         )
         fibres.append(OwnerInvocationFibre(key, (item.name,)))
-        if item.role is k2.InputRole.STATEMENT:
-            aliases.append(
-                OwnerStatementAlias(
-                    key,
-                    item.name,
-                    StatementFlowKind.SUPPLIES_INVOCATION,
-                    item.name,
-                )
+    assignment_by_binding = {
+        (item.scope, item.name): input_assignment[item.name] for item in core.inputs
+    }
+    for member in interface.statements:
+        assignment = assignment_by_binding[
+            (member.binding.scope, member.binding.input_name)
+        ]
+        aliases.append(
+            OwnerStatementAlias(
+                f"input:{assignment.core_input}",
+                member.binding.input_name,
+                StatementFlowKind.SUPPLIES_INVOCATION,
+                assignment.core_input,
+                member.external_statement,
             )
+        )
     for item in core.schedule:
         if item.kind not in {
             k2.OccurrenceKind.PROVER_MESSAGE,
             k2.OccurrenceKind.VERIFIER_MESSAGE,
         }:
             continue
+        exposure = transport_exposure[item.name]
         key = f"transport:{item.name}"
         slots.append(
             OwnerSlot(
                 key,
-                f"effect.{item.name}",
-                codec_key(_occurrence_type(core, item)),
+                exposure.external_coordinate,
+                codec_key(_occurrence_type(core, item), exposure.codec_id),
             )
         )
         source = (
@@ -1330,13 +1715,16 @@ def _future_core(core: object) -> OwnerCoreSurface:
         for item in core.reductions
     )
     claims: list[OwnerClaim] = []
-    for name in core.initial_claims:
-        statement = next(
-            (item for item in core.inputs if item.role is k2.InputRole.STATEMENT),
-            core.inputs[0] if core.inputs else None,
+    statement_bindings = tuple(
+        item for item in core.inputs if item.role is k2.InputRole.STATEMENT
+    )
+    if core.initial_claims and len(statement_bindings) != 1:
+        raise ValueError(
+            "the bounded initial-claim supplement law requires exactly one "
+            "Statement binding"
         )
-        if statement is None:
-            raise ValueError("a nonempty initial-claim fixture needs a binding source")
+    for name in core.initial_claims:
+        statement = statement_bindings[0]
         claims.append(
             OwnerClaim(
                 name,
@@ -1389,27 +1777,236 @@ def _future_owner(
     construction: object,
     plan: object | None,
     *,
+    interface: object | None = None,
     public_derivations: Sequence[str] = (),
 ) -> FutureOwnerSurface:
     return FutureOwnerSurface(
         _future_core(core),
         _owner_fs(core, construction),
-        _future_interface(core, public_derivations=public_derivations),
+        _future_interface(
+            core,
+            interface,
+            public_derivations=public_derivations,
+        ),
         None if plan is None else _future_plan(core, plan),
     )
+
+
+def future_owner_supplement(
+    core: object,
+    construction: object,
+    interface: object,
+    plan: object | None,
+    *,
+    public_derivations: Sequence[str] = (),
+) -> FutureOwnerSupplement:
+    """Build an inert fixture candidate; this function mints no authority."""
+
+    return _future_owner(
+        core,
+        construction,
+        plan,
+        interface=interface,
+        public_derivations=public_derivations,
+    )
+
+
+def _supplement_source_fingerprint(request: ProjectionRequest) -> bytes:
+    if request.construction is None:
+        raise ValueError("future-owner supplement requires one FS construction")
+    protocol = k3.protocol_id(
+        request.core,
+        request.construction,
+        request.interpretation,
+    )
+    interface = k3.interface_id(
+        request.core,
+        request.construction,
+        request.interpretation,
+        request.interface,
+    )
+    plan = (
+        None
+        if request.plan is None
+        else k3.plan_id(
+            request.core,
+            request.construction,
+            request.interpretation,
+            request.plan,
+        )
+    )
+    return canonical_bytes(
+        (
+            k2.core_id(request.core),
+            k2.construction_id(request.core, request.construction),
+            protocol,
+            interface,
+            plan,
+            _purpose(request.role),
+        )
+    )
+
+
+def _profiled_source_datum_id(subject_kind: str, body: object) -> object:
+    if subject_kind != "pir.endpoint-owner-supplement-authority-binding":
+        raise TypeError("unsupported profiled K3-D source datum")
+    identifier = k1.profiled_content_id(
+        subject_kind,
+        SOURCE_PROFILE,
+        body,
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+    k1.authenticate_profiled_semantic_content(
+        identifier,
+        SOURCE_PROFILE,
+        body,
+        K3D_SEMANTIC_PROFILES.source_view_bundle,
+        supported_profiles=(SOURCE_PROFILE,),
+    )
+    return identifier
+
+
+def issue_future_owner_supplement(request: object) -> Answer:
+    """Form one inert provisional supplement admission.
+
+    The returned bearer is not live projection authority.  K3-D activates the
+    exact same bearer only after joining and checking every available K2/K3-B
+    owner view in :func:`check_projection_owner_adapter`.
+    """
+
+    if type(request) is not ProjectionRequest:
+        return _answer(OutcomeKind.MALFORMED, reason="wrong supplement request carrier")
+    if request.future_owner is None:
+        return _answer(
+            OutcomeKind.MISSING_DEPENDENCY,
+            reason="future-owner supplement candidate is absent",
+        )
+    shape = _validate_future_owner_shape(request)
+    if shape.kind is not OutcomeKind.AFFIRMATIVE:
+        return shape
+    overlap = _validate_future_owner_overlap(request)
+    if overlap.kind is not OutcomeKind.AFFIRMATIVE:
+        return overlap
+    try:
+        fingerprint = _supplement_source_fingerprint(request)
+        supplement_id = _semantic_id(
+            "pir.endpoint-owner-supplement",
+            (fingerprint, request.future_owner),
+        )
+        consumer_id = _semantic_id(
+            "pir.endpoint-owner-adapter-consumer",
+            "checked-projection-owner-adapter-v0",
+        )
+        purpose_id = _semantic_id(
+            "pir.endpoint-owner-adapter-purpose",
+            (supplement_id, _purpose(request.role)),
+        )
+        owner = k1.Symbol("pir")
+        family = k1.Symbol("endpoint-owner-supplement")
+        requirement_id = _semantic_id(
+            "pir.endpoint-owner-supplement-requirement",
+            (
+                supplement_id,
+                consumer_id,
+                purpose_id,
+                "fresh-identical-bearer-capability-v0",
+            ),
+        )
+        requirement = k1.OwnerCapabilityRequirement(owner, family, requirement_id)
+        no_policy_id = _semantic_id(
+            "pir.endpoint-owner-supplement-no-policy",
+            (supplement_id, "no-owner-operation-after-admission-v0"),
+        )
+        closure_id = _semantic_id(
+            "pir.endpoint-owner-supplement-policy-closure",
+            (supplement_id, no_policy_id),
+        )
+        payload_id = _semantic_id(
+            "pir.endpoint-owner-supplement-binding-payload",
+            (supplement_id, fingerprint, consumer_id, purpose_id),
+        )
+        binding = k1.PortableSourceAuthorityBinding(
+            owner,
+            family,
+            supplement_id,
+            payload_id,
+            k1.OwnerDefinesNoOperationPolicy(no_policy_id),
+            closure_id,
+            requirement,
+        )
+        binding_id = _profiled_source_datum_id(
+            "pir.endpoint-owner-supplement-authority-binding",
+            binding.body(),
+        )
+        capability = FutureOwnerSupplementCapability(
+            supplement_id,
+            binding,
+            consumer_id,
+            purpose_id,
+            _purpose(request.role),
+            fingerprint,
+            request.future_owner,
+            _FUTURE_OWNER_SUPPLEMENT_ISSUER,
+        )
+        issued = IssuedFutureOwnerSupplement(
+            supplement_id,
+            binding,
+            binding_id,
+            _purpose(request.role),
+            fingerprint,
+            request.future_owner,
+            capability,
+            _FUTURE_OWNER_SUPPLEMENT_ISSUER,
+        )
+        _PROVISIONAL_SUPPLEMENT_CAPABILITIES[id(capability)] = capability
+        _PROVISIONAL_SUPPLEMENT_AUTHORITIES[id(issued)] = issued
+    except (TypeError, ValueError, k1.ModelError) as error:
+        return _answer(
+            OutcomeKind.REFUSED,
+            reason=f"future-owner supplement authority failed: {error}",
+        )
+    return _answer(OutcomeKind.AFFIRMATIVE, issued)
+
+
+def bind_future_owner_supplement(request: object) -> Answer:
+    """Return a request carrying the exact owner-issued supplement authority."""
+
+    issued = issue_future_owner_supplement(request)
+    if issued.kind is not OutcomeKind.AFFIRMATIVE:
+        return issued
+    assert type(request) is ProjectionRequest
+    return _answer(
+        OutcomeKind.AFFIRMATIVE,
+        replace(request, supplement_authority=issued.value),
+    )
+
+
+def _require_bound_supplement(request: ProjectionRequest) -> ProjectionRequest:
+    bound = bind_future_owner_supplement(request)
+    if bound.kind is not OutcomeKind.AFFIRMATIVE:
+        raise ValueError(f"fixture supplement admission failed: {bound.reason}")
+    assert type(bound.value) is ProjectionRequest
+    return bound.value
 
 
 def p01_request(role: EndpointRole = EndpointRole.VERIFIER) -> ProjectionRequest:
     case = k3.schnorr_case()
     plan = case.plan if role is EndpointRole.PROVER else None
-    return ProjectionRequest(
-        case.core,
-        case.construction,
-        k2.ChallengeInterpretation.FIAT_SHAMIR,
-        case.interface,
-        role,
-        plan,
-        _future_owner(case.core, case.construction, plan),
+    return _require_bound_supplement(
+        ProjectionRequest(
+            case.core,
+            case.construction,
+            k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            role,
+            plan,
+            future_owner_supplement(
+                case.core,
+                case.construction,
+                case.interface,
+                plan,
+            ),
+        )
     )
 
 
@@ -1421,6 +2018,7 @@ def live_p01_request(role: EndpointRole = EndpointRole.VERIFIER) -> ProjectionRe
     return replace(
         p01_request(role),
         future_owner=None,
+        supplement_authority=None,
         provenance="live-k3b-carrier",
     )
 
@@ -1438,25 +2036,29 @@ def trivial_requests() -> tuple[ProjectionRequest, ProjectionRequest]:
         k3.protocol_id(core, construction, interpretation), (), (), (), (), ()
     )
     k3.check_plan_realizes(core, construction, interpretation, plan)
-    verifier = ProjectionRequest(
-        core,
-        construction,
-        interpretation,
-        interface,
-        EndpointRole.VERIFIER,
-        None,
-        _future_owner(core, construction, None),
-        "independent-trivial-control",
+    verifier = _require_bound_supplement(
+        ProjectionRequest(
+            core,
+            construction,
+            interpretation,
+            interface,
+            EndpointRole.VERIFIER,
+            None,
+            future_owner_supplement(core, construction, interface, None),
+            "independent-trivial-control",
+        )
     )
-    prover = ProjectionRequest(
-        core,
-        construction,
-        interpretation,
-        interface,
-        EndpointRole.PROVER,
-        plan,
-        _future_owner(core, construction, plan),
-        "independent-trivial-control",
+    prover = _require_bound_supplement(
+        ProjectionRequest(
+            core,
+            construction,
+            interpretation,
+            interface,
+            EndpointRole.PROVER,
+            plan,
+            future_owner_supplement(core, construction, interface, plan),
+            "independent-trivial-control",
+        )
     )
     return verifier, prover
 
@@ -1486,25 +2088,29 @@ def verifier_message_requests(
         protocol_id=k3.protocol_id(core, construction, interpretation),
     )
     k3.check_plan_realizes(core, construction, interpretation, plan)
-    verifier = ProjectionRequest(
-        core,
-        construction,
-        interpretation,
-        interface,
-        EndpointRole.VERIFIER,
-        None,
-        _future_owner(core, construction, None),
-        "verifier-message-control",
+    verifier = _require_bound_supplement(
+        ProjectionRequest(
+            core,
+            construction,
+            interpretation,
+            interface,
+            EndpointRole.VERIFIER,
+            None,
+            future_owner_supplement(core, construction, interface, None),
+            "verifier-message-control",
+        )
     )
-    prover = ProjectionRequest(
-        core,
-        construction,
-        interpretation,
-        interface,
-        EndpointRole.PROVER,
-        plan,
-        _future_owner(core, construction, plan),
-        "verifier-message-control",
+    prover = _require_bound_supplement(
+        ProjectionRequest(
+            core,
+            construction,
+            interpretation,
+            interface,
+            EndpointRole.PROVER,
+            plan,
+            future_owner_supplement(core, construction, interface, plan),
+            "verifier-message-control",
+        )
     )
     return verifier, prover
 
@@ -1529,25 +2135,29 @@ def nested_scope_requests() -> tuple[ProjectionRequest, ProjectionRequest]:
     )
     k3.check_plan_realizes(core, construction, interpretation, plan)
     return (
-        ProjectionRequest(
-            core,
-            construction,
-            interpretation,
-            interface,
-            EndpointRole.VERIFIER,
-            None,
-            _future_owner(core, construction, None),
-            "nested-scope",
+        _require_bound_supplement(
+            ProjectionRequest(
+                core,
+                construction,
+                interpretation,
+                interface,
+                EndpointRole.VERIFIER,
+                None,
+                future_owner_supplement(core, construction, interface, None),
+                "nested-scope",
+            )
         ),
-        ProjectionRequest(
-            core,
-            construction,
-            interpretation,
-            interface,
-            EndpointRole.PROVER,
-            plan,
-            _future_owner(core, construction, plan),
-            "nested-scope",
+        _require_bound_supplement(
+            ProjectionRequest(
+                core,
+                construction,
+                interpretation,
+                interface,
+                EndpointRole.PROVER,
+                plan,
+                future_owner_supplement(core, construction, interface, plan),
+                "nested-scope",
+            )
         ),
     )
 
@@ -1586,11 +2196,19 @@ def stateful_p01_request() -> ProjectionRequest:
     k3.check_plan_realizes(
         request.core, request.construction, request.interpretation, changed
     )
-    return replace(
-        request,
-        plan=changed,
-        future_owner=_future_owner(request.core, request.construction, changed),
-        provenance="stateful-p01",
+    return _require_bound_supplement(
+        replace(
+            request,
+            plan=changed,
+            future_owner=future_owner_supplement(
+                request.core,
+                request.construction,
+                request.interface,
+                changed,
+            ),
+            supplement_authority=None,
+            provenance="stateful-p01",
+        )
     )
 
 
@@ -1603,22 +2221,30 @@ def public_derivation_requests(
         verifier, prover = p01_requests()
         names = () if count == 0 else ("challenge",)
         return (
-            replace(
-                verifier,
-                future_owner=_future_owner(
-                    verifier.core,
-                    verifier.construction,
-                    None,
-                    public_derivations=names,
+            _require_bound_supplement(
+                replace(
+                    verifier,
+                    future_owner=future_owner_supplement(
+                        verifier.core,
+                        verifier.construction,
+                        verifier.interface,
+                        None,
+                        public_derivations=names,
+                    ),
+                    supplement_authority=None,
                 ),
             ),
-            replace(
-                prover,
-                future_owner=_future_owner(
-                    prover.core,
-                    prover.construction,
-                    prover.plan,
-                    public_derivations=names,
+            _require_bound_supplement(
+                replace(
+                    prover,
+                    future_owner=future_owner_supplement(
+                        prover.core,
+                        prover.construction,
+                        prover.interface,
+                        prover.plan,
+                        public_derivations=names,
+                    ),
+                    supplement_authority=None,
                 ),
             ),
         )
@@ -1660,25 +2286,41 @@ def public_derivation_requests(
     k3.check_plan_realizes(core, construction, interpretation, plan)
     names = ("challenge", "challenge-2")
     return (
-        ProjectionRequest(
-            core,
-            construction,
-            interpretation,
-            interface,
-            EndpointRole.VERIFIER,
-            None,
-            _future_owner(core, construction, None, public_derivations=names),
-            "two-public-derivations",
+        _require_bound_supplement(
+            ProjectionRequest(
+                core,
+                construction,
+                interpretation,
+                interface,
+                EndpointRole.VERIFIER,
+                None,
+                future_owner_supplement(
+                    core,
+                    construction,
+                    interface,
+                    None,
+                    public_derivations=names,
+                ),
+                "two-public-derivations",
+            )
         ),
-        ProjectionRequest(
-            core,
-            construction,
-            interpretation,
-            interface,
-            EndpointRole.PROVER,
-            plan,
-            _future_owner(core, construction, plan, public_derivations=names),
-            "two-public-derivations",
+        _require_bound_supplement(
+            ProjectionRequest(
+                core,
+                construction,
+                interpretation,
+                interface,
+                EndpointRole.PROVER,
+                plan,
+                future_owner_supplement(
+                    core,
+                    construction,
+                    interface,
+                    plan,
+                    public_derivations=names,
+                ),
+                "two-public-derivations",
+            )
         ),
     )
 
@@ -1817,6 +2459,7 @@ _OWNER_SCHEMA_FIELDS: tuple[tuple[str, object | None, tuple[str, ...]], ...] = (
             "semantic_type",
             "children",
             "general_law_id",
+            "interface_codec_id",
         ),
     ),
     ("OwnerSlot", OwnerSlot, ("slot_key", "external_key", "codec_key")),
@@ -1824,7 +2467,13 @@ _OWNER_SCHEMA_FIELDS: tuple[tuple[str, object | None, tuple[str, ...]], ...] = (
     (
         "OwnerStatementAlias",
         OwnerStatementAlias,
-        ("slot_key", "binding_input", "flow", "invocation_input"),
+        (
+            "slot_key",
+            "binding_input",
+            "flow",
+            "invocation_input",
+            "external_statement",
+        ),
     ),
     (
         "OwnerTransport",
@@ -1963,7 +2612,6 @@ def reflected_owner_schema_paths(
 ROOT_GRAMMAR_LAW = "RootGrammarLawV0"
 READ_LAW = "K3DReadLawV0"
 OWNER_SCHEMA_SET_BODY = (
-    _stable(k1.SEMANTIC_REGIME_ID),
     ROOT_GRAMMAR_LAW,
 )
 OWNER_SCHEMA_SET_ID = _semantic_id(
@@ -1974,7 +2622,6 @@ OWNER_SCHEMA_SET_ID = _semantic_id(
 
 def read_manifest_body(purpose: ProjectionPurpose) -> tuple[object, ...]:
     return (
-        SOURCE_PROFILE,
         purpose,
         _id_text(OWNER_SCHEMA_SET_ID, "pir.endpoint-owner-schema-set"),
         READ_LAW,
@@ -2110,15 +2757,586 @@ def owner_field_disposition(
 
 
 _SUPPORT_ISSUER = object()
+_OWNER_ADAPTER_ISSUER = object()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class CheckedProjectionOwnerAdapter:
+    _issuer: object
+    request: ProjectionRequest
+    purpose: ProjectionPurpose
+    k2_static_views: tuple[object, ...]
+    checked_fs_construction: object
+    fs_construction_view: object
+    interface_view: object
+    checked_plan: object | None
+    supplement: IssuedFutureOwnerSupplement
+    supplement_only_paths: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _OWNER_ADAPTER_ISSUER:
+            raise ValueError("only K3-D may issue a checked projection-owner adapter")
+
+    def __repr__(self) -> str:
+        return "CheckedProjectionOwnerAdapter(<live>)"
+
+    def __copy__(self) -> "CheckedProjectionOwnerAdapter":
+        raise ValueError("checked owner adapters cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "CheckedProjectionOwnerAdapter":
+        raise ValueError("checked owner adapters cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("checked owner adapters cannot be serialized")
+
+
+_LIVE_OWNER_ADAPTERS: dict[int, CheckedProjectionOwnerAdapter] = {}
+
+
+def _is_live_joined_supplement(
+    request: ProjectionRequest,
+    authority: object,
+) -> bool:
+    if (
+        type(authority) is not IssuedFutureOwnerSupplement
+        or authority._issuer is not _FUTURE_OWNER_SUPPLEMENT_ISSUER
+        or _LIVE_SUPPLEMENT_AUTHORITIES.get(id(authority)) is not authority
+        or type(authority.capability) is not FutureOwnerSupplementCapability
+        or _LIVE_SUPPLEMENT_CAPABILITIES.get(id(authority.capability))
+        is not authority.capability
+        or authority.capability._issuer is not _FUTURE_OWNER_SUPPLEMENT_ISSUER
+        or authority.capability.authority_binding is not authority.authority_binding
+        or authority.capability.supplement is not authority.supplement
+        or authority.capability.supplement_id != authority.supplement_id
+        or authority.capability.purpose is not authority.purpose
+        or authority.capability.source_fingerprint != authority.source_fingerprint
+        or authority.supplement is not request.future_owner
+        or request.supplement_authority is not authority
+        or authority.purpose is not _purpose(request.role)
+    ):
+        return False
+    try:
+        fingerprint = _supplement_source_fingerprint(request)
+        supplement_id = _semantic_id(
+            "pir.endpoint-owner-supplement",
+            (fingerprint, request.future_owner),
+        )
+        expected_consumer_id = _semantic_id(
+            "pir.endpoint-owner-adapter-consumer",
+            "checked-projection-owner-adapter-v0",
+        )
+        expected_purpose_id = _semantic_id(
+            "pir.endpoint-owner-adapter-purpose",
+            (supplement_id, _purpose(request.role)),
+        )
+        authority.authority_binding.body()
+        return (
+            authority.source_fingerprint == fingerprint
+            and authority.supplement_id == supplement_id
+            and authority.authority_binding.owner_source_coordinate
+            == supplement_id
+            and authority.authority_binding_id
+            == _profiled_source_datum_id(
+                "pir.endpoint-owner-supplement-authority-binding",
+                authority.authority_binding.body(),
+            )
+            and authority.capability.consumer_id == expected_consumer_id
+            and authority.capability.purpose_id == expected_purpose_id
+        )
+    except (AttributeError, TypeError, ValueError, k1.ModelError):
+        return False
+
+
+def _is_live_owner_adapter(
+    adapter: object,
+    *,
+    expected_request: ProjectionRequest | None = None,
+) -> bool:
+    if (
+        type(adapter) is not CheckedProjectionOwnerAdapter
+        or adapter._issuer is not _OWNER_ADAPTER_ISSUER
+        or _LIVE_OWNER_ADAPTERS.get(id(adapter)) is not adapter
+        or type(adapter.request) is not ProjectionRequest
+        or (expected_request is not None and adapter.request is not expected_request)
+        or adapter.purpose is not _purpose(adapter.request.role)
+        or adapter.supplement_only_paths != FUTURE_OWNER_SUPPLEMENT_ONLY_PATHS
+        or not _is_live_joined_supplement(adapter.request, adapter.supplement)
+    ):
+        return False
+    authority = adapter.supplement
+    consumer_id = authority.capability.consumer_id
+    purpose_id = authority.capability.purpose_id
+    try:
+        _static_view_payload(adapter.k2_static_views, consumer_id, purpose_id)
+        if not k2.validate_issued_pir_static_view(
+            adapter.fs_construction_view,
+            expected_consumer_id=consumer_id,
+            expected_purpose_id=purpose_id,
+        ):
+            return False
+        if not k3.validate_issued_protocol_interface_correspondence_view(
+            adapter.interface_view,
+            expected_consumer_id=consumer_id,
+            expected_purpose_id=purpose_id,
+        ):
+            return False
+        checked_fs = adapter.checked_fs_construction
+        if (
+            type(checked_fs) is not k2.CheckedFSConstructionIssue
+            or k2._FS_CONSTRUCTION_LIVE_ISSUES.get(id(checked_fs)) is not checked_fs
+            or type(checked_fs.capability) is not k2.CheckedFSConstructionCapability
+            or k2._FS_CONSTRUCTION_LIVE_CAPABILITIES.get(id(checked_fs.capability))
+            is not checked_fs.capability
+            or checked_fs.capability.consumer_id != consumer_id
+            or checked_fs.capability.purpose_id != purpose_id
+            or checked_fs.capability.result is not checked_fs.result
+            or checked_fs.capability.source_binding is not checked_fs.source_binding
+            or checked_fs.capability._sources[0] is not adapter.request.core
+            or checked_fs.capability._sources[1] is not adapter.request.core
+            or checked_fs.capability._sources[2] is not adapter.request.construction
+        ):
+            return False
+        if adapter.request.role is EndpointRole.VERIFIER:
+            return adapter.checked_plan is None
+        expected_plan = k3.check_plan_realizes(
+            adapter.request.core,
+            adapter.request.construction,
+            adapter.request.interpretation,
+            adapter.request.plan,
+        )
+        return (
+            type(adapter.checked_plan) is k3.CheckedPlanRealizes
+            and adapter.checked_plan.protocol_id == expected_plan.protocol_id
+            and adapter.checked_plan.plan_id == expected_plan.plan_id
+        )
+    except (AttributeError, IndexError, TypeError, ValueError, k1.ModelError):
+        return False
+
+
+def _closed_static_manifest(
+    kind: object,
+    requested: tuple[object, ...],
+) -> tuple[object, ...]:
+    return k2.required_static_view_read_closure(kind, requested)
+
+
+def _lift_owner_view_failure(result: object, label: str) -> Answer | None:
+    if result.kind is k2.QualifiedViewOutcomeKind.AFFIRMATIVE:
+        return None
+    try:
+        kind = OutcomeKind(result.kind.value)
+    except (AttributeError, ValueError):
+        kind = OutcomeKind.CHECKER_FAILURE
+    return _answer(kind, reason=f"{label} owner view failed: {result.detail}")
+
+
+def _issue_k2_adapter_views(
+    request: ProjectionRequest,
+    consumer_id: object,
+    purpose_id: object,
+) -> Answer:
+    core_requests = (
+        (
+            k2.StaticViewKind.PUBLIC_BINDING,
+            (k2.StaticViewField.PB_BINDINGS,),
+        ),
+        (
+            k2.StaticViewKind.PUBLIC_COIN,
+            (k2.StaticViewField.PC_CHALLENGES,),
+        ),
+        (
+            k2.StaticViewKind.EFFECT,
+            (
+                k2.StaticViewField.EF_MESSAGES,
+                k2.StaticViewField.EF_ORACLES,
+                k2.StaticViewField.EF_TERMINALS,
+                k2.StaticViewField.EF_EXTENSIONS,
+            ),
+        ),
+        (
+            k2.StaticViewKind.CLAIM_REDUCTION,
+            (k2.StaticViewField.CR_TERMINAL_DISPOSITIONS,),
+        ),
+    ) + (
+        (
+            k2.StaticViewKind.STRATEGY_DECISION,
+            (
+                k2.StaticViewField.SD_GUARANTEED_READS,
+                k2.StaticViewField.SD_LEGAL_MOVE_TYPES,
+            ),
+        ),
+    ) * (request.role is EndpointRole.PROVER)
+    issued: list[object] = []
+    for kind, leaves in core_requests:
+        manifest = _closed_static_manifest(kind, leaves)
+        result = k2.issue_core_static_view(
+            request.core,
+            kind,
+            manifest,
+            consumer_id=consumer_id,
+            purpose_id=purpose_id,
+        )
+        failure = _lift_owner_view_failure(result, kind.value)
+        if failure is not None:
+            return failure
+        issued.append(result.value)
+
+    construction_requests = (
+        (
+            k2.StaticViewKind.TRANSCRIPT_DECLARATION,
+            (k2.StaticViewField.TD_FRAME_SCHEDULE,),
+        ),
+        (
+            k2.StaticViewKind.REQUIRED_INFLUENCE,
+            (k2.StaticViewField.RI_PREFIX_LAW,),
+        ),
+        (
+            k2.StaticViewKind.CHALLENGE_TRANSITION,
+            (k2.StaticViewField.CT_RETRY_FAILURE,),
+        ),
+    )
+    for kind, leaves in construction_requests:
+        manifest = _closed_static_manifest(kind, leaves)
+        result = k2.issue_construction_static_view(
+            request.core,
+            request.construction,
+            kind,
+            manifest,
+            consumer_id=consumer_id,
+            purpose_id=purpose_id,
+        )
+        failure = _lift_owner_view_failure(result, kind.value)
+        if failure is not None:
+            return failure
+        issued.append(result.value)
+    return _answer(OutcomeKind.AFFIRMATIVE, tuple(issued))
+
+
+def _issue_fs_adapter_view(
+    request: ProjectionRequest,
+    consumer_id: object,
+    purpose_id: object,
+) -> Answer:
+    checked = k2.check_fs_construction(
+        request.core,
+        request.core,
+        request.construction,
+        consumer_id=consumer_id,
+        purpose_id=purpose_id,
+    )
+    failure = _lift_owner_view_failure(checked, "checked FS construction")
+    if failure is not None:
+        return failure
+    manifest = _closed_static_manifest(
+        k2.StaticViewKind.FS_CONSTRUCTION,
+        (k2.StaticViewField.FS_CONCLUSION,),
+    )
+    view = k2.issue_fs_construction_view(
+        checked.value,
+        manifest,
+        expected_consumer_id=consumer_id,
+        expected_purpose_id=purpose_id,
+        view_consumer_id=consumer_id,
+        view_purpose_id=purpose_id,
+    )
+    failure = _lift_owner_view_failure(view, "FS construction")
+    if failure is not None:
+        return failure
+    return _answer(OutcomeKind.AFFIRMATIVE, (checked.value, view.value))
+
+
+def _issue_interface_adapter_view(
+    request: ProjectionRequest,
+    consumer_id: object,
+    purpose_id: object,
+) -> Answer:
+    requested = tuple(
+        k3.ProtocolInterfaceRead(
+            k3.ProtocolInterfaceReadKind.INVOCATION_ASSIGNMENT,
+            item.core_input,
+        )
+        for item in request.interface.inputs
+    ) + tuple(
+        k3.ProtocolInterfaceRead(
+            k3.ProtocolInterfaceReadKind.STATEMENT_MEMBER,
+            item.external_statement,
+        )
+        for item in request.interface.statements
+    ) + tuple(
+        k3.ProtocolInterfaceRead(
+            k3.ProtocolInterfaceReadKind.TRANSPORT_ENTRY,
+            item.occurrence,
+        )
+        for item in request.interface.transports
+    )
+    try:
+        manifest = k3.CorrespondenceReadManifest(
+            k3.required_protocol_interface_read_closure(
+                request.interface,
+                requested,
+            )
+        )
+    except k3.K3Error as error:
+        return _answer(
+            OutcomeKind.MALFORMED,
+            reason=f"Interface read closure failed: {error}",
+        )
+    except Exception as error:
+        return _answer(
+            OutcomeKind.CHECKER_FAILURE,
+            reason=f"Interface read closure checker failed: {error}",
+        )
+    result = k3.issue_protocol_interface_correspondence_view(
+        request.core,
+        request.construction,
+        request.interpretation,
+        request.interface,
+        manifest,
+        consumer_id=consumer_id,
+        purpose_id=purpose_id,
+    )
+    failure = _lift_owner_view_failure(result, "ProtocolInterface")
+    if failure is not None:
+        return failure
+    if not k3.validate_issued_protocol_interface_correspondence_view(
+        result.value,
+        expected_consumer_id=consumer_id,
+        expected_purpose_id=purpose_id,
+    ):
+        return _answer(
+            OutcomeKind.CHECKER_FAILURE,
+            reason="ProtocolInterface owner authority is not exact",
+        )
+    return _answer(OutcomeKind.AFFIRMATIVE, result.value)
+
+
+def _static_view_payload(
+    issued: Sequence[object],
+    consumer_id: object,
+    purpose_id: object,
+) -> Mapping[object, object]:
+    values: dict[object, object] = {}
+    for item in issued:
+        if type(item) is not k2.IssuedPIRStaticView:
+            raise ValueError("K2 adapter view has the wrong issued carrier")
+        if not k2.validate_issued_pir_static_view(
+            item,
+            expected_consumer_id=consumer_id,
+            expected_purpose_id=purpose_id,
+        ):
+            raise ValueError("K2 adapter view authority is not exact")
+        for entry in item.projection.entries:
+            if entry.field in values:
+                raise ValueError("K2 adapter views duplicate one owner field")
+            values[entry.field] = entry.value
+    return MappingProxyType(values)
+
+
+def check_projection_owner_adapter(
+    request: object,
+    *,
+    work_limit: int = MAX_WORK,
+) -> Answer:
+    """Join live owner views with one owner-admitted, purpose-bound supplement."""
+
+    if type(work_limit) is not int or work_limit <= 0:
+        return _answer(OutcomeKind.MALFORMED, reason="work limit must be positive")
+    if type(request) is not ProjectionRequest:
+        return _answer(OutcomeKind.MALFORMED, reason="wrong projection request carrier")
+    authority = request.supplement_authority
+    if authority is None or request.future_owner is None:
+        return _answer(
+            OutcomeKind.MISSING_DEPENDENCY,
+            reason="owner-admitted future supplement authority is absent",
+        )
+    try:
+        fingerprint = _supplement_source_fingerprint(request)
+        provisional_authority = (
+            _PROVISIONAL_SUPPLEMENT_AUTHORITIES.get(id(authority)) is authority
+        )
+        live_authority = _LIVE_SUPPLEMENT_AUTHORITIES.get(id(authority)) is authority
+        provisional_capability = (
+            type(authority) is IssuedFutureOwnerSupplement
+            and type(authority.capability) is FutureOwnerSupplementCapability
+            and _PROVISIONAL_SUPPLEMENT_CAPABILITIES.get(id(authority.capability))
+            is authority.capability
+        )
+        live_capability = (
+            type(authority) is IssuedFutureOwnerSupplement
+            and type(authority.capability) is FutureOwnerSupplementCapability
+            and _LIVE_SUPPLEMENT_CAPABILITIES.get(id(authority.capability))
+            is authority.capability
+        )
+        if (
+            type(authority) is not IssuedFutureOwnerSupplement
+            or authority._issuer is not _FUTURE_OWNER_SUPPLEMENT_ISSUER
+            or not (provisional_authority or live_authority)
+            or type(authority.capability) is not FutureOwnerSupplementCapability
+            or not (provisional_capability or live_capability)
+            or provisional_authority != provisional_capability
+            or live_authority != live_capability
+            or authority.capability._issuer is not _FUTURE_OWNER_SUPPLEMENT_ISSUER
+            or authority.capability.authority_binding is not authority.authority_binding
+            or authority.capability.supplement_id != authority.supplement_id
+            or authority.capability.supplement is not authority.supplement
+            or authority.capability.purpose is not authority.purpose
+            or authority.capability.source_fingerprint != authority.source_fingerprint
+            or authority.supplement is not request.future_owner
+            or authority.purpose is not _purpose(request.role)
+            or authority.source_fingerprint != fingerprint
+            or authority.supplement_id
+            != _semantic_id(
+                "pir.endpoint-owner-supplement",
+                (fingerprint, request.future_owner),
+            )
+        ):
+            raise ValueError("future supplement capability is stale or mismatched")
+        authority.authority_binding.body()
+        if authority.authority_binding.owner_source_coordinate != authority.supplement_id:
+            raise ValueError("supplement authority binding names another source")
+        if authority.authority_binding_id != _profiled_source_datum_id(
+            "pir.endpoint-owner-supplement-authority-binding",
+            authority.authority_binding.body(),
+        ):
+            raise ValueError("supplement authority-binding identity is stale")
+        expected_consumer_id = _semantic_id(
+            "pir.endpoint-owner-adapter-consumer",
+            "checked-projection-owner-adapter-v0",
+        )
+        expected_purpose_id = _semantic_id(
+            "pir.endpoint-owner-adapter-purpose",
+            (authority.supplement_id, authority.purpose),
+        )
+        if (
+            authority.capability.consumer_id != expected_consumer_id
+            or authority.capability.purpose_id != expected_purpose_id
+        ):
+            raise ValueError("supplement capability consumer or purpose is stale")
+    except (AttributeError, TypeError, ValueError, k1.ModelError) as error:
+        return _answer(
+            OutcomeKind.REFUSED,
+            reason=f"future supplement authority refused: {error}",
+        )
+
+    consumer_id = authority.capability.consumer_id
+    purpose_id = authority.capability.purpose_id
+    k2_views = _issue_k2_adapter_views(request, consumer_id, purpose_id)
+    if k2_views.kind is not OutcomeKind.AFFIRMATIVE:
+        return k2_views
+    fs_view = _issue_fs_adapter_view(request, consumer_id, purpose_id)
+    if fs_view.kind is not OutcomeKind.AFFIRMATIVE:
+        return fs_view
+    interface_view = _issue_interface_adapter_view(
+        request,
+        consumer_id,
+        purpose_id,
+    )
+    if interface_view.kind is not OutcomeKind.AFFIRMATIVE:
+        return interface_view
+    try:
+        payload = _static_view_payload(k2_views.value, consumer_id, purpose_id)
+    except (TypeError, ValueError) as error:
+        return _answer(
+            OutcomeKind.CHECKER_FAILURE,
+            reason=f"owner-view authority check failed: {error}",
+        )
+    overlap = _validate_future_owner_overlap(
+        request,
+        static_payload=payload,
+        interface_view=interface_view.value.view,
+    )
+    if overlap.kind is not OutcomeKind.AFFIRMATIVE:
+        return overlap
+    checked_plan = None
+    if request.role is EndpointRole.PROVER:
+        try:
+            checked_plan = k3.check_plan_realizes(
+                request.core,
+                request.construction,
+                request.interpretation,
+                request.plan,
+            )
+        except (k2.ModelError, k3.K3Error) as error:
+            return _answer(
+                OutcomeKind.REFUSED,
+                reason=f"PlanRealizes authority failed: {error}",
+            )
+        except Exception as error:
+            return _answer(
+                OutcomeKind.CHECKER_FAILURE,
+                reason=f"PlanRealizes authority checker failed: {error}",
+            )
+    # The owner-side carrier is deliberately provisional until all available
+    # independent owner views and the exact Plan join have agreed.  Only this
+    # point activates the identical bearer for consumption by the checked
+    # adapter; failed joins never leave live supplement authority behind.
+    if provisional_authority:
+        _PROVISIONAL_SUPPLEMENT_AUTHORITIES.pop(id(authority), None)
+        _PROVISIONAL_SUPPLEMENT_CAPABILITIES.pop(id(authority.capability), None)
+        _LIVE_SUPPLEMENT_AUTHORITIES[id(authority)] = authority
+        _LIVE_SUPPLEMENT_CAPABILITIES[id(authority.capability)] = authority.capability
+    checked_fs, issued_fs_view = fs_view.value
+    adapter = CheckedProjectionOwnerAdapter(
+        _OWNER_ADAPTER_ISSUER,
+        request,
+        _purpose(request.role),
+        k2_views.value,
+        checked_fs,
+        issued_fs_view,
+        interface_view.value,
+        checked_plan,
+        authority,
+        FUTURE_OWNER_SUPPLEMENT_ONLY_PATHS,
+    )
+    _LIVE_OWNER_ADAPTERS[id(adapter)] = adapter
+    return _answer(OutcomeKind.AFFIRMATIVE, adapter)
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
 class SupportedExtractionBasis:
     _issuer: object
     request: ProjectionRequest
     purpose: ProjectionPurpose
+    adapter: CheckedProjectionOwnerAdapter
     schema_set_id: object
     manifest_id: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _SUPPORT_ISSUER:
+            raise ValueError("only K3-D may issue a supported extraction basis")
+
+    def __repr__(self) -> str:
+        return "SupportedExtractionBasis(<live>)"
+
+    def __copy__(self) -> "SupportedExtractionBasis":
+        raise ValueError("live support bases cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "SupportedExtractionBasis":
+        raise ValueError("live support bases cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("live support bases cannot be serialized")
+
+
+_LIVE_SUPPORT_BASES: dict[int, SupportedExtractionBasis] = {}
+
+
+def _is_live_support_basis(basis: object) -> bool:
+    return (
+        type(basis) is SupportedExtractionBasis
+        and basis._issuer is _SUPPORT_ISSUER
+        and _LIVE_SUPPORT_BASES.get(id(basis)) is basis
+        and type(basis.request) is ProjectionRequest
+        and _is_live_owner_adapter(
+            basis.adapter,
+            expected_request=basis.request,
+        )
+        and basis.adapter.request is basis.request
+        and basis.purpose is _purpose(basis.request.role)
+        and basis.adapter.purpose is basis.purpose
+        and basis.schema_set_id == OWNER_SCHEMA_SET_ID
+        and basis.manifest_id == read_manifest_id(basis.purpose)
+    )
 
 
 def classify_support(request: object, *, work_limit: int = MAX_WORK) -> Answer:
@@ -2137,8 +3355,13 @@ def classify_support(request: object, *, work_limit: int = MAX_WORK) -> Answer:
         return schema
     try:
         k2.admit_core(request.core)
-    except Exception as error:
+    except k2.ModelError as error:
         return _answer(OutcomeKind.MALFORMED, reason=f"Core admission failed: {error}")
+    except Exception as error:
+        return _answer(
+            OutcomeKind.CHECKER_FAILURE,
+            reason=f"Core admission checker failed: {error}",
+        )
     if request.interpretation not in {
         k2.ChallengeInterpretation.FRESH,
         k2.ChallengeInterpretation.FIAT_SHAMIR,
@@ -2170,8 +3393,7 @@ def classify_support(request: object, *, work_limit: int = MAX_WORK) -> Answer:
         unsupported.add(SupportReason.MODULE_EFFECT_ENDPOINT)
     if (
         request.role is EndpointRole.PROVER
-        and request.future_owner is not None
-        and (request.plan is None or request.future_owner.plan is None)
+        and request.plan is None
     ):
         unsupported.add(SupportReason.GENERIC_PROVER_ENDPOINT)
     if unsupported:
@@ -2198,9 +3420,14 @@ def classify_support(request: object, *, work_limit: int = MAX_WORK) -> Answer:
         protocol = k3.protocol_id(
             request.core, request.construction, request.interpretation
         )
-    except Exception as error:
+    except (k2.ModelError, k3.K3Error) as error:
         return _answer(
             OutcomeKind.REFUSED, reason=f"FS Protocol admission failed: {error}"
+        )
+    except Exception as error:
+        return _answer(
+            OutcomeKind.CHECKER_FAILURE,
+            reason=f"FS Protocol admission checker failed: {error}",
         )
     if type(request.interface) is not k3.ProtocolInterface:
         return _answer(OutcomeKind.MALFORMED, reason="wrong current Interface carrier")
@@ -2215,9 +3442,14 @@ def classify_support(request: object, *, work_limit: int = MAX_WORK) -> Answer:
             request.interpretation,
             request.interface,
         )
-    except Exception as error:
+    except (k2.ModelError, k3.K3Error) as error:
         return _answer(
             OutcomeKind.MALFORMED, reason=f"Interface admission failed: {error}"
+        )
+    except Exception as error:
+        return _answer(
+            OutcomeKind.CHECKER_FAILURE,
+            reason=f"Interface admission checker failed: {error}",
         )
     if request.role is EndpointRole.VERIFIER:
         if request.plan is not None or request.future_owner.plan is not None:
@@ -2232,21 +3464,29 @@ def classify_support(request: object, *, work_limit: int = MAX_WORK) -> Answer:
                 request.interpretation,
                 request.plan,
             )
-        except Exception as error:
+        except (k2.ModelError, k3.K3Error) as error:
             return _answer(OutcomeKind.REFUSED, reason=f"PlanRealizes failed: {error}")
+        except Exception as error:
+            return _answer(
+                OutcomeKind.CHECKER_FAILURE,
+                reason=f"PlanRealizes checker failed: {error}",
+            )
     purpose = _purpose(request.role)
     for path in OWNER_SCHEMA_PATHS:
         owner_field_disposition(path, purpose)
-    return _answer(
-        OutcomeKind.AFFIRMATIVE,
-        SupportedExtractionBasis(
-            _SUPPORT_ISSUER,
-            request,
-            purpose,
-            OWNER_SCHEMA_SET_ID,
-            read_manifest_id(purpose),
-        ),
+    adapter = check_projection_owner_adapter(request, work_limit=work_limit)
+    if adapter.kind is not OutcomeKind.AFFIRMATIVE:
+        return adapter
+    basis = SupportedExtractionBasis(
+        _SUPPORT_ISSUER,
+        request,
+        purpose,
+        adapter.value,
+        OWNER_SCHEMA_SET_ID,
+        read_manifest_id(purpose),
     )
+    _LIVE_SUPPORT_BASES[id(basis)] = basis
+    return _answer(OutcomeKind.AFFIRMATIVE, basis)
 
 
 # ---------------------------------------------------------------------------
@@ -2584,6 +3824,7 @@ def _source_abi(
                         DependencyKind.CODEC_LAW,
                     )
                 ),
+                item.interface_codec_id,
             )
         )
     slots = tuple(
@@ -2622,6 +3863,7 @@ def _source_abi(
                 if item.invocation_input is None
                 else invocation_refs[item.invocation_input]
             ),
+            item.external_statement,
         )
         for item in owner.statement_aliases
         if item.slot_key in selected_slot_keys
@@ -3245,7 +4487,20 @@ def _source_complete_spine(
     return tuple(result)
 
 
-def _validate_future_owner(request: ProjectionRequest) -> Answer:
+def _require_unique_owner_rows(
+    rows: object,
+    key: Callable[[object], object],
+    label: str,
+) -> tuple[object, ...]:
+    if type(rows) is not tuple:
+        raise TypeError(f"{label} must be one exact tuple")
+    keys = tuple(key(item) for item in rows)
+    if len(keys) != len(set(keys)):
+        raise ValueError(f"{label} contain duplicate keys")
+    return keys
+
+
+def _validate_future_owner_shape(request: ProjectionRequest) -> Answer:
     if request.future_owner is None:
         return _answer(
             OutcomeKind.MISSING_DEPENDENCY,
@@ -3253,23 +4508,89 @@ def _validate_future_owner(request: ProjectionRequest) -> Answer:
         )
     owner = request.future_owner
     try:
-        codec_keys = tuple(item.codec_key for item in owner.interface.codecs)
-        slot_keys = tuple(item.slot_key for item in owner.interface.slots)
-        if len(codec_keys) != len(set(codec_keys)) or len(slot_keys) != len(
-            set(slot_keys)
+        if (
+            type(owner) is not FutureOwnerSurface
+            or type(owner.core) is not OwnerCoreSurface
+            or type(owner.fs) is not OwnerFsSurface
+            or type(owner.interface) is not OwnerInterfaceSurface
         ):
-            raise ValueError("Interface codec and slot keys must be unique")
+            raise TypeError("future-owner supplement has the wrong exact carrier")
+
+        if any(type(item) is not OwnerCodec for item in owner.interface.codecs):
+            raise TypeError("Interface codec rows have the wrong exact carrier")
+        codec_keys = _require_unique_owner_rows(
+            owner.interface.codecs,
+            lambda item: item.codec_key,
+            "Interface codec rows",
+        )
+        if any(type(item) is not OwnerSlot for item in owner.interface.slots):
+            raise TypeError("Interface slot rows have the wrong exact carrier")
+        slot_keys = _require_unique_owner_rows(
+            owner.interface.slots,
+            lambda item: item.slot_key,
+            "Interface slot rows",
+        )
+        if any(
+            type(key) is not str or not key for key in (*codec_keys, *slot_keys)
+        ):
+            raise ValueError("Interface codec and slot keys must be nonempty strings")
         if any(item.codec_key not in codec_keys for item in owner.interface.slots):
             raise ValueError("Interface slot names an unknown codec")
-        input_names = {item.name for item in request.core.inputs}
-        if {
+        if any(
+            type(item) is not OwnerInvocationFibre
+            for item in owner.interface.invocation_fibres
+        ):
+            raise TypeError("Interface fibre rows have the wrong exact carrier")
+        _require_unique_owner_rows(
+            owner.interface.invocation_fibres,
+            lambda item: item.slot_key,
+            "Interface invocation fibres",
+        )
+        if any(
+            fibre.slot_key not in slot_keys
+            or type(fibre.invocation_inputs) is not tuple
+            for fibre in owner.interface.invocation_fibres
+        ):
+            raise ValueError("Interface invocation fibre names an unknown slot")
+        flattened_inputs = tuple(
             name
             for fibre in owner.interface.invocation_fibres
             for name in fibre.invocation_inputs
-        } != input_names:
+        )
+        input_names = tuple(item.name for item in request.core.inputs)
+        if (
+            len(flattened_inputs) != len(set(flattened_inputs))
+            or set(flattened_inputs) != set(input_names)
+            or len(flattened_inputs) != len(input_names)
+        ):
             raise ValueError(
                 "Interface invocation fibres do not cover Core inputs exactly"
             )
+
+        if any(
+            type(item) is not OwnerStatementAlias
+            for item in owner.interface.statement_aliases
+        ):
+            raise TypeError("Statement aliases have the wrong exact carrier")
+        _require_unique_owner_rows(
+            owner.interface.statement_aliases,
+            lambda item: item.external_statement,
+            "Interface Statement aliases",
+        )
+        _require_unique_owner_rows(
+            owner.interface.statement_aliases,
+            lambda item: (item.binding_input, item.slot_key),
+            "Interface Statement binding aliases",
+        )
+        if any(
+            type(item.external_statement) is not str
+            or not item.external_statement
+            or item.slot_key not in slot_keys
+            or type(item.flow) is not StatementFlowKind
+            for item in owner.interface.statement_aliases
+        ):
+            raise ValueError("Interface Statement alias is malformed")
+
         occurrence_by_name = {item.name: item for item in request.core.schedule}
         message_names = {
             item.name
@@ -3280,6 +4601,16 @@ def _validate_future_owner(request: ProjectionRequest) -> Answer:
                 k2.OccurrenceKind.VERIFIER_MESSAGE,
             }
         }
+        if any(
+            type(item) is not OwnerTransport
+            for item in owner.interface.transports
+        ):
+            raise TypeError("Interface transports have the wrong exact carrier")
+        transport_occurrences = _require_unique_owner_rows(
+            owner.interface.transports,
+            lambda item: item.occurrence,
+            "Interface transports",
+        )
         observed_messages = {
             item.occurrence
             for item in owner.interface.transports
@@ -3291,18 +4622,71 @@ def _validate_future_owner(request: ProjectionRequest) -> Answer:
             )
         if any(
             item.occurrence not in occurrence_by_name
+            or item.slot_key not in slot_keys
+            or type(item.source) is not TransportActor
+            or type(item.destination) is not TransportDestination
             for item in owner.interface.transports
         ):
-            raise ValueError("Interface transport names a phantom occurrence")
-        challenge_names = {
+            raise ValueError("Interface transport is malformed")
+        if len(transport_occurrences) != len(owner.interface.transports):
+            raise AssertionError("transport uniqueness helper lost cardinality")
+        for transport in owner.interface.transports:
+            occurrence = occurrence_by_name[transport.occurrence]
+            if transport.source is TransportActor.PUBLIC_DERIVATION:
+                if (
+                    occurrence.kind is not k2.OccurrenceKind.CHALLENGE
+                    or transport.destination
+                    is not TransportDestination.EXTERNAL_APPLICATION
+                ):
+                    raise ValueError(
+                        "public-derivation transport is not one exact challenge export"
+                    )
+            elif occurrence.kind not in {
+                k2.OccurrenceKind.PROVER_MESSAGE,
+                k2.OccurrenceKind.VERIFIER_MESSAGE,
+            }:
+                raise ValueError("non-public transport is not one message exposure")
+
+        if any(
+            type(item) is not OwnerChallengeSemantics
+            for item in owner.fs.challenges
+        ):
+            raise TypeError("FS challenge rows have the wrong exact carrier")
+        _require_unique_owner_rows(
+            owner.fs.challenges,
+            lambda item: item.occurrence,
+            "FS challenge rows",
+        )
+        challenge_sequence = tuple(
             item.name
             for item in request.core.schedule
             if item.kind is k2.OccurrenceKind.CHALLENGE
-        }
-        if {item.occurrence for item in owner.fs.challenges} != challenge_names:
+        )
+        challenge_names = set(challenge_sequence)
+        if (
+            {item.occurrence for item in owner.fs.challenges} != challenge_names
+            or len(owner.fs.challenges) != len(challenge_names)
+            or tuple(item.occurrence for item in owner.fs.challenges)
+            != challenge_sequence
+        ):
             raise ValueError("FS surface does not cover challenges exactly")
-        reduction_names = {item.name for item in request.core.reductions}
-        if {item.reduction_name for item in owner.core.reductions} != reduction_names:
+
+        if any(type(item) is not OwnerReduction for item in owner.core.reductions):
+            raise TypeError("Core reduction rows have the wrong exact carrier")
+        _require_unique_owner_rows(
+            owner.core.reductions,
+            lambda item: item.reduction_name,
+            "Core reduction rows",
+        )
+        reduction_sequence = tuple(item.name for item in request.core.reductions)
+        reduction_names = set(reduction_sequence)
+        if (
+            {item.reduction_name for item in owner.core.reductions}
+            != reduction_names
+            or len(owner.core.reductions) != len(reduction_names)
+            or tuple(item.reduction_name for item in owner.core.reductions)
+            != reduction_sequence
+        ):
             raise ValueError("Core surface does not cover reductions exactly")
         reduction_by_name = {
             item.reduction_name: item for item in owner.core.reductions
@@ -3316,6 +4700,27 @@ def _validate_future_owner(request: ProjectionRequest) -> Answer:
             for item in owner.core.reductions
         ):
             raise ValueError("reduction output-contract rows are malformed")
+        if any(type(item) is not OwnerClaim for item in owner.core.claims):
+            raise TypeError("Core claim rows have the wrong exact carrier")
+        _require_unique_owner_rows(
+            owner.core.claims,
+            lambda item: item.claim_key,
+            "Core claim rows",
+        )
+        if any(
+            type(claim.source_kind) is not ClaimSourceKind
+            or type(claim.usage) is not ClaimUsage
+            or type(claim.scope) is not str
+            or not claim.scope
+            or type(claim.source_name) is not str
+            or not claim.source_name
+            or (
+                claim.source_kind is ClaimSourceKind.BINDING
+                and claim.output_ordinal is not None
+            )
+            for claim in owner.core.claims
+        ):
+            raise ValueError("Core claim origin row is malformed")
         if any(
             claim.source_kind is ClaimSourceKind.REDUCTION_OUTPUT
             and (
@@ -3328,6 +4733,8 @@ def _validate_future_owner(request: ProjectionRequest) -> Answer:
             for claim in owner.core.claims
         ):
             raise ValueError("reduction claim lies outside declared output contracts")
+        if type(owner.core.terminal) is not OwnerTerminal:
+            raise TypeError("Core terminal has the wrong exact carrier")
         terminals = [
             item.name
             for item in request.core.schedule
@@ -3335,38 +4742,531 @@ def _validate_future_owner(request: ProjectionRequest) -> Answer:
         ]
         if terminals != [owner.core.terminal.terminal_occurrence]:
             raise ValueError("Core surface terminal anchor is not exact")
+
+        if any(
+            type(item) is not OwnerCompletion
+            for item in owner.interface.completions
+        ):
+            raise TypeError("Interface completions have the wrong exact carrier")
+        completion_targets = _require_unique_owner_rows(
+            owner.interface.completions,
+            lambda item: item.target,
+            "Interface completion targets",
+        )
+        _require_unique_owner_rows(
+            owner.interface.completions,
+            lambda item: item.external_tag,
+            "Interface completion tags",
+        )
+        expected_completion_sequence = (
+            CompletionTargetKind.CORE_TERMINAL,
+            CompletionTargetKind.FS_FAILURE,
+        )
+        expected_completion_targets = set(expected_completion_sequence)
+        if (
+            set(completion_targets) != expected_completion_targets
+            or len(completion_targets) != len(expected_completion_targets)
+            or completion_targets != expected_completion_sequence
+        ):
+            raise ValueError("Interface completion surface is not exactly closed")
+        expected_failure_coordinates = {
+            CompletionCoordinateKind.FS_FAILURE_PAYLOAD,
+            CompletionCoordinateKind.FS_FAILURE_CHALLENGE,
+            CompletionCoordinateKind.FS_FAILURE_PREFIX_COUNT,
+            CompletionCoordinateKind.FS_FAILURE_PREFIX_STATE,
+            CompletionCoordinateKind.FS_FAILURE_DRAWS,
+            CompletionCoordinateKind.FS_FAILURE_FINAL_STATE,
+        }
+        for completion in owner.interface.completions:
+            if (
+                type(completion.external_tag) is not str
+                or not completion.external_tag
+                or type(completion.bindings) is not tuple
+                or any(
+                    type(binding) is not OwnerCompletionBinding
+                    for binding in completion.bindings
+                )
+            ):
+                raise ValueError("Interface completion row is malformed")
+            _require_unique_owner_rows(
+                completion.bindings,
+                lambda item: (item.coordinate, item.output_ordinal),
+                f"{completion.target.value} completion bindings",
+            )
+            if any(
+                binding.slot_key not in slot_keys
+                or type(binding.coordinate) is not CompletionCoordinateKind
+                for binding in completion.bindings
+            ):
+                raise ValueError("completion binding names an unknown slot")
+            if completion.target is CompletionTargetKind.CORE_TERMINAL:
+                ordinals = tuple(
+                    binding.output_ordinal for binding in completion.bindings
+                )
+                if (
+                    completion.terminal_occurrence
+                    != owner.core.terminal.terminal_occurrence
+                    or any(
+                        binding.coordinate
+                        is not CompletionCoordinateKind.TERMINAL_OUTPUT
+                        for binding in completion.bindings
+                    )
+                    or ordinals
+                    != tuple(range(len(owner.core.terminal.public_outputs)))
+                ):
+                    raise ValueError("terminal completion bindings are not exact")
+            elif (
+                completion.terminal_occurrence is not None
+                or {binding.coordinate for binding in completion.bindings}
+                != expected_failure_coordinates
+                or len(completion.bindings) != len(expected_failure_coordinates)
+                or any(
+                    binding.output_ordinal is not None
+                    for binding in completion.bindings
+                )
+            ):
+                raise ValueError("FS-failure completion bindings are not exact")
+
         if request.role is EndpointRole.PROVER:
-            if request.plan is None or owner.plan is None:
+            if request.plan is None or type(owner.plan) is not OwnerPlanSurface:
                 raise ValueError("Prover source lacks a Plan surface")
+            if any(type(item) is not OwnerPlanRecipe for item in owner.plan.recipes):
+                raise TypeError("Plan recipes have the wrong exact carrier")
+            _require_unique_owner_rows(
+                owner.plan.recipes,
+                lambda item: item.decision,
+                "Plan recipe rows",
+            )
             decisions = {
                 item.name
                 for item in request.core.schedule
                 if item.kind is k2.OccurrenceKind.PROVER_MESSAGE
             }
-            if {item.decision for item in owner.plan.recipes} != decisions:
+            if (
+                {item.decision for item in owner.plan.recipes} != decisions
+                or len(owner.plan.recipes) != len(decisions)
+            ):
                 raise ValueError("Plan recipe graph does not cover decisions exactly")
+            _require_unique_owner_rows(
+                owner.plan.derived_exports,
+                lambda item: item[0],
+                "Plan derived exports",
+            )
+            if any(
+                type(item) is not tuple
+                or len(item) != 4
+                or type(item[0]) is not str
+                or not item[0]
+                or type(item[1]) is not str
+                or not item[1]
+                or type(item[2]) is not OwnerPlanOperand
+                for item in owner.plan.derived_exports
+            ):
+                raise ValueError("Plan derived-export row is malformed")
         elif owner.plan is not None:
             raise ValueError("Verifier source unexpectedly carries a Plan surface")
-    except (KeyError, TypeError, ValueError) as error:
-        return _answer(OutcomeKind.NEGATIVE, reason=f"owner-source inadequacy: {error}")
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        # This operation validates whether a formed owner carrier inhabits the
+        # selected extraction profile.  Failure here does not refute a formed
+        # projection proposition; no such proposition exists yet.
+        return _answer(OutcomeKind.REFUSED, reason=f"owner-source inadequacy: {error}")
+    return _answer(OutcomeKind.AFFIRMATIVE, owner)
+
+
+def _validate_future_owner_overlap(
+    request: ProjectionRequest,
+    *,
+    static_payload: Mapping[object, object] | None = None,
+    interface_view: object | None = None,
+) -> Answer:
+    """Check every coordinate shared with current K2/K3-B owner surfaces."""
+
+    if request.future_owner is None:
+        return _answer(
+            OutcomeKind.MISSING_DEPENDENCY,
+            reason="selected future-owner supplement is absent",
+        )
+    owner = request.future_owner
+    try:
+        payload = {} if static_payload is None else static_payload
+        transcript_algorithms = payload.get(
+            k2.StaticViewField.TD_ALGORITHMS,
+            (request.construction.version, k2.INITIAL_TRANSCRIPT_STATE),
+        )
+        if owner.fs.initial_state != transcript_algorithms[1]:
+            raise ValueError("FS initial state disagrees with Construction ownership")
+
+        initial_claims = payload.get(
+            k2.StaticViewField.CR_CLAIMS,
+            request.core.initial_claims,
+        )
+        reductions = payload.get(
+            k2.StaticViewField.CR_REDUCTIONS,
+            request.core.reductions,
+        )
+        claim_uses = payload.get(
+            k2.StaticViewField.CR_TERMINAL_DISPOSITIONS,
+            request.core.claim_uses,
+        )
+        schedule = payload.get(
+            k2.StaticViewField.EF_OCCURRENCE_SCHEDULE,
+            request.core.schedule,
+        )
+        public_bindings = payload.get(
+            k2.StaticViewField.PB_BINDINGS,
+            tuple(
+                (
+                    item.scope,
+                    item.name,
+                    item.role,
+                    item.value_sort,
+                    "invocation-public-input",
+                )
+                for item in request.core.inputs
+                if item.role is not k2.InputRole.VERIFIER_PRIVATE
+            ),
+        )
+        statement_bindings = tuple(
+            row for row in public_bindings if row[2] is k2.InputRole.STATEMENT
+        )
+        if initial_claims and len(statement_bindings) != 1:
+            raise ValueError(
+                "bounded initial claims require one exact owner-issued Statement "
+                "binding"
+            )
+        expected_claim_origins: dict[
+            str, tuple[str, ClaimSourceKind, str, int | None]
+        ] = {}
+        for claim_name in initial_claims:
+            if claim_name in expected_claim_origins:
+                raise ValueError("Core initial claim names are duplicated")
+            statement_scope, statement_name, *_rest = statement_bindings[0]
+            expected_claim_origins[claim_name] = (
+                statement_scope,
+                ClaimSourceKind.BINDING,
+                statement_name,
+                None,
+            )
+        for reduction in reductions:
+            for output_ordinal, claim_name in enumerate(reduction.output_claims):
+                if claim_name in expected_claim_origins:
+                    raise ValueError("Core claim origins are not uniquely keyed")
+                expected_claim_origins[claim_name] = (
+                    reduction.scope,
+                    ClaimSourceKind.REDUCTION_OUTPUT,
+                    reduction.name,
+                    output_ordinal,
+                )
+        owner_claims = {item.claim_key: item for item in owner.core.claims}
+        if (
+            set(owner_claims) != set(expected_claim_origins)
+            or len(owner.core.claims) != len(expected_claim_origins)
+            or tuple(item.claim_key for item in owner.core.claims)
+            != tuple(expected_claim_origins)
+        ):
+            raise ValueError("supplement claim coverage disagrees with Core")
+        for claim_name, expected_origin in expected_claim_origins.items():
+            claim = owner_claims[claim_name]
+            observed_origin = (
+                claim.scope,
+                claim.source_kind,
+                claim.source_name,
+                claim.output_ordinal,
+            )
+            if observed_origin != expected_origin:
+                raise ValueError(
+                    "supplement claim origin disagrees with the owner-issued Core view"
+                )
+        owner_reductions = {
+            item.reduction_name: item for item in owner.core.reductions
+        }
+        if len(owner_reductions) != len(reductions):
+            raise ValueError("supplement reduction cardinality disagrees with Core")
+        for reduction in reductions:
+            row = owner_reductions[reduction.name]
+            if len(row.output_contracts) != len(reduction.output_claims):
+                raise ValueError("supplement reduction output arity disagrees with Core")
+        expected_checks = tuple(
+            item.name
+            for item in schedule
+            if item.kind is k2.OccurrenceKind.CHECK
+        )
+        if owner.core.terminal.required_checks != expected_checks:
+            raise ValueError("supplement terminal checks disagree with Core")
+        expected_dispositions = tuple(
+            (item.claim, ClaimDisposition.CONSUME)
+            for item in claim_uses
+            if item.consumer == owner.core.terminal.terminal_occurrence
+        )
+        if owner.core.terminal.claim_dispositions != expected_dispositions:
+            raise ValueError("supplement terminal claim uses disagree with Core")
+
+        if interface_view is None:
+            interface_inputs = request.interface.inputs
+            interface_statements = request.interface.statements
+            interface_transports_rows = request.interface.transports
+        else:
+            if (
+                type(interface_view) is not k3.ProtocolInterfaceCorrespondenceView
+                or interface_view.protocol_interface_id
+                != k3.interface_id(
+                    request.core,
+                    request.construction,
+                    request.interpretation,
+                    request.interface,
+                )
+            ):
+                raise ValueError("live Interface view names another owner")
+            interface_inputs = tuple(
+                entry.value
+                for entry in interface_view.entries
+                if entry.read.kind
+                is k3.ProtocolInterfaceReadKind.INVOCATION_ASSIGNMENT
+            )
+            interface_statements = tuple(
+                entry.value
+                for entry in interface_view.entries
+                if entry.read.kind is k3.ProtocolInterfaceReadKind.STATEMENT_MEMBER
+            )
+            interface_transports_rows = tuple(
+                entry.value
+                for entry in interface_view.entries
+                if entry.read.kind is k3.ProtocolInterfaceReadKind.TRANSPORT_ENTRY
+            )
+        slots = {item.slot_key: item for item in owner.interface.slots}
+        codecs = {item.codec_key: item for item in owner.interface.codecs}
+        fibres = {item.slot_key: item for item in owner.interface.invocation_fibres}
+        for assignment in interface_inputs:
+            slot_key = f"input:{assignment.core_input}"
+            slot = slots.get(slot_key)
+            if slot is None or slot.external_key != assignment.external_coordinate:
+                raise ValueError("supplement invocation slot disagrees with Interface")
+            codec = codecs[slot.codec_key]
+            if codec.interface_codec_id != assignment.codec_id:
+                raise ValueError("supplement invocation codec disagrees with Interface")
+            declaration = next(
+                item for item in request.core.inputs if item.name == assignment.core_input
+            )
+            if (
+                codec.value_type is None
+                or _type_body(codec.value_type)
+                != _type_body(_sort_type(declaration.value_sort))
+            ):
+                raise ValueError("supplement invocation codec type disagrees with Core")
+            fibre = fibres.get(slot_key)
+            if fibre is None or fibre.invocation_inputs != (assignment.core_input,):
+                raise ValueError("bounded supplement invocation fibre is not exact")
+
+        owner_statements = {
+            item.external_statement: item for item in owner.interface.statement_aliases
+        }
+        if (
+            set(owner_statements)
+            != {item.external_statement for item in interface_statements}
+            or len(owner.interface.statement_aliases) != len(interface_statements)
+        ):
+            raise ValueError("supplement Statement names disagree with Interface")
+        for member in interface_statements:
+            alias = owner_statements[member.external_statement]
+            if (
+                alias.binding_input != member.binding.input_name
+                or alias.slot_key != f"input:{member.binding.input_name}"
+                or alias.invocation_input != member.binding.input_name
+            ):
+                raise ValueError("supplement Statement binding disagrees with Interface")
+
+        owner_transports = {
+            item.occurrence: item
+            for item in owner.interface.transports
+            if item.source is not TransportActor.PUBLIC_DERIVATION
+        }
+        interface_transports = {
+            item.occurrence: item for item in interface_transports_rows
+        }
+        message_names = {
+            item.name
+            for item in schedule
+            if item.kind
+            in {
+                k2.OccurrenceKind.PROVER_MESSAGE,
+                k2.OccurrenceKind.VERIFIER_MESSAGE,
+            }
+        }
+        if set(interface_transports) != message_names:
+            raise ValueError(
+                "selected endpoint profile requires exact Interface message exposure"
+            )
+        if (
+            set(owner_transports) != set(interface_transports)
+            or len(owner_transports) != len(interface_transports)
+        ):
+            raise ValueError("supplement transports disagree with Interface")
+        transport_roles = {
+            k3.TransportRole.PROVER_TO_VERIFIER: (
+                TransportActor.PROVER,
+                TransportDestination.VERIFIER,
+            ),
+            k3.TransportRole.VERIFIER_TO_PROVER: (
+                TransportActor.VERIFIER,
+                TransportDestination.PROVER,
+            ),
+        }
+        for occurrence, exposure in interface_transports.items():
+            edge = owner_transports[occurrence]
+            expected_source, expected_destination = transport_roles[exposure.role]
+            slot = slots.get(edge.slot_key)
+            if (
+                edge.source is not expected_source
+                or edge.destination is not expected_destination
+                or slot is None
+                or slot.external_key != exposure.external_coordinate
+                or codecs[slot.codec_key].interface_codec_id != exposure.codec_id
+            ):
+                raise ValueError("supplement transport row disagrees with Interface")
+
+        if request.role is EndpointRole.PROVER:
+            if request.plan is None or owner.plan is None:
+                raise ValueError("prover supplement lacks its checked Plan")
+            routes = {item.occurrence: item for item in request.plan.decision_routes}
+            view_decisions = payload.get(
+                k2.StaticViewField.SD_DECISION_POINTS,
+                tuple(
+                    item
+                    for item in schedule
+                    if item.kind is k2.OccurrenceKind.PROVER_MESSAGE
+                ),
+            )
+            if set(routes) != {item.name for item in view_decisions}:
+                raise ValueError("Plan routes disagree with owner-issued decision view")
+            recipes = {item.decision: item for item in owner.plan.recipes}
+            if set(recipes) != set(routes):
+                raise ValueError("supplement recipes disagree with Plan decisions")
+            read_kinds = {
+                k3.PlanReadKind.PRIVATE_MATERIAL: PlanOperandKind.PRIVATE_MATERIAL,
+                k3.PlanReadKind.PRIVATE_RANDOMNESS: PlanOperandKind.PRIVATE_RANDOMNESS,
+                k3.PlanReadKind.STATE_BEFORE: PlanOperandKind.STATE_BEFORE,
+                k3.PlanReadKind.PUBLIC_INPUT_VIEW: PlanOperandKind.VIEW_PUBLIC_INPUT,
+                k3.PlanReadKind.PRIOR_OCCURRENCE_VIEW: PlanOperandKind.VIEW_OCCURRENCE,
+            }
+            for decision, route in routes.items():
+                recipe = recipes[decision]
+                if len(recipe.nodes) != 1:
+                    raise ValueError("bounded supplement recipe must have one owner node")
+                node = recipe.nodes[0]
+                expected_inputs = tuple(
+                    OwnerPlanOperand(read_kinds[item.kind], item.name)
+                    for item in route.reads
+                )
+                expected_move = (
+                    PlanMoveKind.MESSAGE_VALUE
+                    if route.move_kind is k3.MoveKind.MESSAGE_VALUE
+                    else PlanMoveKind.ORACLE_OBJECT
+                )
+                expected_updates = tuple(
+                    (
+                        item.state,
+                        PlanUpdateKind.KEEP
+                        if item.kind is k3.StateAfterKind.KEEP
+                        else PlanUpdateKind.REPLACE,
+                        None
+                        if item.kind is k3.StateAfterKind.KEEP
+                        else OwnerPlanOperand(
+                            PlanOperandKind.NODE_OUTPUT,
+                            node_ordinal=0,
+                        ),
+                    )
+                    for item in route.state_after
+                )
+                if (
+                    node.algorithm_id != route.implementation_algorithm_id
+                    or node.inputs != expected_inputs
+                    or recipe.move_kind is not expected_move
+                    or recipe.move
+                    != OwnerPlanOperand(PlanOperandKind.NODE_OUTPUT, node_ordinal=0)
+                    or recipe.state_after != expected_updates
+                ):
+                    raise ValueError("supplement recipe overlap disagrees with Plan")
+            expected_exports = tuple(
+                (item.key, item.source_decision, item.value_type)
+                for item in request.plan.exports
+            )
+            observed_exports = tuple(
+                (key, source, value_type)
+                for key, source, _operand, value_type in owner.plan.derived_exports
+            )
+            if observed_exports != expected_exports:
+                raise ValueError("supplement exports disagree with Plan")
+    except (AttributeError, IndexError, KeyError, StopIteration, TypeError, ValueError) as error:
+        return _answer(
+            OutcomeKind.REFUSED,
+            reason=f"future-owner overlap mismatch: {error}",
+        )
     return _answer(OutcomeKind.AFFIRMATIVE, owner)
 
 
 _EXTRACTION_ISSUER = object()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
 class CheckedEndpointSourceView:
     _issuer: object
     request: ProjectionRequest
+    basis: SupportedExtractionBasis
+    adapter: CheckedProjectionOwnerAdapter
     view: EndpointSourceView
     view_id: object
     schema_set_id: object
     manifest_id: object
 
+    def __post_init__(self) -> None:
+        if self._issuer is not _EXTRACTION_ISSUER:
+            raise ValueError("only K3-D may issue a checked endpoint source view")
+
+    def __repr__(self) -> str:
+        return "CheckedEndpointSourceView(<live>)"
+
+    def __copy__(self) -> "CheckedEndpointSourceView":
+        raise ValueError("live source views cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "CheckedEndpointSourceView":
+        raise ValueError("live source views cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("live source views cannot be serialized")
+
+
+_LIVE_CHECKED_SOURCE_VIEWS: dict[int, CheckedEndpointSourceView] = {}
+
 
 def endpoint_source_view_id(view: EndpointSourceView) -> object:
-    return _semantic_id("pir.endpoint-source-view", view)
+    if view.profile != SOURCE_PROFILE:
+        raise TypeError("endpoint source view names an unsupported language profile")
+    return _semantic_id(
+        "pir.endpoint-source-view",
+        (view.purpose, view.semantic_graph),
+    )
+
+
+def _is_live_checked_source_view(source: object) -> bool:
+    if (
+        type(source) is not CheckedEndpointSourceView
+        or source._issuer is not _EXTRACTION_ISSUER
+        or _LIVE_CHECKED_SOURCE_VIEWS.get(id(source)) is not source
+        or type(source.request) is not ProjectionRequest
+        or not _is_live_support_basis(source.basis)
+        or source.basis.request is not source.request
+        or source.adapter is not source.basis.adapter
+        or type(source.view) is not EndpointSourceView
+        or source.view.profile != SOURCE_PROFILE
+        or source.view.purpose is not _purpose(source.request.role)
+        or source.schema_set_id != OWNER_SCHEMA_SET_ID
+        or source.manifest_id != read_manifest_id(source.view.purpose)
+    ):
+        return False
+    try:
+        return source.view_id == endpoint_source_view_id(source.view)
+    except (TypeError, ValueError):
+        return False
 
 
 def _extract_source_graph(basis: SupportedExtractionBasis) -> EndpointSemanticGraph:
@@ -3405,17 +5305,12 @@ def extract_endpoint_source_view(
 ) -> Answer:
     if type(work_limit) is not int or work_limit <= 0:
         return _answer(OutcomeKind.MALFORMED, reason="work limit must be positive")
-    if (
-        type(basis) is not SupportedExtractionBasis
-        or basis._issuer is not _SUPPORT_ISSUER
-    ):
+    if not _is_live_support_basis(basis):
         return _answer(
             OutcomeKind.REFUSED, reason="missing affirmative support capability"
         )
+    assert type(basis) is SupportedExtractionBasis
     request = basis.request
-    adequacy = _validate_future_owner(request)
-    if adequacy.kind is not OutcomeKind.AFFIRMATIVE:
-        return adequacy
     try:
         graph = _extract_source_graph(basis)
         if len(canonical_bytes(graph)) > 1 << 20:
@@ -3439,20 +5334,25 @@ def extract_endpoint_source_view(
                 reason="source extraction exceeds the request work limit",
             )
         view = EndpointSourceView(SOURCE_PROFILE, basis.purpose, graph)
-        return _answer(
-            OutcomeKind.AFFIRMATIVE,
-            CheckedEndpointSourceView(
-                _EXTRACTION_ISSUER,
-                request,
-                view,
-                endpoint_source_view_id(view),
-                basis.schema_set_id,
-                basis.manifest_id,
-            ),
+        checked = CheckedEndpointSourceView(
+            _EXTRACTION_ISSUER,
+            request,
+            basis,
+            basis.adapter,
+            view,
+            endpoint_source_view_id(view),
+            basis.schema_set_id,
+            basis.manifest_id,
         )
+        _LIVE_CHECKED_SOURCE_VIEWS[id(checked)] = checked
+        return _answer(OutcomeKind.AFFIRMATIVE, checked)
     except (KeyError, StopIteration, TypeError, ValueError) as error:
+        # The owner surface was already admitted by the exact adequacy gate.
+        # A later deterministic extractor disagreement is a checker defect,
+        # never semantic evidence against ProjectionCorrect.
         return _answer(
-            OutcomeKind.NEGATIVE, reason=f"source extraction failed: {error}"
+            OutcomeKind.CHECKER_FAILURE,
+            reason=f"source extraction failed after owner admission: {error}",
         )
 
 
@@ -3739,6 +5639,7 @@ def _target_abi(
                 else _type_index(types, item.semantic_type),
                 tuple((ordinal, codec_refs[key]) for ordinal, key in item.children),
                 law_ref,
+                item.interface_codec_id,
             )
         )
     slots = tuple(
@@ -3772,6 +5673,7 @@ def _target_abi(
             None
             if item.invocation_input is None
             else invocation_refs[item.invocation_input],
+            item.external_statement,
         )
         for item in owner.statement_aliases
         if item.slot_key in slot_refs and item.binding_input in layout.binding_refs
@@ -4319,7 +6221,16 @@ def _target_complete_spine(
     return tuple(completed)
 
 
-def _construct_target_graph(request: ProjectionRequest) -> EndpointSemanticGraph:
+def _construct_target_graph(
+    adapter: CheckedProjectionOwnerAdapter,
+) -> EndpointSemanticGraph:
+    if (
+        type(adapter) is not CheckedProjectionOwnerAdapter
+        or adapter._issuer is not _OWNER_ADAPTER_ISSUER
+        or _LIVE_OWNER_ADAPTERS.get(id(adapter)) is not adapter
+    ):
+        raise ValueError("target construction lacks a checked owner adapter")
+    request = adapter.request
     dependencies = _target_dependency_table(request)
     types = _target_type_table(request)
     layout = _target_spine_layout(request)
@@ -4348,11 +6259,13 @@ def _construct_target_graph(request: ProjectionRequest) -> EndpointSemanticGraph
 
 
 def oir_endpoint_id(endpoint: OirEndpoint | EndpointSemanticGraph) -> object:
-    graph = endpoint.semantic_graph if type(endpoint) is OirEndpoint else endpoint
-    return _semantic_id(
-        "oir.endpoint",
-        (OIR_PROFILE, graph),
-    )
+    if type(endpoint) is OirEndpoint:
+        if endpoint.semantic_profile != OIR_PROFILE:
+            raise TypeError("OIR endpoint names an unsupported language profile")
+        graph = endpoint.semantic_graph
+    else:
+        graph = endpoint
+    return _semantic_id("oir.endpoint", graph)
 
 
 def remint(endpoint: OirEndpoint) -> OirEndpoint:
@@ -4360,17 +6273,21 @@ def remint(endpoint: OirEndpoint) -> OirEndpoint:
     return replace(provisional, asserted_id=oir_endpoint_id(provisional))
 
 
-def project(request: object, *, work_limit: int = MAX_WORK) -> Answer:
-    """Construct one unauthoritative OIR candidate from the live PIR request."""
+def project_supported_endpoint(basis: object) -> Answer:
+    """Construct one candidate from the exact basis used by both graph lanes."""
 
-    support = classify_support(request, work_limit=work_limit)
-    if support.kind is not OutcomeKind.AFFIRMATIVE:
-        return support
-    adequacy = _validate_future_owner(request)
-    if adequacy.kind is not OutcomeKind.AFFIRMATIVE:
-        return adequacy
+    if type(basis) is not SupportedExtractionBasis:
+        return _answer(
+            OutcomeKind.MALFORMED,
+            reason="wrong supported-extraction-basis carrier",
+        )
+    if not _is_live_support_basis(basis):
+        return _answer(
+            OutcomeKind.REFUSED,
+            reason="target construction lacks a live supported extraction basis",
+        )
     try:
-        graph = _construct_target_graph(request)
+        graph = _construct_target_graph(basis.adapter)
         if len(canonical_bytes(graph)) > 1 << 20:
             return _answer(
                 OutcomeKind.DETERMINISTIC_LIMIT_EXCEEDED,
@@ -4381,9 +6298,22 @@ def project(request: object, *, work_limit: int = MAX_WORK) -> Answer:
             remint(OirEndpoint(OIR_PROFILE, graph, None)),
         )
     except (KeyError, StopIteration, TypeError, ValueError) as error:
+        # Target construction is an implementation step preceding local OIR
+        # admission and proposition formation.  It cannot produce a semantic
+        # counterexample to a proposition that has not been formed.
         return _answer(
-            OutcomeKind.NEGATIVE, reason=f"target construction failed: {error}"
+            OutcomeKind.CHECKER_FAILURE,
+            reason=f"target construction failed after source admission: {error}",
         )
+
+
+def project(request: object, *, work_limit: int = MAX_WORK) -> Answer:
+    """Convenience wrapper that classifies once, then projects its exact basis."""
+
+    support = classify_support(request, work_limit=work_limit)
+    if support.kind is not OutcomeKind.AFFIRMATIVE:
+        return support
+    return project_supported_endpoint(support.value)
 
 
 # ---------------------------------------------------------------------------
@@ -4468,6 +6398,7 @@ def _validate_role_abi(graph: EndpointSemanticGraph) -> None:
     for index, codec in enumerate(abi.codec_nodes):
         if type(codec.kind) is not CodecKind:
             raise ValueError("codec has an unknown kind")
+        _id_text(codec.interface_codec_id, "foundation.canonical-algorithm")
         if codec.kind is CodecKind.IDENTITY:
             if codec.value_type_ref is None:
                 raise ValueError("Identity codec lacks its value type")
@@ -4523,6 +6454,7 @@ def _validate_role_abi(graph: EndpointSemanticGraph) -> None:
         ):
             raise ValueError("Prover ABI contains a verifier-private invocation target")
     statement_slots: set[int] = set()
+    external_statements: set[str] = set()
     for alias in abi.statement_aliases:
         _require_index(alias.slot_ref, len(abi.slots), "Statement slot")
         _require_index(
@@ -4536,6 +6468,13 @@ def _validate_role_abi(graph: EndpointSemanticGraph) -> None:
         if alias.slot_ref in statement_slots:
             raise ValueError("Statement slot has duplicate aliases")
         statement_slots.add(alias.slot_ref)
+        if (
+            type(alias.external_statement) is not str
+            or not alias.external_statement
+            or alias.external_statement in external_statements
+        ):
+            raise ValueError("external Statement name is malformed or duplicated")
+        external_statements.add(alias.external_statement)
         if alias.flow is StatementFlowKind.SUPPLIES_INVOCATION:
             if alias.invocation_target_ref is None:
                 raise ValueError("Supplying Statement lacks an invocation target")
@@ -5332,11 +7271,49 @@ def _validate_graph(
 _ADMISSION_ISSUER = object()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
 class AdmittedOir:
     _issuer: object
     endpoint: OirEndpoint
     oir_id: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _ADMISSION_ISSUER:
+            raise ValueError("only local OIR admission may issue this capability")
+
+    def __repr__(self) -> str:
+        return "AdmittedOir(<live>)"
+
+    def __copy__(self) -> "AdmittedOir":
+        raise ValueError("live OIR admissions cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "AdmittedOir":
+        raise ValueError("live OIR admissions cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("live OIR admissions cannot be serialized")
+
+
+_LIVE_ADMITTED_OIRS: dict[int, AdmittedOir] = {}
+
+
+def _is_live_admitted_oir(admitted: object) -> bool:
+    if (
+        type(admitted) is not AdmittedOir
+        or admitted._issuer is not _ADMISSION_ISSUER
+        or _LIVE_ADMITTED_OIRS.get(id(admitted)) is not admitted
+        or type(admitted.endpoint) is not OirEndpoint
+        or admitted.endpoint.semantic_profile != OIR_PROFILE
+    ):
+        return False
+    try:
+        expected_id = oir_endpoint_id(admitted.endpoint)
+    except (TypeError, ValueError):
+        return False
+    return (
+        admitted.oir_id == expected_id
+        and admitted.endpoint.asserted_id == expected_id
+    )
 
 
 def local_admit(
@@ -5362,10 +7339,9 @@ def local_admit(
         return _answer(OutcomeKind.DETERMINISTIC_LIMIT_EXCEEDED, reason=str(error))
     except (KeyError, TypeError, ValueError) as error:
         return _answer(OutcomeKind.MALFORMED, reason=f"LocalOirValid failed: {error}")
-    return _answer(
-        OutcomeKind.AFFIRMATIVE,
-        AdmittedOir(_ADMISSION_ISSUER, endpoint, expected_id),
-    )
+    admitted = AdmittedOir(_ADMISSION_ISSUER, endpoint, expected_id)
+    _LIVE_ADMITTED_OIRS[id(admitted)] = admitted
+    return _answer(OutcomeKind.AFFIRMATIVE, admitted)
 
 
 # ---------------------------------------------------------------------------
@@ -6067,37 +8043,81 @@ class ProjectionProposition:
     purpose: ProjectionPurpose
     source_view_id: object
     target_oir_id: object
-    relation_profile: str
+    relation_profile: object
 
 
 _PROPOSITION_ISSUER = object()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
 class FormedProjectionProposition:
     _issuer: object
     body: ProjectionProposition
     proposition_id: object
 
+    def __post_init__(self) -> None:
+        if self._issuer is not _PROPOSITION_ISSUER:
+            raise ValueError("only K3-D may form a projection proposition")
 
-@dataclass(frozen=True)
+    def __repr__(self) -> str:
+        return "FormedProjectionProposition(<live>)"
+
+    def __copy__(self) -> "FormedProjectionProposition":
+        raise ValueError("formed propositions cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "FormedProjectionProposition":
+        raise ValueError("formed propositions cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("formed propositions cannot be serialized")
+
+
+_LIVE_FORMED_PROPOSITIONS: dict[int, FormedProjectionProposition] = {}
+
+
+_VALIDATION_REQUEST_ISSUER = object()
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
 class ProjectionValidationRequest:
     proposition: FormedProjectionProposition
     source: CheckedEndpointSourceView
     target: AdmittedOir
-    checker_basis: str
+    basis: SupportedExtractionBasis
+    adapter: CheckedProjectionOwnerAdapter
+    checker_basis: object
     work_limit: int
     source_handles: tuple[str, ...]
     schema_set_id: object
     manifest_id: object
     provenance: str
     source_label: str
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _VALIDATION_REQUEST_ISSUER:
+            raise ValueError("only K3-D may form a projection-validation request")
+
+    def __repr__(self) -> str:
+        return "ProjectionValidationRequest(<live>)"
+
+    def __copy__(self) -> "ProjectionValidationRequest":
+        raise ValueError("live validation requests cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "ProjectionValidationRequest":
+        raise ValueError("live validation requests cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("live validation requests cannot be serialized")
+
+
+_LIVE_VALIDATION_REQUESTS: dict[int, ProjectionValidationRequest] = {}
 
 
 _PROJECTED_ISSUER = object()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
 class CheckedProjection:
     _issuer: object
     proposition: FormedProjectionProposition
@@ -6106,9 +8126,53 @@ class CheckedProjection:
     validation_request_id: object
     validation: ProjectionValidationRequest
 
+    def __post_init__(self) -> None:
+        if self._issuer is not _PROJECTED_ISSUER:
+            raise ValueError("only the projection checker may issue this capability")
+
+    def __repr__(self) -> str:
+        return "CheckedProjection(<live>)"
+
+    def __copy__(self) -> "CheckedProjection":
+        raise ValueError("checked projections cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "CheckedProjection":
+        raise ValueError("checked projections cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ValueError("checked projections cannot be serialized")
+
+
+_LIVE_CHECKED_PROJECTIONS: dict[int, CheckedProjection] = {}
+
 
 def projection_proposition_id(proposition: ProjectionProposition) -> object:
-    return _semantic_id("oir.projection-proposition", proposition)
+    if proposition.relation_profile != RELATION_PROFILE:
+        raise TypeError("projection proposition names an unsupported language profile")
+    return _semantic_id(
+        "oir.projection-proposition",
+        (
+            proposition.purpose,
+            proposition.source_view_id,
+            proposition.target_oir_id,
+        ),
+    )
+
+
+def _is_live_formed_proposition(proposition: object) -> bool:
+    if (
+        type(proposition) is not FormedProjectionProposition
+        or proposition._issuer is not _PROPOSITION_ISSUER
+        or _LIVE_FORMED_PROPOSITIONS.get(id(proposition)) is not proposition
+        or type(proposition.body) is not ProjectionProposition
+    ):
+        return False
+    try:
+        return proposition.proposition_id == projection_proposition_id(
+            proposition.body
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def _source_handles(request: ProjectionRequest) -> tuple[str, ...]:
@@ -6144,15 +8208,14 @@ def form_projection_proposition(
     source: object,
     target: object,
     *,
-    relation_profile: str = RELATION_PROFILE,
+    relation_profile: object = RELATION_PROFILE,
 ) -> Answer:
-    if (
-        type(source) is not CheckedEndpointSourceView
-        or source._issuer is not _EXTRACTION_ISSUER
-    ):
+    if not _is_live_checked_source_view(source):
         return _answer(OutcomeKind.REFUSED, reason="source view is not checked")
-    if type(target) is not AdmittedOir or target._issuer is not _ADMISSION_ISSUER:
+    if not _is_live_admitted_oir(target):
         return _answer(OutcomeKind.REFUSED, reason="target OIR is not locally admitted")
+    assert type(source) is CheckedEndpointSourceView
+    assert type(target) is AdmittedOir
     if relation_profile != RELATION_PROFILE:
         return _answer(
             OutcomeKind.KIND_MISMATCH, reason="unknown projection relation profile"
@@ -6175,14 +8238,13 @@ def form_projection_proposition(
         target.oir_id,
         relation_profile,
     )
-    return _answer(
-        OutcomeKind.AFFIRMATIVE,
-        FormedProjectionProposition(
-            _PROPOSITION_ISSUER,
-            body,
-            projection_proposition_id(body),
-        ),
+    formed = FormedProjectionProposition(
+        _PROPOSITION_ISSUER,
+        body,
+        projection_proposition_id(body),
     )
+    _LIVE_FORMED_PROPOSITIONS[id(formed)] = formed
+    return _answer(OutcomeKind.AFFIRMATIVE, formed)
 
 
 def projection_validation_request_id(request: ProjectionValidationRequest) -> object:
@@ -6199,6 +8261,63 @@ def projection_validation_request_id(request: ProjectionValidationRequest) -> ob
             request.source_label,
         ),
     )
+
+
+def _is_live_validation_request(validation: object) -> bool:
+    if (
+        type(validation) is not ProjectionValidationRequest
+        or validation._issuer is not _VALIDATION_REQUEST_ISSUER
+        or _LIVE_VALIDATION_REQUESTS.get(id(validation)) is not validation
+        or not _is_live_formed_proposition(validation.proposition)
+        or not _is_live_checked_source_view(validation.source)
+        or not _is_live_admitted_oir(validation.target)
+        or validation.basis is not validation.source.basis
+        or validation.adapter is not validation.source.adapter
+        or validation.checker_basis != CHECKER_BASIS
+        or type(validation.work_limit) is not int
+        or validation.work_limit <= 0
+    ):
+        return False
+    try:
+        body = validation.proposition.body
+        return (
+            validation.source_handles == _source_handles(validation.source.request)
+            and validation.schema_set_id == validation.source.schema_set_id
+            and validation.schema_set_id == OWNER_SCHEMA_SET_ID
+            and validation.manifest_id == validation.source.manifest_id
+            and validation.manifest_id
+            == read_manifest_id(validation.source.view.purpose)
+            and validation.provenance == validation.source.request.provenance
+            and validation.source_label == validation.source.request.source_label
+            and validation.proposition.proposition_id
+            == projection_proposition_id(body)
+            and body.source_view_id == validation.source.view_id
+            and body.target_oir_id == validation.target.oir_id
+            and body.purpose is validation.source.view.purpose
+            and body.relation_profile == RELATION_PROFILE
+        )
+    except (AssertionError, AttributeError, TypeError, ValueError):
+        return False
+
+
+def _is_live_checked_projection(checked: object) -> bool:
+    if (
+        type(checked) is not CheckedProjection
+        or checked._issuer is not _PROJECTED_ISSUER
+        or _LIVE_CHECKED_PROJECTIONS.get(id(checked)) is not checked
+        or not _is_live_validation_request(checked.validation)
+        or checked.proposition is not checked.validation.proposition
+    ):
+        return False
+    try:
+        return (
+            checked.source_view_id == checked.validation.source.view_id
+            and checked.oir_id == checked.validation.target.oir_id
+            and checked.validation_request_id
+            == projection_validation_request_id(checked.validation)
+        )
+    except (AttributeError, TypeError, ValueError):
+        return False
 
 
 def form_projection_validation_request(
@@ -6221,6 +8340,8 @@ def form_projection_validation_request(
             proposition.value,
             source,
             target,
+            source.basis,
+            source.adapter,
             CHECKER_BASIS,
             work_limit,
             _source_handles(source.request),
@@ -6228,7 +8349,14 @@ def form_projection_validation_request(
             source.manifest_id,
             source.request.provenance,
             source.request.source_label,
+            _VALIDATION_REQUEST_ISSUER,
         )
+        if (
+            source.schema_set_id != OWNER_SCHEMA_SET_ID
+            or source.manifest_id != read_manifest_id(source.view.purpose)
+        ):
+            raise ValueError("source authority carries stale schema or manifest IDs")
+        _LIVE_VALIDATION_REQUESTS[id(result)] = result
     except (TypeError, ValueError) as error:
         return _answer(
             OutcomeKind.MALFORMED, reason=f"validation authority malformed: {error}"
@@ -6268,12 +8396,41 @@ def check_projection(
     if type(validation) is not ProjectionValidationRequest:
         return _answer(OutcomeKind.MALFORMED, reason="wrong validation-request carrier")
     if (
-        validation.proposition._issuer is not _PROPOSITION_ISSUER
-        or validation.source._issuer is not _EXTRACTION_ISSUER
-        or validation.target._issuer is not _ADMISSION_ISSUER
+        validation._issuer is not _VALIDATION_REQUEST_ISSUER
+        or _LIVE_VALIDATION_REQUESTS.get(id(validation)) is not validation
+        or not _is_live_formed_proposition(validation.proposition)
+        or not _is_live_checked_source_view(validation.source)
+        or not _is_live_admitted_oir(validation.target)
+        or validation.basis is not validation.source.basis
+        or validation.adapter is not validation.source.adapter
     ):
         return _answer(
             OutcomeKind.REFUSED, reason="validation capabilities are not live"
+        )
+    try:
+        expected_handles = _source_handles(validation.source.request)
+        expected_manifest = read_manifest_id(validation.source.view.purpose)
+        expected_proposition_id = projection_proposition_id(
+            validation.proposition.body
+        )
+    except (AssertionError, TypeError, ValueError) as error:
+        return _answer(
+            OutcomeKind.REFUSED,
+            reason=f"validation authority cannot be recomputed: {error}",
+        )
+    if (
+        validation.source_handles != expected_handles
+        or validation.schema_set_id != validation.source.schema_set_id
+        or validation.schema_set_id != OWNER_SCHEMA_SET_ID
+        or validation.manifest_id != validation.source.manifest_id
+        or validation.manifest_id != expected_manifest
+        or validation.provenance != validation.source.request.provenance
+        or validation.source_label != validation.source.request.source_label
+        or validation.proposition.proposition_id != expected_proposition_id
+    ):
+        return _answer(
+            OutcomeKind.REFUSED,
+            reason="validation request fields disagree with live formation authority",
         )
     if validation.checker_basis != CHECKER_BASIS:
         return _answer(OutcomeKind.KIND_MISMATCH, reason="checker basis changed")
@@ -6310,41 +8467,63 @@ def check_projection(
             mismatches=mismatches,
         )
     request_id = projection_validation_request_id(validation)
+    checked = CheckedProjection(
+        _PROJECTED_ISSUER,
+        validation.proposition,
+        validation.source.view_id,
+        validation.target.oir_id,
+        request_id,
+        validation,
+    )
+    _LIVE_CHECKED_PROJECTIONS[id(checked)] = checked
     return _answer(
         OutcomeKind.AFFIRMATIVE,
-        CheckedProjection(
-            _PROJECTED_ISSUER,
-            validation.proposition,
-            validation.source.view_id,
-            validation.target.oir_id,
-            request_id,
-            validation,
-        ),
+        checked,
     )
+
+
+@dataclass(frozen=True)
+class ProjectionPipelineRun:
+    """One staged convenience run without fabricated downstream outcomes.
+
+    ``None`` means that the stage was not attempted because an earlier stage
+    did not affirm.  It is process state, not another semantic outcome kind.
+    """
+
+    produced: Answer
+    admitted: Answer | None
+    checked: Answer | None
+
+    def __iter__(self):
+        return iter((self.produced, self.admitted, self.checked))
 
 
 def project_admit_check(
     request: ProjectionRequest,
     *,
     work_limit: int = MAX_WORK,
-) -> tuple[Answer, Answer, Answer]:
+) -> ProjectionPipelineRun:
     produced = project(request, work_limit=work_limit)
     if produced.kind is not OutcomeKind.AFFIRMATIVE:
-        return produced, _answer(OutcomeKind.REFUSED), _answer(OutcomeKind.REFUSED)
+        return ProjectionPipelineRun(produced, None, None)
     admitted = local_admit(produced.value)
     if admitted.kind is not OutcomeKind.AFFIRMATIVE:
-        return produced, admitted, _answer(OutcomeKind.REFUSED)
+        return ProjectionPipelineRun(produced, admitted, None)
     source = derive_source_view(request, work_limit=work_limit)
     if source.kind is not OutcomeKind.AFFIRMATIVE:
-        return produced, admitted, source
+        return ProjectionPipelineRun(produced, admitted, source)
     validation = form_projection_validation_request(
         source.value,
         admitted.value,
         work_limit=work_limit,
     )
     if validation.kind is not OutcomeKind.AFFIRMATIVE:
-        return produced, admitted, validation
-    return produced, admitted, check_projection(validation.value)
+        return ProjectionPipelineRun(produced, admitted, validation)
+    return ProjectionPipelineRun(
+        produced,
+        admitted,
+        check_projection(validation.value),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -6395,6 +8574,7 @@ def _pair_transport(graph: EndpointSemanticGraph, ref: int) -> object:
         edge.destination,
         slot.external_key,
         codec.kind,
+        codec.interface_codec_id,
         None
         if codec.value_type_ref is None
         else _type_semantic(graph, codec.value_type_ref),
@@ -6541,6 +8721,7 @@ def _pair_abi(graph: EndpointSemanticGraph) -> object:
             item.binding_spine_ref,
             item.flow,
             item.invocation_target_ref,
+            item.external_statement,
         )
         for item in abi.statement_aliases
     )
@@ -6561,13 +8742,10 @@ def pressure_probe_p01_endpoint_pair(
     Authoritative endpoint pairing is deferred beyond K3-D.
     """
 
-    if (
-        type(verifier) is not AdmittedOir
-        or verifier._issuer is not _ADMISSION_ISSUER
-        or type(prover) is not AdmittedOir
-        or prover._issuer is not _ADMISSION_ISSUER
-    ):
+    if not _is_live_admitted_oir(verifier) or not _is_live_admitted_oir(prover):
         raise TypeError("P01 pair pressure probe requires independently admitted OIRs")
+    assert type(verifier) is AdmittedOir
+    assert type(prover) is AdmittedOir
     verifier_graph = verifier.endpoint.semantic_graph
     prover_graph = prover.endpoint.semantic_graph
     if (

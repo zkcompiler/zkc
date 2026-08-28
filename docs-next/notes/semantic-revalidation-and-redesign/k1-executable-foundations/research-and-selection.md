@@ -445,18 +445,22 @@ protocol correctness, or the durable specification.
 
 ### 8.1 Final bounded selection result
 
-The strict standalone gate passed 116/116 tests: 90 reference/parity tests
-(88 direct `reference_model` tests, one replay of every frozen oracle record,
-and one exact durable-law transcription check) and 26 independently written
-oracle tests. The accepted frozen anchors are:
+The initial strict standalone checkpoint passed 116/116 tests under the
+historical `bfe22f86...` regime. K3-E later reopened only the smallest
+Foundation cone needed for exact semantic-language profiles, inert authority
+envelopes, and a single identity lane for Foundation standalone kinds. The
+post-repair gate passed 129/129 tests: 103 reference/parity tests (101 direct
+`reference_model` tests, one replay of every frozen oracle record, and one
+exact durable-law transcription check) and 26 independently written oracle
+tests. The current accepted frozen anchors are:
 
-- semantic-core law source: 39,468 bytes, SHA-256
-  `4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3`;
-- encoded regime descriptor: 40,383 bytes, SHA-256
-  `e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0`;
+- semantic-core law source: 45,669 bytes, SHA-256
+  `96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`;
+- encoded regime descriptor: 46,606 bytes, SHA-256
+  `01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`;
   and
 - semantic-regime digest:
-  `bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77`.
+  `a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`.
 
 The final regressions include a conflicting failure-payload declaration and
 host subclasses that attempt to override authenticated algorithm, term,

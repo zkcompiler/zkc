@@ -12,12 +12,13 @@
 > K2 gates and focused follow-up are green in its validation record. K3-A
 > consumer-boundary reconstruction, bounded K3-B dependent-surface,
 > Relations, and carrier co-design, bounded K3-C minimum Analysis closure, and
-> bounded K3-D endpoint-projection closure completed on 2026-08-28. K3-E
-> integrated closure is next. R2 remains an evidence track after the repaired
+> bounded K3-D endpoint-projection closure completed on 2026-08-28. Bounded
+> K3-E integrated closure is also complete at its finite scope. K4/P02
+> protocol-portfolio pressure is next; K5 independent freeze remains pending.
+> R2 remains an evidence track after the repaired
 > `FRI-Grind-1` witness
 > and retained T3 `P01` Schnorr/Sigma result. `P02` is the next witness anchor
-> and may run early as a non-ratifying pressure probe, but its portfolio
-> acceptance follows K1--K3. Stage 4B remains inactive.
+> and now proceeds as the first K4 portfolio case. Stage 4B remains inactive.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -85,7 +86,9 @@ below are reader cross-references rather than inventory edges.
   target-semantic OIR identity and local admission, and a separate exact
   source-relative projection relation for FS verifier and Plan-specialized
   prover endpoints. Fresh, Oracle, module, and generic-prover cases remain
-  typed unsupported boundaries; K3-E integrated closure is next.
+  typed unsupported boundaries. K3-E subsequently reclosed the joined finite
+  profile, view, read, and authority boundary; K4 portfolio pressure is next
+  and K5 still owns independent freeze.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,

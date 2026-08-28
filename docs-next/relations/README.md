@@ -166,5 +166,9 @@ remains normative until explicit consolidation and cutover.
   Full OIR syntax and protocol-family coverage remain later work.
 - Native P02 FRI/IOR and P09 Nova/folding remain executable portfolio pressure
   for commitment/opening and relation-changing reduction paths.
-- K3-E still owns integrated deduplication and freeze review; later stages own
-  normative encodings, implementation correspondence, and migration.
+- K3-E has completed bounded integrated deduplication and joined read closure
+  for the selected P01 relation/Plan grounding path. It did not exercise the
+  full bridge-law portfolio or general relation execution. K4 owns native
+  P02/P09 and broader portfolio pressure; K5 owns independent freeze, and
+  later stages own normative encodings, implementation correspondence, and
+  migration.

@@ -4,8 +4,9 @@
 > **Document state:** Active non-normative K2 target with K3-B consumer view
 > **Target status:** K2 identity-bearing Core and execution body complete;
 > K3-B execution-issued relation grounding view, bounded K3-C Analysis
-> consumption, and bounded K3-D endpoint projection selected; K3-E integrated
-> review remains open
+> consumption, bounded K3-D endpoint projection, and finite K3-E executable
+> integration evidence recorded; owner profile preimages remain open, K4 is
+> next, and K5 freeze remains pending
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Protocol
 > semantics remain under [`docs/`](../../docs/README.md).
@@ -70,16 +71,17 @@ or depth bound. Formation preflights the enclosing canonical body before
 materializing a derived aggregate. Reaching a limit is allowed; crossing it
 produces no Core ID.
 
-The PIR K2 semantic regime supports the exact declarations on this page. In
-this document, that phrase means the exact `B.semantic_regime.id` in the
-authenticated `PriorMetaAuthenticationBasis B`, together with the Core's
-exact-used same-regime semantic modules. It does not introduce a second PIR or
-transcript-construction regime axis. A Core, either Protocol interpretation,
-and any transcript construction for that Core use the same complete `B`,
-including its identity profile, hash suite, semantic-regime descriptor, and
-semantic-regime ID. Equality of a bare digest or only one component is
-insufficient. A Core may import additional same-regime semantic modules under
-Section 8, but only exact-used imports enter its body.
+The shared K1 semantic regime supplies only the common identity, value, and
+evaluation mechanisms. PIR-specific meaning is selected by the exact
+owner-local language profile and, where a body directly cites extensible
+meaning, its exact-used same-regime semantic modules. All of them use the exact
+`B.semantic_regime.id` in the authenticated `PriorMetaAuthenticationBasis B`;
+there is no second PIR or transcript-construction regime axis. A Core, either
+Protocol interpretation, and any transcript construction for that Core use the
+same complete `B`, including its identity profile, hash suite, semantic-regime
+descriptor, and semantic-regime ID. Equality of a bare digest or only one
+component is insufficient. A Core may import additional same-regime semantic
+modules under Section 8, but only exact-used imports enter its body.
 
 Several Core fields need nominal semantic coordinates without asking PIR to
 prove the theorem or cryptographic meaning attached to them. K2 uses one
@@ -100,7 +102,8 @@ NominalProtocolDeclarationBody = MetaRecord {
 }
 ```
 
-The selected PIR regime recognizes this body for the declaration kinds
+The exact-used PIR owner-module closure recognizes this body for the
+declaration kinds
 `"pir.message-channel"`, `"pir.challenge-domain"`,
 `"pir.public-coin-law"`, `"pir.coin-correlation-group"`,
 `"pir.challenge-sharing-contract"`, `"pir.claim-contract"`,
@@ -116,7 +119,89 @@ meaning.
 
 ## 3. Subjects and identities
 
-### 3.1 Core and Protocol
+### 3.1 Exact PIR language-profile split
+
+K2 does not place one catch-all PIR language above every subject. It selects
+three standalone K1 `SemanticLanguageProfile` owners and the following exact
+import topology. This display is a symbolic owner schema, not publication of
+the complete six-field K1 profile preimages or their full typed IDs:
+
+```text
+PIRInteractionProfile = {
+  profile_imports: {},
+  supported_subject_kinds:
+    {"pir.interactive-core", "pir.protocol", "pir.invocation",
+     "pir.source-binding-payload", "pir.source-capability-requirement",
+     "pir.source-consumer", "pir.source-no-policy",
+     "pir.source-policy-closure", "pir.source-purpose"},
+  declarations:
+    {InteractiveCoreBody, FreshProtocolBody, CoreInvocationBody,
+     CoreStaticViewSchemas, ProtocolExecutionViewSchema}
+}
+
+PIRTranscriptFSProfile =
+  the companion page's profile importing exactly PIRInteractionProfile
+
+PIRPublicSetupProfile = {
+  profile_imports:
+    {PIRInteractionProfileId, PIRTranscriptFSProfileId},
+  supported_subject_kinds:
+    {"pir.public-setup-invocation-view",
+     "pir.source-binding-payload", "pir.source-capability-requirement",
+     "pir.source-consumer", "pir.source-no-policy",
+     "pir.source-policy-closure", "pir.source-purpose"},
+  declarations:
+    {PublicSetupInvocationViewBody, its projection and issuance laws}
+}
+```
+
+The required authenticated import closure is selected-root-specific once each
+owner has published its complete profile preimage:
+
+```text
+ExactProfilePreimages(PIRInteractionProfileId) =
+  {PIRInteractionProfileId}
+ExactProfilePreimages(PIRTranscriptFSProfileId) =
+  {PIRInteractionProfileId, PIRTranscriptFSProfileId}
+ExactProfilePreimages(PIRPublicSetupProfileId) =
+  {PIRInteractionProfileId, PIRTranscriptFSProfileId,
+   PIRPublicSetupProfileId}
+```
+
+These are exact no-extra closures. The three-entry convenience bundle is not a
+valid Interaction or Transcript/FS intake. Profile imports are ordinary
+profile edges, not module roots. The combined public-view profile imports both
+Protocol languages because one public-setup view family may name either a
+Fresh or an FS `ProtocolId`; changing an unrelated profile outside this
+three-node cone does not rotate these subjects.
+
+The bounded executable witnesses instantiate deterministic finite profile
+bodies to test this topology, authentication, and rotation behavior. Those
+pins are evidence, not PIR semantic authority. The owning PIR pages still have
+to publish every complete owner-local `SemanticLanguageProfileBody`--including
+the exact family, revision, imports, supported kinds, declaration catalogs,
+and semantic-law-source bytes--and its independently reconstructible full
+typed ID before any dependent K4 ID is treated as persistent and before K5
+freeze.
+
+Every formation, authentication, admission, view-issuance, and view-validation
+operation selects exactly one root profile, authenticates only that root's
+exact closure, requires that exact root ID in the evaluator's supported-profile
+set, and checks every identified subject it forms against the root's
+`supported_subject_kinds`. Lack of evaluator support is `Unsupported`; a
+supported profile that omits a required subject kind is `Refused`; malformed
+profile or closure structure is `Malformed`. Thus an Interaction-only
+evaluator may issue Core and Fresh views without supporting Transcript/FS or
+public-setup semantics, while those downstream operations remain
+`Unsupported`; support never flows backward.
+
+Every identified subject below uses K1 `ProfiledSemanticId`, so the directly
+selected profile ID is in the subject preimage. The `"pir.protocol"` subject
+kind is deliberately supported by two profiles: Fresh selects
+`PIRInteractionProfileId`, while Fiat--Shamir selects
+`PIRTranscriptFSProfileId`. The profile ID makes those meanings unambiguous.
+
+### 3.2 Core and Protocol
 
 ```text
 InteractiveCore = {
@@ -140,8 +225,8 @@ InteractiveCore = {
 The identity-bearing body is `InteractiveCoreBody` in Appendix A:
 
 ```text
-CoreId = SemanticContentId<"pir.interactive-core">(
-  B, InteractiveCoreBody(core))
+CoreId = ProfiledSemanticId<"pir.interactive-core">(
+  B, PIRInteractionProfileId, InteractiveCoreBody(core))
 ```
 
 Display names, source locations, MLIR syntax, authoring labels, diagnostics,
@@ -160,14 +245,19 @@ Protocol = {
   challenge_interpretation: ChallengeInterpretation
 }
 
-ProtocolId = SemanticContentId<"pir.protocol">(B, ProtocolBody(protocol))
+ProtocolLanguageProfile(Fresh) = PIRInteractionProfileId
+ProtocolLanguageProfile(FiatShamir(_)) = PIRTranscriptFSProfileId
+
+ProtocolId = ProfiledSemanticId<"pir.protocol">(
+  B, ProtocolLanguageProfile(protocol.challenge_interpretation),
+  ProtocolBody(protocol))
 ```
 
 `TranscriptConstructionId` is defined by the companion page. `Fresh` is one
 closed tag; its challenge laws are already in the Core. The two Protocol IDs
 are distinct while retaining one literal `CoreId`.
 
-### 3.2 Lifecycle
+### 3.3 Lifecycle
 
 ```text
 CanonicalCoreCandidate
@@ -1166,8 +1256,9 @@ CoreState = {
   optional_terminal
 }
 
-CoreInvocationId = SemanticContentId<"pir.invocation">(
-  B, CoreInvocationBody(admitted_core.id, invocation))
+CoreInvocationId = ProfiledSemanticId<"pir.invocation">(
+  B, PIRInteractionProfileId,
+  CoreInvocationBody(admitted_core.id, invocation))
 ```
 
 Input maps cover every and only declared occurrence. Strict canonical decode
@@ -1391,41 +1482,380 @@ or replay-match authority. Successful replay still does not mint or strengthen
 
 ## 13. PIR-owned source views
 
-An admitted Core exports the following immutable static question-scoped views,
-each derived from the exact body and carrying `CoreId`:
+The names in this section denote exact owner schemas and owner operations, not
+informal tuples or consumer-defined field lists. A downstream domain may select
+a closed projection, but it cannot define a second PIR body schema, invent a
+value, weaken a dependency closure, or mint source authority.
+
+### 13.1 Common view schema, coordinates, and projection law
+
+The exact Core-static view kinds are:
 
 ```text
-PublicBindingView =
-  (scopes, openings, every BindingRef/class/type/value origin)
-
-StrategyDecisionView =
-  (decision points, exact ProverView formation, GuaranteedProverRead table,
-   legal move types)
-
-PublicCoinView =
-  (eligibility result, challenge laws, conditions, joint groups,
-   verifier-private dependency closure)
-
-EffectView =
-  (messages, oracle lifecycle, checks, terminals, supported extensions)
-
-ClaimReductionView =
-  (claim contracts/usage/source, reductions, required challenges/publications,
-   terminal dispositions)
-
-ExecutionView =
-  (visible-history law, resolver coordinates, process-local causal-capability
-   and checked-replay issuance, RunRecord and replay law, owner-local public
-   relation-run-view issuance)
+CoreStaticViewKind =
+    PublicBindingView
+  | StrategyDecisionView
+  | PublicCoinView
+  | EffectView
+  | ClaimReductionView
 ```
 
-PIR owns their source facts and adequacy for the named question. Relations,
-Analysis, and OIR own any additional proposition computed from them. A view is
-not a second Protocol schema and does not add facts absent from the admitted
-body. Section 13.1 separately defines a process-local view issued from one exact
-Protocol execution; it is not one of these static Core views.
+`ExecutionView` is deliberately not in that sum. Execution and replay depend
+on the selected Challenge interpretation, so its owner coordinate is one exact
+`ProtocolId`, even when two Protocols share a `CoreId`. The construction and
+checked-result view kinds are defined in
+[Fiat--Shamir](fiat-shamir.md#13-exact-source-view-contracts).
 
-### 13.1 Execution-issued relation grounding view
+```text
+PIRStaticViewOwnerCoordinate =
+    CoreView(CoreId, CoreStaticViewKind)
+  | ProtocolView(ProtocolId, ExecutionView)
+  | ConstructionView(TranscriptConstructionId, ConstructionStaticViewKind)
+  | FSResultView(CheckedFSConstructionResultRef, FSConstructionView)
+
+PIRStaticViewCoordinate = {
+  owner: PIRStaticViewOwnerCoordinate,
+  semantic_language_profile_id:
+    PIRInteractionProfileId | PIRTranscriptFSProfileId
+}
+
+StaticViewProfile(CoreView(_,_)) = PIRInteractionProfileId
+StaticViewProfile(ProtocolView(FreshProtocolId,_)) = PIRInteractionProfileId
+StaticViewProfile(ProtocolView(FSProtocolId,_)) = PIRTranscriptFSProfileId
+StaticViewProfile(ConstructionView(_,_)) = PIRTranscriptFSProfileId
+StaticViewProfile(FSResultView(_,_)) = PIRTranscriptFSProfileId
+
+PIRViewPathStep =
+    Field(field_ordinal)
+  | VariantCase(case_ordinal)
+  | SequenceElement(element_ordinal)
+
+PIRViewAtomicBoundary =
+    Unit | Natural | MetaBoolean | MetaSymbol | Bytes
+  | ValueType | CanonicalValue(ValueType)
+  | PIRReference | K1SemanticReference
+
+PIRStaticViewFieldCoordinate = {
+  view_coordinate: PIRStaticViewCoordinate,
+  path: NonEmptyFiniteSeq<PIRViewPathStep>,
+  boundary: PIRViewAtomicBoundary
+}
+```
+
+Formation requires
+`coordinate.semantic_language_profile_id = StaticViewProfile(coordinate.owner)`.
+This field is part of the owner binding source body. In particular, an FS
+`ExecutionView` cannot be wrapped under the Interaction profile merely because
+its Protocol shares a Core with a Fresh Protocol.
+
+A field coordinate forms only when its path reaches exactly one atomic leaf of
+the closed body schema selected by `view_coordinate`; an absent field, interior
+record, wrong sequence ordinal, wrong variant arm, or wrong boundary is
+malformed. No text path, display name, wildcard, reflection callback, or
+consumer extension is a coordinate.
+
+The standalone PIR semantic profile governing the source coordinate fixes one closed
+`PIRViewSchemaCatalog` in its inline profile-owned declaration catalog. For
+each view kind it contains exactly the owner subject kind, body schema,
+derivation law, field-coordinate resolver, required-read-closure law, source
+binding schema, and capability contract. This is fixed evaluator dispatch
+under the selected regime. It is not a declaration-module root in an effective
+context, and the profile-import DAG remains the only generic closure mechanism;
+it is also not a consumer-authored catalog.
+
+```text
+PIRStaticViewReadManifest =
+  CanonicalNonEmptySortedUniqueSeq<PIRStaticViewFieldCoordinate>
+
+RequiredPIRViewReadClosure(view_coordinate, selected_fields) =
+  the least sorted-unique field set containing selected_fields and every
+  owner-schema leaf needed to resolve its type, source coordinate, producer,
+  scope/guard/order predecessor, and referenced semantic dependency
+
+PIRStaticViewProjection = {
+  coordinate: PIRStaticViewCoordinate,
+  manifest: PIRStaticViewReadManifest,
+  entries: CanonicalMap<PIRStaticViewFieldCoordinate, exact owner leaf value>
+}
+```
+
+Every manifest field has the same `view_coordinate` and
+`manifest = RequiredPIRViewReadClosure(coordinate, manifest)`. This fixed-point
+equation is intentional: requesting a Check input, for example, also reads the
+exact producer/type/schedule closure needed to interpret its `ValueRef`.
+Requesting only the dangling ref does not form a smaller view. The realized
+read set must equal the manifest exactly. Missing closure is
+`MissingDependency`; extra, duplicate, aliased, reordered, or unconsumed
+entries are `Malformed`. This equality closes both omission and phantom-read
+directions.
+
+### 13.2 Exact Core and Protocol view bodies
+
+The five admitted-Core views and one admitted-Protocol view have these complete
+bodies. Every sequence is in the corresponding admitted Core reference order;
+every repeated type or backlink is owner-derived and checked rather than
+authored.
+
+```text
+PublicBindingViewBody = {
+  core_id: CoreId,
+  scope_openings: CanonicalSeq<{
+    scope_ref, parent, opening, complete_scope_path
+  }>,
+  bindings: CanonicalSeq<{
+    binding_ref, scope_ref, class, value_ref, value_type,
+    value_origin: InvocationPublicInput | Constant | DerivedValue |
+                  OccurrenceOutput,
+    complete_value_producer_coordinate
+  }>
+}
+
+StrategyDecisionViewBody = {
+  core_id: CoreId,
+  decision_points: CanonicalSeq<{
+    decision_ref, occurrence_ref, scope_ref, guard_ref,
+    legal_move_type, prior_decision_refs
+  }>,
+  prover_view_formation: exact prefix/scope/guard visibility law,
+  guaranteed_prover_reads:
+    CanonicalMap<(ProverDecisionPointRef,ProverViewCoordinate),ValueType>,
+  legal_move_types: CanonicalMap<ProverDecisionPointRef,ValueType>
+}
+
+PublicCoinViewBody = {
+  core_id: CoreId,
+  structural_public_coin_eligibility: MetaBoolean,
+  verifier_private_dependency_closure:
+    CanonicalSortedUniqueSeq<ValueRef>,
+  challenges: CanonicalSeq<{
+    challenge_ref, occurrence_ref, scope_ref, value_type, domain, fresh_law,
+    correlation, reduction_use, public_conditions,
+    complete_public_condition_producer_closure
+  }>
+}
+
+EffectViewBody = {
+  core_id: CoreId,
+  occurrence_schedule: CanonicalSeq<{
+    occurrence_ref, scope_ref, guard, effect, output_types
+  }>,
+  value_producer_graph: {
+    public_inputs, verifier_private_inputs, constants, derived_values,
+    occurrence_outputs, exact producer edges and ValueType at every node
+  },
+  messages: CanonicalSeq<exact Message declaration and occurrence backlink>,
+  oracles: CanonicalSeq<exact Oracle lifecycle declaration/backlinks>,
+  checks: CanonicalSeq<exact Check declaration and occurrence backlink>,
+  terminals: CanonicalSeq<exact Terminal declaration and occurrence backlink>,
+  supported_extensions: CanonicalSeq<exact admitted extension declaration>
+}
+
+ClaimReductionViewBody = {
+  core_id: CoreId,
+  claims: CanonicalSeq<{
+    claim_ref, contract, usage, source, creation coordinate,
+    complete consumer and terminal-disposition coordinates
+  }>,
+  reductions: CanonicalSeq<{
+    reduction_ref, contract, scope, apply_occurrence, ordered inputs/outputs,
+    side_inputs, required_challenges, complete publication requirements
+  }>,
+  terminal_dispositions:
+    CanonicalSeq<(TerminalRef,ClaimRef,Consume | Discharge)>
+}
+
+ExecutionViewBody = {
+  protocol_id: ProtocolId,
+  core_id: CoreId,
+  challenge_interpretation: ChallengeInterpretation,
+  visible_history_law,
+  resolver_coordinates,
+  generated_execution_law,
+  run_record_schema,
+  replay_qualification_law,
+  relation_run_view_issuance_law
+}
+```
+
+For these view schemas, record field ordinals and variant tags are the written
+order. A phrase of the form `exact X declaration` means the complete existing
+Appendix-A `XBody`, not a new tuple with selected fields; each added backlink is
+the unique admitted `OccurrenceRef` or producer coordinate derived by the Core
+admission laws. `ValueType`, canonical values, Core references, K1 references,
+and option/sequence/map wrappers use their already defined exact bodies. Thus
+the catalog can enumerate every atomic leaf and the field resolver has no prose
+or implementation-defined remainder.
+
+`RequiredPIRViewReadClosure` is constructor-specific. In particular:
+
+- a Public-binding leaf closes to its exact scope opening, type, origin, and
+  producer coordinate;
+- a decision/read leaf closes to the exact decision, visibility formation,
+  type, and causal predecessor set;
+- a Challenge leaf closes to its occurrence, public conditions, producer
+  closure, law, correlation, and reduction-use fields;
+- any Message, Check, Terminal, guard, or occurrence-output leaf closes through
+  `occurrence_schedule` and `value_producer_graph` to every referenced producer,
+  scope, guard, type, and ordering fact;
+- a claim or reduction leaf closes to its exact creation/use/disposition and
+  challenge/publication closure; and
+- an Execution leaf closes to the exact `ProtocolId`, interpretation, and
+  `CoreId`, so the Fresh and Fiat--Shamir Protocols over one Core cannot alias.
+
+PIR owns these facts and this adequacy. Relations, Analysis, and OIR own any
+additional proposition computed from them. A view is not a second Protocol
+schema and adds no fact absent from its exact admitted owner body.
+
+### 13.3 Issuance, bindings, capabilities, and outcomes
+
+```text
+PIRStaticViewIssueOutcome =
+    Affirmative(IssuedPIRStaticView)
+  | Unsupported(PIRStaticViewUnsupportedReason)
+  | MissingDependency | KindMismatch | Malformed | Refused
+  | DeterministicLimitExceeded | CheckerFailure
+
+IssuePIRStaticView(
+  exact admitted Core or Protocol selected by the coordinate,
+  exact inert admitted-subject authority binding,
+  matching fresh admission capability,
+  exact PIRStaticViewReadManifest,
+  exact PIR evaluator and deterministic limits)
+    -> PIRStaticViewIssueOutcome
+
+IssuedPIRStaticView = {
+  projection: PIRStaticViewProjection,
+  source_binding:
+    ExactPIRStaticViewAuthorityBinding<view kind>
+      = OwnerLocalSourceAuthorityBinding,
+  capability: PIRStaticViewCapability<coordinate,manifest,projection>
+}
+```
+
+The operation reauthenticates the owner body, resolves the catalog entry,
+derives the full owner view, computes the least required closure independently
+of the requested projection, and requires exact realized-read equality. It
+constructs a K1 `OwnerLocalSourceAuthorityBinding` with owner `"pir"`,
+capability family `"static-view"`, and the exact projection object as its local source
+coordinate. Its profiled owner-binding payload commits to the producer
+coordinate and complete field manifest. Its policy disposition is an explicit
+`OwnerDefinesNoPolicy(exact PIR no-policy declaration ID)`; its policy-closure
+ID commits to that
+declaration and an `OwnerCapabilityRequirement` naming the exact typed consumer
+and purpose. The binding is inert and contains no live token.
+
+The fresh `PIRStaticViewCapability` retains that exact binding object, the
+admitted handle, manifest and projection objects, evaluator, typed consumer and
+purpose, and issuance occurrence. The local binding, capability, and issued
+aggregate are noncopyable and nonserializable. Bearer delegation means passing
+the identical live capability object; reconstruction, structural equality,
+cross-family substitution, or reuse for another consumer or purpose grants no
+authority.
+
+The consumer and purpose intake coordinates may be any exact same-regime K1
+`TypedContentId` owned by the downstream domain; PIR does not enumerate or
+reinterpret downstream subject kinds. It nominalizes them before using them in
+an authority identity:
+
+```text
+PIRSourceConsumerRoleId(family,c) =
+  ProfiledSemanticId<"pir.source-consumer">(
+    B, StaticViewProfile(coordinate.owner), {family, ContentRef(c)})
+
+PIRSourcePurposeRoleId(family,p) =
+  ProfiledSemanticId<"pir.source-purpose">(
+    B, StaticViewProfile(coordinate.owner), {family, ContentRef(p)})
+```
+
+The payload and `OwnerCapabilityRequirement` contain these owner-profiled role
+IDs, while the live capability retains the exact original `c` and `p` and
+validation compares them exactly. This permits a typed OIR or Analysis
+coordinate without teaching PIR that downstream language, yet prevents an
+unrelated identifier, swapped role, different family, or different purpose
+from substituting for the requested authority.
+
+There is no semantic Negative: a static projection of an admitted owner either
+is issued exactly or fails by one qualified noncompletion branch. An
+unsupported view kind returns no partial projection or binding. A wrong Core,
+Protocol, view kind, result origin, manifest, capability, or purpose is
+`Refused` or `KindMismatch`, never a differently scoped affirmative.
+
+### 13.4 Invocation-issued public setup view
+
+Static `PublicBindingViewBody` declares public-binding meaning; it does not and
+cannot contain an invocation's values. PIR exposes those values through one
+separate fixed quotient:
+
+```text
+PublicSetupInvocationEntry = {
+  binding_ref: BindingRef,
+  scope_ref: ScopeRef,
+  class: SessionContext | PublicParameter,
+  value_type: ValueType,
+  value: CanonicalValue<value_type>
+}
+
+PublicSetupInvocationViewBody = {
+  protocol_id: ProtocolId,
+  core_id: CoreId,
+  entries:
+    CanonicalSeq<PublicSetupInvocationEntry in BindingRef order>
+}
+
+PublicSetupInvocationViewId =
+  ProfiledSemanticId<"pir.public-setup-invocation-view">(
+    B, PIRPublicSetupProfileId, PublicSetupInvocationViewBody)
+
+PublicSetupInvocationViewCoordinate =
+  PublicSetupInvocationView(ProtocolId,PublicSetupInvocationViewId)
+
+PublicSetupInvocationEntryBody(x) = R{
+  0:N(x.binding_ref),
+  1:N(x.scope_ref),
+  2:V(0,Unit) | V(1,Unit), // SessionContext | PublicParameter
+  3:ValueTypeBody(x.value_type),
+  4:x.value.datum
+}
+
+PublicSetupInvocationViewBody(x) = R{
+  0:ContentRef(x.protocol_id),
+  1:ContentRef(x.core_id),
+  2:S[PublicSetupInvocationEntryBody(e)... in BindingRef order]
+}
+
+IssuePublicSetupInvocationView(
+  exact admitted Protocol,
+  exact admitted CoreInvocation,
+  exact inert Protocol and invocation authority bindings,
+  matching fresh capabilities,
+  exact PIR evaluator and limits)
+    -> Affirmative({
+         view,
+         ExactPublicSetupInvocationViewAuthorityBinding
+           = PortableSourceAuthorityBinding,
+         PublicSetupInvocationViewCapability
+       })
+       | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+       | DeterministicLimitExceeded | CheckerFailure
+```
+
+The entries are every and only `SessionContext` and `PublicParameter` binding
+occurrence. The view contains no Statement, verifier-private input, unbound
+public input, prover output, full `CoreInvocationId`, or completed record. Its
+portable ID changes with any visible entry, type, binding coordinate,
+`ProtocolId`, or `CoreId`; changing only a Statement or verifier-private value
+does not change this quotient ID. This is the deliberate portable exception:
+the K1 binding uses `PublicSetupInvocationViewId` as its portable source
+coordinate, owner `"pir"`, family `"public-setup-invocation-view"`, and a
+public-view-profiled payload, explicit no-policy declaration,
+policy closure, and typed consumer/purpose requirement. The binding remains
+inert. The fresh noncopyable capability retains that exact binding object and
+the exact full invocation; substituting an equal or copied portable binding
+does not move the live capability. Cold use must reauthenticate the Protocol
+and invocation and rerun issuance; the portable body or binding alone grants
+nothing.
+
+### 13.5 Execution-issued relation grounding view
 
 Relations sometimes needs the value that one exact verifier run consumed at a
 scoped Statement, phase-input, Oracle, claim, reduction, check, terminal, or
@@ -1772,7 +2202,7 @@ observationally different, that a binding digest is collision resistant, or
 that access receipts exclude host side channels.
 
 The owner-local relation-run view exposes only the closed public coordinates in
-Section 13.1. It supplies no verifier-private grounding channel. A later need to
+Section 13.5. It supplies no verifier-private grounding channel. A later need to
 ground a relation in confidential run state requires a separately designed
 PIR-owned disclosure contract and purpose-specific view; a Relations manifest
 cannot enable it. The derived decision references, structural read table,
@@ -2029,5 +2459,8 @@ ValueTypeBody(T) = CanonicalValueTypeBody(T)
 `ModuleDeclarationRefBody` and `SemanticModuleRefBody` are the exact Section 2
 wrappers around the K1 union and content-reference carriers. None is a textual
 identifier. Tag meanings are fixed by the order shown on this page. Changing a
-field, tag, order, or admission law requires a new
-supported PIR semantic module/regime; old bytes are never reinterpreted.
+field, tag, order, or admission law rotates the exact owning PIR profile and
+every downstream profile that imports it. A module-owned declaration change
+instead rotates that module and the subjects that exactly use it. The shared
+Foundation semantic regime rotates only when a Foundation-owned mechanism or
+its interpretation changes. Old bytes are never reinterpreted.

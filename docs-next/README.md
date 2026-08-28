@@ -21,8 +21,10 @@ one bounded research package at its selection gate. It does not mean the
 promoted candidate is mutually closed or semantically frozen. The
 [v0 Semantic Design Program](project/v0-design-program.md#14-progress-and-change-control)
 owns that live integrated-design gate. Bounded K3-D endpoint projection is
-complete at its stated scope, but the kernel is not frozen and full Stage 4B
-remains inactive.
+complete at its stated scope, and bounded K3-E integrated closure is complete
+at its stated finite scope. K4 bounded protocol-portfolio pressure is next;
+K5 independent freeze remains later. The semantic kernel is not frozen and
+full Stage 4B remains inactive.
 
 ## Where current truth lives
 
@@ -165,9 +167,12 @@ semantic-composition candidate at package resolution, promoted it into
 candidate target owners, and produced separate Stage 4A and Stage 4B entry
 contracts. Stage 4A selected the federated Analysis and validated-decision
 Compiler architecture and promoted candidate target owners. K3-D subsequently
-selected whole-source-provenance-free PIR endpoint views, a minimum target-semantic OIR body,
-and an independent projection relation while leaving full Stage 4B
-unactivated.
+selected whole-source-provenance-free PIR endpoint views, a minimum target-
+semantic OIR body, and an independent projection relation while leaving full
+Stage 4B unactivated. K3-E then reclosed the joined bounded K1--K3-D profile,
+owner-view, read, and authority boundary over one finite P01/Schnorr witness.
+That result routes protocol-family pressure to K4 and independent freeze to
+K5; it is not a semantic freeze or Stage 4B activation.
 
 The first semantic reconstruction result is the
 [Candidate v0 Semantic Architecture](project/v0-semantic-architecture.md). It

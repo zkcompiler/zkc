@@ -35,7 +35,7 @@ FROZEN_REGIME = {
     "id_type": "prior-meta",
     "foundation_profile": FOUNDATION,
     "subject_kind": REGIME_KIND,
-    "digest": "bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77",
+    "digest": "a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c",
 }
 
 
@@ -246,7 +246,7 @@ class TypedIdentityTests(unittest.TestCase):
         )
         return request
 
-    def test_regime_root_freezes_only_the_selected_core_calculus(self) -> None:
+    def test_regime_root_freezes_the_selected_foundation_mechanisms(self) -> None:
         requests = [
             json.loads(line)
             for line in (ORACLE_DIR / "cases" / "requests.jsonl")
@@ -301,10 +301,10 @@ class TypedIdentityTests(unittest.TestCase):
         law_source = bytes.fromhex(core_fields[1]["value"]).decode("ascii")
         self.assertTrue(law_source.startswith("zkc.foundation.semantic-core-law.v0\n"))
         law_octets = law_source.encode("ascii")
-        self.assertEqual(len(law_octets), 39_468)
+        self.assertEqual(len(law_octets), 45_669)
         self.assertEqual(
             hashlib.sha256(law_octets).hexdigest(),
-            "4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3",
+            "96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc",
         )
         self.assertIn("source-encoding=ASCII-0x20..0x7e;", law_source)
         self.assertIn(
@@ -313,6 +313,16 @@ class TypedIdentityTests(unittest.TestCase):
         )
         self.assertIn("decl-ref-resolution=", law_source)
         self.assertIn("module-closure-measure=", law_source)
+        self.assertIn("semantic-language-profile-body=", law_source)
+        self.assertIn(
+            "no-kind-is-prior-meta-or-any-foundation-standalone-semantic-kind",
+            law_source,
+        )
+        self.assertIn("identity-body-mode-law=", law_source)
+        self.assertIn("canonical-value-id-body(P,T,d):=", law_source)
+        self.assertIn("external-operation-contract-id=", law_source)
+        self.assertIn("effective-semantic-context=", law_source)
+        self.assertIn("portable-source-authority-binding-body=", law_source)
         self.assertIn("primitive-ref-pair-law=", law_source)
         self.assertIn("evaluation-request-snapshot=", law_source)
         self.assertTrue(
@@ -323,14 +333,24 @@ class TypedIdentityTests(unittest.TestCase):
             )
         )
         self.assertEqual(root_fields[3]["items"], [])
+        self.assertEqual(
+            root_fields[5],
+            {
+                "tag": "symbol",
+                "value": (
+                    "language-profiles-and-extension-modules-"
+                    "same-root-dag-v0"
+                ),
+            },
+        )
 
         frozen = oracle.process_request(root)
         self.assertEqual(frozen["outcome"], "Completed", frozen)
         descriptor_octets = bytes.fromhex(frozen["canonical_hex"])
-        self.assertEqual(len(descriptor_octets), 40_383)
+        self.assertEqual(len(descriptor_octets), 46_606)
         self.assertEqual(
             hashlib.sha256(descriptor_octets).hexdigest(),
-            "e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0",
+            "01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f",
         )
         self.assertEqual(frozen["content_id"], FROZEN_REGIME)
 

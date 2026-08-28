@@ -8,9 +8,9 @@
 > the candidate. It cannot override its durable owners or current authority
 > under [`docs/`](../../../../docs/README.md).
 > **Validated:** 2026-08-27
-> **Disposition:** Retain with the K3 work package until K3-E confirms that
-> selected rationale, repairs, and deferrals have durable homes; delete it
-> before cutover.
+> **Disposition:** K3-E subsequently completed its bounded joined audit.
+> Retain with the K3 work package until the selected rationale, repairs, and
+> residuals are durably absorbed; delete it before cutover.
 
 ## 1. Exact scope and candidate owners
 
@@ -149,7 +149,11 @@ Passing these tests demonstrates finite constructibility and rejection at the
 named boundaries only. It does not promote fixture labels, Python objects, or
 host callbacks into target semantics.
 
-## 5. Final verification record
+## 5. Historical K3-B checkpoint verification record
+
+This table predates the K3-E profile and owner-export repairs. K3-E later
+reclosed the expanded K3-B instrument at 47/47 under the rotated Foundation
+regime; the K3-E integration record owns that current result.
 
 | Gate | Final result |
 |---|---|
@@ -195,21 +199,27 @@ non-result attempt or the later positive rerun alone.
 K3-B is **bounded complete** for its stated dependent-surface scope. K2 remains
 **provisionally closed**: no K3-B consumer required a new verifier-observable
 or identity-bearing Core fact. This is not a full semantic-kernel freeze.
-K3-C, the minimum Analysis source, strategy/experiment,
-theorem-applicability, and quantitative-loss contract, is next.
+At this checkpoint K3-C, the minimum Analysis source, strategy/experiment,
+theorem-applicability, and quantitative-loss contract, was next. K3-C through
+bounded K3-E subsequently completed at their recorded scopes; their own
+records own the later repairs and residuals.
 
 The following remain explicit residuals:
 
 - P02 and P09 require K4 protocol-family validation and may provide new
   constructive pressure without silently reopening K2;
-- K3-C must close minimum Analysis propositions and source manifests;
-- K3-D must close the minimum PIR-to-OIR projection-obligation contract;
-- K3-E must perform the integrated closure and reopen audit; and
+- at this checkpoint K3-C still had to close minimum Analysis propositions and
+  source manifests;
+- at this checkpoint K3-D still had to close the minimum PIR-to-OIR
+  projection-obligation contract;
+- at this checkpoint K3-E still had to perform the integrated closure and
+  reopen audit; and
 - K4 retains protocol-family expressibility and the deferred P02/P09 work.
 
 This record makes no claim of cryptographic security, theorem truth,
 soundness, completeness, knowledge extraction, zero knowledge,
 Fiat--Shamir theorem applicability, protocol-family completeness,
 implementation conformance, production readiness, final MLIR spelling,
-complete K3-C/K3-D/K3-E semantics, integrated freeze, migration readiness, or
-cutover readiness.
+general K3-C/K3-D/K3-E semantics, integrated freeze, migration readiness, or
+cutover readiness. The later bounded closures do not establish those stronger
+claims.

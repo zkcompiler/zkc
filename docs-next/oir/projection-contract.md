@@ -18,9 +18,9 @@ ClassifyEndpointProjectionSupport(exact admitted sources, purpose, profile)
   -> SupportedExtractionBasis | Unsupported | qualified noncompletion
 
 ExtractEndpointSourceView(SupportedExtractionBasis, exact PIR evaluator)
-  -> CheckedEndpointSourceView | Negative adequacy | qualified noncompletion
+  -> CheckedEndpointSourceView | qualified noncompletion
 
-ProjectEndpoint(CheckedEndpointSourceView)
+ConstructIndependentOirCandidate(exact SupportedExtractionBasis, OIR profile)
   -> unauthoritative OIR candidate | qualified noncompletion
 
 AuthenticateAndAdmitOir(candidate, exact OIR dependencies)
@@ -32,6 +32,22 @@ FormProjectionProposition(CheckedEndpointSourceView, AdmittedOir, profile)
 ValidateProjection(formed proposition, live authorities, checker, limits)
   -> Affirmative | Negative | qualified noncompletion
 ```
+
+For the bounded profile, `SupportedExtractionBasis` contains the exact live
+`CheckedProjectionOwnerAdapterV0` defined by the PIR source-view contract. The
+adapter joins all currently available purpose-bound K2/K3-B owner views with
+one explicitly admitted residual future-owner supplement; raw supplement
+data, copied capabilities, or unauthenticated Interface/Plan facts cannot
+enter either graph constructor. This is source-side authority only. Neither
+the adapter nor the supplement is an input to source-blind local OIR
+admission, and neither enters `OirId`.
+
+The executable evidence exposes this target lane as
+`project_supported_endpoint(basis)`. Source extraction and independent target
+construction consume the identical live basis and adapter, while the target
+lane receives no `CheckedEndpointSourceView` and performs no source/target
+comparison. This makes the authority chain inspectable without putting a PIR
+source ID, basis, adapter, or manifest into OIR semantic identity.
 
 `LocalOirValid(O)` asks whether OIR is a coherent endpoint semantic object.
 `ProjectionCorrect(S,O)` asks whether it is exactly the selected endpoint
@@ -58,12 +74,13 @@ K3-D therefore selects one canonical shared value schema:
 EndpointSemanticGraphBody
 ```
 
-This schema is a joint PIR/OIR bridge contract. PIR owns extraction of that
-graph. OIR owns independent construction, authentication, and local
-interpretation. Neither owner can reinterpret one of its fields; an exact
-schema or `DeriveEndpointContractV0` change rotates both the K3-D projection
-profile and this OIR semantic profile. Sharing a value schema transfers no
-source handle, read authority, or correctness.
+OIR is the one semantic owner and physical definition site for this bridge
+schema and `DeriveEndpointContractV0`. PIR owns exhaustive source traversal,
+the read manifest, and extraction into the OIR-owned value type. It may not
+define or reinterpret a shadow graph schema. An exact schema or contract-law
+change rotates the OIR language profile and every exact-used downstream PIR
+projection-view profile. Producing this value transfers no source handle,
+read authority, local OIR admission, or correctness.
 Projection compares the independently formed canonical graph bodies exactly.
 
 This is the minimum closed translation-validation boundary. It is stricter and
@@ -79,14 +96,16 @@ The complete bounded target identity is:
 
 ```text
 OirEndpoint = {
-  semantic_profile: OirSemanticProfileV0,
+  semantic_profile: OirEndpointGraphProfileId,
   semantic_graph: EndpointSemanticGraph
 }
 ```
 
-The exact graph schema is imported from
-[PIR Endpoint Projection Views](../pir/endpoint-projection-views.md#appendix-a-exact-selected-source-view-body)
-under the same exact K1 basis and semantic regime. It contains:
+The exact graph schema is defined physically in Appendix A below. Its
+component subbodies consume the exact source-independent value grammars fixed
+by [PIR Endpoint Projection Views](../pir/endpoint-projection-views.md#appendix-a-exact-selected-source-view-body)
+under the same exact K1 basis and exact-used language-profile closure. It
+contains:
 
 - role, exact-used dependencies, and exact value types;
 - canonical constants and pure-node value graph;
@@ -124,10 +143,15 @@ must derive this exact semantic body before an `OirId` exists.
 ## 4. Identity
 
 ```text
-OirId =
-  SemanticContentId<"oir.endpoint">(
-    B, OirEndpointBody(endpoint))
+OirId(endpoint) =
+  ProfiledSemanticId<"oir.endpoint">(
+    B, OirEndpointGraphProfileId,
+    OirEndpointDomainBody(endpoint))
 ```
+
+The carrier's `semantic_profile` must equal `OirEndpointGraphProfileId`. K1's
+profiled wrapper places that ID in the semantic preimage exactly once; the
+domain body does not repeat a profile body or profile ID.
 
 `OirId` includes every semantic operand in the graph and excludes:
 
@@ -143,8 +167,10 @@ An exact Core or TranscriptConstruction ID that K2 absorbs or uses in a
 namespace remains inside the graph's dependency table. Original K2 scope,
 binding, occurrence, challenge, condition, module-frame, and draw coordinates
 remain wherever the selected K2 runtime law consumes them. Those values are
-semantics, not provenance. Interface codec/slot and Plan ordinals are local
-graph refs and are rebased.
+semantics, not provenance. Interface codec/slot and Plan table ordinals are
+local graph refs and are rebased. The exact Interface codec content ID,
+external slot key, and external Statement coordinate remain semantic graph
+operands; rebasing may not erase or synthesize any of them.
 
 Consequently, two exact sources with the same complete endpoint quotient share
 one semantic OIR. Dead Plan nodes, witness exports, and private source maps do
@@ -266,8 +292,13 @@ ProjectionProposition = {
   purpose: EndpointProjectionPurpose,
   source_view_id: EndpointSourceViewId,
   target_oir_id: OirId,
-  relation_profile: K3DProjectionRelationV0
+  relation_profile: OirProjectionRelationProfileId
 }
+
+ProjectionPropositionId(x) =
+  ProfiledSemanticId<"oir.projection-proposition">(
+    B, OirProjectionRelationProfileId,
+    ProjectionPropositionDomainBody(x))
 ```
 
 Procedure, authority, and audit data remain outside it:
@@ -279,6 +310,7 @@ ProjectionValidationRequest = {
   exact admitted ProtocolInterface,
   optional exact admitted ProverPlan,
   optional exact affirmative CheckedPlanRealizes,
+  exact live CheckedProjectionOwnerAdapterV0,
   exact affirmative SupportedExtractionBasis,
   exact affirmative CheckedEndpointSourceView,
   exact AdmittedOir,
@@ -288,11 +320,18 @@ ProjectionValidationRequest = {
 ```
 
 Request formation reauthenticates every named body and requires the live
-handles/capabilities to agree with the proposition IDs. Full source IDs,
-manifest, realized reads, checker, limits, provenance, and evidence bind this
-request and the resulting process-local capability, not proposition identity.
-View-equivalent distinct sources may therefore share one proposition while
-receiving distinct live capabilities.
+adapter, owner-view capabilities, admitted residual supplement capability,
+the exact identical `SupportedExtractionBasis`, the exact adapter retained by
+the checked source view, and all other handles to agree with the proposition
+IDs. The residual supplement is restricted to the closed families named by
+the PIR source-view contract; it cannot override an available owner-issued
+fact. Request formation and validation recompute source handles, schema-set
+and manifest IDs, proposition ID, provenance, source label, checker basis, and
+deterministic limit binding. Full source IDs, manifest, realized reads,
+checker, limits, provenance, and evidence bind this request and the resulting
+process-local capability, not proposition identity. View-equivalent distinct
+sources may therefore share one proposition while receiving distinct live
+capabilities.
 
 There is no producer witness in this exact-equality profile. Removing it also
 removes the earlier ambiguity between rejection of one witness and refutation
@@ -300,16 +339,18 @@ of an existential proposition.
 
 ## 7. Exact projection relation
 
-Let `S` be the authenticated `EndpointSourceViewBody` retained by the checked
-source capability, and `O` the independently admitted `OirEndpointBody`.
+Let `(source_profile,S)` be the authenticated profiled source subject retained
+by the checked source capability, where `S` is its
+`EndpointSourceViewDomainBody`. Let `(oir_profile,O)` be the independently
+admitted profiled OIR subject, where `O` is its `OirEndpointDomainBody`.
 Bounded v0 defines:
 
 ```text
-ProjectionCorrectV0(S,O) :=
-  S.profile = K3DProjectionV0
-  and O.profile = OirSemanticProfileV0
-  and ContractLaw(S.profile) = EndpointContractLawV0
-  and ContractLaw(O.profile) = EndpointContractLawV0
+ProjectionCorrectV0((source_profile,S),(oir_profile,O)) :=
+  source_profile = PirEndpointSourceViewProfileId
+  and oir_profile = OirEndpointGraphProfileId
+  and ContractLaw(source_profile) = EndpointContractLawV0
+  and ContractLaw(oir_profile) = EndpointContractLawV0
   and PurposeRole(S.purpose) = O.semantic_graph.role
   and M(S.semantic_graph) = M(O.semantic_graph)
 ```
@@ -371,6 +412,12 @@ K3-D. Missing bytes, types, authority, formation, limits, and evaluator
 operation cannot become Negative, and no partial target or comparison result
 is returned.
 
+A convenience pipeline may retain an optional result for each sequential
+stage. If an earlier stage does not affirm, every later stage is
+`NotAttempted` process state represented by absence, not a fabricated
+`Refused`, `Negative`, or other semantic outcome. `NotAttempted` is therefore
+not a member of `ProjectionValidationOutcomeBody`.
+
 Only Affirmative mints:
 
 ```text
@@ -378,10 +425,13 @@ ProjectedOirCapability<exact ProjectionValidationRequest>
 ```
 
 The capability is opaque, linear where consumed, process-local, and bound to
-the exact live source and target handles. Serialization transfers neither it
-nor authority. Cold recovery reauthenticates and readmits every subject,
-reclassifies support, re-extracts the source view, readmits OIR, reforms the
-request, and reruns validation.
+the exact identical live validation request and therefore to its full basis,
+adapter, source, proposition, and target chain. Every consumed carrier in that
+chain is process-registered and noncopyable; a structurally equal
+reconstruction is not authority even when all public fields match.
+Serialization transfers neither it nor authority. Cold recovery
+reauthenticates and readmits every subject, reclassifies support, re-extracts
+the source view, readmits OIR, reforms the request, and reruns validation.
 
 ## 9. Role semantics and deferred endpoint pairing
 
@@ -500,37 +550,57 @@ family-wide projectability result, or security claim.
 
 ## Appendix A. Exact OIR and projection bodies
 
-All bodies use the exact K1 notation and the same `PriorMetaBasisId` and
-selected `SemanticRegimeId` as the source graph. `CR(x)=Y(ContentRefV0(x))`.
-`EndpointPurposeBody`, `K3DProjectionProfileBody`,
-`EndpointContractLawV0Body`, `EndpointSemanticGraphBody`, and the complete
-non-identity `DerivedEndpointContractBody` are imported exactly from the PIR
-specification linked in Section 3; OIR cannot reinterpret their tags, fields,
-local-reference rules, or bounds.
+All bodies use the exact K1 notation and the same
+`PriorMetaAuthenticationBasis`, selected `SemanticRegimeId`, and exact-used
+language-profile closure as the source graph.
+`CR(x)=Y(ContentRefV0(x))`. `EndpointPurposeBody` and the component graph-body
+constructors are imported exactly from the PIR source-view specification
+linked in Section 3. OIR owns the aggregate graph schema, endpoint-contract
+law, OIR profile, and projection relation below. PIR cannot reinterpret their
+tags, fields, local-reference rules, or bounds.
 
 ```text
-OirSemanticProfileBody = R{
-  0:V(0,U),1:EndpointContractLawV0Body
-}
-K3DProjectionRelationV0Body = V(0,U)
+EndpointContractLawV0Body = V(0,U)
 
-OirEndpointBody(x) = R{
-  0:OirSemanticProfileBody,
-  1:EndpointSemanticGraphBody(x.semantic_graph)
+EndpointSemanticGraphBody(x) = R{
+  0:EndpointRoleBody(x.role),
+  1:S[EndpointDependencyBody(d)... in body-byte order],
+  2:S[VT(T)... in body-byte order],
+  3:S[SourceConstantBody...],4:S[SourcePureNodeBody...],
+  5:RoleEndpointAbiGraphBody(x.abi),
+  6:S[SourceSpineEventBody...],
+  7:OptionBody(x.fs,StaticFsEndpointSemanticsBody),
+  8:S[SourceClaimAtomBody...],
+  9:S[SourceAnchoredObligationBody...],
+ 10:OptionBody(x.plan,PlanGraphBody)
 }
 
-ProjectionPropositionBody(x) = R{
+OirEndpointDomainBody(x) = EndpointSemanticGraphBody(x.semantic_graph)
+
+ProjectionPropositionDomainBody(x) = R{
   0:EndpointPurposeBody(x.purpose),
   1:CR(x.source_view_id),
-  2:CR(x.target_oir_id),
-  3:K3DProjectionRelationV0Body
+  2:CR(x.target_oir_id)
 }
 ```
 
-The semantic proposition has exactly four fields. Source IDs, manifest,
-source maps, read receipts, support/extraction/admission capabilities, checker,
-limits, evidence, and provenance are request inputs and cannot appear in this
-body. K3-D defines no pair proposition body.
+The semantic proposition domain has exactly three fields. Its exact relation
+profile is field 0 of the outer K1 `ProfiledSemanticBody`, not a fourth domain
+field. Source IDs, manifest, source maps, read receipts,
+support/extraction/admission capabilities, checker, limits, evidence, and
+provenance are request inputs and cannot appear in this body. K3-D defines no
+pair proposition body.
+
+The bounded executable also assigns profiled probe-local identifiers to its
+checker-basis label and validation-request binding. This target page does not
+yet select portable canonical domain bodies for either validation-layer
+record: the request contains live process authority and the checker coordinate
+still needs an exact owner declaration. Those two executable identifiers are
+therefore **bounded validation identities**, not durable semantic identities or
+evidence of K1 preimage parity. A future durable definition must give each one
+an exact typed domain body under `OirProjectionValidationProfileId`; it cannot
+promote the instrument's label, provenance, source label, live handle, or JSON
+encoding by convention.
 
 The OIR body must fit the cumulative K1 `2^20` encoded-byte, `2^14` node,
 `2^14` aggregate-child-edge, and depth-384 limits. Local admission and

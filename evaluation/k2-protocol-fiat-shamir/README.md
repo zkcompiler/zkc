@@ -8,6 +8,12 @@ compiler implementation, protocol conformance, or a cryptographic proof.
 machinery directly. It does not reproduce a second foundation. On top of that
 fixed basis it implements a fixture-exact finite model with:
 
+- three exact standalone K1 language profiles: Interaction/Core+Fresh,
+  Transcript/FS importing Interaction, and public-view export importing both;
+  every K2 semantic ID selects its exact profile in the preimage, and the
+  selected root's one-, two-, or three-profile bundle is authenticated as an
+  exact no-extra import closure. Issuance requires evaluator support only for
+  that root and refuses a supported profile omitting any emitted subject kind;
 - an exact finite total interaction schedule with explicit nested scope opens;
 - first-class statements, public context and parameters, and optional
   verifier-private inputs;
@@ -36,6 +42,19 @@ fixed basis it implements a fixture-exact finite model with:
   obligations, linear claim-consumer uses, a Last-Challenge falsifier, and
   terminal closure;
 - checked Fresh/Fiat--Shamir structural correspondence.
+- exact, owner-issued static-view projections for the five Core schemas, the
+  Protocol-scoped execution schema, the three transcript-construction schemas,
+  and the checked FS result schema, with canonical field manifests, explicit
+  dependency closure, K1 owner-local source bindings, domain-profiled payload,
+  no-policy/closure/requirement identities, typed consumer and purpose, and
+  fresh exact-object guarded capabilities;
+- a checked-FS authority boundary: the result view can be issued only from an
+  affirmative same-Core/public-coin result, and forged or substituted checked
+  authority is refused; and
+- a separately identified public-setup invocation view containing only public
+  context and public parameters. Statement values and the full invocation
+  remain outside its body and inert portable K1 authority binding; its copied
+  metadata cannot substitute for the exact live capability.
 
 Two narrow contract-vector families are target-exact rather than merely
 fixture-shaped. They are built and admitted through K1 directly:
@@ -63,8 +82,10 @@ retries/exhaustion, typed and scope-correct oracle indices, oracle lifecycle
 and answers, extension refusal, schedule identity, nested-scope continuity,
 grinding separation, claim linearity, reduction-required Last-Challenge
 ordering, terminal closure, challenge-time Fresh resolution, resolver-free
-Fresh replay, and resolver-independent invocation identity. The frozen gate
-runs 57 tests.
+Fresh replay, resolver-independent invocation identity, owner-view closure and
+schema separation, Protocol-scoped execution views, checked FS view authority,
+public-setup attenuation, profile-identity locality, and selected-profile
+execution/replay identity. The frozen gate runs 76 tests.
 
 ## Evidence boundary
 
@@ -99,6 +120,16 @@ formable, not that the runtime executes sparse absent lookups.
 Reduction applications are declarations anchored at schedule coordinates
 rather than first-class executable reduction effects, and claim identifiers
 carry no theorem semantics beyond the checked linear-use ledger.
+
+The owner-view instrument is an exact contract witness for its finite field
+catalog and closure rules. Its semantic IDs do execute K1's exact profile
+preimage, selected-root no-extra import-closure, evaluator-support, and
+supported-subject-kind machinery, but it does not yet execute the
+durable view evaluator or generic field-path language. Its Python
+capabilities model origin and object binding; they are not a host-language
+security boundary. The public-setup view deliberately proves attenuation only:
+it does not authorize execution, disclose Statement values, or replace the
+separate Statement binding used by strong Fiat--Shamir.
 
 This finite instrument also selects one challenge value per occurrence,
 unconditional scope openings, one closing terminal, linear claims only, and

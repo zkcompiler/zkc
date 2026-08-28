@@ -121,7 +121,7 @@ class IndependentOracleVectorParityTest(unittest.TestCase):
                 .splitlines()
             )
         }
-        self.assertEqual(len(requests), 20)
+        self.assertEqual(len(requests), 24)
 
         for request in requests:
             name = request["case"]
@@ -151,7 +151,12 @@ class IndependentOracleVectorParityTest(unittest.TestCase):
                         foundation_profile=request["foundation_profile"],
                     )
                     self.assertEqual(_prior_object(identifier), result["content_id"])
-                elif name in ("id-core", "id-semantic-module"):
+                elif name in (
+                    "id-core",
+                    "id-semantic-module",
+                    "id-semantic-language-profile",
+                    "id-profiled-subject",
+                ):
                     body = _datum(request["value"])
                     identifier = model.content_id(
                         request["subject_kind"],
@@ -175,6 +180,25 @@ class IndependentOracleVectorParityTest(unittest.TestCase):
                         )
                         self.assertEqual(candidate.body(), model.encode_datum(body))
                         self.assertEqual(candidate.identity, identifier)
+                    elif name == "id-semantic-language-profile":
+                        self.assertIsInstance(body, model.DatumRecord)
+                        profile_fields = dict(body.fields)
+                        self.assertEqual(tuple(profile_fields), tuple(range(6)))
+                        profile = model.SemanticLanguageProfile(
+                            profile_fields[0],
+                            profile_fields[1].value,
+                            (),
+                            tuple(profile_fields[3].values),
+                            profile_fields[4],
+                            profile_fields[5].value,
+                        )
+                        self.assertEqual(profile.body(), body)
+                        self.assertEqual(profile.identity, identifier)
+                    elif name == "id-profiled-subject":
+                        self.assertIsInstance(body, model.DatumRecord)
+                        profiled_fields = dict(body.fields)
+                        self.assertEqual(tuple(profiled_fields), (0, 1))
+                        self.assertIsInstance(profiled_fields[0], model.BytesValue)
                 elif name == "wrong-kind":
                     # Kind precedence is checked without attempting to parse the
                     # deliberately malformed body.

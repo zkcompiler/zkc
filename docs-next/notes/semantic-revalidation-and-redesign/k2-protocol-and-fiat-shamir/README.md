@@ -1,8 +1,9 @@
 # K2 Protocol and Fiat--Shamir Kernel
 
 > **Document kind:** Temporary bounded work-package charter
-> **Document state:** Bounded K2 package narrowly reclosed; final gate evidence
-> is owned by [`validation.md`](validation.md)
+> **Document state:** Bounded K2 package narrowly reclosed at its pre-K3-E
+> checkpoint; current rotated-profile reclosure is owned by the
+> [K3-E integration record](../k3-minimum-consumer-co-design/k3-e-integrated-closure.md)
 > **Provisional owner:** `pir`, coordinated by `project`
 > **Authority:** None. This package records research, selection, and validation;
 > current normative Protocol and Fiat--Shamir rules remain under
@@ -10,7 +11,7 @@
 > **Activated:** 2026-08-26
 > **Completed:** 2026-08-26
 > **Narrow reclosure:** 2026-08-26, after exact-body and evidence-boundary
-> repair; the green final gates and focused follow-up are recorded in
+> repair; that historical checkpoint and focused follow-up are recorded in
 > [`validation.md`](validation.md)
 > **Disposition:** Selected semantics and exact limitations are absorbed into
 > the durable PIR owners. Retain this research/validation package as optional

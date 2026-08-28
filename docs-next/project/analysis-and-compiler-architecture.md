@@ -210,46 +210,64 @@ Stage 4A catalog.
 ### 2.3 Capability-neutral source bindings
 
 Every semantic-owner capability consumed across the Analysis or Compiler
-boundary is accompanied by one exact inert source binding:
+boundary is accompanied by exactly one inert K1 source binding. Foundation is
+the sole owner of the common carrier: `PortableSourceAuthorityBinding`,
+`OwnerLocalSourceAuthorityBinding`, `OwnerOperationPolicyDisposition`, and the
+three-field `OwnerCapabilityRequirement`. Project owns the cross-domain
+completeness rule, while each source domain owns the profiled bodies named by
+that carrier.
+
+The richer inventory selected at Stage 4A is therefore an owner-payload
+contract and a predicate over a K1 binding, not a second envelope algebra:
 
 ```text
-OwnerCapabilityRequirement {
+OwnerCapabilityRequirementPayload<Owner, CapabilityFamily> {
   exact owner capability-contract identity,
   exact capability ABI,
   exact operand/result binding schema,
+  exact typed consumer and purpose coordinates where required,
   freshness and authority-lifetime requirements
 }
 
-ExactSourceAuthorityBinding<Owner, CapabilityFamily> {
-  exact owner domain and capability family,
-  semantic_coordinate:
-      Portable(exact owner-defined canonical subject/admission coordinate
-               or domain-separated result-record identity)
-    | OwnerLocal(exact owner-defined subject/view or premise/result-record
-                 reference),
-  complete owner result-origin coordinates required by the capability ABI,
-  exact admitted-subject facts or completed qualified outcome, polarity when
-    applicable, and semantic facts,
-  exact qualification, assurance, and residual-trust coordinates,
-  exact authenticated OwnerOperationPolicyDisposition,
-  exact transitive source-operation-policy dependency closure,
-  exact OwnerCapabilityRequirement
-}
+ExactSourceAuthorityBinding<Owner, CapabilityFamily>(b) iff
+  b is exactly one K1 PortableSourceAuthorityBinding or
+    OwnerLocalSourceAuthorityBinding,
+  b.owner_domain = Owner and b.capability_family = CapabilityFamily,
+  b.owner_binding_payload authenticates the owner-defined complete origin,
+    admitted-subject or completed-outcome facts, polarity where applicable,
+    semantic facts, qualification, assurance, and residual trust,
+  b.operation_policy is the exact K1 policy disposition,
+  b.owner_policy_closure authenticates the owner's complete derived closure,
+  b.capability_requirement.owner_requirement authenticates the exact
+    OwnerCapabilityRequirementPayload<Owner, CapabilityFamily>, and
+  the owner rederives every referenced body and equality before use
 
-ExactAdmittedSubjectAuthorityBinding<Owner, SubjectFamily> =
-  ExactSourceAuthorityBinding whose semantic coordinate is an exact admitted
-  subject/regime coordinate
+ExactAdmittedSubjectAuthorityBinding<Owner, SubjectFamily>(b) iff
+  ExactSourceAuthorityBinding<Owner, SubjectFamily>(b) and the K1 source
+  coordinate plus owner payload denote that exact admitted subject
 
-ExactCheckedResultAuthorityBinding<Owner, ResultFamily> =
-  ExactSourceAuthorityBinding whose semantic coordinate is an exact checked-
-  result record identity or owner-local premise/result-record reference
+ExactCheckedResultAuthorityBinding<Owner, ResultFamily>(b) iff
+  ExactSourceAuthorityBinding<Owner, ResultFamily>(b) and the K1 source
+  coordinate plus owner payload denote that exact checked-result record
 ```
 
-`OwnerCapabilityRequirement` contains no capability token, occurrence identity,
-or authority. It describes what a separately supplied fresh capability must
-match. The source owner constructs the binding as part of the same completed
-operation that mints the capability, and the capability retains that exact
-binding. A consumer cannot manufacture, weaken, or reinterpret it.
+The field correspondence is exact. A portable semantic coordinate is K1
+`owner_source_coordinate`; an owner-local coordinate is K1
+`owner_local_coordinate`. The rich origin, fact, qualification, assurance, and
+trust material is the authenticated preimage of `owner_binding_payload`. The
+capability contract, ABI, binding schema, and freshness/lifetime law are the
+authenticated owner-defined body named by
+`capability_requirement.owner_requirement`. The transitive policy set is the
+authenticated preimage of `owner_policy_closure`, not an additional authored
+field. `ExactSourceAuthorityBinding` and its two refinements have no separate
+canonical body, content ID, or constructor.
+
+K1 `OwnerCapabilityRequirement` contains no capability token, occurrence
+identity, or authority. It points to the owner-defined requirement payload that
+describes what a separately supplied fresh capability must match. The source
+owner constructs the binding as part of the same completed operation that
+mints the capability, and the capability retains that exact binding. A
+consumer cannot manufacture, weaken, or reinterpret it.
 
 The portable coordinate may be an owner's canonical admitted-subject/regime
 coordinate; admission does not need a portable receipt. A checked result uses
@@ -261,8 +279,11 @@ reference instead. Any identity preimage that names the local branch becomes
 local; the portable branch remains inert and grants no authority. In either
 case, omission of owner policy is illegal: the binding contains either
 `BoundTo(exact authenticated policy contract)` or
-`OwnerDefinesNoOperationPolicy(exact owner capability contract and ABI that
-declare that fact)`.
+`OwnerDefinesNoPolicy(exact owner-defined no-policy declaration ID)`. The
+referenced no-policy declaration authenticates the exact capability contract
+and ABI that declare that fact. The older phrase
+`OwnerDefinesNoOperationPolicy(contract, ABI)` is only a schema-local spelling
+for that referenced body; it is not another Foundation variant.
 
 Checking receives the binding and actual fresh capability separately, requires
 complete field equality, and freshly validates the bound-policy or explicit
@@ -283,8 +304,8 @@ ledger. Every imported truth-apt dependency is one of:
 - an exact definitional or logic-adequacy trust root.
 
 There is no generic import or axiom bucket. In the portable lane, concrete
-exact `ExactSourceAuthorityBinding` values and their inert
-`OwnerCapabilityRequirement` values belong to an
+exact K1 binding values satisfying `ExactSourceAuthorityBinding` and their
+embedded inert `OwnerCapabilityRequirement` values belong to an
 `AnalysisSupportInstantiationCoordinate`, not
 semantic-basis or proposition identity. When a support preimage names an
 owner-local source coordinate, Analysis instead uses
@@ -313,8 +334,8 @@ proposition, polarity, family result, assurance class, trust closure,
 dependency closure, and completed `AnalysisJudgmentRecordCoordinate` down to
 the proposition, `AnalysisSemanticBasisId`,
 `AnalysisSupportInstantiationCoordinate`, and `AnalysisValidationBasisId`,
-together with the exact
-`ExactCheckedResultAuthorityBinding<Analysis, F>`. That result binding carries
+together with the exact K1 binding satisfying
+`ExactCheckedResultAuthorityBinding<Analysis, F>`. Its owner payload carries
 the owner-defined result record or local reference, complete origin and
 completed-outcome facts, qualification and trust, owner-policy disposition and
 transitive source-policy closure, and inert `OwnerCapabilityRequirement`. It is
@@ -693,10 +714,10 @@ and runtime results are not inferred from Analysis or Compiler output.
 
 A later-owned fact enters Stage 4A only through an exact subject tuple,
 qualified result and polarity, model/checker basis, maps and reads, and complete
-`ExactCheckedResultAuthorityBinding`, including its owner origin coordinates,
-inert `OwnerCapabilityRequirement`, authenticated owner-policy disposition,
-total transitive source-policy dependency closure, and residual trust. Policy
-absence requires an exact
+K1 binding satisfying `ExactCheckedResultAuthorityBinding`, including its
+owner origin coordinates, inert `OwnerCapabilityRequirement`, authenticated
+owner-policy disposition, total transitive source-policy dependency closure,
+and residual trust. Policy absence requires an exact
 owner capability contract that declares it. The independent fact never names a
 future Compiler assessment; Compiler checks a separate association edge and the
 conjunction of every bound source policy. If a policy does not name such a fact,
@@ -811,8 +832,11 @@ The package-resolution candidate target is split by meaning:
   Analysis property transport.
 
 Broader Analysis families and generic composition remain deferred. Bounded
-K3-D has selected the minimum OIR seam without activating Stage 4B. K3-E must
-now reconcile shared
-observations, occurrence maps, failure and terminal semantics, Plan reads,
-property versus projection claims, and explicit endpoint facts without merging
-the two authority graphs.
+K3-D selected the minimum OIR seam without activating Stage 4B. Bounded K3-E
+then reclosed the joined profile, owner-view, read, failure, Plan, property,
+and projection boundary over one finite P01/Schnorr witness without merging
+the Analysis and OIR authority graphs. The exercised Analysis lane is limited
+to deterministic rederivation of selected records and stable-ID checks; no
+live Analysis capability crosses into K3-D or is exercised by K3-E. Broader
+families, live authority, and proof discharge remain later
+Analysis work. K4 portfolio pressure is next and K5 freeze remains pending.

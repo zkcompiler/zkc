@@ -56,10 +56,39 @@ The input Core is an exact `AdmittedCore` from the companion page. Its
 occurrence order, values, scope tree, public bindings, challenges, messages,
 oracles, reductions, extensions, and public-coin result are immutable.
 
-The selected PIR regime additionally recognizes
+The exact-used PIR owner-module closure additionally recognizes
 `ProtocolDeclarationRef<"pir.fs-application-domain">` with the exact nominal
 declaration body defined by the companion page. It is an authenticated static
 application-purpose coordinate, not a display string or a freshness claim.
+
+This page selects one standalone `PIRTranscriptFSProfile`. Its required exact
+profile imports are `{PIRInteractionProfileId}`; its supported subject kinds are
+`{"pir.transcript-construction", "pir.protocol",
+"pir.source-binding-payload", "pir.source-capability-requirement",
+"pir.source-consumer", "pir.source-no-policy",
+"pir.source-policy-closure", "pir.source-purpose"}`; and its inline declaration
+catalog contains `TranscriptConstructionBody`, `FSProtocolBody`, the three
+construction-view schemas, `FSConstructionViewBody`, and their closure and
+issuance laws. There is intentionally no second FS-only profile:
+`PIRFSProfileId = PIRTranscriptFSProfileId`. A construction and an FS Protocol
+therefore rotate together when transcript/FS meaning changes, while a Fresh
+Protocol remains under `PIRInteractionProfileId`. The profile import is the
+only generic upstream closure; it is not a declaration-module root.
+Construction formation, FS Protocol/view issuance, and checked-construction
+authority authenticate exactly the two-entry
+`{PIRInteractionProfileId,PIRTranscriptFSProfileId}` closure and require only
+`PIRTranscriptFSProfileId` in evaluator support. Public-setup-profile support is
+irrelevant to those operations. An unrecognized exact root is `Unsupported`,
+while a supported root omitting any emitted Protocol, construction, or
+owner-authority subject kind is `Refused`.
+
+This fixes the target owner, import topology, supported-kind set, catalog
+responsibility, and no-extra closure law. It does not yet publish the complete
+six-field K1 profile preimage or its full typed ID. The deterministic profile
+pin used by the bounded executable witness tests topology, authentication, and
+rotation only and is not semantic authority. This page must publish the
+complete owner-local preimage and independently reconstructible full typed ID
+before any dependent K4 ID is treated as persistent and before K5 freeze.
 
 All collections and bodies obey the K1 constitutional bounds. In addition:
 
@@ -276,8 +305,9 @@ Core challenge. The canonical body is in Appendix A:
 
 ```text
 TranscriptConstructionId =
-  SemanticContentId<"pir.transcript-construction">(
-    B, TranscriptConstructionBody(construction))
+  ProfiledSemanticId<"pir.transcript-construction">(
+    B, PIRTranscriptFSProfileId,
+    TranscriptConstructionBody(construction))
 ```
 
 The construction body contains no literal copy of its own ID. Initialization
@@ -977,11 +1007,30 @@ Neither path is a false sampling acceptance result or the construction's
 ### 10.1 Structural question
 
 ```text
+FSConstructionDefect =
+    SharedCoreMismatch
+  | ConstructionCoreMismatch
+  | TargetConstructionMismatch
+  | PublicCoinEligibilityMissing
+  | OccurrenceDomainMismatch
+  | NonChallengeValueDomainMismatch
+  | ChallengeDomainMismatch
+  | TargetCoreFieldMismatch
+
+FSConstructionDefectSet =
+  CanonicalNonEmptySortedUniqueSeq<FSConstructionDefect in written tag order>
+
 CheckFSConstruction(
   AdmittedFreshProtocol source,
   AdmittedFSProtocol target,
   AdmittedTranscriptConstruction construction)
-  -> Qualified<CheckedFSConstruction>
+  -> Qualified<
+       Affirmative({
+         CheckedFSConstruction,
+         ExactCheckedFSConstructionAuthorityBinding,
+         CheckedFSConstructionCapability
+       })
+       | Negative(FSConstructionDefectSet)>
 ```
 
 The affirmative result contains:
@@ -1015,6 +1064,24 @@ The checker requires:
 A mismatch returns a field-factored negative or qualified noncompletion and
 mints no affirmative capability. There is no authored map that can hide a
 different Core.
+
+`CheckedFSConstruction` has no semantic ID. An affirmative checking occurrence
+creates one collision-free owner-local `CheckedFSConstructionResultRef`, an
+exact K1 `OwnerLocalSourceAuthorityBinding`, and one fresh opaque
+`CheckedFSConstructionCapability`. The binding records the exact result ref,
+source and target Protocol IDs, shared Core, construction, full result schema,
+affirmative polarity, checker contract, domain-profiled owner payload, explicit
+`OwnerDefinesNoPolicy(exact PIR no-policy declaration ID)`, policy closure, and an
+`OwnerCapabilityRequirement` for the exact typed consumer and purpose. Its
+owner is `"pir"`, its family is `"checked-fs-construction"`, and its local
+source coordinate is the exact result-ref object; it contains no live token.
+The capability retains the exact live admitted handles, result and
+binding objects, checker/evaluator, consumer, purpose, and checking occurrence.
+The local binding, capability, and checked-result aggregate are noncopyable and
+nonserializable. A copied result, reconstructed binding, equal tuple, stale
+capability, different family or purpose, or different result schema grants no
+authority. Cold use must reauthenticate and readmit all three subjects and
+rerun `CheckFSConstruction`.
 
 ### 10.2 Exact meaning
 
@@ -1078,35 +1145,113 @@ Applications needing nonreplay, proof uniqueness, or concurrent-session
 separation must supply exact SessionContext values with those semantics. The
 mere presence of a session field does not establish freshness.
 
-## 13. Source views and downstream questions
+## 13. Exact source view contracts
 
-An admitted construction exports immutable PIR-owned views carrying exact
-`CoreId` and `TranscriptConstructionId`:
+The common coordinate, field-path, projection, issuance, and capability laws
+are those of
+[PIR-owned source views](interactive-core.md#13-pir-owned-source-views). This
+page supplies the three construction schemas and one checked-result schema:
 
 ```text
-TranscriptDeclarationView =
-  (state/bytes types, initial state, absorb/squeeze-bytes/advance-state
-   algorithms and contracts, application domain, sampling-failure coordinate,
-   exact FrameBody law)
+ConstructionStaticViewKind =
+    TranscriptDeclarationView
+  | RequiredInfluenceView
+  | ChallengeTransitionView
 
-RequiredInfluenceView =
-  (InfluenceAtom algebra, scope bindings, per-challenge ordered requirements,
-   reduction/module additions, derived exact prefix law)
+TranscriptDeclarationViewBody = {
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
+  state_type,
+  absorbed_bytes_type,
+  initial_state,
+  initialize_algorithm_and_contract,
+  absorb_algorithm_and_contract,
+  squeeze_bytes_algorithm_and_contract,
+  advance_state_algorithm_and_contract,
+  application_domain,
+  sampling_failure_coordinate,
+  frame_body_law,
+  exact_frame_schedule_coordinates
+}
 
-ChallengeTransitionView =
-  (namespace derivation, acceptance/decoder ABIs, draw bounds,
-   exact-length/state-update/retry/failure law)
+RequiredInfluenceViewBody = {
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
+  influence_atom_algebra,
+  scope_binding_requirements,
+  per_challenge_ordered_required_influence_sets,
+  reduction_and_module_additions,
+  exact_prefix_law
+}
 
-FSConstructionView =
-  (Fresh/FS Protocol IDs, shared Core ID, identity coordinate maps,
-   structural conclusion)
+ChallengeTransitionViewBody = {
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
+  challenge_namespace_derivation,
+  acceptance_abi,
+  decoder_abi,
+  draw_bounds,
+  exact_length_law,
+  state_update_before_decode_law,
+  retry_law,
+  sampling_failure_law,
+  challenge_decoding_coordinates
+}
+
+FSConstructionViewBody = {
+  result_ref: CheckedFSConstructionResultRef,
+  result_schema: exact CheckedFSConstruction schema,
+  fresh_protocol_id: ProtocolId,
+  fiat_shamir_protocol_id: ProtocolId,
+  shared_core_id: CoreId,
+  transcript_construction_id: TranscriptConstructionId,
+  occurrence_map: IdentityOnEveryOccurrenceRef,
+  value_map: IdentityOnEveryNonChallengeValueRef,
+  challenge_map: IdentityOnEveryChallengeRef,
+  structural_conclusion: StructurallyConstructed
+}
 ```
+
+The first three coordinates are
+`ConstructionView(TranscriptConstructionId,kind)` and are issued by the common
+`IssuePIRStaticView` operation from the exact admitted construction, its Core,
+their inert authority bindings, and matching fresh capabilities.
+`FSConstructionView` is not exported by construction admission. Its coordinate
+is `FSResultView(CheckedFSConstructionResultRef,FSConstructionView)`, and it is
+issued only by:
+
+```text
+IssueFSConstructionView(
+  exact affirmative CheckedFSConstruction result,
+  exact ExactCheckedFSConstructionAuthorityBinding,
+  matching fresh CheckedFSConstructionCapability,
+  exact closed PIRStaticViewReadManifest,
+  exact PIR evaluator and limits)
+    -> PIRStaticViewIssueOutcome
+```
+
+The operation reruns result/binding/capability equality, resolves the exact
+result-view schema, computes the required field closure, and requires realized
+reads to equal the manifest. Any result field closes to all four owner subjects
+and the exact checked-result schema; a map field additionally closes to both
+its source and target coordinate domains. Missing capability is
+`MissingDependency`; wrong result origin or stale/equal-looking authority is
+`Refused`; malformed, duplicate, extra, or nonclosed reads are `Malformed`.
+No nonaffirmative check result can issue a view or partial projection.
+
+The construction-view closure is likewise exact: a frame field closes to its
+algorithm/contract, source occurrence and prefix position; an influence field
+closes to the complete ordered requirement and every referenced Core
+coordinate; a challenge-transition field closes to namespace, draw, state,
+decoder, retry, and failure semantics. Thus a consumer cannot read an
+application-domain label, challenge sampler, or influence set while omitting
+the law that gives it meaning.
 
 Analysis must read these exact views when selecting an FS theorem. It may add
 ROM/QROM model, strategy class, query bounds, soundness notion, hash/codec/
 sampler assumptions, binding assumptions, and quantitative loss. It may not
-substitute a second transcript declaration or infer structural success from a
-theorem citation.
+substitute a second transcript declaration, treat construction admission as a
+checked Fresh/FS result, or infer structural success from a theorem citation.
 
 OIR may later read the same occurrence and framing coordinates to project proof
 serialization and challenge execution, but endpoint correctness cannot change
@@ -1355,5 +1500,8 @@ an untyped diagnostic record. The declaration body and declaration-local type
 are exactly those in Section 3.2.
 
 Changing any tag, field, order, derived action, namespace law, transition, or
-admission predicate requires a new supported PIR semantic module/regime. Old
+admission predicate rotates `PIRTranscriptFSProfile` and every downstream
+profile that imports it. A module-owned declaration change instead rotates
+that module and its exact users. The shared Foundation semantic regime rotates
+only when a Foundation-owned mechanism or its interpretation changes. Old
 bytes are never reinterpreted.

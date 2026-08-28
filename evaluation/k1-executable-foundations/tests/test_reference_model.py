@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import replace
 import hashlib
 from pathlib import Path
+import pickle
 import sys
 from types import MappingProxyType
 import unittest
@@ -68,6 +70,48 @@ def module(
         ordered,
         local_declarations,
         payload,
+    )
+
+
+def language_profile(
+    family: str,
+    supported_subject_kinds: tuple[str, ...],
+    law_source: bytes,
+    profile_imports: tuple[model.TypedContentId, ...] = (),
+    declaration_catalogs: model.DatumSeq | None = None,
+) -> model.SemanticLanguageProfile:
+    if declaration_catalogs is None:
+        declaration_catalogs = model.DatumSeq(
+            (
+                model.DatumRecord(
+                    (
+                        (0, model.Symbol("fixture-profile-declaration")),
+                        (
+                            1,
+                            model.DatumSeq(
+                                (
+                                    model.DatumRecord(
+                                        ((0, model.Symbol(family)),)
+                                    ),
+                                )
+                            ),
+                        ),
+                    )
+                ),
+            )
+        )
+    return model.SemanticLanguageProfile(
+        model.Symbol(family),
+        0,
+        tuple(
+            sorted(
+                profile_imports,
+                key=lambda item: item.internal_reference(),
+            )
+        ),
+        tuple(model.Symbol(kind) for kind in sorted(supported_subject_kinds)),
+        declaration_catalogs,
+        law_source,
     )
 
 
@@ -1467,6 +1511,883 @@ class SemanticModuleClosureTest(unittest.TestCase):
         self.assertNotEqual(unrelated.identity, base.identity)
         self.assertEqual(base_algorithm.identity, same_algorithm.identity)
         self.assertNotEqual(base_algorithm.identity, changed_algorithm.identity)
+
+
+class SemanticProfileAndAuthorityEnvelopeTest(unittest.TestCase):
+    @staticmethod
+    def semantic_id(kind: str, label: str) -> model.TypedContentId:
+        return model.content_id(
+            kind,
+            model.encode_datum(model.Symbol(label)),
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+
+    @staticmethod
+    def profile_fixture(
+        law: bytes = b"analysis-kernel-law-v0",
+    ) -> tuple[
+        model.SemanticLanguageProfileId,
+        dict[model.SemanticLanguageProfileId, model.SemanticLanguageProfile],
+    ]:
+        relations = language_profile(
+            "zkc.relations.language",
+            ("relations.artifact",),
+            b"relations-law-v0",
+        )
+        analysis = language_profile(
+            "zkc.analysis.kernel-language",
+            ("analysis.goal", "analysis.judgment"),
+            law,
+            profile_imports=(relations.identity,),
+        )
+        return (
+            analysis.identity,
+            {
+                analysis.identity: analysis,
+                relations.identity: relations,
+            },
+        )
+
+    def test_foundation_standalone_subject_catalog_is_exact(self) -> None:
+        profile, _ = self.profile_fixture()
+        canonical = value(model.BYTES_32, model.BytesValue(b"v" * 32))
+        canonical_id = model.value_id("fixture.canonical-value", canonical)
+        canonical_body = model.decode_datum(
+            model.value_preimage("fixture.canonical-value", canonical)
+        )
+        self.assertIsInstance(canonical_body, model.DatumRecord)
+        canonical_fields = dict(canonical_body.fields)
+        self.assertEqual(tuple(canonical_fields), (0, 1, 2, 3))
+        self.assertEqual(
+            canonical_fields[0],
+            model.Symbol("fixture.canonical-value"),
+        )
+        self.assertEqual(canonical_id.subject_kind, model.CANONICAL_VALUE_KIND)
+        self.assertNotEqual(
+            canonical_id,
+            model.value_id("fixture.other-purpose", canonical),
+        )
+
+        external = model.ExternalOperationContract(
+            model.Symbol("RemoteHashService"),
+            model.SemanticFunctionType((model.BYTES_0_32,), model.BYTES_32),
+        )
+        standalone_ids = (
+            profile,
+            model.FIXTURE_EXTENSION_MODULE_ID,
+            canonical_id,
+            next(iter(model.PRIMITIVE_IDS_BY_KEY.values())),
+            model.build_transcript_algorithm().identity,
+            model.DEFAULT_EVALUATION_CONTRACT.identity,
+            external.identity,
+        )
+        self.assertEqual(
+            frozenset(identifier.subject_kind for identifier in standalone_ids),
+            model.FOUNDATION_STANDALONE_SEMANTIC_SUBJECT_KINDS,
+        )
+        self.assertEqual(
+            external.identity,
+            model.content_id(
+                model.EXTERNAL_OPERATION_CONTRACT_KIND,
+                external.body(),
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            ),
+        )
+
+    def test_profiled_subject_authenticates_exact_used_profile_closure(self) -> None:
+        profile, supplied_profiles = self.profile_fixture()
+        domain_body = model.DatumRecord(((0, model.Symbol("goal-7")),))
+        identifier = model.profiled_content_id(
+            "analysis.goal",
+            profile,
+            domain_body,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+
+        context = model.authenticate_profiled_semantic_content(
+            identifier,
+            profile,
+            domain_body,
+            supplied_profiles,
+            supported_profiles=(profile,),
+        )
+        repeated = model.effective_semantic_context(
+            profile,
+            supplied_profiles,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+
+        self.assertEqual(context.selected_profile, profile)
+        self.assertEqual(context.selected_profile_body.profile_family.value,
+                         "zkc.analysis.kernel-language")
+        self.assertEqual(len(context.authenticated_profiles), 2)
+        self.assertTrue(model.semantic_contexts_are_identical(context, repeated))
+        body = model.profiled_semantic_body(profile, domain_body)
+        self.assertEqual(tuple(dict(body.fields)), (0, 1))
+        self.assertEqual(
+            dict(body.fields)[0],
+            model.BytesValue(profile.internal_reference()),
+        )
+
+    def test_profile_change_rotates_only_dependent_profiled_subjects(self) -> None:
+        profile_v0, profiles_v0 = self.profile_fixture(
+            b"analysis-law-v0"
+        )
+        profile_v1, profiles_v1 = self.profile_fixture(
+            b"analysis-law-v1"
+        )
+        unrelated = language_profile(
+            "zkc.oir.endpoint-language",
+            ("oir.endpoint-graph",),
+            b"oir-law-v0",
+        )
+        domain_body = model.Symbol("same-domain-body")
+        before = model.profiled_content_id(
+            "analysis.goal",
+            profile_v0,
+            domain_body,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        after = model.profiled_content_id(
+            "analysis.goal",
+            profile_v1,
+            domain_body,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+
+        self.assertNotEqual(profile_v0, profile_v1)
+        self.assertNotEqual(before, after)
+        self.assertNotIn(unrelated.identity, profiles_v0)
+        self.assertEqual(
+            before,
+            model.profiled_content_id(
+                "analysis.goal",
+                profile_v0,
+                domain_body,
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            ),
+        )
+        context_v0 = model.effective_semantic_context(
+            profile_v0,
+            profiles_v0,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        context_v1 = model.effective_semantic_context(
+            profile_v1,
+            profiles_v1,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        self.assertFalse(
+            model.semantic_contexts_are_identical(context_v0, context_v1)
+        )
+
+        new_subject = model.profiled_content_id(
+            "analysis.goal",
+            profile_v1,
+            domain_body,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        with self.assertRaises(model._Control) as caught:
+            model.authenticate_profiled_semantic_content(
+                new_subject,
+                profile_v1,
+                domain_body,
+                profiles_v1,
+                supported_profiles=(profile_v0,),
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.UNSUPPORTED)
+        self.assertEqual(caught.exception.code, "K1-UNSUPPORTED-PROFILE")
+
+    def test_import_change_rotates_composition_profile_and_dependent_subject(self) -> None:
+        upstream_v0 = language_profile(
+            "zkc.relations.language",
+            ("relations.artifact",),
+            b"relations-law-v0",
+        )
+        upstream_v1 = replace(upstream_v0, semantic_law_source=b"relations-law-v1")
+        selected_v0 = language_profile(
+            "zkc.analysis.language",
+            ("analysis.goal",),
+            b"analysis-law",
+            profile_imports=(upstream_v0.identity,),
+        )
+        selected_v1 = replace(
+            selected_v0,
+            profile_imports=(upstream_v1.identity,),
+        )
+        domain_body = model.Symbol("same-analysis-goal")
+
+        self.assertNotEqual(upstream_v0.identity, upstream_v1.identity)
+        self.assertNotEqual(selected_v0.identity, selected_v1.identity)
+        self.assertNotEqual(
+            model.profiled_content_id(
+                "analysis.goal",
+                selected_v0.identity,
+                domain_body,
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            ),
+            model.profiled_content_id(
+                "analysis.goal",
+                selected_v1.identity,
+                domain_body,
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            ),
+        )
+
+    def test_one_selected_composition_profile_closes_both_language_imports(self) -> None:
+        relations = language_profile(
+            "zkc.relations.language",
+            ("relations.artifact",),
+            b"relations-law",
+        )
+        protocol = language_profile(
+            "zkc.pir.language",
+            ("pir.protocol",),
+            b"pir-law",
+        )
+        imports = tuple(
+            sorted(
+                (relations.identity, protocol.identity),
+                key=lambda item: item.internal_reference(),
+            )
+        )
+        composition = language_profile(
+            "zkc.analysis.protocol-relation-language",
+            ("analysis.goal",),
+            b"analysis-composition-law",
+            profile_imports=imports,
+        )
+        supplied = {
+            item.identity: item for item in (composition, relations, protocol)
+        }
+
+        context = model.effective_semantic_context(
+            composition.identity,
+            supplied,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        self.assertEqual(context.selected_profile, composition.identity)
+        self.assertEqual(len(context.authenticated_profiles), 3)
+
+    def test_profile_closure_rejects_missing_and_extra_preimages(self) -> None:
+        profile, supplied_profiles = self.profile_fixture()
+        selected = supplied_profiles[profile]
+        missing_import = {profile: selected}
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                profile,
+                missing_import,
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.MISSING_DEPENDENCY)
+        self.assertEqual(caught.exception.code, "K1-MISSING-PROFILE")
+
+        unrelated = language_profile(
+            "zkc.unused.language",
+            ("unused.subject",),
+            b"unused-law-v0",
+        )
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                profile,
+                {**supplied_profiles, unrelated.identity: unrelated},
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.REFUSED)
+        self.assertEqual(caught.exception.code, "K1-REFUSED-EXTRA-PROFILE")
+
+    def test_profile_catalogs_and_local_or_imported_refs_are_exact(self) -> None:
+        upstream_catalogs = model.DatumSeq(
+            (
+                model.DatumRecord(
+                    (
+                        (0, model.Symbol("relations.fact")),
+                        (1, model.DatumSeq((model.Symbol("fact-law"),))),
+                    )
+                ),
+            )
+        )
+        upstream = language_profile(
+            "zkc.relations.language",
+            ("relations.artifact",),
+            b"relations-law",
+            declaration_catalogs=upstream_catalogs,
+        )
+        local_catalogs = model.DatumSeq(
+            (
+                model.DatumRecord(
+                    (
+                        (0, model.Symbol("analysis.rule")),
+                        (1, model.DatumSeq((model.Symbol("rule-law"),))),
+                    )
+                ),
+            )
+        )
+        selected = language_profile(
+            "zkc.analysis.language",
+            ("analysis.judgment",),
+            b"analysis-law",
+            profile_imports=(upstream.identity,),
+            declaration_catalogs=local_catalogs,
+        )
+        supplied = {
+            selected.identity: selected,
+            upstream.identity: upstream,
+        }
+        context = model.effective_semantic_context(
+            selected.identity,
+            supplied,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        local = model.ProfileLocalDeclarationRef("analysis.rule", 0)
+        imported = model.ImportedProfileDeclarationRef(
+            upstream.identity,
+            "relations.fact",
+            0,
+        )
+        self.assertEqual(
+            model.resolve_profile_declaration(context, local),
+            model.Symbol("rule-law"),
+        )
+        self.assertEqual(
+            model.resolve_profile_declaration(context, imported),
+            model.Symbol("fact-law"),
+        )
+        self.assertEqual(model.profile_declaration_ref_datum(local).case, 0)
+        self.assertEqual(model.profile_declaration_ref_datum(imported).case, 1)
+        with self.assertRaisesRegex(
+            model.DeclarationAdmissionRefusedError,
+            "self declarations must use",
+        ):
+            model.resolve_profile_declaration(
+                context,
+                model.ImportedProfileDeclarationRef(
+                    selected.identity,
+                    "analysis.rule",
+                    0,
+                ),
+            )
+
+        unsorted_catalogs = model.DatumSeq(
+            (
+                model.DatumRecord(
+                    ((0, model.Symbol("z.kind")), (1, model.DatumSeq(())))
+                ),
+                model.DatumRecord(
+                    ((0, model.Symbol("a.kind")), (1, model.DatumSeq(())))
+                ),
+            )
+        )
+        with self.assertRaisesRegex(model.ModelError, "sorted and unique"):
+            language_profile(
+                "zkc.bad.catalogs",
+                ("bad.subject",),
+                b"bad-law",
+                declaration_catalogs=unsorted_catalogs,
+            ).body()
+
+    def test_profile_diamond_deep_walk_and_bounds_are_deterministic(self) -> None:
+        base = language_profile("zkc.base", ("base.subject",), b"base-law")
+        left = language_profile(
+            "zkc.left",
+            ("left.subject",),
+            b"left-law",
+            profile_imports=(base.identity,),
+        )
+        right = language_profile(
+            "zkc.right",
+            ("right.subject",),
+            b"right-law",
+            profile_imports=(base.identity,),
+        )
+        roots = tuple(
+            sorted(
+                (left.identity, right.identity),
+                key=lambda item: item.internal_reference(),
+            )
+        )
+        top = language_profile(
+            "zkc.top",
+            ("top.subject",),
+            b"top-law",
+            profile_imports=roots,
+        )
+        supplied = {
+            item.identity: item for item in (top, left, right, base)
+        }
+        context = model.effective_semantic_context(
+            top.identity,
+            supplied,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        self.assertEqual(len(context.authenticated_profiles), 4)
+
+        previous = base
+        deep: dict[model.TypedContentId, model.SemanticLanguageProfile] = {
+            base.identity: base
+        }
+        for index in range(96):
+            current = language_profile(
+                f"zkc.deep-{index}",
+                (f"deep.subject-{index}",),
+                f"deep-law-{index}".encode("ascii"),
+                profile_imports=(previous.identity,),
+            )
+            deep[current.identity] = current
+            previous = current
+        deep_context = model.effective_semantic_context(
+            previous.identity,
+            deep,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        self.assertEqual(len(deep_context.authenticated_profiles), 97)
+
+        with patch.object(model, "MAX_PROFILE_EDGES", 0):
+            with self.assertRaises(model._Control) as caught:
+                model.effective_semantic_context(
+                    top.identity,
+                    supplied,
+                    semantic_regime=model.SEMANTIC_REGIME_ID,
+                )
+            self.assertIs(
+                caught.exception.outcome,
+                model.Outcome.DETERMINISTIC_LIMIT_EXCEEDED,
+            )
+            self.assertEqual(caught.exception.code, "K1-LIMIT-PROFILE-EDGES")
+
+        with patch.object(model, "MAX_PROFILE_NODES", 3):
+            with self.assertRaises(model._Control) as caught:
+                model.effective_semantic_context(
+                    top.identity,
+                    supplied,
+                    semantic_regime=model.SEMANTIC_REGIME_ID,
+                )
+            self.assertIs(
+                caught.exception.outcome,
+                model.Outcome.DETERMINISTIC_LIMIT_EXCEEDED,
+            )
+            self.assertEqual(caught.exception.code, "K1-LIMIT-PROFILE-NODES")
+
+    def test_profile_bundle_preflight_and_forged_preimage_fail_closed(self) -> None:
+        profile, supplied = self.profile_fixture()
+        with patch.object(model, "MAX_PROFILE_BUNDLE_ENTRIES", 0):
+            with self.assertRaises(model._Control) as caught:
+                model.effective_semantic_context(
+                    profile,
+                    {object(): object()},  # type: ignore[dict-item]
+                    semantic_regime=model.SEMANTIC_REGIME_ID,
+                )
+            self.assertIs(
+                caught.exception.outcome,
+                model.Outcome.DETERMINISTIC_LIMIT_EXCEEDED,
+            )
+            self.assertEqual(caught.exception.code, "K1-LIMIT-PROFILE-BUNDLE")
+
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                profile,
+                {object(): object()},  # type: ignore[dict-item]
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.MALFORMED)
+        self.assertEqual(caught.exception.code, "K1-MALFORMED-PROFILE-BUNDLE")
+
+        wrong_kind = self.semantic_id("fixture.not-profile", "wrong-kind")
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                profile,
+                {wrong_kind: supplied[profile]},
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.KIND_MISMATCH)
+        self.assertEqual(caught.exception.code, "K1-KIND-PROFILE")
+
+        forged = model.content_id(
+            model.SEMANTIC_LANGUAGE_PROFILE_KIND,
+            model.encode_datum(model.Symbol("forged")),
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                forged,
+                {forged: supplied[profile]},
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.MALFORMED)
+        self.assertEqual(caught.exception.code, "K1-MALFORMED-PROFILE-PREIMAGE")
+
+        fake_a = model.content_id(
+            model.SEMANTIC_LANGUAGE_PROFILE_KIND,
+            model.encode_datum(model.Symbol("fake-profile-a")),
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        fake_b = model.content_id(
+            model.SEMANTIC_LANGUAGE_PROFILE_KIND,
+            model.encode_datum(model.Symbol("fake-profile-b")),
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        candidate_a = language_profile(
+            "zkc.fake-a",
+            ("fake.a",),
+            b"fake-a-law",
+            profile_imports=(fake_b,),
+        )
+        candidate_b = language_profile(
+            "zkc.fake-b",
+            ("fake.b",),
+            b"fake-b-law",
+            profile_imports=(fake_a,),
+        )
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                fake_a,
+                {fake_a: candidate_a, fake_b: candidate_b},
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.MALFORMED)
+        self.assertEqual(caught.exception.code, "K1-MALFORMED-PROFILE-PREIMAGE")
+
+    def test_profile_formation_and_subject_support_fail_closed(self) -> None:
+        with self.assertRaisesRegex(model.ModelError, "sorted-unique"):
+            model.SemanticLanguageProfile(
+                model.Symbol("zkc.bad.language"),
+                0,
+                (),
+                (model.Symbol("z.subject"), model.Symbol("a.subject")),
+                model.DatumSeq(()),
+                b"law",
+            ).body()
+        with self.assertRaisesRegex(model.ModelError, "nonempty"):
+            model.SemanticLanguageProfile(
+                model.Symbol("zkc.bad.language"),
+                0,
+                (),
+                (model.Symbol("bad.subject"),),
+                model.DatumSeq(()),
+                b"",
+            ).body()
+        for forbidden_kind in sorted(model.PROFILED_FORBIDDEN_SUBJECT_KINDS):
+            with self.subTest(profile_forbidden_kind=forbidden_kind):
+                with self.assertRaisesRegex(
+                    model.ModelError,
+                    "prior-meta or standalone Foundation subject kinds",
+                ):
+                    model.SemanticLanguageProfile(
+                        model.Symbol("zkc.bad.language"),
+                        0,
+                        (),
+                        (model.Symbol(forbidden_kind),),
+                        model.DatumSeq(()),
+                        b"law",
+                    ).body()
+
+        profile, supplied_profiles = self.profile_fixture()
+        domain_body = model.Symbol("body")
+        for forbidden_kind in sorted(model.PROFILED_FORBIDDEN_SUBJECT_KINDS):
+            with self.subTest(profiled_id_forbidden_kind=forbidden_kind):
+                with self.assertRaisesRegex(
+                    model.DeclarationKindMismatchError,
+                    "prior-meta or standalone Foundation subject kind",
+                ):
+                    model.profiled_content_id(
+                        forbidden_kind,
+                        profile,
+                        domain_body,
+                        semantic_regime=model.SEMANTIC_REGIME_ID,
+                    )
+
+                if forbidden_kind in model.FOUNDATION_STANDALONE_SEMANTIC_SUBJECT_KINDS:
+                    externally_formed = model.content_id(
+                        forbidden_kind,
+                        model.encode_datum(
+                            model.profiled_semantic_body(profile, domain_body)
+                        ),
+                        semantic_regime=model.SEMANTIC_REGIME_ID,
+                    )
+                    with self.assertRaises(model._Control) as caught:
+                        model.authenticate_profiled_semantic_content(
+                            externally_formed,
+                            profile,
+                            domain_body,
+                            supplied_profiles,
+                            supported_profiles=(profile,),
+                        )
+                    self.assertIs(
+                        caught.exception.outcome,
+                        model.Outcome.KIND_MISMATCH,
+                    )
+                    self.assertEqual(
+                        caught.exception.code,
+                        "K1-KIND-PROFILED-SUBJECT",
+                    )
+
+        unsupported = model.profiled_content_id(
+            "pir.core",
+            profile,
+            domain_body,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        with self.assertRaises(model._Control) as caught:
+            model.authenticate_profiled_semantic_content(
+                unsupported,
+                profile,
+                domain_body,
+                supplied_profiles,
+                supported_profiles=(profile,),
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.REFUSED)
+        self.assertEqual(
+            caught.exception.code,
+            "K1-REFUSED-PROFILE-SUBJECT-KIND",
+        )
+
+        with self.assertRaises(model._Control) as caught:
+            valid = model.profiled_content_id(
+                "analysis.goal",
+                profile,
+                domain_body,
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+            model.authenticate_profiled_semantic_content(
+                valid,
+                profile,
+                domain_body,
+                supplied_profiles,
+                supported_profiles=(),
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.UNSUPPORTED)
+        self.assertEqual(caught.exception.code, "K1-UNSUPPORTED-PROFILE")
+
+        other_regime = model.meta_object_id(
+            model.SEMANTIC_REGIME_KIND,
+            model.encode_datum(model.Symbol("other-regime")),
+        )
+        foreign = language_profile(
+            "zkc.foreign.language",
+            ("foreign.subject",),
+            b"foreign-law",
+        )
+        foreign_id = foreign.identity_for(other_regime)
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                foreign_id,
+                {foreign_id: foreign},
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.KIND_MISMATCH)
+        self.assertEqual(caught.exception.code, "K1-KIND-PROFILE-REGIME")
+
+        class HostileProfile(model.SemanticLanguageProfile):
+            def body(self) -> model.DatumRecord:
+                raise AssertionError("subclass body must not execute")
+
+        exact_profile = supplied_profiles[profile]
+        hostile = HostileProfile(
+            exact_profile.profile_family,
+            exact_profile.revision,
+            exact_profile.profile_imports,
+            exact_profile.supported_subject_kinds,
+            exact_profile.declaration_catalogs,
+            exact_profile.semantic_law_source,
+        )
+        with self.assertRaises(model._Control) as caught:
+            model.effective_semantic_context(
+                profile,
+                {profile: hostile},
+                semantic_regime=model.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.Outcome.MALFORMED)
+        self.assertEqual(caught.exception.code, "K1-MALFORMED-PROFILE-PREIMAGE")
+
+    def authority_fixture(self) -> model.PortableSourceAuthorityBinding:
+        identifiers = {
+            name: self.semantic_id(f"fixture.{name}", name)
+            for name in (
+                "source-coordinate",
+                "binding-payload",
+                "policy",
+                "policy-closure",
+                "capability-requirement",
+                "no-policy-declaration",
+            )
+        }
+        requirement = model.OwnerCapabilityRequirement(
+            model.Symbol("relations"),
+            model.Symbol("checked-result"),
+            identifiers["capability-requirement"],
+        )
+        return model.PortableSourceAuthorityBinding(
+            model.Symbol("relations"),
+            model.Symbol("checked-result"),
+            identifiers["source-coordinate"],
+            identifiers["binding-payload"],
+            model.BoundOwnerOperationPolicy(identifiers["policy"]),
+            identifiers["policy-closure"],
+            requirement,
+        )
+
+    def test_portable_authority_binding_is_exact_inert_and_sensitive(self) -> None:
+        binding = self.authority_fixture()
+        body = model.portable_source_authority_binding_body(binding)
+        encoded = model.encode_datum(body)
+
+        self.assertEqual(tuple(dict(body.fields)), tuple(range(7)))
+        self.assertEqual(model.decode_datum(encoded), body)
+        changed_owner_requirement = model.OwnerCapabilityRequirement(
+            model.Symbol("pir"),
+            binding.capability_family,
+            binding.capability_requirement.owner_requirement,
+        )
+        changed_family_requirement = model.OwnerCapabilityRequirement(
+            binding.owner_domain,
+            model.Symbol("admitted-core"),
+            binding.capability_requirement.owner_requirement,
+        )
+        variants = (
+            replace(
+                binding,
+                owner_domain=model.Symbol("pir"),
+                capability_requirement=changed_owner_requirement,
+            ),
+            replace(
+                binding,
+                capability_family=model.Symbol("admitted-core"),
+                capability_requirement=changed_family_requirement,
+            ),
+            replace(
+                binding,
+                owner_source_coordinate=self.semantic_id(
+                    "fixture.source-coordinate",
+                    "changed-source-coordinate",
+                ),
+            ),
+            replace(
+                binding,
+                owner_binding_payload=self.semantic_id(
+                    "fixture.binding-payload",
+                    "changed-binding-payload",
+                ),
+            ),
+            replace(
+                binding,
+                operation_policy=model.BoundOwnerOperationPolicy(
+                    self.semantic_id("fixture.policy", "changed-policy")
+                ),
+            ),
+            replace(
+                binding,
+                owner_policy_closure=self.semantic_id(
+                    "fixture.policy-closure",
+                    "changed-policy-closure",
+                ),
+            ),
+            replace(
+                binding,
+                capability_requirement=replace(
+                    binding.capability_requirement,
+                    owner_requirement=self.semantic_id(
+                        "fixture.capability-requirement",
+                        "changed-requirement",
+                    ),
+                ),
+            ),
+        )
+        encodings = {
+            model.encode_datum(model.portable_source_authority_binding_body(item))
+            for item in (binding, *variants)
+        }
+        self.assertEqual(len(encodings), 1 + len(variants))
+
+        class HostilePortableBinding(model.PortableSourceAuthorityBinding):
+            def body(self) -> model.DatumRecord:
+                raise AssertionError("subclass body must not execute")
+
+        hostile = HostilePortableBinding(
+            binding.owner_domain,
+            binding.capability_family,
+            binding.owner_source_coordinate,
+            binding.owner_binding_payload,
+            binding.operation_policy,
+            binding.owner_policy_closure,
+            binding.capability_requirement,
+        )
+        with self.assertRaisesRegex(model.ModelError, "only a portable"):
+            model.portable_source_authority_binding_body(hostile)
+
+    def test_authority_policy_and_owner_family_fail_closed(self) -> None:
+        binding = self.authority_fixture()
+        no_policy = replace(
+            binding,
+            operation_policy=model.OwnerDefinesNoOperationPolicy(
+                self.semantic_id(
+                    "fixture.no-policy-declaration",
+                    "no-policy-declaration",
+                ),
+            ),
+        )
+        body = model.portable_source_authority_binding_body(no_policy)
+        self.assertEqual(dict(body.fields)[4].case, 1)
+
+        mismatched = replace(
+            binding,
+            capability_requirement=model.OwnerCapabilityRequirement(
+                model.Symbol("pir"),
+                binding.capability_family,
+                binding.capability_requirement.owner_requirement,
+            ),
+        )
+        with self.assertRaisesRegex(model.ModelError, "disagree on owner or family"):
+            model.portable_source_authority_binding_body(mismatched)
+
+    def test_authority_envelope_rejects_cross_regime_and_never_serializes_live_capability(self) -> None:
+        binding = self.authority_fixture()
+        other_regime = model.meta_object_id(
+            model.SEMANTIC_REGIME_KIND,
+            model.encode_datum(model.Symbol("authority-other-regime")),
+        )
+        foreign_closure = model.content_id(
+            "fixture.policy-closure",
+            model.encode_datum(model.Symbol("foreign")),
+            semantic_regime=other_regime,
+        )
+        with self.assertRaisesRegex(
+            model.DeclarationKindMismatchError,
+            "crosses semantic regimes",
+        ):
+            model.portable_source_authority_binding_body(
+                replace(binding, owner_policy_closure=foreign_closure)
+            )
+
+        local = model.OwnerLocalSourceAuthorityBinding(
+            binding.owner_domain,
+            binding.capability_family,
+            object(),
+            binding.owner_binding_payload,
+            binding.operation_policy,
+            binding.owner_policy_closure,
+            binding.capability_requirement,
+        )
+        self.assertIsNone(
+            model.validate_owner_local_source_authority_binding(local)
+        )
+        self.assertEqual(
+            repr(local),
+            "OwnerLocalSourceAuthorityBinding(<process-local>)",
+        )
+        with self.assertRaises(model.CanonicalError):
+            model.encode_datum(local)  # type: ignore[arg-type]
+        with self.assertRaisesRegex(model.ModelError, "only a portable"):
+            model.portable_source_authority_binding_body(  # type: ignore[arg-type]
+                local
+            )
+        with self.assertRaises(model.ModelError):
+            copy.copy(local)
+        with self.assertRaises(model.ModelError):
+            copy.deepcopy(local)
+        with self.assertRaises(model.ModelError):
+            pickle.dumps(local)
+        with self.assertRaises(TypeError):
+            hash(local)
 
 
 class AlgorithmIdentityAndAdmissionTest(unittest.TestCase):

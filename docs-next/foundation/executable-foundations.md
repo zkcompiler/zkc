@@ -3,7 +3,8 @@
 > **Document kind:** Target semantic specification
 > **Document state:** Active non-normative target
 > **Target status:** K1 durable selection; three bounded K3 consumer
-> extractions demonstrated; K3-E integrated review remains open
+> extractions and their finite K3-E join demonstrated; K4 next, K5 freeze
+> pending
 > **Provisional owner:** `foundation`
 > **Authority:** None during the transition. Current normative identity,
 > encoding, admission, and execution rules remain under
@@ -15,17 +16,20 @@ This page defines mechanisms whose meaning must be shared by PIR and at least
 one other semantic domain:
 
 - the constitutional bootstrap and disjoint identity classes;
-- regime-qualified semantic content and acyclic semantic modules;
+- regime-qualified semantic content, exact language profiles, and acyclic
+  semantic modules;
 - domain-indexed canonical values;
 - a small, total, first-order term calculus and exact semantic primitives;
 - derived success and typed-failure function ABIs;
-- deterministic evaluation control; and
+- deterministic evaluation control;
+- capability-neutral source-authority envelopes; and
 - the boundary between semantic completion and operational noncompletion.
 
 Foundation does not define a universal ZK value algebra, protocol evaluator,
 transition system, judgment engine, result type, or resource policy. A domain
 continues to own its mathematical objects, admission predicates, semantic
-failures, judgments, and domain-specific costs.
+failures, judgments, semantic-language contents, authority predicates, live
+capabilities, and domain-specific costs.
 
 A successfully authenticated `(typed identifier, exact preimage)` pair binds
 that presented description for the current check. Identifier-wide uniqueness
@@ -112,8 +116,10 @@ member inspection or constructing a derived aggregate. The exact mapping is:
 |---|---|
 | `MetaValueV0` sequence or record | remaining cumulative constitutional child edges and nodes |
 | finite-schema record or variant | per-aggregate child-edge ceiling plus remaining cumulative schema-node minimum reservation |
-| semantic-function inputs/failures; primitive failures/work indices; evaluation-contract cost rules; module declaration catalogs/bodies; algorithm inputs | per-aggregate constitutional child-edge ceiling |
+| semantic-function inputs/failures; primitive failures/work indices; evaluation-contract cost rules; semantic-language-profile supported kinds/declaration catalogs; module declaration catalogs/bodies; algorithm inputs | per-aggregate constitutional child-edge ceiling |
 | canonical-term multi-child constructor | remaining term nodes |
+| semantic-language-profile imports | per-profile import-edge ceiling, then authenticated-closure remaining-edge reservation |
+| profile-preimage bundle | profile-bundle entries |
 | semantic-module imports | per-module import-edge ceiling, then authenticated-closure remaining-edge reservation |
 | direct module roots | module-node ceiling |
 | module-preimage bundle | module-bundle entries |
@@ -181,16 +187,20 @@ preimage is itself framed.
 
 The identity-profile descriptor fixes ordinary subject-preimage framing and
 ID construction. The hash-suite descriptor fixes the exact digest operation
-and output domain. A semantic-regime descriptor fixes the minimum language
-needed to authenticate meaning within that regime. Its exact authenticated
-law exposes base declarations through kind-indexed local ordinals; as a
-prior-meta root, its descriptor need not use the ordinary module envelope. A
-mutually recursive strongly connected group is one finite aggregate
-declaration with local ordinals, not a content-hash fixpoint.
+and output domain. A semantic-regime descriptor fixes the shared Foundation
+mechanism language needed to authenticate ordinary meaning within that regime;
+it does not absorb every consumer's semantic law. Exact domain languages are
+ordinary standalone profiles under Section 3.2. The regime's authenticated
+law exposes only its selected base declarations through kind-indexed local
+ordinals; as a prior-meta root, its descriptor need not use the ordinary
+profile or module envelope. A mutually recursive strongly connected group is
+one finite aggregate declaration with local ordinals, not a content-hash
+fixpoint.
 
-The regime root embeds this finite base grammar directly. It imports no
-ordinary semantic module and does not enumerate later extensions. Therefore
-the root cannot participate in a root--module identity cycle.
+The regime root embeds this finite Foundation grammar directly. It imports no
+ordinary semantic-language profile or semantic module and does not enumerate
+later domain extensions. Therefore the root cannot participate in a
+root--profile or root--module identity cycle.
 
 ### 2.3 Prior-meta authentication before ordinary identity
 
@@ -299,6 +309,31 @@ match. One ordinary authentication graph uses the exact identity-profile,
 hash-suite, and regime IDs in its prior-meta basis throughout; a dependency
 cannot switch any axis mid-graph.
 
+The selected Foundation epoch assigns exactly one semantic-body mode to each
+Foundation-owned ordinary subject kind. Its standalone catalog is:
+
+```text
+FoundationStandaloneSemanticKindsV0 = {
+  "foundation.canonical-value",
+  "foundation.evaluation-contract",
+  "foundation.external-operation-contract",
+  "foundation.portable-algorithm",
+  "foundation.semantic-language-profile",
+  "foundation.semantic-module",
+  "foundation.semantic-primitive"
+}
+```
+
+Each catalog member uses only its exact dedicated body constructor defined on
+this page. The three prior-meta kinds remain a separate constructor class, and
+no catalog member or prior-meta kind can be governed by a semantic-language
+profile. `SemanticContentId<K>` is the common structural framing mechanism; a
+raw call to that mechanism authenticates only the presented typed ID/body pair
+and never establishes that the body is the semantic constructor assigned to
+`K`. Semantic admission always routes through the exact dedicated or profiled
+constructor owned for that kind. Adding or reassigning a Foundation standalone
+kind changes this regime law and rotates `SemanticRegimeId`.
+
 Identity, evaluator support, and translation are separate relations:
 
 ```text
@@ -359,7 +394,186 @@ establishes none of the other relations. If two evaluators claim the same
 operation for the same authenticated inputs, disagreement is a conformance
 failure; it does not create two meanings for the object.
 
-### 3.2 Ordinary semantic modules
+### 3.2 Exact semantic-language profiles
+
+`SemanticRegimeId` selects the shared Foundation mechanism law. It is not a
+global composite hash of every PIR, Relations, Analysis, Compiler, or OIR law.
+Each domain instead publishes the exact ordinary language profile used by a
+subject. The selected v0 profile envelope is:
+
+```text
+SemanticLanguageProfile = {
+  profile_family: Symbol,
+  revision: u64,
+  profile_imports:
+    CanonicalSortedUniqueSeq<SemanticLanguageProfileId>,
+  supported_subject_kinds: NonemptyCanonicalSortedUniqueSeq<Symbol>,
+  declaration_catalogs:
+    CanonicalSortedUniqueSeq<ProfileDeclarationCatalog>,
+  semantic_law_source: NonemptyExactBytes
+}
+
+ProfileDeclarationCatalog = {
+  kind: Symbol,
+  bodies: CanonicalSeq<MetaValueV0>
+}
+
+SemanticLanguageProfileBody(p) = MetaRecord {
+  0: MetaSymbol(p.profile_family),
+  1: MetaNatural(p.revision),
+  2: MetaSeq(map(p.profile_imports,
+       i -> MetaBytes(ContentRefV0(i)))),
+  3: MetaSeq(map(p.supported_subject_kinds, MetaSymbol)),
+  4: MetaSeq(map(p.declaration_catalogs, c -> MetaRecord {
+       0: MetaSymbol(c.kind), 1: MetaSeq(c.bodies)
+     })),
+  5: MetaBytes(p.semantic_law_source)
+}
+
+SemanticLanguageProfileId =
+  SemanticContentId<"foundation.semantic-language-profile">
+```
+
+`profile_family` and `revision` are identity-bearing syntax-dispatch fields;
+they do not establish compatibility or evaluator support. Imports are ordered
+by ascending full `ContentRefV0` bytes, contain no duplicate, have exact kind
+`"foundation.semantic-language-profile"`, and carry the profile's regime.
+Supported subject kinds are ordered by ascending `A(kind)`, unique, nonempty,
+and exclude the three prior-meta kinds and every member of
+`FoundationStandaloneSemanticKindsV0`. Catalog kinds use the same ordering,
+uniqueness, and zero-based local-ordinal discipline as Section 3.3. Profile law
+bytes are exact and nonempty. Formation applies the constitutional body, node,
+child-edge, and byte bounds before hashing.
+
+A profile owns declarations directly. It does not route them through an
+ordinary semantic module. Its declaration-reference grammar is exactly:
+
+```text
+ProfileDeclarationRef =
+    LocalProfileDeclarationRef(kind: Symbol, local_ordinal: u64)
+  | ImportedProfileDeclarationRef(
+      profile: SemanticLanguageProfileId,
+      kind: Symbol,
+      local_ordinal: u64)
+
+ProfileDeclarationRefBody(Local(K, n)) = MetaVariant(0, MetaRecord {
+  0: MetaSymbol(K), 1: MetaNatural(n)
+})
+
+ProfileDeclarationRefBody(Imported(p, K, n)) =
+  MetaVariant(1, MetaRecord {
+    0: MetaBytes(ContentRefV0(p)),
+    1: MetaSymbol(K),
+    2: MetaNatural(n)
+  })
+```
+
+A local reference resolves only in the selected profile. An imported
+reference resolves only in a distinct exact profile in the selected profile's
+authenticated transitive import closure. A reference to the selected profile
+spelled through the imported branch refuses; self-declarations use local
+ordinals. The kind and ordinal must exist exactly. Only fields whose supported
+typed-body grammar declares `ProfileDeclarationRefBody` have this meaning;
+Foundation never scans arbitrary law or catalog bytes for ID-shaped material.
+
+`SemanticLanguageProfileBody` contains no structured self ID, governed-subject
+ID, evidence ID, policy ID, capability, module ID, live handle, or ambient
+registry coordinate. Its only ordinary references are upstream profile
+imports. A mutually recursive profile-local language is one finite catalog
+aggregate with local ordinals. A true cross-profile cycle is not constructed
+by a content-hash fixpoint.
+
+One profiled semantic subject has exactly one directly selected profile:
+
+```text
+ProfiledSemanticBody(profile, domain_body) = MetaRecord {
+  0: MetaBytes(ContentRefV0(profile)),
+  1: domain_body
+}
+
+ProfiledSemanticId<K>(B, profile, domain_body) =
+  SemanticContentId<K>(B, ProfiledSemanticBody(profile, domain_body))
+```
+
+`K` must be neither a prior-meta kind nor a member of
+`FoundationStandaloneSemanticKindsV0`. Every standalone body uses its dedicated
+ordinary preimage and admission path; wrapping one in `ProfiledSemanticBody` is
+a kind mismatch, not an alternate constructor lane.
+
+If two languages compose, their owner defines one exact composition profile
+that imports both. Allowing several direct roots would require a separate
+precedence and nonambiguity algebra and is not selected for v0. The subject's
+profile and subject ID carry one regime. A profile cannot govern a prior-meta
+or Foundation standalone semantic kind.
+
+Authentication receives one exact `ProfilePreimageBundle`, a finite typed map
+from asserted `SemanticLanguageProfileId` to the exact corresponding
+`SemanticLanguageProfileBody`. It has at most `2^14` entries, checked before
+key inspection or copying. Every key must first form as the exact profile kind
+under the selected regime. Starting from the selected profile ID, canonical
+iterative depth-first traversal:
+
+1. authenticates each reached profile's exact body before reading its imports;
+2. follows its sorted imports, visiting each distinct profile once;
+3. bounds the closure at `2^14` distinct nodes and `2^14` authenticated import
+   edges; and
+4. requires the supplied key set to equal the reached import closure exactly.
+
+A missing reached profile is `MissingDependency`; a wrong kind or regime is
+`KindMismatch`; a malformed or forged profile preimage is `Malformed`; an
+authenticated cycle or unreferenced extra preimage is `Refused`; and crossing
+a bundle, node, or edge limit is `DeterministicLimitExceeded`. A cycle target
+must authenticate before cycle classification, so a forged body cannot select
+that outcome. The result is an immutable canonical snapshot:
+
+```text
+EffectiveSemanticContext = {
+  semantic_regime: SemanticRegimeId,
+  selected_profile: SemanticLanguageProfileId,
+  selected_profile_body: SemanticLanguageProfile,
+  authenticated_profiles:
+    CanonicalSortedUniqueSeq<
+      (SemanticLanguageProfileId, exact SemanticLanguageProfileBody)>
+}
+```
+
+The authenticated profile-import DAG is the only generic language closure in
+`EffectiveSemanticContext`. Subject-specific ordinary modules, declarations,
+policies, and evidence remain owner inputs and are authenticated separately.
+No global registry is consulted. An evaluator supports a profiled subject only
+when it explicitly supports the exact selected profile ID and that profile
+lists the subject's exact kind. Equal family or revision fields are
+insufficient. An unsupported exact profile is `Unsupported`; a formed subject
+kind outside the selected profile's support set is `Refused`.
+
+Generic closure authentication cannot infer which domain rules an opaque law
+source actually uses. The owning domain must therefore derive, rather than
+accept as an authored assertion, the profile dependencies required by its
+complete typed subject and selected law. Owner admission must establish both:
+
+- every semantic operation and profile declaration transitively used by the
+  subject is defined by the selected profile or its authenticated imports; and
+- every imported profile is required by that selected profile's admitted law
+  or declaration catalogs.
+
+Failure of either condition refuses owner admission. A broad domain profile
+with surplus imported laws is not an exact-used profile merely because its
+closure authenticates. Foundation supplies the bounded authenticated
+snapshot; each owner supplies and tests the exact derivation equation. This
+keeps domain semantics downstream of Foundation while preventing an authored
+dependency list from becoming semantic authority.
+
+The only intrinsic v0 compatibility relation between two effective semantic
+contexts is exact equality. Unequal contexts require an explicit directional,
+owner-checked bridge; matching family or revision labels do not imply
+preservation. Changing the selected profile or any transitively imported
+profile rotates the selected profile and every dependent profiled subject.
+Adding or changing an unreferenced profile does not. A subject-specific module
+change follows that module's owner's identity law and does not rotate the
+shared Foundation regime. Changing the Foundation mechanism grammar itself
+rotates `SemanticRegimeId` and every ordinary subject under it.
+
+### 3.3 Ordinary semantic modules
 
 Every extensible semantic module is an ordinary, regime-qualified semantic
 object. Its Foundation envelope has one exact canonical body:
@@ -646,7 +860,7 @@ Changing a used module does rotate dependent identities.
 ## 4. Domain-indexed canonical values
 
 An exact value-domain reference is the following closed refinement of the
-declaration-reference union in Section 3.2:
+declaration-reference union in Section 3.3:
 
 ```text
 ValueDomainRef = Root(RootDeclarationRef<
@@ -671,21 +885,25 @@ CanonicalValue<T: ValueType> = {
   canonical_bytes: M(datum)
 }
 
-CanonicalValueIdBody(T, datum) = MetaRecord {
-  0: ValueDomainRefBody(T.domain),
-  1: SchemaBody(T.schema),
-  2: datum
+CanonicalValueIdBody(P, T, datum) = MetaRecord {
+  0: MetaSymbol(P),
+  1: ValueDomainRefBody(T.domain),
+  2: SchemaBody(T.schema),
+  3: datum
 }
 
-CanonicalValueId<K>(B, T, datum) =
-  SemanticContentId<K>(B, CanonicalValueIdBody(T, datum))
+CanonicalValueId<P>(B, T, datum) =
+  SemanticContentId<"foundation.canonical-value">(
+    B, CanonicalValueIdBody(P, T, datum))
 ```
 
 `CanonicalValueId` is defined only after exact domain admission of `datum` at
-`T`; carrier-shape checking alone cannot mint it. `K` is an ordinary,
-non-prior subject kind and `B.semantic_regime.id = RegimeOf(T.domain)`.
-Private or otherwise unaddressed values need no ID. Content addressing never
-authorizes exposure.
+`T`; carrier-shape checking alone cannot mint it. `P` is the caller's exact
+nonempty purpose kind. It is identity-bearing inside the body but is not the
+ID's `subject_kind` and does not select another constructor lane.
+`B.semantic_regime.id = RegimeOf(T.domain)`. Private or otherwise unaddressed
+values need no ID. Content addressing never authorizes exposure, owner meaning,
+or use under a semantic-language profile.
 
 For exact resolved declaration body `body(d)`, define the support gate:
 
@@ -890,6 +1108,12 @@ SemanticFunctionType = {
   success: ValueType,
   failures: CanonicalSortedUniqueSeq<SemanticFailureType>
 }
+
+SemanticFunctionTypeBody(fn) = MetaRecord {
+  0: MetaSeq(map(fn.inputs, CanonicalValueTypeBody)),
+  1: CanonicalValueTypeBody(fn.success),
+  2: MetaSeq(map(fn.failures, CanonicalSemanticFailureTypeBody))
+}
 ```
 
 The failure row is the canonical union of explicit failure constructors and
@@ -998,7 +1222,7 @@ primitives. A mathematically partial primitive returns a declared typed
 failure; it never traps. There is no authored “totality evidence” field.
 
 The algorithm's exact primitive references and module roots are the functions
-in Section 3.2, not authored assertions. Its canonical semantic body is:
+in Section 3.3, not authored assertions. Its canonical semantic body is:
 
 ```text
 PortableAlgorithmCandidate = {
@@ -1042,7 +1266,7 @@ stronger wrapper.
 The direct primitive sequence in the body must equal the syntax-derived
 sequence; it cannot omit or pad it. `DirectModuleRoots` is derived only and is
 not another authored or hashed summary. The supplied `ModulePreimageBundle`
-must equal `RequiredModuleClosure_B` under Section 3.2. There is no mixed
+must equal `RequiredModuleClosure_B` under Section 3.3. There is no mixed
 “semantic dependency preimage closure”: primitive references remain exact
 direct references resolved through their authenticated module declarations,
 while only module imports form the transitive preimage DAG.
@@ -1057,6 +1281,32 @@ A derived portable function ABI does not become a capability, checker, wire
 codec, or endpoint contract through field-shape equality. Those domain-owned
 objects add meanings that Foundation does not define. Crossing such a
 namespace requires an exact, separately identified checked bridge.
+
+The exact capability-neutral external-operation description used by the K1
+surface is a standalone Foundation semantic kind:
+
+```text
+ExternalOperationContract = {
+  operation_kind: Symbol,
+  function_type: SemanticFunctionType
+}
+
+ExternalOperationContractBody(c) = MetaRecord {
+  0: MetaSymbol(c.operation_kind),
+  1: SemanticFunctionTypeBody(c.function_type)
+}
+
+ExternalOperationContractId(B, c) =
+  SemanticContentId<"foundation.external-operation-contract">(
+    B, ExternalOperationContractBody(c))
+```
+
+The operation kind and complete same-regime function type are identity-bearing.
+A provider binding, endpoint, invocation authority, implementation handle, and
+execution result are outside this body. Rebinding a provider cannot rotate the
+contract ID, while possessing the contract ID never grants execution or
+portable-algorithm denotation. Execution requires a separate owner capability
+contract and checked bridge.
 
 ## 7. Evaluation semantics and deterministic control
 
@@ -1322,6 +1572,105 @@ contract. Only successful owner admission can mint an immutable, narrow,
 process-local capability. Serialization, copying, FFI, caching, evidence, or a
 prior admission record never transports authority.
 
+### 9.1 Inert source-authority envelopes
+
+Consumers need one common way to retain what an owner must later authenticate
+without pretending that Foundation understands the owner's policy. The
+selected envelope is deliberately made only of inert, owner-profiled
+identities:
+
+```text
+OwnerCapabilityRequirement = {
+  owner_domain: Symbol,
+  capability_family: Symbol,
+  owner_requirement: SemanticContentId<owner-defined kind>
+}
+
+OwnerCapabilityRequirementBody(r) = MetaRecord {
+  0: MetaSymbol(r.owner_domain),
+  1: MetaSymbol(r.capability_family),
+  2: MetaBytes(ContentRefV0(r.owner_requirement))
+}
+
+OwnerOperationPolicyDisposition =
+    BoundTo(owner_policy_binding: SemanticContentId<owner-defined kind>)
+  | OwnerDefinesNoPolicy(
+      owner_no_policy_declaration: SemanticContentId<owner-defined kind>)
+
+OwnerOperationPolicyDispositionBody(BoundTo(p)) =
+  MetaVariant(0, MetaBytes(ContentRefV0(p)))
+
+OwnerOperationPolicyDispositionBody(OwnerDefinesNoPolicy(p)) =
+  MetaVariant(1, MetaBytes(ContentRefV0(p)))
+
+PortableSourceAuthorityBinding = {
+  owner_domain: Symbol,
+  capability_family: Symbol,
+  owner_source_coordinate: SemanticContentId<owner-defined kind>,
+  owner_binding_payload: SemanticContentId<owner-defined kind>,
+  operation_policy: OwnerOperationPolicyDisposition,
+  owner_policy_closure: SemanticContentId<owner-defined kind>,
+  capability_requirement: OwnerCapabilityRequirement
+}
+
+PortableSourceAuthorityBindingBody(b) = MetaRecord {
+  0: MetaSymbol(b.owner_domain),
+  1: MetaSymbol(b.capability_family),
+  2: MetaBytes(ContentRefV0(b.owner_source_coordinate)),
+  3: MetaBytes(ContentRefV0(b.owner_binding_payload)),
+  4: OwnerOperationPolicyDispositionBody(b.operation_policy),
+  5: MetaBytes(ContentRefV0(b.owner_policy_closure)),
+  6: OwnerCapabilityRequirementBody(b.capability_requirement)
+}
+```
+
+Foundation checks only exact carrier shape, agreement of the outer and inner
+owner-domain/capability-family fields, and one common semantic regime across
+all contained ordinary references. It does not assign universal kinds to
+source coordinates, binding payloads, policies, policy closures, or
+requirements. In particular, `owner_policy_closure` is an opaque exact ID for
+the owner's complete profiled policy closure, not a Foundation-authored list
+of facts.
+
+Before using a portable binding, the named owner must authenticate the exact
+profiled preimage of every referenced owner object and apply its own typed-body
+grammar. The owner must derive the complete policy closure from the formed
+source coordinate, binding payload, policy disposition, and operation context,
+then require its exact derivation equation to yield the carried
+`owner_policy_closure`. An aggregate consumer, including Analysis, derives its
+aggregate closure as the canonical union of those authenticated owner
+closures; it never authors a second closure summary and calls that summary
+authority. Whether a requirement is satisfied, which facts qualify, and what
+freshness or lifetime is required remain owner predicates.
+
+The portable body has no standalone Foundation-defined binding ID. It may be
+embedded in an owner-defined profiled body when that owner needs a durable
+identity. Every field is then identity-bearing through that enclosing body.
+Neither the portable binding nor any referenced ID is an admission receipt or
+live capability.
+
+For a source that cannot be named portably, an owner may retain:
+
+```text
+OwnerLocalSourceAuthorityBinding = {
+  owner_domain: Symbol,
+  capability_family: Symbol,
+  owner_local_coordinate: OpaqueProcessLocalCoordinate,
+  owner_binding_payload: SemanticContentId<owner-defined kind>,
+  operation_policy: OwnerOperationPolicyDisposition,
+  owner_policy_closure: SemanticContentId<owner-defined kind>,
+  capability_requirement: OwnerCapabilityRequirement
+}
+```
+
+The local carrier obeys the same owner/family and same-regime checks for its
+inert ID fields, but has no canonical body and no content ID. It is not
+serializable, hashable, copyable, deep-copyable, cacheable, FFI-safe, or
+evidence-transportable. Its local coordinate is never rendered into portable
+bytes. A fresh live capability is a separate invocation input to the owner's
+checker. The owner, not Foundation, checks that capability's exact binding,
+freshness, lifetime, attenuation, single-use, or revocation law.
+
 No malformed, unsupported, mismatched, refused, over-limit, or checker-failed
 attempt returns a partial semantic object or capability.
 
@@ -1329,26 +1678,35 @@ attempt returns a partial semantic object or capability.
 
 Foundation owns only the mechanisms on this page. Each consumer owns:
 
-- its semantic-regime descriptor under the prior-meta root grammar;
+- its exact semantic-language profile contents, supported subject families,
+  evaluator implementation, and exact-use derivation under the shared
+  Foundation regime mechanism;
 - its extensible declaration catalogs and domain payloads under the Foundation
   module envelope;
 - subject semantic-body schemas, adequacy, and admission predicates;
 - value-domain mathematics and codecs;
 - algorithm kinds, primitive selection, predicates, and failure declarations;
-- capability, checker, wire, and endpoint contract bodies;
+- source-coordinate, binding-payload, policy, complete-policy-closure,
+  capability-requirement, checker, wire, and endpoint contract bodies;
+- every authority-preimage authentication, policy-closure derivation, owner
+  admission predicate, and live-capability rule;
 - domain resource dimensions and policies; and
 - migrations and checked cross-domain relations.
 
 ## 11. Evolution laws
 
-- A change to a regime root, used module, primitive denotation, function term,
+- A change to the shared Foundation regime mechanism, selected or imported
+  language profile, used module, primitive denotation, function term,
   value-domain membership or canonicalization, identity profile, or hash suite
   changes the complete typed preimage. Conditional on the governing digest
   law's binding assumption, this creates a distinct typed ID. A changed value-domain
   declaration changes the preimages of its owning module (or regime root) and
   every affected value type and dependent subject.
-- Adding or changing an unused module does not rotate the regime root or an
-  unrelated subject.
+- Adding or changing an unreferenced language profile or unused module does
+  not rotate the shared regime or an unrelated subject. Changing any profile
+  in a selected profile's import closure rotates that selected profile and its
+  dependent profiled subjects. Surplus imports fail the owner's exact-use
+  admission equation rather than weakening this locality law.
 - A carrier rendering, diagnostic relabel, provider rebinding, observation
   record, stricter unobservable host/evaluator safety limit, or evaluator bug
   fix does not rotate semantic identity. An admission or evaluation bound made
@@ -1356,6 +1714,8 @@ Foundation owns only the mechanisms on this page. Each consumer owns:
   profile, regime, module, algorithm, or evaluation contract instead.
 - Cross-regime preservation is an explicit checked relation. Translation never
   transfers prior admission or authority.
+- Unequal `EffectiveSemanticContext` values have no intrinsic compatibility;
+  preservation requires an explicit directional owner-checked bridge.
 - Unknown extensions refuse or remain unsupported; they are never interpreted
   as the closest known meaning.
 
@@ -1391,31 +1751,44 @@ exercise raw-request mismatch of an asserted algorithm ID, omission, padding,
 or reordering of the carried direct-primitive field, or absence/mismatch of an
 asserted contract body. Those are target-specification obligations, not
 executable observations, until a strict raw request carrier is added.
-The module bundle is likewise supplied as a typed host map rather than strict
-raw sorted-unique ID/body bytes, so duplicate or unsorted raw carriers and
-noncanonical raw module bodies are outside present coverage even though the
-instrument exercises ID recomputation, missing/extra nodes, kind and regime
-checks, cycles, diamonds, and closure bounds. Its Python realization accepts
-inputs only in an exact tuple and accepts module material only in an exact
-built-in dictionary or the package's exact immutable fixture-mapping
-singleton. It snapshots either accepted carrier into one dictionary and
-rejects other sequence or mapping implementations and subclasses. Those choices are bounded
-realization evidence for the portable immutable-snapshot law, not universal
-host-carrier semantics. Before semantic use, that realization recursively
-requires algorithm, module, evaluation-contract, charging-formula, schema,
-datum, typed-ID, and term carriers to use their exact frozen base dataclass
-constructors; subclass carriers are rejected as `Malformed` before virtual
-overrides can participate in authentication or evaluation. This does not claim resilience to reflective
+The module and profile bundles are likewise supplied as typed host maps rather
+than strict raw sorted-unique ID/body bytes, so duplicate or unsorted raw
+carriers and noncanonical raw bodies are outside present coverage. The
+instrument nevertheless exercises ID recomputation, missing/extra nodes, kind
+and regime checks, forged cycles, diamonds, deep iterative traversal, and
+independent bundle/node/edge bounds. Its Python realization accepts inputs
+only in an exact tuple, module material only in an exact built-in dictionary or
+the package's exact immutable fixture-mapping singleton, and profile material
+only in an exact built-in dictionary. It snapshots every accepted closure and
+rejects other sequence or mapping implementations and subclasses. Those
+choices are bounded realization evidence for the portable immutable-snapshot
+law, not universal host-carrier semantics. Before semantic use, that
+realization recursively requires algorithm, module, semantic-language-profile,
+evaluation-contract, charging-formula, schema, datum, typed-ID, and term
+carriers to use their exact frozen base dataclass constructors; subclass
+carriers are rejected as `Malformed` before virtual overrides can participate
+in authentication or evaluation. This does not claim resilience to reflective
 mutation or concurrent host sabotage. Catastrophic allocation remains host
 noncompletion and may produce no record.
 
+The instrument also forms both portable authority-policy branches, checks
+every inert field's encoding sensitivity, owner/family agreement, and
+same-regime formation, and refuses encoding, hashing, copying, deep-copying,
+or pickling an owner-local binding. These are shape and nontransport
+observations only. They do not authenticate an owner policy closure, establish
+its derivation equation, execute owner admission, or exercise a live
+capability.
+
 Each evaluator call that passes boundary 1 creates one fresh authentication
-ledger. Its derived host cap is `3 + 1 + 1 + 2^14 + 1 + 2^12 = 20,486`:
-three prior-meta bodies, one
-contract ID, one algorithm ID, at most `2^14` authenticated request-module
-IDs, one evaluator primitive-support module ID, and at most one distinct
-primitive ID per `2^12` term nodes. The cap therefore cannot add a refusal
-inside the selected semantic bounds. Before contract routing,
+ledger. A profile-aware owner may pass that same ledger through profile and
+subject authentication before its domain check. The derived maximum host cap
+is
+`3 + 1 + 1 + 2^14 + 2^14 + 1 + 2^12 = 36,870`: three prior-meta bodies,
+one contract ID, one algorithm ID, at most `2^14` authenticated profile IDs,
+at most `2^14` authenticated request-module IDs, one evaluator
+primitive-support module ID, and at most one distinct primitive ID per
+`2^12` term nodes. The cap therefore cannot add a refusal inside the selected
+combined semantic bounds. Before contract routing,
 the evaluator co-observes the exact supported prior-meta descriptor bodies in
 the same ledger, so basis support cannot degrade to an ID-only registry hit.
 Contract and primitive
@@ -1507,14 +1880,16 @@ notation=U:MetaUnit;MF:MetaBooleanFalse;MT:MetaBooleanTrue;N(n):MetaNatural(n);I
 reference-notation=PR(id):PriorRefV0(id);CR(id):ContentRefV0(id);SR:SemanticRegimeId-derived-from-this-exact-descriptor
 basis-notation=B:the-enclosing-authenticated-PriorMetaAuthenticationBasis-with-B.semantic-regime.id=SR
 ordinary-id(K,b):=SemanticContentId<K>(B,b)
+foundation-standalone-semantic-kinds=foundation.canonical-value,foundation.evaluation-contract,foundation.external-operation-contract,foundation.portable-algorithm,foundation.semantic-language-profile,foundation.semantic-module,foundation.semantic-primitive
+identity-body-mode-law=every-foundation-standalone-semantic-kind-has-only-its-exact-dedicated-body-constructor;prior-meta-kinds-remain-a-separate-constructor-class;profiled-semantic-subjects-use-neither-class;raw-ordinary-id-is-structural-framing-and-never-semantic-admission
 sequence-notation=S[...] preserves written order;R fields are written in increasing ordinal order;map preserves source order
-selected-limits=axis-octets<=1048576;meta-bytes<=1048576;meta-nodes<=16384;meta-child-edges<=16384;meta-root-zero-depth<=384;schema-nodes<=16384;schema-root-zero-depth<=48;term-nodes<=4096;term-root-zero-depth<=48;module-bundle-entries<=16384;module-nodes<=16384;module-import-edges<=16384;sequence-capacity<=16384;all-bounds-inclusive
+selected-limits=axis-octets<=1048576;meta-bytes<=1048576;meta-nodes<=16384;meta-child-edges<=16384;meta-root-zero-depth<=384;schema-nodes<=16384;schema-root-zero-depth<=48;term-nodes<=4096;term-root-zero-depth<=48;profile-bundle-entries<=16384;profile-nodes<=16384;profile-import-edges<=16384;module-bundle-entries<=16384;module-nodes<=16384;module-import-edges<=16384;sequence-capacity<=16384;all-bounds-inclusive
 axis-admission=A(s)-is-nonempty-printable-ASCII-and-length-at-most-1048576-checked-before-character-conversion-or-scanning
 pair-authentication=exact-typed-constructor-kind-and-axes;strict-canonical-body-decode-and-reencode;recomputed-governing-digest-equals-asserted-ID
 closed-validation-scope=one-top-level-admission-check-or-evaluation-transaction-from-prior-meta-basis-authentication-through-final-decision;includes-every-request-preimage-and-every-consulted-successfully-authenticated-registry-resolver-or-cache-preimage
 hash-binding-conflict=same-exact-typed-ID-and-two-pair-authenticated-distinct-canonical-descriptor-or-body-byte-strings-in-one-closed-validation-scope
 hash-binding-conflict-outcome=CheckerFailure-before-owner-admission-or-capability;equal-byte-reobservation-is-idempotent;retained-cross-transaction-authentication-state-requires-equivalent-cross-scope-grouping-and-quarantine-or-per-transaction-reauthentication
-aggregate-bound-owners=MetaValue-sequence-or-record:remaining-cumulative-meta-child-edges-and-nodes;FiniteSchema-record-or-variant:per-aggregate-meta-child-edge-ceiling-plus-remaining-cumulative-schema-node-minimum-reservation;SemanticFunction-inputs-or-failures,PrimitiveDeclaration-failures,PrimitiveWork-indices,EvaluationContract-cost-rules,SemanticModule-declaration-catalogs-or-bodies,PortableAlgorithm-inputs:per-aggregate-meta-child-edge-ceiling;CanonicalTerm-multi-child:remaining-term-nodes;SemanticModule-imports:per-module-import-edge-ceiling-then-authenticated-closure-remaining-edge-reservation;DirectModuleRoots:module-node-ceiling;ModulePreimageBundle:module-bundle-entries;EvaluationRequest-inputs:derived-function-input-count
+aggregate-bound-owners=MetaValue-sequence-or-record:remaining-cumulative-meta-child-edges-and-nodes;FiniteSchema-record-or-variant:per-aggregate-meta-child-edge-ceiling-plus-remaining-cumulative-schema-node-minimum-reservation;SemanticFunction-inputs-or-failures,PrimitiveDeclaration-failures,PrimitiveWork-indices,EvaluationContract-cost-rules,SemanticModule-declaration-catalogs-or-bodies,SemanticLanguageProfile-supported-kinds-or-declaration-catalogs,PortableAlgorithm-inputs:per-aggregate-meta-child-edge-ceiling;CanonicalTerm-multi-child:remaining-term-nodes;SemanticLanguageProfile-imports:per-profile-import-edge-ceiling-then-authenticated-closure-remaining-edge-reservation;ProfilePreimageBundle:profile-bundle-entries;SemanticModule-imports:per-module-import-edge-ceiling-then-authenticated-closure-remaining-edge-reservation;DirectModuleRoots:module-node-ceiling;ModulePreimageBundle:module-bundle-entries;EvaluationRequest-inputs:derived-function-input-count
 aggregate-admission-preflight=every-aggregate-bearing-semantic-carrier-has-the-explicit-owner-above;check-its-declared-or-trusted-cardinality-against-that-bound-before-member-inspection-or-derived-aggregate-construction;the-serialized-carrier-separately-owns-aggregate-raw-byte-preflight
 u64-range=0..18446744073709551615
 core-names=unit,bool,nat,int,bytes,symbol,seq,record,variant,literal,variable,let,record-construct,project,inject,case,sequence-construct,sequence-length,fail,strict-index,bounded-append,primitive-call,bounded-iterate,conditional
@@ -1582,6 +1957,27 @@ module-closure-order=depth-first;direct-roots-ascending;each-import-list-ascendi
 module-closure-admission=every-reached-key-recomputed-before-its-imports;keys(P)-equal-required-module-closure-after-traversal;unreferenced-extra-keys-refused-without-body-interpretation;no-missing-wrong-kind-cross-regime-id-mismatch-or-cycle
 module-closure-measure=each-unique-module-node-once;each-authenticated-module-import-edge-once;shared-diamond-target-authenticated-and-expanded-once
 module-closure-limits=unique-nodes<=16384;import-edges<=16384
+semantic-language-profile-kind=foundation.semantic-language-profile
+semantic-language-profile-body=SLPB(family,revision,imports,kinds,catalogs,law):=R{0:Q(family),1:N(revision),2:S[O(CR(profile-import_i))...],3:S[Q(kind_i)...],4:S[R{0:Q(declaration-kind),1:S[declaration-body...] }...],5:O(law)}
+semantic-language-profile-id=SLPId(profile):=ordinary-id(foundation.semantic-language-profile,SLPB(profile));regime-axis-SR
+semantic-language-profile-formation=family,each-supported-kind,and-each-declaration-kind-are-exact-Symbols;revision-is-u64;imports-are-ascending-full-CR-unique-same-SR-foundation.semantic-language-profile-IDs;kinds-is-nonempty-ascending-ASCII-and-unique;no-kind-is-prior-meta-or-any-foundation-standalone-semantic-kind;catalog-kinds-are-ascending-ASCII-and-unique;body-position-is-zero-based-local-ordinal;law-is-nonempty-exact-bytes;constitutional-body-bounds-apply
+semantic-language-profile-preimages=finite-map-from-asserted-SLPId-to-exact-SLPB;entry-count<=16384-before-key-inspection-or-copy;every-key-forms-and-routes-before-map-copy-or-key-set-comparison
+semantic-language-profile-closure=depth-first-from-the-selected-SLPId;authenticate-each-profile-before-reading-its-imports-or-classifying-a-selected-cycle;keys(bundle)-equal-the-reached-profile-DAG;no-missing,extra,wrong-kind,cross-regime,forged,or-cyclic-profile;unique-profile-nodes<=16384;profile-import-edges<=16384
+profile-declaration-ref-body=PDRB(Local(kind,n)):=V(0,R{0:Q(kind),1:N(n)});PDRB(Imported(profile,kind,n)):=V(1,R{0:O(CR(profile)),1:Q(kind),2:N(n)})
+profile-declaration-ref-admission=Local-resolves-only-in-the-selected-profile;Imported-owner-is-a-distinct-exact-profile-in-the-authenticated-import-closure;kind-and-ordinal-resolve-exactly;self-spelled-as-Imported-refuses;arbitrary-bytes-have-no-reference-semantics
+profiled-semantic-body=PSB(profile-id,body):=R{0:O(CR(profile-id)),1:body}
+profiled-semantic-id=ordinary-id(subject-kind,PSB(profile-id,domain-body));the-exact-standalone-profile-ID-is-in-the-subject-preimage;subject-kind-is-neither-prior-meta-nor-any-foundation-standalone-semantic-kind
+effective-semantic-context=ESC(profile-id,profile-preimages):=(SR,profile-id,authenticated-selected-SLPB,canonical-authenticated-profile-DAG)
+effective-semantic-context-admission=authenticate-the-exact-no-extra-profile-closure;subject-kind-is-in-the-selected-SLPB-kinds;evaluator-support-explicitly-contains-the-exact-selected-SLPId;family-or-revision-equality-alone-is-insufficient;subject-specific-module-closures-remain-separate-domain-inputs
+profile-reference-exclusions=SLPB-has-no-structured-self,governed-subject,evidence,policy,capability,module,or-live-authority-reference;profile-imports-point-only-upstream;only-PDRB-has-profile-declaration-reference-semantics;fixpoint-construction-is-never-used
+profile-support-law=unequal-effective-contexts-have-no-intrinsic-compatibility-and-require-a-separate-owner-checked-edge
+profile-evolution=changing-a-selected-profile-or-imported-profile-rotates-dependent-subject-IDs;adding-or-changing-an-unreferenced-profile-does-not;subject-specific-module-evolution-is-owned-and-authenticated-separately
+owner-capability-requirement-body=OCRB(owner,family,owner-requirement):=R{0:Q(owner),1:Q(family),2:O(CR(owner-requirement))}
+owner-policy-disposition-body=OPDB(BoundTo(owner-policy-binding)):=V(0,O(CR(owner-policy-binding)));OPDB(NoPolicy(owner-no-policy-declaration)):=V(1,O(CR(owner-no-policy-declaration)))
+portable-source-authority-binding-body=PSABB(owner,family,source-coordinate,binding-payload,policy,policy-closure,requirement):=R{0:Q(owner),1:Q(family),2:O(CR(source-coordinate)),3:O(CR(binding-payload)),4:OPDB(policy),5:O(CR(policy-closure)),6:OCRB(requirement)}
+portable-source-authority-binding-formation=owner-and-family-are-Symbols-and-equal-the-enclosed-OCRB-owner-and-family;all-refs-share-the-source-coordinate-SR;the-owner-authenticates-and-interprets-the-exact-profiled-source-coordinate,binding-payload,policy-disposition,complete-derived-policy-closure,and-requirement
+authority-envelope-inertness=OCRB,OPDB,and-PSABB-are-canonical-inert-bodies-only;their-owner-defined-ID-targets-carry-all-domain-specific-ABI,binding,freshness,lifetime,fact,qualification,assurance,trust,policy,and-completeness-semantics;the-envelope-never-mints-or-contains-a-live-capability,occurrence,mutable-handle,checker-cache,or-provider-object
+owner-local-source-authority-binding=inert-process-local-metadata(owner,family,owner-local-coordinate,binding-payload,policy,policy-closure,requirement);fresh-live-capability-is-a-separate-checking-input;the-local-binding-has-no-canonical-body-or-content-ID;serialization,hashing,copying,FFI,caching,or-evidence-does-not-transport-the-local-coordinate-or-live-capability
 module-declaration-reference-scope=after-module-authentication-each-supported-kind-interprets-only-its-exact-body-law;recognized-target-is-LDRB-in-the-same-aggregate,SR-root,or-a-module-in-the-declaring-module-import-closure;an-unrecognized-kind-in-a-generic-extension-capable-declaration-position-is-Unsupported;an-exact-typed-slot-carrying-a-kind-other-than-its-required-K-is-KindMismatch;unreferenced-unknown-catalogs-are-inert
 primitive-candidates-not-module-nodes=primitive-id-is-a-direct-algorithm-dependency;primitive-declaration-resolves-through-its-owner-module;only-module-imports-form-the-transitive-preimage-DAG
 value-domain-ref=Root(SR,foundation.root-value-domain,n)-with-n-in-0..8-or-Module(m,value-domain,n)-whose-resolved-body-passes-module-value-domain-admission;no-other-kind-or-body-is-a-value-domain-ref
@@ -1597,8 +1993,8 @@ root-structural-boundary=generic-Boolean,record,variant,sequence,and-natural-ope
 module-value-entry=first-entry-only-as-owner-admitted-literal,owner-admitted-input,or-owner-admitted-result-of-an-exact-supported-primitive;root-aggregate-members-may-contain-already-admitted-same-regime-module-values
 canonical-value=CV(T,v,d,M(d));d-is-the-unique-domain-admitted-MetaValueV0-representative-of-v;strict-decode-consumes-one-datum-reencodes-identically-and-owner-admits
 canonical-and-root-value-equality=defined-only-for-values-with-the-same-exact-ValueType;then-use-the-exact-domain-owned-mathematical-equality;selected-root-domains-use-equality-of-their-unique-admitted-datums;same-domain-values-under-different-FiniteSchemas-are-not-equal-at-this-typed-value-layer
-canonical-value-id-body(T,d):=R{0:VDRB(T.domain),1:SB(T.schema),2:d}
-canonical-value-id(K,T,d):=ordinary-id(K,canonical-value-id-body(T,d));defined-only-after-exact-domain-admission;private-or-unaddressed-values-need-no-id
+canonical-value-id-body(P,T,d):=R{0:Q(P),1:VDRB(T.domain),2:SB(T.schema),3:d}
+canonical-value-id(P,T,d):=ordinary-id(foundation.canonical-value,canonical-value-id-body(P,T,d));P-is-the-caller-purpose-kind-and-is-identity-bearing-but-not-the-ID-subject-kind;defined-only-after-exact-domain-admission;private-or-unaddressed-values-need-no-id
 schema-body.Unit=SB(Unit):=V(0,U)
 schema-body.Bool=SB(Bool):=V(1,U)
 schema-body.Nat=SB(Nat(max)):=V(2,N(max))
@@ -1653,6 +2049,9 @@ function-type=Fn(inputs,success,failures)
 function-type-body=FnB(Fn(inputs,success,failures)):=R{0:S[VTB(input_i)...],1:VTB(success),2:S[FT(failure_i)...]}
 failure-row-order=ascending-M(FT(f))-bytes;exact-duplicates-collapse;same-declaration-with-different-payload-type-refuses
 failure-row-derivation=canonical-union-of-every-failure-in-every-structurally-present-subterm-including-unselected-case-and-conditional-branches,each-explicit-Fail,StrictIndex,and-BoundedAppend-failure,and-each-resolved-primitive-declaration-row
+external-operation-contract-body=EOCB(kind,abi):=R{0:Q(kind),1:FnB(abi)}
+external-operation-contract-id=ordinary-id(foundation.external-operation-contract,EOCB(kind,abi));kind-is-an-identity-bearing-operation-purpose-and-abi-is-an-exact-same-regime-SemanticFunctionType
+external-operation-binding-nonauthority=provider-binding-is-outside-EOCB-and-cannot-rotate-the-contract-ID-or-inherit-portable-algorithm-denotation;execution-requires-a-separate-owner-capability-contract
 semantic-completion=Success(CV(success,...))|DomainFailure(failure_i,CV(failure_i.payload-type,...));only-these-are-semantic-completions
 term-body.Literal=TB(Literal(v)):=V(0,R{0:VTB(v.type),1:v.datum})
 term-body.Variable=TB(Variable(n,T)):=V(1,R{0:N(n),1:VTB(T)})
@@ -1765,8 +2164,8 @@ host-failure=process-death,unrecordable-allocation-failure,or-unavailable-device
 nonclaims=no-universal-result-type-or-resource-or-judgment;no-security-property;no-distribution-property;no-constant-time-property;no-provider-conformance;no-unconditional-hash-binding-or-collision-resistance;no-protocol-relation-analysis-compiler-or-endpoint-admission
 ```
 
-The byte string has length `39,468` and SHA-256 digest
-`4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3`.
+The byte string has length `45,669` and SHA-256 digest
+`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`.
 The digest here is only an exact transcription check; descriptor field `1`
 contains the bytes themselves.
 
@@ -1782,15 +2181,15 @@ SemanticRegimeDescriptorV0 = R {
      },
   3: S [],
   4: Q("local-ordinals-and-closed-scc-v0"),
-  5: Q("extension-modules-same-root-dag-v0")
+  5: Q("language-profiles-and-extension-modules-same-root-dag-v0")
 }
 ```
 
-It has `length(M(SemanticRegimeDescriptorV0)) = 40,383`; those encoded
+It has `length(M(SemanticRegimeDescriptorV0)) = 46,606`; those encoded
 descriptor bytes have SHA-256 digest
-`e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0`,
+`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`,
 and its prior-meta `SemanticRegimeId` digest is
-`bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77`.
+`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`.
 The embedded law source, not an external appendix fiat, authenticates the
 selected semantic law. This appendix reproduces that law and expands its
 notation for readers; it cannot assign extra meaning to the same descriptor
@@ -1842,15 +2241,17 @@ CanonicalValueTypeBody(T) = R {
   1: SchemaBody(T.schema)
 }
 
-CanonicalValueIdBody(T, datum) = R {
-  0: ValueDomainRefBody(T.domain),
-  1: SchemaBody(T.schema),
-  2: datum
+CanonicalValueIdBody(P, T, datum) = R {
+  0: Q(P),
+  1: ValueDomainRefBody(T.domain),
+  2: SchemaBody(T.schema),
+  3: datum
 }
 ```
 
-`CanonicalValueIdBody` is admissible for ordinary identity only after `datum`
-passes exact domain admission at `T`.
+`CanonicalValueIdBody` is admissible for the fixed outer subject kind
+`"foundation.canonical-value"` only after `P` forms as an exact nonempty
+`MetaSymbol` and `datum` passes exact domain admission at `T`.
 
 Inside one module declaration, the localizable counterparts are exactly:
 
@@ -1879,7 +2280,7 @@ below. Its aggregate payloads are the following exact substitutions:
 The localizable tree obeys the same scalar, ordinal, structure, `Worst`, and
 constitutional canonical-body bounds. Its lifted outward
 `CanonicalValueTypeBody` independently obeys those bounds as specified in
-Section 3.2; compact local references do not weaken outward admission.
+Section 3.3; compact local references do not weaken outward admission.
 
 `SchemaBody` has exactly these cases and payloads:
 

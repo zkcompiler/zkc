@@ -37,13 +37,33 @@ FOUNDATION_PROFILE = "zkc.foundation.meta.v0"
 IDENTITY_PROFILE_KIND = "foundation.identity-profile"
 HASH_SUITE_KIND = "foundation.hash-suite"
 SEMANTIC_MODULE_KIND = "foundation.semantic-module"
+SEMANTIC_LANGUAGE_PROFILE_KIND = "foundation.semantic-language-profile"
 SEMANTIC_REGIME_KIND = "foundation.semantic-regime"
+CANONICAL_VALUE_KIND = "foundation.canonical-value"
+SEMANTIC_PRIMITIVE_KIND = "foundation.semantic-primitive"
+PORTABLE_ALGORITHM_KIND = "foundation.portable-algorithm"
+EVALUATION_CONTRACT_KIND = "foundation.evaluation-contract"
+EXTERNAL_OPERATION_CONTRACT_KIND = "foundation.external-operation-contract"
 PRIOR_META_SUBJECT_KINDS = frozenset(
     {
         IDENTITY_PROFILE_KIND,
         HASH_SUITE_KIND,
         SEMANTIC_REGIME_KIND,
     }
+)
+FOUNDATION_STANDALONE_SEMANTIC_SUBJECT_KINDS = frozenset(
+    {
+        SEMANTIC_LANGUAGE_PROFILE_KIND,
+        SEMANTIC_MODULE_KIND,
+        CANONICAL_VALUE_KIND,
+        SEMANTIC_PRIMITIVE_KIND,
+        PORTABLE_ALGORITHM_KIND,
+        EVALUATION_CONTRACT_KIND,
+        EXTERNAL_OPERATION_CONTRACT_KIND,
+    }
+)
+PROFILED_FORBIDDEN_SUBJECT_KINDS = (
+    PRIOR_META_SUBJECT_KINDS | FOUNDATION_STANDALONE_SEMANTIC_SUBJECT_KINDS
 )
 META_ID_PREFIX = b"zkc/prior-meta-id/v0\x00"
 CONTENT_ID_PREFIX = b"zkc/content-id/v0\x00"
@@ -56,11 +76,16 @@ MAX_SCHEMA_DEPTH = 48
 MAX_MODULE_BUNDLE_ENTRIES = 1 << 14
 MAX_MODULE_NODES = 1 << 14
 MAX_MODULE_EDGES = 1 << 14
+MAX_PROFILE_BUNDLE_ENTRIES = 1 << 14
+MAX_PROFILE_NODES = 1 << 14
+MAX_PROFILE_EDGES = 1 << 14
 MAX_EVALUATOR_REGISTRY_ENTRIES = 1 << 14
 # Three prior-meta descriptors, one contract, one algorithm, every bounded
 # request module, the evaluator's primitive-support module, and at most one
 # distinct primitive ID per bounded term node.
-MAX_AUTHENTICATION_LEDGER_ENTRIES = 3 + 1 + 1 + MAX_MODULE_NODES + 1 + (1 << 12)
+MAX_AUTHENTICATION_LEDGER_ENTRIES = (
+    3 + 1 + 1 + MAX_PROFILE_NODES + MAX_MODULE_NODES + 1 + (1 << 12)
+)
 
 
 class CanonicalError(ValueError):
@@ -847,7 +872,7 @@ def content_id(
     identity_profile: PriorMetaId = IDENTITY_PROFILE_ID,
     hash_suite: PriorMetaId = HASH_SUITE_ID,
 ) -> TypedContentId:
-    """Hash all semantic identity axes plus a canonical preimage body."""
+    """Frame and hash typed axes plus a canonical body, without admitting it."""
 
     _axis(foundation_profile)
     _axis(subject_kind)
@@ -1236,14 +1261,16 @@ notation=U:MetaUnit;MF:MetaBooleanFalse;MT:MetaBooleanTrue;N(n):MetaNatural(n);I
 reference-notation=PR(id):PriorRefV0(id);CR(id):ContentRefV0(id);SR:SemanticRegimeId-derived-from-this-exact-descriptor
 basis-notation=B:the-enclosing-authenticated-PriorMetaAuthenticationBasis-with-B.semantic-regime.id=SR
 ordinary-id(K,b):=SemanticContentId<K>(B,b)
+foundation-standalone-semantic-kinds=foundation.canonical-value,foundation.evaluation-contract,foundation.external-operation-contract,foundation.portable-algorithm,foundation.semantic-language-profile,foundation.semantic-module,foundation.semantic-primitive
+identity-body-mode-law=every-foundation-standalone-semantic-kind-has-only-its-exact-dedicated-body-constructor;prior-meta-kinds-remain-a-separate-constructor-class;profiled-semantic-subjects-use-neither-class;raw-ordinary-id-is-structural-framing-and-never-semantic-admission
 sequence-notation=S[...] preserves written order;R fields are written in increasing ordinal order;map preserves source order
-selected-limits=axis-octets<=1048576;meta-bytes<=1048576;meta-nodes<=16384;meta-child-edges<=16384;meta-root-zero-depth<=384;schema-nodes<=16384;schema-root-zero-depth<=48;term-nodes<=4096;term-root-zero-depth<=48;module-bundle-entries<=16384;module-nodes<=16384;module-import-edges<=16384;sequence-capacity<=16384;all-bounds-inclusive
+selected-limits=axis-octets<=1048576;meta-bytes<=1048576;meta-nodes<=16384;meta-child-edges<=16384;meta-root-zero-depth<=384;schema-nodes<=16384;schema-root-zero-depth<=48;term-nodes<=4096;term-root-zero-depth<=48;profile-bundle-entries<=16384;profile-nodes<=16384;profile-import-edges<=16384;module-bundle-entries<=16384;module-nodes<=16384;module-import-edges<=16384;sequence-capacity<=16384;all-bounds-inclusive
 axis-admission=A(s)-is-nonempty-printable-ASCII-and-length-at-most-1048576-checked-before-character-conversion-or-scanning
 pair-authentication=exact-typed-constructor-kind-and-axes;strict-canonical-body-decode-and-reencode;recomputed-governing-digest-equals-asserted-ID
 closed-validation-scope=one-top-level-admission-check-or-evaluation-transaction-from-prior-meta-basis-authentication-through-final-decision;includes-every-request-preimage-and-every-consulted-successfully-authenticated-registry-resolver-or-cache-preimage
 hash-binding-conflict=same-exact-typed-ID-and-two-pair-authenticated-distinct-canonical-descriptor-or-body-byte-strings-in-one-closed-validation-scope
 hash-binding-conflict-outcome=CheckerFailure-before-owner-admission-or-capability;equal-byte-reobservation-is-idempotent;retained-cross-transaction-authentication-state-requires-equivalent-cross-scope-grouping-and-quarantine-or-per-transaction-reauthentication
-aggregate-bound-owners=MetaValue-sequence-or-record:remaining-cumulative-meta-child-edges-and-nodes;FiniteSchema-record-or-variant:per-aggregate-meta-child-edge-ceiling-plus-remaining-cumulative-schema-node-minimum-reservation;SemanticFunction-inputs-or-failures,PrimitiveDeclaration-failures,PrimitiveWork-indices,EvaluationContract-cost-rules,SemanticModule-declaration-catalogs-or-bodies,PortableAlgorithm-inputs:per-aggregate-meta-child-edge-ceiling;CanonicalTerm-multi-child:remaining-term-nodes;SemanticModule-imports:per-module-import-edge-ceiling-then-authenticated-closure-remaining-edge-reservation;DirectModuleRoots:module-node-ceiling;ModulePreimageBundle:module-bundle-entries;EvaluationRequest-inputs:derived-function-input-count
+aggregate-bound-owners=MetaValue-sequence-or-record:remaining-cumulative-meta-child-edges-and-nodes;FiniteSchema-record-or-variant:per-aggregate-meta-child-edge-ceiling-plus-remaining-cumulative-schema-node-minimum-reservation;SemanticFunction-inputs-or-failures,PrimitiveDeclaration-failures,PrimitiveWork-indices,EvaluationContract-cost-rules,SemanticModule-declaration-catalogs-or-bodies,SemanticLanguageProfile-supported-kinds-or-declaration-catalogs,PortableAlgorithm-inputs:per-aggregate-meta-child-edge-ceiling;CanonicalTerm-multi-child:remaining-term-nodes;SemanticLanguageProfile-imports:per-profile-import-edge-ceiling-then-authenticated-closure-remaining-edge-reservation;ProfilePreimageBundle:profile-bundle-entries;SemanticModule-imports:per-module-import-edge-ceiling-then-authenticated-closure-remaining-edge-reservation;DirectModuleRoots:module-node-ceiling;ModulePreimageBundle:module-bundle-entries;EvaluationRequest-inputs:derived-function-input-count
 aggregate-admission-preflight=every-aggregate-bearing-semantic-carrier-has-the-explicit-owner-above;check-its-declared-or-trusted-cardinality-against-that-bound-before-member-inspection-or-derived-aggregate-construction;the-serialized-carrier-separately-owns-aggregate-raw-byte-preflight
 u64-range=0..18446744073709551615
 core-names=unit,bool,nat,int,bytes,symbol,seq,record,variant,literal,variable,let,record-construct,project,inject,case,sequence-construct,sequence-length,fail,strict-index,bounded-append,primitive-call,bounded-iterate,conditional
@@ -1311,6 +1338,27 @@ module-closure-order=depth-first;direct-roots-ascending;each-import-list-ascendi
 module-closure-admission=every-reached-key-recomputed-before-its-imports;keys(P)-equal-required-module-closure-after-traversal;unreferenced-extra-keys-refused-without-body-interpretation;no-missing-wrong-kind-cross-regime-id-mismatch-or-cycle
 module-closure-measure=each-unique-module-node-once;each-authenticated-module-import-edge-once;shared-diamond-target-authenticated-and-expanded-once
 module-closure-limits=unique-nodes<=16384;import-edges<=16384
+semantic-language-profile-kind=foundation.semantic-language-profile
+semantic-language-profile-body=SLPB(family,revision,imports,kinds,catalogs,law):=R{0:Q(family),1:N(revision),2:S[O(CR(profile-import_i))...],3:S[Q(kind_i)...],4:S[R{0:Q(declaration-kind),1:S[declaration-body...] }...],5:O(law)}
+semantic-language-profile-id=SLPId(profile):=ordinary-id(foundation.semantic-language-profile,SLPB(profile));regime-axis-SR
+semantic-language-profile-formation=family,each-supported-kind,and-each-declaration-kind-are-exact-Symbols;revision-is-u64;imports-are-ascending-full-CR-unique-same-SR-foundation.semantic-language-profile-IDs;kinds-is-nonempty-ascending-ASCII-and-unique;no-kind-is-prior-meta-or-any-foundation-standalone-semantic-kind;catalog-kinds-are-ascending-ASCII-and-unique;body-position-is-zero-based-local-ordinal;law-is-nonempty-exact-bytes;constitutional-body-bounds-apply
+semantic-language-profile-preimages=finite-map-from-asserted-SLPId-to-exact-SLPB;entry-count<=16384-before-key-inspection-or-copy;every-key-forms-and-routes-before-map-copy-or-key-set-comparison
+semantic-language-profile-closure=depth-first-from-the-selected-SLPId;authenticate-each-profile-before-reading-its-imports-or-classifying-a-selected-cycle;keys(bundle)-equal-the-reached-profile-DAG;no-missing,extra,wrong-kind,cross-regime,forged,or-cyclic-profile;unique-profile-nodes<=16384;profile-import-edges<=16384
+profile-declaration-ref-body=PDRB(Local(kind,n)):=V(0,R{0:Q(kind),1:N(n)});PDRB(Imported(profile,kind,n)):=V(1,R{0:O(CR(profile)),1:Q(kind),2:N(n)})
+profile-declaration-ref-admission=Local-resolves-only-in-the-selected-profile;Imported-owner-is-a-distinct-exact-profile-in-the-authenticated-import-closure;kind-and-ordinal-resolve-exactly;self-spelled-as-Imported-refuses;arbitrary-bytes-have-no-reference-semantics
+profiled-semantic-body=PSB(profile-id,body):=R{0:O(CR(profile-id)),1:body}
+profiled-semantic-id=ordinary-id(subject-kind,PSB(profile-id,domain-body));the-exact-standalone-profile-ID-is-in-the-subject-preimage;subject-kind-is-neither-prior-meta-nor-any-foundation-standalone-semantic-kind
+effective-semantic-context=ESC(profile-id,profile-preimages):=(SR,profile-id,authenticated-selected-SLPB,canonical-authenticated-profile-DAG)
+effective-semantic-context-admission=authenticate-the-exact-no-extra-profile-closure;subject-kind-is-in-the-selected-SLPB-kinds;evaluator-support-explicitly-contains-the-exact-selected-SLPId;family-or-revision-equality-alone-is-insufficient;subject-specific-module-closures-remain-separate-domain-inputs
+profile-reference-exclusions=SLPB-has-no-structured-self,governed-subject,evidence,policy,capability,module,or-live-authority-reference;profile-imports-point-only-upstream;only-PDRB-has-profile-declaration-reference-semantics;fixpoint-construction-is-never-used
+profile-support-law=unequal-effective-contexts-have-no-intrinsic-compatibility-and-require-a-separate-owner-checked-edge
+profile-evolution=changing-a-selected-profile-or-imported-profile-rotates-dependent-subject-IDs;adding-or-changing-an-unreferenced-profile-does-not;subject-specific-module-evolution-is-owned-and-authenticated-separately
+owner-capability-requirement-body=OCRB(owner,family,owner-requirement):=R{0:Q(owner),1:Q(family),2:O(CR(owner-requirement))}
+owner-policy-disposition-body=OPDB(BoundTo(owner-policy-binding)):=V(0,O(CR(owner-policy-binding)));OPDB(NoPolicy(owner-no-policy-declaration)):=V(1,O(CR(owner-no-policy-declaration)))
+portable-source-authority-binding-body=PSABB(owner,family,source-coordinate,binding-payload,policy,policy-closure,requirement):=R{0:Q(owner),1:Q(family),2:O(CR(source-coordinate)),3:O(CR(binding-payload)),4:OPDB(policy),5:O(CR(policy-closure)),6:OCRB(requirement)}
+portable-source-authority-binding-formation=owner-and-family-are-Symbols-and-equal-the-enclosed-OCRB-owner-and-family;all-refs-share-the-source-coordinate-SR;the-owner-authenticates-and-interprets-the-exact-profiled-source-coordinate,binding-payload,policy-disposition,complete-derived-policy-closure,and-requirement
+authority-envelope-inertness=OCRB,OPDB,and-PSABB-are-canonical-inert-bodies-only;their-owner-defined-ID-targets-carry-all-domain-specific-ABI,binding,freshness,lifetime,fact,qualification,assurance,trust,policy,and-completeness-semantics;the-envelope-never-mints-or-contains-a-live-capability,occurrence,mutable-handle,checker-cache,or-provider-object
+owner-local-source-authority-binding=inert-process-local-metadata(owner,family,owner-local-coordinate,binding-payload,policy,policy-closure,requirement);fresh-live-capability-is-a-separate-checking-input;the-local-binding-has-no-canonical-body-or-content-ID;serialization,hashing,copying,FFI,caching,or-evidence-does-not-transport-the-local-coordinate-or-live-capability
 module-declaration-reference-scope=after-module-authentication-each-supported-kind-interprets-only-its-exact-body-law;recognized-target-is-LDRB-in-the-same-aggregate,SR-root,or-a-module-in-the-declaring-module-import-closure;an-unrecognized-kind-in-a-generic-extension-capable-declaration-position-is-Unsupported;an-exact-typed-slot-carrying-a-kind-other-than-its-required-K-is-KindMismatch;unreferenced-unknown-catalogs-are-inert
 primitive-candidates-not-module-nodes=primitive-id-is-a-direct-algorithm-dependency;primitive-declaration-resolves-through-its-owner-module;only-module-imports-form-the-transitive-preimage-DAG
 value-domain-ref=Root(SR,foundation.root-value-domain,n)-with-n-in-0..8-or-Module(m,value-domain,n)-whose-resolved-body-passes-module-value-domain-admission;no-other-kind-or-body-is-a-value-domain-ref
@@ -1326,8 +1374,8 @@ root-structural-boundary=generic-Boolean,record,variant,sequence,and-natural-ope
 module-value-entry=first-entry-only-as-owner-admitted-literal,owner-admitted-input,or-owner-admitted-result-of-an-exact-supported-primitive;root-aggregate-members-may-contain-already-admitted-same-regime-module-values
 canonical-value=CV(T,v,d,M(d));d-is-the-unique-domain-admitted-MetaValueV0-representative-of-v;strict-decode-consumes-one-datum-reencodes-identically-and-owner-admits
 canonical-and-root-value-equality=defined-only-for-values-with-the-same-exact-ValueType;then-use-the-exact-domain-owned-mathematical-equality;selected-root-domains-use-equality-of-their-unique-admitted-datums;same-domain-values-under-different-FiniteSchemas-are-not-equal-at-this-typed-value-layer
-canonical-value-id-body(T,d):=R{0:VDRB(T.domain),1:SB(T.schema),2:d}
-canonical-value-id(K,T,d):=ordinary-id(K,canonical-value-id-body(T,d));defined-only-after-exact-domain-admission;private-or-unaddressed-values-need-no-id
+canonical-value-id-body(P,T,d):=R{0:Q(P),1:VDRB(T.domain),2:SB(T.schema),3:d}
+canonical-value-id(P,T,d):=ordinary-id(foundation.canonical-value,canonical-value-id-body(P,T,d));P-is-the-caller-purpose-kind-and-is-identity-bearing-but-not-the-ID-subject-kind;defined-only-after-exact-domain-admission;private-or-unaddressed-values-need-no-id
 schema-body.Unit=SB(Unit):=V(0,U)
 schema-body.Bool=SB(Bool):=V(1,U)
 schema-body.Nat=SB(Nat(max)):=V(2,N(max))
@@ -1382,6 +1430,9 @@ function-type=Fn(inputs,success,failures)
 function-type-body=FnB(Fn(inputs,success,failures)):=R{0:S[VTB(input_i)...],1:VTB(success),2:S[FT(failure_i)...]}
 failure-row-order=ascending-M(FT(f))-bytes;exact-duplicates-collapse;same-declaration-with-different-payload-type-refuses
 failure-row-derivation=canonical-union-of-every-failure-in-every-structurally-present-subterm-including-unselected-case-and-conditional-branches,each-explicit-Fail,StrictIndex,and-BoundedAppend-failure,and-each-resolved-primitive-declaration-row
+external-operation-contract-body=EOCB(kind,abi):=R{0:Q(kind),1:FnB(abi)}
+external-operation-contract-id=ordinary-id(foundation.external-operation-contract,EOCB(kind,abi));kind-is-an-identity-bearing-operation-purpose-and-abi-is-an-exact-same-regime-SemanticFunctionType
+external-operation-binding-nonauthority=provider-binding-is-outside-EOCB-and-cannot-rotate-the-contract-ID-or-inherit-portable-algorithm-denotation;execution-requires-a-separate-owner-capability-contract
 semantic-completion=Success(CV(success,...))|DomainFailure(failure_i,CV(failure_i.payload-type,...));only-these-are-semantic-completions
 term-body.Literal=TB(Literal(v)):=V(0,R{0:VTB(v.type),1:v.datum})
 term-body.Variable=TB(Variable(n,T)):=V(1,R{0:N(n),1:VTB(T)})
@@ -1509,7 +1560,7 @@ SEMANTIC_REGIME_DESCRIPTOR = DatumRecord(
         ),
         (3, SEMANTIC_ROOT_PRIMITIVE_EXTENSIONS),
         (4, Symbol("local-ordinals-and-closed-scc-v0")),
-        (5, Symbol("extension-modules-same-root-dag-v0")),
+        (5, Symbol("language-profiles-and-extension-modules-same-root-dag-v0")),
     )
 )
 SEMANTIC_REGIME_ID = meta_object_id(
@@ -1634,7 +1685,7 @@ def primitive_reference_datum(entry: PrimitiveCatalogEntry) -> DatumVariant:
 PRIMITIVE_IDS_BY_KEY: Mapping[tuple[str, int], TypedContentId] = MappingProxyType(
     {
         (entry[1], entry[2]): content_id(
-            "foundation.semantic-primitive",
+            SEMANTIC_PRIMITIVE_KIND,
             encode_datum(primitive_reference_datum(entry)),
             semantic_regime=SEMANTIC_REGIME_ID,
         )
@@ -1698,7 +1749,7 @@ def authenticate_primitive_reference(
     if type(reference) is not SemanticPrimitiveRef:
         raise ModelError("primitive reference has the wrong exact typed shape")
     reference.__post_init__()
-    if reference.identifier.subject_kind != "foundation.semantic-primitive":
+    if reference.identifier.subject_kind != SEMANTIC_PRIMITIVE_KIND:
         raise DeclarationKindMismatchError(
             "primitive reference has the wrong identifier kind"
         )
@@ -2978,25 +3029,27 @@ def canonical_value_equal(left: CanonicalValue, right: CanonicalValue) -> bool:
     return admitted_left.datum == admitted_right.datum
 
 
-def value_preimage(value: CanonicalValue) -> bytes:
+def value_preimage(purpose_kind: str, value: CanonicalValue) -> bytes:
+    _axis(purpose_kind)
     if type(value) is not CanonicalValue:
         raise CanonicalError("value identity requires an exact canonical-value carrier")
     admitted = admit_value(value.value_type, value.datum)
     return encode_datum(
         DatumRecord(
             (
-                (0, admitted.value_type.domain.datum()),
-                (1, schema_datum(admitted.value_type.schema)),
-                (2, admitted.datum),
+                (0, Symbol(purpose_kind)),
+                (1, admitted.value_type.domain.datum()),
+                (2, schema_datum(admitted.value_type.schema)),
+                (3, admitted.datum),
             )
         )
     )
 
 
-def value_id(subject_kind: str, value: CanonicalValue) -> TypedContentId:
+def value_id(purpose_kind: str, value: CanonicalValue) -> TypedContentId:
     return content_id(
-        subject_kind,
-        value_preimage(value),
+        CANONICAL_VALUE_KIND,
+        value_preimage(purpose_kind, value),
         semantic_regime=value.value_type.domain.semantic_regime,
     )
 
@@ -3242,7 +3295,7 @@ def authenticate_primitive_declaration(
         or any(type(item) is not SemanticFailureType for item in declaration.failures)
     ):
         raise ModelError("primitive declaration fields have the wrong exact shapes")
-    if declaration.identifier.subject_kind != "foundation.semantic-primitive":
+    if declaration.identifier.subject_kind != SEMANTIC_PRIMITIVE_KIND:
         raise ModelError("primitive declaration identifier has the wrong subject kind")
     if (
         declaration.identifier.semantic_regime
@@ -3630,7 +3683,7 @@ class CanonicalAlgorithm:
     @property
     def identity(self) -> TypedContentId:
         return content_id(
-            "foundation.portable-algorithm",
+            PORTABLE_ALGORITHM_KIND,
             algorithm_preimage(self),
             semantic_regime=self.semantic_regime,
         )
@@ -3651,10 +3704,11 @@ class ExternalOperationContract:
     def __post_init__(self) -> None:
         validate_external_operation_contract(self)
 
-    @property
-    def identity(self) -> TypedContentId:
+    def body(self) -> bytes:
+        if type(self) is not ExternalOperationContract:
+            raise ModelError("external operation contract has the wrong exact shape")
         validate_external_operation_contract(self)
-        body = encode_datum(
+        return encode_datum(
             DatumRecord(
                 (
                     (0, self.operation_kind),
@@ -3662,9 +3716,12 @@ class ExternalOperationContract:
                 )
             )
         )
+
+    @property
+    def identity(self) -> TypedContentId:
         return content_id(
-            "foundation.external-operation-contract",
-            body,
+            EXTERNAL_OPERATION_CONTRACT_KIND,
+            self.body(),
             semantic_regime=self.semantic_regime,
         )
 
@@ -4909,7 +4966,7 @@ def authenticate_algorithm_identity(
         raise ModelError("algorithm kind must be an exact symbol")
     body = algorithm_preimage(algorithm, ledger=ledger)
     identifier = content_id(
-        "foundation.portable-algorithm",
+        PORTABLE_ALGORITHM_KIND,
         body,
         semantic_regime=algorithm.semantic_regime,
     )
@@ -5184,7 +5241,7 @@ class EvaluationContractV0:
         if self.semantic_regime != SEMANTIC_REGIME_ID:
             raise ModelError("evaluation contract crosses semantic regimes")
         for rule in self.primitive_cost_rules:
-            if rule.primitive.subject_kind != "foundation.semantic-primitive":
+            if rule.primitive.subject_kind != SEMANTIC_PRIMITIVE_KIND:
                 raise ModelError("primitive cost rule key has the wrong kind")
             if rule.primitive.semantic_regime != self.semantic_regime:
                 raise ModelError("primitive cost rule crosses semantic regimes")
@@ -5203,7 +5260,7 @@ class EvaluationContractV0:
     @property
     def identity(self) -> TypedContentId:
         return content_id(
-            "foundation.evaluation-contract",
+            EVALUATION_CONTRACT_KIND,
             self.body(),
             semantic_regime=self.semantic_regime,
         )
@@ -5335,6 +5392,217 @@ class SemanticModuleCandidate:
         )
 
 
+@dataclass(frozen=True)
+class SemanticLanguageProfile:
+    """One standalone, exact, domain-owned language-profile preimage."""
+
+    profile_family: Symbol
+    revision: int
+    profile_imports: tuple[TypedContentId, ...]
+    supported_subject_kinds: tuple[Symbol, ...]
+    declaration_catalogs: DatumSeq
+    semantic_law_source: bytes
+
+    def body(self) -> DatumRecord:
+        if type(self) is not SemanticLanguageProfile:
+            raise ModelError(
+                "semantic-language profile has the wrong exact typed shape"
+            )
+        if type(self.profile_family) is not Symbol:
+            raise ModelError("profile family must be an exact MetaSymbol")
+        if not _is_u64_natural(self.revision):
+            raise ModelError("profile revision must be a u64 natural")
+        profile_imports = _profile_reference_sequence(
+            self.profile_imports,
+            label="semantic-language profile imports",
+        )
+        if type(self.supported_subject_kinds) is not tuple:
+            raise ModelError(
+                "supported subject kinds must use an immutable tuple"
+            )
+        if not self.supported_subject_kinds:
+            raise ModelError("a semantic-language profile must support a subject")
+        if len(self.supported_subject_kinds) > MAX_CANONICAL_EDGES:
+            raise ModelError("supported subject kinds exceed the edge bound")
+        if any(type(item) is not Symbol for item in self.supported_subject_kinds):
+            raise ModelError("supported subject kinds must be exact MetaSymbols")
+        keys = tuple(
+            item.value.encode("ascii") for item in self.supported_subject_kinds
+        )
+        if keys != tuple(sorted(set(keys))):
+            raise ModelError(
+                "supported subject kinds must be canonical sorted-unique"
+            )
+        if any(
+            item.value in PROFILED_FORBIDDEN_SUBJECT_KINDS
+            for item in self.supported_subject_kinds
+        ):
+            raise ModelError(
+                "a profile cannot govern prior-meta or standalone Foundation "
+                "subject kinds"
+            )
+        if type(self.declaration_catalogs) is not DatumSeq:
+            raise ModelError("profile declaration catalogs must be an exact MetaSeq")
+        profile_declaration_catalogs(self)
+        if type(self.semantic_law_source) is not bytes:
+            raise ModelError("semantic law source must be exact bytes")
+        if not self.semantic_law_source:
+            raise ModelError("semantic law source must be nonempty")
+        body = DatumRecord(
+            (
+                (0, self.profile_family),
+                (1, Nat(self.revision)),
+                (
+                    2,
+                    DatumSeq(
+                        tuple(
+                            BytesValue(item.internal_reference())
+                            for item in profile_imports
+                        )
+                    ),
+                ),
+                (
+                    3,
+                    DatumSeq(self.supported_subject_kinds),
+                ),
+                (4, self.declaration_catalogs),
+                (5, BytesValue(self.semantic_law_source)),
+            )
+        )
+        encode_datum(body)
+        return body
+
+    def identity_for(self, semantic_regime: PriorMetaId) -> TypedContentId:
+        _require_prior_meta_axis(
+            semantic_regime,
+            expected_kind=SEMANTIC_REGIME_KIND,
+            axis_name="semantic-language profile regime",
+        )
+        if any(
+            item.semantic_regime != semantic_regime
+            for item in self.profile_imports
+        ):
+            raise DeclarationKindMismatchError(
+                "semantic-language profile dependencies cross regimes"
+            )
+        return content_id(
+            SEMANTIC_LANGUAGE_PROFILE_KIND,
+            encode_datum(self.body()),
+            semantic_regime=semantic_regime,
+        )
+
+    @property
+    def identity(self) -> TypedContentId:
+        return self.identity_for(SEMANTIC_REGIME_ID)
+
+
+SemanticLanguageProfileId: TypeAlias = TypedContentId
+SemanticLanguageProfileBody: TypeAlias = SemanticLanguageProfile
+ProfilePreimageBundle: TypeAlias = dict[
+    SemanticLanguageProfileId, SemanticLanguageProfileBody
+]
+
+
+def _sorted_unique_reference_sequence(
+    values: tuple[TypedContentId, ...],
+    *,
+    label: str,
+    expected_kind: str,
+) -> tuple[TypedContentId, ...]:
+    if type(values) is not tuple:
+        raise ModelError(f"{label} must use an immutable tuple")
+    if len(values) > MAX_CANONICAL_EDGES:
+        raise ModelError(f"{label} exceed the canonical edge bound")
+    for value in values:
+        if type(value) is not TypedContentId:
+            raise ModelError(f"{label} must contain exact typed IDs")
+        value.__post_init__()
+        if value.subject_kind != expected_kind:
+            raise DeclarationKindMismatchError(f"{label} have the wrong subject kind")
+    keys = tuple(value.internal_reference() for value in values)
+    if keys != tuple(sorted(set(keys))):
+        raise ModelError(f"{label} must be canonical sorted-unique")
+    return values
+
+
+def _profile_reference_sequence(
+    values: tuple[TypedContentId, ...],
+    *,
+    label: str,
+) -> tuple[TypedContentId, ...]:
+    return _sorted_unique_reference_sequence(
+        values,
+        label=label,
+        expected_kind=SEMANTIC_LANGUAGE_PROFILE_KIND,
+    )
+
+
+def semantic_language_profile_body(
+    profile: SemanticLanguageProfile,
+) -> DatumRecord:
+    if type(profile) is not SemanticLanguageProfile:
+        raise ModelError(
+            "semantic-language profile has the wrong exact typed shape"
+        )
+    return profile.body()
+
+
+def semantic_language_profile_id(
+    profile: SemanticLanguageProfile,
+    *,
+    semantic_regime: PriorMetaId,
+) -> SemanticLanguageProfileId:
+    if type(profile) is not SemanticLanguageProfile:
+        raise ModelError(
+            "semantic-language profile has the wrong exact typed shape"
+        )
+    return profile.identity_for(semantic_regime)
+
+
+def profiled_semantic_body(
+    profile_id: SemanticLanguageProfileId,
+    domain_body: Datum,
+) -> DatumRecord:
+    """Place the exact used language-profile ID in a subject preimage."""
+
+    _require_typed_content_id(profile_id, axis_name="semantic-language profile ID")
+    if profile_id.subject_kind != SEMANTIC_LANGUAGE_PROFILE_KIND:
+        raise DeclarationKindMismatchError(
+            "profiled semantic body names the wrong profile subject kind"
+        )
+    body = DatumRecord(
+        ((0, BytesValue(profile_id.internal_reference())), (1, domain_body))
+    )
+    encode_datum(body)
+    return body
+
+
+def profiled_content_id(
+    subject_kind: str,
+    profile_id: SemanticLanguageProfileId,
+    domain_body: Datum,
+    *,
+    semantic_regime: PriorMetaId,
+) -> TypedContentId:
+    if (
+        type(subject_kind) is str
+        and subject_kind in PROFILED_FORBIDDEN_SUBJECT_KINDS
+    ):
+        raise DeclarationKindMismatchError(
+            "profiled semantic subjects cannot use a prior-meta or standalone "
+            "Foundation subject kind"
+        )
+    if profile_id.semantic_regime != semantic_regime:
+        raise DeclarationKindMismatchError(
+            "profiled subject and language profile cross semantic regimes"
+        )
+    return content_id(
+        subject_kind,
+        encode_datum(profiled_semantic_body(profile_id, domain_body)),
+        semantic_regime=semantic_regime,
+    )
+
+
 def module_declaration_catalogs(
     candidate: SemanticModuleCandidate,
 ) -> Mapping[str, DatumSeq]:
@@ -5381,6 +5649,117 @@ def module_declaration_catalogs(
         previous = key
         result[kind.value] = bodies
     return result
+
+
+def profile_declaration_catalogs(
+    profile: SemanticLanguageProfile,
+) -> Mapping[str, DatumSeq]:
+    """Validate profile-local catalogs using the shared exact catalog grammar."""
+
+    if type(profile) is not SemanticLanguageProfile:
+        raise ModelError("semantic-language profile has the wrong exact shape")
+    probe = SemanticModuleCandidate(
+        Symbol("foundation.profile-catalog-grammar"),
+        (),
+        profile.declaration_catalogs,
+    )
+    return module_declaration_catalogs(probe)
+
+
+@dataclass(frozen=True)
+class ProfileLocalDeclarationRef:
+    declaration_kind: str
+    local_ordinal: int
+
+
+@dataclass(frozen=True)
+class ImportedProfileDeclarationRef:
+    profile_id: SemanticLanguageProfileId
+    declaration_kind: str
+    local_ordinal: int
+
+
+ProfileDeclarationRef: TypeAlias = (
+    ProfileLocalDeclarationRef | ImportedProfileDeclarationRef
+)
+
+
+def profile_declaration_ref_datum(reference: ProfileDeclarationRef) -> DatumVariant:
+    if type(reference) is ProfileLocalDeclarationRef:
+        _axis(reference.declaration_kind)
+        if not _is_u64_natural(reference.local_ordinal):
+            raise ModelError("profile-local declaration ordinal must be a u64")
+        return DatumVariant(
+            0,
+            DatumRecord(
+                (
+                    (0, Symbol(reference.declaration_kind)),
+                    (1, Nat(reference.local_ordinal)),
+                )
+            ),
+        )
+    if type(reference) is ImportedProfileDeclarationRef:
+        _require_typed_content_id(
+            reference.profile_id,
+            axis_name="imported semantic-language profile",
+        )
+        if reference.profile_id.subject_kind != SEMANTIC_LANGUAGE_PROFILE_KIND:
+            raise DeclarationKindMismatchError(
+                "imported declaration owner has the wrong profile kind"
+            )
+        _axis(reference.declaration_kind)
+        if not _is_u64_natural(reference.local_ordinal):
+            raise ModelError("imported profile declaration ordinal must be a u64")
+        return DatumVariant(
+            1,
+            DatumRecord(
+                (
+                    (0, BytesValue(reference.profile_id.internal_reference())),
+                    (1, Symbol(reference.declaration_kind)),
+                    (2, Nat(reference.local_ordinal)),
+                )
+            ),
+        )
+    raise ModelError("unknown profile declaration-reference branch")
+
+
+def resolve_profile_declaration(
+    context: EffectiveSemanticContext,
+    reference: ProfileDeclarationRef,
+) -> Datum:
+    """Resolve only local or exact imported coordinates in a closed profile DAG."""
+
+    if type(context) is not EffectiveSemanticContext:
+        raise ModelError("effective semantic context has the wrong exact shape")
+    authenticated_profiles = dict(context.authenticated_profiles)
+    selected = authenticated_profiles.get(context.selected_profile)
+    if selected is None or selected != context.selected_profile_body:
+        raise ModelError("selected profile is absent from its authenticated closure")
+    if type(reference) is ProfileLocalDeclarationRef:
+        target = selected
+        kind = reference.declaration_kind
+        ordinal = reference.local_ordinal
+    elif type(reference) is ImportedProfileDeclarationRef:
+        if reference.profile_id == context.selected_profile:
+            raise DeclarationAdmissionRefusedError(
+                "self declarations must use a profile-local reference"
+            )
+        target = authenticated_profiles.get(reference.profile_id)
+        if target is None:
+            raise DeclarationAdmissionRefusedError(
+                "imported declaration owner is outside the profile closure"
+            )
+        kind = reference.declaration_kind
+        ordinal = reference.local_ordinal
+    else:
+        raise ModelError("unknown profile declaration-reference branch")
+    catalogs = profile_declaration_catalogs(target)
+    catalog = catalogs.get(kind)
+    if catalog is None or not _is_u64_natural(ordinal) or ordinal >= len(catalog.values):
+        raise DeclarationAdmissionRefusedError(
+            "profile declaration coordinate is absent"
+        )
+    return catalog.values[ordinal]
 
 
 def resolve_module_declaration(
@@ -6095,6 +6474,615 @@ def authenticate_module_closure(
     return AuthenticatedModuleClosure(len(visited), edges)
 
 
+@dataclass(frozen=True)
+class EffectiveSemanticContext:
+    """The exact profile-qualified context authenticated for one subject."""
+
+    semantic_regime: PriorMetaId
+    selected_profile: SemanticLanguageProfileId
+    selected_profile_body: SemanticLanguageProfile
+    authenticated_profiles: tuple[
+        tuple[SemanticLanguageProfileId, SemanticLanguageProfile], ...
+    ]
+
+
+def effective_semantic_context(
+    selected_profile: SemanticLanguageProfileId,
+    supplied_profiles: ProfilePreimageBundle,
+    *,
+    semantic_regime: PriorMetaId,
+    ledger: AuthenticationLedger | None = None,
+) -> EffectiveSemanticContext:
+    """Authenticate and snapshot one exact no-extra profile-import closure."""
+
+    if type(semantic_regime) is not PriorMetaId:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-REGIME",
+            "profile closure regime must be an exact PriorMetaId",
+        )
+    try:
+        semantic_regime.__post_init__()
+    except CanonicalError as error:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-REGIME",
+            str(error),
+        ) from error
+    if semantic_regime.subject_kind != SEMANTIC_REGIME_KIND:
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PROFILE-REGIME",
+            "profile closure regime coordinate has the wrong prior-meta kind",
+        )
+    if semantic_regime != SEMANTIC_REGIME_ID:
+        raise _Control(
+            Outcome.UNSUPPORTED,
+            "K1-UNSUPPORTED-PROFILE-REGIME",
+            "profile closure uses an unsupported semantic regime",
+        )
+
+    if type(selected_profile) is not TypedContentId:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-ROOT",
+            "selected profile must be an exact typed ID",
+        )
+    try:
+        selected_profile.__post_init__()
+    except CanonicalError as error:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-ROOT",
+            str(error),
+        ) from error
+    if selected_profile.subject_kind != SEMANTIC_LANGUAGE_PROFILE_KIND:
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PROFILE",
+            "selected language profile has the wrong subject kind",
+        )
+    if selected_profile.semantic_regime != semantic_regime:
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PROFILE-REGIME",
+            "selected language profile crosses semantic regimes",
+        )
+    if type(supplied_profiles) is not dict:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-BUNDLE",
+            "profile preimages must use an exact built-in dict",
+        )
+    if len(supplied_profiles) > MAX_PROFILE_BUNDLE_ENTRIES:
+        raise _Control(
+            Outcome.DETERMINISTIC_LIMIT_EXCEEDED,
+            "K1-LIMIT-PROFILE-BUNDLE",
+            "profile preimages exceed the bundle-entry bound",
+        )
+    if any(type(profile_id) is not TypedContentId for profile_id in supplied_profiles):
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-BUNDLE",
+            "profile-preimage keys must be exact typed IDs",
+        )
+    try:
+        for profile_id in supplied_profiles:
+            profile_id.__post_init__()
+    except CanonicalError as error:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-BUNDLE",
+            str(error),
+        ) from error
+    for profile_id in supplied_profiles:
+        if profile_id.subject_kind != SEMANTIC_LANGUAGE_PROFILE_KIND:
+            raise _Control(
+                Outcome.KIND_MISMATCH,
+                "K1-KIND-PROFILE",
+                "profile-preimage key has the wrong subject kind",
+            )
+        if profile_id.semantic_regime != semantic_regime:
+            raise _Control(
+                Outcome.KIND_MISMATCH,
+                "K1-KIND-PROFILE-REGIME",
+                "profile-preimage key crosses semantic regimes",
+            )
+    supplied_profiles = dict(supplied_profiles)
+
+    active: set[SemanticLanguageProfileId] = set()
+    discovered: set[SemanticLanguageProfileId] = set()
+    visited: set[SemanticLanguageProfileId] = set()
+    profile_edges = 0
+
+    def authenticate_profile(profile_id: SemanticLanguageProfileId) -> None:
+        try:
+            _require_typed_content_id(
+                profile_id,
+                axis_name="semantic-language profile dependency",
+            )
+        except CanonicalError as error:
+            raise _Control(
+                Outcome.MALFORMED,
+                "K1-MALFORMED-PROFILE-REF",
+                str(error),
+            ) from error
+        if profile_id.subject_kind != SEMANTIC_LANGUAGE_PROFILE_KIND:
+            raise _Control(
+                Outcome.KIND_MISMATCH,
+                "K1-KIND-PROFILE",
+                "profile dependency has the wrong subject kind",
+            )
+        if profile_id.semantic_regime != semantic_regime:
+            raise _Control(
+                Outcome.KIND_MISMATCH,
+                "K1-KIND-PROFILE-REGIME",
+                "profile dependency crosses semantic regimes",
+            )
+        profile = supplied_profiles.get(profile_id)
+        if profile is None:
+            raise _Control(
+                Outcome.MISSING_DEPENDENCY,
+                "K1-MISSING-PROFILE",
+                "required semantic-language profile is missing",
+            )
+        if type(profile) is not SemanticLanguageProfile:
+            raise _Control(
+                Outcome.MALFORMED,
+                "K1-MALFORMED-PROFILE-PREIMAGE",
+                "profile preimage has the wrong exact typed shape",
+            )
+        try:
+            body = encode_datum(profile.body())
+            authenticate_content_id(
+                profile_id,
+                body,
+                FOUNDATION_PRIOR_META_PREIMAGES,
+                ledger=ledger,
+            )
+        except HashBindingConflictError as error:
+            raise _Control(
+                Outcome.CHECKER_FAILURE,
+                "K1-HASH-BINDING-CONFLICT",
+                str(error),
+            ) from error
+        except DeclarationKindMismatchError as error:
+            raise _Control(
+                Outcome.KIND_MISMATCH,
+                "K1-KIND-PROFILE-DEPENDENCY",
+                str(error),
+            ) from error
+        except (CanonicalError, ModelError, AttributeError, TypeError) as error:
+            raise _Control(
+                Outcome.MALFORMED,
+                "K1-MALFORMED-PROFILE-PREIMAGE",
+                str(error),
+            ) from error
+        for imported in profile.profile_imports:
+            if imported.semantic_regime != semantic_regime:
+                raise _Control(
+                    Outcome.KIND_MISMATCH,
+                    "K1-KIND-PROFILE-REGIME",
+                    "profile import crosses semantic regimes",
+                )
+
+    events: list[tuple[str, SemanticLanguageProfileId]] = [
+        ("enter", selected_profile)
+    ]
+    while events:
+        event, profile_id = events.pop()
+        if event == "exit":
+            active.remove(profile_id)
+            visited.add(profile_id)
+            continue
+        if profile_id in active:
+            authenticate_profile(profile_id)
+            raise _Control(
+                Outcome.REFUSED,
+                "K1-REFUSED-PROFILE-CYCLE",
+                "semantic-language profile imports contain a cycle",
+            )
+        if profile_id in visited:
+            continue
+        if profile_id not in discovered:
+            discovered.add(profile_id)
+            if len(discovered) > MAX_PROFILE_NODES:
+                raise _Control(
+                    Outcome.DETERMINISTIC_LIMIT_EXCEEDED,
+                    "K1-LIMIT-PROFILE-NODES",
+                    "profile closure exceeds the node bound",
+                )
+        authenticate_profile(profile_id)
+        profile = supplied_profiles[profile_id]
+        next_profile_edges = profile_edges + len(profile.profile_imports)
+        if next_profile_edges > MAX_PROFILE_EDGES:
+            raise _Control(
+                Outcome.DETERMINISTIC_LIMIT_EXCEEDED,
+                "K1-LIMIT-PROFILE-EDGES",
+                "profile closure exceeds the edge bound",
+            )
+        profile_edges = next_profile_edges
+        active.add(profile_id)
+        events.append(("exit", profile_id))
+        for imported in reversed(profile.profile_imports):
+            events.append(("enter", imported))
+
+    if set(supplied_profiles) != visited:
+        raise _Control(
+            Outcome.REFUSED,
+            "K1-REFUSED-EXTRA-PROFILE",
+            "an unreferenced semantic-language profile preimage was supplied",
+        )
+    selected_profile_body = supplied_profiles[selected_profile]
+    return EffectiveSemanticContext(
+        semantic_regime,
+        selected_profile,
+        selected_profile_body,
+        tuple(
+            (profile_id, supplied_profiles[profile_id])
+            for profile_id in sorted(
+                visited,
+                key=lambda item: item.internal_reference(),
+            )
+        ),
+    )
+
+
+def authenticate_profiled_semantic_content(
+    identifier: TypedContentId,
+    selected_profile: SemanticLanguageProfileId,
+    domain_body: Datum,
+    supplied_profiles: dict[SemanticLanguageProfileId, SemanticLanguageProfile],
+    *,
+    supported_profiles: tuple[SemanticLanguageProfileId, ...],
+    ledger: AuthenticationLedger | None = None,
+) -> EffectiveSemanticContext:
+    """Authenticate profile closure, exact support, then the subject ID."""
+
+    try:
+        _require_typed_content_id(identifier, axis_name="profiled semantic subject")
+    except CanonicalError as error:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILED-SUBJECT",
+            str(error),
+        ) from error
+    if identifier.subject_kind in PROFILED_FORBIDDEN_SUBJECT_KINDS:
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PROFILED-SUBJECT",
+            "profiled semantic subjects cannot use a prior-meta or standalone "
+            "Foundation subject kind",
+        )
+    context = effective_semantic_context(
+        selected_profile,
+        supplied_profiles,
+        semantic_regime=identifier.semantic_regime,
+        ledger=ledger,
+    )
+    try:
+        supported = _profile_reference_sequence(
+            supported_profiles,
+            label="evaluator-supported semantic-language profiles",
+        )
+    except DeclarationKindMismatchError as error:
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PROFILE-SUPPORT",
+            str(error),
+        ) from error
+    except (CanonicalError, ModelError, AttributeError, TypeError) as error:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILE-SUPPORT",
+            str(error),
+        ) from error
+    if any(
+        profile.semantic_regime != identifier.semantic_regime
+        for profile in supported
+    ):
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PROFILE-SUPPORT-REGIME",
+            "evaluator profile support crosses semantic regimes",
+        )
+    if selected_profile not in supported:
+        raise _Control(
+            Outcome.UNSUPPORTED,
+            "K1-UNSUPPORTED-PROFILE",
+            "evaluator does not support the exact semantic-language profile",
+        )
+    supported_subject_kinds = tuple(
+        item.value for item in context.selected_profile_body.supported_subject_kinds
+    )
+    if identifier.subject_kind not in supported_subject_kinds:
+        raise _Control(
+            Outcome.REFUSED,
+            "K1-REFUSED-PROFILE-SUBJECT-KIND",
+            "selected language profile does not support the subject kind",
+        )
+    try:
+        body = encode_datum(profiled_semantic_body(selected_profile, domain_body))
+        authenticate_content_id(
+            identifier,
+            body,
+            FOUNDATION_PRIOR_META_PREIMAGES,
+            ledger=ledger,
+        )
+    except HashBindingConflictError as error:
+        raise _Control(
+            Outcome.CHECKER_FAILURE,
+            "K1-HASH-BINDING-CONFLICT",
+            str(error),
+        ) from error
+    except (CanonicalError, ModelError, AttributeError, TypeError) as error:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILED-SUBJECT",
+            str(error),
+        ) from error
+    return context
+
+
+def semantic_contexts_are_identical(
+    left: EffectiveSemanticContext,
+    right: EffectiveSemanticContext,
+) -> bool:
+    """The only intrinsic v0 compatibility relation is exact equality."""
+
+    if (
+        type(left) is not EffectiveSemanticContext
+        or type(right) is not EffectiveSemanticContext
+    ):
+        raise ModelError("effective semantic context has the wrong exact shape")
+    return left == right
+
+
+def _content_ref_datum(identifier: TypedContentId) -> BytesValue:
+    _require_typed_content_id(identifier, axis_name="authority-envelope reference")
+    return BytesValue(identifier.internal_reference())
+
+
+@dataclass(frozen=True)
+class OwnerCapabilityRequirement:
+    """One inert reference to the owner's complete profiled requirement."""
+
+    owner_domain: Symbol
+    capability_family: Symbol
+    owner_requirement: TypedContentId
+
+    def body(self) -> DatumRecord:
+        if type(self) is not OwnerCapabilityRequirement:
+            raise ModelError("owner capability requirement has the wrong shape")
+        if (
+            type(self.owner_domain) is not Symbol
+            or type(self.capability_family) is not Symbol
+        ):
+            raise ModelError("capability requirement owner and family must be symbols")
+        _require_typed_content_id(
+            self.owner_requirement,
+            axis_name="owner capability-requirement identity",
+        )
+        return DatumRecord(
+            (
+                (0, self.owner_domain),
+                (1, self.capability_family),
+                (2, _content_ref_datum(self.owner_requirement)),
+            )
+        )
+
+
+@dataclass(frozen=True)
+class BoundOwnerOperationPolicy:
+    """Reference carrier for the durable ``BoundTo`` disposition."""
+
+    owner_policy_binding: TypedContentId
+
+
+@dataclass(frozen=True)
+class OwnerDefinesNoOperationPolicy:
+    """Reference carrier for durable ``OwnerDefinesNoPolicy``."""
+
+    owner_no_policy_declaration: TypedContentId
+
+
+OwnerOperationPolicyDisposition: TypeAlias = (
+    BoundOwnerOperationPolicy | OwnerDefinesNoOperationPolicy
+)
+
+
+def owner_operation_policy_disposition_body(
+    disposition: OwnerOperationPolicyDisposition,
+) -> DatumVariant:
+    if type(disposition) is BoundOwnerOperationPolicy:
+        _require_typed_content_id(
+            disposition.owner_policy_binding,
+            axis_name="owner operation-policy binding",
+        )
+        return DatumVariant(
+            0,
+            _content_ref_datum(disposition.owner_policy_binding),
+        )
+    if type(disposition) is OwnerDefinesNoOperationPolicy:
+        _require_typed_content_id(
+            disposition.owner_no_policy_declaration,
+            axis_name="owner no-policy declaration",
+        )
+        return DatumVariant(
+            1,
+            _content_ref_datum(disposition.owner_no_policy_declaration),
+        )
+    raise ModelError("unknown owner operation-policy disposition")
+
+
+@dataclass(frozen=True)
+class PortableSourceAuthorityBinding:
+    """Exact portable metadata that carries no owner capability."""
+
+    owner_domain: Symbol
+    capability_family: Symbol
+    owner_source_coordinate: TypedContentId
+    owner_binding_payload: TypedContentId
+    operation_policy: OwnerOperationPolicyDisposition
+    owner_policy_closure: TypedContentId
+    capability_requirement: OwnerCapabilityRequirement
+
+    def body(self) -> DatumRecord:
+        if type(self) is not PortableSourceAuthorityBinding:
+            raise ModelError("portable source authority binding has the wrong shape")
+        if (
+            type(self.owner_domain) is not Symbol
+            or type(self.capability_family) is not Symbol
+        ):
+            raise ModelError("authority owner and capability family must be symbols")
+        if type(self.capability_requirement) is not OwnerCapabilityRequirement:
+            raise ModelError("authority binding lacks an exact capability requirement")
+        requirement_body = self.capability_requirement.body()
+        if (
+            self.capability_requirement.owner_domain != self.owner_domain
+            or self.capability_requirement.capability_family
+            != self.capability_family
+        ):
+            raise ModelError(
+                "authority binding and capability requirement disagree on owner or family"
+            )
+        identifiers = (
+            self.owner_source_coordinate,
+            self.owner_binding_payload,
+            self.owner_policy_closure,
+            self.capability_requirement.owner_requirement,
+        )
+        for identifier in identifiers:
+            _require_typed_content_id(
+                identifier,
+                axis_name="portable source-authority binding reference",
+            )
+        policy_body = owner_operation_policy_disposition_body(self.operation_policy)
+        policy_id = (
+            self.operation_policy.owner_policy_binding
+            if type(self.operation_policy) is BoundOwnerOperationPolicy
+            else self.operation_policy.owner_no_policy_declaration
+        )
+        regime = self.owner_source_coordinate.semantic_regime
+        if any(
+            identifier.semantic_regime != regime
+            for identifier in (*identifiers, policy_id)
+        ):
+            raise DeclarationKindMismatchError(
+                "portable source-authority binding crosses semantic regimes"
+            )
+        return DatumRecord(
+            (
+                (0, self.owner_domain),
+                (1, self.capability_family),
+                (2, _content_ref_datum(self.owner_source_coordinate)),
+                (3, _content_ref_datum(self.owner_binding_payload)),
+                (4, policy_body),
+                (5, _content_ref_datum(self.owner_policy_closure)),
+                (6, requirement_body),
+            )
+        )
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class OwnerLocalSourceAuthorityBinding:
+    """Inert owner-local metadata with deliberately no canonical body."""
+
+    owner_domain: Symbol
+    capability_family: Symbol
+    owner_local_coordinate: object
+    owner_binding_payload: TypedContentId
+    operation_policy: OwnerOperationPolicyDisposition
+    owner_policy_closure: TypedContentId
+    capability_requirement: OwnerCapabilityRequirement
+
+    __hash__ = None
+
+    def __repr__(self) -> str:
+        return "OwnerLocalSourceAuthorityBinding(<process-local>)"
+
+    def __copy__(self) -> "OwnerLocalSourceAuthorityBinding":
+        raise ModelError("owner-local authority bindings cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> "OwnerLocalSourceAuthorityBinding":
+        raise ModelError("owner-local authority bindings cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise ModelError("owner-local authority bindings cannot be serialized")
+
+
+def owner_capability_requirement_body(
+    requirement: OwnerCapabilityRequirement,
+) -> DatumRecord:
+    if type(requirement) is not OwnerCapabilityRequirement:
+        raise ModelError("owner capability requirement has the wrong exact shape")
+    return requirement.body()
+
+
+def portable_source_authority_binding_body(
+    binding: PortableSourceAuthorityBinding,
+) -> DatumRecord:
+    if type(binding) is not PortableSourceAuthorityBinding:
+        raise ModelError(
+            "only a portable source authority binding has a canonical body"
+        )
+    return binding.body()
+
+
+def validate_owner_local_source_authority_binding(
+    binding: OwnerLocalSourceAuthorityBinding,
+) -> None:
+    """Validate inert local metadata without creating bytes, an ID, or authority."""
+
+    if type(binding) is not OwnerLocalSourceAuthorityBinding:
+        raise ModelError("owner-local source authority binding has the wrong shape")
+    if (
+        type(binding.owner_domain) is not Symbol
+        or type(binding.capability_family) is not Symbol
+    ):
+        raise ModelError("owner-local authority owner and family must be symbols")
+    if binding.owner_local_coordinate is None:
+        raise ModelError("owner-local authority binding lacks its local coordinate")
+    if type(binding.capability_requirement) is not OwnerCapabilityRequirement:
+        raise ModelError("owner-local authority binding lacks its requirement")
+    binding.capability_requirement.body()
+    if (
+        binding.capability_requirement.owner_domain != binding.owner_domain
+        or binding.capability_requirement.capability_family
+        != binding.capability_family
+    ):
+        raise ModelError(
+            "owner-local binding and capability requirement disagree on owner or family"
+        )
+    for identifier in (
+        binding.owner_binding_payload,
+        binding.owner_policy_closure,
+        binding.capability_requirement.owner_requirement,
+    ):
+        _require_typed_content_id(
+            identifier,
+            axis_name="owner-local source-authority reference",
+        )
+    owner_operation_policy_disposition_body(binding.operation_policy)
+    policy_id = (
+        binding.operation_policy.owner_policy_binding
+        if type(binding.operation_policy) is BoundOwnerOperationPolicy
+        else binding.operation_policy.owner_no_policy_declaration
+    )
+    regime = binding.owner_binding_payload.semantic_regime
+    if any(
+        identifier.semantic_regime != regime
+        for identifier in (
+            binding.owner_policy_closure,
+            binding.capability_requirement.owner_requirement,
+            policy_id,
+        )
+    ):
+        raise DeclarationKindMismatchError(
+            "owner-local source-authority binding crosses semantic regimes"
+        )
+
+
 class _SemanticFailure(Exception):
     def __init__(self, failure: DomainFailure) -> None:
         super().__init__(failure.failure_type.local_ordinal)
@@ -6247,7 +7235,7 @@ class Evaluator:
             raise ModelError("supported primitive IDs must have exact typed shape")
         for identifier in primitives:
             identifier.__post_init__()
-            if identifier.subject_kind != "foundation.semantic-primitive":
+            if identifier.subject_kind != SEMANTIC_PRIMITIVE_KIND:
                 raise ModelError("supported primitive ID has the wrong subject kind")
             if identifier.semantic_regime != SEMANTIC_REGIME_ID:
                 raise ModelError("supported primitive ID crosses semantic regimes")
@@ -6319,7 +7307,7 @@ class Evaluator:
                     )
                 for rule in contract.primitive_cost_rules:
                     if (
-                        rule.primitive.subject_kind != "foundation.semantic-primitive"
+                        rule.primitive.subject_kind != SEMANTIC_PRIMITIVE_KIND
                         or rule.primitive.semantic_regime != SEMANTIC_REGIME_ID
                     ):
                         raise _Control(
@@ -6328,7 +7316,7 @@ class Evaluator:
                             "evaluation contract rule names an incompatible primitive coordinate",
                         )
                 identifier = content_id(
-                    "foundation.evaluation-contract",
+                    EVALUATION_CONTRACT_KIND,
                     body,
                     semantic_regime=contract.semantic_regime,
                 )
@@ -6340,7 +7328,7 @@ class Evaluator:
                 )
             elif type(contract) is TypedContentId:
                 contract.__post_init__()
-                if contract.subject_kind != "foundation.evaluation-contract":
+                if contract.subject_kind != EVALUATION_CONTRACT_KIND:
                     raise _Control(
                         Outcome.KIND_MISMATCH,
                         "K1-KIND-EVALUATION-CONTRACT",

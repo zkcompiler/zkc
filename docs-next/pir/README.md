@@ -39,9 +39,13 @@ K3-B has now reconciled the canonical carrier, `ProtocolInterface`, and
 narrow source-ID-free `PlanWitnessSurface` needed for relation-witness
 attachment. This bounded closure does not freeze the integrated kernel;
 K3-C has consumed the exact source views for its bounded minimum Analysis
-profiles without reopening K2. K3-D has now selected the purpose-specific PIR
-endpoint views and bounded source-to-OIR projection contract without reopening
-K1 or K2; integrated K3-E review remains open.
+profiles without changing the K2 Core/Fiat--Shamir meaning. K3-D then selected
+the purpose-specific PIR endpoint views and bounded source-to-OIR projection
+contract. Bounded K3-E has reclosed the joined profile, owner-view, read, and
+authority boundary. Its repair rotated the shared K1 profile/regime and exact
+K2/K3-B profile/export identities, but preserved the verifier-observable Core,
+Fresh/Fiat--Shamir interpretation, and transcript-construction architecture.
+K4 portfolio pressure is next and K5 independent freeze remains pending.
 
 ## Owns
 
@@ -229,11 +233,13 @@ closure. K1 and the narrowly reclosed K2 closed executable Foundation and PIR
 semantics at their bounded resolutions; K3-B has now reconciled the dependent
 Interface/Plan, carrier, and Relations seams without reopening the K2 Core.
 K3-C closed the minimum Analysis source, experiment, applicability, and
-quantitative contracts at its bounded profile without reopening K2. K3-D has
-selected the bounded OIR source read, semantic skeleton, and projection
-contract without reopening K1 or K2. K3-E must now audit their integrated
-boundary. K4 and K5 must then complete the bounded protocol
-portfolio and independent freeze. Later work includes:
+quantitative contracts at its bounded profile without changing K2 Core
+meaning. K3-D selected the bounded OIR source read, semantic skeleton, and
+projection contract. K3-E has now joined those paths with exact K2 static
+views, one affirmative checked FS construction and issued FS view, a K3-B
+Interface correspondence view, and an affirmative `CheckedPlanRealizes` for
+the Prover path. K4 and K5 still own the bounded protocol portfolio and
+independent freeze. Later work includes:
 
 - Stage 4A selected the exact Analysis model families and theorem/profile
   architecture for what its historical package called `FSCompile`, composition

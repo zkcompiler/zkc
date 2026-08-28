@@ -19,7 +19,7 @@ ClassifyEndpointProjectionSupport(exact admitted sources, purpose, profile)
   -> SupportedExtractionBasis | Unsupported | qualified noncompletion
 
 ExtractEndpointSourceView(SupportedExtractionBasis, exact PIR evaluator)
-  -> CheckedEndpointSourceView | Negative adequacy | qualified noncompletion
+  -> CheckedEndpointSourceView | qualified noncompletion
 ```
 
 The quotient body excludes whole source-subject provenance. Its live checked
@@ -80,14 +80,6 @@ EndpointUnsupportedReasonBody =
 EndpointUnsupportedBody =
   S[EndpointUnsupportedReasonBody... in increasing tag order, nonempty]
 
-EndpointAdequacyDefectBody =
-  V(0,N(original_message_occurrence_ordinal))
-// MissingRequiredCounterpartyTransport
-
-EndpointAdequacyNegativeBody =
-  S[EndpointAdequacyDefectBody... in full-body byte order,
-    duplicates rejected, nonempty]
-
 EndpointSupportOutcomeBody =
     V(0,U) | V(1,EndpointUnsupportedBody)
   | V(2,U) | V(3,U) | V(4,U) | V(5,U) | V(6,U) | V(7,U)
@@ -95,24 +87,22 @@ EndpointSupportOutcomeBody =
 // Refused | DeterministicLimitExceeded | CheckerFailure
 
 EndpointExtractionOutcomeBody =
-    V(0,U) | V(1,EndpointAdequacyNegativeBody)
-  | V(2,U) | V(3,U) | V(4,U) | V(5,U) | V(6,U) | V(7,U)
-// Affirmative | Negative | MissingDependency | KindMismatch | Malformed
-// Refused | DeterministicLimitExceeded | CheckerFailure
+    V(0,U) | V(1,U) | V(2,U) | V(3,U)
+  | V(4,U) | V(5,U) | V(6,U)
+// Affirmative | MissingDependency | KindMismatch | Malformed | Refused
+// DeterministicLimitExceeded | CheckerFailure
 ```
 
 `Unsupported` carries every and only applicable supported-grammar reason and
 returns no extraction basis; a Core containing both Oracle and a
 module effect therefore has two reasons, not an unspecified first error.
-Because K3-B admission already proves slot/codec closure, invocation and
-Statement coverage, completions, and edge legality, extraction `Negative` is
-narrow: it carries every base message occurrence for which this role requires
-but lacks a counterparty transport. Wrong edge shape is Interface
-nonadmission, and a missing Plan join prevents request formation. Recursive
-diagnostics are non-authoritative. Missing dependencies, wrong kinds,
-malformed bodies, policy refusal, deterministic exhaustion, and checker
-failure retain K1's qualified result categories and never become semantic
-Negative.
+Because no source-adequacy proposition is formed at this boundary, extraction
+has no semantic `Negative`. A missing source is `MissingDependency`; a formed
+owner carrier that fails the selected adequacy/profile law is `Refused`; and a
+contradiction after affirmative owner admission is `CheckerFailure`. Wrong
+edge shape remains Interface nonadmission, and a missing Plan join prevents
+request formation. Recursive diagnostics are non-authoritative. Only the
+later exact source/target projection proposition has a semantic Negative arm.
 
 ## 3. Exact owner read manifest
 
@@ -133,12 +123,14 @@ The manifest is profile-owned, never producer-authored:
 
 ```text
 EndpointOwnerSchemaSetId =
-  SemanticContentId<"pir.endpoint-owner-schema-set">(
-    B, EndpointOwnerSchemaSetBody)
+  ProfiledSemanticId<"pir.endpoint-owner-schema-set">(
+    B, PirEndpointSourceViewProfileId,
+    EndpointOwnerSchemaSetDomainBody)
 
-EndpointReadManifestId =
-  SemanticContentId<"pir.endpoint-read-manifest">(
-    B, EndpointReadManifestBody)
+EndpointReadManifestId(purpose) =
+  ProfiledSemanticId<"pir.endpoint-read-manifest">(
+    B, PirEndpointSourceViewProfileId,
+    EndpointReadManifestDomainBody(purpose))
 ```
 
 The manifest covers owner identity-body reads. Exact dependency-preimage reads
@@ -172,12 +164,44 @@ atomic coordinates, root optionality, policy, receipts, and selector
 subroutines.
 
 `K3DProjectionV0` accepts only the selected v0 `SemanticRegimeId`
-`bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77`
-and its one exact owner-schema-set ID. A same-shaped future regime does not
-inherit the policy. There is no wildcard, default, authored callback, textual
-reason, or precedence rule. A grammar or policy change rotates the selected
-regime/schema or K3-D profile/read-law tag. Missing, extra, or unknown schema
-edges fail before extraction.
+`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`
+and its exact K1 `SemanticLanguageProfileId` import chain:
+
+```text
+PIRInterfacePlanProfileId
+  <- OirEndpointGraphProfileId
+  <- PirEndpointSourceViewProfileId
+  <- OirProjectionRelationProfileId
+  <- OirProjectionValidationProfileId
+```
+
+The target requires each arrow to be one exact-used `profile_imports` edge to
+the immediate semantic dependency, not an ambient bundle hash or a textual
+version label. The bounded executable baseline exercises that topology with
+the following profile-ID digests under the selected regime, in the same order:
+`3249d35408bd507c6613eb2d7496b95c6d3313a85bac41f28751d1957d6e4f8c`,
+`6138f0ffe95880b2cfe0a4ccd3da71610974193a2fcf6aaa60ae3cf7bfacdfa4`,
+`ccb080314d48881cf89d8b59bc3d14364311797b49f2048b31fd59e684fbaaa7`,
+`cf79a520db90374e7c1bbed17cda79c20130e479a538de9c8a41826b62a60330`,
+and `b183c8af6fad580b0c4d003f4b4e3c26e08fca63dff0b6cf36f6b210091a89fd`.
+The identity equations below consume full typed profile IDs, never bare digest
+strings. These values are an executable-only post-K3-E-repair snapshot, not
+durable selected constants. They do not supply the complete canonical
+`SemanticLanguageProfileBody` preimages or establish durable owner-profile byte
+parity. Until those complete owner profile preimages are published, this page
+fixes the ideal target equations and import topology, not independently
+reconstructible profile IDs.
+
+The owner-schema-set and read-manifest IDs are formed under the exact source-
+view profile. A same-shaped future regime or profile does not inherit this
+policy. A change to Interface/Plan meaning rotates the endpoint graph and all
+four K3-D descendants; a source-view change rotates source, projection, and
+validation; a projection change rotates projection and validation; and a
+validation-only change rotates only validation. A Relations-only K3-B profile
+change remains outside this exact Interface/Plan-rooted profile closure and
+therefore does not rotate the K3-D chain. There is no wildcard, default,
+authored callback, textual reason, or precedence rule. Missing, extra, or
+unknown schema edges fail before extraction.
 
 The four closed sequence selectors are owner algorithms:
 
@@ -202,14 +226,88 @@ can be genuinely quotient-inert because their whole owner IDs are not
 retained. An unsupported concrete element stops classification before any
 view is produced.
 
+### 3.1 Live owner adapter and bounded supplement
+
+Reading an admitted root body is not by itself owner authority. Before source
+extraction, bounded K3-D must join the exact live capabilities issued by the
+owners for every fact family that those owners currently expose:
+
+- K2 `PublicBinding`, `PublicCoin`, `Effect`, and `ClaimReduction` views, plus
+  `StrategyDecision` for a Plan-specialized Prover;
+- K2 `TranscriptDeclaration`, `RequiredInfluence`, and
+  `ChallengeTransition` views;
+- one exact checked FS-construction authority and its `FSConstruction` view;
+- one K3-B `ProtocolInterface` correspondence view over the complete selected
+  invocation, Statement, transport, slot, and transitive-codec closure; and
+- for the Prover, one affirmative `CheckedPlanRealizes` result over the exact
+  Protocol and Plan.
+
+Each transferable binding is the owner's exact K1 source-authority envelope.
+Each consumed capability is a live, identical bearer and names the same typed
+K3-D consumer and the source- and role-specific projection purpose. A copied,
+reconstructed, wrong-purpose, wrong-consumer, stale-source, or partial view is
+not equivalent authority even when its public fields compare equal.
+
+The current executable owners do not yet issue all rich source facts selected
+by Sections 5--10. The bounded evaluation may bridge only that availability
+gap with `FutureOwnerSupplementV0`. Its identity commits to the exact Core,
+Construction, Protocol, Interface, optional Plan, purpose, and complete
+supplement body under the source-view language profile. A preparatory
+owner-side operation may form its binding and a provisional bearer after
+closed-shape and root-level validation, but that bearer is inert: it is not
+live authority and no graph constructor may consume it. Activation must first
+validate exact equality with every overlapping live owner view and the exact
+checked Plan. Only that complete join may make the identical bearer live and
+mint:
+
+1. an exact K1 `PortableSourceAuthorityBinding` whose operation policy is the
+   explicit owner-no-additional-policy case;
+2. a typed capability requirement for the K3-D consumer and exact projection
+   purpose; and
+3. one process-local, noncopyable, nonserializable identical-bearer
+   capability.
+
+Every keyed closed table is checked for exact cardinality and uniqueness at
+this boundary: claims, reductions, challenges, Statement aliases, transports,
+completions, Plan recipes, and Plan exports may neither collapse duplicate
+keys nor smuggle extras. Claim overlap includes the complete origin tuple
+`(scope, Binding | ReductionOutput, source name, output ordinal)`, derived
+from the owner-issued public-binding and claim/reduction views; matching only
+claim names and reduction arities is insufficient.
+
+The raw supplement carrier is inert. Only the following residual families may
+come from its admitted capability in bounded v0: rich claim/reduction contract
+and terminal detail; FS state/scalar types, algorithm/evaluation ABIs, and
+per-challenge laws; structural codec/type-tree laws, fibres,
+public-derivation transports, and completions; and rich Plan
+recipe/evaluation/export detail. Core occurrence, binding, challenge,
+claim/reduction-use, Interface coordinate/codec/Statement/transport, and Plan
+route facts already exposed by owner views must agree exactly and cannot be
+overridden by the supplement.
+
+`CheckedProjectionOwnerAdapterV0` is minted only after that join. It retains
+the exact request, purpose, all live owner views, checked FS authority,
+optional checked Plan, admitted supplement capability, and the closed
+supplement-only path set. Extraction and independent target construction may
+consume only this adapter, never a raw supplement or unauthenticated root.
+Absent required authority is `MissingDependency`; a formed but stale or
+disagreeing authority is `Refused`; contradiction after the complete join is
+`CheckerFailure`.
+
+This mechanism authenticates one selected bounded supplement law. It is not a
+claim that K2/K3-B already expose the universal future owner-view surface.
+When an owner adds a live view for a residual family, the corresponding path
+must leave the supplement and join that view; overlapping independent truths
+are forbidden.
+
 ## 4. One source quotient, several owner components
 
-The exact quotient contains one shared endpoint semantic graph. Its value
-schema is a joint PIR/OIR bridge contract: PIR owns source extraction and OIR
-owns target formation and admission. Neither owner may reinterpret a field;
-an exact schema or `DeriveEndpointContractV0` change rotates both the K3-D
-projection profile and the OIR semantic profile. Sharing the schema transfers
-no source authority.
+The exact quotient contains one OIR-owned endpoint semantic graph. OIR owns
+the bridge value schema and `DeriveEndpointContractV0`; PIR owns the exhaustive
+source traversal and constructs that exact foreign-owned value without a
+shadow definition. A schema or contract-law change rotates the OIR language
+profile and this exact-used PIR projection-view profile. Producing the value
+transfers no source authority.
 
 ```text
 EndpointSourceView = {
@@ -239,11 +337,17 @@ derives them uniquely from this graph. This avoids two semantic copies of the
 same action while retaining an exact static conformance and requirement
 boundary for OIR and Realization.
 
-The Protocol component is derived from K2 `PublicBindingView`,
-`StrategyDecisionView`, `EffectView`, `ClaimReductionView`, `ExecutionView`,
+The Protocol component consumes and rechecks the same exact fact families
+exported by K2
+`PublicBindingView`,
+`StrategyDecisionView`, `EffectView`, and `ClaimReductionView`,
 and the FS `TranscriptDeclarationView`, `RequiredInfluenceView`,
 `ChallengeTransitionView`, and `FSConstructionView`. The Interface component
-is the role-filtered, transitive K3-B codec/slot graph. The Plan component is
+is the role-filtered, transitive K3-B codec/slot graph. Appendix B's exhaustive
+five-root traversal defines completeness and disposition, while Section 3.1's
+live views provide owner authority for every currently issued overlap; neither
+can substitute for the other. Residual selected facts are admitted only by the
+bounded supplement capability. The Plan component is
 the reachable K3-B Plan graph after affirmative `PlanRealizes` over the same
 exact Protocol and Plan.
 
@@ -912,9 +1016,10 @@ Interface adequacy requires complete role-required invocation, Statement,
 transport, public-derivation, completion, slot, and transitive codec coverage;
 exact origin/alias laws; and no dead selected slot or codec. Admission of the
 whole Interface alone is insufficient. A missing required counterparty
-transport is the exact typed Negative adequacy result. A wrong edge shape or
-another malformed presentation is Interface nonadmission and never becomes a
-different semantic Negative; OIR cannot repair either ambiently.
+transport in an otherwise formed owner carrier is a source-profile `Refused`
+result. A wrong edge shape or another malformed presentation is Interface
+nonadmission. Neither becomes semantic `Negative`; OIR cannot repair either
+ambiently.
 
 ## 9. Reachable Plan graph
 
@@ -979,15 +1084,19 @@ coverage. A hidden host read is instead a later Realization nonconformance.
 ## 11. Identity, extraction, and authority
 
 ```text
-EndpointSourceViewId =
-  SemanticContentId<"pir.endpoint-source-view">(
-    B, EndpointSourceViewBody(view))
+EndpointSourceViewId(view) =
+  ProfiledSemanticId<"pir.endpoint-source-view">(
+    B, PirEndpointSourceViewProfileId,
+    EndpointSourceViewDomainBody(view))
 ```
 
-The body contains the profile, purpose, and every semantic universe above.
-There is no extra hash argument for dependency closure, purpose, source IDs,
-or maps. The read manifest ID is deliberately not in quotient identity: two
-exact owner procedures deriving the same complete meaning share the view ID.
+The K1 profiled wrapper contains `PirEndpointSourceViewProfileId` exactly once;
+the domain body contains the purpose and every semantic universe above. The
+carrier's `profile` field must equal that selected ID, but it is not copied into
+the domain body. There is no extra hash argument for dependency closure,
+purpose, source IDs, or maps. The read manifest ID is deliberately not in
+quotient identity: two exact owner procedures deriving the same complete
+meaning share the view ID.
 
 Extraction requires the affirmative support capability, exact manifest and
 schema-set authentication, Interface adequacy, optional exact
@@ -996,11 +1105,22 @@ cumulative K1 limits, and request-local traversal limits. Only Affirmative
 mints `CheckedEndpointSourceView`. No nonaffirmative result emits a partial
 authoritative view.
 
-The live capability binds exact source handles, manifest, owner and dependency
-read receipts, private rebase maps, and view ID. Cold recovery reauthenticates
-and readmits the sources and dependency preimages, reclassifies support, and
-reruns extraction. A body, ID, source map, or sample execution never
+The live capability retains the exact identical `SupportedExtractionBasis`
+and its exact live `CheckedProjectionOwnerAdapterV0`, and binds exact source
+handles, manifest, owner and dependency read receipts, private rebase maps,
+and view ID. Every consumed bearer is process-registered, noncopyable, and
+checked by recomputing its complete semantic ID/body relation. Cold recovery
+reauthenticates and readmits the sources and dependency preimages,
+reclassifies support, and reruns extraction. A body, ID, source map,
+structurally equal reconstructed carrier, or sample execution never
 reconstructs authority.
+
+The bounded executable evidence also exposes an independent target constructor
+that consumes this same exact `SupportedExtractionBasis` and its retained
+adapter. It does not consume the resulting `CheckedEndpointSourceView`.
+Consequently a joined witness can demonstrate one classification and one
+authority chain feeding both independently implemented graph constructors,
+without transferring source-view bytes or identity into local OIR admission.
 
 ## 12. Downstream boundary and non-claims
 
@@ -1039,8 +1159,9 @@ and regime, never copies with local reinterpretation:
 | construction algorithm and transition ABIs, `InfluenceAtomBody` | K2 [`fiat-shamir.md`](fiat-shamir.md#appendix-a-canonical-bodies) |
 | transport actor/destination, completion-coordinate cases, and `PrivateMaterialKindBody` | K3-B [`interfaces-and-plans.md`](interfaces-and-plans.md#6-exact-canonical-bodies) |
 
-Use under another `PriorMetaBasisId` or `SemanticRegimeId` is a kind/regime
-mismatch, even when bytes happen to resemble the selected body.
+Use under another `PriorMetaAuthenticationBasis`, `SemanticRegimeId`, or
+incompatible exact-used language-profile closure is a kind/regime mismatch,
+even when bytes happen to resemble the selected body.
 
 ```text
 ChallengeModeBody = V(0,U) | V(1,U)
@@ -1049,10 +1170,9 @@ EndpointPurposeBody =
     V(0,ChallengeModeBody) | V(1,ChallengeModeBody)
   | V(2,ChallengeModeBody)
 // VerifierEndpoint | GenericProverEndpoint | PlanSpecializedProverEndpoint
-EndpointContractLawV0Body = V(0,U)
-K3DProjectionProfileBody = R{
-  0:V(0,U),1:EndpointContractLawV0Body
-}
+// EndpointContractLawV0Body and EndpointSemanticGraphBody are imported
+// exactly from OIR's Appendix A.  Their owning profile is named by the
+// outer PirEndpointSourceViewProfileId wrapper.
 EndpointRoleBody = V(0,U) | V(1,U)
 // Verifier | Prover
 OptionBody(None,F) = V(0,U)
@@ -1087,8 +1207,11 @@ EndpointStructuralCodecBody =
           2:S[R{0:N(case_ordinal),1:N(local_codec_ref)}...]})
   | V(3,R{0:N(external_type_ref),1:N(semantic_type_ref),
           2:N(element_codec_ref)})
-EndpointCodecNodeBody = V(0,EndpointStructuralCodecBody)
-                      | V(1,ModuleDeclarationRefBody(general_codec_law))
+EndpointCodecNodeBody(x) = R{
+  0:CR(x.interface_codec_id),
+  1:V(0,EndpointStructuralCodecBody(x))
+    | V(1,ModuleDeclarationRefBody(x.general_codec_law))
+}
 EndpointSlotBody(x) = R{0:Q(x.external_key),1:N(x.codec_ref)}
 InvocationClassBody = V(0,U) | V(1,U)
 // PublicInput | VerifierPrivateInput
@@ -1099,8 +1222,8 @@ InvocationFibreBody(x) = R{
 StatementFlowBodyRebased = V(0,N(invocation_target_ref)) | V(1,U)
 // SuppliesInvocation | ExposesOpenedBinding
 StatementAliasBody(x) = R{
-  0:N(x.slot_ref),1:N(x.binding_spine_ref),
-  2:StatementFlowBodyRebased(x.flow)
+  0:Q(x.external_statement),1:N(x.slot_ref),2:N(x.binding_spine_ref),
+  3:StatementFlowBodyRebased(x.flow)
 }
 TransportEdgeBody(x) = R{
   0:N(x.target_spine_ref),1:TransportActorBody(x.source),
@@ -1330,39 +1453,26 @@ Plan edge is in range and the combined graph is acyclic under the admitted
 decision schedule. A `PlanViewReadBody` must be the exact rebased K3-B
 coordinate/value pair in that decision's admitted `StrategyDecisionView`.
 
-The shared graph body and the one source-view ID body are exactly:
+The one PIR-owned source-view domain body is exactly:
 
 ```text
-EndpointSemanticGraphBody(x) = R{
-  0:EndpointRoleBody(x.role),
-  1:S[EndpointDependencyBody(d)... in body-byte order],
-  2:S[VT(T)... in body-byte order],
-  3:S[SourceConstantBody...],4:S[SourcePureNodeBody...],
-  5:RoleEndpointAbiGraphBody(x.abi),
-  6:S[SourceSpineEventBody...],
-  7:OptionBody(x.fs,StaticFsEndpointSemanticsBody),
-  8:S[SourceClaimAtomBody...],
-  9:S[SourceAnchoredObligationBody...],
- 10:OptionBody(x.plan,PlanGraphBody)
-}
-
-EndpointSourceViewBody(x) = R{
-  0:K3DProjectionProfileBody,
-  1:EndpointPurposeBody(x.purpose),
-  2:EndpointSemanticGraphBody(x.semantic_graph)
+EndpointSourceViewDomainBody(x) = R{
+  0:EndpointPurposeBody(x.purpose),
+  1:EndpointSemanticGraphBody(x.semantic_graph)
 }
 ```
 
-`K3DProjectionProfileBody` selects exactly the graph schema and shared
-`EndpointContractLawV0Body`; `DeriveEndpointContractV0` is its evaluator. The
-law is not an authored graph field. The OIR semantic profile imports this same
-body byte-for-byte, so projection cannot compare graphs under different
-derived semantics.
+`PirEndpointSourceViewProfileId` imports the exact
+`OirEndpointGraphProfileId`, whose authenticated profile preimage owns the graph
+schema and `EndpointContractLawV0`; `DeriveEndpointContractV0` is OIR's
+evaluator. The law is not an authored graph field. The source view and OIR
+endpoint therefore reach that same exact law through their authenticated
+profile-import edge rather than by embedding a second profile-shaped body.
 
-The complete body, not merely each table, must fit K1's `2^20` encoded-byte,
-`2^14` node, `2^14` aggregate-child-edge, and depth-384 limits. Each local
-table is also bounded by `2^14`. Extraction has an additional request-local
-visit/edge limit at most `2^17`; exhaustion is atomic
+The complete K1 profiled body, not merely each domain table, must fit K1's
+`2^20` encoded-byte, `2^14` node, `2^14` aggregate-child-edge, and depth-384
+limits. Each local table is also bounded by `2^14`. Extraction has an
+additional request-local visit/edge limit at most `2^17`; exhaustion is atomic
 `DeterministicLimitExceeded`.
 
 ## Appendix B. Exact owner schema and read-manifest bodies
@@ -1393,16 +1503,20 @@ OwnerCoordinateBody(x) = R{
 }
 RootGrammarLawV0Body = V(0,U)
 K3DReadLawV0Body = V(0,U)
-EndpointOwnerSchemaSetBody = R{
-  0:PR(selected_semantic_regime_id),1:RootGrammarLawV0Body
+EndpointOwnerSchemaSetDomainBody = R{
+  0:RootGrammarLawV0Body
 }
-EndpointReadManifestBody = R{
-  0:K3DProjectionProfileBody,
-  1:EndpointPurposeBody(purpose),
-  2:CR(owner_schema_set_id),
-  3:K3DReadLawV0Body
+EndpointReadManifestDomainBody(purpose) = R{
+  0:EndpointPurposeBody(purpose),
+  1:CR(EndpointOwnerSchemaSetId),
+  2:K3DReadLawV0Body
 }
 ```
+
+The selected `SemanticRegimeId` is already fixed by `B`, and the exact source-
+view profile ID is already field 0 of K1 `ProfiledSemanticBody`. Neither value
+is repeated inside these domain bodies. The source-view profile's authenticated
+import closure and law source bind the selected owner grammar and read law.
 
 `RootGrammarLawV0` has exactly five roots in tag order: admitted Protocol,
 its exact admitted Core, the Protocol's exact admitted Construction, its exact

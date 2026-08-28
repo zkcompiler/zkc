@@ -24,9 +24,10 @@ foundation.semantic-regime
 ```
 
 Carrier and evaluator profiles are not content-addressed by K1. A semantic
-module is not prior meta: it is an ordinary, regime-qualified semantic subject.
-The frozen fixtures construct real identity-profile and hash-suite descriptors,
-then use their exact `PriorMetaId` values as all ordinary identity axes.
+module and a semantic-language profile are not prior meta: each is an ordinary,
+regime-qualified semantic subject. The frozen fixtures construct real
+identity-profile and hash-suite descriptors, then use their exact
+`PriorMetaId` values as all ordinary identity axes.
 
 ## 2. Canonical value grammar
 
@@ -120,8 +121,9 @@ A `SemanticContentId` has exactly:
 
 There is no null regime and no optional-regime exception. Only the three closed
 kinds can use `PriorMetaId`; none can use `SemanticContentId`. Every other kind,
-including `foundation.semantic-module`, uses `SemanticContentId` and carries all
-three exact typed axes. `id_type` and the nested reference kinds are checked;
+including `foundation.semantic-module` and
+`foundation.semantic-language-profile`, uses `SemanticContentId` and carries
+all three exact typed axes. `id_type` and the nested reference kinds are checked;
 coincident digest bytes never make unlike kinds interchangeable.
 
 ## 4. Exact identity bytes
@@ -175,7 +177,7 @@ HashSuiteId digest       = c24b580c31bf26bf314e746c87a93cb7ff61d3c33880fbd0ad8e3
 Their canonical descriptor bodies and the exact regime-root descriptor are in
 `cases/requests.jsonl`; `cases/expected.jsonl` freezes their computed IDs. The
 selected root has digest
-`bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77`
+`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`
 and the following identity-bearing shape:
 
 ```text
@@ -192,30 +194,34 @@ Record {
      },
   3: Seq(),
   4: Symbol("local-ordinals-and-closed-scc-v0"),
-  5: Symbol("extension-modules-same-root-dag-v0"),
+  5: Symbol("language-profiles-and-extension-modules-same-root-dag-v0"),
 }
 ```
 
 `EXACT_SEMANTIC_CORE_LAW_SOURCE` is an ASCII octet string with a final LF. It
 is stored in full, as lowercase hexadecimal, in the `id-regime-root` request;
 that frozen request is the exact oracle input rather than a prose
-reconstruction. The installed source is 39,468 octets and has SHA-256 digest
-`4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3`.
+reconstruction. The installed source is 45,669 octets and has SHA-256 digest
+`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`.
 It fixes the declaration-reference grammar and resolution law, declaration-
 local type lifting, root and module value-domain support boundaries, exact
 primitive declaration binding, derived direct primitive references,
 `DirectModuleRoots`, `RequiredModuleClosure_B`, module authentication order,
-term typing and evaluation, charging, and validation precedence. The complete
-encoded regime descriptor is 40,383 octets and has SHA-256 digest
-`e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0`.
+the exact standalone-semantic-kind catalog and one-body-mode law, the
+semantic-language-profile and effective-context envelopes, the inert
+source-authority envelope, term typing and evaluation, charging, and
+validation precedence. The complete encoded regime descriptor is 46,606
+octets and has SHA-256 digest
+`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`.
 Because these exact octets are in the root preimage, they are authenticated
 laws rather than prose names that an implementation may reinterpret.
 
 The term grammar has one `bounded-iterate` constructor; map, fold, find,
 pairwise traversal, and worklists are not independent core syntax. The root
-does not import a same-regime semantic module. Exact primitives live in ordinary
-semantic modules under that root; those modules import only earlier same-root
-modules as a DAG, and consumers must cite the exact used closure.
+does not import an ordinary same-regime language profile or semantic module.
+Exact domain languages and primitives live in ordinary content under that
+root; their profile-import and module-import graphs are separate DAGs, and
+consumers must cite the exact used closures.
 
 The semantic-module identity contrast uses the ordinary module envelope:
 
@@ -230,9 +236,19 @@ Record {
 Its fixture has no imports, exact semantic-failure and semantic-primitive
 declaration catalogs, and a Unit domain payload. Its ordinary semantic-module
 digest is
-`0e89ce7e005432619f5c80a9180e6ca8916cf863857b4fd4537e41e4a6906bd5`.
+`933f1998db8b6b37fa4fc77c06845e598e71bcd8f42bdada494e0df27b965052`.
 The oracle computes an identity over those exact bytes. It does not validate
 declaration meaning, import-DAG admission, or exact-used closure.
+
+The frozen cases also include one exact standalone language-profile identity,
+one profile-qualified subject identity, and canonical encodings of
+`OwnerCapabilityRequirementBody` and
+`PortableSourceAuthorityBindingBody`. The oracle independently checks only
+their canonical bytes and ordinary identity framing. It does not validate a
+profile-import closure, infer exact language use, authenticate the referenced
+owner objects, derive a policy closure, run owner admission, or convey a live
+capability. No owner-local binding vector exists because that carrier has no
+canonical body.
 
 ## 5. Constitutional and local resource bounds
 

@@ -1,9 +1,10 @@
 # OIR and Endpoint Semantics
 
 > **Document kind:** Domain index
-> **Document state:** Active bounded K3-D target
+> **Document state:** Active bounded K3-D target, reclosed by bounded K3-E
 > **Target alignment:** Minimum PIR-to-OIR semantic and projection boundary
-> selected; full Stage 4B remains unactivated
+> selected and joined on the finite P01/Schnorr path; full Stage 4B remains
+> unactivated
 > **Provisional owner:** `oir`
 > **Authority:** None during transition. Current endpoint semantics remain
 > governed by the [Endpoints](../../docs/spec/endpoints.md),
@@ -29,11 +30,12 @@ not selected here.
 
 ## Owns
 
-- joint ownership with PIR of the canonical bridge graph schema: role,
+- sole ownership of the canonical bridge graph schema: role,
   dependencies/types, constants/pure nodes, slot-centric ABI, action spine,
   static FS semantics, complete claims/reductions/terminals, and reachable Plan
-  graph; PIR owns source extraction while OIR owns target formation/admission;
-- the shared exact `EndpointContractLawV0` evaluator deriving one closed
+  graph; PIR owns exact traversal and extraction into this OIR-owned value,
+  while OIR owns the schema, target formation, and admission;
+- the exact `EndpointContractLawV0` evaluator deriving one closed
   `DerivedEndpointContractBody`—static obligations, exact requirements, and
   completion interface—from that graph;
 - canonical semantic `OirId` and exact semantic dependency closure;
@@ -71,10 +73,13 @@ reference interpreter executes OIR directly.
 exact admitted PIR sources
   -> pre-view support classification
   -> affirmative PIR-owned purpose-specific source views
+
+canonical endpoint graph + exact OIR profile
   -> unauthoritative OIR candidate
   -> OIR authentication and local admission
        establishes LocalOirValid(O)
-  -> semantic proposition formation
+
+source view + AdmittedOir -> semantic proposition formation
   -> independent request-specific projection validation
        establishes ProjectionCorrect(source, O) only on Affirmative
   -> later Realization preservation boundary

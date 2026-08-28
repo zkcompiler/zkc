@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import FrozenInstanceError, replace
 import hashlib
 from pathlib import Path
+import pickle
 import sys
 from types import MappingProxyType
 import unittest
@@ -1675,6 +1677,881 @@ class GrindingSeparationTest(unittest.TestCase):
         challenge = record.entries[2]
         self.assertGreaterEqual(challenge.sampling_attempts or 0, 1)
         self.assertFalse(hasattr(tc, "grinding_bits"))
+
+
+class SemanticProfileIdentityTest(unittest.TestCase):
+    def setUp(self) -> None:
+        (
+            self.core,
+            self.construction,
+            self.invocation,
+            self.strategy,
+        ) = model.schnorr_fixture()
+
+    def setup_view_id(self, profiles: model.K2SemanticProfiles) -> object:
+        support = model.make_k2_profile_support(profiles)
+        outcome = model.issue_public_setup_invocation_view(
+            self.core,
+            self.construction,
+            model.ChallengeInterpretation.FIAT_SHAMIR,
+            self.invocation,
+            profiles=profiles,
+            profile_support=support,
+        )
+        self.assertIs(outcome.kind, model.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        self.assertIs(type(outcome.value), model.IssuedPublicSetupInvocationView)
+        assert type(outcome.value) is model.IssuedPublicSetupInvocationView
+        return outcome.value.view_id
+
+    def test_each_profile_root_has_its_exact_no_extra_import_closure(self) -> None:
+        expected_sizes = {
+            model.PIR_INTERACTION_PROFILE_ID: 1,
+            model.PIR_TRANSCRIPT_PROFILE_ID: 2,
+            model.PIR_PUBLIC_SETUP_PROFILE_ID: 3,
+        }
+        for root_id, expected_size in expected_sizes.items():
+            preimages = model.K2_ROOT_PROFILE_PREIMAGES[root_id]
+            self.assertIs(type(preimages), dict)
+            context = model.k1.effective_semantic_context(
+                root_id,
+                preimages,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            )
+            self.assertEqual(len(context.authenticated_profiles), expected_size)
+        self.assertEqual(
+            set(model.K2_PROFILE_PREIMAGES),
+            {
+                model.PIR_INTERACTION_PROFILE_ID,
+                model.PIR_TRANSCRIPT_PROFILE_ID,
+                model.PIR_PUBLIC_SETUP_PROFILE_ID,
+            },
+        )
+        self.assertIs(model.PIR_FS_PROFILE, model.PIR_TRANSCRIPT_PROFILE)
+
+    def test_unrecognized_profile_bundle_cannot_authorize_real_view_issuance(self) -> None:
+        changed = model.make_k2_semantic_profiles(
+            public_view_law=b"zkc-k2-unrecognized-public-view-law-v1",
+        )
+        refused = model.issue_public_setup_invocation_view(
+            self.core,
+            self.construction,
+            model.ChallengeInterpretation.FIAT_SHAMIR,
+            self.invocation,
+            profiles=changed,
+        )
+        self.assertIs(refused.kind, model.QualifiedViewOutcomeKind.UNSUPPORTED)
+        admitted = model.issue_public_setup_invocation_view(
+            self.core,
+            self.construction,
+            model.ChallengeInterpretation.FIAT_SHAMIR,
+            self.invocation,
+            profiles=changed,
+            profile_support=model.make_k2_profile_support(changed),
+        )
+        self.assertIs(admitted.kind, model.QualifiedViewOutcomeKind.AFFIRMATIVE)
+
+    def test_generation_and_replay_use_the_selected_profile_ids(self) -> None:
+        changed = model.make_k2_semantic_profiles(
+            transcript_fs_law=b"zkc-k2-execution-transcript-fs-law-v1",
+        )
+        record = completed(
+            model.generate(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                self.invocation,
+                self.strategy,
+                profiles=changed,
+            )
+        )
+        self.assertEqual(
+            record.construction_id,
+            model.construction_id(
+                self.core,
+                self.construction,
+                profiles=changed,
+            ),
+        )
+        self.assertNotEqual(
+            record.construction_id,
+            model.construction_id(self.core, self.construction),
+        )
+        self.assertEqual(
+            model.replay(
+                self.core,
+                self.construction,
+                self.invocation,
+                record,
+                profiles=changed,
+            ),
+            record,
+        )
+        with self.assertRaisesRegex(model.ReplayError, "identity axes"):
+            model.replay(
+                self.core,
+                self.construction,
+                self.invocation,
+                record,
+            )
+
+    def test_supported_profile_still_refuses_an_undeclared_real_subject_kind(self) -> None:
+        baseline = model.K2_SEMANTIC_PROFILES
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.PUBLIC_COIN,
+            (model.StaticViewField.PC_CHALLENGES,),
+        )
+        required_kinds = model._PIR_SOURCE_AUTHORITY_SUBJECT_KINDS | {
+            "pir.interactive-core"
+        }
+        for omitted_kind in sorted(required_kinds):
+            with self.subTest(omitted_kind=omitted_kind):
+                interaction = replace(
+                    baseline.interaction,
+                    supported_subject_kinds=tuple(
+                        item
+                        for item in baseline.interaction.supported_subject_kinds
+                        if item.value != omitted_kind
+                    ),
+                )
+                transcript = replace(
+                    baseline.transcript_fs,
+                    profile_imports=model._sorted_profile_imports(interaction),
+                )
+                public_view = replace(
+                    baseline.public_view,
+                    profile_imports=model._sorted_profile_imports(
+                        interaction,
+                        transcript,
+                    ),
+                )
+                changed = model.K2SemanticProfiles(
+                    interaction,
+                    transcript,
+                    public_view,
+                )
+                outcome = model.issue_core_static_view(
+                    self.core,
+                    model.StaticViewKind.PUBLIC_COIN,
+                    manifest,
+                    profiles=changed,
+                    profile_support=model.make_k2_profile_support(changed),
+                )
+                self.assertIs(
+                    outcome.kind,
+                    model.QualifiedViewOutcomeKind.REFUSED,
+                )
+
+    def test_interaction_only_support_does_not_backflow_from_downstream_profiles(self) -> None:
+        core_manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.PUBLIC_COIN,
+            (model.StaticViewField.PC_CHALLENGES,),
+        )
+        fresh_manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.EXECUTION,
+            (model.StaticViewField.EX_REPLAY,),
+        )
+        construction_manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.TRANSCRIPT_DECLARATION,
+            (model.StaticViewField.TD_FRAME_SCHEDULE,),
+        )
+        support = model.K2_INTERACTION_PROFILE_SUPPORT
+        self.assertIs(
+            model.issue_core_static_view(
+                self.core,
+                model.StaticViewKind.PUBLIC_COIN,
+                core_manifest,
+                profile_support=support,
+            ).kind,
+            model.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        )
+        self.assertIs(
+            model.issue_execution_view(
+                self.core,
+                None,
+                model.ChallengeInterpretation.FRESH,
+                fresh_manifest,
+                profile_support=support,
+            ).kind,
+            model.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        )
+        self.assertIs(
+            model.issue_construction_static_view(
+                self.core,
+                self.construction,
+                model.StaticViewKind.TRANSCRIPT_DECLARATION,
+                construction_manifest,
+                profile_support=support,
+            ).kind,
+            model.QualifiedViewOutcomeKind.UNSUPPORTED,
+        )
+        self.assertIs(
+            model.issue_public_setup_invocation_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                self.invocation,
+                profile_support=support,
+            ).kind,
+            model.QualifiedViewOutcomeKind.UNSUPPORTED,
+        )
+
+    def test_interaction_profile_change_rotates_every_dependent_identity(self) -> None:
+        changed = model.make_k2_semantic_profiles(
+            interaction_law=b"zkc-k2-interaction-core-fresh-law-v1",
+        )
+        baseline = model.K2_SEMANTIC_PROFILES
+        self.assertNotEqual(
+            model.core_id(self.core, profiles=baseline),
+            model.core_id(self.core, profiles=changed),
+        )
+        self.assertNotEqual(
+            model.invocation_id(self.core, self.invocation, profiles=baseline),
+            model.invocation_id(self.core, self.invocation, profiles=changed),
+        )
+        self.assertNotEqual(
+            model.protocol_id(
+                self.core,
+                None,
+                model.ChallengeInterpretation.FRESH,
+                profiles=baseline,
+            ),
+            model.protocol_id(
+                self.core,
+                None,
+                model.ChallengeInterpretation.FRESH,
+                profiles=changed,
+            ),
+        )
+        self.assertNotEqual(
+            model.construction_id(
+                self.core,
+                self.construction,
+                profiles=baseline,
+            ),
+            model.construction_id(
+                self.core,
+                self.construction,
+                profiles=changed,
+            ),
+        )
+        self.assertNotEqual(
+            self.setup_view_id(baseline),
+            self.setup_view_id(changed),
+        )
+
+    def test_transcript_and_public_view_profile_changes_are_local(self) -> None:
+        baseline = model.K2_SEMANTIC_PROFILES
+        transcript_changed = model.make_k2_semantic_profiles(
+            transcript_fs_law=b"zkc-k2-transcript-fs-law-v1",
+        )
+        public_view_changed = model.make_k2_semantic_profiles(
+            public_view_law=b"zkc-k2-public-view-export-law-v1",
+        )
+        for profiles in (transcript_changed, public_view_changed):
+            self.assertEqual(
+                model.core_id(self.core, profiles=baseline),
+                model.core_id(self.core, profiles=profiles),
+            )
+            self.assertEqual(
+                model.protocol_id(
+                    self.core,
+                    None,
+                    model.ChallengeInterpretation.FRESH,
+                    profiles=baseline,
+                ),
+                model.protocol_id(
+                    self.core,
+                    None,
+                    model.ChallengeInterpretation.FRESH,
+                    profiles=profiles,
+                ),
+            )
+        self.assertNotEqual(
+            model.construction_id(
+                self.core,
+                self.construction,
+                profiles=baseline,
+            ),
+            model.construction_id(
+                self.core,
+                self.construction,
+                profiles=transcript_changed,
+            ),
+        )
+        self.assertEqual(
+            model.construction_id(
+                self.core,
+                self.construction,
+                profiles=baseline,
+            ),
+            model.construction_id(
+                self.core,
+                self.construction,
+                profiles=public_view_changed,
+            ),
+        )
+        self.assertNotEqual(
+            self.setup_view_id(baseline),
+            self.setup_view_id(transcript_changed),
+        )
+        self.assertNotEqual(
+            self.setup_view_id(baseline),
+            self.setup_view_id(public_view_changed),
+        )
+
+
+class OwnerIssuedViewContractTest(unittest.TestCase):
+    def setUp(self) -> None:
+        (
+            self.core,
+            self.construction,
+            self.invocation,
+            self.strategy,
+        ) = model.schnorr_fixture()
+
+    def assert_affirmative(self, outcome: object) -> object:
+        self.assertIs(type(outcome), model.QualifiedViewOutcome)
+        assert type(outcome) is model.QualifiedViewOutcome
+        self.assertIs(outcome.kind, model.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        self.assertIsNotNone(outcome.value)
+        return outcome.value
+
+    def test_effect_terminal_read_closes_over_schedule_producers_and_checks(self) -> None:
+        incomplete = model.issue_core_static_view(
+            self.core,
+            model.StaticViewKind.EFFECT,
+            (model.StaticViewField.EF_TERMINALS,),
+        )
+        self.assertIs(
+            incomplete.kind,
+            model.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+        )
+        expected = model.required_static_view_read_closure(
+            model.StaticViewKind.EFFECT,
+            (model.StaticViewField.EF_TERMINALS,),
+        )
+        self.assertEqual(
+            expected,
+            (
+                model.StaticViewField.EF_CORE_ID,
+                model.StaticViewField.EF_OCCURRENCE_SCHEDULE,
+                model.StaticViewField.EF_VALUE_PRODUCER_GRAPH,
+                model.StaticViewField.EF_CHECKS,
+                model.StaticViewField.EF_TERMINALS,
+            ),
+        )
+        issued = self.assert_affirmative(
+            model.issue_core_static_view(
+                self.core,
+                model.StaticViewKind.EFFECT,
+                expected,
+            )
+        )
+        self.assertIs(type(issued), model.IssuedPIRStaticView)
+        assert type(issued) is model.IssuedPIRStaticView
+        self.assertEqual(issued.projection.manifest, expected)
+        self.assertEqual(
+            tuple(entry.field for entry in issued.projection.entries),
+            expected,
+        )
+        self.assertIs(
+            issued.source_binding.owner_local_coordinate,
+            issued.projection,
+        )
+        self.assertIs(
+            issued.capability.projection,
+            issued.projection,
+        )
+        self.assertIs(issued.capability.source_binding, issued.source_binding)
+        self.assertTrue(model.validate_issued_pir_static_view(issued))
+
+    def test_static_manifest_refuses_duplicates_and_cross_schema_fields(self) -> None:
+        duplicate = model.issue_core_static_view(
+            self.core,
+            model.StaticViewKind.EFFECT,
+            (
+                model.StaticViewField.EF_CORE_ID,
+                model.StaticViewField.EF_CORE_ID,
+            ),
+        )
+        self.assertIs(duplicate.kind, model.QualifiedViewOutcomeKind.MALFORMED)
+        wrong_schema = model.issue_core_static_view(
+            self.core,
+            model.StaticViewKind.EFFECT,
+            (model.StaticViewField.CR_CORE_ID,),
+        )
+        self.assertIs(
+            wrong_schema.kind,
+            model.QualifiedViewOutcomeKind.KIND_MISMATCH,
+        )
+
+    def test_execution_view_is_protocol_scoped_for_fresh_and_fs(self) -> None:
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.EXECUTION,
+            (model.StaticViewField.EX_REPLAY,),
+        )
+        fresh = self.assert_affirmative(
+            model.issue_execution_view(
+                self.core,
+                None,
+                model.ChallengeInterpretation.FRESH,
+                manifest,
+            )
+        )
+        fs = self.assert_affirmative(
+            model.issue_execution_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                manifest,
+            )
+        )
+        assert type(fresh) is model.IssuedPIRStaticView
+        assert type(fs) is model.IssuedPIRStaticView
+        self.assertIs(
+            fresh.projection.coordinate.owner_kind,
+            model.StaticViewOwnerKind.PROTOCOL,
+        )
+        self.assertNotEqual(
+            fresh.projection.coordinate.owner_id,
+            fs.projection.coordinate.owner_id,
+        )
+        self.assertEqual(
+            dict(
+                (entry.field, entry.value)
+                for entry in fresh.projection.entries
+            )[model.StaticViewField.EX_CORE_ID],
+            dict(
+                (entry.field, entry.value)
+                for entry in fs.projection.entries
+            )[model.StaticViewField.EX_CORE_ID],
+        )
+        self.assertEqual(
+            fresh.projection.coordinate.semantic_profile_id,
+            model.PIR_INTERACTION_PROFILE_ID,
+        )
+        self.assertEqual(
+            fs.projection.coordinate.semantic_profile_id,
+            model.PIR_TRANSCRIPT_PROFILE_ID,
+        )
+        self.assertNotEqual(
+            fresh.source_binding.owner_binding_payload,
+            fs.source_binding.owner_binding_payload,
+        )
+
+    def test_strategy_view_respects_scope_opening_and_guaranteed_history(self) -> None:
+        scoped = model.Core(
+            inputs=(
+                model.InputDecl("root-public", model.InputRole.PUBLIC_CONTEXT),
+                model.InputDecl(
+                    "late-public",
+                    model.InputRole.PUBLIC_CONTEXT,
+                    scope="child",
+                ),
+            ),
+            scopes=(
+                model.ScopeDecl("root", None, None),
+                model.ScopeDecl("child", "root", "late-decision"),
+            ),
+            schedule=(
+                model.Occurrence("early-decision", model.OccurrenceKind.PROVER_MESSAGE),
+                model.Occurrence(
+                    "conditional",
+                    model.OccurrenceKind.VERIFIER_MESSAGE,
+                    guard=model.Predicate(model.PredicateKind.NEVER),
+                    verifier_rule=model.VerifierRule(
+                        model.VerifierRuleKind.CONSTANT_INT,
+                        (7,),
+                    ),
+                ),
+                model.Occurrence("late-decision", model.OccurrenceKind.PROVER_MESSAGE),
+                model.Occurrence("terminal", model.OccurrenceKind.TERMINAL),
+            ),
+            initial_claims=("claim",),
+            claim_uses=(model.ClaimConsumerUse("claim", "terminal"),),
+        )
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.STRATEGY_DECISION,
+            (model.StaticViewField.SD_GUARANTEED_READS,),
+        )
+        issued = self.assert_affirmative(
+            model.issue_core_static_view(
+                scoped,
+                model.StaticViewKind.STRATEGY_DECISION,
+                manifest,
+            )
+        )
+        assert type(issued) is model.IssuedPIRStaticView
+        reads = next(
+            entry.value
+            for entry in issued.projection.entries
+            if entry.field is model.StaticViewField.SD_GUARANTEED_READS
+        )
+        self.assertEqual(reads[0][1], ("root-public",))
+        self.assertEqual(reads[1][1], ("root-public", "late-public"))
+        self.assertNotIn("conditional", reads[1][2])
+
+    def test_construction_view_is_exact_and_dependency_closed(self) -> None:
+        incomplete = model.issue_construction_static_view(
+            self.core,
+            self.construction,
+            model.StaticViewKind.REQUIRED_INFLUENCE,
+            (model.StaticViewField.RI_PREFIX_LAW,),
+        )
+        self.assertIs(
+            incomplete.kind,
+            model.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+        )
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.REQUIRED_INFLUENCE,
+            (model.StaticViewField.RI_PREFIX_LAW,),
+        )
+        issued = self.assert_affirmative(
+            model.issue_construction_static_view(
+                self.core,
+                self.construction,
+                model.StaticViewKind.REQUIRED_INFLUENCE,
+                manifest,
+            )
+        )
+        assert type(issued) is model.IssuedPIRStaticView
+        self.assertIs(
+            issued.projection.coordinate.owner_kind,
+            model.StaticViewOwnerKind.CONSTRUCTION,
+        )
+        self.assertEqual(
+            issued.projection.coordinate.owner_id,
+            model.construction_id(self.core, self.construction),
+        )
+
+    def test_fs_view_requires_affirmative_checked_authority(self) -> None:
+        checked = self.assert_affirmative(
+            model.check_fs_construction(
+                self.core,
+                self.core,
+                self.construction,
+            )
+        )
+        self.assertIs(type(checked), model.CheckedFSConstructionIssue)
+        assert type(checked) is model.CheckedFSConstructionIssue
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.FS_CONSTRUCTION,
+            (model.StaticViewField.FS_CONCLUSION,),
+        )
+        issued = self.assert_affirmative(
+            model.issue_fs_construction_view(checked, manifest)
+        )
+        assert type(issued) is model.IssuedPIRStaticView
+        fields_by_name = {
+            entry.field: entry.value for entry in issued.projection.entries
+        }
+        self.assertNotEqual(
+            fields_by_name[model.StaticViewField.FS_SOURCE_PROTOCOL],
+            fields_by_name[model.StaticViewField.FS_TARGET_PROTOCOL],
+        )
+        self.assertEqual(
+            fields_by_name[model.StaticViewField.FS_SHARED_CORE],
+            model.core_id(self.core),
+        )
+        self.assertIs(
+            model.issue_fs_construction_view(object(), manifest).kind,
+            model.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+        )
+        forged = replace(
+            checked,
+            capability=replace(
+                checked.capability,
+                result=replace(checked.result),
+            ),
+        )
+        self.assertIs(
+            model.issue_fs_construction_view(forged, manifest).kind,
+            model.QualifiedViewOutcomeKind.REFUSED,
+        )
+
+    def test_fs_checker_reports_core_mismatch_before_view_issuance(self) -> None:
+        changed = replace(
+            self.core,
+            inputs=self.core.inputs
+            + (
+                model.InputDecl(
+                    "unused-public-context",
+                    model.InputRole.PUBLIC_CONTEXT,
+                ),
+            ),
+        )
+        outcome = model.check_fs_construction(
+            self.core,
+            changed,
+            self.construction,
+        )
+        self.assertIs(outcome.kind, model.QualifiedViewOutcomeKind.NEGATIVE)
+        self.assertIn(
+            model.FSConstructionDefect.SHARED_CORE_MISMATCH,
+            outcome.detail,
+        )
+
+    def test_public_setup_view_excludes_statement_and_private_invocation(self) -> None:
+        baseline = self.assert_affirmative(
+            model.issue_public_setup_invocation_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                self.invocation,
+            )
+        )
+        self.assertIs(type(baseline), model.IssuedPublicSetupInvocationView)
+        assert type(baseline) is model.IssuedPublicSetupInvocationView
+        self.assertEqual(
+            tuple(item.binding_ref.input_name for item in baseline.view.entries),
+            ("g", "q", "p", "session"),
+        )
+        self.assertFalse(hasattr(baseline.source_binding, "invocation"))
+        self.assertFalse(hasattr(baseline.view, "invocation"))
+
+        statement_values = dict(self.invocation.values)
+        statement_values["statement"] = statement_values["statement"] + 1
+        changed_statement = self.assert_affirmative(
+            model.issue_public_setup_invocation_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                model.Invocation(MappingProxyType(statement_values)),
+            )
+        )
+        assert type(changed_statement) is model.IssuedPublicSetupInvocationView
+        self.assertEqual(baseline.view_id, changed_statement.view_id)
+
+        setup_values = dict(self.invocation.values)
+        setup_values["g"] = setup_values["g"] + 1
+        changed_setup = self.assert_affirmative(
+            model.issue_public_setup_invocation_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                model.Invocation(MappingProxyType(setup_values)),
+            )
+        )
+        assert type(changed_setup) is model.IssuedPublicSetupInvocationView
+        self.assertNotEqual(baseline.view_id, changed_setup.view_id)
+
+    def test_static_view_authority_is_exact_local_and_purpose_bound(self) -> None:
+        effect_manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.EFFECT,
+            (model.StaticViewField.EF_TERMINALS,),
+        )
+        effect = self.assert_affirmative(
+            model.issue_core_static_view(
+                self.core,
+                model.StaticViewKind.EFFECT,
+                effect_manifest,
+            )
+        )
+        execution_manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.EXECUTION,
+            (model.StaticViewField.EX_REPLAY,),
+        )
+        execution = self.assert_affirmative(
+            model.issue_execution_view(
+                self.core,
+                None,
+                model.ChallengeInterpretation.FRESH,
+                execution_manifest,
+            )
+        )
+        assert type(effect) is model.IssuedPIRStaticView
+        assert type(execution) is model.IssuedPIRStaticView
+        self.assertIs(
+            type(effect.source_binding),
+            model.k1.OwnerLocalSourceAuthorityBinding,
+        )
+        self.assertTrue(model.validate_issued_pir_static_view(effect))
+        self.assertFalse(
+            model.validate_issued_pir_static_view(
+                effect,
+                expected_purpose_id=execution.capability.purpose_id,
+            )
+        )
+        for live in (effect.source_binding, effect.capability, effect):
+            with self.assertRaises((model.ModelError, model.k1.ModelError)):
+                copy.copy(live)
+            with self.assertRaises((model.ModelError, model.k1.ModelError)):
+                copy.deepcopy(live)
+            with self.assertRaises((model.ModelError, model.k1.ModelError)):
+                pickle.dumps(live)
+        binding = effect.source_binding
+        reconstructed_binding = model.k1.OwnerLocalSourceAuthorityBinding(
+            binding.owner_domain,
+            binding.capability_family,
+            binding.owner_local_coordinate,
+            binding.owner_binding_payload,
+            binding.operation_policy,
+            binding.owner_policy_closure,
+            binding.capability_requirement,
+        )
+        reconstructed = replace(effect, source_binding=reconstructed_binding)
+        self.assertFalse(model.validate_issued_pir_static_view(reconstructed))
+
+    def test_external_role_coordinates_are_owner_wrapped_and_not_substitutable(self) -> None:
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.PUBLIC_COIN,
+            (model.StaticViewField.PC_CHALLENGES,),
+        )
+        consumer_id = model.core_id(self.core)
+        purpose_id = model.protocol_id(
+            self.core,
+            None,
+            model.ChallengeInterpretation.FRESH,
+        )
+        issued = self.assert_affirmative(
+            model.issue_core_static_view(
+                self.core,
+                model.StaticViewKind.PUBLIC_COIN,
+                manifest,
+                consumer_id=consumer_id,
+                purpose_id=purpose_id,
+            )
+        )
+        swapped = self.assert_affirmative(
+            model.issue_core_static_view(
+                self.core,
+                model.StaticViewKind.PUBLIC_COIN,
+                manifest,
+                consumer_id=purpose_id,
+                purpose_id=consumer_id,
+            )
+        )
+        assert type(issued) is model.IssuedPIRStaticView
+        assert type(swapped) is model.IssuedPIRStaticView
+        self.assertTrue(
+            model.validate_issued_pir_static_view(
+                issued,
+                expected_consumer_id=consumer_id,
+                expected_purpose_id=purpose_id,
+            )
+        )
+        self.assertFalse(
+            model.validate_issued_pir_static_view(
+                issued,
+                expected_consumer_id=purpose_id,
+                expected_purpose_id=consumer_id,
+            )
+        )
+        self.assertNotEqual(
+            issued.source_binding.owner_binding_payload,
+            swapped.source_binding.owner_binding_payload,
+        )
+
+    def test_checked_fs_authority_refuses_reconstruction_and_wrong_purpose(self) -> None:
+        checked = self.assert_affirmative(
+            model.check_fs_construction(
+                self.core,
+                self.core,
+                self.construction,
+            )
+        )
+        other = self.assert_affirmative(
+            model.check_fs_construction(
+                self.core,
+                self.core,
+                self.construction,
+                purpose_id=self.assert_affirmative(
+                    model.issue_core_static_view(
+                        self.core,
+                        model.StaticViewKind.PUBLIC_COIN,
+                        model.required_static_view_read_closure(
+                            model.StaticViewKind.PUBLIC_COIN,
+                            (model.StaticViewField.PC_CHALLENGES,),
+                        ),
+                    )
+                ).capability.purpose_id,
+            )
+        )
+        assert type(checked) is model.CheckedFSConstructionIssue
+        assert type(other) is model.CheckedFSConstructionIssue
+        self.assertIs(
+            type(checked.source_binding),
+            model.k1.OwnerLocalSourceAuthorityBinding,
+        )
+        self.assertIs(
+            checked.capability.source_binding,
+            checked.source_binding,
+        )
+        for live in (checked.source_binding, checked.capability, checked):
+            with self.assertRaises((model.ModelError, model.k1.ModelError)):
+                copy.copy(live)
+            with self.assertRaises((model.ModelError, model.k1.ModelError)):
+                pickle.dumps(live)
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.FS_CONSTRUCTION,
+            (model.StaticViewField.FS_CONCLUSION,),
+        )
+        self.assertIs(
+            model.issue_fs_construction_view(
+                checked,
+                manifest,
+                expected_purpose_id=other.capability.purpose_id,
+            ).kind,
+            model.QualifiedViewOutcomeKind.REFUSED,
+        )
+        binding = checked.source_binding
+        reconstructed_binding = model.k1.OwnerLocalSourceAuthorityBinding(
+            binding.owner_domain,
+            binding.capability_family,
+            binding.owner_local_coordinate,
+            binding.owner_binding_payload,
+            binding.operation_policy,
+            binding.owner_policy_closure,
+            binding.capability_requirement,
+        )
+        forged = replace(checked, source_binding=reconstructed_binding)
+        self.assertIs(
+            model.issue_fs_construction_view(forged, manifest).kind,
+            model.QualifiedViewOutcomeKind.REFUSED,
+        )
+
+    def test_public_setup_metadata_is_portable_but_live_authority_is_not(self) -> None:
+        issued = self.assert_affirmative(
+            model.issue_public_setup_invocation_view(
+                self.core,
+                self.construction,
+                model.ChallengeInterpretation.FIAT_SHAMIR,
+                self.invocation,
+            )
+        )
+        assert type(issued) is model.IssuedPublicSetupInvocationView
+        self.assertIs(
+            type(issued.source_binding),
+            model.k1.PortableSourceAuthorityBinding,
+        )
+        self.assertEqual(
+            issued.source_binding.owner_source_coordinate,
+            issued.view_id,
+        )
+        self.assertTrue(
+            model.validate_issued_public_setup_invocation_view(issued)
+        )
+        portable_copy = copy.copy(issued.source_binding)
+        self.assertIsNot(portable_copy, issued.source_binding)
+        forged_capability = replace(
+            issued.capability,
+            source_binding=portable_copy,
+        )
+        forged = replace(
+            issued,
+            source_binding=portable_copy,
+            capability=forged_capability,
+        )
+        self.assertFalse(
+            model.validate_issued_public_setup_invocation_view(forged)
+        )
+        for live in (issued.capability, issued):
+            with self.assertRaises(model.ModelError):
+                copy.copy(live)
+            with self.assertRaises(model.ModelError):
+                copy.deepcopy(live)
+            with self.assertRaises(model.ModelError):
+                pickle.dumps(live)
 
 
 if __name__ == "__main__":

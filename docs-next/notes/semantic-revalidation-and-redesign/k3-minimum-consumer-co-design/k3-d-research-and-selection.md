@@ -2,7 +2,7 @@
 
 > **Document kind:** Temporary research and decision record
 > **Document state:** Bounded research, selection, and executable revalidation
-> complete; K3-E integration remains open
+> complete; subsequent bounded K3-E integration complete
 > **Provisional owner:** `project`, coordinating `pir` and `oir`
 > **Authority:** None. Durable target rules live in
 > [`pir/endpoint-projection-views.md`](../../../pir/endpoint-projection-views.md)
@@ -349,9 +349,11 @@ Fresh, Oracle, module, generic-prover, optimization, or complete-execution case
 only with a positive inhabitant, same-boundary negative, exact identity effect,
 and smaller rejected alternative.
 
-K3-E still must audit the joined K1/K2/K3-B/K3-C/K3-D boundary. K4 must pressure
-the protocol portfolio. Full OIR syntax/execution and Realization remain behind
-a separate Stage 4B activation. The bounded Python instrument is a structural
-falsifier; unless it implements the exact K1 `MetaValueV0` bodies, its
-JSON-based canonical IDs remain modeled surrogates and cannot be cited as
-K1/OIR byte-parity vectors.
+At this K3-D checkpoint, K3-E still had to audit the joined
+K1/K2/K3-B/K3-C/K3-D boundary. That bounded integration subsequently
+completed; its own record owns the repairs and residuals. K4 must pressure the
+protocol portfolio. Full OIR syntax/execution and Realization remain behind a
+separate Stage 4B activation. The bounded Python instrument is a structural
+falsifier; unless it implements the exact K1 `MetaValueV0` bodies, its JSON-
+based canonical IDs remain modeled surrogates and cannot be cited as K1/OIR
+byte-parity vectors.

@@ -1,7 +1,7 @@
 # K1 Executable Foundations
 
 > **Document kind:** Temporary bounded work-package charter
-> **Document state:** Bounded standalone K1 candidate complete; integrated kernel open
+> **Document state:** Bounded K1 candidate reclosed through K3-E; kernel freeze pending
 > **Provisional owner:** `foundation`, coordinated by `project`
 > **Authority:** None. This package records research and validation work;
 > current normative rules remain under [`docs/`](../../../../docs/README.md).
@@ -110,16 +110,21 @@ The detailed alternatives, reasons, and reversal conditions are in
 [`research-and-selection.md`](research-and-selection.md). Exact executed
 evidence belongs only in [`validation.md`](validation.md).
 
-The final strict gate is green: 90/90 reference/parity tests and 26/26
-independently written oracle tests, or 116/116 total. The reference/parity lane
-contains 88 direct `reference_model` tests, one replay of all frozen oracle
-records, and one exact durable-law transcription check. The frozen semantic-
-core law is 39,468 bytes with SHA-256
-`4c0115cb4301240c555e1484ce98863bd2f3400a1ac0cf456ff89248229452d3`;
-the encoded regime descriptor is 40,383 bytes with SHA-256
-`e7fa336ad42e028d272f7eb870cc5a9213068253a74f07c710ae111da3205eb0`;
+The initial standalone checkpoint was green at 116/116. That result and its
+`bfe22f86...` regime are historical and were superseded when K3-E exposed the
+need for exact semantic-language profiles, the inert authority envelope, and
+one disjoint identity lane for every Foundation standalone kind.
+
+The post-repair K3-E reclosure is green at 103/103 reference/parity tests and
+26/26 independently written oracle tests, or 129/129 total. The
+reference/parity lane contains 101 direct `reference_model` tests, one replay
+of all frozen oracle records, and one exact durable-law transcription check.
+The current frozen semantic-core law is 45,669 bytes with SHA-256
+`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`;
+the encoded regime descriptor is 46,606 bytes with SHA-256
+`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`;
 and the resulting regime digest is
-`bfe22f86f4afc4ffaa79d7ec02db42f0c3fad30f6e6e81163cf21a52e05cce77`.
+`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`.
 
 ## Work-package records
 

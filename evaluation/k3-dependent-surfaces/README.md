@@ -7,9 +7,24 @@ conformance, an MLIR carrier, or a cryptographic proof.
 
 The instrument checks these discriminators:
 
+- one Interface/Plan language profile imports exactly the K2 Interaction and
+  Transcript/FS profiles it interprets, and one Relations/correspondence
+  profile imports Interface/Plan; the five-profile convenience container is
+  distinct from the three-entry Interface and four-entry Relations no-extra
+  closures. Real owner-view issuance checks the selected root's evaluator
+  support and complete emitted subject-kind set. Real Interface, Plan,
+  Relations, checked-binding, carrier, and replay paths retain that selected
+  profile bundle rather than silently relabeling content under repository
+  defaults;
 - an Interface depends on one exact `ProtocolId`, assigns every public and
   verifier-private invocation input, and answers scoped Statement coverage as
   a separate question;
+- an Interface-owned correspondence view resolves exact invocation,
+  Statement, transport, external-slot, and codec reads. Its manifest must be
+  canonical and transitively closed, and issuance returns an inert exact-source
+  K1 owner-local binding plus a fresh exact-object guarded capability, with
+  domain-profiled payload, no-policy/closure/requirement identities, and typed
+  consumer and purpose;
 - Plan admission checks its own finite typed shape independently from
   `PlanRealizes`; the latter checks exact K2 decision coverage and the legacy
   owner's scope-gated public-input and closed order/guard availability rules
@@ -23,12 +38,23 @@ The instrument checks these discriminators:
 - a four-role Relation Interface separates public instance, private witness,
   Oracle statement, and phase input, while `ProtocolRelationBinding` and each
   single-Interface, source-ID-free `PlanWitnessBinding` are checked
-  independently. Relation definitions are inert typed references to the
-  Relations owner: the probe does not invent a shadow definition body or hash
-  a satisfaction evaluator into definition identity;
+  independently. Except for the selected Schnorr fixed-setup body described
+  next, relation definitions remain inert typed references to the Relations
+  owner; the probe never hashes a satisfaction evaluator into definition
+  identity;
+- the selected Schnorr case replaces its former fixture definition ID with one
+  exact Relations-profiled fixed-setup definition. Exact owner field
+  coordinates export `g`, `q`, and `p` through a process-local, consumer- and
+  purpose-bound definition view; equal values, another definition/profile, or
+  reconstructed authority cannot substitute for that view;
 - checked binding identities are revalidated at consumption, and value
   grounding is derived from the checked Protocol binding rather than from a
   second free graph;
+- Relations-owned transform reads use authenticated `RelationTransformId`
+  coordinates and owner-issued exact views under a distinct K1 owner-local
+  envelope family; absent transforms, reconstructed/cross-family envelopes,
+  wrong-purpose use, self-authored view carriers, and unrequested extra source
+  transforms are refused or classified as malformed by their exact branch;
 - a replay-qualified PIR-issued `RelationRunView` is an immutable,
   explicit-manifest, public-only attenuation of one real K2 execution, with
   transitive verifier-private influence closed over guards, predicates,
@@ -68,11 +94,11 @@ python3 -B evaluation/k3-dependent-surfaces/run.py --check
 
 ## Evidence boundary
 
-Passing the gate demonstrates only the finite positive and mutation cases in
-`tests/test_reference_model.py`. The fixture semantic references are K1-backed
-content identities, but their labels do not provide the algorithms, theorems,
-or security properties they name. The K2 executor remains the only execution
-model used here.
+Passing the 47-test gate demonstrates only the finite positive and mutation
+cases in `tests/test_reference_model.py`. The fixture semantic references are
+K1-backed content identities, but their labels do not provide the algorithms,
+theorems, or security properties they name. The K2 executor remains the only
+execution model used here.
 
 The Plan instrument is a route-shaped finite proxy over the legacy K2
 executable, not an implementation of the durable recipe DAG or its complete
@@ -81,8 +107,10 @@ that proxy. The witness binding uses whole-value edges and checks one selected
 relation Interface; it implements neither typed selectors nor the aggregate
 `SelectedPlanWitnessBindings` intake. Its local `whole` result means only that
 every witness slot of that selected Interface has an edge; it does not answer
-whole-`PlanWitnessSurface` coverage. This package also does not implement the
-closed correspondence-question algebra, relation transforms or refinements,
+whole-`PlanWitnessSurface` coverage. The bounded `RelationTransform` carrier
+and owner view exercise exact transform sourcing only; they do not execute a
+transform, establish a refinement, or implement the complete closed
+correspondence-question algebra. This package also does not implement
 commitment grounding, bridge-law checking, or quantitative loss export.
 
 The carrier is a tagged Python mapping used to test field disposition and

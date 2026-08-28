@@ -61,6 +61,42 @@ This page adds the owner predicates for Interface, Plan,
 `PlanWitnessSurface` extraction, and `PlanRealizes`; it does not restate the
 generic capability machinery.
 
+All three identified subjects on this page select one standalone
+`PIRInterfacePlanProfileId`. Its required exact profile imports are
+`{PIRInteractionProfileId, PIRTranscriptFSProfileId}`. Its supported subject kinds are
+`{"pir.protocol-interface", "pir.prover-plan",
+"pir.plan-witness-surface", "pir.source-binding-payload",
+"pir.source-capability-requirement", "pir.source-consumer",
+"pir.source-no-policy", "pir.source-policy-closure",
+"pir.source-purpose"}`. Its inline declaration catalog contains the
+three exact bodies below, the Interface and Plan owner-view schemas, their
+field-expansion and closure laws, and `PlanRealizes` intake semantics. The
+two K2 imports are exact: Interface and Plan interpret Fresh and Fiat--Shamir
+Protocol identities, but no subject on this page names or interprets the
+invocation-issued public-setup quotient. A public-setup-law change therefore
+cannot rotate Interface, Plan, or Relations meaning. The K1 profile-import
+DAG, rather than an authored module root list, is the complete generic language
+closure.
+
+The required Interface/Plan root closure has three entries once their owners
+publish complete profile preimages: the two K2 profiles plus
+`PIRInterfacePlanProfileId`. The five-entry convenience bundle
+that also contains the unrelated K2 public-setup profile and
+`RelationsProfileId` is not valid Interface/Plan intake. Interface formation
+and owner-view issuance authenticate only this three-entry
+closure and require only the Interface/Plan root in evaluator support; lack of
+Relations support cannot block an Interface view. An authenticated but
+evaluator-unrecognized root is `Unsupported`, while a supported profile that
+omits the Interface or any emitted owner-authority subject kind is `Refused`.
+
+This section fixes the target profile owner, import topology, supported-kind
+set, catalog responsibility, and no-extra closure law. It does not yet publish
+the complete six-field owner-local K1 profile preimage or its full typed ID.
+The bounded executable profile pin is evidence only for deterministic
+topology, authentication, and rotation. The owner must publish the complete
+preimage and independently reconstructible full typed ID before any dependent
+K4 ID is treated as persistent and before K5 freeze.
+
 ## 2. Shared local vocabulary
 
 ### 2.1 Invocation references and audiences
@@ -158,9 +194,10 @@ therefore derived structurally (`Identity(T)` yields `T,T`). Acyclic
 earlier-codec references give the structural constructors the exact law by
 induction.
 
-The selected PIR regime gives declaration kind `pir.interface-codec-law`
-exactly the body above and the proposition `CanonicalCodecLaw`; the proposition
-is fixed by the kind and is not an authored Boolean. The declaration and every
+The exact-used owner module for declaration kind `pir.interface-codec-law`
+gives exactly the body above and the proposition `CanonicalCodecLaw`; the
+proposition is fixed by the kind and is not an authored Boolean. The
+declaration and every
 algorithm it names use the Protocol's complete `B`, enter the exact-used module
 closure, and determine a General codec's types and algorithms. Its encoder ABI
 is `[semantic_type] -> external_type`; its decoder ABI is
@@ -206,8 +243,9 @@ transcript frame, or Protocol transition.
 ### 2.3 External keys and slots
 
 `ExternalKey` and `WitnessSurfaceKey` are nonempty bounded K1 `MetaSymbol`
-values owned by the selected PIR semantic regime. Their spelling is semantic
-only for the dependent subject that contains them; it is never Core meaning.
+values. The shared regime supplies only their canonical carrier; their spelling
+is semantic only inside the exact owner-local profiled subject that contains
+them and is never Core meaning.
 
 ```text
 ExternalValueSlot = {
@@ -397,7 +435,11 @@ Admission requires
 table.
 
 The target's actor, visibility, value type, guard occurrence, and semantic
-order are derived from the admitted K2 `EffectView` and `ExecutionView`.
+order are derived from exact owner-issued K2 `EffectView` and `ExecutionView`
+projections with their matching fresh capabilities. `EffectView` supplies the
+Core occurrence/value closure; the Protocol-scoped `ExecutionView` supplies the
+selected Fresh or Fiat--Shamir interpretation and cannot alias the other
+Protocol over the same Core.
 Every transport slot has semantic type
 `TransportSemanticValue(TargetType(target))`, including an unguarded target.
 Its semantic value is `Active(v)` exactly when that occurrence is active and
@@ -489,8 +531,9 @@ noncompletion plane.
 
 ```text
 ProtocolInterfaceId =
-  SemanticContentId<"pir.protocol-interface">(
-    B, ProtocolInterfaceBody(interface))
+  ProfiledSemanticId<"pir.protocol-interface">(
+    B, PIRInterfacePlanProfileId,
+    ProtocolInterfaceBody(interface))
 
 AuthenticateProtocolInterface(
   raw, exact AdmittedProtocol P,
@@ -522,6 +565,95 @@ After generic K1 authentication, admission checks in order:
 
 Only a completed affirmative admission mints an `AdmittedProtocolInterface`.
 The ordinary qualified K1/PIR outcome partition remains intact.
+
+### 3.7 Exact owner view for downstream reads
+
+`ProtocolInterfaceBody` remains the only Interface meaning. PIR exports an
+attenuated field projection rather than letting Relations or Analysis recreate
+codec, slot, assignment, member, or transport facts:
+
+```text
+ProtocolInterfaceOwnerViewCoordinate =
+  ProtocolInterfaceView(ProtocolInterfaceId)
+
+ProtocolInterfaceOwnerFieldCoordinate = {
+  view_coordinate: ProtocolInterfaceOwnerViewCoordinate,
+  path: NonEmptyFiniteSeq<PIRViewPathStep>,
+  boundary: PIRViewAtomicBoundary
+}
+
+ProtocolInterfaceOwnerReadManifest =
+  CanonicalNonEmptySortedUniqueSeq<ProtocolInterfaceOwnerFieldCoordinate>
+
+ProtocolInterfaceOwnerViewProjection = {
+  coordinate: ProtocolInterfaceOwnerViewCoordinate,
+  manifest: ProtocolInterfaceOwnerReadManifest,
+  entries:
+    CanonicalMap<ProtocolInterfaceOwnerFieldCoordinate,exact Interface leaf>
+}
+```
+
+The path and atomic-boundary grammars are imported from
+[PIR-owned source views](interactive-core.md#131-common-view-schema-coordinates-and-projection-law).
+They resolve against the exact `ProtocolInterfaceBody` schema; free names,
+reflection, and consumer-defined fields do not form.
+
+`RequiredProtocolInterfaceReadClosure` is the least exact field closure with
+these rules:
+
+1. an invocation assignment closes to its target input, external slot, slot
+   origin, semantic type, and codec;
+2. a Statement member closes to its slot, binding/flow, origin, type, codec,
+   and any `SuppliesInvocation` assignment;
+3. a transport or completion entry closes to its exact target, slot, origin,
+   type, codec, presence/payload law, and role or tag closure;
+4. an external slot closes to every inverse use that derives its unique
+   `SlotOrigin` and to its codec; and
+5. a codec closes transitively over every structural child, exact K1 ABI,
+   algorithm/evaluation/declaration dependency, and General-codec law
+   coordinate. General-codec evidence remains admission authority and is not
+   copied into Interface meaning.
+
+```text
+IssueProtocolInterfaceView(
+  exact AdmittedProtocolInterface,
+  exact inert admitted-Interface authority binding,
+  matching fresh Interface admission capability,
+  exact ProtocolInterfaceOwnerReadManifest,
+  exact PIR evaluator and limits)
+    -> Affirmative({
+         ProtocolInterfaceOwnerViewProjection,
+         ExactProtocolInterfaceViewAuthorityBinding
+           = OwnerLocalSourceAuthorityBinding,
+         ProtocolInterfaceViewCapability
+       })
+       | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+       | DeterministicLimitExceeded | CheckerFailure
+```
+
+Issuance independently derives the closure and requires requested, realized,
+and returned field sets to be identical. Missing closure is
+`MissingDependency`; extra, duplicate, aliased, reordered, or unused fields are
+`Malformed`; wrong subject, admission, evidence binding, purpose, or stale
+capability is `Refused`. Only Affirmative returns a projection, project-wide
+inert source binding, and fresh process-local capability. The binding has
+owner `"pir"`, family `"interface-correspondence-view"`, and the exact projection object as
+its local coordinate. Its Interface/Plan-profiled payload binds the source
+Interface and closed manifest; its explicit no-policy declaration, policy
+closure, and owner requirement name the exact typed consumer and purpose. The
+capability retains that exact envelope object. The binding, capability, and
+issued aggregate are noncopyable and nonserializable; only the identical live
+bearer may be delegated, and reconstructed, cross-family, or cross-purpose
+substitutes refuse. No downstream correspondence result can mint or widen
+them.
+
+As in the common PIR source-view law, the supplied consumer and purpose are
+arbitrary exact same-regime downstream `TypedContentId` coordinates. The owner
+wraps them separately as Interface/Plan-profiled `pir.source-consumer` and
+`pir.source-purpose` IDs over `(family,ContentRef(coordinate))`; payload and
+requirement identities use those nominal roles, while the live capability
+retains and exactly compares the original coordinates. No downstream kind
+union is imported into PIR, and swapping the two roles changes authority.
 
 ## 4. `ProverPlan`
 
@@ -693,7 +825,8 @@ view coordinate of another decision can be captured by ordinal coincidence.
 
 ```text
 ProverPlanId =
-  SemanticContentId<"pir.prover-plan">(B, ProverPlanBody(plan))
+  ProfiledSemanticId<"pir.prover-plan">(
+    B, PIRInterfacePlanProfileId, ProverPlanBody(plan))
 
 AuthenticateProverPlan(
   raw, exact AdmittedProtocol P,
@@ -719,7 +852,9 @@ establish decision coverage against K2; that remains an independent relation.
 PlanRealizes(
   exact AdmittedProtocol P,
   exact AdmittedProverPlan,
-  exact StrategyDecisionView,
+  exact owner-issued complete StrategyDecisionView projection,
+  exact ExactPIRStaticViewAuthorityBinding<StrategyDecisionView>,
+  matching fresh PIRStaticViewCapability,
   exact DependentAdmissionBasis(P))
   -> Qualified<Affirmative(CheckedPlanRealizes)
              | Negative(PlanRealizesReason)>
@@ -887,8 +1022,9 @@ PlanWitnessSurfaceBody = {
 }
 
 PlanWitnessSurfaceId(surface) =
-  SemanticContentId<"pir.plan-witness-surface">(
-    B, PlanWitnessSurfaceBody(surface))
+  ProfiledSemanticId<"pir.plan-witness-surface">(
+    B, PIRInterfacePlanProfileId,
+    PlanWitnessSurfaceBody(surface))
 
 PlanWitnessOccurrenceRef = {
   surface_id: PlanWitnessSurfaceId,
@@ -1059,8 +1195,11 @@ bodies; the checked extraction, source Plan ID, and source mapping are not
 serialized fields.
 
 Changing a body field, order, tag, admission law, witness-surface derivation, or
-`PlanRealizes` proposition requires a new supported PIR semantic regime. Old
-bytes are never reinterpreted.
+`PlanRealizes` proposition rotates the owner-local Interface/Plan profile ID
+and every downstream profile that imports it. A module-owned declaration
+change instead rotates that module and its exact users. The shared Foundation
+semantic regime rotates only when a Foundation-owned mechanism or its
+interpretation changes. Old bytes are never reinterpreted.
 
 ## 7. Nonclaims and reopening conditions
 

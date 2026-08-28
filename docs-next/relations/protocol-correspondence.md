@@ -33,6 +33,31 @@ realization, property Analysis, OIR projection, or realization. A raw carrier
 path, label, digest, record, external container, or caller-created tuple is
 never a correspondence source.
 
+The K3-B Relations language selects the companion page's standalone
+`RelationsProfileId`. It imports exactly
+`{PIRInterfacePlanProfileId}` and therefore reaches the two K2 PIR profiles
+only through that transitive edge. Its supported subject-kind catalog is the
+closed `RelationsId` subject set owned by the companion Relation Model plus
+`"relations.correspondence-question"`, `"relations.source-binding-payload"`,
+`"relations.source-capability-requirement"`, `"relations.source-consumer"`,
+`"relations.source-no-policy"`, `"relations.source-policy-closure"`, and
+`"relations.source-purpose"`. Its inline declaration catalogs contain
+the exact Relations bodies, correspondence-question algebra, complete read
+vocabulary, owner-view schemas, closure and field-expansion laws, and checked
+correspondence result schema, plus the Relations-local source-binding payload,
+no-policy, policy-closure, typed consumer/purpose, and capability-requirement
+subject kinds. Analysis, OIR, realization, theorem, and evidence
+profiles are absent. A consumer authenticates the exact no-extra four-profile
+closure; it cannot supply a shadow PIR profile, flatten imports into module
+roots, or add a consumer-authored declaration catalog.
+The Relations issuer requires only `RelationsProfileId` in evaluator support;
+the three imported profiles are authenticated preimages, not three additional
+evaluator-support requirements. Conversely, the three-entry Interface/Plan
+closure cannot issue a Relations view. An authenticated but evaluator-unknown
+Relations root is `Unsupported`; a supported root omitting
+`relations.transform` or any emitted Relations owner-authority subject kind is
+`Refused`; malformed profile/closure structure is `Malformed`.
+
 ## 2. Directional dependency cut
 
 ```text
@@ -335,8 +360,9 @@ CorrespondenceQuestionBody(question) =
   RelationsBodyV0<CorrespondenceQuestion>(question)
 
 CorrespondenceQuestionId =
-  RelationsId<"relations.correspondence-question">(
-    B, CorrespondenceQuestionBody(question))
+  ProfiledSemanticId<"relations.correspondence-question">(
+    B, RelationsProfileId,
+    CorrespondenceQuestionBody(question))
 ```
 
 Variant tags and record fields follow the written order. A question contains
@@ -440,6 +466,8 @@ ProtocolInterfaceReadBody =
     InvocationAssignment(InvocationInputRef)
   | StatementMember(StatementMemberRef)
   | TransportEntry(TransportEntryRef)
+  | ExternalSlot(ExternalSlotRef)
+  | InterfaceCodec(InterfaceCodecRef)
 
 ProtocolInterfaceRead = {
   protocol_interface_id: ProtocolInterfaceId,
@@ -470,6 +498,7 @@ RelationsRead =
   | GroundingStep(GroundingEquationOwner, step_ordinal)
   | GroundingEquality(GroundingEquationOwner, equality_ordinal)
   | CommitmentClause(ProtocolRelationBindingId, CommitmentClauseRef)
+  | RelationTransform(RelationTransformId)
 
 CorrespondenceRunRead =
     EquationRun {
@@ -515,16 +544,40 @@ The caller never supplies or widens it. Derivation is exhaustive:
 | `MappedPlanWitness` | selected witness edges, relation witness roles, surface entries, selectors, and bridges |
 | `WholeRelationWitness` | the complete witness-role sequence plus selected witness edges and surface entries |
 | `WholePlanWitnessSurface` | every entry in the selected surface plus selected witness edges and relation sources |
-| `ClaimReductionShape` | selected claim/reduction meanings and the exact K2 claim/reduction declarations, recipes, transforms, side inputs, challenges, and full publication requirements they cite |
-| `ExternalStatement` | selected Interface members, Statement edges, invocation assignments reached by `SuppliesInvocation`, codecs, and bindings |
-| `ExternalInstance` | selected instance fields, Interface members/transports, binding edges, codecs, and bridges |
+| `ClaimReductionShape` | selected claim/reduction meanings and the exact K2 claim/reduction declarations, recipes, explicit `RelationTransform` reads, side inputs, challenges, and full publication requirements they cite |
+| `ExternalStatement` | selected Interface members, Statement edges, invocation assignments reached by `SuppliesInvocation`, explicit external-slot and codec reads, and bindings |
+| `ExternalInstance` | selected instance fields, Interface members/transports, binding edges, explicit external-slot and codec reads, and bridges |
 | `ArtifactComparison` | the exact admitted artifact question, issued observation fields, selected relation Interface facts, selectors, and bridges named by each clause |
 | `EquationGrounding` | the exact admitted equation; every source, step, equality, exactly `RequiredGroundingOperandSlots(equation)`, and one exact run read per run slot |
 | `CommitmentGroundingCheck` | every typed construction input and publication slot plus the exact source, step, and equality in each selected closed grounding |
 | `RunGrounding` | the binding edge for every `RelationBoundRunValueSelector` appearing in any check; the instance field selected only by each `RelationBoundValue` check; when the owner-derived `RunGroundedPotentialLossyCoordinates(q)` is nonempty, the premise and consumer-source join for every coordinate in that sequence; plus the unique public `RelationRunCoordinate` derived from every check. Expected values are authenticated question literals, not owner reads. |
 
-Reading one edge includes its complete typed endpoints and the exact admitted
-bridge plus affirmative bridge-law result when the edge is not same-type.
+Every phrase in the table is expanded to the closed read arms above before
+canonical sorting. No arm silently carries an unlisted owner subtree. The
+exact fixed `CorrespondenceReadClosure` then reaches a fixed point:
+
+```text
+InvocationAssignment(i) -> ExternalSlot(slot(i)), InterfaceCodec(codec(slot(i)))
+StatementMember(m) -> ExternalSlot(slot(m)), InterfaceCodec(codec(slot(m))),
+                      and InvocationAssignment(target(m)) when SuppliesInvocation
+TransportEntry(t) -> ExternalSlot(slot(t)), InterfaceCodec(codec(slot(t)))
+ExternalSlot(s) -> InterfaceCodec(codec(s)) and every exact inverse-use field
+InterfaceCodec(c) -> every transitive structural child and exact General-law
+                     semantic dependency named by c
+ReductionMeaning(_,r) -> RelationTransform(transform(r))
+```
+
+The closure includes the exact semantic codec declaration and General-law
+coordinate, never its admission certificate or live evidence capability. Those
+remain authority inputs retained by the admitted Interface and its owner-issued
+view capability. A transform read selects the complete identified
+`RelationTransformBody`, including input/output Interfaces and the exact public
+derivation ABI. Merely reading a `RelationTransformId` from one reduction
+meaning is not a transform read.
+
+Reading one edge includes, through explicit canonical manifest arms, its
+complete typed endpoints and the exact admitted bridge plus affirmative
+bridge-law result when the edge is not same-type.
 For `RunGrounding`, each coordinate in its exact owner-derived potential lossy
 sequence additionally reads the affirmative occurrence-local source premise and
 affirmative consumer-source join bound to that use coordinate. Other structural, coverage,
@@ -540,11 +593,173 @@ construction, and publication occurrence. Reading a reduction meaning includes
 the exact side-input, challenge, and `(publication,next_challenge)` ordinal
 maps; it does not read a refinement theorem or output-agreement proof.
 
-An owner issues an immutable view for its exact submanifest. Every requested
-entry occurs once and no unrequested entry is accepted as authoritative input.
-A missing required entry is `CannotAnswer`; an unsupported owner constructor is
-`Unsupported`; a wrong subject or unauthenticated source is `Refused`; an
-extra, duplicate, aliased, or ill-formed entry is `Malformed`. None is Negative.
+### 4.2 Exact owner-issued view carriers
+
+The four source owners issue separate attenuated carriers. They do not return a
+generic map whose value type or provenance is selected by Relations:
+
+```text
+ProtocolStaticCorrespondenceEntry = {
+  read: ProtocolStaticRead,
+  exact_pir_field_manifest: PIRStaticViewReadManifest,
+  exact_pir_projection: PIRStaticViewProjection
+}
+
+ProtocolStaticCorrespondenceView = {
+  protocol_id: ProtocolId,
+  requested_reads: CanonicalSortedUniqueSeq<ProtocolStaticRead>,
+  entries:
+    CanonicalSeq<ProtocolStaticCorrespondenceEntry in requested-read order>
+}
+
+ProtocolInterfaceCorrespondenceEntry = {
+  read: ProtocolInterfaceRead,
+  exact_interface_field_manifest: ProtocolInterfaceOwnerReadManifest,
+  exact_interface_projection: ProtocolInterfaceOwnerViewProjection
+}
+
+ProtocolInterfaceCorrespondenceView = {
+  protocol_interface_id: ProtocolInterfaceId,
+  requested_reads: CanonicalSortedUniqueSeq<ProtocolInterfaceRead>,
+  entries:
+    CanonicalSeq<ProtocolInterfaceCorrespondenceEntry in requested-read order>
+}
+
+PlanSurfaceCorrespondenceView = {
+  plan_witness_surface_id: PlanWitnessSurfaceId,
+  requested_reads: CanonicalSortedUniqueSeq<PlanSurfaceRead>,
+  entries: CanonicalSeq<exact PlanWitnessSurfaceEntry in requested-read order>
+}
+
+RelationsCorrespondenceEntry<r: RelationsRead> = {
+  read: r,
+  value: ExactRelationsReadValue(r)
+}
+
+RelationsCorrespondenceView = {
+  requested_reads: CanonicalSortedUniqueSeq<RelationsRead>,
+  entries: CanonicalSeq<RelationsCorrespondenceEntry in requested-read order>
+}
+```
+
+`ExactRelationsReadValue` is a fixed total owner resolver over the closed
+`RelationsRead` sum and `RelationsBodyV0`. It selects the complete typed local
+subtree named by the read and the exact admitted body/capability on which that
+subtree depends. In particular `RelationTransform(id)` resolves the complete
+authenticated `RelationTransformBody(id)` rather than the occurrence of `id`
+inside a reduction meaning. It has no caller callback, default arm, textual
+path, or proposition-dependent override.
+
+`PIRFieldExpansion(read)` and `InterfaceFieldExpansion(read)` are fixed total
+owner translations from each corresponding read constructor to the exact
+field manifest required by the K2 and Interface closure laws. Their unions must
+equal the realized projection manifests; two high-level reads may share a
+field, but the field occurs once in the canonical union and its inverse-use
+ledger records both reads. A field with no requesting read or a read with no
+complete field expansion is malformed.
+
+The owner operations are:
+
+```text
+IssueProtocolStaticCorrespondenceView(
+  exact AdmittedProtocol,
+  exact protocol submanifest,
+  exact PIR static-view bindings and matching fresh capabilities)
+    -> CorrespondenceOwnerViewIssueOutcome<ProtocolStaticCorrespondenceView>
+
+IssueProtocolInterfaceCorrespondenceView(
+  exact AdmittedProtocolInterface,
+  exact Interface submanifest,
+  exact Interface admission/source binding and matching fresh capability)
+    -> CorrespondenceOwnerViewIssueOutcome<ProtocolInterfaceCorrespondenceView>
+
+IssuePlanSurfaceCorrespondenceView(
+  exact PlanWitnessSurface,
+  exact checked extraction binding and matching fresh extraction capability,
+  exact Plan-surface submanifest)
+    -> CorrespondenceOwnerViewIssueOutcome<PlanSurfaceCorrespondenceView>
+
+IssueRelationsCorrespondenceView(
+  every and only exact admitted Relations operand named by the submanifest,
+  every exact admitted/check-result source binding and matching capability,
+  exact Relations submanifest)
+    -> CorrespondenceOwnerViewIssueOutcome<RelationsCorrespondenceView>
+
+CorrespondenceOwnerViewIssueOutcome<V> =
+    Affirmative({
+      view: V,
+      exact_owner_view_authority_binding: OwnerLocalSourceAuthorityBinding,
+      fresh_owner_view_capability
+    })
+  | CannotAnswer | Unsupported | Refused | Malformed
+  | DeterministicLimitExceeded | CheckerFailure
+```
+
+Every owner independently rederives its required closure and source values.
+Requested reads, realized reads, returned entries, and the appropriate
+canonical submanifest must agree exactly. A missing required entry or source
+capability is `CannotAnswer`; an unsupported owner constructor is
+`Unsupported`; a wrong subject, stale capability, or unauthenticated source is
+`Refused`; an extra, duplicate, aliased, reordered, unconsumed, or ill-formed
+entry is `Malformed`. None is Negative, and no partial carrier or binding is
+returned.
+
+For `IssueRelationsCorrespondenceView`, the identity set of supplied Relations
+operands equals the identity set requested by the Relations submanifest. A
+missing requested transform is `CannotAnswer`; an unrequested extra transform
+is `Malformed` even when every returned entry happens to ignore it. The live
+capability retains exactly that equal source set, never a larger ambient owner
+environment.
+
+Each static owner binding specializes K1
+`OwnerLocalSourceAuthorityBinding`. The PIR Interface binding has owner `"pir"`
+and family `"interface-correspondence-view"`; the Relations binding has owner
+`"relations"` and family `"relations-correspondence-view"`. In both cases the local coordinate is
+the exact issued view object. The domain-profiled binding payload names the
+complete source and closed submanifest, while an explicit no-policy declaration,
+policy closure, and `OwnerCapabilityRequirement` bind the exact typed consumer
+and purpose. The fresh capability retains that identical envelope object plus
+the admitted handles, submanifest, realized reads, evaluator, and issuance
+occurrence. Local bindings, capabilities, and issued aggregates are
+noncopyable and nonserializable. Passing the identical capability object is the
+only bearer delegation; reconstructed, cross-owner, cross-family, or
+cross-purpose substitutes grant no source authority.
+
+Consumer and purpose intake follows the same open downstream-coordinate,
+closed owner-role rule as PIR. Each may be any exact same-regime downstream
+`TypedContentId`; Relations wraps it under `RelationsProfileId` as a distinct
+`relations.source-consumer` or `relations.source-purpose` identity over
+`(family,ContentRef(coordinate))`. The payload and owner requirement use those
+nominal role IDs, while the live capability retains and exactly compares the
+original coordinates. Relations therefore imports no downstream vocabulary,
+and consumer/purpose or cross-family substitution changes authority.
+
+The invocation-issued `PublicSetupInvocationView` is the only portable
+source-view exception in this cut: its inert
+`PortableSourceAuthorityBinding` is keyed by the view ID, but its live
+capability is still exact and nontransferable. `CheckCorrespondence` consumes
+the exact owner products and cannot call an unqualified raw-body lookup.
+
+```text
+CorrespondenceOwnerViewSet = {
+  protocol: None | Some(affirmative ProtocolStaticCorrespondenceView issuance),
+  protocol_interface:
+    None | Some(affirmative ProtocolInterfaceCorrespondenceView issuance),
+  plan_surface: None | Some(affirmative PlanSurfaceCorrespondenceView issuance),
+  relations: None | Some(affirmative RelationsCorrespondenceView issuance)
+}
+
+OwnerViewSetMatches(manifest,views) iff
+  each component is None exactly when its canonical submanifest is empty,
+  each present view's requested reads equal that submanifest byte-for-byte,
+  each binding and fresh capability is the exact issuance object for that
+    exact view, typed consumer, and purpose, and
+  the four realized field/read unions contain no cross-owner alias
+```
+
+Run reads remain execution-issued `RelationRunView` operands with their exact
+fresh authority. They are not folded into a static owner view and cannot be
+replaced by a completed-record lookup.
 
 ## 5. Completed result payloads and authority
 
@@ -619,8 +834,9 @@ All named operations below are specializations of:
 CheckCorrespondence(
   admitted CorrespondenceQuestion,
   every exact admitted operand named by the question,
-  owner-issued views for ManifestFor(question),
-  matching live source authority,
+  exact CorrespondenceOwnerViewSet for ManifestFor(question),
+  exact RelationRunView sequence for its run submanifest,
+  every matching live owner-view and run-view capability,
   exact evaluator support and limits)
   -> Qualified<CheckedCorrespondence>
 ```

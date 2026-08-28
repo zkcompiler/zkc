@@ -9,7 +9,8 @@
 > protocol-family coverage, compiler correctness, implementation conformance,
 > or cryptographic property.
 > **Date:** 2026-08-28
-> **Disposition:** Retain through K3-E, then delete after durable absorption.
+> **Disposition:** Retain until durable absorption, then delete with the K3
+> package.
 
 ## 1. Bounded validation claim
 
@@ -160,6 +161,11 @@ carrier.
 
 ## 6. Final gates
 
+This table records the pre-K3-E K3-D checkpoint. K3-E later rotated the
+Foundation regime, repaired the K3-D profiled-identity and host-fault
+boundaries, and reclosed the expanded K3-D instrument at 94/94. The K3-E
+integration record owns the current result.
+
 | Gate | Result |
 |---|---:|
 | K1 executable foundations | 116/116 passed |
@@ -185,8 +191,9 @@ not a test failure.
 
 ## 7. Closure and residual obligations
 
-Bounded K3-D is complete at this recorded scope. K3-E now owns the joined
-K1/K2/K3-B/K3-C/K3-D identity, view, dependency, and no-backflow audit.
+Bounded K3-D is complete at this recorded scope. At that checkpoint K3-E owned
+the next joined K1/K2/K3-B/K3-C/K3-D identity, view, dependency, and no-
+backflow audit; the later K3-E record now owns its completed disposition.
 
 The following remain open by construction:
 

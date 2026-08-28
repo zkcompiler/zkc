@@ -20,7 +20,9 @@ model instantiation, selector, or concrete formula identity. Those coordinates
 belong to later layers. Creating or changing a family therefore does not rotate
 the global theorem identity.
 
-The authority record independently pins:
+The theorem-statement digest is derived from the exact profiled semantic
+schema body; it is not a second, independently encoded statement copy. A
+separate source-validation record pins:
 
 - the verified PDF SHA-256
   `93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c`;
@@ -29,9 +31,8 @@ The authority record independently pins:
   construction in Section 6.3 immediately before Theorem 4, Remark 2 for
   deterministic next-message access and rewinding, Remark 6 for consistent
   oracle answers across subextractor reruns, and Theorem 4; and
-- SHA-256
-  `f449dd9a41b8d4ef6f4ed7794d68398f81d562e31e828252fabd09ca551ae0bc`
-  of this instrument's independently encoded selected-statement template.
+- the `ImportedPaperOnly` truth-discharge status, with no admitted proof
+  artifact.
 
 Schema formation establishes identity and shape only. The theorem's truth is a
 separate goal and remains `Assumed`; no proof artifact is admitted here.
@@ -112,6 +113,25 @@ objects and exact pre-challenge influence prefix; the remaining family-process
 adequacy is still a premise. The table checks the exact K2 carrier for all 121
 valid `(Y,A)` pairs and verifies injectivity on that finite domain.
 
+The conditional correspondence is formed over one exact nine-node hypothesis
+DAG. In ordinal order its nodes are family denotation and length embedding,
+pointwise family projection, the concrete challenge model, the concrete
+acceptance relation, fixed challenge cardinality, finite random-oracle indexing
+and operations, role-map adequacy, quantitative-normalization adequacy, and
+full process correspondence. Their dependency ordinals are exactly:
+
+```text
+[], [0], [], [], [0,1], [0,1],
+[0,1,2,3,4,5], [0,1,2,4,6], [0,1,5,6]
+```
+
+The unique outward root frontier is `[7,8]`. The support partition covers every
+reachable node exactly once as established or assumed. Its source-support
+domain is also closed: two dependent family support-schema bindings cover the
+Fresh-source and adaptive-FS-target family manifests, and two exact concrete
+support coordinates cover the selected Fresh and target manifests. Missing,
+extra, reordered, or cross-axis support does not admit the correspondence.
+
 The family oracle index is finite bounded bitstrings. Its authenticated bound
 is a closed polynomial `u(n)`; at `n0`, the gate evaluates that polynomial and
 requires the result to match the bit length of K1's maximum raw canonical-datum
@@ -129,12 +149,37 @@ specialization. Concrete SHA-256 execution is never random-oracle evidence.
 Programming, rerun, forking, and lazy sampling are theorem-level contracts,
 not K2 `ReplayRun` operations.
 
-Capability admission re-runs the complete correspondence formation gate and
-requires the reproduced capability to be exactly equal. It does not maintain a
-second hand-copied predicate list. In particular, a coherently re-fielded
-family with a smaller oracle-index bound and a modulus-11 bounded-rejection
-member are both refused at admission, even if every dependent identity is
-recomputed around the substitution.
+Correspondence formation produces a portable inert judgment, inert checked
+result, and owner authority binding. It separately issues a fresh,
+process-local capability restricted to the member-specialization consumer and
+purpose. The live token, issuer occurrence, and live wrapper enter none of the
+semantic IDs or portable records. Cold validation reconstructs and compares
+the exact inert semantic components without minting authority. Invocation-time
+validation additionally authenticates the supplied live capability against
+that exact authority binding and checks the concrete witness fields; it does
+not call formation recursively or compare against a newly minted live wrapper.
+
+Pointwise specialization consumes two independently live inputs: the checked
+all-`n` family-target capability and the checked one-member correspondence
+capability. It forms the member hypothesis context with
+`CanonicalGoalDagUnion` over the family-target DAG and the nine-node instance
+DAG. Equal goals are merged by exact goal identity, their dependency sets are
+unioned, cycles are rejected, fresh canonical ordinals are assigned, and the
+outward frontier is derived rather than copied. The inherited support treatment
+is complete on that union: an established occurrence dominates an assumed
+occurrence of the same goal, and every other undischarged goal remains assumed.
+
+The specialization result is terminal and inert-only. It retains the exact
+family and correspondence judgments, their checked results and portable
+authority bindings, the joined support, validation basis, policy, and
+quantitative conclusion. It retains neither consumed live capability, a token,
+nor an issuer, and its empty consumer map permits no downstream capability.
+
+The historical negative cases remain part of the bounded validation: formation
+cannot answer for a family whose evaluated oracle-index bound differs from the
+native bound or for the stock modulus-11 bounded-rejection member, and
+post-issuance substitutions are refused when the inert or live authority
+boundary is consumed.
 
 ## Quantitative boundary
 

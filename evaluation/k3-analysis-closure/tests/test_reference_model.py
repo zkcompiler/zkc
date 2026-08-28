@@ -6,6 +6,7 @@ from functools import lru_cache
 import hashlib
 from pathlib import Path
 import sys
+from types import MappingProxyType
 import unittest
 from unittest.mock import patch
 
@@ -98,126 +99,432 @@ def fixed_source_judgment() -> model.EstablishedJudgment:
     )
 
 
-def _legacy_unchecked_index_bound_hypothesis(
-    family: model.AFKAsymptoticFamily,
-    concrete_subject_id: object,
-    family_index_bound_at_n0: int,
-    native_index_bound: int,
-) -> object:
-    """Reproduce the pre-repair hypothesis body for a regression attack."""
+class SemanticProfileIntegrationTest(unittest.TestCase):
+    @staticmethod
+    def probe_body() -> object:
+        return model.k1.DatumRecord(
+            ((0, model.k1.Symbol("k3c-profile-locality-probe")),)
+        )
 
-    return model._analysis_id(
-        "analysis.hypothesis",
-        model.k1.DatumRecord(
-            (
-                (
-                    0,
-                    model._id_datum(
-                        model.family_definition_id(family),
-                        "analysis.asymptotic-family-definition",
-                    ),
-                ),
-                (
-                    1,
-                    model._id_datum(
-                        concrete_subject_id,
-                        "analysis.concrete-family-member-subject",
-                    ),
-                ),
-                (2, model.k1.Nat(1)),
-                (3, model.k1.Nat(family_index_bound_at_n0)),
-                (4, model.k1.Nat(native_index_bound)),
-                (
-                    5,
-                    model.k1.Symbol(
-                        "checked-numeric-u-at-n0-equality-with-assumed-domain-correspondence"
-                    ),
+    def test_transport_profile_has_one_exact_transitive_import_closure(self) -> None:
+        profiles = model.K3C_ANALYSIS_SEMANTIC_PROFILES
+        self.assertEqual(profiles.kernel.profile_imports, ())
+        self.assertEqual(
+            profiles.property.profile_imports,
+            model._profile_imports(
+                profiles.kernel,
+                profiles.k3b_profiles.relations_correspondence,
+            ),
+        )
+        self.assertEqual(
+            profiles.transport.profile_imports,
+            (profiles.property.identity,),
+        )
+        context = model.k1.effective_semantic_context(
+            profiles.transport.identity,
+            model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
+            semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+        )
+        self.assertEqual(len(context.authenticated_profiles), 7)
+        relations_closure = model.k3.K3B_ROOT_PROFILE_PREIMAGES[
+            profiles.k3b_profiles.relations_correspondence.identity
+        ]
+        self.assertEqual(
+            set(model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE),
+            {
+                *relations_closure,
+                profiles.kernel.identity,
+                profiles.property.identity,
+                profiles.transport.identity,
+            },
+        )
+
+    def test_theorem_source_validation_is_a_one_way_child_profile(self) -> None:
+        profiles = model.K3C_ANALYSIS_SEMANTIC_PROFILES
+        self.assertEqual(
+            profiles.theorem_source_validation.profile_imports,
+            (profiles.transport.identity,),
+        )
+        self.assertNotIn(
+            profiles.theorem_source_validation.identity,
+            profiles.transport.profile_imports,
+        )
+        context = model.k1.effective_semantic_context(
+            profiles.theorem_source_validation.identity,
+            model.K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE,
+            semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+        )
+        self.assertEqual(len(context.authenticated_profiles), 8)
+        self.assertEqual(
+            set(model.K3C_PROFILE_BUNDLE),
+            set(model.K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE),
+        )
+
+    def test_property_and_transport_subjects_authenticate_exact_profiles(self) -> None:
+        property_id = model.AFK_POSITIVE_POLYNOMIAL_Q_ONE
+        property_body = model._formed_analysis_body(
+            property_id,
+            "analysis.positive-polynomial",
+        )
+        property_context = model.k1.authenticate_profiled_semantic_content(
+            property_id,
+            model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,
+            model.analysis_domain_body_v0(
+                "analysis.positive-polynomial",
+                property_body,
+            ),
+            model.K3C_ANALYSIS_PROPERTY_PROFILE_BUNDLE,
+            supported_profiles=(model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,),
+        )
+        self.assertEqual(
+            property_context.selected_profile,
+            model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,
+        )
+
+        transport_id = model.family_goal_id(
+            model.SELECTED_AFK_FAMILY,
+            "source-two-special-soundness",
+        )
+        transport_body = model._formed_analysis_body(
+            transport_id,
+            "analysis.goal",
+        )
+        transport_context = model.k1.authenticate_profiled_semantic_content(
+            transport_id,
+            model.K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
+            model.analysis_domain_body_v0("analysis.goal", transport_body),
+            model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
+            supported_profiles=(model.K3C_ANALYSIS_TRANSPORT_PROFILE_ID,),
+        )
+        self.assertEqual(
+            transport_context.selected_profile,
+            model.K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
+        )
+
+    def test_profile_subject_partition_refuses_cross_lane_minting(self) -> None:
+        with self.assertRaisesRegex(model.AnalysisError, "raw Analysis profile"):
+            model.analysis_profiled_content_id(
+                "analysis.positive-polynomial",
+                self.probe_body(),
+                model.K3C_ANALYSIS_PROPERTY_PROFILE,
+            )
+
+        property_id = model.AFK_POSITIVE_POLYNOMIAL_Q_ONE
+        property_body = model._formed_analysis_body(
+            property_id,
+            "analysis.positive-polynomial",
+        )
+        with self.assertRaises(model.AnalysisError):
+            model._form_analysis_profiled_content_id(
+                "analysis.positive-polynomial",
+                property_body,
+                model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            )
+
+        transport_id = model.family_goal_id(
+            model.SELECTED_AFK_FAMILY,
+            "source-two-special-soundness",
+        )
+        transport_body = model._formed_analysis_body(transport_id, "analysis.goal")
+        with self.assertRaisesRegex(model.AnalysisError, "requires profile"):
+            model._form_analysis_profiled_content_id(
+                "analysis.goal",
+                transport_body,
+                model.K3C_ANALYSIS_PROPERTY_PROFILE,
+            )
+
+        validation_body = model._formed_analysis_body(
+            model.AFK_V2_THM4_SOURCE_VALIDATION,
+            "analysis.theorem-source-validation",
+        )
+        for wrong_profile in (
+            model.K3C_ANALYSIS_PROPERTY_PROFILE,
+            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+        ):
+            with self.subTest(wrong_profile=wrong_profile.profile_family.value):
+                with self.assertRaises(model.AnalysisError):
+                    model._form_analysis_profiled_content_id(
+                        "analysis.theorem-source-validation",
+                        validation_body,
+                        wrong_profile,
+                    )
+        self.assertTrue(
+            {"analysis.question", "analysis.goal", "analysis.proposition"}
+            <= {
+                item.value
+                for item in model.K3C_ANALYSIS_PROPERTY_PROFILE.supported_subject_kinds
+            }
+        )
+        self.assertTrue(
+            {"analysis.question", "analysis.goal", "analysis.proposition"}
+            <= {
+                item.value
+                for item in model.K3C_ANALYSIS_TRANSPORT_PROFILE.supported_subject_kinds
+            }
+        )
+
+    def test_profile_bundle_refuses_missing_and_extra_preimages(self) -> None:
+        profiles = model.K3C_ANALYSIS_SEMANTIC_PROFILES
+        missing = dict(model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE)
+        missing.pop(profiles.property.identity)
+        with self.assertRaises(model.k1._Control) as caught:
+            model.k1.effective_semantic_context(
+                profiles.transport.identity,
+                missing,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(
+            caught.exception.outcome,
+            model.k1.Outcome.MISSING_DEPENDENCY,
+        )
+
+        unrelated = model.make_k3c_analysis_semantic_profiles(
+            transport_law=model._profile_law_source(
+                "zkc.analysis.bounded-transport-law.v1",
+                ("unreferenced-profile-locality-probe",),
+            )
+        ).transport
+        with self.assertRaises(model.k1._Control) as caught:
+            model.k1.effective_semantic_context(
+                profiles.transport.identity,
+                {
+                    **model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
+                    unrelated.identity: unrelated,
+                },
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.k1.Outcome.REFUSED)
+
+    def test_profile_changes_rotate_only_their_dependency_cone(self) -> None:
+        baseline = model.K3C_ANALYSIS_SEMANTIC_PROFILES
+        changed_transport = model.make_k3c_analysis_semantic_profiles(
+            transport_law=model._profile_law_source(
+                "zkc.analysis.bounded-transport-law.v1",
+                ("transport-local-change",),
+            )
+        )
+        self.assertEqual(baseline.kernel.identity, changed_transport.kernel.identity)
+        self.assertEqual(
+            baseline.property.identity,
+            changed_transport.property.identity,
+        )
+        self.assertNotEqual(
+            baseline.transport.identity,
+            changed_transport.transport.identity,
+        )
+        body = model.k1.BytesValue(b"k3c-profile-locality-probe")
+        self.assertEqual(
+            model.k1.profiled_content_id(
+                "analysis.property-profile",
+                baseline.property.identity,
+                body,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            ),
+            model.k1.profiled_content_id(
+                "analysis.property-profile",
+                changed_transport.property.identity,
+                body,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            ),
+        )
+        self.assertNotEqual(
+            model.k1.profiled_content_id(
+                "analysis.family-theorem-applicability-result",
+                baseline.transport.identity,
+                body,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            ),
+            model.k1.profiled_content_id(
+                "analysis.family-theorem-applicability-result",
+                changed_transport.transport.identity,
+                body,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            ),
+        )
+
+        changed_validation = model.make_k3c_analysis_semantic_profiles(
+            theorem_source_validation_law=model._profile_law_source(
+                "zkc.analysis.afk-theorem-source-validation-law.v0",
+                ("validation-only-local-change",),
+            )
+        )
+        self.assertEqual(
+            baseline.transport.identity,
+            changed_validation.transport.identity,
+        )
+        self.assertNotEqual(
+            baseline.theorem_source_validation.identity,
+            changed_validation.theorem_source_validation.identity,
+        )
+
+        changed_kernel = model.make_k3c_analysis_semantic_profiles(
+            kernel_law=model._profile_law_source(
+                "zkc.analysis.kernel-law.v1",
+                ("kernel-local-change",),
+            )
+        )
+        self.assertNotEqual(baseline.kernel.identity, changed_kernel.kernel.identity)
+        self.assertNotEqual(
+            baseline.property.identity,
+            changed_kernel.property.identity,
+        )
+        self.assertNotEqual(
+            baseline.transport.identity,
+            changed_kernel.transport.identity,
+        )
+
+        changed_k3b = model.k3.make_k3b_semantic_profiles(
+            relations_law=b"zkc-k3b-relations-correspondence-law-v1"
+        )
+        changed_relations = model.make_k3c_analysis_semantic_profiles(
+            k3b_profiles=changed_k3b
+        )
+        self.assertEqual(baseline.kernel.identity, changed_relations.kernel.identity)
+        self.assertNotEqual(
+            baseline.property.identity,
+            changed_relations.property.identity,
+        )
+        self.assertNotEqual(
+            baseline.transport.identity,
+            changed_relations.transport.identity,
+        )
+
+    def test_validation_profile_and_transport_profile_have_no_backflow(self) -> None:
+        schema = model.afk_v2_theorem_schema()
+        baseline_schema_id = model.fs_theorem_schema_id(schema)
+        baseline_question_body = model.theorem_truth_question_body(schema)
+        baseline_goal_id = model.theorem_truth_goal_id(schema)
+        baseline_validation_id = model.theorem_source_validation_id(schema)
+        baseline_digest = model.theorem_statement_digest(schema)
+
+        validation_only = model.make_k3c_analysis_semantic_profiles(
+            theorem_source_validation_law=model._profile_law_source(
+                "zkc.analysis.afk-theorem-source-validation-law.v0",
+                ("validation-only-nonbackflow-probe",),
+            )
+        )
+        with patch.object(
+            model,
+            "K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE",
+            validation_only.theorem_source_validation,
+        ):
+            changed_validation_id = model.theorem_source_validation_id(schema)
+            self.assertEqual(baseline_schema_id, model.fs_theorem_schema_id(schema))
+            self.assertEqual(
+                baseline_question_body,
+                model.theorem_truth_question_body(schema),
+            )
+            self.assertEqual(baseline_goal_id, model.theorem_truth_goal_id(schema))
+        self.assertNotEqual(baseline_validation_id, changed_validation_id)
+
+        semantic_change = model.make_k3c_analysis_semantic_profiles(
+            transport_law=model._profile_law_source(
+                "zkc.analysis.bounded-transport-law.v0",
+                ("semantic-transport-forward-rotation-probe",),
+            )
+        )
+        with patch.object(
+            model,
+            "K3C_ANALYSIS_TRANSPORT_PROFILE",
+            semantic_change.transport,
+        ):
+            changed_digest = model.theorem_statement_digest(schema)
+            changed_schema_id = model.fs_theorem_schema_id(schema)
+            changed_schema = replace(
+                schema,
+                authority=replace(
+                    schema.authority,
+                    statement_content_sha256=changed_digest,
                 ),
             )
-        ),
-    )
+            with patch.object(
+                model,
+                "K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE",
+                semantic_change.theorem_source_validation,
+            ):
+                changed_validation = model.theorem_source_validation_id(
+                    changed_schema
+                )
+        self.assertNotEqual(baseline_digest, changed_digest)
+        self.assertNotEqual(baseline_schema_id, changed_schema_id)
+        self.assertNotEqual(baseline_validation_id, changed_validation)
 
-
-def coherently_refield_correspondence(
-    family: model.AFKAsymptoticFamily,
-    source: object,
-    source_model: model.ExperimentModel,
-    target_model: model.ExperimentModel,
-    correspondence: model.FSCorrespondence,
-    family_index_bound_at_n0: int,
-    *,
-    reproduce_legacy_bound_hypothesis: bool = False,
-) -> model.ConcreteFamilyInstanceCorrespondence:
-    """Recompute every dependent field around a substituted semantic anchor."""
-
-    legitimate = fixed_context()[-1]
-    source_selector = model.fixed_family_member_selector_id(source, "fresh")
-    target_selector = model.fixed_family_member_selector_id(source, "fiat-shamir")
-    subject_id = model.concrete_member_subject_id(
-        family,
-        source,
-        correspondence,
-        source_selector,
-        target_selector,
-    )
-    role_maps = model.family_instance_role_maps(family, source, correspondence)
-    formulas = model.pointwise_formula_correspondences(family, subject_id)
-    hypothesis_patch = (
-        patch.object(
-            model,
-            "fixed_member_index_bound_hypothesis_id",
-            side_effect=_legacy_unchecked_index_bound_hypothesis,
+    def test_property_source_identities_ignore_downstream_transport_profile(self) -> None:
+        proposition = model._SCHNORR_PINNED_PROPOSITION
+        baseline_schnorr = (
+            model.analysis_proposition_id(proposition),
+            model.schnorr_semantic_basis_id(proposition),
         )
-        if reproduce_legacy_bound_hypothesis
-        else patch.object(
-            model,
-            "fixed_member_index_bound_hypothesis_id",
-            wraps=model.fixed_member_index_bound_hypothesis_id,
+        family = model.SELECTED_AFK_FAMILY
+        authority = model.fixture_ref(
+            "analysis.external-proof-authority",
+            "profile-locality-external-source",
         )
-    )
-    with hypothesis_patch:
-        hypotheses = model.fixed_member_required_hypotheses(
+        baseline_hypothesis, baseline_result, _ = model._family_source_components(
             family,
-            source,
-            source_model,
-            target_model,
-            correspondence,
-            family_index_bound_at_n0=family_index_bound_at_n0,
+            authority,
         )
-    capability_id = model._member_correspondence_id(
-        family,
-        source,
-        source_model,
-        target_model,
-        correspondence,
-        subject_id,
-        family_index_bound_at_n0,
-        legitimate.native_index_bound,
-        source_selector,
-        target_selector,
-        role_maps,
-        formulas,
-        hypotheses,
-    )
-    return replace(
-        legitimate,
-        correspondence_capability_id=capability_id,
-        family=family,
-        family_definition_id=model.family_definition_id(family),
-        source=source,
-        native_subject_projection_id=model.native_subject_projection_id(source),
-        concrete_member_subject_id=subject_id,
-        family_index_bound_at_n0=family_index_bound_at_n0,
-        source_model=source_model,
-        target_model=target_model,
-        fs_correspondence=correspondence,
-        fs_correspondence_id=model.fs_correspondence_id(correspondence),
-        source_member_selector_id=source_selector,
-        target_member_selector_id=target_selector,
-        role_maps=role_maps,
-        formula_correspondences=formulas,
-        retained_hypotheses=hypotheses,
-    )
+        changed = model.make_k3c_analysis_semantic_profiles(
+            transport_law=model._profile_law_source(
+                "zkc.analysis.bounded-transport-law.v0",
+                ("downstream-only-source-locality-probe",),
+            )
+        )
+        with patch.object(
+            model,
+            "K3C_ANALYSIS_TRANSPORT_PROFILE",
+            changed.transport,
+        ):
+            self.assertEqual(
+                baseline_schnorr,
+                (
+                    model.analysis_proposition_id(proposition),
+                    model.schnorr_semantic_basis_id(proposition),
+                ),
+            )
+            hypothesis, result, _ = model._family_source_components(
+                family,
+                authority,
+            )
+            self.assertEqual(baseline_hypothesis, hypothesis)
+            self.assertEqual(baseline_result, result)
+
+    def test_analysis_law_sources_are_canonical_closed_data(self) -> None:
+        for profile in (
+            model.K3C_ANALYSIS_KERNEL_PROFILE,
+            model.K3C_ANALYSIS_PROPERTY_PROFILE,
+            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            model.K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE,
+        ):
+            with self.subTest(profile=profile.profile_family.value):
+                decoded = model.k1.decode_datum(profile.semantic_law_source)
+                self.assertEqual(
+                    model.k1.encode_datum(decoded),
+                    profile.semantic_law_source,
+                )
+                self.assertIsInstance(decoded, model.k1.DatumRecord)
+
+    def test_fixture_subjects_remain_direct_k1_identities(self) -> None:
+        label = "direct-k1-foundation-fixture"
+        body = model.k1.DatumRecord(((0, model.k1.Symbol(label)),))
+        fixture = model.fixture_ref("analysis.hypothesis", label)
+        self.assertEqual(
+            fixture,
+            model.k1.content_id(
+                "analysis.hypothesis",
+                model.k1.encode_datum(body),
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            ),
+        )
+        self.assertNotEqual(
+            fixture,
+            model.k1.profiled_content_id(
+                "analysis.hypothesis",
+                model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,
+                body,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            ),
+        )
 
 
 class ImportAndFiniteSourceTest(unittest.TestCase):
@@ -290,6 +597,29 @@ class ImportAndFiniteSourceTest(unittest.TestCase):
         )
         model.require_established_judgment(judgment)
 
+    def test_bounded_schnorr_assumption_is_not_a_shadow_theorem_schema(self) -> None:
+        self.assertEqual(
+            model.SCHNORR_TWO_SPECIAL_SOUNDNESS_THEOREM_ID,
+            model._analysis_id(
+                "analysis.bounded-property-theorem-assumption",
+                model._schnorr_two_special_soundness_theorem_assumption_body(),
+            ),
+        )
+        self.assertNotIn(
+            "analysis.theorem-schema",
+            {
+                item.value
+                for item in model.K3C_ANALYSIS_PROPERTY_PROFILE.supported_subject_kinds
+            },
+        )
+        self.assertIn(
+            "analysis.theorem-schema",
+            {
+                item.value
+                for item in model.K3C_ANALYSIS_TRANSPORT_PROFILE.supported_subject_kinds
+            },
+        )
+
 
 class GlobalTheoremSchemaTest(unittest.TestCase):
     def test_verified_pdf_digest_is_pinned(self) -> None:
@@ -314,12 +644,14 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
             schema.transform_program_template,
             schema.conclusion_law_template,
         )
-        digest = hashlib.sha256(model.k1.encode_datum(body)).hexdigest()
+        unprofiled_digest = hashlib.sha256(model.k1.encode_datum(body)).hexdigest()
+        digest = model.theorem_statement_digest(schema)
         self.assertEqual(digest, schema.authority.statement_content_sha256)
         self.assertEqual(
             digest,
-            "f449dd9a41b8d4ef6f4ed7794d68398f81d562e31e828252fabd09ca551ae0bc",
+            "dea40bdec3e81668fc10289aafbcbc5be9cce1b0078f1df302e7ba6e5cd2cd49",
         )
+        self.assertNotEqual(digest, unprofiled_digest)
         self.assertNotEqual(digest, schema.authority.artifact_sha256)
 
     def test_source_profile_has_all_eleven_required_views(self) -> None:
@@ -395,24 +727,113 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
             }
         )
 
-    def test_pdf_digest_mutation_is_rejected(self) -> None:
+    def test_source_metadata_rotates_validation_not_theorem_meaning(self) -> None:
         schema = model.afk_v2_theorem_schema()
         changed = replace(
             schema, authority=replace(schema.authority, artifact_sha256="0" * 64)
         )
+        self.assertEqual(
+            model.fs_theorem_schema_id(changed),
+            model.fs_theorem_schema_id(schema),
+        )
+        self.assertEqual(
+            model.theorem_truth_goal_id(changed),
+            model.theorem_truth_goal_id(schema),
+        )
+        self.assertEqual(
+            model.theorem_truth_proposition_id(changed),
+            model.theorem_truth_proposition_id(schema),
+        )
+        self.assertNotEqual(
+            model.theorem_source_validation_id(changed),
+            model.theorem_source_validation_id(schema),
+        )
         with self.assertRaises(model.TheoremError):
-            model.fs_theorem_schema_id(changed)
+            model.assume_afk_theorem_truth(changed)
 
-    def test_statement_component_mutation_is_rejected(self) -> None:
+    def test_forged_statement_digest_is_rejected_without_rotating_meaning(self) -> None:
         schema = model.afk_v2_theorem_schema()
-        changed = replace(
+        forged = replace(
+            schema,
+            authority=replace(
+                schema.authority,
+                statement_content_sha256="0" * 64,
+            ),
+        )
+        self.assertEqual(
+            model.fs_theorem_schema_id(forged),
+            model.fs_theorem_schema_id(schema),
+        )
+        self.assertEqual(
+            model.theorem_statement_digest(forged),
+            model.theorem_statement_digest(schema),
+        )
+        self.assertEqual(
+            model.theorem_truth_goal_id(forged),
+            model.theorem_truth_goal_id(schema),
+        )
+        with self.assertRaisesRegex(model.TheoremError, "statement digest"):
+            model.theorem_source_validation_id(forged)
+        with self.assertRaises(model.TheoremError):
+            model.assume_afk_theorem_truth(forged)
+
+    def test_forged_proof_status_is_rejected_without_rotating_meaning(self) -> None:
+        schema = model.afk_v2_theorem_schema()
+        forged = replace(
+            schema,
+            proof_status=replace(
+                schema.proof_status,
+                canonical_clauses=(
+                    *schema.proof_status.canonical_clauses[:-1],
+                    "schema-admission-establishes-truth",
+                ),
+            ),
+        )
+        self.assertEqual(
+            model.fs_theorem_schema_id(forged),
+            model.fs_theorem_schema_id(schema),
+        )
+        self.assertEqual(
+            model.theorem_statement_digest(forged),
+            model.theorem_statement_digest(schema),
+        )
+        with self.assertRaisesRegex(model.TheoremError, "proof status"):
+            model.theorem_source_validation_id(forged)
+        with self.assertRaises(model.TheoremError):
+            model.assume_afk_theorem_truth(forged)
+
+    def test_theorem_truth_question_is_exactly_source_free(self) -> None:
+        body = model.theorem_truth_question_body(model.afk_v2_theorem_schema())
+        self.assertEqual(
+            dict(body.fields)[2],
+            model.k1.DatumVariant(0, model.k1.DatumRecord(())),
+        )
+
+    def test_theorem_truth_goal_identity_is_question_only(self) -> None:
+        schema = model.afk_v2_theorem_schema()
+        question_id = model._analysis_transport_id(
+            "analysis.question",
+            model.theorem_truth_question_body(schema),
+        )
+        self.assertEqual(
+            model.theorem_truth_goal_id(schema),
+            model._analysis_transport_id(
+                "analysis.goal",
+                model.AnalysisGoalBodyV0(question_id),
+            ),
+        )
+
+    def test_statement_component_outside_closed_catalog_is_refused(self) -> None:
+        schema = model.afk_v2_theorem_schema()
+        changed_component = replace(
             schema.source_property_template,
             canonical_clauses=("different-source-property",),
         )
-        with self.assertRaises(model.TheoremError):
-            model.fs_theorem_schema_id(
-                replace(schema, source_property_template=changed)
-            )
+        changed = replace(schema, source_property_template=changed_component)
+        with self.assertRaisesRegex(model.TheoremError, "closed transport catalog"):
+            model.fs_theorem_schema_id(changed)
+        with self.assertRaisesRegex(model.TheoremError, "closed transport catalog"):
+            model.theorem_source_validation_id(changed)
 
     def test_missing_source_view_is_rejected(self) -> None:
         schema = model.afk_v2_theorem_schema()
@@ -485,14 +906,13 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
         self.assertEqual(body.random_function_process.capability_contract_id, n11)
         model.single_experiment_body_id(body)
 
-    def test_operator_ast_mutation_is_rejected(self) -> None:
+    def test_operator_ast_outside_closed_catalog_is_refused(self) -> None:
         schema = model.afk_v2_theorem_schema()
         operators = list(schema.local_operator_catalog)
         operators[3] = replace(operators[3], template_ast="expected-count(Q+1)")
-        with self.assertRaises(model.TheoremError):
-            model.fs_theorem_schema_id(
-                replace(schema, local_operator_catalog=tuple(operators))
-            )
+        changed = replace(schema, local_operator_catalog=tuple(operators))
+        with self.assertRaisesRegex(model.TheoremError, "closed AFK catalog"):
+            model.fs_theorem_schema_id(changed)
 
     def test_schema_admission_is_not_theorem_truth(self) -> None:
         schema = model.afk_v2_theorem_schema()
@@ -501,6 +921,50 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
 
 
 class FamilyApplicabilityTest(unittest.TestCase):
+    def test_family_and_applicability_goal_identities_are_question_only(self) -> None:
+        family = model.SELECTED_AFK_FAMILY
+        schema = model.afk_v2_theorem_schema()
+        candidate = model.derive_family_applicability_input(schema, family)
+        for role in (
+            "source-two-special-soundness",
+            "target-adaptive-knowledge-q-lt-N",
+        ):
+            with self.subTest(role=role):
+                question_id = model.family_question_id(family, role)
+                self.assertEqual(
+                    model.family_goal_id(family, role),
+                    model._analysis_transport_id(
+                        "analysis.goal",
+                        model.AnalysisGoalBodyV0(question_id),
+                    ),
+                )
+        applicability_question_id = model.family_applicability_question_id(
+            family,
+            candidate,
+        )
+        self.assertEqual(
+            model.family_applicability_goal_id(family, candidate),
+            model._analysis_transport_id(
+                "analysis.goal",
+                model.AnalysisGoalBodyV0(applicability_question_id),
+            ),
+        )
+
+    def test_attempt_taxonomy_matches_qualified_analysis_outcomes(self) -> None:
+        self.assertEqual(
+            {item.value for item in model.AttemptKind},
+            {
+                "affirmative",
+                "negative",
+                "unsupported",
+                "cannot-answer",
+                "refused",
+                "malformed",
+                "deterministic-limit-exceeded",
+                "checker-failure",
+            },
+        )
+
     def test_selected_family_keeps_N_constant_across_n(self) -> None:
         family = model.SELECTED_AFK_FAMILY
         self.assertEqual(family.challenge_cardinality, 8)
@@ -578,7 +1042,7 @@ class FamilyApplicabilityTest(unittest.TestCase):
         )
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
-    def test_wrong_source_goal_cannot_instantiate_schema(self) -> None:
+    def test_wrong_source_goal_is_refused_as_false_applicability(self) -> None:
         schema, family, candidate, premises, *_ = family_context()
         changed = replace(
             candidate,
@@ -589,14 +1053,15 @@ class FamilyApplicabilityTest(unittest.TestCase):
         result = model.check_afk_family_applicability(
             schema, family, premises, candidate=changed
         )
-        self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
-    def test_q_equals_two_substitution_is_not_selected(self) -> None:
+    def test_q_equals_two_substitution_is_refused(self) -> None:
         schema, family, candidate, premises, *_ = family_context()
         substitution = replace(
             candidate.parameter_substitution,
-            positive_polynomial_id=model.fixture_ref(
-                "analysis.positive-polynomial-profile", "constant-two"
+            positive_polynomial_id=model.positive_polynomial_id(
+                model.AFK_POSITIVE_POLYNOMIAL_PROFILE_ID,
+                (2,),
             ),
         )
         result = model.check_afk_family_applicability(
@@ -605,9 +1070,9 @@ class FamilyApplicabilityTest(unittest.TestCase):
             premises,
             candidate=replace(candidate, parameter_substitution=substitution),
         )
-        self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
-    def test_ro_index_domain_identity_mismatch_cannot_instantiate(self) -> None:
+    def test_ro_index_domain_identity_mismatch_is_refused(self) -> None:
         schema, family, candidate, premises, *_ = family_context()
         substitution = replace(
             candidate.parameter_substitution,
@@ -621,9 +1086,9 @@ class FamilyApplicabilityTest(unittest.TestCase):
             premises,
             candidate=replace(candidate, parameter_substitution=substitution),
         )
-        self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
-    def test_formula_binding_mutation_cannot_instantiate(self) -> None:
+    def test_formula_binding_mutation_is_refused(self) -> None:
         schema, family, candidate, premises, *_ = family_context()
         bindings = list(candidate.operator_bindings)
         bindings[0] = replace(
@@ -638,7 +1103,7 @@ class FamilyApplicabilityTest(unittest.TestCase):
             premises,
             candidate=replace(candidate, operator_bindings=tuple(bindings)),
         )
-        self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
     def test_second_constant_N_family_does_not_rotate_global_theorem(self) -> None:
         schema = model.afk_v2_theorem_schema()
@@ -655,6 +1120,339 @@ class FamilyApplicabilityTest(unittest.TestCase):
 
 
 class FamilyTransportTest(unittest.TestCase):
+    def test_live_reissuance_does_not_rotate_inert_applicability_identity(self) -> None:
+        schema, family, candidate, premises, first, *_ = family_context()
+        second_outcome = model.check_afk_family_applicability(
+            schema, family, premises, candidate=candidate
+        )
+        self.assertIs(second_outcome.kind, model.AttemptKind.AFFIRMATIVE)
+        second = second_outcome.value
+        self.assertEqual(first.checked_result, second.checked_result)
+        self.assertEqual(first.authority_binding, second.authority_binding)
+        self.assertEqual(first.port_id, second.port_id)
+        self.assertIsNot(first.live_capability._token, second.live_capability._token)
+
+    def test_live_reissuance_does_not_rotate_family_judgment_identity(self) -> None:
+        schema, family, candidate, premises, first_port, _, _, first = family_context()
+        second_port = model.check_afk_family_applicability(
+            schema, family, premises, candidate=candidate
+        ).value
+        source = model.assume_external_family_source_capability_for_fixture(
+            family, authority_label="test-assumed-all-n-source-authority"
+        )
+        truth = model.assume_afk_theorem_truth(schema)
+        second_outcome = model.transport_afk_family_knowledge(
+            source, second_port, truth
+        )
+        self.assertIs(second_outcome.kind, model.AttemptKind.AFFIRMATIVE)
+        second = second_outcome.value
+        self.assertEqual(first.judgment, second.judgment)
+        self.assertEqual(first.checked_result, second.checked_result)
+        self.assertEqual(first.authority_binding, second.authority_binding)
+        self.assertEqual(first_port.checked_result, second_port.checked_result)
+        self.assertIsNot(first.live_capability._token, second.live_capability._token)
+
+    def test_transport_policy_closure_is_derived_from_exact_used_bindings(self) -> None:
+        port, source, truth, capability = family_context()[4:8]
+        expected = model.derive_source_policy_closure(
+            (
+                port.authority_binding,
+                source.authority_binding,
+                truth.authority_binding,
+            )
+        )
+        self.assertEqual(capability.authority_binding.transitive_policy_ids, expected)
+        self.assertNotIn(
+            "source_policy_closure",
+            {item.name for item in fields(type(capability.judgment))},
+        )
+
+    def test_derived_policy_closure_is_a_set_union(self) -> None:
+        binding = family_context()[4].authority_binding
+        self.assertEqual(
+            model.derive_source_policy_closure((binding,)),
+            model.derive_source_policy_closure((binding, binding)),
+        )
+
+    def test_policy_closure_is_embedded_as_a_canonical_sequence(self) -> None:
+        capability = family_context()[-1]
+        judgment = capability.judgment
+        bindings = (
+            judgment.applicability_authority_binding,
+            judgment.source_authority_binding,
+            judgment.theorem_truth_authority_binding,
+        )
+        closure = model.derive_source_policy_closure(bindings)
+        operator_binding_ids = tuple(
+            model.family_operator_binding_id(binding)
+            for binding in judgment.operator_bindings
+        )
+        self.assertEqual(
+            judgment.judgment_id,
+            model._family_judgment_id(
+                judgment.theorem_schema_id,
+                judgment.family_definition_id,
+                operator_binding_ids,
+                judgment.target_proposition_id,
+                judgment.semantic_basis_id,
+                capability.checked_result.support_id,
+                judgment.validation_basis_id,
+                capability.authority_binding.immediate_policy_ids[0],
+                judgment.retained_hypotheses,
+                closure,
+            ),
+        )
+        self.assertGreater(len(closure), 1)
+        with self.assertRaisesRegex(model.AuthorityError, "not canonical"):
+            model._family_judgment_id(
+                judgment.theorem_schema_id,
+                judgment.family_definition_id,
+                operator_binding_ids,
+                judgment.target_proposition_id,
+                judgment.semantic_basis_id,
+                capability.checked_result.support_id,
+                judgment.validation_basis_id,
+                capability.authority_binding.immediate_policy_ids[0],
+                judgment.retained_hypotheses,
+                tuple(reversed(closure)),
+            )
+        self.assertNotIn(
+            "analysis.source-policy-closure",
+            model.ANALYSIS_SUBJECT_KINDS,
+        )
+        self.assertFalse(hasattr(model, "source_policy_closure_id"))
+
+    def test_analysis_and_external_owner_policies_do_not_collapse(self) -> None:
+        port, source = family_context()[4:6]
+        analysis_policy = port.authority_binding.immediate_policy_ids[0]
+        external_policy = source.authority_binding.immediate_policy_ids[0]
+        self.assertEqual(analysis_policy.subject_kind, "analysis.operation-policy")
+        self.assertEqual(
+            external_policy.subject_kind,
+            "k3c.external-owner-operation-policy",
+        )
+        self.assertEqual(
+            analysis_policy,
+            model._analysis_operation_policy_id(
+                port.checked_result.proposition_id,
+                (
+                    (
+                        "afk-family-property-transport",
+                        ("exact-family-applicability",),
+                    ),
+                ),
+                profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            ),
+        )
+        self.assertEqual(
+            external_policy,
+            model._assumed_external_operation_policy_id(
+                source.external_authority_id,
+                "use-assumed-all-n-source-result",
+            ),
+        )
+        self.assertNotEqual(
+            external_policy,
+            model._analysis_operation_policy_id(
+                source.checked_result.proposition_id,
+                (
+                    (
+                        "afk-family-property-transport",
+                        ("all-n-two-special-soundness-source",),
+                    ),
+                ),
+                profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            ),
+        )
+        with self.assertRaisesRegex(
+            model.AnalysisError,
+            "does not support subject kind",
+        ):
+            model._analysis_transport_id(
+                "analysis.owner-policy-disposition",
+                self.probe_policy_body(),
+            )
+
+    @staticmethod
+    def probe_policy_body() -> object:
+        return model.k1.DatumRecord(
+            ((0, model.k1.Symbol("forbidden-shadow-policy-kind")),)
+        )
+
+    def test_analysis_minted_external_policy_forgery_is_refused(self) -> None:
+        family = model.SELECTED_AFK_FAMILY
+        source = family_context()[5]
+        forged_policy = model._analysis_operation_policy_id(
+            source.checked_result.proposition_id,
+            (
+                (
+                    "afk-family-property-transport",
+                    ("all-n-two-special-soundness-source",),
+                ),
+            ),
+            profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+        )
+        forged_binding = replace(
+            source.authority_binding,
+            immediate_policy_ids=(forged_policy,),
+        )
+        forged = replace(source, authority_binding=forged_binding)
+        with self.assertRaisesRegex(
+            model.AuthorityError,
+            "identity or support was substituted",
+        ):
+            model.require_family_source_capability(family, forged)
+
+    def test_analysis_contract_is_wrapped_by_the_single_k1_envelope(self) -> None:
+        binding = family_context()[4].authority_binding
+        self.assertIs(type(binding), model.AnalysisSourceAuthorityContract)
+        envelope = model.k1_portable_source_authority_binding(binding)
+        self.assertIs(type(envelope), model.k1.PortableSourceAuthorityBinding)
+        self.assertIs(
+            type(envelope.capability_requirement),
+            model.k1.OwnerCapabilityRequirement,
+        )
+        self.assertEqual(
+            envelope.capability_requirement.owner_requirement,
+            model.analysis_capability_requirement_payload_id(
+                binding.capability_requirement
+            ),
+        )
+        self.assertEqual(
+            model.portable_source_authority_binding_id(binding),
+            model._form_analysis_profiled_content_id(
+                "analysis.portable-source-authority-binding",
+                model.AnalysisPortableSourceAuthorityBindingBodyV0(envelope),
+                binding.semantic_profile,
+            ),
+        )
+        self.assertFalse(hasattr(model, "OwnerCapabilityRequirement"))
+        self.assertFalse(hasattr(model, "PortableSourceAuthorityBinding"))
+        self.assertFalse(
+            {item.name for item in fields(type(envelope))}
+            & {"live_capability", "_token", "checker", "provider", "occurrence"}
+        )
+
+    def test_family_judgment_carries_only_inert_authority_coordinates(self) -> None:
+        names = {item.name for item in fields(model.AFKFamilyKnowledgeJudgment)}
+        self.assertFalse(
+            names
+            & {
+                "live_capability",
+                "applicability_port",
+                "source_capability",
+                "theorem_truth",
+                "_issuer",
+                "checker",
+                "provider",
+                "occurrence",
+            }
+        )
+        self.assertTrue(
+            {
+                "applicability_checked_result",
+                "applicability_authority_binding",
+                "source_checked_result",
+                "source_authority_binding",
+                "theorem_truth_checked_result",
+                "theorem_truth_authority_binding",
+            }
+            <= names
+        )
+
+    def test_inert_judgment_revalidation_does_not_issue_live_capabilities(self) -> None:
+        judgment = family_context()[-1].judgment
+        counts_before = (
+            len(model._FAMILY_PORT_TOKENS),
+            len(model._EXTERNAL_SOURCE_CAP_TOKENS),
+            len(model._TRUTH_TREATMENT_TOKENS),
+            len(model._FAMILY_JUDGMENT_TOKENS),
+        )
+        model.require_family_knowledge_judgment(judgment)
+        counts_after = (
+            len(model._FAMILY_PORT_TOKENS),
+            len(model._EXTERNAL_SOURCE_CAP_TOKENS),
+            len(model._TRUTH_TREATMENT_TOKENS),
+            len(model._FAMILY_JUDGMENT_TOKENS),
+        )
+        self.assertEqual(counts_before, counts_after)
+
+    def test_forged_live_applicability_token_is_refused(self) -> None:
+        port, source, truth = family_context()[4:7]
+        forged = replace(
+            port,
+            live_capability=replace(port.live_capability, _token=object()),
+        )
+        result = model.transport_afk_family_knowledge(source, forged, truth)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_reconstructed_invocation_capability_is_not_live_authority(self) -> None:
+        port, source, truth = family_context()[4:7]
+        reconstructed = replace(port.live_capability)
+        self.assertEqual(reconstructed, port.live_capability)
+        self.assertIsNot(reconstructed, port.live_capability)
+        result = model.transport_afk_family_knowledge(
+            source,
+            replace(port, live_capability=reconstructed),
+            truth,
+        )
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_reconstructed_k1_source_binding_is_not_live_authority(self) -> None:
+        port, source, truth = family_context()[4:7]
+        reconstructed = replace(port.live_capability.source_binding)
+        self.assertEqual(reconstructed, port.live_capability.source_binding)
+        self.assertIsNot(reconstructed, port.live_capability.source_binding)
+        forged = replace(
+            port,
+            live_capability=replace(
+                port.live_capability,
+                source_binding=reconstructed,
+            ),
+        )
+        result = model.transport_afk_family_knowledge(source, forged, truth)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_cross_family_live_capability_is_refused(self) -> None:
+        port, source, truth = family_context()[4:7]
+        forged = replace(
+            port,
+            live_capability=replace(
+                port.live_capability,
+                capability_family=model.k1.Symbol("different-capability-family"),
+            ),
+        )
+        result = model.transport_afk_family_knowledge(source, forged, truth)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_cross_purpose_live_capability_is_refused(self) -> None:
+        port, source, truth = family_context()[4:7]
+        forged = replace(
+            port,
+            live_capability=replace(
+                port.live_capability,
+                typed_purpose_id=model.fixture_ref(
+                    "analysis.use-purpose", "different-live-purpose"
+                ),
+            ),
+        )
+        result = model.transport_afk_family_knowledge(source, forged, truth)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_detached_inert_authority_binding_is_refused(self) -> None:
+        port, source, truth = family_context()[4:7]
+        forged = replace(
+            source,
+            authority_binding=replace(
+                source.authority_binding,
+                owner_id=model.fixture_ref(
+                    "analysis.external-proof-authority", "detached-owner"
+                ),
+            ),
+        )
+        result = model.transport_afk_family_knowledge(forged, port, truth)
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
     def test_missing_all_n_source_capability_cannot_answer(self) -> None:
         port, truth = family_context()[4], family_context()[6]
         self.assertIs(
@@ -687,7 +1485,12 @@ class FamilyTransportTest(unittest.TestCase):
         port, source_capability, truth = family_context()[4:7]
         changed = replace(
             truth,
-            support_ref=model.fixture_ref("analysis.theorem-truth-support", "forged"),
+            checked_result=replace(
+                truth.checked_result,
+                support_id=model.fixture_ref(
+                    "analysis.support-instantiation", "forged-theorem-truth"
+                ),
+            ),
         )
         result = model.transport_afk_family_knowledge(source_capability, port, changed)
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
@@ -696,45 +1499,53 @@ class FamilyTransportTest(unittest.TestCase):
         port, source_capability, truth = family_context()[4:7]
         changed = replace(
             source_capability,
-            support_id=model.fixture_ref("analysis.support-instantiation", "forged"),
+            checked_result=replace(
+                source_capability.checked_result,
+                support_id=model.fixture_ref(
+                    "analysis.support-instantiation", "forged-family-source"
+                ),
+            ),
         )
         result = model.transport_afk_family_knowledge(changed, port, truth)
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
     def test_positive_transport_retains_both_external_assumptions(self) -> None:
-        source_capability, truth, judgment = family_context()[5:8]
-        self.assertIn(
-            source_capability.retained_hypothesis_id, judgment.retained_hypotheses
-        )
+        source_capability, truth, capability = family_context()[5:8]
+        judgment = capability.judgment
+        for source_hypothesis in source_capability.retained_hypotheses:
+            self.assertIn(source_hypothesis, judgment.retained_hypotheses)
         self.assertIn(truth.retained_hypothesis_id, judgment.retained_hypotheses)
+        model.require_family_knowledge_capability(capability)
         model.require_family_knowledge_judgment(judgment)
 
     def test_revalidated_judgment_cannot_drop_all_n_source_premise(self) -> None:
-        source_capability, judgment = family_context()[5], family_context()[-1]
+        source_capability = family_context()[5]
+        judgment = family_context()[-1].judgment
         changed = replace(
             judgment,
             retained_hypotheses=tuple(
                 item
                 for item in judgment.retained_hypotheses
-                if item != source_capability.retained_hypothesis_id
+                if item != source_capability.retained_hypotheses[0]
             ),
         )
         with self.assertRaises(model.TheoremError):
             model.require_family_knowledge_judgment(changed)
 
     def test_revalidated_judgment_cannot_swap_truth_support(self) -> None:
-        judgment = family_context()[-1]
+        judgment = family_context()[-1].judgment
         changed = replace(
             judgment,
-            theorem_truth_support_ref=model.fixture_ref(
-                "analysis.theorem-truth-support", "unrelated-proof"
+            theorem_truth_checked_result=replace(
+                judgment.theorem_truth_checked_result,
+                support_id=judgment.applicability_checked_result.support_id,
             ),
         )
         with self.assertRaises(model.TheoremError):
             model.require_family_knowledge_judgment(changed)
 
     def test_revalidated_judgment_cannot_float_to_another_family(self) -> None:
-        judgment = family_context()[-1]
+        judgment = family_context()[-1].judgment
         other = model.form_afk_asymptotic_family(
             "floating-N16-family", challenge_cardinality=16
         )
@@ -749,7 +1560,7 @@ class FamilyTransportTest(unittest.TestCase):
             model.require_family_knowledge_judgment(changed)
 
     def test_family_judgment_has_no_native_member_coordinates(self) -> None:
-        judgment = family_context()[-1]
+        judgment = family_context()[-1].judgment
         names = {item.name for item in fields(type(judgment))}
         self.assertFalse(
             names
@@ -761,13 +1572,322 @@ class FamilyTransportTest(unittest.TestCase):
             }
         )
 
+    def test_active_question_goal_proposition_layers_are_distinct(self) -> None:
+        proposition = fixed_source_judgment().proposition
+        question_id = model.analysis_question_id(proposition.goal.question)
+        goal_id = model.analysis_goal_id(proposition.goal)
+        proposition_id = model.analysis_proposition_id(proposition)
+        extra = model.fixture_hypothesis("question-goal-proposition-split")
+        changed = replace(
+            proposition,
+            hypotheses=model.hypothesis_union(proposition.hypotheses, (extra,)),
+        )
+        self.assertEqual(question_id, model.analysis_question_id(changed.goal.question))
+        self.assertEqual(goal_id, model.analysis_goal_id(changed.goal))
+        self.assertNotEqual(proposition_id, model.analysis_proposition_id(changed))
+        self.assertNotEqual(
+            model.analysis_hypothesis_context_id(proposition.hypotheses),
+            model.analysis_hypothesis_context_id(changed.hypotheses),
+        )
+
+    def test_goal_identity_is_exactly_its_authenticated_question(self) -> None:
+        goal = fixed_source_judgment().proposition.goal
+        question_id = model.analysis_question_id(goal.question)
+        self.assertEqual(
+            model.analysis_goal_id(goal),
+            model._analysis_id(
+                "analysis.goal",
+                model.AnalysisGoalBodyV0(question_id),
+            ),
+        )
+
+    def test_goal_refuses_conclusion_substitution_after_question_formation(self) -> None:
+        goal = fixed_source_judgment().proposition.goal
+        changed = replace(
+            goal,
+            conclusion=replace(
+                goal.conclusion,
+                extractor_algorithm_id=model.fixture_ref(
+                    "analysis.extractor-algorithm", "substituted-goal-conclusion"
+                ),
+            ),
+        )
+        self.assertEqual(
+            model.analysis_question_id(goal.question),
+            model.analysis_question_id(changed.question),
+        )
+        with self.assertRaises(model.PropertyError):
+            model.analysis_goal_id(changed)
+
+    def test_goal_reconstruction_is_pure_and_order_independent(self) -> None:
+        goal = fixed_source_judgment().proposition.goal
+        self.assertFalse(hasattr(model, "_QUESTION_CONCLUSION_REGISTRY"))
+        reconstructed = model.hypothesis_free_conclusion(replace(goal.question))
+        self.assertEqual(reconstructed, goal.conclusion)
+        self.assertEqual(
+            model.analysis_goal_id(replace(goal, question=replace(goal.question))),
+            model.analysis_goal_id(goal),
+        )
+
+    def test_conflicting_family_payload_changes_question_and_cannot_poison_goal(self) -> None:
+        goal = fixed_source_judgment().proposition.goal
+        changed_question = replace(
+            goal.question,
+            family_payload=replace(
+                goal.question.family_payload,
+                extractor_algorithm_id=model.k1.authenticate_algorithm_identity(
+                    model.k1.build_unsupported_algorithm()
+                ),
+            ),
+        )
+        self.assertNotEqual(
+            model.analysis_question_id(changed_question),
+            model.analysis_question_id(goal.question),
+        )
+        with self.assertRaises(model.PropertyError):
+            model.analysis_goal_id(replace(goal, question=changed_question))
+        self.assertEqual(
+            model.analysis_goal_id(goal), model.analysis_goal_id(replace(goal))
+        )
+
+    def test_family_question_goal_proposition_profiles_do_not_collapse(self) -> None:
+        family = model.SELECTED_AFK_FAMILY
+        candidate = family_context()[2]
+        coordinates = {
+            model.family_source_property_proposition_id(family),
+            model.family_target_property_proposition_id(family),
+            model.family_applicability_proposition_id(family, candidate),
+        }
+        self.assertEqual(len(coordinates), 3)
+
 
 class PointwiseSpecializationTest(unittest.TestCase):
+    def test_fixed_setup_is_paired_owner_view_coordinates_only(self) -> None:
+        source, _, _, _, correspondence, *_ = fixed_context()
+        setup = correspondence.fixed_public_setup
+        names = {item.name for item in fields(model.FixedPublicSetup)}
+        self.assertEqual(
+            names,
+            {
+                "core_id",
+                "construction_id",
+                "fresh_protocol_id",
+                "fiat_shamir_protocol_id",
+                "fresh_public_setup_view_id",
+                "fiat_shamir_public_setup_view_id",
+                "relation_definition_id",
+                "_source_views",
+                "_source",
+            },
+        )
+        self.assertEqual(
+            setup.relation_definition_id,
+            model.k3.schnorr_relation_definition_id(
+                source.case.definition_sources[0]
+            ),
+        )
+        self.assertEqual(
+            setup.relation_definition_id,
+            setup._source_views.relation_definition.view.coordinate.definition_id,
+        )
+        self.assertEqual(
+            setup._source_views.fresh_public_setup.view.entries,
+            setup._source_views.fiat_shamir_public_setup.view.entries,
+        )
+        self.assertEqual(setup.core_id, source.protocol_source.core_id)
+        self.assertEqual(
+            (setup.group_generator, setup.subgroup_order, setup.group_modulus),
+            (2, 11, 23),
+        )
+        self.assertEqual(
+            (
+                setup.fixed_before_prover_and_oracle,
+                setup.adversary_selected,
+                setup.oracle_correlated,
+                setup.mutable_within_instance,
+            ),
+            (True, False, False, False),
+        )
+
+    def test_reconstructed_public_setup_bearer_is_refused(self) -> None:
+        correspondence = fixed_context()[4]
+        setup = correspondence.fixed_public_setup
+        issued = setup._source_views.fresh_public_setup
+        reconstructed = model.k2.IssuedPublicSetupInvocationView(
+            issued.view_id,
+            issued.view,
+            issued.source_binding,
+            issued.capability,
+            issued._issuer,
+        )
+        forged_views = replace(
+            setup._source_views,
+            fresh_public_setup=reconstructed,
+        )
+        with self.assertRaises(model.AuthorityError):
+            model.fixed_public_setup_id(
+                replace(setup, _source_views=forged_views)
+            )
+
+    def test_cross_axis_execution_view_is_refused(self) -> None:
+        correspondence = fixed_context()[4]
+        setup = correspondence.fixed_public_setup
+        forged_views = replace(
+            setup._source_views,
+            fiat_shamir_execution=setup._source_views.fresh_execution,
+        )
+        with self.assertRaises(model.AuthorityError):
+            model.fixed_public_setup_id(
+                replace(setup, _source_views=forged_views)
+            )
+
+    def test_unequal_fresh_fs_public_setup_entries_are_refused(self) -> None:
+        source, _, _, _, correspondence, *_ = fixed_context()
+        setup = correspondence.fixed_public_setup
+        values = dict(source.case.invocation.values)
+        values["session"] = b"different-public-session"
+        outcome = model.k2.issue_public_setup_invocation_view(
+            source.case.core,
+            source.case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            model.k2.Invocation(MappingProxyType(values)),
+            consumer_id=model._k3c_pir_view_consumer_id(),
+            purpose_id=model._k3c_pir_view_purpose_id(
+                "fiat-shamir", "public-setup-invocation-view"
+            ),
+        )
+        self.assertIs(
+            outcome.kind,
+            model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        )
+        forged_views = replace(
+            setup._source_views,
+            fiat_shamir_public_setup=outcome.value,
+        )
+        with self.assertRaises(model.SourceIngressError):
+            model.fixed_public_setup_id(
+                replace(
+                    setup,
+                    fiat_shamir_public_setup_view_id=outcome.value.view_id,
+                    _source_views=forged_views,
+                )
+            )
+
+    def test_reissuance_changes_live_views_not_semantic_identity(self) -> None:
+        source, _, source_model, target_model, correspondence, *_ = fixed_context()
+        reissued = model.derive_fs_correspondence(
+            source,
+            source_model,
+            target_model,
+        )
+        self.assertEqual(
+            model.fs_correspondence_id(reissued),
+            model.fs_correspondence_id(correspondence),
+        )
+        self.assertIsNot(
+            reissued._pir_source_views.fresh_execution,
+            correspondence._pir_source_views.fresh_execution,
+        )
+
+    def test_fresh_fs_relation_and_plan_axes_are_not_substitutable(self) -> None:
+        correspondence = fixed_context()[4]
+        substitutions = (
+            (
+                "fiat_shamir_binding_id",
+                model.fixture_ref(
+                    "relations.protocol-binding",
+                    "substituted-fs-relation-binding",
+                ),
+            ),
+            (
+                "fiat_shamir_plan_binding_id",
+                model.fixture_ref(
+                    "relations.plan-witness-binding",
+                    "substituted-fs-plan-binding",
+                ),
+            ),
+            (
+                "fiat_shamir_execution_view_binding_id",
+                correspondence.fresh_execution_view_binding_id,
+            ),
+        )
+        for field_name, value in substitutions:
+            with self.subTest(field_name=field_name):
+                with self.assertRaises(model.TheoremError):
+                    model.fs_correspondence_id(
+                        replace(correspondence, **{field_name: value})
+                    )
+
     def test_exact_correspondence_is_issued(self) -> None:
         capability = fixed_context()[-1]
         model.require_concrete_family_instance_correspondence(capability)
         self.assertEqual(
             (capability.logical_index, capability.native_statement_length), (1, 1)
+        )
+
+    def test_correspondence_reissuance_preserves_inert_identity_only(self) -> None:
+        source, _, source_model, target_model, corr, assumptions, first = (
+            fixed_context()
+        )
+        second_outcome = model.form_concrete_family_instance_correspondence(
+            model.SELECTED_AFK_FAMILY,
+            source,
+            source_model,
+            target_model,
+            assumptions,
+            correspondence=corr,
+        )
+        self.assertIs(second_outcome.kind, model.AttemptKind.AFFIRMATIVE)
+        second = second_outcome.value
+        self.assertEqual(first.judgment, second.judgment)
+        self.assertEqual(first.checked_result, second.checked_result)
+        self.assertEqual(first.authority_binding, second.authority_binding)
+        self.assertIsNot(first.live_capability._token, second.live_capability._token)
+
+    def test_reconstructed_correspondence_capability_is_refused(self) -> None:
+        capability = fixed_context()[-1]
+        reconstructed = replace(capability.live_capability)
+        self.assertEqual(reconstructed, capability.live_capability)
+        self.assertIsNot(reconstructed, capability.live_capability)
+        changed = replace(capability, live_capability=reconstructed)
+        result = model.specialize_afk_family_judgment(
+            family_context()[-1], changed
+        )
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_specialization_refuses_inert_correspondence_without_live_use(self) -> None:
+        result = model.specialize_afk_family_judgment(
+            family_context()[-1], fixed_context()[-1].judgment
+        )
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
+
+    def test_correspondence_dag_and_source_support_are_exact(self) -> None:
+        judgment = fixed_context()[-1].judgment
+        self.assertEqual(
+            tuple(node.dependency_ordinals for node in judgment.hypothesis_nodes),
+            (
+                (),
+                (0,),
+                (),
+                (),
+                (0, 1),
+                (0, 1),
+                (0, 1, 2, 3, 4, 5),
+                (0, 1, 2, 4, 6),
+                (0, 1, 5, 6),
+            ),
+        )
+        coordinates = model._coordinates_from_correspondence_judgment(judgment)
+        context_id = model._family_instance_hypothesis_context_id(coordinates)
+        context = model._formed_analysis_body(
+            context_id, "analysis.hypothesis-context"
+        )
+        self.assertEqual(context.roots, (7, 8))
+        self.assertEqual(len(judgment.family_support_schema_bindings), 2)
+        self.assertEqual(len(judgment.concrete_support_coordinates), 2)
+        self.assertEqual(
+            len(model._family_instance_source_support_bindings(coordinates).values),
+            4,
         )
 
     def test_all_concrete_selectors_live_in_specialization(self) -> None:
@@ -789,26 +1909,32 @@ class PointwiseSpecializationTest(unittest.TestCase):
             tuple(item.role for item in roles), model.AFK_FAMILY_ROLE_NAMES
         )
         self.assertEqual(tuple(item.ordinal for item in roles), tuple(range(20)))
-        old_shape = tuple(
-            model._analysis_id(
-                "analysis.native-role-coordinate",
-                model.k1.DatumRecord(
+        expected_native_bodies = tuple(
+            model.k1.DatumRecord(
+                (
                     (
-                        (
-                            0,
-                            model._id_datum(
-                                item.native_subject_projection_id,
-                                "analysis.native-subject-projection",
-                            ),
+                        0,
+                        model._id_datum(
+                            item.native_subject_projection_id,
+                            "analysis.native-subject-projection",
                         ),
-                        (1, model.k1.Nat(item.ordinal)),
-                        (2, model.k1.Symbol(item.role)),
-                    )
-                ),
+                    ),
+                    (1, model.k1.Nat(item.ordinal)),
+                    (2, model.k1.Symbol(item.role)),
+                )
             )
             for item in roles
         )
-        self.assertEqual(tuple(item.native_coordinate_id for item in roles), old_shape)
+        self.assertEqual(
+            tuple(
+                model._local_component_body(
+                    item.native_coordinate_id,
+                    "native-role-coordinate",
+                )
+                for item in roles
+            ),
+            expected_native_bodies,
+        )
         self.assertEqual(len({item.abstract_resolved_id for item in roles}), 20)
         self.assertEqual(len({item.native_resolved_id for item in roles}), 20)
 
@@ -824,22 +1950,25 @@ class PointwiseSpecializationTest(unittest.TestCase):
             )
 
         for ordinal, occurrence in ((11, "verify"), (12, "terminal")):
-            expected = model._analysis_id(
-                "analysis.native-resolved-role",
-                model.k1.DatumRecord(
+            expected = model.k1.DatumRecord(
+                (
                     (
-                        (
-                            0,
-                            model._id_datum(
-                                roles[ordinal].native_coordinate_id,
-                                "analysis.native-role-coordinate",
-                            ),
+                        0,
+                        model._id_datum(
+                            roles[ordinal].native_coordinate_id,
+                            "analysis.native-role-coordinate",
                         ),
-                        (1, occurrence_payload(occurrence)),
-                    )
-                ),
+                    ),
+                    (1, occurrence_payload(occurrence)),
+                )
             )
-            self.assertEqual(roles[ordinal].native_resolved_id, expected)
+            self.assertEqual(
+                model._local_component_body(
+                    roles[ordinal].native_resolved_id,
+                    "native-resolved-role",
+                ),
+                expected,
+            )
 
     def test_missing_role_map_is_malformed(self) -> None:
         source, _, source_model, target_model, corr, assumptions, _ = fixed_context()
@@ -1064,17 +2193,14 @@ class PointwiseSpecializationTest(unittest.TestCase):
                 length_bound_coefficients_low_to_high=(64,),
             ),
         )
-        refielded = coherently_refield_correspondence(
-            family,
-            source,
-            source_model,
-            target_model,
-            corr,
-            64,
-            reproduce_legacy_bound_hypothesis=True,
+        substituted = replace(
+            fixed_context()[-1],
+            family=family,
+            family_definition_id=model.family_definition_id(family),
+            family_index_bound_at_n0=64,
         )
         with self.assertRaises(model.AuthorityError):
-            model.require_concrete_family_instance_correspondence(refielded)
+            model.require_concrete_family_instance_correspondence(substituted)
 
     def test_family_ro_bound_is_evaluated_from_authenticated_family_data(self) -> None:
         source, _, source_model, target_model, corr, *_ = fixed_context()
@@ -1132,30 +2258,33 @@ class PointwiseSpecializationTest(unittest.TestCase):
         correspondence = model.derive_fs_correspondence(
             source, source_model, target_model
         )
-        refielded = coherently_refield_correspondence(
-            model.SELECTED_AFK_FAMILY,
-            source,
-            source_model,
-            target_model,
-            correspondence,
-            model.native_raw_query_index_bit_bound(),
+        substituted = replace(
+            fixed_context()[-1],
+            source=source,
+            source_model=source_model,
+            target_model=target_model,
+            fs_correspondence=correspondence,
+            fs_correspondence_id=model.fs_correspondence_id(correspondence),
         )
-        with self.assertRaises(model.AuthorityError):
-            model.require_concrete_family_instance_correspondence(refielded)
-        result = model.specialize_afk_family_judgment(family_context()[-1], refielded)
+        result = model.specialize_afk_family_judgment(
+            family_context()[-1], substituted
+        )
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
     def test_post_authentication_substitution_is_refused(self) -> None:
         capability = fixed_context()[-1]
-        changed = replace(
-            capability,
-            correspondence_capability_id=model.fixture_ref(
-                "analysis.family-instance-correspondence-capability",
+        changed_judgment = replace(
+            capability.judgment,
+            judgment_id=model.fixture_ref(
+                "analysis.judgment-record",
                 "substituted-after-mint",
             ),
         )
         with self.assertRaises(model.AuthorityError):
-            model.require_concrete_family_instance_correspondence(changed)
+            model.require_family_instance_correspondence_judgment(
+                changed_judgment
+            )
+        changed = replace(capability, judgment=changed_judgment)
         result = model.specialize_afk_family_judgment(family_context()[-1], changed)
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
@@ -1174,6 +2303,25 @@ class PointwiseSpecializationTest(unittest.TestCase):
         )
         with self.assertRaises(model.AuthorityError):
             model.require_concrete_member_judgment(changed)
+
+    def test_cold_member_revalidation_does_not_touch_live_registries(self) -> None:
+        result = model.specialize_afk_family_judgment(
+            family_context()[-1], fixed_context()[-1]
+        )
+        self.assertIs(result.kind, model.AttemptKind.AFFIRMATIVE)
+        registries = (
+            model._FAMILY_PORT_TOKENS,
+            model._EXTERNAL_SOURCE_CAP_TOKENS,
+            model._TRUTH_TREATMENT_TOKENS,
+            model._FAMILY_JUDGMENT_TOKENS,
+            model._MEMBER_CORRESPONDENCE_TOKENS,
+        )
+        before = tuple(len(item) for item in registries)
+        model.require_family_instance_correspondence_judgment(
+            result.value.correspondence_judgment
+        )
+        model.require_concrete_member_judgment(result.value)
+        self.assertEqual(tuple(len(item) for item in registries), before)
 
     def test_raw_statement_profile_has_fixed_setup(self) -> None:
         correspondence = fixed_context()[4]
@@ -1215,11 +2363,22 @@ class PointwiseSpecializationTest(unittest.TestCase):
 
     def test_setup_session_mutation_is_malformed(self) -> None:
         source, _, source_model, target_model, corr, assumptions, _ = fixed_context()
-        changed_setup = replace(corr.fixed_public_setup, session=b"different")
+        values = dict(source.case.invocation.values)
+        values["session"] = b"different"
+        changed_source = replace(
+            source,
+            case=replace(
+                source.case,
+                invocation=model.k2.Invocation(MappingProxyType(values)),
+            ),
+        )
+        changed_setup = replace(
+            corr.fixed_public_setup,
+            _source=changed_source,
+        )
         changed = replace(
             corr,
             fixed_public_setup=changed_setup,
-            fixed_public_setup_id=model.fixed_public_setup_id(changed_setup),
         )
         result = model.form_concrete_family_instance_correspondence(
             model.SELECTED_AFK_FAMILY,
@@ -1234,6 +2393,12 @@ class PointwiseSpecializationTest(unittest.TestCase):
     def test_specialization_requires_correspondence(self) -> None:
         result = model.specialize_afk_family_judgment(family_context()[-1], None)
         self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
+
+    def test_specialization_requires_live_family_capability(self) -> None:
+        result = model.specialize_afk_family_judgment(
+            family_context()[-1].judgment, fixed_context()[-1]
+        )
+        self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
     def test_positive_specialization_is_relation_bound(self) -> None:
         result = model.specialize_afk_family_judgment(
@@ -1262,17 +2427,43 @@ class PointwiseSpecializationTest(unittest.TestCase):
         with self.assertRaises(model.AuthorityError):
             model.require_concrete_member_judgment(changed)
 
-    def test_member_judgment_revalidates_its_correspondence_object(self) -> None:
+    def test_member_judgment_retains_no_live_correspondence_or_issuer(self) -> None:
         result = model.specialize_afk_family_judgment(
             family_context()[-1], fixed_context()[-1]
         )
         self.assertIs(result.kind, model.AttemptKind.AFFIRMATIVE)
+        names = {item.name for item in fields(type(result.value))}
+        self.assertFalse(
+            names
+            & {
+                "correspondence",
+                "correspondence_capability_id",
+                "live_capability",
+                "family_capability",
+                "_token",
+                "_issuer",
+                "checker",
+                "provider",
+                "occurrence",
+            }
+        )
+        self.assertTrue(
+            {
+                "family_judgment",
+                "correspondence_judgment",
+                "family_checked_result",
+                "family_authority_binding",
+                "correspondence_checked_result",
+                "correspondence_authority_binding",
+            }
+            <= names
+        )
         changed = replace(
             result.value,
-            correspondence=replace(
-                result.value.correspondence,
-                concrete_member_subject_id=model.fixture_ref(
-                    "analysis.concrete-family-member-subject", "detached"
+            correspondence_checked_result=replace(
+                result.value.correspondence_checked_result,
+                result_id=model.fixture_ref(
+                    "analysis.judgment-record", "detached-correspondence-result"
                 ),
             ),
         )

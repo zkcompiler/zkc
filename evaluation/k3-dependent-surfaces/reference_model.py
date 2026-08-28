@@ -69,6 +69,18 @@ class K3Error(ValueError):
     """Base class for one supported K3-B refusal."""
 
 
+class UnsupportedK3BSemanticProfileError(K3Error):
+    pass
+
+
+class MalformedK3BSemanticProfileError(K3Error):
+    pass
+
+
+class RefusedK3BSemanticProfileError(K3Error):
+    pass
+
+
 class InterfaceError(K3Error):
     pass
 
@@ -109,6 +121,21 @@ class UnsupportedCarrierFeature(CarrierError):
     pass
 
 
+class _NonTransferableAuthority:
+    """Process-local bearer state whose object identity is authoritative."""
+
+    __hash__ = None
+
+    def __copy__(self) -> object:
+        raise K3Error("live authority cannot be copied")
+
+    def __deepcopy__(self, _memo: object) -> object:
+        raise K3Error("live authority cannot be deep-copied")
+
+    def __reduce_ex__(self, _protocol: int) -> object:
+        raise K3Error("live authority cannot be serialized")
+
+
 def _ascii(text: str, what: str) -> str:
     if (
         type(text) is not str
@@ -117,6 +144,363 @@ def _ascii(text: str, what: str) -> str:
     ):
         raise K3Error(f"{what} must be nonempty printable ASCII without spaces")
     return text
+
+
+def _profile_catalog(catalog_kind: str, declarations: tuple[str, ...]) -> object:
+    return k1.DatumSeq(
+        (
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol(catalog_kind)),
+                    (
+                        1,
+                        k1.DatumSeq(
+                            tuple(k1.Symbol(item) for item in declarations)
+                        ),
+                    ),
+                )
+            ),
+        )
+    )
+
+
+def _profile_imports(*profiles: object) -> tuple[object, ...]:
+    return tuple(
+        sorted(
+            (profile.identity for profile in profiles),
+            key=lambda identifier: identifier.internal_reference(),
+        )
+    )
+
+
+@dataclass(frozen=True)
+class K3BSemanticProfiles:
+    k2_profiles: object
+    interface_plan: object
+    relations_correspondence: object
+
+    def __post_init__(self) -> None:
+        if type(self.k2_profiles) is not k2.K2SemanticProfiles or any(
+            type(item) is not k1.SemanticLanguageProfile
+            for item in (self.interface_plan, self.relations_correspondence)
+        ):
+            raise K3Error("K3-B semantic profiles have the wrong exact shape")
+        if self.interface_plan.profile_imports != _profile_imports(
+            self.k2_profiles.interaction,
+            self.k2_profiles.transcript_fs,
+        ):
+            raise K3Error(
+                "the Interface/Plan profile must import exactly the K2 "
+                "languages it interprets"
+            )
+        if self.relations_correspondence.profile_imports != _profile_imports(
+            self.interface_plan
+        ):
+            raise K3Error("the Relations profile must import Interface/Plan")
+
+    @property
+    def bundle(self) -> dict[object, object]:
+        return {
+            **self.k2_profiles.bundle,
+            self.interface_plan.identity: self.interface_plan,
+            self.relations_correspondence.identity: self.relations_correspondence,
+        }
+
+
+def make_k3b_semantic_profiles(
+    *,
+    k2_profiles: object = k2.K2_SEMANTIC_PROFILES,
+    interface_plan_law: bytes = b"zkc-k3b-interface-plan-law-v0",
+    relations_law: bytes = b"zkc-k3b-relations-correspondence-law-v0",
+) -> K3BSemanticProfiles:
+    if type(k2_profiles) is not k2.K2SemanticProfiles:
+        raise K3Error("K3-B needs one exact K2 profile bundle")
+    interface_plan = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.pir.interface-plan"),
+        0,
+        _profile_imports(
+            k2_profiles.interaction,
+            k2_profiles.transcript_fs,
+        ),
+        tuple(
+            k1.Symbol(item)
+            for item in sorted(
+                (
+                    "pir.plan-witness-surface",
+                    "pir.protocol-interface",
+                    "pir.prover-plan",
+                    "pir.source-binding-payload",
+                    "pir.source-capability-requirement",
+                    "pir.source-consumer",
+                    "pir.source-no-policy",
+                    "pir.source-policy-closure",
+                    "pir.source-purpose",
+                )
+            )
+        ),
+        _profile_catalog(
+            "pir.interface-plan-declaration",
+            (
+                "interface-and-plan-owner-view-catalog-v0",
+                "pir-source-authority-envelope-specialization-v0",
+                "plan-witness-surface-body-v0",
+                "protocol-interface-body-v0",
+                "prover-plan-body-v0",
+            ),
+        ),
+        interface_plan_law,
+    )
+    relations_correspondence = k1.SemanticLanguageProfile(
+        k1.Symbol("zkc.relations.correspondence"),
+        0,
+        _profile_imports(interface_plan),
+        tuple(
+            k1.Symbol(item)
+            for item in sorted(
+                (
+                    "relations.correspondence-question",
+                    "relations.definition",
+                    "relations.grounded-value-occurrence",
+                    "relations.grounding-equation",
+                    "relations.interface",
+                    "relations.loss-export",
+                    "relations.loss-source-premise",
+                    "relations.oracle-access-law",
+                    "relations.plan-witness-binding",
+                    "relations.predicate",
+                    "relations.protocol-binding",
+                    "relations.source-binding-payload",
+                    "relations.source-capability-requirement",
+                    "relations.source-consumer",
+                    "relations.source-no-policy",
+                    "relations.source-policy-closure",
+                    "relations.source-purpose",
+                    "relations.transform",
+                    "relations.value-bridge",
+                    "relations.value-bridge-law",
+                )
+            )
+        ),
+        _profile_catalog(
+            "relations.correspondence-declaration",
+            (
+                "binding-body-v0",
+                "bridge-body-v0",
+                "bridge-law-reference-v0",
+                "correspondence-question-body-v0",
+                "correspondence-owner-view-catalog-v0",
+                "correspondence-read-body-v0",
+                "grounding-body-v0",
+                "relation-definition-owner-view-catalog-v0",
+                "schnorr-relation-definition-body-v0",
+                "relation-interface-body-v0",
+                "relation-transform-body-v0",
+                "relations-source-authority-envelope-specialization-v0",
+            ),
+        ),
+        relations_law,
+    )
+    return K3BSemanticProfiles(
+        k2_profiles,
+        interface_plan,
+        relations_correspondence,
+    )
+
+
+K3B_SEMANTIC_PROFILES = make_k3b_semantic_profiles()
+K3B_PROFILE_BUNDLE = K3B_SEMANTIC_PROFILES.bundle
+PIR_INTERFACE_PLAN_PROFILE = K3B_SEMANTIC_PROFILES.interface_plan
+PIR_INTERFACE_PLAN_PROFILE_ID = PIR_INTERFACE_PLAN_PROFILE.identity
+RELATIONS_PROFILE = K3B_SEMANTIC_PROFILES.relations_correspondence
+RELATIONS_PROFILE_ID = RELATIONS_PROFILE.identity
+# The maximal convenience bundle contains the unrelated K2 public-view profile
+# for callers that need every K2/K3-B preimage.  It is not an exact root
+# closure for either K3-B language.
+K3B_PROFILE_PREIMAGES = K3B_PROFILE_BUNDLE
+
+
+def k3b_root_profile_preimages(
+    profiles: K3BSemanticProfiles,
+) -> Mapping[object, dict[object, object]]:
+    if type(profiles) is not K3BSemanticProfiles:
+        raise K3Error("K3-B root closures need one exact profile bundle")
+    interface = {
+        profiles.k2_profiles.interaction.identity: profiles.k2_profiles.interaction,
+        profiles.k2_profiles.transcript_fs.identity: profiles.k2_profiles.transcript_fs,
+        profiles.interface_plan.identity: profiles.interface_plan,
+    }
+    relations = {
+        **interface,
+        profiles.relations_correspondence.identity: profiles.relations_correspondence,
+    }
+    return MappingProxyType(
+        {
+            profiles.interface_plan.identity: interface,
+            profiles.relations_correspondence.identity: relations,
+        }
+    )
+
+
+K3B_ROOT_PROFILE_PREIMAGES = k3b_root_profile_preimages(K3B_SEMANTIC_PROFILES)
+PIR_INTERFACE_PLAN_PROFILE_PREIMAGES = K3B_ROOT_PROFILE_PREIMAGES[
+    PIR_INTERFACE_PLAN_PROFILE_ID
+]
+RELATIONS_PROFILE_PREIMAGES = K3B_ROOT_PROFILE_PREIMAGES[RELATIONS_PROFILE_ID]
+
+
+@dataclass(frozen=True)
+class K3BSemanticProfileSupport:
+    supported_profile_ids: frozenset[object]
+
+    def __post_init__(self) -> None:
+        if type(self.supported_profile_ids) is not frozenset:
+            raise K3Error("K3-B profile support must be one exact frozen ID set")
+        for identifier in self.supported_profile_ids:
+            if (
+                type(identifier) is not k1.TypedContentId
+                or identifier.subject_kind != k1.SEMANTIC_LANGUAGE_PROFILE_KIND
+                or identifier.semantic_regime != k1.SEMANTIC_REGIME_ID
+            ):
+                raise K3Error("K3-B profile support contains a non-profile ID")
+
+
+def make_k3b_profile_support(
+    *bundles: K3BSemanticProfiles,
+) -> K3BSemanticProfileSupport:
+    if not bundles or any(type(item) is not K3BSemanticProfiles for item in bundles):
+        raise K3Error("K3-B profile support needs exact profile bundles")
+    return K3BSemanticProfileSupport(
+        frozenset(
+            identifier
+            for bundle in bundles
+            for identifier in bundle.bundle
+        )
+    )
+
+
+def make_k3b_selected_profile_support(
+    *profiles: object,
+) -> K3BSemanticProfileSupport:
+    if not profiles or any(
+        type(profile) is not k1.SemanticLanguageProfile for profile in profiles
+    ):
+        raise K3Error("K3-B selected-profile support needs exact profiles")
+    return K3BSemanticProfileSupport(
+        frozenset(profile.identity for profile in profiles)
+    )
+
+
+K3B_PROFILE_SUPPORT = make_k3b_profile_support(K3B_SEMANTIC_PROFILES)
+K3B_INTERFACE_PROFILE_SUPPORT = make_k3b_selected_profile_support(
+    PIR_INTERFACE_PLAN_PROFILE
+)
+K3B_RELATIONS_PROFILE_SUPPORT = make_k3b_selected_profile_support(
+    RELATIONS_PROFILE
+)
+
+_PIR_SOURCE_AUTHORITY_SUBJECT_KINDS = frozenset(
+    {
+        "pir.source-binding-payload",
+        "pir.source-capability-requirement",
+        "pir.source-consumer",
+        "pir.source-no-policy",
+        "pir.source-policy-closure",
+        "pir.source-purpose",
+    }
+)
+_RELATIONS_SOURCE_AUTHORITY_SUBJECT_KINDS = frozenset(
+    {
+        "relations.source-binding-payload",
+        "relations.source-capability-requirement",
+        "relations.source-consumer",
+        "relations.source-no-policy",
+        "relations.source-policy-closure",
+        "relations.source-purpose",
+    }
+)
+
+
+def _require_supported_k3b_profile(
+    profiles: K3BSemanticProfiles,
+    profile_support: K3BSemanticProfileSupport,
+    selected_profile: object,
+    *,
+    required_subject_kinds: frozenset[str] = frozenset(),
+) -> None:
+    if (
+        type(profiles) is not K3BSemanticProfiles
+        or type(profile_support) is not K3BSemanticProfileSupport
+        or type(selected_profile) is not k1.SemanticLanguageProfile
+    ):
+        raise MalformedK3BSemanticProfileError(
+            "K3-B issuance needs exact profiles and evaluator support"
+        )
+    profiles.__post_init__()
+    profile_support.__post_init__()
+    root_preimages = k3b_root_profile_preimages(profiles)
+    preimages = root_preimages.get(selected_profile.identity)
+    if preimages is None:
+        raise MalformedK3BSemanticProfileError(
+            "K3-B issuance selected no profile from its exact bundle"
+        )
+    try:
+        context = k1.effective_semantic_context(
+            selected_profile.identity,
+            preimages,
+            semantic_regime=k1.SEMANTIC_REGIME_ID,
+        )
+    except (k1.ModelError, k1.CanonicalError) as error:
+        raise MalformedK3BSemanticProfileError(
+            "K3-B profile import closure is not authenticated"
+        ) from error
+    authenticated_ids = {
+        identifier for identifier, _profile in context.authenticated_profiles
+    }
+    if authenticated_ids != set(preimages):
+        raise RefusedK3BSemanticProfileError(
+            "K3-B root profile bundle is not its exact no-extra closure"
+        )
+    if selected_profile.identity not in profile_support.supported_profile_ids:
+        raise UnsupportedK3BSemanticProfileError(
+            "K3-B evaluator does not support the selected root profile"
+        )
+    supported_subject_kinds = {
+        item.value for item in selected_profile.supported_subject_kinds
+    }
+    if not required_subject_kinds.issubset(supported_subject_kinds):
+        raise RefusedK3BSemanticProfileError(
+            "K3-B selected profile does not support every issued subject kind"
+        )
+
+
+def _authenticate_k3b_profiled_subject(
+    identifier: object,
+    subject_kind: str,
+    domain_body: object,
+    *,
+    profiles: K3BSemanticProfiles,
+    profile_support: K3BSemanticProfileSupport,
+    selected_profile: object,
+) -> None:
+    _require_supported_k3b_profile(
+        profiles,
+        profile_support,
+        selected_profile,
+        required_subject_kinds=frozenset({subject_kind}),
+    )
+    supported_profiles = tuple(
+        sorted(
+            profile_support.supported_profile_ids,
+            key=lambda item: item.internal_reference(),
+        )
+    )
+    k1.authenticate_profiled_semantic_content(
+        identifier,
+        selected_profile.identity,
+        domain_body,
+        k3b_root_profile_preimages(profiles)[selected_profile.identity],
+        supported_profiles=supported_profiles,
+    )
 
 
 def _bounded_unique(names: Sequence[str], bound: int, what: str) -> None:
@@ -151,20 +535,77 @@ def _id_datum(
     return k1.BytesValue(identifier.internal_reference())
 
 
-def _semantic_id(subject_kind: str, body: object) -> object:
-    return k1.content_id(
+def _semantic_id(
+    subject_kind: str,
+    body: object,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
+    if subject_kind in {
+        "pir.plan-witness-surface",
+        "pir.protocol-interface",
+        "pir.prover-plan",
+        "pir.source-binding-payload",
+        "pir.source-capability-requirement",
+        "pir.source-consumer",
+        "pir.source-no-policy",
+        "pir.source-policy-closure",
+        "pir.source-purpose",
+    }:
+        profile = profiles.interface_plan
+    elif subject_kind in {
+        "relations.correspondence-question",
+        "relations.definition",
+        "relations.grounded-value-occurrence",
+        "relations.grounding-equation",
+        "relations.interface",
+        "relations.loss-export",
+        "relations.loss-source-premise",
+        "relations.oracle-access-law",
+        "relations.plan-witness-binding",
+        "relations.predicate",
+        "relations.protocol-binding",
+        "relations.source-binding-payload",
+        "relations.source-capability-requirement",
+        "relations.source-consumer",
+        "relations.source-no-policy",
+        "relations.source-policy-closure",
+        "relations.source-purpose",
+        "relations.transform",
+        "relations.value-bridge",
+        "relations.value-bridge-law",
+    }:
+        profile = profiles.relations_correspondence
+    elif subject_kind.startswith(("pir.", "relations.")):
+        raise K3Error(
+            "K3-B cannot identify an owner subject outside its exact profile catalog"
+        )
+    else:
+        return k1.content_id(
+            subject_kind,
+            k1.encode_datum(body),
+            semantic_regime=k1.SEMANTIC_REGIME_ID,
+        )
+    return k1.profiled_content_id(
         subject_kind,
-        k1.encode_datum(body),
+        profile.identity,
+        body,
         semantic_regime=k1.SEMANTIC_REGIME_ID,
     )
 
 
-def fixture_semantic_ref(subject_kind: str, label: str) -> object:
+def fixture_semantic_ref(
+    subject_kind: str,
+    label: str,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     """Create one K1-backed exact reference for a bounded fixture meaning."""
 
     return _semantic_id(
         subject_kind,
         k1.DatumRecord(((0, k1.Symbol(_ascii(label, "fixture label"))),)),
+        profiles=profiles,
     )
 
 
@@ -198,31 +639,20 @@ def protocol_id(
     core: object,
     construction: object | None,
     interpretation: object,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> object:
-    """Form the bounded K2-shaped ProtocolId used by dependent subjects."""
+    """Delegate to K2's single owner implementation of Protocol identity."""
 
-    k2.admit_core(core)
-    if interpretation is k2.ChallengeInterpretation.FRESH:
-        if construction is not None:
-            raise K3Error("Fresh Protocol does not carry a transcript construction")
-        interpretation_body = k1.DatumVariant(0, k1.UNIT)
-    elif interpretation is k2.ChallengeInterpretation.FIAT_SHAMIR:
-        if construction is None:
-            raise K3Error("Fiat--Shamir Protocol requires a transcript construction")
-        construction.admit()
-        if not k2.is_public_coin_eligible(core):
-            raise K3Error("Fiat--Shamir Protocol requires a public-coin-eligible Core")
-        interpretation_body = k1.DatumVariant(
-            1, _id_datum(k2.construction_id(core, construction), "pir.transcript-construction")
+    try:
+        return k2.protocol_id(
+            core,
+            construction,
+            interpretation,
+            profiles=profiles.k2_profiles,
         )
-    else:
-        raise K3Error("unsupported challenge interpretation")
-    return _semantic_id(
-        "pir.protocol",
-        k1.DatumRecord(
-            ((0, _id_datum(k2.core_id(core), "pir.interactive-core")), (1, interpretation_body))
-        ),
-    )
+    except k2.ModelError as error:
+        raise K3Error(str(error)) from error
 
 
 # ---------------------------------------------------------------------------
@@ -329,11 +759,18 @@ def admit_interface(
     construction: object | None,
     interpretation: object,
     interface: ProtocolInterface,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> None:
     k2.admit_core(core)
     if type(interface) is not ProtocolInterface:
         raise InterfaceError("Interface has the wrong exact shape")
-    if interface.protocol_id != protocol_id(core, construction, interpretation):
+    if interface.protocol_id != protocol_id(
+        core,
+        construction,
+        interpretation,
+        profiles=profiles,
+    ):
         raise InterfaceError("Interface names the wrong Protocol")
     if len(interface.inputs) > MAX_INTERFACE_ENTRIES:
         raise InterfaceError("Interface input assignment exceeds its bound")
@@ -400,8 +837,16 @@ def interface_body(
     construction: object | None,
     interpretation: object,
     interface: ProtocolInterface,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> object:
-    admit_interface(core, construction, interpretation, interface)
+    admit_interface(
+        core,
+        construction,
+        interpretation,
+        interface,
+        profiles=profiles,
+    )
     return k1.DatumRecord(
         (
             (0, k1.Symbol("k3.protocol-interface.probe.v0")),
@@ -463,10 +908,19 @@ def interface_id(
     construction: object | None,
     interpretation: object,
     interface: ProtocolInterface,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> object:
     return _semantic_id(
         "pir.protocol-interface",
-        interface_body(core, construction, interpretation, interface),
+        interface_body(
+            core,
+            construction,
+            interpretation,
+            interface,
+            profiles=profiles,
+        ),
+        profiles=profiles,
     )
 
 
@@ -476,6 +930,7 @@ def default_interface(
     interpretation: object,
     *,
     expose_all_transports: bool = False,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> ProtocolInterface:
     k2.admit_core(core)
     assignments = tuple(
@@ -506,13 +961,1051 @@ def default_interface(
         else ()
     )
     result = ProtocolInterface(
-        protocol_id(core, construction, interpretation),
+        protocol_id(core, construction, interpretation, profiles=profiles),
         assignments,
         statements,
         transports,
     )
-    admit_interface(core, construction, interpretation, result)
+    admit_interface(
+        core,
+        construction,
+        interpretation,
+        result,
+        profiles=profiles,
+    )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Exact owner-issued correspondence read views
+# ---------------------------------------------------------------------------
+
+
+class ProtocolInterfaceReadKind(str, Enum):
+    INVOCATION_ASSIGNMENT = "invocation-assignment"
+    STATEMENT_MEMBER = "statement-member"
+    TRANSPORT_ENTRY = "transport-entry"
+    EXTERNAL_SLOT = "external-slot"
+    INTERFACE_CODEC = "interface-codec"
+
+
+@dataclass(frozen=True)
+class ProtocolInterfaceRead:
+    kind: ProtocolInterfaceReadKind
+    coordinate: object
+
+
+class RelationsReadKind(str, Enum):
+    RELATION_TRANSFORM = "relation-transform"
+
+
+@dataclass(frozen=True)
+class RelationsRead:
+    kind: RelationsReadKind
+    coordinate: object
+
+
+@dataclass(frozen=True)
+class CorrespondenceReadManifest:
+    protocol_interface: tuple[ProtocolInterfaceRead, ...]
+    relations: tuple[RelationsRead, ...] = ()
+
+
+@dataclass(frozen=True)
+class RelationTransform:
+    name: str
+    input_interface_ids: tuple[object, ...]
+    output_interface_ids: tuple[object, ...]
+    public_derivation_id: object
+
+
+def relation_transform_body(
+    transform: RelationTransform,
+) -> object:
+    _ascii(transform.name, "relation transform")
+    if (
+        type(transform.input_interface_ids) is not tuple
+        or not transform.input_interface_ids
+        or type(transform.output_interface_ids) is not tuple
+        or not transform.output_interface_ids
+    ):
+        raise RelationError("relation transform needs nonempty Interface domains")
+    inputs = tuple(
+        _id_datum(identifier, "relations.interface")
+        for identifier in transform.input_interface_ids
+    )
+    outputs = tuple(
+        _id_datum(identifier, "relations.interface")
+        for identifier in transform.output_interface_ids
+    )
+    derivation = _id_datum(
+        transform.public_derivation_id,
+        "foundation.canonical-algorithm",
+    )
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol(transform.name)),
+            (1, k1.DatumSeq(inputs)),
+            (2, k1.DatumSeq(outputs)),
+            (3, derivation),
+        )
+    )
+
+
+def relation_transform_id(
+    transform: RelationTransform,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
+    return _semantic_id(
+        "relations.transform",
+        relation_transform_body(transform),
+        profiles=profiles,
+    )
+
+
+_INTERFACE_READ_ORDER = MappingProxyType(
+    {kind: index for index, kind in enumerate(ProtocolInterfaceReadKind)}
+)
+_RELATIONS_READ_ORDER = MappingProxyType(
+    {kind: index for index, kind in enumerate(RelationsReadKind)}
+)
+
+
+def _read_coordinate_bytes(value: object) -> bytes:
+    if type(value) is str:
+        return value.encode("ascii")
+    if type(value) is k1.TypedContentId:
+        value.__post_init__()
+        return value.internal_reference()
+    raise K3Error("correspondence read has the wrong coordinate type")
+
+
+def _interface_read_key(read: ProtocolInterfaceRead) -> tuple[int, bytes]:
+    if type(read) is not ProtocolInterfaceRead or type(read.kind) is not ProtocolInterfaceReadKind:
+        raise InterfaceError("Interface correspondence read has the wrong shape")
+    return _INTERFACE_READ_ORDER[read.kind], _read_coordinate_bytes(read.coordinate)
+
+
+def _relations_read_key(read: RelationsRead) -> tuple[int, bytes]:
+    if type(read) is not RelationsRead or type(read.kind) is not RelationsReadKind:
+        raise RelationError("Relations correspondence read has the wrong shape")
+    return _RELATIONS_READ_ORDER[read.kind], _read_coordinate_bytes(read.coordinate)
+
+
+def _source_authority_id(
+    profile: object,
+    subject_kind: str,
+    body: object,
+) -> object:
+    if type(profile) is not k1.SemanticLanguageProfile:
+        raise K3Error("source authority identity needs one exact semantic profile")
+    return k1.profiled_content_id(
+        subject_kind,
+        profile.identity,
+        body,
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+
+
+def _source_authority_ref(identifier: object, what: str) -> object:
+    try:
+        return _id_datum(identifier)
+    except (K3Error, k1.ModelError, k1.CanonicalError) as error:
+        raise K3Error(f"{what} must be one exact typed content ID") from error
+
+
+def _source_authority_role_id(
+    profile: object,
+    subject_kind: str,
+    family: object,
+    identifier: object,
+    what: str,
+) -> object:
+    return _source_authority_id(
+        profile,
+        subject_kind,
+        k1.DatumRecord(
+            (
+                (0, family),
+                (
+                    1,
+                    k1.DatumVariant(
+                        1,
+                        _source_authority_ref(identifier, what),
+                    ),
+                ),
+            )
+        ),
+    )
+
+
+def _source_authority_components(
+    profile: object,
+    subject_namespace: str,
+    owner_domain: str,
+    capability_family: str,
+    source_body: object,
+    manifest_body: object,
+    purpose_label: str,
+    consumer_id: object | None,
+    purpose_id: object | None,
+) -> tuple[object, object, object, object, object, object]:
+    family = k1.Symbol(_ascii(capability_family, "capability family"))
+    if consumer_id is None:
+        consumer_id = _source_authority_id(
+            profile,
+            f"{subject_namespace}.source-consumer",
+            k1.DatumRecord(
+                ((0, family), (1, k1.Symbol("bounded-downstream-consumer")))
+            ),
+        )
+    owner_consumer_id = _source_authority_role_id(
+        profile,
+        f"{subject_namespace}.source-consumer",
+        family,
+        consumer_id,
+        "authority consumer",
+    )
+    if purpose_id is None:
+        purpose_id = _source_authority_id(
+            profile,
+            f"{subject_namespace}.source-purpose",
+            k1.DatumRecord(
+                (
+                    (0, family),
+                    (1, k1.Symbol(_ascii(purpose_label, "authority purpose"))),
+                )
+            ),
+        )
+    owner_purpose_id = _source_authority_role_id(
+        profile,
+        f"{subject_namespace}.source-purpose",
+        family,
+        purpose_id,
+        "authority purpose",
+    )
+    consumer_ref = _source_authority_ref(
+        owner_consumer_id,
+        "authority consumer role",
+    )
+    purpose_ref = _source_authority_ref(
+        owner_purpose_id,
+        "authority purpose role",
+    )
+    payload_id = _source_authority_id(
+        profile,
+        f"{subject_namespace}.source-binding-payload",
+        k1.DatumRecord(
+            (
+                (0, k1.Symbol(owner_domain)),
+                (1, family),
+                (2, source_body),
+                (3, manifest_body),
+                (4, consumer_ref),
+                (5, purpose_ref),
+            )
+        ),
+    )
+    no_policy_id = _source_authority_id(
+        profile,
+        f"{subject_namespace}.source-no-policy",
+        k1.DatumRecord(
+            (
+                (0, family),
+                (1, _source_authority_ref(payload_id, "authority payload")),
+                (2, k1.Symbol("owner-defines-no-additional-operation-policy")),
+            )
+        ),
+    )
+    requirement_id = _source_authority_id(
+        profile,
+        f"{subject_namespace}.source-capability-requirement",
+        k1.DatumRecord(
+            (
+                (0, family),
+                (1, _source_authority_ref(payload_id, "authority payload")),
+                (2, consumer_ref),
+                (3, purpose_ref),
+                (4, k1.Symbol("fresh-identical-bearer-capability")),
+            )
+        ),
+    )
+    closure_id = _source_authority_id(
+        profile,
+        f"{subject_namespace}.source-policy-closure",
+        k1.DatumRecord(
+            (
+                (0, family),
+                (1, _source_authority_ref(payload_id, "authority payload")),
+                (2, _source_authority_ref(no_policy_id, "no-policy declaration")),
+                (3, _source_authority_ref(requirement_id, "capability requirement")),
+            )
+        ),
+    )
+    requirement = k1.OwnerCapabilityRequirement(
+        k1.Symbol(owner_domain),
+        family,
+        requirement_id,
+    )
+    return (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    )
+
+
+def _correspondence_read_datum(read: object) -> object:
+    if type(read) is ProtocolInterfaceRead:
+        kind = read.kind.value
+        _interface_read_key(read)
+    elif type(read) is RelationsRead:
+        kind = read.kind.value
+        _relations_read_key(read)
+    else:
+        raise K3Error("correspondence read has the wrong exact shape")
+    coordinate = (
+        k1.DatumVariant(0, k1.Symbol(read.coordinate))
+        if type(read.coordinate) is str
+        else k1.DatumVariant(1, _id_datum(read.coordinate))
+    )
+    return k1.DatumRecord(((0, k1.Symbol(kind)), (1, coordinate)))
+
+
+def _correspondence_manifest_body(reads: tuple[object, ...]) -> object:
+    return k1.DatumSeq(tuple(_correspondence_read_datum(read) for read in reads))
+
+
+def _canonical_interface_reads(
+    reads: set[ProtocolInterfaceRead],
+) -> tuple[ProtocolInterfaceRead, ...]:
+    return tuple(sorted(reads, key=_interface_read_key))
+
+
+def required_protocol_interface_read_closure(
+    interface: ProtocolInterface,
+    requested: tuple[ProtocolInterfaceRead, ...],
+) -> tuple[ProtocolInterfaceRead, ...]:
+    """Derive the exact slot/codec closure, independently of returned entries."""
+
+    if type(requested) is not tuple:
+        raise InterfaceError("Interface correspondence manifest must be a tuple")
+    input_by_core = {item.core_input: item for item in interface.inputs}
+    input_by_external = {item.external_coordinate: item for item in interface.inputs}
+    statement_by_external = {
+        item.external_statement: item for item in interface.statements
+    }
+    transport_by_external = {
+        item.external_coordinate: item for item in interface.transports
+    }
+    transport_by_occurrence = {item.occurrence: item for item in interface.transports}
+    closure = set(requested)
+    changed = True
+    while changed:
+        changed = False
+        additions: set[ProtocolInterfaceRead] = set()
+        for read in tuple(closure):
+            _interface_read_key(read)
+            if read.kind is ProtocolInterfaceReadKind.INVOCATION_ASSIGNMENT:
+                if type(read.coordinate) is not str or read.coordinate not in input_by_core:
+                    raise InterfaceError("invocation read names no exact assignment")
+                assignment = input_by_core[read.coordinate]
+                additions.update(
+                    {
+                        ProtocolInterfaceRead(
+                            ProtocolInterfaceReadKind.EXTERNAL_SLOT,
+                            assignment.external_coordinate,
+                        ),
+                        ProtocolInterfaceRead(
+                            ProtocolInterfaceReadKind.INTERFACE_CODEC,
+                            assignment.codec_id,
+                        ),
+                    }
+                )
+            elif read.kind is ProtocolInterfaceReadKind.STATEMENT_MEMBER:
+                if type(read.coordinate) is not str or read.coordinate not in statement_by_external:
+                    raise InterfaceError("Statement read names no exact member")
+                member = statement_by_external[read.coordinate]
+                assignment = input_by_core.get(member.binding.input_name)
+                if assignment is None:
+                    raise InterfaceError("Statement member has no invocation/slot source")
+                additions.add(
+                    ProtocolInterfaceRead(
+                        ProtocolInterfaceReadKind.INVOCATION_ASSIGNMENT,
+                        assignment.core_input,
+                    )
+                )
+            elif read.kind is ProtocolInterfaceReadKind.TRANSPORT_ENTRY:
+                if type(read.coordinate) is not str or read.coordinate not in transport_by_occurrence:
+                    raise InterfaceError("transport read names no exact entry")
+                exposure = transport_by_occurrence[read.coordinate]
+                additions.update(
+                    {
+                        ProtocolInterfaceRead(
+                            ProtocolInterfaceReadKind.EXTERNAL_SLOT,
+                            exposure.external_coordinate,
+                        ),
+                        ProtocolInterfaceRead(
+                            ProtocolInterfaceReadKind.INTERFACE_CODEC,
+                            exposure.codec_id,
+                        ),
+                    }
+                )
+            elif read.kind is ProtocolInterfaceReadKind.EXTERNAL_SLOT:
+                if type(read.coordinate) is not str:
+                    raise InterfaceError("external-slot read needs one exact key")
+                use = input_by_external.get(read.coordinate)
+                transport = transport_by_external.get(read.coordinate)
+                if (use is None) == (transport is None):
+                    raise InterfaceError("external-slot read is absent or aliased")
+                codec_id = use.codec_id if use is not None else transport.codec_id
+                additions.add(
+                    ProtocolInterfaceRead(
+                        ProtocolInterfaceReadKind.INTERFACE_CODEC,
+                        codec_id,
+                    )
+                )
+            else:
+                _id_datum(
+                    read.coordinate,
+                    "foundation.canonical-algorithm",
+                )
+                if not any(
+                    item.codec_id == read.coordinate
+                    for item in (*interface.inputs, *interface.transports)
+                ):
+                    raise InterfaceError("codec read names no exact Interface use")
+        old_size = len(closure)
+        closure.update(additions)
+        changed = len(closure) != old_size
+    return _canonical_interface_reads(closure)
+
+
+def external_statement_read_manifest(
+    interface: ProtocolInterface,
+    members: tuple[str, ...],
+) -> CorrespondenceReadManifest:
+    if type(members) is not tuple or not members or len(members) != len(set(members)):
+        raise InterfaceError("external Statement selection must be nonempty and unique")
+    requested = tuple(
+        ProtocolInterfaceRead(ProtocolInterfaceReadKind.STATEMENT_MEMBER, member)
+        for member in members
+    )
+    return CorrespondenceReadManifest(
+        required_protocol_interface_read_closure(interface, requested)
+    )
+
+
+def claim_reduction_transform_read_manifest(
+    transform_ids: tuple[object, ...],
+) -> CorrespondenceReadManifest:
+    if type(transform_ids) is not tuple or not transform_ids:
+        raise RelationError("claim/reduction shape needs at least one transform")
+    reads = tuple(
+        RelationsRead(RelationsReadKind.RELATION_TRANSFORM, identifier)
+        for identifier in transform_ids
+    )
+    canonical = tuple(sorted(set(reads), key=_relations_read_key))
+    if canonical != reads:
+        raise RelationError("transform reads must be canonical and unique")
+    return CorrespondenceReadManifest((), canonical)
+
+
+@dataclass(frozen=True)
+class ProtocolInterfaceCorrespondenceEntry:
+    read: ProtocolInterfaceRead
+    value: object
+
+
+_INTERFACE_CORRESPONDENCE_VIEW_ISSUER = object()
+
+
+@dataclass(frozen=True, slots=True)
+class ProtocolInterfaceCorrespondenceView:
+    protocol_interface_id: object
+    requested_reads: tuple[ProtocolInterfaceRead, ...]
+    entries: tuple[ProtocolInterfaceCorrespondenceEntry, ...]
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _INTERFACE_CORRESPONDENCE_VIEW_ISSUER:
+            raise InterfaceError("only PIR may issue an Interface correspondence view")
+
+
+ExactProtocolInterfaceViewAuthorityBinding = k1.OwnerLocalSourceAuthorityBinding
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class ProtocolInterfaceViewCapability(_NonTransferableAuthority):
+    view: ProtocolInterfaceCorrespondenceView
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    consumer_id: object
+    purpose_id: object
+    _source: ProtocolInterface
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _INTERFACE_CORRESPONDENCE_VIEW_ISSUER:
+            raise InterfaceError("only PIR may issue an Interface view capability")
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class IssuedProtocolInterfaceCorrespondenceView(_NonTransferableAuthority):
+    view: ProtocolInterfaceCorrespondenceView
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    capability: ProtocolInterfaceViewCapability
+    _issuer: object
+
+
+_INTERFACE_VIEW_LIVE_CAPABILITIES: dict[int, object] = {}
+_INTERFACE_VIEW_LIVE_ISSUANCES: dict[int, object] = {}
+
+
+def _interface_view_authority_components(
+    view: ProtocolInterfaceCorrespondenceView,
+    consumer_id: object | None,
+    purpose_id: object | None,
+    profiles: K3BSemanticProfiles,
+) -> tuple[object, object, object, object, object, object]:
+    return _source_authority_components(
+        profiles.interface_plan,
+        "pir",
+        "pir",
+        "interface-correspondence-view",
+        k1.DatumRecord(
+            ((0, _id_datum(view.protocol_interface_id, "pir.protocol-interface")),)
+        ),
+        _correspondence_manifest_body(view.requested_reads),
+        "consume-interface-correspondence-view",
+        consumer_id,
+        purpose_id,
+    )
+
+
+def issue_protocol_interface_correspondence_view(
+    core: object,
+    construction: object | None,
+    interpretation: object,
+    interface: ProtocolInterface,
+    manifest: CorrespondenceReadManifest,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+    profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> object:
+    try:
+        _require_supported_k3b_profile(
+            profiles,
+            profile_support,
+            profiles.interface_plan,
+            required_subject_kinds=(
+                _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"pir.protocol-interface"})
+            ),
+        )
+        admit_interface(
+            core,
+            construction,
+            interpretation,
+            interface,
+            profiles=profiles,
+        )
+        if type(manifest) is not CorrespondenceReadManifest or manifest.relations:
+            raise InterfaceError("Interface owner received the wrong submanifest")
+        canonical = tuple(sorted(set(manifest.protocol_interface), key=_interface_read_key))
+        if canonical != manifest.protocol_interface:
+            raise InterfaceError("Interface submanifest is not canonical and unique")
+        required = required_protocol_interface_read_closure(
+            interface,
+            manifest.protocol_interface,
+        )
+    except UnsupportedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.UNSUPPORTED,
+            detail=(str(error),),
+        )
+    except RefusedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.REFUSED,
+            detail=(str(error),),
+        )
+    except MalformedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MALFORMED,
+            detail=(str(error),),
+        )
+    except InterfaceError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MALFORMED,
+            detail=(str(error),),
+        )
+    if required != manifest.protocol_interface:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+            detail=tuple(item for item in required if item not in manifest.protocol_interface),
+        )
+    input_by_core = {item.core_input: item for item in interface.inputs}
+    input_by_external = {item.external_coordinate: item for item in interface.inputs}
+    statement_by_external = {
+        item.external_statement: item for item in interface.statements
+    }
+    transport_by_occurrence = {item.occurrence: item for item in interface.transports}
+    transport_by_external = {
+        item.external_coordinate: item for item in interface.transports
+    }
+
+    def resolve(read: ProtocolInterfaceRead) -> object:
+        if read.kind is ProtocolInterfaceReadKind.INVOCATION_ASSIGNMENT:
+            return input_by_core[read.coordinate]
+        if read.kind is ProtocolInterfaceReadKind.STATEMENT_MEMBER:
+            return statement_by_external[read.coordinate]
+        if read.kind is ProtocolInterfaceReadKind.TRANSPORT_ENTRY:
+            return transport_by_occurrence[read.coordinate]
+        if read.kind is ProtocolInterfaceReadKind.EXTERNAL_SLOT:
+            return input_by_external.get(read.coordinate) or transport_by_external[read.coordinate]
+        return (
+            read.coordinate,
+            tuple(
+                item.external_coordinate
+                for item in (*interface.inputs, *interface.transports)
+                if item.codec_id == read.coordinate
+            ),
+        )
+
+    entries = tuple(
+        ProtocolInterfaceCorrespondenceEntry(read, resolve(read))
+        for read in manifest.protocol_interface
+    )
+    protocol_interface_id = interface_id(
+        core,
+        construction,
+        interpretation,
+        interface,
+        profiles=profiles,
+    )
+    _authenticate_k3b_profiled_subject(
+        protocol_interface_id,
+        "pir.protocol-interface",
+        interface_body(
+            core,
+            construction,
+            interpretation,
+            interface,
+            profiles=profiles,
+        ),
+        profiles=profiles,
+        profile_support=profile_support,
+        selected_profile=profiles.interface_plan,
+    )
+    view = ProtocolInterfaceCorrespondenceView(
+        protocol_interface_id,
+        manifest.protocol_interface,
+        entries,
+        _INTERFACE_CORRESPONDENCE_VIEW_ISSUER,
+    )
+    (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    ) = _interface_view_authority_components(
+        view,
+        consumer_id,
+        purpose_id,
+        profiles,
+    )
+    binding = k1.OwnerLocalSourceAuthorityBinding(
+        k1.Symbol("pir"),
+        k1.Symbol("interface-correspondence-view"),
+        view,
+        payload_id,
+        k1.OwnerDefinesNoOperationPolicy(no_policy_id),
+        closure_id,
+        requirement,
+    )
+    k1.validate_owner_local_source_authority_binding(binding)
+    capability = ProtocolInterfaceViewCapability(
+        view,
+        binding,
+        consumer_id,
+        purpose_id,
+        interface,
+        _INTERFACE_CORRESPONDENCE_VIEW_ISSUER,
+    )
+    _INTERFACE_VIEW_LIVE_CAPABILITIES[id(capability)] = capability
+    issued = IssuedProtocolInterfaceCorrespondenceView(
+        view,
+        binding,
+        capability,
+        _INTERFACE_CORRESPONDENCE_VIEW_ISSUER,
+    )
+    _INTERFACE_VIEW_LIVE_ISSUANCES[id(issued)] = issued
+    return k2.QualifiedViewOutcome(
+        k2.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        issued,
+    )
+
+
+def validate_issued_protocol_interface_correspondence_view(
+    issued: object,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+    profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
+    expected_consumer_id: object | None = None,
+    expected_purpose_id: object | None = None,
+) -> bool:
+    if (
+        type(issued) is not IssuedProtocolInterfaceCorrespondenceView
+        or _INTERFACE_VIEW_LIVE_ISSUANCES.get(id(issued)) is not issued
+        or issued._issuer is not _INTERFACE_CORRESPONDENCE_VIEW_ISSUER
+        or type(issued.capability) is not ProtocolInterfaceViewCapability
+        or _INTERFACE_VIEW_LIVE_CAPABILITIES.get(id(issued.capability))
+        is not issued.capability
+        or issued.capability._issuer is not _INTERFACE_CORRESPONDENCE_VIEW_ISSUER
+        or issued.capability.view is not issued.view
+        or issued.capability.source_binding is not issued.source_binding
+        or type(issued.source_binding) is not k1.OwnerLocalSourceAuthorityBinding
+        or issued.source_binding.owner_local_coordinate is not issued.view
+    ):
+        return False
+    consumer_id = (
+        issued.capability.consumer_id
+        if expected_consumer_id is None
+        else expected_consumer_id
+    )
+    purpose_id = (
+        issued.capability.purpose_id
+        if expected_purpose_id is None
+        else expected_purpose_id
+    )
+    if (
+        issued.capability.consumer_id != consumer_id
+        or issued.capability.purpose_id != purpose_id
+    ):
+        return False
+    try:
+        _require_supported_k3b_profile(
+            profiles,
+            profile_support,
+            profiles.interface_plan,
+            required_subject_kinds=(
+                _PIR_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"pir.protocol-interface"})
+            ),
+        )
+        k1.validate_owner_local_source_authority_binding(issued.source_binding)
+        (
+            _,
+            _,
+            payload_id,
+            no_policy_id,
+            closure_id,
+            requirement,
+        ) = _interface_view_authority_components(
+            issued.view,
+            consumer_id,
+            purpose_id,
+            profiles,
+        )
+    except (K3Error, k1.ModelError, k1.CanonicalError):
+        return False
+    binding = issued.source_binding
+    return (
+        binding.owner_domain == k1.Symbol("pir")
+        and binding.capability_family
+        == k1.Symbol("interface-correspondence-view")
+        and binding.owner_binding_payload == payload_id
+        and type(binding.operation_policy) is k1.OwnerDefinesNoOperationPolicy
+        and binding.operation_policy.owner_no_policy_declaration == no_policy_id
+        and binding.owner_policy_closure == closure_id
+        and binding.capability_requirement == requirement
+    )
+
+
+@dataclass(frozen=True)
+class RelationsCorrespondenceEntry:
+    read: RelationsRead
+    value: RelationTransform
+
+
+_RELATIONS_CORRESPONDENCE_VIEW_ISSUER = object()
+
+
+@dataclass(frozen=True, slots=True)
+class RelationsCorrespondenceView:
+    requested_reads: tuple[RelationsRead, ...]
+    entries: tuple[RelationsCorrespondenceEntry, ...]
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _RELATIONS_CORRESPONDENCE_VIEW_ISSUER:
+            raise RelationError("only Relations may issue its correspondence view")
+
+
+ExactRelationsCorrespondenceViewAuthorityBinding = k1.OwnerLocalSourceAuthorityBinding
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class RelationsCorrespondenceViewCapability(_NonTransferableAuthority):
+    view: RelationsCorrespondenceView
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    consumer_id: object
+    purpose_id: object
+    _sources: tuple[RelationTransform, ...]
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _RELATIONS_CORRESPONDENCE_VIEW_ISSUER:
+            raise RelationError("only Relations may issue a correspondence capability")
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class IssuedRelationsCorrespondenceView(_NonTransferableAuthority):
+    view: RelationsCorrespondenceView
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    capability: RelationsCorrespondenceViewCapability
+    _issuer: object
+
+
+_RELATIONS_VIEW_LIVE_CAPABILITIES: dict[int, object] = {}
+_RELATIONS_VIEW_LIVE_ISSUANCES: dict[int, object] = {}
+
+
+def _relations_view_authority_components(
+    view: RelationsCorrespondenceView,
+    consumer_id: object | None,
+    purpose_id: object | None,
+    profiles: K3BSemanticProfiles,
+) -> tuple[object, object, object, object, object, object]:
+    return _source_authority_components(
+        profiles.relations_correspondence,
+        "relations",
+        "relations",
+        "relations-correspondence-view",
+        k1.DatumRecord(
+            ((0, _correspondence_manifest_body(view.requested_reads)),)
+        ),
+        _correspondence_manifest_body(view.requested_reads),
+        "consume-relations-correspondence-view",
+        consumer_id,
+        purpose_id,
+    )
+
+
+def issue_relations_correspondence_view(
+    transforms: tuple[RelationTransform, ...],
+    manifest: CorrespondenceReadManifest,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+    profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> object:
+    try:
+        _require_supported_k3b_profile(
+            profiles,
+            profile_support,
+            profiles.relations_correspondence,
+            required_subject_kinds=(
+                _RELATIONS_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"relations.transform"})
+            ),
+        )
+        if type(manifest) is not CorrespondenceReadManifest or manifest.protocol_interface:
+            raise RelationError("Relations owner received the wrong submanifest")
+        transform_by_id: dict[object, RelationTransform] = {}
+        for transform in transforms:
+            transform_id = relation_transform_id(transform, profiles=profiles)
+            _authenticate_k3b_profiled_subject(
+                transform_id,
+                "relations.transform",
+                relation_transform_body(transform),
+                profiles=profiles,
+                profile_support=profile_support,
+                selected_profile=profiles.relations_correspondence,
+            )
+            transform_by_id[transform_id] = transform
+        if len(transform_by_id) != len(transforms):
+            raise RelationError("relation transforms must have distinct identities")
+        canonical = tuple(sorted(set(manifest.relations), key=_relations_read_key))
+        if canonical != manifest.relations:
+            raise RelationError("Relations submanifest is not canonical and unique")
+        requested_transform_ids = {
+            read.coordinate
+            for read in manifest.relations
+            if read.kind is RelationsReadKind.RELATION_TRANSFORM
+        }
+        missing_transform_ids = requested_transform_ids - set(transform_by_id)
+        if missing_transform_ids:
+            raise KeyError(
+                min(
+                    missing_transform_ids,
+                    key=lambda identifier: identifier.internal_reference(),
+                )
+            )
+        if set(transform_by_id) != requested_transform_ids:
+            raise RelationError(
+                "Relations sources must equal the exact requested transform set"
+            )
+        entries = tuple(
+            RelationsCorrespondenceEntry(read, transform_by_id[read.coordinate])
+            for read in manifest.relations
+        )
+    except UnsupportedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.UNSUPPORTED,
+            detail=(str(error),),
+        )
+    except RefusedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.REFUSED,
+            detail=(str(error),),
+        )
+    except MalformedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MALFORMED,
+            detail=(str(error),),
+        )
+    except KeyError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+            detail=(error.args[0],),
+        )
+    except RelationError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MALFORMED,
+            detail=(str(error),),
+        )
+    view = RelationsCorrespondenceView(
+        manifest.relations,
+        entries,
+        _RELATIONS_CORRESPONDENCE_VIEW_ISSUER,
+    )
+    (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    ) = _relations_view_authority_components(
+        view,
+        consumer_id,
+        purpose_id,
+        profiles,
+    )
+    binding = k1.OwnerLocalSourceAuthorityBinding(
+        k1.Symbol("relations"),
+        k1.Symbol("relations-correspondence-view"),
+        view,
+        payload_id,
+        k1.OwnerDefinesNoOperationPolicy(no_policy_id),
+        closure_id,
+        requirement,
+    )
+    k1.validate_owner_local_source_authority_binding(binding)
+    capability = RelationsCorrespondenceViewCapability(
+        view,
+        binding,
+        consumer_id,
+        purpose_id,
+        transforms,
+        _RELATIONS_CORRESPONDENCE_VIEW_ISSUER,
+    )
+    _RELATIONS_VIEW_LIVE_CAPABILITIES[id(capability)] = capability
+    issued = IssuedRelationsCorrespondenceView(
+        view,
+        binding,
+        capability,
+        _RELATIONS_CORRESPONDENCE_VIEW_ISSUER,
+    )
+    _RELATIONS_VIEW_LIVE_ISSUANCES[id(issued)] = issued
+    return k2.QualifiedViewOutcome(
+        k2.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        issued,
+    )
+
+
+def validate_issued_relations_correspondence_view(
+    issued: object,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+    profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
+    expected_consumer_id: object | None = None,
+    expected_purpose_id: object | None = None,
+) -> bool:
+    if (
+        type(issued) is not IssuedRelationsCorrespondenceView
+        or _RELATIONS_VIEW_LIVE_ISSUANCES.get(id(issued)) is not issued
+        or issued._issuer is not _RELATIONS_CORRESPONDENCE_VIEW_ISSUER
+        or type(issued.capability) is not RelationsCorrespondenceViewCapability
+        or _RELATIONS_VIEW_LIVE_CAPABILITIES.get(id(issued.capability))
+        is not issued.capability
+        or issued.capability._issuer is not _RELATIONS_CORRESPONDENCE_VIEW_ISSUER
+        or issued.capability.view is not issued.view
+        or issued.capability.source_binding is not issued.source_binding
+        or type(issued.source_binding) is not k1.OwnerLocalSourceAuthorityBinding
+        or issued.source_binding.owner_local_coordinate is not issued.view
+    ):
+        return False
+    consumer_id = (
+        issued.capability.consumer_id
+        if expected_consumer_id is None
+        else expected_consumer_id
+    )
+    purpose_id = (
+        issued.capability.purpose_id
+        if expected_purpose_id is None
+        else expected_purpose_id
+    )
+    if (
+        issued.capability.consumer_id != consumer_id
+        or issued.capability.purpose_id != purpose_id
+    ):
+        return False
+    try:
+        _require_supported_k3b_profile(
+            profiles,
+            profile_support,
+            profiles.relations_correspondence,
+            required_subject_kinds=(
+                _RELATIONS_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"relations.transform"})
+            ),
+        )
+        k1.validate_owner_local_source_authority_binding(issued.source_binding)
+        (
+            _,
+            _,
+            payload_id,
+            no_policy_id,
+            closure_id,
+            requirement,
+        ) = _relations_view_authority_components(
+            issued.view,
+            consumer_id,
+            purpose_id,
+            profiles,
+        )
+    except (K3Error, k1.ModelError, k1.CanonicalError):
+        return False
+    binding = issued.source_binding
+    return (
+        binding.owner_domain == k1.Symbol("relations")
+        and binding.capability_family
+        == k1.Symbol("relations-correspondence-view")
+        and binding.owner_binding_payload == payload_id
+        and type(binding.operation_policy) is k1.OwnerDefinesNoOperationPolicy
+        and binding.operation_policy.owner_no_policy_declaration == no_policy_id
+        and binding.owner_policy_closure == closure_id
+        and binding.capability_requirement == requirement
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -723,10 +2216,18 @@ def check_plan_realizes(
     construction: object | None,
     interpretation: object,
     plan: ProverPlan,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> CheckedPlanRealizes:
     """Check decision coverage and owner-derived all-path read availability."""
 
-    admit_plan(core, construction, interpretation, plan)
+    admit_plan(
+        core,
+        construction,
+        interpretation,
+        plan,
+        profiles=profiles,
+    )
     decisions = _decision_occurrences(core)
     decision_by_name = {item.name: item for item in decisions}
     route_by_name = {item.occurrence: item for item in plan.decision_routes}
@@ -756,7 +2257,13 @@ def check_plan_realizes(
     return CheckedPlanRealizes(
         _PLAN_REALIZES_ISSUER,
         plan.protocol_id,
-        plan_id(core, construction, interpretation, plan),
+        plan_id(
+            core,
+            construction,
+            interpretation,
+            plan,
+            profiles=profiles,
+        ),
     )
 
 
@@ -765,11 +2272,19 @@ def admit_plan(
     construction: object | None,
     interpretation: object,
     plan: ProverPlan,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> None:
     k2.admit_core(core)
     if (
         type(plan) is not ProverPlan
-        or plan.protocol_id != protocol_id(core, construction, interpretation)
+        or plan.protocol_id
+        != protocol_id(
+            core,
+            construction,
+            interpretation,
+            profiles=profiles,
+        )
     ):
         raise PlanError("Plan must name one exact admitted Protocol")
     if (
@@ -901,8 +2416,16 @@ def plan_body(
     construction: object | None,
     interpretation: object,
     plan: ProverPlan,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> object:
-    admit_plan(core, construction, interpretation, plan)
+    admit_plan(
+        core,
+        construction,
+        interpretation,
+        plan,
+        profiles=profiles,
+    )
     return k1.DatumRecord(
         (
             (0, k1.Symbol("k3.prover-plan.probe.v0")),
@@ -1032,9 +2555,19 @@ def plan_id(
     construction: object | None,
     interpretation: object,
     plan: ProverPlan,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> object:
     return _semantic_id(
-        "pir.prover-plan", plan_body(core, construction, interpretation, plan)
+        "pir.prover-plan",
+        plan_body(
+            core,
+            construction,
+            interpretation,
+            plan,
+            profiles=profiles,
+        ),
+        profiles=profiles,
     )
 
 
@@ -1080,8 +2613,16 @@ def derive_plan_witness_surface(
     construction: object | None,
     interpretation: object,
     plan: ProverPlan,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> PlanWitnessSurface:
-    admit_plan(core, construction, interpretation, plan)
+    admit_plan(
+        core,
+        construction,
+        interpretation,
+        plan,
+        profiles=profiles,
+    )
     ingress = tuple(
         PlanWitnessSurfaceEntry(
             item.key, PlanWitnessEntryKind.WITNESS_INGRESS, item.value_type
@@ -1103,7 +2644,11 @@ def derive_plan_witness_surface(
     return PlanWitnessSurface(plan.protocol_id, entries)
 
 
-def plan_witness_surface_id(surface: PlanWitnessSurface) -> object:
+def plan_witness_surface_id(
+    surface: PlanWitnessSurface,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     if type(surface) is not PlanWitnessSurface:
         raise PlanError("PlanWitnessSurface has the wrong exact shape")
     _id_datum(surface.protocol_id, "pir.protocol")
@@ -1143,6 +2688,7 @@ def plan_witness_surface_id(surface: PlanWitnessSurface) -> object:
                 ),
             )
         ),
+        profiles=profiles,
     )
 
 
@@ -1155,12 +2701,475 @@ def plan_witness_surface_id(surface: PlanWitnessSurface) -> object:
 class RelationDefinitionRef:
     """One inert exact reference to a Relations-owned definition.
 
-    The bounded probe does not implement the durable definition language and
-    payload grammar. In particular, it must not manufacture a shadow
-    definition whose identity commits to the evaluator used to check it.
+    Generic fixtures do not implement the durable definition language. The
+    selected Schnorr fixed-setup subset below is the sole executable definition
+    body, and no definition identity commits to a satisfaction evaluator.
     """
 
     definition_id: object
+
+
+@dataclass(frozen=True)
+class SchnorrRelationDefinition:
+    """The bounded, Relations-owned fixed setup for the selected Schnorr relation."""
+
+    generator: int
+    scalar_modulus: int
+    group_modulus: int
+
+
+def admit_schnorr_relation_definition(
+    definition: SchnorrRelationDefinition,
+) -> None:
+    if type(definition) is not SchnorrRelationDefinition:
+        raise RelationError("Schnorr relation definition has the wrong exact shape")
+    if any(
+        type(value) is not int
+        for value in (
+            definition.generator,
+            definition.scalar_modulus,
+            definition.group_modulus,
+        )
+    ):
+        raise RelationError("Schnorr relation parameters must be exact naturals")
+    if (
+        definition.group_modulus <= 2
+        or definition.scalar_modulus <= 1
+        or not 1 < definition.generator < definition.group_modulus
+    ):
+        raise RelationError("Schnorr relation parameters are outside their domains")
+    if pow(
+        definition.generator,
+        definition.scalar_modulus,
+        definition.group_modulus,
+    ) != 1:
+        raise RelationError("Schnorr generator is not in the declared scalar subgroup")
+
+
+def schnorr_relation_definition_body(
+    definition: SchnorrRelationDefinition,
+) -> object:
+    admit_schnorr_relation_definition(definition)
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol("schnorr-discrete-log-knowledge-v0")),
+            (1, k1.Nat(definition.generator)),
+            (2, k1.Nat(definition.scalar_modulus)),
+            (3, k1.Nat(definition.group_modulus)),
+        )
+    )
+
+
+def schnorr_relation_definition_id(
+    definition: SchnorrRelationDefinition,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
+    return _semantic_id(
+        "relations.definition",
+        schnorr_relation_definition_body(definition),
+        profiles=profiles,
+    )
+
+
+def selected_schnorr_relation_definition() -> SchnorrRelationDefinition:
+    return SchnorrRelationDefinition(2, 11, 23)
+
+
+class RelationDefinitionField(str, Enum):
+    GENERATOR = "payload.generator"
+    SCALAR_MODULUS = "payload.scalar-modulus"
+    GROUP_MODULUS = "payload.group-modulus"
+
+
+_RELATION_DEFINITION_FIELD_ORDER = MappingProxyType(
+    {field: index for index, field in enumerate(RelationDefinitionField)}
+)
+
+
+@dataclass(frozen=True)
+class RelationDefinitionViewCoordinate:
+    definition_id: object
+    semantic_profile_id: object
+
+
+@dataclass(frozen=True)
+class RelationDefinitionFieldCoordinate:
+    view_coordinate: RelationDefinitionViewCoordinate
+    field: RelationDefinitionField
+
+
+@dataclass(frozen=True)
+class RelationDefinitionViewEntry:
+    coordinate: RelationDefinitionFieldCoordinate
+    value: int
+
+
+_RELATION_DEFINITION_VIEW_ISSUER = object()
+
+
+@dataclass(frozen=True, slots=True)
+class RelationDefinitionView:
+    coordinate: RelationDefinitionViewCoordinate
+    manifest: tuple[RelationDefinitionFieldCoordinate, ...]
+    entries: tuple[RelationDefinitionViewEntry, ...]
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _RELATION_DEFINITION_VIEW_ISSUER:
+            raise RelationError("only Relations may issue a definition view")
+
+
+@dataclass(frozen=True, eq=False, repr=False, slots=True)
+class RelationDefinitionViewCapability(_NonTransferableAuthority):
+    view: RelationDefinitionView
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    consumer_id: object
+    purpose_id: object
+    _source: SchnorrRelationDefinition
+    _issuer: object
+
+    def __post_init__(self) -> None:
+        if self._issuer is not _RELATION_DEFINITION_VIEW_ISSUER:
+            raise RelationError("only Relations may issue a definition capability")
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class IssuedRelationDefinitionView(_NonTransferableAuthority):
+    view: RelationDefinitionView
+    source_binding: k1.OwnerLocalSourceAuthorityBinding
+    capability: RelationDefinitionViewCapability
+    _issuer: object
+
+
+_RELATION_DEFINITION_VIEW_LIVE_CAPABILITIES: dict[int, object] = {}
+_RELATION_DEFINITION_VIEW_LIVE_ISSUANCES: dict[int, object] = {}
+
+
+def relation_definition_field_coordinate(
+    definition: SchnorrRelationDefinition,
+    field: RelationDefinitionField,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> RelationDefinitionFieldCoordinate:
+    if type(field) is not RelationDefinitionField:
+        raise RelationError("relation definition field has the wrong exact kind")
+    return RelationDefinitionFieldCoordinate(
+        RelationDefinitionViewCoordinate(
+            schnorr_relation_definition_id(definition, profiles=profiles),
+            profiles.relations_correspondence.identity,
+        ),
+        field,
+    )
+
+
+def schnorr_fixed_setup_manifest(
+    definition: SchnorrRelationDefinition,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> tuple[RelationDefinitionFieldCoordinate, ...]:
+    return tuple(
+        relation_definition_field_coordinate(definition, field, profiles=profiles)
+        for field in RelationDefinitionField
+    )
+
+
+def _relation_definition_field_coordinate_body(
+    coordinate: RelationDefinitionFieldCoordinate,
+) -> object:
+    if (
+        type(coordinate) is not RelationDefinitionFieldCoordinate
+        or type(coordinate.view_coordinate) is not RelationDefinitionViewCoordinate
+        or type(coordinate.field) is not RelationDefinitionField
+    ):
+        raise RelationError("relation definition field coordinate is malformed")
+    return k1.DatumRecord(
+        (
+            (
+                0,
+                _id_datum(
+                    coordinate.view_coordinate.definition_id,
+                    "relations.definition",
+                ),
+            ),
+            (
+                1,
+                _id_datum(
+                    coordinate.view_coordinate.semantic_profile_id,
+                    "foundation.semantic-language-profile",
+                ),
+            ),
+            (2, k1.Symbol(coordinate.field.value)),
+        )
+    )
+
+
+def _relation_definition_manifest_body(
+    manifest: tuple[RelationDefinitionFieldCoordinate, ...],
+) -> object:
+    return k1.DatumSeq(
+        tuple(_relation_definition_field_coordinate_body(item) for item in manifest)
+    )
+
+
+def _relation_definition_view_authority_components(
+    view: RelationDefinitionView,
+    consumer_id: object | None,
+    purpose_id: object | None,
+    profiles: K3BSemanticProfiles,
+) -> tuple[object, object, object, object, object, object]:
+    return _source_authority_components(
+        profiles.relations_correspondence,
+        "relations",
+        "relations",
+        "relation-definition-view",
+        k1.DatumRecord(
+            (
+                (
+                    0,
+                    _id_datum(
+                        view.coordinate.definition_id,
+                        "relations.definition",
+                    ),
+                ),
+                (
+                    1,
+                    _id_datum(
+                        view.coordinate.semantic_profile_id,
+                        "foundation.semantic-language-profile",
+                    ),
+                ),
+            )
+        ),
+        _relation_definition_manifest_body(view.manifest),
+        "consume-relation-definition-view",
+        consumer_id,
+        purpose_id,
+    )
+
+
+def _relation_definition_field_value(
+    definition: SchnorrRelationDefinition,
+    field: RelationDefinitionField,
+) -> int:
+    if field is RelationDefinitionField.GENERATOR:
+        return definition.generator
+    if field is RelationDefinitionField.SCALAR_MODULUS:
+        return definition.scalar_modulus
+    return definition.group_modulus
+
+
+def issue_relation_definition_view(
+    definition: SchnorrRelationDefinition,
+    manifest: tuple[RelationDefinitionFieldCoordinate, ...],
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+    profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
+    consumer_id: object | None = None,
+    purpose_id: object | None = None,
+) -> object:
+    try:
+        _require_supported_k3b_profile(
+            profiles,
+            profile_support,
+            profiles.relations_correspondence,
+            required_subject_kinds=(
+                _RELATIONS_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"relations.definition"})
+            ),
+        )
+        body = schnorr_relation_definition_body(definition)
+        definition_id = schnorr_relation_definition_id(definition, profiles=profiles)
+        _authenticate_k3b_profiled_subject(
+            definition_id,
+            "relations.definition",
+            body,
+            profiles=profiles,
+            profile_support=profile_support,
+            selected_profile=profiles.relations_correspondence,
+        )
+        expected_view_coordinate = RelationDefinitionViewCoordinate(
+            definition_id,
+            profiles.relations_correspondence.identity,
+        )
+        if type(manifest) is not tuple or not manifest:
+            raise RelationError("relation definition manifest must be nonempty")
+        if any(
+            type(item) is not RelationDefinitionFieldCoordinate
+            or item.view_coordinate != expected_view_coordinate
+            or type(item.field) is not RelationDefinitionField
+            for item in manifest
+        ):
+            raise RelationError("relation definition manifest selects another source")
+        canonical = tuple(
+            sorted(
+                set(manifest),
+                key=lambda item: _RELATION_DEFINITION_FIELD_ORDER[item.field],
+            )
+        )
+        if canonical != manifest:
+            raise RelationError("relation definition manifest is not canonical and unique")
+        entries = tuple(
+            RelationDefinitionViewEntry(
+                item,
+                _relation_definition_field_value(definition, item.field),
+            )
+            for item in manifest
+        )
+    except UnsupportedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.UNSUPPORTED,
+            detail=(str(error),),
+        )
+    except RefusedK3BSemanticProfileError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.REFUSED,
+            detail=(str(error),),
+        )
+    except (MalformedK3BSemanticProfileError, RelationError) as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MALFORMED,
+            detail=(str(error),),
+        )
+    view = RelationDefinitionView(
+        expected_view_coordinate,
+        manifest,
+        entries,
+        _RELATION_DEFINITION_VIEW_ISSUER,
+    )
+    (
+        consumer_id,
+        purpose_id,
+        payload_id,
+        no_policy_id,
+        closure_id,
+        requirement,
+    ) = _relation_definition_view_authority_components(
+        view,
+        consumer_id,
+        purpose_id,
+        profiles,
+    )
+    binding = k1.OwnerLocalSourceAuthorityBinding(
+        k1.Symbol("relations"),
+        k1.Symbol("relation-definition-view"),
+        view,
+        payload_id,
+        k1.OwnerDefinesNoOperationPolicy(no_policy_id),
+        closure_id,
+        requirement,
+    )
+    k1.validate_owner_local_source_authority_binding(binding)
+    capability = RelationDefinitionViewCapability(
+        view,
+        binding,
+        consumer_id,
+        purpose_id,
+        definition,
+        _RELATION_DEFINITION_VIEW_ISSUER,
+    )
+    _RELATION_DEFINITION_VIEW_LIVE_CAPABILITIES[id(capability)] = capability
+    issued = IssuedRelationDefinitionView(
+        view,
+        binding,
+        capability,
+        _RELATION_DEFINITION_VIEW_ISSUER,
+    )
+    _RELATION_DEFINITION_VIEW_LIVE_ISSUANCES[id(issued)] = issued
+    return k2.QualifiedViewOutcome(k2.QualifiedViewOutcomeKind.AFFIRMATIVE, issued)
+
+
+def validate_issued_relation_definition_view(
+    issued: object,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+    profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
+    expected_consumer_id: object | None = None,
+    expected_purpose_id: object | None = None,
+) -> bool:
+    if (
+        type(issued) is not IssuedRelationDefinitionView
+        or _RELATION_DEFINITION_VIEW_LIVE_ISSUANCES.get(id(issued)) is not issued
+        or issued._issuer is not _RELATION_DEFINITION_VIEW_ISSUER
+        or type(issued.capability) is not RelationDefinitionViewCapability
+        or _RELATION_DEFINITION_VIEW_LIVE_CAPABILITIES.get(id(issued.capability))
+        is not issued.capability
+        or issued.capability._issuer is not _RELATION_DEFINITION_VIEW_ISSUER
+        or issued.capability.view is not issued.view
+        or issued.capability.source_binding is not issued.source_binding
+        or type(issued.source_binding) is not k1.OwnerLocalSourceAuthorityBinding
+        or issued.source_binding.owner_local_coordinate is not issued.view
+    ):
+        return False
+    consumer_id = (
+        issued.capability.consumer_id
+        if expected_consumer_id is None
+        else expected_consumer_id
+    )
+    purpose_id = (
+        issued.capability.purpose_id
+        if expected_purpose_id is None
+        else expected_purpose_id
+    )
+    if (
+        issued.capability.consumer_id != consumer_id
+        or issued.capability.purpose_id != purpose_id
+    ):
+        return False
+    try:
+        _require_supported_k3b_profile(
+            profiles,
+            profile_support,
+            profiles.relations_correspondence,
+            required_subject_kinds=(
+                _RELATIONS_SOURCE_AUTHORITY_SUBJECT_KINDS
+                | frozenset({"relations.definition"})
+            ),
+        )
+        definition = issued.capability._source
+        expected_id = schnorr_relation_definition_id(definition, profiles=profiles)
+        expected_coordinate = RelationDefinitionViewCoordinate(
+            expected_id,
+            profiles.relations_correspondence.identity,
+        )
+        expected_entries = tuple(
+            RelationDefinitionViewEntry(
+                item,
+                _relation_definition_field_value(definition, item.field),
+            )
+            for item in issued.view.manifest
+        )
+        if (
+            issued.view.coordinate != expected_coordinate
+            or issued.view.entries != expected_entries
+        ):
+            return False
+        k1.validate_owner_local_source_authority_binding(issued.source_binding)
+        (
+            _,
+            _,
+            payload_id,
+            no_policy_id,
+            closure_id,
+            requirement,
+        ) = _relation_definition_view_authority_components(
+            issued.view,
+            consumer_id,
+            purpose_id,
+            profiles,
+        )
+    except (K3Error, k1.ModelError, k1.CanonicalError):
+        return False
+    binding = issued.source_binding
+    return (
+        binding.owner_domain == k1.Symbol("relations")
+        and binding.capability_family == k1.Symbol("relation-definition-view")
+        and binding.owner_binding_payload == payload_id
+        and type(binding.operation_policy) is k1.OwnerDefinesNoOperationPolicy
+        and binding.operation_policy.owner_no_policy_declaration == no_policy_id
+        and binding.owner_policy_closure == closure_id
+        and binding.capability_requirement == requirement
+    )
 
 
 @dataclass(frozen=True)
@@ -1246,7 +3255,11 @@ def admit_relation_interface(interface: RelationInterface) -> None:
         _id_datum(slot.access_law_id, "relations.oracle-access-law")
 
 
-def relation_interface_id(interface: RelationInterface) -> object:
+def relation_interface_id(
+    interface: RelationInterface,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     admit_relation_interface(interface)
     return _semantic_id(
         "relations.interface",
@@ -1283,6 +3296,7 @@ def relation_interface_id(interface: RelationInterface) -> object:
                 (5, interface.requires_claim),
             )
         ),
+        profiles=profiles,
     )
 
 
@@ -1361,7 +3375,11 @@ def admit_value_bridge(bridge: ValueBridge) -> None:
         raise BridgeError("unsupported value bridge lane")
 
 
-def value_bridge_id(bridge: ValueBridge) -> object:
+def value_bridge_id(
+    bridge: ValueBridge,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     admit_value_bridge(bridge)
 
     def optional(identifier: object | None, expected: str) -> object:
@@ -1399,6 +3417,7 @@ def value_bridge_id(bridge: ValueBridge) -> object:
                 ),
             )
         ),
+        profiles=profiles,
     )
 
 
@@ -1411,12 +3430,16 @@ class ValueRelation:
 SAME_EXACT_TYPE = ValueRelation()
 
 
-def _bridge_registry(bridges: tuple[ValueBridge, ...]) -> dict[object, ValueBridge]:
+def _bridge_registry(
+    bridges: tuple[ValueBridge, ...],
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> dict[object, ValueBridge]:
     if len(bridges) > MAX_RELATION_OCCURRENCES:
         raise BridgeError("value bridge registry exceeds its finite bound")
     result: dict[object, ValueBridge] = {}
     for bridge in bridges:
-        identifier = value_bridge_id(bridge)
+        identifier = value_bridge_id(bridge, profiles=profiles)
         if identifier in result:
             raise BridgeError("value bridge registry contains a duplicate identity")
         result[identifier] = bridge
@@ -1530,6 +3553,7 @@ _PLAN_BINDING_ISSUER = object()
 @dataclass(frozen=True)
 class CheckedProtocolRelationBinding:
     _issuer: object
+    _profiles: K3BSemanticProfiles
     binding_id: object
     binding: ProtocolRelationBinding
     missing_public: tuple[tuple[str, str], ...]
@@ -1550,6 +3574,7 @@ class CheckedProtocolRelationBinding:
 @dataclass(frozen=True)
 class CheckedPlanWitnessBinding:
     _issuer: object
+    _profiles: K3BSemanticProfiles
     binding_id: object
     binding: PlanWitnessBinding
     surface: PlanWitnessSurface
@@ -1626,7 +3651,11 @@ def _value_relation_body(relation: ValueRelation) -> object:
     )
 
 
-def protocol_relation_binding_id(binding: ProtocolRelationBinding) -> object:
+def protocol_relation_binding_id(
+    binding: ProtocolRelationBinding,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     _id_datum(binding.protocol_id, "pir.protocol")
     return _semantic_id(
         "relations.protocol-binding",
@@ -1641,10 +3670,15 @@ def protocol_relation_binding_id(binding: ProtocolRelationBinding) -> object:
                 (6, k1.DatumSeq(tuple(k1.DatumRecord(((0, k1.Symbol(x.instance)), (1, k1.Symbol(x.claim.origin.value)), (2, k1.Symbol(x.claim.claim)), (3, k1.DatumVariant(0, k1.UNIT) if x.claim.producer is None else k1.DatumVariant(1, k1.Symbol(x.claim.producer))))) for x in binding.claim_edges))),
             )
         ),
+        profiles=profiles,
     )
 
 
-def plan_witness_binding_id(binding: PlanWitnessBinding) -> object:
+def plan_witness_binding_id(
+    binding: PlanWitnessBinding,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     return _semantic_id(
         "relations.plan-witness-binding",
         k1.DatumRecord(
@@ -1668,17 +3702,20 @@ def plan_witness_binding_id(binding: PlanWitnessBinding) -> object:
                 ),
             )
         ),
+        profiles=profiles,
     )
 
 
 def _admitted_interfaces(
     interfaces: tuple[RelationInterface, ...],
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> dict[object, RelationInterface]:
     if len(interfaces) > MAX_RELATION_OCCURRENCES:
         raise RelationError("relation Interface set exceeds its finite bound")
     result: dict[object, RelationInterface] = {}
     for interface in interfaces:
-        identifier = relation_interface_id(interface)
+        identifier = relation_interface_id(interface, profiles=profiles)
         if identifier in result:
             raise RelationError("relation Interfaces must have distinct identities")
         result[identifier] = interface
@@ -1692,11 +3729,18 @@ def check_protocol_relation_binding(
     interfaces: tuple[RelationInterface, ...],
     bridges: tuple[ValueBridge, ...],
     binding: ProtocolRelationBinding,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> CheckedProtocolRelationBinding:
     k2.admit_core(core)
     if type(binding) is not ProtocolRelationBinding:
         raise RelationError("ProtocolRelationBinding has the wrong exact shape")
-    if binding.protocol_id != protocol_id(core, construction, interpretation):
+    if binding.protocol_id != protocol_id(
+        core,
+        construction,
+        interpretation,
+        profiles=profiles,
+    ):
         raise RelationError("ProtocolRelationBinding names the wrong Protocol")
     sequences = (
         binding.relation_interface_ids,
@@ -1708,7 +3752,7 @@ def check_protocol_relation_binding(
     )
     if any(len(items) > MAX_RELATION_OCCURRENCES for items in sequences):
         raise RelationError("ProtocolRelationBinding exceeds its finite bounds")
-    interface_by_id = _admitted_interfaces(interfaces)
+    interface_by_id = _admitted_interfaces(interfaces, profiles=profiles)
     if len(binding.relation_interface_ids) != len(set(binding.relation_interface_ids)):
         raise RelationError("Protocol binding relation Interface IDs must be unique")
     for identifier in binding.relation_interface_ids:
@@ -1727,7 +3771,7 @@ def check_protocol_relation_binding(
         raise RelationError("Protocol binding Interface list must be exact-used")
 
     value_types = _core_value_types(core)
-    bridge_by_id = _bridge_registry(bridges)
+    bridge_by_id = _bridge_registry(bridges, profiles=profiles)
     public_keys: set[tuple[str, str]] = set()
     for edge in binding.public_edges:
         instance = instance_by_name.get(edge.instance)
@@ -1804,7 +3848,8 @@ def check_protocol_relation_binding(
     expected_claim = {i.name for i in binding.instances if interface_by_id[i.relation_interface_id].requires_claim}
     return CheckedProtocolRelationBinding(
         _PROTOCOL_BINDING_ISSUER,
-        protocol_relation_binding_id(binding),
+        profiles,
+        protocol_relation_binding_id(binding, profiles=profiles),
         binding,
         tuple(sorted(expected_public - public_keys)),
         tuple(sorted(expected_phase - phase_keys)),
@@ -1818,17 +3863,25 @@ def check_plan_witness_binding(
     interface: RelationInterface,
     bridges: tuple[ValueBridge, ...],
     binding: PlanWitnessBinding,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> CheckedPlanWitnessBinding:
     if type(binding) is not PlanWitnessBinding:
         raise RelationError("PlanWitnessBinding has the wrong exact shape")
-    if binding.plan_witness_surface_id != plan_witness_surface_id(surface):
+    if binding.plan_witness_surface_id != plan_witness_surface_id(
+        surface,
+        profiles=profiles,
+    ):
         raise RelationError("PlanWitnessBinding names the wrong witness surface")
     if len(binding.witness_edges) > MAX_RELATION_OCCURRENCES:
         raise RelationError("PlanWitnessBinding exceeds its finite bounds")
-    if binding.relation_interface_id != relation_interface_id(interface):
+    if binding.relation_interface_id != relation_interface_id(
+        interface,
+        profiles=profiles,
+    ):
         raise RelationError("Plan witness binding names the wrong relation Interface")
     surface_entries = {item.key: item for item in surface.entries}
-    bridge_by_id = _bridge_registry(bridges)
+    bridge_by_id = _bridge_registry(bridges, profiles=profiles)
     edge_keys: set[str] = set()
     for edge in binding.witness_edges:
         slot = next((x for x in interface.private_witness if x.name == edge.slot), None)
@@ -1848,7 +3901,8 @@ def check_plan_witness_binding(
     expected = {x.name for x in interface.private_witness}
     return CheckedPlanWitnessBinding(
         _PLAN_BINDING_ISSUER,
-        plan_witness_binding_id(binding),
+        profiles,
+        plan_witness_binding_id(binding, profiles=profiles),
         binding,
         surface,
         tuple(sorted(expected - edge_keys)),
@@ -1859,7 +3913,11 @@ def require_whole_protocol_binding(result: CheckedProtocolRelationBinding) -> No
     if (
         type(result) is not CheckedProtocolRelationBinding
         or result._issuer is not _PROTOCOL_BINDING_ISSUER
-        or result.binding_id != protocol_relation_binding_id(result.binding)
+        or result.binding_id
+        != protocol_relation_binding_id(
+            result.binding,
+            profiles=result._profiles,
+        )
         or not result.whole
     ):
         raise RelationError("Protocol relation binding is not whole")
@@ -1869,8 +3927,16 @@ def require_whole_plan_binding(result: CheckedPlanWitnessBinding) -> None:
     if (
         type(result) is not CheckedPlanWitnessBinding
         or result._issuer is not _PLAN_BINDING_ISSUER
-        or result.binding_id != plan_witness_binding_id(result.binding)
-        or result.binding.plan_witness_surface_id != plan_witness_surface_id(result.surface)
+        or result.binding_id
+        != plan_witness_binding_id(
+            result.binding,
+            profiles=result._profiles,
+        )
+        or result.binding.plan_witness_surface_id
+        != plan_witness_surface_id(
+            result.surface,
+            profiles=result._profiles,
+        )
         or not result.whole
     ):
         raise RelationError("Plan witness binding is not whole")
@@ -2181,7 +4247,11 @@ def admit_grounding_equation(equation: GroundingEquation) -> None:
         raise ArtifactError("grounding equation root must be Boolean")
 
 
-def grounding_equation_id(equation: GroundingEquation) -> object:
+def grounding_equation_id(
+    equation: GroundingEquation,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     admit_grounding_equation(equation)
 
     def reference_body(node: EquationNode) -> object:
@@ -2294,6 +4364,7 @@ def grounding_equation_id(equation: GroundingEquation) -> object:
                 (4, k1.Symbol(equation.root)),
             )
         ),
+        profiles=profiles,
     )
 
 
@@ -2367,10 +4438,16 @@ def _coordinate_body(coordinate: RelationRunCoordinate) -> object:
     raise GroundingError("relation run coordinate has the wrong exact shape")
 
 
-def _grounded_value_id(coordinate: RelationRunCoordinate, value: object) -> object:
+def _grounded_value_id(
+    coordinate: RelationRunCoordinate,
+    value: object,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     return _semantic_id(
         "relations.grounded-value-occurrence",
         k1.DatumRecord(((0, _coordinate_body(coordinate)), (1, k2._datum(value)))),
+        profiles=profiles,
     )
 
 
@@ -2395,6 +4472,7 @@ def issue_relation_run_view(
     manifest: tuple[RelationRunCoordinate, ...],
     *,
     qualification: RelationRunQualification = RelationRunQualification.REPLAY_QUALIFIED,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> RelationRunView:
     """Replay one exact record and resolve one explicit public-only manifest."""
 
@@ -2402,7 +4480,13 @@ def issue_relation_run_view(
         raise GroundingError(
             "the bounded probe has no live causal capability for CausallyGenerated"
         )
-    checked = k2.replay(core, construction, invocation, record)
+    checked = k2.replay(
+        core,
+        construction,
+        invocation,
+        record,
+        profiles=profiles.k2_profiles,
+    )
     admitted_values = k2.admit_invocation(core, invocation)
     if len(manifest) > MAX_RUN_READS or len(manifest) != len(set(manifest)):
         raise GroundingError("relation run manifest must be unique and bounded")
@@ -2455,6 +4539,7 @@ def issue_relation_run_view(
             if record.interpretation is k2.ChallengeInterpretation.FRESH
             else construction,
             record.interpretation,
+            profiles=profiles,
         ),
         qualification,
         manifest,
@@ -2514,7 +4599,14 @@ def ground_whole_correspondence(
             raise GroundingError("PIR view lacks a required public occurrence") from error
         coordinate = f"public:{edge.instance}:{edge.slot}"
         public.append(
-            GroundedValue(coordinate, _grounded_value_id(coordinate_ref, value))
+            GroundedValue(
+                coordinate,
+                _grounded_value_id(
+                    coordinate_ref,
+                    value,
+                    profiles=checked_binding._profiles,
+                ),
+            )
         )
 
     phase: list[GroundedValue] = []
@@ -2525,7 +4617,16 @@ def ground_whole_correspondence(
         except KeyError as error:
             raise GroundingError("PIR view lacks a required phase occurrence") from error
         coordinate = f"phase:{edge.instance}:{edge.slot}"
-        phase.append(GroundedValue(coordinate, _grounded_value_id(coordinate_ref, value)))
+        phase.append(
+            GroundedValue(
+                coordinate,
+                _grounded_value_id(
+                    coordinate_ref,
+                    value,
+                    profiles=checked_binding._profiles,
+                ),
+            )
+        )
 
     oracle: list[GroundedValue] = []
     for edge in checked_binding.binding.oracle_edges:
@@ -2537,7 +4638,14 @@ def ground_whole_correspondence(
                 raise GroundingError("PIR view lacks a required Oracle observation") from error
             coordinate = f"oracle-{label}:{edge.instance}:{edge.slot}"
             oracle.append(
-                GroundedValue(coordinate, _grounded_value_id(coordinate_ref, value))
+                GroundedValue(
+                    coordinate,
+                    _grounded_value_id(
+                        coordinate_ref,
+                        value,
+                        profiles=checked_binding._profiles,
+                    ),
+                )
             )
     return RunGroundingResult(
         checked_binding.binding_id,
@@ -2716,7 +4824,11 @@ def form_carrier_graph(graph: CarrierGraph) -> None:
         raise CarrierError(str(error)) from error
 
 
-def carrier_protocol_id(graph: CarrierGraph) -> object:
+def carrier_protocol_id(
+    graph: CarrierGraph,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> object:
     form_carrier_graph(graph)
     construction_ref = (
         k1.DatumVariant(0, k1.UNIT)
@@ -2729,14 +4841,30 @@ def carrier_protocol_id(graph: CarrierGraph) -> object:
             ),
         )
     )
-    return _semantic_id(
+    profile = (
+        profiles.k2_profiles.interaction
+        if graph.interpretation is k2.ChallengeInterpretation.FRESH
+        else profiles.k2_profiles.transcript_fs
+    )
+    return k1.profiled_content_id(
         "pir.protocol",
+        profile.identity,
         k1.DatumRecord(
             (
-                (0, _id_datum(k2.core_id(graph.core), "pir.interactive-core")),
+                (
+                    0,
+                    _id_datum(
+                        k2.core_id(
+                            graph.core,
+                            profiles=profiles.k2_profiles,
+                        ),
+                        "pir.interactive-core",
+                    ),
+                ),
                 (1, construction_ref),
             )
         ),
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
     )
 
 
@@ -2744,11 +4872,17 @@ def carrier_graph_for(
     core: object,
     interpretation: object,
     transcript_construction: object | None,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> CarrierGraph:
     construction_id = (
         None
         if transcript_construction is None
-        else k2.construction_id(core, transcript_construction)
+        else k2.construction_id(
+            core,
+            transcript_construction,
+            profiles=profiles.k2_profiles,
+        )
     )
     graph = CarrierGraph(core, interpretation, construction_id)
     form_carrier_graph(graph)
@@ -2758,16 +4892,23 @@ def carrier_graph_for(
 def admit_carrier_graph(
     graph: CarrierGraph,
     dependencies: CarrierDependencyEnvironment,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> None:
     form_carrier_graph(graph)
     if type(dependencies) is not CarrierDependencyEnvironment:
         raise CarrierError("carrier dependency environment has the wrong exact shape")
     construction = dependencies.transcript_construction
     try:
-        expected_protocol = protocol_id(graph.core, construction, graph.interpretation)
+        expected_protocol = protocol_id(
+            graph.core,
+            construction,
+            graph.interpretation,
+            profiles=profiles,
+        )
     except (K3Error, ValueError) as error:
         raise CarrierError(str(error)) from error
-    if expected_protocol != carrier_protocol_id(graph):
+    if expected_protocol != carrier_protocol_id(graph, profiles=profiles):
         raise CarrierError(
             "external transcript construction does not match the graph reference"
         )
@@ -2908,19 +5049,33 @@ def _read_carrier_value(value: object) -> object:
     raise UnknownCarrierField("mapping carries no recognized semantic tag")
 
 
-def lower_carrier(graph: CarrierGraph) -> dict[str, object]:
+def lower_carrier(
+    graph: CarrierGraph,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> dict[str, object]:
     """Serialize only the canonical graph; dependency preimages stay external."""
 
     form_carrier_graph(graph)
     return {
         "profile": CARRIER_PROFILE,
         "graph": _lower_carrier_value(graph),
-        "asserted_core_id": k2.core_id(graph.core).internal_reference().hex(),
-        "asserted_protocol_id": carrier_protocol_id(graph).internal_reference().hex(),
+        "asserted_core_id": k2.core_id(
+            graph.core,
+            profiles=profiles.k2_profiles,
+        ).internal_reference().hex(),
+        "asserted_protocol_id": carrier_protocol_id(
+            graph,
+            profiles=profiles,
+        ).internal_reference().hex(),
     }
 
 
-def read_carrier(carrier: object) -> CarrierGraph:
+def read_carrier(
+    carrier: object,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
+) -> CarrierGraph:
     """Authenticate carrier shape and identity without admitting dependencies."""
 
     if type(carrier) is not dict:
@@ -2941,10 +5096,16 @@ def read_carrier(carrier: object) -> CarrierGraph:
     if type(graph) is not CarrierGraph:
         raise CarrierError("carrier graph does not reconstruct CarrierGraph")
     form_carrier_graph(graph)
-    expected_core = k2.core_id(graph.core).internal_reference().hex()
+    expected_core = k2.core_id(
+        graph.core,
+        profiles=profiles.k2_profiles,
+    ).internal_reference().hex()
     if carrier["asserted_core_id"] != expected_core:
         raise CarrierError("asserted Core ID does not authenticate reconstructed body")
-    expected_protocol = carrier_protocol_id(graph).internal_reference().hex()
+    expected_protocol = carrier_protocol_id(
+        graph,
+        profiles=profiles,
+    ).internal_reference().hex()
     if carrier["asserted_protocol_id"] != expected_protocol:
         raise CarrierError("asserted Protocol ID does not authenticate graph fields")
     return graph
@@ -2953,9 +5114,11 @@ def read_carrier(carrier: object) -> CarrierGraph:
 def authenticate_carrier(
     carrier: object,
     dependencies: CarrierDependencyEnvironment,
+    *,
+    profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
 ) -> CarrierGraph:
-    graph = read_carrier(carrier)
-    admit_carrier_graph(graph, dependencies)
+    graph = read_carrier(carrier, profiles=profiles)
+    admit_carrier_graph(graph, dependencies, profiles=profiles)
     return graph
 
 
@@ -2978,6 +5141,7 @@ class DependentSurfaceCase:
     protocol_binding: ProtocolRelationBinding
     plan_binding: PlanWitnessBinding
     bridges: tuple[ValueBridge, ...] = ()
+    definition_sources: tuple[SchnorrRelationDefinition, ...] = ()
 
 
 def _algorithm(label: str) -> object:
@@ -3049,10 +5213,16 @@ def schnorr_case() -> DependentSurfaceCase:
         ),
         (),
     )
-    definition, relation_interface = _simple_relation(
-        "schnorr-knowledge",
-        public=(RelationSlot("statement", NAT),),
-        witness=(RelationSlot("secret", NAT),),
+    definition_source = selected_schnorr_relation_definition()
+    definition = RelationDefinitionRef(
+        schnorr_relation_definition_id(definition_source)
+    )
+    relation_interface = RelationInterface(
+        definition.definition_id,
+        (RelationSlot("statement", NAT),),
+        (RelationSlot("secret", NAT),),
+        (),
+        (),
     )
     relation_id = relation_interface_id(relation_interface)
     instances = (RelationInstanceOccurrence("knowledge-instance", relation_id),)
@@ -3091,6 +5261,8 @@ def schnorr_case() -> DependentSurfaceCase:
         (relation_interface,),
         protocol_binding,
         plan_binding,
+        (),
+        (definition_source,),
     )
 
 

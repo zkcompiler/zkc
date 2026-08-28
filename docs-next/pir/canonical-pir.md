@@ -47,16 +47,18 @@ adding another Protocol schema.
 
 The carrier contract has six load-bearing invariants.
 
-1. One graph denotes exactly one `Protocol` and embeds exactly the
-   `InteractiveCore` body named by that Protocol.
+1. One graph denotes exactly one profile-qualified `Protocol` and embeds
+   exactly the profile-qualified `InteractiveCore` body named by that
+   Protocol.
 2. Every field in `InteractiveCoreBody` and `ProtocolBody` is present exactly
    once. No identity-bearing fact is inferred from a name, registry, SSA use,
    default, source position, or consumer.
 3. An FS root carries only `TranscriptConstructionId`. The construction body
    and its dependencies are separately authenticated inputs.
-4. K1 modules, declarations, primitives, algorithms, evaluation contracts,
-   value domains, and failures remain independently identified dependencies.
-   Their bodies are not copied into the Protocol graph.
+4. K1 language profiles, modules, declarations, primitives, algorithms,
+   evaluation contracts, value domains, and failures remain independently
+   identified dependencies. Their bodies are not copied into the Protocol
+   graph.
 5. Interface, Plan, Relations, Analysis, Evidence, OIR, runtime invocations,
    and execution records are not Protocol fields.
 6. Transport validity, canonical authentication, and semantic admission are
@@ -73,30 +75,48 @@ The carrier domain is the finite pair:
 
 ```text
 CanonicalPirSubjectPair_B = {
+  core_profile_id: PIRInteractionProfileId,
   core: InteractiveCore,
+  protocol_profile_id:
+    PIRInteractionProfileId | PIRTranscriptFSProfileId,
   protocol: Protocol
 }
 
 where
   protocol.core_id =
-    SemanticContentId<"pir.interactive-core">(
-      B, InteractiveCoreBody(core))
+    ProfiledSemanticId<"pir.interactive-core">(
+      B, core_profile_id, InteractiveCoreBody(core))
+
+  protocol.protocol_id =
+    ProfiledSemanticId<"pir.protocol">(
+      B, protocol_profile_id, ProtocolBody(protocol))
+
+  protocol_profile_id =
+    PIRInteractionProfileId       when protocol is Fresh
+    PIRTranscriptFSProfileId      when protocol is FiatShamir
 ```
 
-The physical root carries the complete typed `core_id` and one claimed complete
-typed `ProtocolId`. A `SemanticContentId` already contains the foundation
-epoch, identity-profile ID, hash-suite ID, semantic-regime ID, subject kind, and
-digest fixed by K1. There is no additional independently variable
-`ProtocolSemanticRegimeId` field.
+The physical root carries the complete typed `core_id`, one claimed complete
+typed `ProtocolId`, and both exact language-profile IDs. A
+`SemanticContentId` contains the foundation epoch, identity-profile ID,
+hash-suite ID, semantic-regime ID, subject kind, and digest fixed by K1; it does
+not expose the selected language-profile ID outside that digest. The explicit
+profile coordinates are therefore necessary to reconstruct and authenticate
+the complete profiled preimages without a registry lookup or default. There is
+no additional independently variable `ProtocolSemanticRegimeId` field.
 
-The exact descriptor preimages forming `PriorMetaAuthenticationBasis B` remain
+The exact descriptor preimages forming `PriorMetaAuthenticationBasis B` and
+the exact no-extra preimage closure of both selected language profiles remain
 external authentication inputs. Repeating their bytes in the graph would not
-make an unauthenticated root authoritative.
+make an unauthenticated root authoritative. The carrier profile admits only
+the selected K2 profile IDs; equality of profile family or revision is not
+support.
 
 ### 2.2 `InteractiveCoreBody`
 
-The Core body has exactly the fourteen K2 fields below, in this order. The
-canonical MLIR graph carries every listed field. The exact nested
+The Core domain body has exactly the fourteen K2 fields below, in this order.
+The canonical MLIR graph carries every listed field, while the root carries
+the outer `PIRInteractionProfileId`. The exact nested
 `MetaValueV0` record and variant tags are those in
 [Interactive Core Appendix A](interactive-core.md#appendix-a-canonical-bodies);
 this page does not create parallel encodings for them.
@@ -138,7 +158,7 @@ the graph:
 
 ### 2.3 `ProtocolBody`
 
-The Protocol part of the root carries exactly:
+The Protocol domain-body part of the root carries exactly:
 
 ```text
 ProtocolBody(P) = {
@@ -151,10 +171,12 @@ ProtocolBody(P) = {
 The same physical `core_id` is the Protocol field and the claimed identity of
 the embedded Core. A second Core-ID spelling is forbidden. `ProtocolId` is a
 claimed root header checked against this exact body; it is not a field of its
-own preimage.
+own domain body. Its outer profiled preimage additionally contains the root's
+exact `protocol_profile_id`.
 
 Fresh and FS Protocols over one literal Core therefore have different
-`ProtocolId`s while sharing one `CoreId`.
+`ProtocolId`s and different selected Protocol profiles while sharing one
+`CoreId` and `PIRInteractionProfileId`.
 
 ### 2.4 External `TranscriptConstructionBody`
 
@@ -250,6 +272,8 @@ physical groups occur in this order:
 
 ```text
 root header
+root core-language-profile coordinate
+root Protocol-language-profile coordinate
 core.used_modules
 core.public_inputs
 core.verifier_private_inputs
@@ -284,6 +308,8 @@ would merely embed a second parser.
 The eventual physical profile must fix and check:
 
 - exactly one root, one embedded Core, and one instance of every field group;
+- exact selected Core and Protocol language-profile IDs, with Fresh/FS profile
+  selection agreeing with the carried interpretation;
 - the exact permitted PIR and minimal builtin operation/type/attribute set;
 - exact region and block counts;
 - canonical declaration order and explicit empty/absent values;
@@ -370,7 +396,8 @@ domain is deliberate: parsing cannot assume the prior-meta basis that the next
 boundary must authenticate.
 
 `ExactCanonicalPirDependencyEnvironment_B` is the exact request-local tuple of
-the authenticated prior-meta basis `B`; every and only Core dependency preimage
+the authenticated prior-meta basis `B`; the exact no-extra selected
+language-profile preimage closure; every and only Core dependency preimage
 derived from the structurally reconstructed body and K1 module closure; for FS,
 the one exact transcript-construction body and every and only dependency
 preimage derived from it; and no construction for Fresh. The authentication
@@ -465,13 +492,26 @@ correspondence result.
 
 ### 5.1 Cross-owner capability contract and inert bindings
 
-PIR uses the project-wide
-[`ExactSourceAuthorityBinding`](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings)
+PIR uses only the K1 `PortableSourceAuthorityBinding` and
+`OwnerLocalSourceAuthorityBinding` carriers from
+[Executable Foundations](../foundation/executable-foundations.md#91-inert-source-authority-envelopes)
 for admitted subjects, attenuated views, and checked results exported across an
-owner boundary. Each PIR family retains its exact family-indexed
-`PirCapabilityContractId`, ABI, consumer, purpose, source coordinate, and
-transitive operation-policy closure. The contract uses the explicit
-`OwnerDefinesNoOperationPolicy` disposition where PIR owns no separate policy.
+owner boundary. Foundation is the sole owner of that common envelope. The
+project-wide `ExactSourceAuthorityBinding` terminology is only a predicate over
+one of those two K1 variants, as specified by the
+[cross-domain completeness rule](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings);
+it is not a third record type.
+
+Each PIR family owns the exact profiled preimages named by its K1 carrier: its
+family-indexed `PirCapabilityContractId`, ABI, typed consumer and purpose,
+source/result coordinate and complete binding payload, no-policy declaration,
+and transitive operation-policy closure. A family-specific
+`ExactPIR...AuthorityBinding` name is likewise a refinement requiring those
+preimages and equations over the exact K1 binding, never a separately encoded
+envelope. Where PIR owns no separate operation policy, the K1 disposition is
+`OwnerDefinesNoPolicy(exact PIR no-policy declaration ID)`. The older prose
+spelling `OwnerDefinesNoOperationPolicy(contract, ABI)` denotes the contents of
+that PIR-owned declaration and is not another Foundation constructor.
 
 The portable binding is inert. It is neither an admission receipt nor a
 capability. A consumer reauthenticates the exact subject, contract, ABI, and
@@ -482,8 +522,9 @@ serialization or process crossing destroys live authority.
 This page adds no portable carrier-specific capability channel. The process-
 local graph handle remains inside authentication and admission and cannot cross
 an owner boundary. The detailed binding, portable/owner-local result-coordinate,
-reset, and replay laws remain those of the project authority model and the K1/K2
-subject lifecycles.
+reset, and replay laws remain those of K1 plus the exact K2 owner lifecycles;
+the project architecture may summarize their completeness conditions but may
+not redefine their carrier fields.
 
 ### 5.2 Separate checker authority
 
@@ -522,8 +563,9 @@ The ordered boundary is:
 3. authenticate the complete prior-meta basis;
 4. authenticate every typed Core dependency and exact K1 module closure;
 5. for FS, authenticate the external construction and its dependencies;
-6. recompute `CoreId`, `TranscriptConstructionId` when present, and
-   `ProtocolId`;
+6. authenticate the exact profile-import closure and recompute `CoreId`,
+   `TranscriptConstructionId` when present, and `ProtocolId` from their
+   complete profiled preimages;
 7. mint the operand-bound `AuthenticatedCanonicalPirGraphHandle_B` and expose
    its immutable pair view through `Read_B`; and
 8. run the exact K2 Core and selected interpretation admission.

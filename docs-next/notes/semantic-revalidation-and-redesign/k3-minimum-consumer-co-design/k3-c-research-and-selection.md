@@ -9,8 +9,8 @@
 > rationale. Only exact durable owners may define target semantics.
 > **Started:** 2026-08-27
 > **Selection completed:** 2026-08-27
-> **Disposition:** Retain through K3-E, then delete after its selected
-> contracts, rationale, and deferrals have durable owners.
+> **Disposition:** Retain until its selected contracts, rationale, and
+> deferrals have durable owners, then delete with the K3 package.
 
 ## 1. Bounded question
 

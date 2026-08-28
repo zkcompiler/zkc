@@ -1,8 +1,8 @@
 # K2 Protocol and Fiat--Shamir Validation
 
 > **Document kind:** Temporary validation and falsification record
-> **Document state:** Bounded K2 candidate complete; final repository gates
-> recorded below
+> **Document state:** Bounded K2 candidate complete; pre-K3-E checkpoint gates
+> recorded below and current rotated-profile reclosure routed to K3-E
 > **Provisional owner:** `pir`, coordinated by `project`
 > **Authority:** None. This page records evidence for the non-normative target;
 > current authority remains under [`docs/`](../../../../docs/README.md).
@@ -149,7 +149,13 @@ the integrated semantic kernel: K3 must test the read interfaces against Relatio
 Analysis, and the minimum OIR projection-obligation view, and may reopen a K2
 choice only with a concrete contradiction.
 
-## 6. Final verification record
+## 6. Historical pre-K3-E verification record
+
+This table records the K2 narrow-reclosure checkpoint before K3-E added and
+rotated the exact language-profile and owner-export surfaces. K3-E later
+reclosed the expanded K2 instrument at 76/76 and K1 at 129/129 under the
+rotated Foundation regime. The K3-E integration record owns those current
+results; the table below remains evidence for the earlier K2 checkpoint.
 
 | Gate | Final result |
 |---|---|

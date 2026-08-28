@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from dataclasses import FrozenInstanceError, fields, replace
 from pathlib import Path
+import pickle
 import sys
 import unittest
 from types import MappingProxyType
@@ -103,6 +104,694 @@ def issue_case_view(case: model.DependentSurfaceCase) -> model.RelationRunView:
         record,
         binding_manifest(case.protocol_binding),
     )
+
+
+class SemanticProfileIdentityTest(unittest.TestCase):
+    @staticmethod
+    def body() -> object:
+        return model.k1.DatumRecord(
+            ((0, model.k1.Symbol("profile-locality-probe")),)
+        )
+
+    def identity(
+        self,
+        subject_kind: str,
+        profiles: model.K3BSemanticProfiles,
+    ) -> object:
+        return model._semantic_id(
+            subject_kind,
+            self.body(),
+            profiles=profiles,
+        )
+
+    def test_each_k3b_profile_root_has_its_exact_no_extra_closure(self) -> None:
+        expected_sizes = {
+            model.PIR_INTERFACE_PLAN_PROFILE_ID: 3,
+            model.RELATIONS_PROFILE_ID: 4,
+        }
+        for root_id, expected_size in expected_sizes.items():
+            preimages = model.K3B_ROOT_PROFILE_PREIMAGES[root_id]
+            self.assertIs(type(preimages), dict)
+            context = model.k1.effective_semantic_context(
+                root_id,
+                preimages,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            )
+            self.assertEqual(len(context.authenticated_profiles), expected_size)
+        self.assertEqual(
+            set(model.K3B_PROFILE_PREIMAGES),
+            {
+                model.k2.PIR_INTERACTION_PROFILE_ID,
+                model.k2.PIR_TRANSCRIPT_PROFILE_ID,
+                model.k2.PIR_PUBLIC_SETUP_PROFILE_ID,
+                model.PIR_INTERFACE_PLAN_PROFILE_ID,
+                model.RELATIONS_PROFILE_ID,
+            },
+        )
+        interface_with_unrelated_public_view = {
+            **model.PIR_INTERFACE_PLAN_PROFILE_PREIMAGES,
+            model.k2.PIR_PUBLIC_SETUP_PROFILE_ID: model.k2.PIR_PUBLIC_SETUP_PROFILE,
+        }
+        with self.assertRaises(model.k1._Control) as caught:
+            model.k1.effective_semantic_context(
+                model.PIR_INTERFACE_PLAN_PROFILE_ID,
+                interface_with_unrelated_public_view,
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
+            )
+        self.assertIs(caught.exception.outcome, model.k1.Outcome.REFUSED)
+        self.assertEqual(caught.exception.code, "K1-REFUSED-EXTRA-PROFILE")
+        with self.assertRaisesRegex(model.K3Error, "outside its exact profile catalog"):
+            model._semantic_id("pir.protocol", self.body())
+
+    def test_interface_only_support_does_not_backflow_from_relations(self) -> None:
+        case = model.schnorr_case()
+        manifest = model.external_statement_read_manifest(
+            case.interface,
+            ("statement.statement",),
+        )
+        issued = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            manifest,
+            profile_support=model.K3B_INTERFACE_PROFILE_SUPPORT,
+        )
+        self.assertIs(issued.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        relation_id = model.relation_interface_id(case.relation_interfaces[0])
+        transform = model.RelationTransform(
+            "profile-support-probe",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        relation_manifest = model.claim_reduction_transform_read_manifest(
+            (model.relation_transform_id(transform),)
+        )
+        refused = model.issue_relations_correspondence_view(
+            (transform,),
+            relation_manifest,
+            profile_support=model.K3B_INTERFACE_PROFILE_SUPPORT,
+        )
+        self.assertIs(refused.kind, model.k2.QualifiedViewOutcomeKind.UNSUPPORTED)
+
+    def test_real_owner_views_enforce_support_and_profile_locality(self) -> None:
+        case = model.schnorr_case()
+        interpretation = model.k2.ChallengeInterpretation.FIAT_SHAMIR
+        baseline_manifest = model.external_statement_read_manifest(
+            case.interface,
+            ("statement.statement",),
+        )
+        baseline = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            interpretation,
+            case.interface,
+            baseline_manifest,
+        )
+        self.assertIs(baseline.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+
+        changed = model.make_k3b_semantic_profiles(
+            interface_plan_law=b"zkc-k3b-real-interface-plan-law-v1",
+        )
+        changed_interface = model.default_interface(
+            case.core,
+            case.construction,
+            interpretation,
+            expose_all_transports=True,
+            profiles=changed,
+        )
+        changed_manifest = model.external_statement_read_manifest(
+            changed_interface,
+            ("statement.statement",),
+        )
+        unsupported = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            interpretation,
+            changed_interface,
+            changed_manifest,
+            profiles=changed,
+        )
+        self.assertIs(
+            unsupported.kind,
+            model.k2.QualifiedViewOutcomeKind.UNSUPPORTED,
+        )
+        supported = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            interpretation,
+            changed_interface,
+            changed_manifest,
+            profiles=changed,
+            profile_support=model.make_k3b_profile_support(changed),
+        )
+        self.assertIs(supported.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        assert type(baseline.value) is model.IssuedProtocolInterfaceCorrespondenceView
+        assert type(supported.value) is model.IssuedProtocolInterfaceCorrespondenceView
+        self.assertNotEqual(
+            baseline.value.view.protocol_interface_id,
+            supported.value.view.protocol_interface_id,
+        )
+        self.assertNotEqual(
+            baseline.value.source_binding.owner_binding_payload,
+            supported.value.source_binding.owner_binding_payload,
+        )
+
+        relations_only = model.make_k3b_semantic_profiles(
+            relations_law=b"zkc-k3b-real-relations-law-v1",
+        )
+        same_interface = model.default_interface(
+            case.core,
+            case.construction,
+            interpretation,
+            expose_all_transports=True,
+            profiles=relations_only,
+        )
+        same_manifest = model.external_statement_read_manifest(
+            same_interface,
+            ("statement.statement",),
+        )
+        unaffected = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            interpretation,
+            same_interface,
+            same_manifest,
+            profiles=relations_only,
+            profile_support=model.make_k3b_profile_support(relations_only),
+        )
+        self.assertIs(unaffected.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        assert type(unaffected.value) is model.IssuedProtocolInterfaceCorrespondenceView
+        self.assertEqual(
+            baseline.value.view.protocol_interface_id,
+            unaffected.value.view.protocol_interface_id,
+        )
+        self.assertEqual(
+            baseline.value.source_binding.owner_binding_payload,
+            unaffected.value.source_binding.owner_binding_payload,
+        )
+
+    def test_real_relations_view_rotates_only_under_supported_profile(self) -> None:
+        case = model.schnorr_case()
+        relation_id = model.relation_interface_id(case.relation_interfaces[0])
+        transform = model.RelationTransform(
+            "real-relations-profile-probe",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        baseline_id = model.relation_transform_id(transform)
+        baseline_manifest = model.claim_reduction_transform_read_manifest(
+            (baseline_id,)
+        )
+        baseline = model.issue_relations_correspondence_view(
+            (transform,),
+            baseline_manifest,
+        )
+        self.assertIs(baseline.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+
+        changed = model.make_k3b_semantic_profiles(
+            relations_law=b"zkc-k3b-real-relations-view-law-v1",
+        )
+        changed_id = model.relation_transform_id(transform, profiles=changed)
+        changed_manifest = model.claim_reduction_transform_read_manifest(
+            (changed_id,)
+        )
+        unsupported = model.issue_relations_correspondence_view(
+            (transform,),
+            changed_manifest,
+            profiles=changed,
+        )
+        self.assertIs(
+            unsupported.kind,
+            model.k2.QualifiedViewOutcomeKind.UNSUPPORTED,
+        )
+        supported = model.issue_relations_correspondence_view(
+            (transform,),
+            changed_manifest,
+            profiles=changed,
+            profile_support=model.make_k3b_profile_support(changed),
+        )
+        self.assertIs(supported.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        assert type(baseline.value) is model.IssuedRelationsCorrespondenceView
+        assert type(supported.value) is model.IssuedRelationsCorrespondenceView
+        self.assertNotEqual(baseline_id, changed_id)
+        self.assertNotEqual(
+            baseline.value.source_binding.owner_binding_payload,
+            supported.value.source_binding.owner_binding_payload,
+        )
+
+    def test_supported_profiles_refuse_undeclared_real_owner_subject_kinds(self) -> None:
+        case = model.schnorr_case()
+        interpretation = model.k2.ChallengeInterpretation.FIAT_SHAMIR
+        baseline = model.K3B_SEMANTIC_PROFILES
+        relation_id = model.relation_interface_id(case.relation_interfaces[0])
+        transform = model.RelationTransform(
+            "undeclared-transform-probe",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        interface_required = model._PIR_SOURCE_AUTHORITY_SUBJECT_KINDS | {
+            "pir.protocol-interface"
+        }
+        for omitted_kind in sorted(interface_required):
+            with self.subTest(interface_omitted_kind=omitted_kind):
+                interface_profile = replace(
+                    baseline.interface_plan,
+                    supported_subject_kinds=tuple(
+                        item
+                        for item in baseline.interface_plan.supported_subject_kinds
+                        if item.value != omitted_kind
+                    ),
+                )
+                relations_profile = replace(
+                    baseline.relations_correspondence,
+                    profile_imports=model._profile_imports(interface_profile),
+                )
+                interface_bundle = model.K3BSemanticProfiles(
+                    baseline.k2_profiles,
+                    interface_profile,
+                    relations_profile,
+                )
+                interface = model.default_interface(
+                    case.core,
+                    case.construction,
+                    interpretation,
+                    expose_all_transports=True,
+                    profiles=interface_bundle,
+                )
+                manifest = model.external_statement_read_manifest(
+                    interface,
+                    ("statement.statement",),
+                )
+                refused_interface = (
+                    model.issue_protocol_interface_correspondence_view(
+                        case.core,
+                        case.construction,
+                        interpretation,
+                        interface,
+                        manifest,
+                        profiles=interface_bundle,
+                        profile_support=model.make_k3b_profile_support(
+                            interface_bundle
+                        ),
+                    )
+                )
+                self.assertIs(
+                    refused_interface.kind,
+                    model.k2.QualifiedViewOutcomeKind.REFUSED,
+                )
+
+        relations_required = model._RELATIONS_SOURCE_AUTHORITY_SUBJECT_KINDS | {
+            "relations.transform"
+        }
+        for omitted_kind in sorted(relations_required):
+            with self.subTest(relations_omitted_kind=omitted_kind):
+                relations_profile = replace(
+                    baseline.relations_correspondence,
+                    supported_subject_kinds=tuple(
+                        item
+                        for item in baseline.relations_correspondence.supported_subject_kinds
+                        if item.value != omitted_kind
+                    ),
+                )
+                relations_bundle = model.K3BSemanticProfiles(
+                    baseline.k2_profiles,
+                    baseline.interface_plan,
+                    relations_profile,
+                )
+                relation_manifest = model.claim_reduction_transform_read_manifest(
+                    (
+                        model.relation_transform_id(
+                            transform,
+                            profiles=relations_bundle,
+                        ),
+                    )
+                )
+                refused_relations = model.issue_relations_correspondence_view(
+                    (transform,),
+                    relation_manifest,
+                    profiles=relations_bundle,
+                    profile_support=model.make_k3b_profile_support(
+                        relations_bundle
+                    ),
+                )
+                self.assertIs(
+                    refused_relations.kind,
+                    model.k2.QualifiedViewOutcomeKind.REFUSED,
+                )
+
+    def test_upstream_interaction_change_rotates_both_k3b_languages(self) -> None:
+        changed_k2 = model.k2.make_k2_semantic_profiles(
+            interaction_law=b"zkc-k2-interaction-core-fresh-law-v1",
+        )
+        changed = model.make_k3b_semantic_profiles(k2_profiles=changed_k2)
+        baseline = model.K3B_SEMANTIC_PROFILES
+        self.assertNotEqual(
+            self.identity("pir.protocol-interface", baseline),
+            self.identity("pir.protocol-interface", changed),
+        )
+        self.assertNotEqual(
+            self.identity("relations.protocol-binding", baseline),
+            self.identity("relations.protocol-binding", changed),
+        )
+        self.assertEqual(
+            model.fixture_semantic_ref(
+                "foundation.canonical-algorithm",
+                "profile-independent-fixture",
+                profiles=baseline,
+            ),
+            model.fixture_semantic_ref(
+                "foundation.canonical-algorithm",
+                "profile-independent-fixture",
+                profiles=changed,
+            ),
+        )
+
+    def test_public_setup_law_is_local_but_transcript_rotates_k3b(self) -> None:
+        baseline = model.K3B_SEMANTIC_PROFILES
+        changed_public = model.make_k3b_semantic_profiles(
+            k2_profiles=model.k2.make_k2_semantic_profiles(
+                public_view_law=b"zkc-k2-unrelated-public-view-law-v1",
+            )
+        )
+        changed_transcript = model.make_k3b_semantic_profiles(
+            k2_profiles=model.k2.make_k2_semantic_profiles(
+                transcript_fs_law=b"zkc-k2-used-transcript-fs-law-v1",
+            )
+        )
+        for subject_kind in ("pir.prover-plan", "relations.interface"):
+            with self.subTest(subject_kind=subject_kind):
+                baseline_id = self.identity(subject_kind, baseline)
+                self.assertEqual(
+                    baseline_id,
+                    self.identity(subject_kind, changed_public),
+                )
+                self.assertNotEqual(
+                    baseline_id,
+                    self.identity(subject_kind, changed_transcript),
+                )
+        self.assertEqual(
+            baseline.interface_plan.identity,
+            changed_public.interface_plan.identity,
+        )
+        self.assertEqual(
+            baseline.relations_correspondence.identity,
+            changed_public.relations_correspondence.identity,
+        )
+        self.assertNotEqual(
+            baseline.interface_plan.identity,
+            changed_transcript.interface_plan.identity,
+        )
+        self.assertNotEqual(
+            baseline.relations_correspondence.identity,
+            changed_transcript.relations_correspondence.identity,
+        )
+
+    def test_real_public_id_constructors_and_checks_use_selected_profiles(self) -> None:
+        baseline = model.K3B_SEMANTIC_PROFILES
+        changed_public = model.make_k3b_semantic_profiles(
+            k2_profiles=model.k2.make_k2_semantic_profiles(
+                public_view_law=b"zkc-k2-real-id-public-view-law-v1",
+            )
+        )
+        changed_transcript = model.make_k3b_semantic_profiles(
+            k2_profiles=model.k2.make_k2_semantic_profiles(
+                transcript_fs_law=b"zkc-k2-real-id-transcript-fs-law-v1",
+            )
+        )
+        case = model.verifier_private_case()
+        construction, interpretation = axes(case)
+
+        def relation(profiles: model.K3BSemanticProfiles) -> model.RelationInterface:
+            return replace(
+                case.relation_interfaces[0],
+                definition_id=model.fixture_semantic_ref(
+                    "relations.definition",
+                    "fresh-statement",
+                    profiles=profiles,
+                ),
+            )
+
+        baseline_relation = relation(baseline)
+        public_relation = relation(changed_public)
+        transcript_relation = relation(changed_transcript)
+        baseline_relation_id = model.relation_interface_id(
+            baseline_relation,
+            profiles=baseline,
+        )
+        public_relation_id = model.relation_interface_id(
+            public_relation,
+            profiles=changed_public,
+        )
+        transcript_relation_id = model.relation_interface_id(
+            transcript_relation,
+            profiles=changed_transcript,
+        )
+        self.assertEqual(baseline_relation_id, public_relation_id)
+        self.assertNotEqual(baseline_relation_id, transcript_relation_id)
+
+        baseline_plan_id = model.plan_id(
+            case.core,
+            construction,
+            interpretation,
+            case.plan,
+            profiles=baseline,
+        )
+        self.assertEqual(
+            baseline_plan_id,
+            model.plan_id(
+                case.core,
+                construction,
+                interpretation,
+                case.plan,
+                profiles=changed_public,
+            ),
+        )
+        self.assertNotEqual(
+            baseline_plan_id,
+            model.plan_id(
+                case.core,
+                construction,
+                interpretation,
+                case.plan,
+                profiles=changed_transcript,
+            ),
+        )
+        surface = model.derive_plan_witness_surface(
+            case.core,
+            construction,
+            interpretation,
+            case.plan,
+            profiles=changed_transcript,
+        )
+        surface_id = model.plan_witness_surface_id(
+            surface,
+            profiles=changed_transcript,
+        )
+
+        instances = tuple(
+            replace(item, relation_interface_id=transcript_relation_id)
+            for item in case.protocol_binding.instances
+        )
+        protocol_binding = replace(
+            case.protocol_binding,
+            relation_interface_ids=(transcript_relation_id,),
+            instances=instances,
+        )
+        checked_protocol = model.check_protocol_relation_binding(
+            case.core,
+            construction,
+            interpretation,
+            (transcript_relation,),
+            (),
+            protocol_binding,
+            profiles=changed_transcript,
+        )
+        model.require_whole_protocol_binding(checked_protocol)
+        self.assertNotEqual(
+            checked_protocol.binding_id,
+            model.protocol_relation_binding_id(protocol_binding),
+        )
+        with self.assertRaisesRegex(model.RelationError, "unavailable"):
+            model.check_protocol_relation_binding(
+                case.core,
+                construction,
+                interpretation,
+                (transcript_relation,),
+                (),
+                protocol_binding,
+            )
+
+        plan_binding = replace(
+            case.plan_binding,
+            plan_witness_surface_id=surface_id,
+            relation_interface_id=transcript_relation_id,
+        )
+        checked_plan = model.check_plan_witness_binding(
+            surface,
+            transcript_relation,
+            (),
+            plan_binding,
+            profiles=changed_transcript,
+        )
+        model.require_whole_plan_binding(checked_plan)
+        self.assertNotEqual(
+            checked_plan.binding_id,
+            model.plan_witness_binding_id(plan_binding),
+        )
+        with self.assertRaisesRegex(model.RelationError, "wrong witness surface"):
+            model.check_plan_witness_binding(
+                surface,
+                transcript_relation,
+                (),
+                plan_binding,
+            )
+
+        bridge = model.three_bridge_fixtures()[0]
+        equation = model.r1cs_grounding_equation()
+        coordinate = model.RelationRunCoordinate(
+            model.RunCoordinateKind.STATEMENT,
+            model.BindingRef("root", "statement"),
+        )
+        locality_subjects = (
+            (
+                model.value_bridge_id(bridge, profiles=baseline),
+                model.value_bridge_id(bridge, profiles=changed_public),
+                model.value_bridge_id(bridge, profiles=changed_transcript),
+            ),
+            (
+                model.grounding_equation_id(equation, profiles=baseline),
+                model.grounding_equation_id(equation, profiles=changed_public),
+                model.grounding_equation_id(
+                    equation,
+                    profiles=changed_transcript,
+                ),
+            ),
+            (
+                model._grounded_value_id(coordinate, b"x", profiles=baseline),
+                model._grounded_value_id(
+                    coordinate,
+                    b"x",
+                    profiles=changed_public,
+                ),
+                model._grounded_value_id(
+                    coordinate,
+                    b"x",
+                    profiles=changed_transcript,
+                ),
+            ),
+        )
+        for baseline_id, public_id, transcript_id in locality_subjects:
+            self.assertEqual(baseline_id, public_id)
+            self.assertNotEqual(baseline_id, transcript_id)
+
+    def test_carrier_and_run_view_do_not_relabel_baseline_execution(self) -> None:
+        changed = model.make_k3b_semantic_profiles(
+            k2_profiles=model.k2.make_k2_semantic_profiles(
+                transcript_fs_law=b"zkc-k2-carrier-runtime-transcript-law-v1",
+            )
+        )
+        core, construction, invocation, strategy = model.k2.schnorr_fixture()
+        interpretation = model.k2.ChallengeInterpretation.FIAT_SHAMIR
+        graph = model.carrier_graph_for(
+            core,
+            interpretation,
+            construction,
+            profiles=changed,
+        )
+        carrier = model.lower_carrier(graph, profiles=changed)
+        dependencies = model.CarrierDependencyEnvironment(construction)
+        self.assertEqual(model.read_carrier(carrier, profiles=changed), graph)
+        self.assertEqual(
+            model.authenticate_carrier(
+                carrier,
+                dependencies,
+                profiles=changed,
+            ),
+            graph,
+        )
+        with self.assertRaisesRegex(model.CarrierError, "asserted Protocol ID"):
+            model.read_carrier(carrier)
+
+        record = completed(
+            model.k2.generate(
+                core,
+                construction,
+                interpretation,
+                invocation,
+                strategy,
+                profiles=changed.k2_profiles,
+            )
+        )
+        manifest = (
+            model.RelationRunCoordinate(
+                model.RunCoordinateKind.STATEMENT,
+                model.BindingRef("root", "statement"),
+            ),
+        )
+        view = model.issue_relation_run_view(
+            core,
+            construction,
+            invocation,
+            record,
+            manifest,
+            profiles=changed,
+        )
+        self.assertEqual(
+            view.protocol_id,
+            model.protocol_id(
+                core,
+                construction,
+                interpretation,
+                profiles=changed,
+            ),
+        )
+        with self.assertRaisesRegex(model.k2.ReplayError, "identity axes"):
+            model.issue_relation_run_view(
+                core,
+                construction,
+                invocation,
+                record,
+                manifest,
+            )
+
+    def test_local_profile_changes_rotate_only_their_dependency_cone(self) -> None:
+        baseline = model.K3B_SEMANTIC_PROFILES
+        changed_interface = model.make_k3b_semantic_profiles(
+            interface_plan_law=b"zkc-k3b-interface-plan-law-v1",
+        )
+        changed_relations = model.make_k3b_semantic_profiles(
+            relations_law=b"zkc-k3b-relations-correspondence-law-v1",
+        )
+        baseline_interface = self.identity("pir.prover-plan", baseline)
+        baseline_relations = self.identity("relations.interface", baseline)
+        self.assertNotEqual(
+            baseline_interface,
+            self.identity("pir.prover-plan", changed_interface),
+        )
+        self.assertNotEqual(
+            baseline_relations,
+            self.identity("relations.interface", changed_interface),
+        )
+        self.assertEqual(
+            baseline_interface,
+            self.identity("pir.prover-plan", changed_relations),
+        )
+        self.assertNotEqual(
+            baseline_relations,
+            self.identity("relations.interface", changed_relations),
+        )
+        self.assertEqual(
+            baseline.k2_profiles.bundle,
+            changed_interface.k2_profiles.bundle,
+        )
+        self.assertEqual(
+            baseline.k2_profiles.bundle,
+            changed_relations.k2_profiles.bundle,
+        )
 
 
 class InterfaceAndPlanTest(unittest.TestCase):
@@ -463,6 +1152,382 @@ class InterfaceAndPlanTest(unittest.TestCase):
         )
         self.assertTrue(model.plan_is_relation_free_by_construction())
         self.assertNotIn("source_kind", {item.name for item in fields(model.PlanExport)})
+
+
+class CorrespondenceOwnerViewTest(unittest.TestCase):
+    def test_interface_manifest_closes_over_assignments_slots_and_codecs(self) -> None:
+        case = model.schnorr_case()
+        requested = (
+            model.ProtocolInterfaceRead(
+                model.ProtocolInterfaceReadKind.STATEMENT_MEMBER,
+                "statement.statement",
+            ),
+            model.ProtocolInterfaceRead(
+                model.ProtocolInterfaceReadKind.TRANSPORT_ENTRY,
+                "commitment",
+            ),
+        )
+        closed = model.required_protocol_interface_read_closure(
+            case.interface,
+            requested,
+        )
+        self.assertEqual(
+            {item.kind for item in closed},
+            set(model.ProtocolInterfaceReadKind),
+        )
+        manifest = model.CorrespondenceReadManifest(closed)
+        outcome = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            manifest,
+        )
+        self.assertIs(outcome.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        self.assertIs(type(outcome.value), model.IssuedProtocolInterfaceCorrespondenceView)
+        issued = outcome.value
+        assert type(issued) is model.IssuedProtocolInterfaceCorrespondenceView
+        self.assertEqual(issued.view.requested_reads, closed)
+        self.assertIs(issued.source_binding.owner_local_coordinate, issued.view)
+        self.assertIs(issued.capability.view, issued.view)
+        self.assertIs(issued.capability.source_binding, issued.source_binding)
+        self.assertTrue(
+            model.validate_issued_protocol_interface_correspondence_view(issued)
+        )
+
+    def test_interface_view_refuses_incomplete_and_aliased_source_reads(self) -> None:
+        case = model.schnorr_case()
+        complete = model.external_statement_read_manifest(
+            case.interface,
+            ("statement.statement",),
+        )
+        incomplete = model.CorrespondenceReadManifest(
+            tuple(
+                item
+                for item in complete.protocol_interface
+                if item.kind is not model.ProtocolInterfaceReadKind.INTERFACE_CODEC
+            )
+        )
+        outcome = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            incomplete,
+        )
+        self.assertIs(
+            outcome.kind,
+            model.k2.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+        )
+
+        colliding_transport = replace(
+            case.interface.transports[0],
+            external_coordinate=case.interface.inputs[0].external_coordinate,
+        )
+        aliased = replace(
+            case.interface,
+            transports=(colliding_transport,) + case.interface.transports[1:],
+        )
+        slot_read = model.CorrespondenceReadManifest(
+            (
+                model.ProtocolInterfaceRead(
+                    model.ProtocolInterfaceReadKind.EXTERNAL_SLOT,
+                    case.interface.inputs[0].external_coordinate,
+                ),
+            )
+        )
+        aliased_outcome = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            aliased,
+            slot_read,
+        )
+        self.assertIs(
+            aliased_outcome.kind,
+            model.k2.QualifiedViewOutcomeKind.MALFORMED,
+        )
+
+    def test_relation_transform_read_is_owner_issued_and_exact(self) -> None:
+        case = model.schnorr_case()
+        relation_id = model.relation_interface_id(case.relation_interfaces[0])
+        transform = model.RelationTransform(
+            "schnorr-self-reduction",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        transform_id = model.relation_transform_id(transform)
+        manifest = model.claim_reduction_transform_read_manifest((transform_id,))
+        outcome = model.issue_relations_correspondence_view(
+            (transform,),
+            manifest,
+        )
+        self.assertIs(outcome.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        self.assertIs(type(outcome.value), model.IssuedRelationsCorrespondenceView)
+        issued = outcome.value
+        assert type(issued) is model.IssuedRelationsCorrespondenceView
+        self.assertEqual(issued.view.requested_reads, manifest.relations)
+        self.assertEqual(issued.view.entries[0].value, transform)
+        self.assertIs(issued.source_binding.owner_local_coordinate, issued.view)
+        self.assertIs(issued.capability.view, issued.view)
+        self.assertIs(issued.capability.source_binding, issued.source_binding)
+        self.assertTrue(model.validate_issued_relations_correspondence_view(issued))
+
+        missing = model.issue_relations_correspondence_view((), manifest)
+        self.assertIs(
+            missing.kind,
+            model.k2.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
+        )
+
+        extra = model.RelationTransform(
+            "unrequested-extra-transform",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        extra_outcome = model.issue_relations_correspondence_view(
+            (transform, extra),
+            manifest,
+        )
+        self.assertIs(
+            extra_outcome.kind,
+            model.k2.QualifiedViewOutcomeKind.MALFORMED,
+        )
+
+    def test_correspondence_views_cannot_be_self_authored(self) -> None:
+        with self.assertRaises(model.InterfaceError):
+            model.ProtocolInterfaceCorrespondenceView(
+                model.IDENTITY_CODEC,
+                (),
+                (),
+                object(),
+            )
+        with self.assertRaises(model.RelationError):
+            model.RelationsCorrespondenceView((), (), object())
+
+    def test_interface_authority_refuses_copy_reconstruction_and_wrong_purpose(self) -> None:
+        case = model.schnorr_case()
+        manifest = model.external_statement_read_manifest(
+            case.interface,
+            ("statement.statement",),
+        )
+        issued = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            manifest,
+        ).value
+        alternate = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            manifest,
+            purpose_id=model._source_authority_id(
+                model.PIR_INTERFACE_PLAN_PROFILE,
+                "pir.source-purpose",
+                model.k1.DatumRecord(
+                    ((0, model.k1.Symbol("alternate-interface-purpose")),)
+                ),
+            ),
+        ).value
+        assert type(issued) is model.IssuedProtocolInterfaceCorrespondenceView
+        assert type(alternate) is model.IssuedProtocolInterfaceCorrespondenceView
+        self.assertFalse(
+            model.validate_issued_protocol_interface_correspondence_view(
+                issued,
+                expected_purpose_id=alternate.capability.purpose_id,
+            )
+        )
+        for live in (issued.source_binding, issued.capability, issued):
+            with self.assertRaises((model.K3Error, model.k1.ModelError)):
+                copy.copy(live)
+            with self.assertRaises((model.K3Error, model.k1.ModelError)):
+                copy.deepcopy(live)
+            with self.assertRaises((model.K3Error, model.k1.ModelError)):
+                pickle.dumps(live)
+        binding = issued.source_binding
+        reconstructed_binding = model.k1.OwnerLocalSourceAuthorityBinding(
+            binding.owner_domain,
+            binding.capability_family,
+            binding.owner_local_coordinate,
+            binding.owner_binding_payload,
+            binding.operation_policy,
+            binding.owner_policy_closure,
+            binding.capability_requirement,
+        )
+        forged = replace(issued, source_binding=reconstructed_binding)
+        self.assertFalse(
+            model.validate_issued_protocol_interface_correspondence_view(forged)
+        )
+        with self.assertRaises(model.InterfaceError):
+            model.ProtocolInterfaceViewCapability(
+                issued.view,
+                issued.source_binding,
+                issued.capability.consumer_id,
+                issued.capability.purpose_id,
+                case.interface,
+                object(),
+            )
+
+    def test_relations_authority_refuses_cross_family_and_reconstruction(self) -> None:
+        case = model.schnorr_case()
+        relation_id = model.relation_interface_id(case.relation_interfaces[0])
+        transform = model.RelationTransform(
+            "schnorr-authority-transform",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        manifest = model.claim_reduction_transform_read_manifest(
+            (model.relation_transform_id(transform),)
+        )
+        issued = model.issue_relations_correspondence_view(
+            (transform,),
+            manifest,
+        ).value
+        assert type(issued) is model.IssuedRelationsCorrespondenceView
+        self.assertTrue(model.validate_issued_relations_correspondence_view(issued))
+        for live in (issued.source_binding, issued.capability, issued):
+            with self.assertRaises((model.K3Error, model.k1.ModelError)):
+                copy.copy(live)
+            with self.assertRaises((model.K3Error, model.k1.ModelError)):
+                pickle.dumps(live)
+        binding = issued.source_binding
+        reconstructed_binding = model.k1.OwnerLocalSourceAuthorityBinding(
+            binding.owner_domain,
+            binding.capability_family,
+            binding.owner_local_coordinate,
+            binding.owner_binding_payload,
+            binding.operation_policy,
+            binding.owner_policy_closure,
+            binding.capability_requirement,
+        )
+        forged = replace(issued, source_binding=reconstructed_binding)
+        self.assertFalse(
+            model.validate_issued_relations_correspondence_view(forged)
+        )
+        interface_manifest = model.external_statement_read_manifest(
+            case.interface,
+            ("statement.statement",),
+        )
+        interface_issued = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            interface_manifest,
+        ).value
+        assert type(interface_issued) is model.IssuedProtocolInterfaceCorrespondenceView
+        cross_family = replace(
+            issued,
+            source_binding=interface_issued.source_binding,
+        )
+        self.assertFalse(
+            model.validate_issued_relations_correspondence_view(cross_family)
+        )
+
+
+class RelationDefinitionOwnerViewTest(unittest.TestCase):
+    def test_schnorr_definition_is_profiled_and_exports_exact_fixed_setup(self) -> None:
+        case = model.schnorr_case()
+        definition = case.definition_sources[0]
+        self.assertEqual(
+            case.definitions[0].definition_id,
+            model.schnorr_relation_definition_id(definition),
+        )
+        manifest = model.schnorr_fixed_setup_manifest(definition)
+        outcome = model.issue_relation_definition_view(definition, manifest)
+        self.assertIs(outcome.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        issued = outcome.value
+        assert type(issued) is model.IssuedRelationDefinitionView
+        self.assertTrue(model.validate_issued_relation_definition_view(issued))
+        self.assertEqual(
+            {entry.coordinate.field: entry.value for entry in issued.view.entries},
+            {
+                model.RelationDefinitionField.GENERATOR: 2,
+                model.RelationDefinitionField.SCALAR_MODULUS: 11,
+                model.RelationDefinitionField.GROUP_MODULUS: 23,
+            },
+        )
+        assert case.invocation is not None
+        self.assertEqual(
+            tuple(case.invocation.values[name] for name in ("g", "q", "p")),
+            (definition.generator, definition.scalar_modulus, definition.group_modulus),
+        )
+
+    def test_definition_view_refuses_substitution_wrong_profile_and_reconstruction(
+        self,
+    ) -> None:
+        definition = model.selected_schnorr_relation_definition()
+        manifest = model.schnorr_fixed_setup_manifest(definition)
+        substituted = replace(definition, generator=3)
+        substitution = model.issue_relation_definition_view(substituted, manifest)
+        self.assertIs(
+            substitution.kind,
+            model.k2.QualifiedViewOutcomeKind.MALFORMED,
+        )
+
+        changed = model.make_k3b_semantic_profiles(
+            relations_law=b"relations-definition-owner-view-profile-locality-v1"
+        )
+        changed_manifest = model.schnorr_fixed_setup_manifest(
+            definition,
+            profiles=changed,
+        )
+        changed_outcome = model.issue_relation_definition_view(
+            definition,
+            changed_manifest,
+            profiles=changed,
+            profile_support=model.make_k3b_profile_support(changed),
+        )
+        self.assertIs(
+            changed_outcome.kind,
+            model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE,
+        )
+        issued = changed_outcome.value
+        assert type(issued) is model.IssuedRelationDefinitionView
+        self.assertFalse(model.validate_issued_relation_definition_view(issued))
+        self.assertTrue(
+            model.validate_issued_relation_definition_view(
+                issued,
+                profiles=changed,
+                profile_support=model.make_k3b_profile_support(changed),
+            )
+        )
+        self.assertFalse(
+            model.validate_issued_relation_definition_view(
+                issued,
+                profiles=changed,
+                profile_support=model.make_k3b_profile_support(changed),
+                expected_purpose_id=model._algorithm("wrong-definition-view-purpose"),
+            )
+        )
+        for live in (issued.source_binding, issued.capability, issued):
+            with self.assertRaises((model.K3Error, model.k1.ModelError)):
+                copy.copy(live)
+            with self.assertRaises((model.K3Error, model.k1.ModelError)):
+                pickle.dumps(live)
+        binding = issued.source_binding
+        reconstructed_binding = model.k1.OwnerLocalSourceAuthorityBinding(
+            binding.owner_domain,
+            binding.capability_family,
+            binding.owner_local_coordinate,
+            binding.owner_binding_payload,
+            binding.operation_policy,
+            binding.owner_policy_closure,
+            binding.capability_requirement,
+        )
+        forged = replace(issued, source_binding=reconstructed_binding)
+        self.assertFalse(
+            model.validate_issued_relation_definition_view(
+                forged,
+                profiles=changed,
+                profile_support=model.make_k3b_profile_support(changed),
+            )
+        )
 
 
 class RelationBindingTest(unittest.TestCase):

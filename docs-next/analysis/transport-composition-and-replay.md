@@ -43,28 +43,46 @@ None implies the next. In particular:
 
 ### 2.1 Admitted theorem schema
 
+For the closed theorem records on this page,
+`TheoremProfileLawRef(body_schema,field_ordinal,signature)` denotes the unique
+exact `AnalysisProfileLawRef<signature>` at that field in the directly selected
+`K3CAFKTransportLanguageProfileId`. This standalone profile imports exactly
+`K3CCryptographicPropertyLanguageProfileId`; it neither copies that profile's
+catalogs nor imports any additional owner profile not referenced by its closed
+contracts. A displayed mathematical or English
+expansion in a schema-, interpretation-, coherence-, transform-, map-,
+side-condition-, failure-, or conclusion-law field is reader-facing expansion
+of that ref and is not encoded. Literal coordinates, IDs, enums, ordinals,
+canonical payloads, sequences, maps, and records are encoded as displayed by
+`AnalysisBodyV0`.
+
 Every extensible theorem-schema component uses the same closed declaration-
 plus-payload pattern:
 
 ```text
 TheoremSchemaComponent<C> = {
-  contract_ref: ModuleDeclarationRef<C>,
+  contract_ref: AnalysisProfileDeclarationRef<C>,
   canonical_payload:
     CanonicalValue<resolved and lifted payload type of contract_ref>
 }
 
 AnalysisTheoremComponentSemanticsContract<C> = {
-  exact_component_payload_meta_schema,
-  admitted_local_binding_kinds_and_occurrence_paths,
-  exact_component_interpretation_law,
-  cross_component_coherence_law,
-  failure_classification
+  exact_component_payload_meta_schema:
+    AnalysisProfileLawRef<ClosedTheoremComponentPayloadSchema<C>>,
+  admitted_local_binding_kinds_and_occurrence_paths:
+    CanonicalSortedUniqueSeq<TheoremBindingOccurrencePath>,
+  exact_component_interpretation_law:
+    AnalysisProfileLawRef<TheoremComponentInterpretationLaw<C>>,
+  cross_component_coherence_law:
+    AnalysisProfileLawRef<TheoremComponentCoherenceLaw<C>>,
+  failure_classification:
+    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
 }
 
-AnalysisTheoremComponentSemanticsCatalog(B) =
-  the authenticated semantic-regime mapping from each complete resolved
-  theorem-component declaration coordinate and body to exactly one immutable
-  AnalysisTheoremComponentSemanticsContract of the same component kind
+ResolvedAnalysisTheoremComponentContract(P,component) =
+  the one theorem-component contract of the same component kind resolved from
+  P's authenticated `AnalysisLanguageProfileLawSourceV0` by the complete
+  declaration coordinate and body
 
 TheoremLocalBindingKind =
     AsymptoticFamilyParameter
@@ -80,7 +98,7 @@ TheoremLocalBindingDeclaration = {
   local_ordinal: Natural,
   binding_kind: TheoremLocalBindingKind,
   dependency_ordinals: CanonicalSortedUniqueSeq<EarlierLocalOrdinal>,
-  exact_denotation_schema
+  exact_denotation_schema: AnalysisProfileLawRef<TheoremLocalDenotationSchema>
 }
 
 LocalTheoremBindingRef<K> =
@@ -97,10 +115,11 @@ TheoremTemplateOperandSort =
       LocalTheoremBindingRef<PositivePolynomialParameter>)
 
 TheoremTemplateQuantitativeExpr<S> =
-  the closed typed quantitative AST using only local parameter ordinals,
-  earlier LocalTheoremOperatorRef ordinals, theorem-local role/resource refs,
-  and the arithmetic constructors admitted by the theorem-transform contract;
-  it contains no Analysis subject, family, formula, proposition, or theorem ID
+  the closed typed `AnalysisLawTerm<TheoremQuantitativeTemplate<S>>` using only
+  local parameter ordinals, earlier LocalTheoremOperatorRef ordinals,
+  theorem-local role/resource refs, and the arithmetic constructors admitted
+  by the theorem-transform contract; it contains no Analysis subject, family,
+  formula, proposition, or theorem ID
 
 LocalTheoremOperatorDeclaration = {
   local_ordinal: Natural,
@@ -112,10 +131,6 @@ LocalTheoremOperatorDeclaration = {
 AnalysisTheoremSchemaBody = {
   local_binding_catalog:
     CanonicalNonEmptySeq<TheoremLocalBindingDeclaration>,
-  authority_coordinate:
-    TheoremSchemaComponent<"analysis.theorem-authority">,
-  authority_and_proof_status_contract:
-    TheoremSchemaComponent<"analysis.theorem-proof-status">,
   source_property_schema:
     TheoremSchemaComponent<"analysis.theorem-property-schema">,
   target_property_schema:
@@ -144,10 +159,64 @@ AnalysisTheoremSchemaBody = {
 AnalysisTheoremSchemaId(B,body:AnalysisTheoremSchemaBody) =
   AnalysisId<"analysis.theorem-schema">(B,body)
 
+ResolvedAnalysisTheoremSchema(T) =
+  the unique authenticated `(direct_profile_id,AnalysisTheoremSchemaBody)`
+  whose admitted profiled semantic identity is exactly T
+
+TheoremStatementDigest(T) =
+  SHA256(M(AnalysisBodyV0(
+    ResolvedAnalysisTheoremSchema(T).direct_profile_id,
+    ResolvedAnalysisTheoremSchema(T).body)))
+
+TheoremSourceAuthorityBody = {
+  publication_kind:
+    AnalysisProfileDeclarationRef<"analysis.theorem-source-kind">,
+  stable_source_id: Bytes,
+  bibliographic_revision: {
+    version: Bytes,
+    date: Bytes
+  },
+  artifact_media_type: Bytes,
+  artifact_sha256: Bytes32,
+  exact_locators: CanonicalNonEmptySeq<Bytes>
+}
+
+TheoremTruthDischargeMetadata = {
+  authority_class:
+      ImportedPaperOnly
+    | CheckedProofArtifact,
+  admitted_proof_artifact:
+      None
+    | Some(TypedSemanticSubjectRef),
+  truth_discharge_mode:
+      RetainedTheoremTruthAssumption
+    | EstablishedByCheckedProof,
+  schema_admission_establishes_truth: exactly false
+}
+
+AnalysisTheoremSourceValidationBody = {
+  theorem_schema_id: AnalysisTheoremSchemaId,
+  source_authority: TheoremSourceAuthorityBody,
+  truth_discharge_metadata: TheoremTruthDischargeMetadata
+}
+
+AnalysisTheoremSourceValidationId(B,body) =
+  AnalysisId<
+    "analysis.theorem-source-validation",
+    K3CAFKTheoremSourceValidationLanguageProfileId>(B,body)
+
+TheoremTruthSourceFreeReasonRef =
+  the one exact
+  AnalysisProfileLawRef<SourceFreeFamilyReason> in
+  K3CAFKTransportLanguageProfileId whose law states that theorem-truth meaning
+  is reconstructed solely from the authenticated theorem-schema subject and
+  requires no source manifest or experiment; bibliographic and proof-source
+  validation remain outside the question
+
 TheoremTruthQuestion(T:AnalysisTheoremSchemaId) = AnalysisQuestionBody {
   family: TheoremTruth,
   exact_subjects: [T],
-  context: SourceFree(TheoremTruth),
+  context: SourceFree(TheoremTruthSourceFreeReasonRef),
   family_payload: {
     theorem_schema_id: T,
     conclusion_schema: DenotationOf(T) holds for every admitted parameter
@@ -156,9 +225,7 @@ TheoremTruthQuestion(T:AnalysisTheoremSchemaId) = AnalysisQuestionBody {
 }
 
 TheoremTruthGoal(T) = AnalysisGoalBody {
-  question_id: AnalysisQuestionId(B,TheoremTruthQuestion(T)),
-  conclusion_family: TheoremTruth,
-  hypothesis_free_conclusion: TheoremTruthQuestion(T).conclusion_schema
+  question_id: AnalysisQuestionId(B,TheoremTruthQuestion(T))
 }
 
 TheoremTruthPropositionBody(T) = AnalysisPropositionBody {
@@ -172,8 +239,9 @@ TheoremTruthPropositionId(T:AnalysisTheoremSchemaId) =
 ```
 
 All component declaration bodies and their lifted payload laws are part of the
-authenticated semantic regime. Every component resolves in
-`AnalysisTheoremComponentSemanticsCatalog(B)`, and its canonical payload must
+exact theorem semantic-language profile directly committed by the theorem body.
+Every component resolves through
+`ResolvedAnalysisTheoremComponentContract(P,component)`, and its canonical payload must
 match that entry's exact meta-schema and interpretation law. They are not an
 open theorem-provider API. A component with the right prose label but a
 different declaration, payload, binding ordinal, operator ordinal, type, or
@@ -193,6 +261,48 @@ declaration, or inconsistent cross-component binding is malformed.
 Display spellings such as `F`, `n`, `Q`, `Statement`, and `Witness` are aliases
 only and never enter the schema body.
 
+The theorem schema is the restricted semantic statement and nothing else.
+`TheoremStatementDigest` is a derived view of that admitted profiled body; it is
+never a caller-authored field and cannot disagree with the theorem ID. Source
+locator, bibliographic revision, PDF digest, imported-paper status, proof
+artifact, and truth-discharge metadata live only in
+`AnalysisTheoremSourceValidationBody`. Formation requires `ImportedPaperOnly`
+to pair with `None` and `RetainedTheoremTruthAssumption`, and
+`CheckedProofArtifact` to pair with `Some(exact checked proof artifact)` and
+`EstablishedByCheckedProof`. Schema admission establishes no truth in either
+case.
+
+The validation body is governed by the narrow
+`K3CAFKTheoremSourceValidationLanguageProfileId`, which imports exactly the
+semantic transport profile. The theorem schema remains governed by
+`K3CAFKTransportLanguageProfileId` and never imports the validation profile.
+This profile edge is directional: changing a validation schema, source-kind
+catalog, or validation law cannot rotate theorem semantics, while changing the
+semantic transport profile intentionally rotates the child validation profile
+and every validation subject under it. A support, validation-basis, or judgment
+body that consumes a theorem-source-validation ID is also governed by the child
+profile; its semantic basis, proposition, question, and goal remain governed by
+the parent semantic transport profile.
+
+Formation first authenticates the named theorem schema under the same exact
+transport profile, resolves the source-kind declaration, requires a nonempty
+bounded stable source ID and locator sequence, requires exactly 32 digest
+bytes, and checks the discharge variant equalities above. The source record
+names the bytes and locations that were selected; it does not by itself prove
+that retrieved bytes match the digest or that a proof artifact establishes the
+theorem. Those checks and their exact algorithms belong in the consuming
+`AnalysisValidationBasis`. An unknown source kind is `Unsupported`; an
+ill-typed, over-limit, wrong-length, incoherent, or mismatched-theorem body is
+`Malformed` or `Refused` under the common outcome partition.
+
+Consequently a source-only correction rotates the theorem-source-validation
+ID and every support or validation basis that consumes it, but not the theorem
+schema, theorem-truth question, goal, or proposition. A semantic statement,
+template, component, local binding, or transform change rotates the theorem
+schema; because the validation body names that schema ID, it also rotates every
+downstream validation and support identity. No evaluator may recover theorem
+meaning from the source record or source authority from the theorem body.
+
 The schema body cannot name its own future ID. Each theorem-owned operator is
 therefore declared under one zero-based local ordinal, and the transform stored
 inside the schema uses `LocalTheoremOperatorRef(ordinal)`. Admission checks the
@@ -210,8 +320,11 @@ Schema admission checks a closed, typed statement. It does not establish the
 theorem. A checked imported proof may provide established theorem authority. A
 paper-only theorem is represented by placing the exact
 `TheoremTruthGoal(T)` in the target's hypothesis context and marking that
-premise `Assumed` in support. `AssumedTheorem(T)` is shorthand for that ordinary
-proposition use, not a second proposition constructor or theorem receipt.
+premise `Assumed` in support together with the exact
+`AnalysisTheoremSourceValidationId` whose body names T and selects
+`ImportedPaperOnly`. `AssumedTheorem(T)` is shorthand for that ordinary
+proposition use plus its validation binding, not a second proposition
+constructor or theorem receipt.
 
 ### 2.2 Applicability question
 
@@ -270,11 +383,14 @@ TheoremApplicabilityQuestion(selection,payload) = AnalysisQuestionBody {
 }
 ```
 
-This page contributes exactly two entries to
-`AnalysisFamilySemanticsCatalog(B)`:
+The exact `K3CAFKTransportLanguageProfileId` family-contract catalog is the
+closed transport-owned catalog defined in
+`cryptographic-properties.md#21-exact-property-family-contracts`. The
+following is its exact theorem-specific two-row projection; no ambient family
+registry is consulted:
 
 ```text
-TransportAnalysisFamilySemanticsEntries = CanonicalKeySortedSeq [
+TransportAnalysisFamilyProfileContracts = CanonicalKeySortedSeq [
   {TheoremTruth,AnalysisFamilySemanticsContract {
     exact_subject_schema: [the same AnalysisTheoremSchemaId in the payload],
     exact_question_payload_meta_schema: CanonicalRecord {
@@ -286,7 +402,8 @@ TransportAnalysisFamilySemanticsEntries = CanonicalKeySortedSeq [
       the same exact denotation proposition,
     question_to_conclusion_reconstruction_law:
       reconstruct TheoremTruthGoal from that payload with no caller choice,
-    allowed_question_context_variants: [SourceFree(TheoremTruth)],
+    allowed_question_context_variants:
+      [SourceFree(TheoremTruthSourceFreeReasonRef)],
     exact_quantitative_result_schema: NoQuantitativeResult,
     affirmative_and_negative_meaning:
       exact theorem denotation true or false under all admitted parameters,
@@ -313,7 +430,19 @@ TransportAnalysisFamilySemanticsEntries = CanonicalKeySortedSeq [
 ]
 ```
 
-The two coordinates above are complete property-family declaration references.
+The transport profile's inline catalogs and exact law source contain the full
+finite transport family catalog, including these two declarations, plus their
+used theorem-component declarations and closed schemas and laws. These two
+rows must be byte-identical to
+`K3CAnalysisFamilySemanticsContract(TheoremTruth)` and
+`K3CAnalysisFamilySemanticsContract(TheoremApplicability)`; they are not a
+second definition. Its profile-import DAG is exactly the property-profile
+closure described above: a missing, extra, or redundant profile import refuses
+formation. Any portable algorithm or evaluation contract selected by those
+laws carries its own exact direct ordinary-module roots; that separate no-extra
+module closure is authenticated for the subject and never becomes a profile
+import. The two coordinates above are complete property-family declaration
+references.
 The schemas are expanded to the exact canonical fields displayed on this page;
 the constructor names are not string labels accepted in place of bodies.
 
@@ -338,11 +467,7 @@ hypothesis context, never in the goal. This prevents a goal -> theorem instance
 ```text
 TheoremApplicabilityGoal(selection,payload) = AnalysisGoalBody {
   question_id:
-    AnalysisQuestionId(B,TheoremApplicabilityQuestion(selection,payload)),
-  conclusion_family: TheoremApplicability,
-  hypothesis_free_conclusion:
-    the exact theorem schema is structurally applicable to the exact
-    source/target experiments, maps, substitutions, and typed transform
+    AnalysisQuestionId(B,TheoremApplicabilityQuestion(selection,payload))
 }
 
 TheoremApplicabilityProposition(selection,payload,retained_premises) =
@@ -411,7 +536,9 @@ Inapplicability is not a negative target property.
 PropertyTransport(
   exact affirmative source-property capability,
   exact affirmative theorem-applicability port,
-  exact theorem-truth node treatment: established capability or Assumed,
+  exact theorem-truth node treatment:
+    established capability with its checked-proof validation
+    or Assumed with its imported-source validation,
   exact target-proposition schema to reconstruct)
   -> AnalysisAttemptOutcome<TargetFamily>
 ```
@@ -441,7 +568,13 @@ Transport inherits the exact established-or-`Assumed` treatment of every node
 from those records; it does not require all side conditions to have established
 capabilities. It may merge equal goals only through `CanonicalGoalDagUnion` and
 the exact support-partition rule. The separate theorem-truth argument adds the
-one theorem-truth node treatment and nothing else.
+one theorem-truth node treatment and nothing else. That treatment includes the
+exact theorem-source-validation ID. Its body must name the same theorem schema
+as the node. An established treatment additionally requires the exact checked
+theorem-truth capability and an `EstablishedByCheckedProof` validation body;
+an assumed treatment requires `ImportedPaperOnly` and
+`RetainedTheoremTruthAssumption`. A mismatched theorem ID, proof status, or
+source-validation body is refused.
 
 The caller cannot supply the target bound, delete inherited hypotheses, or
 choose a different target model. Source loss is inherited exactly as directed
@@ -450,11 +583,12 @@ and only if that program selects it.
 
 An established theorem-truth node requires an exact affirmative capability for
 `TheoremTruthPropositionId(T)`. A paper citation cannot supply it. The
-paper-only path instead places that exact node in the support's `Assumed` map.
+paper-only path instead places that exact node in the support's `Assumed` map
+and binds the exact `AnalysisTheoremSourceValidationId` for T.
 The target proposition contains the same canonical context in either case;
-support records whether the premise was discharged or retained. Neither choice
-changes applicability, the theorem schema, or the target's hypothesis-free
-goal.
+support records whether the premise was discharged or retained and which
+source/proof validation justified that treatment. Neither choice changes
+applicability, the theorem schema, or the target's hypothesis-free goal.
 
 For the initial AFK profile, the source is the exact affirmative uniform
 all-`n` `2`-special-soundness judgment for one authenticated abstract family,

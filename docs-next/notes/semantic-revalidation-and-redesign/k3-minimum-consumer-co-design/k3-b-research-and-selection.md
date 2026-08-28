@@ -7,8 +7,9 @@
 > durable owners. This record cannot override those owners or current `docs/`.
 > **Started:** 2026-08-27
 > **Completed:** 2026-08-27
-> **Disposition:** Retain until K3-E confirms that all selected rationale and
-> deferrals have durable homes, then delete with the K3 workspace.
+> **Disposition:** K3-E subsequently confirmed the bounded joined path. Retain
+> until the selected rationale and residuals are durably absorbed, then delete
+> with the K3 workspace.
 
 ## 1. Question and bounded method
 

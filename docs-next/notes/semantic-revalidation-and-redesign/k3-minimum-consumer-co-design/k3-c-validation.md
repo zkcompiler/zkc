@@ -9,7 +9,8 @@
 > establishes no theorem truth, cryptographic property, implementation
 > conformance, random-oracle realization, migration, or consumer reliance.
 > **Date:** 2026-08-27
-> **Disposition:** Retain through K3-E, then delete after durable absorption.
+> **Disposition:** Retain until durable absorption, then delete with the K3
+> package.
 
 ## 1. Validation claim
 
@@ -159,7 +160,7 @@ Consequently this record claims a local bounded reclosure, not an independent
 post-repair `PASS`. Any later counterexample at the same boundary reopens K3-C
 under Section 5.
 
-The final local gates are:
+The final local gates at the historical K3-C checkpoint were:
 
 | Gate | Result |
 |---|---:|
@@ -179,8 +180,10 @@ The final local gates are:
 | temporary-note parent inventory | 101/101 non-root pages routed |
 | tracked private or local-workflow paths | none |
 
-This closes only bounded K3-C. It does not start K3-D and does not convert any
-assumption or finite instrument result into cryptographic proof authority.
+At this historical checkpoint, the result closed only bounded K3-C and did not
+start K3-D. K3-D and bounded K3-E subsequently completed at their separately
+recorded scopes. No assumption or finite instrument result thereby became
+cryptographic proof authority.
 
 ## 5. Residual obligations
 
@@ -194,4 +197,6 @@ Even after bounded validation, the following remain open by construction:
 - concrete hash/RNG conformance and any ROM idealization claim;
 - broader AFK all-`Q`, QROM, zero-knowledge, restoration, composition, and
   protocol-family profiles; and
-- K3-D OIR closure, K3-E integrated closure, migration, and cutover.
+- at this historical checkpoint, K3-D OIR closure and K3-E integrated closure,
+  plus migration and cutover. K3-D and bounded K3-E subsequently completed at
+  their recorded scopes; migration and cutover remain open.
