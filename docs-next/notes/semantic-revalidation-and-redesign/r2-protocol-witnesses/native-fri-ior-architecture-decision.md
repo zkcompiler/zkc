@@ -15,7 +15,7 @@ Use four semantic subjects and three checked constructions:
 ```text
 Native logical FRI IOR Core
   - fixed logical oracles
-  - fresh public fold/query coins
+  - fresh public fold coins and an ordered query-occurrence vector
   - direct logical queries and answers
   - fold and terminal decision semantics
                  |
@@ -23,7 +23,7 @@ Native logical FRI IOR Core
                  v
 Committed FRI Core
   - ordered caps
-  - fresh public fold/query coins
+  - fresh public fold coins and an ordered query-occurrence vector
   - proof-supplied opened fibres and salts
   - authentication, fold, terminal, and decision checks
                  |
@@ -145,6 +145,15 @@ An active `LogicalAccess` oracle affecting an accepting sink is not directly
 same-Core Fiat--Shamir eligible. A checked commitment compilation must first
 produce a Core whose prior prover material has public transcript influence.
 
+The finite Python witness uses a trusted evaluator that stores the complete
+finite carrier so that it can check exact-domain formation and answer selected
+queries. Its public observation and query operations omit the unqueried
+entries, but the host-language carrier does not enforce noninterference. The
+witness therefore validates observation discipline, not verifier capability
+isolation. A durable runtime claim requires owner-side carrier admission to
+issue an exact-domain query handle whose verifier view exposes metadata and
+selected answers only.
+
 ### 3.2 Oracle origin and supply
 
 Distinguish invocation-supplied and strategy-supplied oracle material:
@@ -163,7 +172,21 @@ Both are immutable after fixation. A relation binding can ground the initial
 oracle to one exact `OracleStatement` material occurrence. Equal values do not
 turn a later strategy oracle into the initial subject.
 
-### 3.3 Exact-domain law
+### 3.3 Ordered query-occurrence vector
+
+The Core owns the exact value consumed by its verifier: one ordered vector of
+four domain indices sampled with replacement. It does not own a byte seed.
+Repeated positions remain distinct vector occurrences.
+
+The Fresh interpretation samples the vector directly from verifier public
+coins. The Fiat--Shamir interpretation may derive a construction-internal
+query seed and expand it deterministically, but its result resolves the same
+Core-owned vector. Seed derivation and expansion belong to the challenge
+interpretation and transcript plan rather than to native FRI semantics. Any
+claim that the two sampling experiments have the required distribution or
+security relationship remains an Analysis proposition.
+
+### 3.4 Exact-domain law
 
 The standard finite carrier remains useful for partial lookup protocols. FRI
 adds an owner-local law declaring an exact finite domain and total answer:
@@ -185,7 +208,7 @@ an accepted `Absent` variant.
 This is not a general “totality evidence” Boolean. It is an exact algorithmic
 law with a bounded evaluator contract.
 
-### 3.4 Checked oracle-commitment compilation
+### 3.5 Checked oracle-commitment compilation
 
 Introduce a PIR-owned structural construction:
 
@@ -225,7 +248,7 @@ property transport remain Analysis propositions. Request-local evaluation
 limits and measured work belong to the validation basis, not the construction
 or Core identity.
 
-### 3.5 Checked grinding augmentation
+### 3.6 Checked grinding augmentation
 
 Original FRI has no grinding message or rejection path. The finite committed
 profile adds those effects through a separately checked construction:
@@ -257,7 +280,7 @@ construction, states any theorem that prices the added work or transports a
 round-by-round error coordinate. The augmentation does not itself establish
 soundness amplification.
 
-### 3.6 Construction advice
+### 3.7 Construction advice
 
 Randomized commitment material is a separate owner-local occurrence:
 
@@ -270,7 +293,7 @@ Generation consumes the exact advice once when constructing a cap. Public
 replay consumes only the opening-local advice disclosed by the proof. Advice
 has no portable semantic identity and is absent from the logical oracle.
 
-### 3.7 Typed opening correspondence
+### 3.8 Typed opening correspondence
 
 Extend Relations with an additive opening clause that binds exact occurrences:
 
@@ -355,6 +378,7 @@ FreshWorkAugmentedProtocol
 
 FiatShamirConstruction
   exact statement/context/frame/hash/sampler/work profile
+  construction-internal query seed -> Core query-occurrence vector
 
 FiatShamirWorkAugmentedProtocol
   same WorkAugmentedCommittedFriCore
@@ -495,6 +519,8 @@ of the following:
 - one public-only committed verification of the corresponding proof;
 - exact reconstruction of all fold and query randomness;
 - exact reconstruction of the inserted work seed before nonce verification;
+- one concrete same-Core coupling from a work-augmented Fresh execution to the
+  one-shot Fiat--Shamir execution, including the complete ordered query vector;
 - ordered query occurrences with at least one duplicate;
 - a smaller deduplicated opening table with total occurrence coverage;
 - cap, leaf, salt, path, position, fold, and terminal first-boundary refusals;

@@ -67,16 +67,21 @@ a Merkle root.
 
 The initial oracle is semantically special. It is the object whose proximity
 is tested, whereas later oracles are prover responses constructed after fold
-challenges. A concrete embedding must decide whether that initial oracle is:
+challenges. The FRI definition calls `f[0]` the first-message format while
+simultaneously giving the verifier oracle access to it, giving it to the
+prover as explicit input, and excluding it from proof length and prover
+complexity. The message-position name therefore does not by itself make
+`f[0]` an adaptive prover-strategy output.
 
-- an indexed oracle statement supplied before protocol execution;
-- the first prover oracle message; or
-- represented by a pre-existing public commitment in a different outer
-  relation.
-
-Those choices define different interactions and different adversarial games.
-They must not be merged because their public values happen to agree in one
-run.
+The selected native profile makes that ownership precise: `f[0]` is an
+invocation-supplied oracle input fixed at the initial publication occurrence.
+The finite commitment compilation then publishes its cap as the first target
+proof message before the first fold challenge. A different outer embedding
+may instead supply a pre-existing authenticated commitment as indexed public
+input. That changes the target relation, statement bytes, and first public
+occurrence; it must not be merged with this profile merely because one run has
+equal roots. The outer predicate relating the public statement to the initial
+oracle remains open here.
 
 ### 2.2 Commit phase
 
@@ -148,6 +153,11 @@ Query draws are occurrences. Repeated points are valid and remain distinct in
 the source probability experiment. An implementation may share values or
 authentication nodes, but that physical compression cannot change the number
 or order of logical draws.
+
+Accordingly, the native Core owns one ordered query-occurrence vector sampled
+directly with replacement. It does not own a byte seed. The selected
+Fiat--Shamir construction uses a query seed only as internal derivation state
+and expands it to resolve that same Core vector.
 
 ### 2.5 What native acceptance means
 
@@ -233,9 +243,10 @@ interpretation while sharing the committed Core.
 
 There are at least two valid compilation profiles:
 
-1. treat the initial oracle as the first IOP prover message and commit it before
-   the first fold challenge; or
-2. make an already authenticated initial commitment part of the indexed
+1. take the initial logical oracle as an indexed, invocation-supplied source
+   input and publish its cap as the first target proof message before the first
+   fold challenge; or
+2. make an already authenticated initial commitment part of the target indexed
    statement and compile only later oracle messages.
 
 The second form is common in larger proof systems, where an outer polynomial
@@ -244,8 +255,11 @@ drop-in representation of the first. The source relation, statement bytes,
 first branch point, and theorem game differ.
 
 The finite witness selects the first form because it exercises the complete
-native-to-committed path. It separately records that an outer system may select
-the second through a different construction.
+native-to-committed path. This is compatible with the source's
+"first-message" nomenclature, but does not turn the fixed source oracle into
+an adaptive prover decision and does not establish the outer
+statement-to-oracle predicate. An outer system may select the second form
+through a different construction.
 
 ### 3.4 Randomized commitments
 
@@ -398,6 +412,14 @@ carrier nor a cryptographic binding is published.
 Such a Core is Fresh-valid. It is not directly eligible for same-Core
 Fiat--Shamir when the oracle affects acceptance, because no public value binds
 its content before dependent challenges.
+
+The finite executable representation retains complete carriers inside one
+trusted evaluator. Its exported publication view and query resolver expose
+only metadata and selected answers, so it checks the intended extensional
+behavior. It does not enforce host-level confidentiality or noninterference.
+That limitation is an explicit residual, not evidence that the verifier lacks
+access to unqueried entries. A durable runtime requires a separately admitted
+owner carrier and a restricted exact-domain query handle.
 
 ### 6.2 Total exact-domain oracles
 

@@ -11,13 +11,26 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from friiormodel.commitment import (  # noqa: E402
+    ANTIPODAL_LEAF_HASH_LAW,
+    EXACT_COMMITMENT_LAWS,
+    EXACT_COMMITMENT_PROFILE,
+    LEAF_HASH_DOMAIN,
+    MERKLE_NODE_HASH_LAW,
+    MERKLE_TREE_CAP_PATH_LAW,
     MerkleCap,
+    NODE_HASH_DOMAIN,
     PairOpening,
     build_commitment,
     verify_pair_opening,
 )
 from friiormodel.field import Fp, Fp2  # noqa: E402
-from friiormodel.profile import D0, D1, D2, EvaluationDomain  # noqa: E402
+from friiormodel.profile import (  # noqa: E402
+    D0,
+    D1,
+    D2,
+    EXACT_ALGEBRA_PROFILE,
+    EvaluationDomain,
+)
 from friiormodel.terms import (  # noqa: E402
     ModelFailure,
     OutcomeClass,
@@ -35,6 +48,108 @@ def _evaluations(domain: EvaluationDomain) -> tuple[Fp2, ...]:
 
 def _salts(domain: EvaluationDomain) -> tuple[bytes, ...]:
     return tuple(index.to_bytes(16, "big") for index in range(domain.order // 2))
+
+
+class CommitmentProfileIdentityTest(unittest.TestCase):
+    def test_exact_profile_binds_algebra_and_exact_versioned_laws(self) -> None:
+        self.assertEqual(
+            EXACT_COMMITMENT_PROFILE.algebra_profile_id,
+            EXACT_ALGEBRA_PROFILE.identity,
+        )
+        self.assertEqual(
+            EXACT_COMMITMENT_PROFILE.semantic_laws,
+            EXACT_COMMITMENT_LAWS,
+        )
+        self.assertEqual(
+            tuple(law.name for law in EXACT_COMMITMENT_PROFILE.semantic_laws),
+            (
+                "antipodal-pair-leaf-hash",
+                "ordered-binary-merkle-node-hash",
+                "binary-merkle-tree-cap-and-path",
+            ),
+        )
+        self.assertEqual(
+            EXACT_COMMITMENT_PROFILE.identity.subject_kind,
+            "fri-commitment-profile",
+        )
+        self.assertEqual(
+            EXACT_COMMITMENT_PROFILE.identity.domain,
+            "fri-ior.commitment-profile.v1",
+        )
+        term = EXACT_COMMITMENT_PROFILE.to_term()
+        self.assertEqual(
+            term["semantic_law_ids"],
+            [law.identity.to_term() for law in EXACT_COMMITMENT_LAWS],
+        )
+        self.assertNotIn("clauses", term)
+        self.assertNotIn("source", term)
+        self.assertNotIn("implementation", term)
+
+    def test_domain_separators_match_commitment_law_descriptors(self) -> None:
+        leaf_parameters = dict(ANTIPODAL_LEAF_HASH_LAW.parameters)
+        node_parameters = dict(MERKLE_NODE_HASH_LAW.parameters)
+        self.assertEqual(
+            bytes.fromhex(str(leaf_parameters["domain-separator-hex"])),
+            LEAF_HASH_DOMAIN,
+        )
+        self.assertEqual(
+            bytes.fromhex(str(node_parameters["domain-separator-hex"])),
+            NODE_HASH_DOMAIN,
+        )
+        self.assertIn(
+            "opening-accepts-exactly-when-final-digest-equals-cap-at-running-index",
+            MERKLE_TREE_CAP_PATH_LAW.clauses,
+        )
+
+    def test_commitment_law_change_rotates_only_commitment_profile(self) -> None:
+        algebra_id = EXACT_ALGEBRA_PROFILE.identity
+        changed_leaf = replace(
+            ANTIPODAL_LEAF_HASH_LAW,
+            clauses=ANTIPODAL_LEAF_HASH_LAW.clauses
+            + ("hypothetical-additional-commitment-clause",),
+        )
+        changed_profile = replace(
+            EXACT_COMMITMENT_PROFILE,
+            semantic_laws=(changed_leaf,) + EXACT_COMMITMENT_LAWS[1:],
+        )
+        self.assertNotEqual(changed_leaf.identity, ANTIPODAL_LEAF_HASH_LAW.identity)
+        self.assertNotEqual(
+            changed_profile.identity,
+            EXACT_COMMITMENT_PROFILE.identity,
+        )
+        self.assertEqual(changed_profile.algebra_profile_id, algebra_id)
+        self.assertEqual(EXACT_ALGEBRA_PROFILE.identity, algebra_id)
+
+    def test_commitment_profile_formation_fails_closed(self) -> None:
+        cases = (
+            ({"name": "Bad Name"}, "FRI-IOR-COMMITMENT-026"),
+            (
+                {
+                    "algebra_profile_id": replace(
+                        EXACT_ALGEBRA_PROFILE.identity,
+                        subject_kind="merkle-cap",
+                    )
+                },
+                "FRI-IOR-COMMITMENT-027",
+            ),
+            ({"hash_name": ""}, "FRI-IOR-COMMITMENT-028"),
+            ({"salt_bytes": 0}, "FRI-IOR-COMMITMENT-029"),
+            ({"cap_size": 3}, "FRI-IOR-COMMITMENT-029"),
+            ({"cap_size": 4}, "FRI-IOR-COMMITMENT-030"),
+            ({"semantic_laws": ()}, "FRI-IOR-COMMITMENT-031"),
+            (
+                {"semantic_laws": tuple(reversed(EXACT_COMMITMENT_LAWS))},
+                "FRI-IOR-COMMITMENT-031",
+            ),
+            ({"hash_name": "sha512"}, "FRI-IOR-COMMITMENT-032"),
+            ({"digest_bytes": 31}, "FRI-IOR-COMMITMENT-032"),
+            ({"salt_bytes": 17}, "FRI-IOR-COMMITMENT-032"),
+            ({"cap_size": 1}, "FRI-IOR-COMMITMENT-032"),
+        )
+        for changes, code in cases:
+            with self.subTest(changes=changes), self.assertRaises(ModelFailure) as raised:
+                replace(EXACT_COMMITMENT_PROFILE, **changes)
+            self.assertEqual(raised.exception.code, code)
 
 
 class CommitmentConstructionTest(unittest.TestCase):
@@ -60,6 +175,15 @@ class CommitmentConstructionTest(unittest.TestCase):
             self.assertEqual(opening.positive, values[pair_index])
             self.assertEqual(opening.negative, values[pair_index + D0.order // 2])
             self.assertEqual(len(opening.authentication_path), 2)
+
+    def test_caps_and_openings_bind_the_commitment_profile_identity(self) -> None:
+        tree = build_commitment(D0, _evaluations(D0), _salts(D0))
+        expected = EXACT_COMMITMENT_PROFILE.identity.to_term()
+        self.assertEqual(tree.cap.to_term()["commitment_profile_id"], expected)
+        self.assertEqual(
+            tree.open_pair(0).to_term()["commitment_profile_id"],
+            expected,
+        )
 
     def test_every_pair_opening_authenticates(self) -> None:
         tree = build_commitment(D0, _evaluations(D0), _salts(D0))

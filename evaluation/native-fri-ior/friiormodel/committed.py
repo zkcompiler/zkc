@@ -16,26 +16,144 @@ theorem or any outer relation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
-from .commitment import PairOpening, verify_pair_opening
-from .field import binary_fold, evaluate_polynomial, polynomial_degree
-from .profile import D0, D1, D2, EXACT_PROFILE, admit_exact_profile
-from .proof import CommittedFriPublicInputs, PublicFriProof
+from .commitment import (
+    EXACT_COMMITMENT_PROFILE,
+    MerkleCap,
+    PairOpening,
+    verify_pair_opening,
+)
+from .field import (
+    Fp2,
+    binary_fold,
+    canonical_polynomial,
+    evaluate_polynomial,
+    polynomial_degree,
+)
+from .native import RandomQueryDraw
+from .profile import D0, D1, D2, EXACT_ALGEBRA_PROFILE, EXACT_PROFILE, admit_exact_profile
+from .proof import (
+    CommittedFriPublicInputs,
+    OccurrenceSelector,
+    OpeningTableEntry,
+    PublicFriProof,
+)
 from .terms import (
     CheckResult,
     ModelFailure,
     OutcomeClass,
     ResourceCounter,
+    SemanticId,
     affirmative,
     checker_failure,
+    encode_term,
     malformed,
     refused,
     semantic_id,
+    unsupported,
 )
 from .transcript import FiatShamirTranscript, derive_fiat_shamir_transcript
 
 
 LOGICAL_LAYER_QUERY_OCCURRENCES_PER_DRAW = 2
+
+
+@dataclass(frozen=True, slots=True)
+class ExplicitCommittedFriExecution:
+    """Committed-Core inputs with challenge origin left outside the carrier.
+
+    A Fresh verifier may supply the values directly.  The Fiat--Shamir wrapper
+    derives the same values from raw public inputs and then delegates to the
+    same Core checker.  No work nonce, statement, application context, or
+    transcript construction plan appears in this carrier.
+    """
+
+    algebra_profile_id: SemanticId
+    commitment_profile_id: SemanticId
+    cap0: MerkleCap
+    beta0: Fp2
+    cap1: MerkleCap
+    beta1: Fp2
+    terminal_coefficients: tuple[Fp2, ...]
+    query_draws: tuple[RandomQueryDraw, ...]
+    opening_table: tuple[OpeningTableEntry, ...]
+    occurrence_selectors: tuple[OccurrenceSelector, ...]
+
+    def __post_init__(self) -> None:
+        if type(self) is not ExplicitCommittedFriExecution:
+            raise malformed(
+                "committed:explicit-execution-formation",
+                "FRI-IOR-COMMITTED-004",
+                "explicit committed execution requires the exact closed carrier",
+            )
+        if (
+            not isinstance(self.algebra_profile_id, SemanticId)
+            or self.algebra_profile_id.subject_kind != "fri-algebra-profile"
+            or not isinstance(self.commitment_profile_id, SemanticId)
+            or self.commitment_profile_id.subject_kind != "fri-commitment-profile"
+            or not isinstance(self.cap0, MerkleCap)
+            or not isinstance(self.beta0, Fp2)
+            or not isinstance(self.cap1, MerkleCap)
+            or not isinstance(self.beta1, Fp2)
+        ):
+            raise malformed(
+                "committed:explicit-execution-formation",
+                "FRI-IOR-COMMITTED-004",
+                "explicit committed execution contains a wrong-kind scalar value",
+            )
+        canonical_polynomial(
+            self.terminal_coefficients,
+            EXACT_PROFILE.terminal_max_coefficient_count,
+        )
+        if (
+            type(self.query_draws) is not tuple
+            or not all(type(item) is RandomQueryDraw for item in self.query_draws)
+            or type(self.opening_table) is not tuple
+            or not all(type(item) is OpeningTableEntry for item in self.opening_table)
+            or type(self.occurrence_selectors) is not tuple
+            or not all(
+                type(item) is OccurrenceSelector for item in self.occurrence_selectors
+            )
+        ):
+            raise malformed(
+                "committed:explicit-execution-formation",
+                "FRI-IOR-COMMITTED-004",
+                "explicit committed execution requires exact immutable sequences",
+            )
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "schema": "zkc.fri-ior.explicit-committed-core-execution.v1",
+            "algebra_profile_id": self.algebra_profile_id.to_term(),
+            "commitment_profile_id": self.commitment_profile_id.to_term(),
+            "cap0": self.cap0.to_term(),
+            "beta0": self.beta0.to_term(),
+            "cap1": self.cap1.to_term(),
+            "beta1": self.beta1.to_term(),
+            "terminal_coefficients": [
+                coefficient.to_term() for coefficient in self.terminal_coefficients
+            ],
+            "ordered_query_draws": [
+                {
+                    "ordinal": draw.ordinal,
+                    "initial_domain_index": draw.initial_domain_index,
+                }
+                for draw in self.query_draws
+            ],
+            "opening_table": [entry.to_term() for entry in self.opening_table],
+            "occurrence_selectors": [
+                selector.to_term() for selector in self.occurrence_selectors
+            ],
+        }
+
+    @property
+    def identity(self):
+        return semantic_id(
+            "explicit-committed-fri-execution",
+            "fri-ior.explicit-committed-fri-execution.v1",
+            self.to_term(),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,25 +193,25 @@ def _require_formed_inputs(
 
 
 def _expected_opening_keys(
-    transcript: FiatShamirTranscript,
+    query_draws: tuple[RandomQueryDraw, ...],
 ) -> tuple[tuple[int, int], ...]:
     keys: set[tuple[int, int]] = set()
-    for occurrence in transcript.query_occurrences:
-        query_index = occurrence.initial_domain_index
+    for draw in query_draws:
+        query_index = draw.initial_domain_index
         keys.add((0, query_index % (D0.order // 2)))
         keys.add((1, query_index % (D1.order // 2)))
     return tuple(sorted(keys))
 
 
 def _cover_occurrences(
-    proof: PublicFriProof,
-    transcript: FiatShamirTranscript,
+    execution: ExplicitCommittedFriExecution,
     resources: ResourceCounter,
+    public_message_byte_length: int,
 ) -> tuple[_CoveredOccurrence, ...] | CheckResult:
     """Check canonical deduplication and resolve all four logical draws."""
 
     boundary = "committed:occurrence-coverage"
-    table = proof.opening_table
+    table = execution.opening_table
     table_keys = tuple(entry.key for entry in table)
     if table_keys != tuple(sorted(table_keys)) or len(set(table_keys)) != len(
         table_keys
@@ -114,7 +232,7 @@ def _cover_occurrences(
                 "an opening-table row has an unsupported layer or wrong domain",
             )
 
-    expected_keys = _expected_opening_keys(transcript)
+    expected_keys = _expected_opening_keys(execution.query_draws)
     if table_keys != expected_keys:
         return refused(
             boundary,
@@ -122,8 +240,8 @@ def _cover_occurrences(
             "the canonical opening table does not exactly cover the derived draws",
         )
 
-    occurrences = transcript.query_occurrences
-    selectors = proof.occurrence_selectors
+    occurrences = execution.query_draws
+    selectors = execution.occurrence_selectors
     if len(selectors) != len(occurrences) or tuple(
         selector.ordinal for selector in selectors
     ) != tuple(occurrence.ordinal for occurrence in occurrences):
@@ -135,10 +253,9 @@ def _cover_occurrences(
 
     covered: list[_CoveredOccurrence] = []
     for occurrence, selector in zip(occurrences, selectors, strict=True):
-        if (
-            selector.layer0_opening_index >= len(table)
-            or selector.layer1_opening_index >= len(table)
-        ):
+        if selector.layer0_opening_index >= len(
+            table
+        ) or selector.layer1_opening_index >= len(table):
             return refused(
                 boundary,
                 "FRI-IOR-COMMITTED-014",
@@ -169,20 +286,20 @@ def _cover_occurrences(
             len(covered) * LOGICAL_LAYER_QUERY_OCCURRENCES_PER_DRAW
         ),
         unique_openings=len(table),
-        proof_bytes=proof.canonical_byte_length,
+        proof_bytes=public_message_byte_length,
     )
     return tuple(covered)
 
 
 def _authenticate_unique_openings(
-    proof: PublicFriProof,
+    execution: ExplicitCommittedFriExecution,
     resources: ResourceCounter,
 ) -> CheckResult | None:
     """Authenticate each physical table row exactly once."""
 
-    for entry in proof.opening_table:
+    for entry in execution.opening_table:
         domain = D0 if entry.layer == 0 else D1
-        cap = proof.cap0 if entry.layer == 0 else proof.cap1
+        cap = execution.cap0 if entry.layer == 0 else execution.cap1
         result = verify_pair_opening(domain, cap, entry.opening, resources)
         if result.outcome is not OutcomeClass.AFFIRMATIVE:
             return result
@@ -191,7 +308,7 @@ def _authenticate_unique_openings(
 
 def _check_first_fold(
     covered: tuple[_CoveredOccurrence, ...],
-    transcript: FiatShamirTranscript,
+    execution: ExplicitCommittedFriExecution,
     resources: ResourceCounter,
 ) -> CheckResult | None:
     boundary = "committed:fold0"
@@ -202,7 +319,7 @@ def _check_first_fold(
             D0.points()[pair_index],
             occurrence.layer0.positive,
             occurrence.layer0.negative,
-            transcript.beta0,
+            execution.beta0,
             resources,
         )
         published = (
@@ -221,7 +338,7 @@ def _check_first_fold(
 
 def _check_second_fold_and_terminal_evaluations(
     covered: tuple[_CoveredOccurrence, ...],
-    transcript: FiatShamirTranscript,
+    execution: ExplicitCommittedFriExecution,
     resources: ResourceCounter,
 ) -> CheckResult | None:
     boundary = "committed:fold1"
@@ -231,11 +348,11 @@ def _check_second_fold_and_terminal_evaluations(
             D1.points()[pair_index],
             occurrence.layer1.positive,
             occurrence.layer1.negative,
-            transcript.beta1,
+            execution.beta1,
             resources,
         )
         published = evaluate_polynomial(
-            transcript.terminal_coefficients,
+            execution.terminal_coefficients,
             D2.points()[pair_index],
             resources,
         )
@@ -246,6 +363,198 @@ def _check_second_fold_and_terminal_evaluations(
                 "a derived occurrence fails the second fold-to-terminal equation",
             )
     return None
+
+
+def _check_explicit_committed_execution(
+    execution: ExplicitCommittedFriExecution,
+    resources: ResourceCounter,
+    public_message_byte_length: int,
+) -> CheckResult:
+    """Run the challenge-origin-independent committed Core checks."""
+
+    if (
+        execution.algebra_profile_id != EXACT_ALGEBRA_PROFILE.identity
+        or execution.commitment_profile_id != EXACT_COMMITMENT_PROFILE.identity
+    ):
+        return unsupported(
+            "committed:explicit-core-verification",
+            "FRI-IOR-COMMITTED-009",
+            "the committed execution selects unsupported algebra or commitment semantics",
+        )
+    if (
+        len(execution.query_draws) != EXACT_PROFILE.ordered_query_count
+        or tuple(draw.ordinal for draw in execution.query_draws)
+        != tuple(range(EXACT_PROFILE.ordered_query_count))
+        or any(
+            not 0 <= draw.initial_domain_index < D0.order
+            for draw in execution.query_draws
+        )
+    ):
+        return refused(
+            "committed:occurrence-coverage",
+            "FRI-IOR-COMMITTED-013",
+            "query draws must be the exact four ordered in-domain occurrences",
+        )
+
+    covered = _cover_occurrences(
+        execution,
+        resources,
+        public_message_byte_length,
+    )
+    if isinstance(covered, CheckResult):
+        return covered
+    authentication_failure = _authenticate_unique_openings(
+        execution,
+        resources,
+    )
+    if authentication_failure is not None:
+        return authentication_failure
+    first_fold_failure = _check_first_fold(covered, execution, resources)
+    if first_fold_failure is not None:
+        return first_fold_failure
+    second_fold_failure = _check_second_fold_and_terminal_evaluations(
+        covered,
+        execution,
+        resources,
+    )
+    if second_fold_failure is not None:
+        return second_fold_failure
+    if (
+        polynomial_degree(execution.terminal_coefficients)
+        >= EXACT_PROFILE.terminal_degree_bound_exclusive
+    ):
+        return refused(
+            "committed:terminal-degree",
+            "FRI-IOR-COMMITTED-022",
+            "the authenticated terminal polynomial exceeds the exact degree bound",
+        )
+    return affirmative(
+        "committed:explicit-core-verification",
+        "FRI-IOR-COMMITTED-101",
+        "the explicit-coin committed Core checks accept",
+        subject=execution.identity,
+        verdict="Accept",
+        beta0=execution.beta0.to_term(),
+        beta1=execution.beta1.to_term(),
+        ordered_initial_domain_indices=[
+            draw.initial_domain_index for draw in execution.query_draws
+        ],
+        random_draw_count=len(execution.query_draws),
+        logical_layer_query_occurrences=(
+            len(covered) * LOGICAL_LAYER_QUERY_OCCURRENCES_PER_DRAW
+        ),
+        unique_authenticated_openings=len(execution.opening_table),
+        first_fold_checks=len(covered),
+        second_fold_checks=len(covered),
+        proof_bytes=public_message_byte_length,
+        establishes_outer_relation=False,
+        establishes_proximity_theorem=False,
+    )
+
+
+def verify_explicit_committed_fri(
+    candidate: object,
+    resources: object,
+) -> CheckResult:
+    """Verify the committed Core under caller-supplied challenge values."""
+
+    boundary = "committed:explicit-core-verification"
+    if type(candidate) is not ExplicitCommittedFriExecution:
+        return CheckResult(
+            OutcomeClass.MALFORMED,
+            boundary,
+            "FRI-IOR-COMMITTED-005",
+            "explicit committed verification requires its exact execution carrier",
+        )
+    if type(resources) is not ResourceCounter:
+        return CheckResult(
+            OutcomeClass.MALFORMED,
+            boundary,
+            "FRI-IOR-COMMITTED-006",
+            "explicit committed verification requires one caller-owned ResourceCounter",
+        )
+    try:
+        public_message_byte_length = len(
+            encode_term(
+                {
+                    "schema": "zkc.fri-ior.committed-fresh-public-messages.v1",
+                    "cap0": candidate.cap0.to_term(),
+                    "cap1": candidate.cap1.to_term(),
+                    "terminal_coefficients": [
+                        coefficient.to_term()
+                        for coefficient in candidate.terminal_coefficients
+                    ],
+                    "opening_table": [
+                        entry.to_term() for entry in candidate.opening_table
+                    ],
+                    "occurrence_selectors": [
+                        selector.to_term()
+                        for selector in candidate.occurrence_selectors
+                    ],
+                }
+            )
+        )
+        return _check_explicit_committed_execution(
+            candidate,
+            resources,
+            public_message_byte_length,
+        )
+    except ModelFailure as error:
+        return error.to_result()
+    except Exception as error:  # pragma: no cover - fault-injection boundary
+        return checker_failure(
+            boundary,
+            f"unexpected explicit committed-verifier failure: {type(error).__name__}",
+        )
+
+
+def verify_explicit_committed_prefix(
+    candidate: object,
+    resources: object,
+) -> CheckResult:
+    """Admit the publication/challenge/terminal prefix without query work."""
+
+    boundary = "committed:explicit-prefix-verification"
+    if type(candidate) is not ExplicitCommittedFriExecution:
+        return CheckResult(
+            OutcomeClass.MALFORMED,
+            boundary,
+            "FRI-IOR-COMMITTED-007",
+            "explicit prefix verification requires its exact execution carrier",
+        )
+    if type(resources) is not ResourceCounter:
+        return CheckResult(
+            OutcomeClass.MALFORMED,
+            boundary,
+            "FRI-IOR-COMMITTED-008",
+            "explicit prefix verification requires one caller-owned ResourceCounter",
+        )
+    try:
+        if (
+            candidate.algebra_profile_id != EXACT_ALGEBRA_PROFILE.identity
+            or candidate.commitment_profile_id != EXACT_COMMITMENT_PROFILE.identity
+        ):
+            return unsupported(
+                boundary,
+                "FRI-IOR-COMMITTED-009",
+                "the committed prefix selects unsupported algebra or commitment semantics",
+            )
+        return affirmative(
+            boundary,
+            "FRI-IOR-COMMITTED-102",
+            "the committed publication and terminal-material prefix is formed",
+            subject=candidate.identity,
+            performs_query_sampling=False,
+            performs_opening_authentication=False,
+            decides_protocol_verdict=False,
+        )
+    except ModelFailure as error:
+        return error.to_result()
+    except Exception as error:  # pragma: no cover - fault-injection boundary
+        return checker_failure(
+            boundary,
+            f"unexpected explicit prefix-verifier failure: {type(error).__name__}",
+        )
 
 
 def verify_committed_fri(
@@ -280,40 +589,35 @@ def verify_committed_fri(
         if isinstance(derived, CheckResult):
             return derived
         if not isinstance(derived, FiatShamirTranscript):
-            raise RuntimeError("the one-shot transcript API returned a wrong-kind value")
-
-        covered = _cover_occurrences(public_proof, derived, counter)
-        if isinstance(covered, CheckResult):
-            return covered
-
-        authentication_failure = _authenticate_unique_openings(
-            public_proof,
-            counter,
-        )
-        if authentication_failure is not None:
-            return authentication_failure
-
-        first_fold_failure = _check_first_fold(covered, derived, counter)
-        if first_fold_failure is not None:
-            return first_fold_failure
-
-        second_fold_failure = _check_second_fold_and_terminal_evaluations(
-            covered,
-            derived,
-            counter,
-        )
-        if second_fold_failure is not None:
-            return second_fold_failure
-
-        if (
-            polynomial_degree(derived.terminal_coefficients)
-            >= EXACT_PROFILE.terminal_degree_bound_exclusive
-        ):
-            return refused(
-                "committed:terminal-degree",
-                "FRI-IOR-COMMITTED-022",
-                "the authenticated terminal polynomial exceeds the exact degree bound",
+            raise RuntimeError(
+                "the one-shot transcript API returned a wrong-kind value"
             )
+
+        execution = ExplicitCommittedFriExecution(
+            inputs.profile.identity,
+            EXACT_COMMITMENT_PROFILE.identity,
+            public_proof.cap0,
+            derived.beta0,
+            public_proof.cap1,
+            derived.beta1,
+            derived.terminal_coefficients,
+            tuple(
+                RandomQueryDraw(
+                    occurrence.ordinal,
+                    occurrence.initial_domain_index,
+                )
+                for occurrence in derived.query_occurrences
+            ),
+            public_proof.opening_table,
+            public_proof.occurrence_selectors,
+        )
+        core_result = _check_explicit_committed_execution(
+            execution,
+            counter,
+            public_proof.canonical_byte_length,
+        )
+        if core_result.outcome is not OutcomeClass.AFFIRMATIVE:
+            return core_result
 
         subject = semantic_id(
             "committed-fri-verification",
@@ -337,11 +641,12 @@ def verify_committed_fri(
             ],
             random_draw_count=len(derived.query_occurrences),
             logical_layer_query_occurrences=(
-                len(covered) * LOGICAL_LAYER_QUERY_OCCURRENCES_PER_DRAW
+                len(derived.query_occurrences)
+                * LOGICAL_LAYER_QUERY_OCCURRENCES_PER_DRAW
             ),
             unique_authenticated_openings=len(public_proof.opening_table),
-            first_fold_checks=len(covered),
-            second_fold_checks=len(covered),
+            first_fold_checks=len(derived.query_occurrences),
+            second_fold_checks=len(derived.query_occurrences),
             proof_bytes=public_proof.canonical_byte_length,
             establishes_outer_relation=False,
             establishes_proximity_theorem=False,
@@ -356,6 +661,9 @@ def verify_committed_fri(
 
 
 __all__ = [
+    "ExplicitCommittedFriExecution",
     "LOGICAL_LAYER_QUERY_OCCURRENCES_PER_DRAW",
     "verify_committed_fri",
+    "verify_explicit_committed_fri",
+    "verify_explicit_committed_prefix",
 ]

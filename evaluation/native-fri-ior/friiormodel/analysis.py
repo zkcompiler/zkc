@@ -7,9 +7,10 @@ an affirmative result from this module means only that a finite term is
 well-formed or that a named arithmetic calculation was reproduced.
 
 The implementation deliberately has no dependency on private generation,
-native execution traces, commitments, openings, or a committed verifier.
-Those objects may eventually be operands of separately checked applicability
-judgments; they are not evidence authored by question formation.
+native execution traces, commitment values, openings, or a committed verifier.
+It does bind the immutable semantic identities of the selected Core, Protocol,
+profile-law, and construction subjects.  Those bindings are coordinates for a
+future applicability judgment, not evidence authored by question formation.
 """
 
 from __future__ import annotations
@@ -19,8 +20,18 @@ from enum import Enum
 from math import gcd
 from typing import Any
 
-from .profile import EXACT_PROFILE
+from .profile import EXACT_ALGEBRA_PROFILE, QUERY_ANSWER_PROJECTION_LAW
 from .provenance import ArtifactContentId
+from .subjects import (
+    CHECKED_FIAT_SHAMIR_CONSTRUCTION,
+    COMMITTED_FRI_CORE,
+    COMMITMENT_COMPILATION_DECLARATION,
+    FIAT_SHAMIR_CONSTRUCTION_DECLARATION,
+    FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL,
+    FRESH_WORK_AUGMENTED_PROTOCOL,
+    GRINDING_AUGMENTATION_DECLARATION,
+    NATIVE_FRI_CORE,
+)
 from .terms import (
     CheckResult,
     ModelFailure,
@@ -135,6 +146,18 @@ class ObligationKind(str, Enum):
     RANDOM_ORACLE_MODEL = "RandomOracleModel"
     EXTRACTOR_RELATION = "ExtractorRelation"
     HIDDEN_CONSTANTS = "HiddenConstants"
+    CHECKED_CONSTRUCTION = "CheckedConstruction"
+
+
+class SemanticBindingKind(str, Enum):
+    SOURCE_CORE = "SourceCore"
+    TARGET_CORE = "TargetCore"
+    SOURCE_PROTOCOL = "SourceProtocol"
+    TARGET_PROTOCOL = "TargetProtocol"
+    CONSTRUCTION_DECLARATION = "ConstructionDeclaration"
+    CHECKED_CONSTRUCTION = "CheckedConstruction"
+    RELATION_SCHEMA = "RelationSchema"
+    OCCURRENCE_MAP = "OccurrenceMap"
 
 
 class ObligationStatus(str, Enum):
@@ -702,6 +725,134 @@ class RetainedAssumption:
         )
 
 
+_BINDING_SUBJECT_KINDS: dict[SemanticBindingKind, frozenset[str]] = {
+    SemanticBindingKind.SOURCE_CORE: frozenset(
+        {
+            "native-fri-core",
+            "committed-fri-core",
+            "work-augmented-committed-fri-core",
+        }
+    ),
+    SemanticBindingKind.TARGET_CORE: frozenset(
+        {
+            "native-fri-core",
+            "committed-fri-core",
+            "work-augmented-committed-fri-core",
+        }
+    ),
+    SemanticBindingKind.SOURCE_PROTOCOL: frozenset({"fri-protocol"}),
+    SemanticBindingKind.TARGET_PROTOCOL: frozenset({"fri-protocol"}),
+    SemanticBindingKind.CONSTRUCTION_DECLARATION: frozenset(
+        {
+            "commitment-compilation-declaration",
+            "grinding-augmentation-declaration",
+            "fiat-shamir-construction-declaration",
+        }
+    ),
+    SemanticBindingKind.CHECKED_CONSTRUCTION: frozenset(
+        {"checked-fiat-shamir-construction"}
+    ),
+    SemanticBindingKind.RELATION_SCHEMA: frozenset({"fri-relation-schema"}),
+    SemanticBindingKind.OCCURRENCE_MAP: frozenset({"fri-occurrence-map-law"}),
+}
+
+_OPEN_BINDING_OBLIGATION_KINDS: dict[SemanticBindingKind, ObligationKind] = {
+    SemanticBindingKind.CHECKED_CONSTRUCTION: ObligationKind.CHECKED_CONSTRUCTION,
+    SemanticBindingKind.RELATION_SCHEMA: ObligationKind.RELATION_CORRESPONDENCE,
+    SemanticBindingKind.OCCURRENCE_MAP: ObligationKind.OCCURRENCE_MAP,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class TheoremSemanticBinding:
+    """One exact local semantic coordinate, or one explicit open slot.
+
+    A bound slot names an already-owned semantic subject.  An open slot names
+    the exact applicability obligation that prevents a caller from mistaking a
+    prose map or a construction declaration for an admitted relation, map, or
+    checked construction.  Slot formation never discharges correspondence.
+    """
+
+    name: str
+    kind: SemanticBindingKind
+    subject_id: SemanticId | None
+    open_obligation_name: str | None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.name, str)
+            or not self.name
+            or not isinstance(self.kind, SemanticBindingKind)
+        ):
+            raise malformed(
+                "analysis:semantic-binding-formation",
+                "FRI-IOR-ANALYSIS-026",
+                "a theorem semantic binding requires a name and typed binding kind",
+            )
+        is_bound = isinstance(self.subject_id, SemanticId)
+        is_open = (
+            isinstance(self.open_obligation_name, str)
+            and bool(self.open_obligation_name)
+        )
+        if is_bound == is_open:
+            raise malformed(
+                "analysis:semantic-binding-formation",
+                "FRI-IOR-ANALYSIS-027",
+                "a semantic binding slot must be exactly bound or explicitly open",
+            )
+        if self.subject_id is not None and not is_bound:
+            raise malformed(
+                "analysis:semantic-binding-formation",
+                "FRI-IOR-ANALYSIS-027",
+                "a bound semantic slot requires a typed SemanticId",
+            )
+        if self.open_obligation_name is not None and not is_open:
+            raise malformed(
+                "analysis:semantic-binding-formation",
+                "FRI-IOR-ANALYSIS-027",
+                "an open semantic slot requires a non-empty obligation name",
+            )
+        if is_bound and self.subject_id.subject_kind not in _BINDING_SUBJECT_KINDS[
+            self.kind
+        ]:
+            raise ModelFailure(
+                OutcomeClass.KIND_MISMATCH,
+                "analysis:semantic-binding-formation",
+                "FRI-IOR-ANALYSIS-028",
+                "the semantic identity kind does not match its theorem binding slot",
+            )
+
+    @classmethod
+    def bound(
+        cls,
+        name: str,
+        kind: SemanticBindingKind,
+        subject_id: SemanticId,
+    ) -> TheoremSemanticBinding:
+        return cls(name, kind, subject_id, None)
+
+    @classmethod
+    def open(
+        cls,
+        name: str,
+        kind: SemanticBindingKind,
+        obligation_name: str,
+    ) -> TheoremSemanticBinding:
+        return cls(name, kind, None, obligation_name)
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "kind": self.kind.value,
+            "status": "Bound" if self.subject_id is not None else "Open",
+            "subject_id": (
+                None if self.subject_id is None else self.subject_id.to_term()
+            ),
+            "open_obligation_name": self.open_obligation_name,
+            "discharges_correspondence": False,
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class TheoremQuestion:
     name: str
@@ -715,6 +866,7 @@ class TheoremQuestion:
     bound: QuantitativeBoundExpression
     conclusion_law: str
     obligations: tuple[ApplicabilityObligation, ...]
+    semantic_bindings: tuple[TheoremSemanticBinding, ...]
     evaluation_status: EvaluationStatus = EvaluationStatus.UNPROVED
 
     def __post_init__(self) -> None:
@@ -743,6 +895,99 @@ class TheoremQuestion:
                 "FRI-IOR-ANALYSIS-017",
                 "a theorem question cannot omit applicability obligations",
             )
+        obligation_names = tuple(item.name for item in self.obligations)
+        if len(set(obligation_names)) != len(obligation_names):
+            raise malformed(
+                "analysis:theorem-question-formation",
+                "FRI-IOR-ANALYSIS-033",
+                "a theorem question cannot repeat an applicability-obligation name",
+            )
+        if not isinstance(self.semantic_bindings, tuple) or not all(
+            type(binding) is TheoremSemanticBinding
+            for binding in self.semantic_bindings
+        ):
+            raise malformed(
+                "analysis:theorem-question-formation",
+                "FRI-IOR-ANALYSIS-029",
+                "a theorem question requires a typed semantic-binding tuple",
+            )
+        binding_keys = tuple(
+            (binding.kind, binding.name) for binding in self.semantic_bindings
+        )
+        if len(set(binding_keys)) != len(binding_keys):
+            raise malformed(
+                "analysis:theorem-question-formation",
+                "FRI-IOR-ANALYSIS-030",
+                "a theorem question cannot repeat a semantic binding slot",
+            )
+        source_bindings = tuple(
+            binding
+            for binding in self.semantic_bindings
+            if binding.kind
+            in (
+                SemanticBindingKind.SOURCE_CORE,
+                SemanticBindingKind.SOURCE_PROTOCOL,
+            )
+        )
+        target_bindings = tuple(
+            binding
+            for binding in self.semantic_bindings
+            if binding.kind
+            in (
+                SemanticBindingKind.TARGET_CORE,
+                SemanticBindingKind.TARGET_PROTOCOL,
+            )
+        )
+        if (
+            len(source_bindings) != 1
+            or len(target_bindings) != 1
+            or source_bindings[0].subject_id is None
+            or target_bindings[0].subject_id is None
+        ):
+            raise malformed(
+                "analysis:theorem-question-formation",
+                "FRI-IOR-ANALYSIS-031",
+                "a theorem question requires one exact bound source and target Core or Protocol",
+            )
+        obligations_by_name = {item.name: item for item in self.obligations}
+        for binding in self.semantic_bindings:
+            obligation_name = binding.open_obligation_name
+            if obligation_name is None:
+                continue
+            obligation = obligations_by_name.get(obligation_name)
+            expected_kind = _OPEN_BINDING_OBLIGATION_KINDS.get(binding.kind)
+            if (
+                obligation is None
+                or obligation.status is not ObligationStatus.OPEN
+                or obligation.kind is not expected_kind
+            ):
+                raise malformed(
+                    "analysis:theorem-question-formation",
+                    "FRI-IOR-ANALYSIS-032",
+                    "every open semantic binding must name an exact compatible open applicability obligation",
+                )
+        occurrence_bindings = tuple(
+            binding
+            for binding in self.semantic_bindings
+            if binding.kind is SemanticBindingKind.OCCURRENCE_MAP
+        )
+        if any(binding.name not in self.required_maps for binding in occurrence_bindings):
+            raise malformed(
+                "analysis:theorem-question-formation",
+                "FRI-IOR-ANALYSIS-034",
+                "an occurrence-map binding must cover an exact required-map name",
+            )
+        relation_bindings = tuple(
+            binding
+            for binding in self.semantic_bindings
+            if binding.kind is SemanticBindingKind.RELATION_SCHEMA
+        )
+        if len(relation_bindings) != 1:
+            raise malformed(
+                "analysis:theorem-question-formation",
+                "FRI-IOR-ANALYSIS-035",
+                "a theorem question requires one typed relation-schema coordinate",
+            )
 
     def schema_term(self) -> dict[str, Any]:
         return {
@@ -770,6 +1015,9 @@ class TheoremQuestion:
             "schema_id": self.schema_identity.to_term(),
             "source_anchor_id": self.source.identity.to_term(),
             "obligations": [item.to_term() for item in self.obligations],
+            "semantic_bindings": [
+                binding.to_term() for binding in self.semantic_bindings
+            ],
             "evaluation_status": self.evaluation_status.value,
             "theorem_true": None,
             "applicable": None,
@@ -788,12 +1036,26 @@ class TheoremQuestion:
 @dataclass(frozen=True, slots=True)
 class BoundEvaluation:
     expression_id: SemanticId
-    profile_id: SemanticId
+    algebra_profile_id: SemanticId
     classification: BoundClassification
     exact_parameters: tuple[tuple[str, Rational | int], ...]
     derived_facts: tuple[str, ...]
     theorem_applicability: None = None
     property_established: None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.expression_id, SemanticId)
+            or self.expression_id.subject_kind != "analysis-bound-expression"
+            or not isinstance(self.algebra_profile_id, SemanticId)
+            or self.algebra_profile_id.subject_kind != "fri-algebra-profile"
+        ):
+            raise ModelFailure(
+                OutcomeClass.KIND_MISMATCH,
+                "analysis:bound-evaluation-formation",
+                "FRI-IOR-ANALYSIS-036",
+                "a bound evaluation requires typed expression and algebra-profile identities",
+            )
 
     def to_term(self) -> dict[str, Any]:
         parameters: list[dict[str, Any]] = []
@@ -806,7 +1068,7 @@ class BoundEvaluation:
             )
         return {
             "expression_id": self.expression_id.to_term(),
-            "profile_id": self.profile_id.to_term(),
+            "algebra_profile_id": self.algebra_profile_id.to_term(),
             "classification": self.classification.value,
             "exact_parameters": parameters,
             "derived_facts": list(self.derived_facts),
@@ -1287,11 +1549,63 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
             "no checked correspondence to the theorem's protocol has been supplied",
         ),
         (
+            "relation-correspondence",
+            ObligationKind.RELATION_CORRESPONDENCE,
+            "no reviewed canonical relation-schema identity is available for binding",
+        ),
+        (
             "side-conditions",
             ObligationKind.SIDE_CONDITION,
             "the theorem-owned side conditions have not all been discharged",
         ),
     )
+
+    property_subjects: dict[PropertyKind, SemanticId] = {
+        PropertyKind.NATIVE_PROXIMITY_SOUNDNESS: NATIVE_FRI_CORE.identity,
+        PropertyKind.ROUND_BY_ROUND_VECTOR_SOUNDNESS: NATIVE_FRI_CORE.identity,
+        PropertyKind.RESTRICTED_RESTORATION_SOUNDNESS: NATIVE_FRI_CORE.identity,
+        PropertyKind.UNRESTRICTED_RESTORATION_SOUNDNESS: NATIVE_FRI_CORE.identity,
+        PropertyKind.COMMITTED_INTERACTIVE_SOUNDNESS: COMMITTED_FRI_CORE.identity,
+        PropertyKind.GRINDING_ADJUSTED_SOUNDNESS: (
+            FRESH_WORK_AUGMENTED_PROTOCOL.identity
+        ),
+        PropertyKind.CLASSICAL_ROM_SOUNDNESS: (
+            FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL.identity
+        ),
+        PropertyKind.QROM_SOUNDNESS: FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL.identity,
+        PropertyKind.CLASSICAL_ROM_KNOWLEDGE: (
+            FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL.identity
+        ),
+        PropertyKind.GENERALIZED_SPECIAL_SOUNDNESS: (
+            FRESH_WORK_AUGMENTED_PROTOCOL.identity
+        ),
+    }
+
+    def endpoint_binding(
+        role: str,
+        property_kind: PropertyKind,
+    ) -> TheoremSemanticBinding:
+        subject_id = property_subjects[property_kind]
+        is_core = subject_id.subject_kind in _BINDING_SUBJECT_KINDS[
+            SemanticBindingKind.SOURCE_CORE
+        ]
+        if role == "source":
+            kind = (
+                SemanticBindingKind.SOURCE_CORE
+                if is_core
+                else SemanticBindingKind.SOURCE_PROTOCOL
+            )
+        else:
+            kind = (
+                SemanticBindingKind.TARGET_CORE
+                if is_core
+                else SemanticBindingKind.TARGET_PROTOCOL
+            )
+        return TheoremSemanticBinding.bound(
+            f"local-{role}-subject",
+            kind,
+            subject_id,
+        )
 
     def question(
         name: str,
@@ -1306,21 +1620,86 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
         conditions: tuple[str, ...],
         conclusion: str,
         obligations: tuple[ApplicabilityObligation, ...] = common,
+        construction_declarations: tuple[tuple[str, SemanticId], ...] = (),
+        checked_constructions: tuple[tuple[str, SemanticId], ...] = (),
+        open_checked_constructions: tuple[tuple[str, str], ...] = (),
+        occurrence_maps: tuple[tuple[str, SemanticId], ...] = (),
+        open_occurrence_maps: tuple[tuple[str, str], ...] = (),
         status: EvaluationStatus = EvaluationStatus.UNPROVED,
     ) -> TheoremQuestion:
+        generated_obligations = _open_obligations(
+            *(
+                (name, ObligationKind.CHECKED_CONSTRUCTION, reason)
+                for name, reason in open_checked_constructions
+            ),
+            *(
+                (name, ObligationKind.OCCURRENCE_MAP, reason)
+                for name, reason in open_occurrence_maps
+            ),
+        )
+        semantic_bindings = (
+            endpoint_binding("source", source_property),
+            endpoint_binding("target", target_property),
+            TheoremSemanticBinding.open(
+                "indexed-relation-schema",
+                SemanticBindingKind.RELATION_SCHEMA,
+                "relation-correspondence",
+            ),
+            *(
+                TheoremSemanticBinding.bound(
+                    binding_name,
+                    SemanticBindingKind.CONSTRUCTION_DECLARATION,
+                    subject_id,
+                )
+                for binding_name, subject_id in construction_declarations
+            ),
+            *(
+                TheoremSemanticBinding.bound(
+                    binding_name,
+                    SemanticBindingKind.CHECKED_CONSTRUCTION,
+                    subject_id,
+                )
+                for binding_name, subject_id in checked_constructions
+            ),
+            *(
+                TheoremSemanticBinding.open(
+                    binding_name,
+                    SemanticBindingKind.CHECKED_CONSTRUCTION,
+                    binding_name,
+                )
+                for binding_name, _ in open_checked_constructions
+            ),
+            *(
+                TheoremSemanticBinding.bound(
+                    binding_name,
+                    SemanticBindingKind.OCCURRENCE_MAP,
+                    subject_id,
+                )
+                for binding_name, subject_id in occurrence_maps
+            ),
+            *(
+                TheoremSemanticBinding.open(
+                    binding_name,
+                    SemanticBindingKind.OCCURRENCE_MAP,
+                    binding_name,
+                )
+                for binding_name, _ in open_occurrence_maps
+            ),
+        )
         return TheoremQuestion(
-            name,
-            sources[source],
-            properties[source_property],
-            properties[target_property],
-            binders,
-            views,
-            maps,
-            conditions,
-            QuantitativeBoundExpression.for_law(law),
-            conclusion,
-            obligations,
-            status,
+            name=name,
+            source=sources[source],
+            source_property=properties[source_property],
+            target_property=properties[target_property],
+            binders=binders,
+            required_views=views,
+            required_maps=maps,
+            side_conditions=conditions,
+            bound=QuantitativeBoundExpression.for_law(law),
+            conclusion_law=conclusion,
+            obligations=obligations + generated_obligations,
+            semantic_bindings=semantic_bindings,
+            evaluation_status=status,
         )
 
     questions = (
@@ -1358,6 +1737,12 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
             maps=("round-prefix-map", "logical-query-occurrence-map"),
             conditions=("theorem-4.1-smooth-multiplicative-hypotheses",),
             conclusion="conditional-round-by-round-error-vector",
+            occurrence_maps=(
+                (
+                    "logical-query-occurrence-map",
+                    QUERY_ANSWER_PROJECTION_LAW.identity,
+                ),
+            ),
         ),
         question(
             "round-by-round-to-restricted-restoration",
@@ -1398,17 +1783,22 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
             ),
             conditions=("commitment-assumptions", "hash-purpose-separation"),
             conclusion="open-commitment-compilation-property-preservation-question",
-            obligations=common
-            + _open_obligations(
+            construction_declarations=(
                 (
-                    "occurrence-map",
-                    ObligationKind.OCCURRENCE_MAP,
-                    "logical occurrences and deduplicated physical openings require a checked map",
+                    "commitment-compilation-declaration",
+                    COMMITMENT_COMPILATION_DECLARATION.identity,
                 ),
+            ),
+            open_checked_constructions=(
                 (
-                    "relation-correspondence",
-                    ObligationKind.RELATION_CORRESPONDENCE,
-                    "source and target relation meanings have not been equated",
+                    "checked-commitment-compilation",
+                    "no stable checked commitment-compilation subject is available",
+                ),
+            ),
+            open_occurrence_maps=(
+                (
+                    "occurrence-to-opening",
+                    "logical occurrences and deduplicated physical openings require a checked map",
                 ),
             ),
         ),
@@ -1437,9 +1827,45 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
                     "SHA-256 fixture execution is not a classical random-oracle experiment",
                 ),
                 (
-                    "occurrence-map",
-                    ObligationKind.OCCURRENCE_MAP,
-                    "the exact generalized commitment profile requires a checked occurrence map",
+                    "work-augmentation-compatibility",
+                    ObligationKind.SIDE_CONDITION,
+                    "the BCS formula does not price the target's added work augmentation",
+                ),
+            ),
+            construction_declarations=(
+                (
+                    "commitment-compilation-declaration",
+                    COMMITMENT_COMPILATION_DECLARATION.identity,
+                ),
+                (
+                    "grinding-augmentation-declaration",
+                    GRINDING_AUGMENTATION_DECLARATION.identity,
+                ),
+                (
+                    "fiat-shamir-construction-declaration",
+                    FIAT_SHAMIR_CONSTRUCTION_DECLARATION.identity,
+                ),
+            ),
+            checked_constructions=(
+                (
+                    "checked-fiat-shamir-construction",
+                    CHECKED_FIAT_SHAMIR_CONSTRUCTION.identity,
+                ),
+            ),
+            open_checked_constructions=(
+                (
+                    "checked-commitment-compilation",
+                    "no stable checked commitment-compilation subject is available",
+                ),
+                (
+                    "checked-grinding-augmentation",
+                    "no stable checked grinding-augmentation subject is available",
+                ),
+            ),
+            open_occurrence_maps=(
+                (
+                    "logical-query-to-opening",
+                    "the generalized commitment path requires a checked occurrence map",
                 ),
             ),
         ),
@@ -1463,6 +1889,26 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
                     "grinding-placement",
                     ObligationKind.GRINDING_PLACEMENT,
                     "a nonce predicate alone does not discharge theorem placement",
+                ),
+            ),
+            construction_declarations=(
+                (
+                    "commitment-compilation-declaration",
+                    COMMITMENT_COMPILATION_DECLARATION.identity,
+                ),
+                (
+                    "grinding-augmentation-declaration",
+                    GRINDING_AUGMENTATION_DECLARATION.identity,
+                ),
+            ),
+            open_checked_constructions=(
+                (
+                    "checked-commitment-compilation",
+                    "no stable checked commitment-compilation subject is available",
+                ),
+                (
+                    "checked-grinding-augmentation",
+                    "no stable checked grinding-augmentation subject is available",
                 ),
             ),
         ),
@@ -1491,6 +1937,47 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
                     ObligationKind.RANDOM_ORACLE_MODEL,
                     "SHA-256 fixture execution is not a classical random-oracle experiment",
                 ),
+                (
+                    "work-augmentation-compatibility",
+                    ObligationKind.SIDE_CONDITION,
+                    "the direct FRI formula does not include the target's grinding term",
+                ),
+            ),
+            construction_declarations=(
+                (
+                    "commitment-compilation-declaration",
+                    COMMITMENT_COMPILATION_DECLARATION.identity,
+                ),
+                (
+                    "grinding-augmentation-declaration",
+                    GRINDING_AUGMENTATION_DECLARATION.identity,
+                ),
+                (
+                    "fiat-shamir-construction-declaration",
+                    FIAT_SHAMIR_CONSTRUCTION_DECLARATION.identity,
+                ),
+            ),
+            checked_constructions=(
+                (
+                    "checked-fiat-shamir-construction",
+                    CHECKED_FIAT_SHAMIR_CONSTRUCTION.identity,
+                ),
+            ),
+            open_checked_constructions=(
+                (
+                    "checked-commitment-compilation",
+                    "no stable checked commitment-compilation subject is available",
+                ),
+                (
+                    "checked-grinding-augmentation",
+                    "no stable checked grinding-augmentation subject is available",
+                ),
+            ),
+            open_occurrence_maps=(
+                (
+                    "logical-to-authenticated-query",
+                    "the logical query to authenticated opening map is not checked",
+                ),
             ),
         ),
         question(
@@ -1518,6 +2005,18 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
                 ),
             ),
             status=EvaluationStatus.UNSUPPORTED,
+            construction_declarations=(
+                (
+                    "fiat-shamir-construction-declaration",
+                    FIAT_SHAMIR_CONSTRUCTION_DECLARATION.identity,
+                ),
+            ),
+            checked_constructions=(
+                (
+                    "checked-fiat-shamir-construction",
+                    CHECKED_FIAT_SHAMIR_CONSTRUCTION.identity,
+                ),
+            ),
         ),
         question(
             "multi-round-fs-knowledge",
@@ -1542,6 +2041,18 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
                 ),
             ),
             status=EvaluationStatus.UNSUPPORTED,
+            construction_declarations=(
+                (
+                    "fiat-shamir-construction-declaration",
+                    FIAT_SHAMIR_CONSTRUCTION_DECLARATION.identity,
+                ),
+            ),
+            checked_constructions=(
+                (
+                    "checked-fiat-shamir-construction",
+                    CHECKED_FIAT_SHAMIR_CONSTRUCTION.identity,
+                ),
+            ),
         ),
     )
     return {item.name: item for item in questions}
@@ -1588,7 +2099,7 @@ def evaluate_tiny_f97_round_by_round_bound(
 
     evaluation = BoundEvaluation(
         expression.identity,
-        EXACT_PROFILE.identity,
+        EXACT_ALGEBRA_PROFILE.identity,
         BoundClassification.VACUOUS_BOUND,
         (
             ("field_size", 97),

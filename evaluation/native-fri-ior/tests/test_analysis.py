@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from friiormodel import analysis as analysis_module  # noqa: E402
 from friiormodel.analysis import (  # noqa: E402
+    ApplicabilityObligation,
     BoundClassification,
     BoundLaw,
     BoundShape,
@@ -25,7 +26,9 @@ from friiormodel.analysis import (  # noqa: E402
     QuantitativeBoundExpression,
     Rational,
     ResourceCoordinate,
+    SemanticBindingKind,
     SourceAnchor,
+    TheoremSemanticBinding,
     canonical_experiments,
     canonical_property_questions,
     canonical_source_anchors,
@@ -36,8 +39,22 @@ from friiormodel.analysis import (  # noqa: E402
     local_original_fri_obligations,
     retained_assumptions,
 )
-from friiormodel.profile import EXACT_PROFILE  # noqa: E402
+from friiormodel.profile import (  # noqa: E402
+    BINARY_FOLD_EVALUATOR_LAW,
+    EXACT_ALGEBRA_PROFILE,
+    QUERY_ANSWER_PROJECTION_LAW,
+)
 from friiormodel.provenance import ArtifactContentId  # noqa: E402
+from friiormodel.subjects import (  # noqa: E402
+    CHECKED_FIAT_SHAMIR_CONSTRUCTION,
+    COMMITTED_FRI_CORE,
+    COMMITMENT_COMPILATION_DECLARATION,
+    FIAT_SHAMIR_CONSTRUCTION_DECLARATION,
+    FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL,
+    FRESH_WORK_AUGMENTED_PROTOCOL,
+    GRINDING_AUGMENTATION_DECLARATION,
+    NATIVE_FRI_CORE,
+)
 from friiormodel.terms import OutcomeClass, SemanticId  # noqa: E402
 
 
@@ -212,7 +229,7 @@ class SourceAndTheoremQuestionTest(unittest.TestCase):
                 "wrong-kind",
                 "Wrong kind",
                 "version 1",
-                EXACT_PROFILE.identity,  # type: ignore[arg-type]
+                EXACT_ALGEBRA_PROFILE.identity,  # type: ignore[arg-type]
                 ("Theorem 1",),
             )
         self.assertIs(caught.exception.outcome, OutcomeClass.MALFORMED)
@@ -230,6 +247,223 @@ class SourceAndTheoremQuestionTest(unittest.TestCase):
                 ObligationKind.THEOREM_TRUTH,
                 {obligation.kind for obligation in question.obligations},
             )
+            relation_bindings = tuple(
+                binding
+                for binding in question.semantic_bindings
+                if binding.kind is SemanticBindingKind.RELATION_SCHEMA
+            )
+            self.assertEqual(len(relation_bindings), 1)
+            self.assertIsNone(relation_bindings[0].subject_id)
+            self.assertEqual(
+                relation_bindings[0].open_obligation_name,
+                "relation-correspondence",
+            )
+
+    def test_questions_bind_exact_local_source_and_target_subjects(self) -> None:
+        expected = {
+            "original-fri-native-proximity": (
+                NATIVE_FRI_CORE.identity,
+                NATIVE_FRI_CORE.identity,
+            ),
+            "direct-fri-round-by-round": (
+                NATIVE_FRI_CORE.identity,
+                NATIVE_FRI_CORE.identity,
+            ),
+            "round-by-round-to-restricted-restoration": (
+                NATIVE_FRI_CORE.identity,
+                NATIVE_FRI_CORE.identity,
+            ),
+            "round-by-round-to-unrestricted-restoration": (
+                NATIVE_FRI_CORE.identity,
+                NATIVE_FRI_CORE.identity,
+            ),
+            "commitment-compilation-preservation": (
+                NATIVE_FRI_CORE.identity,
+                COMMITTED_FRI_CORE.identity,
+            ),
+            "bcs-restricted-restoration-to-classical-rom": (
+                NATIVE_FRI_CORE.identity,
+                FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL.identity,
+            ),
+            "grinding-over-vector-errors": (
+                NATIVE_FRI_CORE.identity,
+                FRESH_WORK_AUGMENTED_PROTOCOL.identity,
+            ),
+            "direct-fri-classical-rom": (
+                NATIVE_FRI_CORE.identity,
+                FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL.identity,
+            ),
+            "fri-qrom-asymptotic": (
+                FRESH_WORK_AUGMENTED_PROTOCOL.identity,
+                FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL.identity,
+            ),
+            "multi-round-fs-knowledge": (
+                FRESH_WORK_AUGMENTED_PROTOCOL.identity,
+                FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL.identity,
+            ),
+        }
+        for name, (source_id, target_id) in expected.items():
+            with self.subTest(question=name):
+                endpoints = tuple(
+                    binding
+                    for binding in self.questions[name].semantic_bindings
+                    if binding.kind
+                    in {
+                        SemanticBindingKind.SOURCE_CORE,
+                        SemanticBindingKind.SOURCE_PROTOCOL,
+                        SemanticBindingKind.TARGET_CORE,
+                        SemanticBindingKind.TARGET_PROTOCOL,
+                    }
+                )
+                self.assertEqual(len(endpoints), 2)
+                self.assertEqual(endpoints[0].subject_id, source_id)
+                self.assertEqual(endpoints[1].subject_id, target_id)
+
+    def test_construction_bindings_distinguish_declarations_checks_and_open_slots(
+        self,
+    ) -> None:
+        commitment = self.questions["commitment-compilation-preservation"]
+        bcs = self.questions["bcs-restricted-restoration-to-classical-rom"]
+        qrom = self.questions["fri-qrom-asymptotic"]
+
+        def ids(question: object, kind: SemanticBindingKind) -> set[SemanticId]:
+            return {
+                binding.subject_id
+                for binding in question.semantic_bindings  # type: ignore[attr-defined]
+                if binding.kind is kind and binding.subject_id is not None
+            }
+
+        self.assertEqual(
+            ids(commitment, SemanticBindingKind.CONSTRUCTION_DECLARATION),
+            {COMMITMENT_COMPILATION_DECLARATION.identity},
+        )
+        self.assertEqual(ids(commitment, SemanticBindingKind.CHECKED_CONSTRUCTION), set())
+        self.assertIn(
+            "checked-commitment-compilation",
+            {
+                binding.name
+                for binding in commitment.semantic_bindings
+                if binding.kind is SemanticBindingKind.CHECKED_CONSTRUCTION
+                and binding.subject_id is None
+            },
+        )
+
+        self.assertEqual(
+            ids(bcs, SemanticBindingKind.CONSTRUCTION_DECLARATION),
+            {
+                COMMITMENT_COMPILATION_DECLARATION.identity,
+                GRINDING_AUGMENTATION_DECLARATION.identity,
+                FIAT_SHAMIR_CONSTRUCTION_DECLARATION.identity,
+            },
+        )
+        self.assertEqual(
+            ids(bcs, SemanticBindingKind.CHECKED_CONSTRUCTION),
+            {CHECKED_FIAT_SHAMIR_CONSTRUCTION.identity},
+        )
+        self.assertEqual(
+            ids(qrom, SemanticBindingKind.CONSTRUCTION_DECLARATION),
+            {FIAT_SHAMIR_CONSTRUCTION_DECLARATION.identity},
+        )
+        self.assertEqual(
+            ids(qrom, SemanticBindingKind.CHECKED_CONSTRUCTION),
+            {CHECKED_FIAT_SHAMIR_CONSTRUCTION.identity},
+        )
+
+    def test_only_the_native_query_projection_has_a_bound_occurrence_map(self) -> None:
+        direct = self.questions["direct-fri-round-by-round"]
+        bound = tuple(
+            binding
+            for binding in direct.semantic_bindings
+            if binding.kind is SemanticBindingKind.OCCURRENCE_MAP
+        )
+        self.assertEqual(len(bound), 1)
+        self.assertEqual(bound[0].name, "logical-query-occurrence-map")
+        self.assertEqual(bound[0].subject_id, QUERY_ANSWER_PROJECTION_LAW.identity)
+
+        commitment = self.questions["commitment-compilation-preservation"]
+        opening = tuple(
+            binding
+            for binding in commitment.semantic_bindings
+            if binding.kind is SemanticBindingKind.OCCURRENCE_MAP
+        )
+        self.assertEqual(len(opening), 1)
+        self.assertIsNone(opening[0].subject_id)
+        self.assertEqual(opening[0].open_obligation_name, "occurrence-to-opening")
+
+    def test_local_bindings_rotate_question_but_not_source_theorem_schema(self) -> None:
+        question = self.questions["commitment-compilation-preservation"]
+        changed_bindings = tuple(
+            TheoremSemanticBinding.bound(
+                "grinding-augmentation-declaration",
+                SemanticBindingKind.CONSTRUCTION_DECLARATION,
+                GRINDING_AUGMENTATION_DECLARATION.identity,
+            )
+            if binding.name == "commitment-compilation-declaration"
+            else binding
+            for binding in question.semantic_bindings
+        )
+        changed = replace(question, semantic_bindings=changed_bindings)
+        self.assertEqual(changed.schema_identity, question.schema_identity)
+        self.assertNotEqual(changed.identity, question.identity)
+
+    def test_semantic_binding_formation_rejects_ambiguous_or_mistyped_slots(
+        self,
+    ) -> None:
+        question = self.questions["direct-fri-round-by-round"]
+        relation_index = next(
+            index
+            for index, binding in enumerate(question.semantic_bindings)
+            if binding.kind is SemanticBindingKind.RELATION_SCHEMA
+        )
+        wrong_obligation = list(question.semantic_bindings)
+        wrong_obligation[relation_index] = replace(
+            wrong_obligation[relation_index],
+            open_obligation_name="theorem-truth",
+        )
+        with self.assertRaises(ModelFailure) as caught:
+            replace(question, semantic_bindings=tuple(wrong_obligation))
+        self.assertEqual(caught.exception.code, "FRI-IOR-ANALYSIS-032")
+
+        with self.assertRaises(ModelFailure) as caught:
+            TheoremSemanticBinding.bound(
+                "logical-query-occurrence-map",
+                SemanticBindingKind.OCCURRENCE_MAP,
+                BINARY_FOLD_EVALUATOR_LAW.identity,
+            )
+        self.assertEqual(caught.exception.code, "FRI-IOR-ANALYSIS-028")
+
+        occurrence_index = next(
+            index
+            for index, binding in enumerate(question.semantic_bindings)
+            if binding.kind is SemanticBindingKind.OCCURRENCE_MAP
+        )
+        wrong_map = list(question.semantic_bindings)
+        wrong_map[occurrence_index] = replace(
+            wrong_map[occurrence_index],
+            name="not-a-required-map",
+        )
+        with self.assertRaises(ModelFailure) as caught:
+            replace(question, semantic_bindings=tuple(wrong_map))
+        self.assertEqual(caught.exception.code, "FRI-IOR-ANALYSIS-034")
+
+        without_relation = tuple(
+            binding
+            for binding in question.semantic_bindings
+            if binding.kind is not SemanticBindingKind.RELATION_SCHEMA
+        )
+        with self.assertRaises(ModelFailure) as caught:
+            replace(question, semantic_bindings=without_relation)
+        self.assertEqual(caught.exception.code, "FRI-IOR-ANALYSIS-035")
+
+        duplicate_name = ApplicabilityObligation(
+            "theorem-truth",
+            ObligationKind.SIDE_CONDITION,
+            ObligationStatus.OPEN,
+            "a distinct obligation must not reuse this name",
+        )
+        with self.assertRaises(ModelFailure) as caught:
+            replace(question, obligations=question.obligations + (duplicate_name,))
+        self.assertEqual(caught.exception.code, "FRI-IOR-ANALYSIS-033")
 
     def test_commitment_compilation_and_rom_are_separate_theorem_questions(
         self,
@@ -371,7 +605,10 @@ class QuantitativeExpressionTest(unittest.TestCase):
         evaluation, result = evaluate_tiny_f97_round_by_round_bound(expression)
 
         self.assertIs(evaluation.classification, BoundClassification.VACUOUS_BOUND)
-        self.assertEqual(evaluation.profile_id, EXACT_PROFILE.identity)
+        self.assertEqual(
+            evaluation.algebra_profile_id,
+            EXACT_ALGEBRA_PROFILE.identity,
+        )
         self.assertIn(
             "first-term-is-greater-than-16009-by-exact-integer-squaring",
             evaluation.derived_facts,
@@ -408,7 +645,7 @@ class QuantitativeExpressionTest(unittest.TestCase):
 
 
 class DependencyBoundaryTest(unittest.TestCase):
-    def test_analysis_imports_no_execution_commitment_or_private_generation_module(
+    def test_analysis_imports_only_semantic_subjects_not_execution_modules(
         self,
     ) -> None:
         source_path = Path(analysis_module.__file__).resolve()
@@ -424,8 +661,17 @@ class DependencyBoundaryTest(unittest.TestCase):
         self.assertTrue(
             relative_imports.issubset(
                 {
-                    "EXACT_PROFILE",
+                    "EXACT_ALGEBRA_PROFILE",
+                    "QUERY_ANSWER_PROJECTION_LAW",
                     "ArtifactContentId",
+                    "CHECKED_FIAT_SHAMIR_CONSTRUCTION",
+                    "COMMITTED_FRI_CORE",
+                    "COMMITMENT_COMPILATION_DECLARATION",
+                    "FIAT_SHAMIR_CONSTRUCTION_DECLARATION",
+                    "FIAT_SHAMIR_WORK_AUGMENTED_PROTOCOL",
+                    "FRESH_WORK_AUGMENTED_PROTOCOL",
+                    "GRINDING_AUGMENTATION_DECLARATION",
+                    "NATIVE_FRI_CORE",
                     "CheckResult",
                     "ModelFailure",
                     "OutcomeClass",
@@ -443,7 +689,10 @@ class DependencyBoundaryTest(unittest.TestCase):
             for node in ast.walk(tree)
             if isinstance(node, ast.ImportFrom) and node.level == 1
         }
-        self.assertEqual(imported_modules, {"profile", "provenance", "terms"})
+        self.assertEqual(
+            imported_modules,
+            {"profile", "provenance", "subjects", "terms"},
+        )
 
 
 if __name__ == "__main__":

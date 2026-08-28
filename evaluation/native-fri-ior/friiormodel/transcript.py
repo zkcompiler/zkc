@@ -23,9 +23,15 @@ from dataclasses import dataclass
 import hashlib
 from typing import Any
 
-from .commitment import DIGEST_BYTES, MerkleCap
+from .commitment import DIGEST_BYTES, EXACT_COMMITMENT_PROFILE, MerkleCap
 from .field import MODULUS, Fp, Fp2, canonical_polynomial
-from .profile import D0, DEFAULT_VALIDATION_LIMITS, EXACT_PROFILE
+from .profile import (
+    D0,
+    DEFAULT_VALIDATION_LIMITS,
+    EXACT_ALGEBRA_PROFILE,
+    EXACT_PROFILE,
+    SemanticLaw,
+)
 from .terms import (
     CheckResult,
     ModelFailure,
@@ -45,6 +51,7 @@ from .terms import (
 MODEL = "FriIorTypedSha256FiatShamir.v1"
 HASH_SUITE = "sha256.v1"
 FRAMING = "typed-length-delimited-big-endian.v1"
+GRINDING_PROFILE_NAME = "zkc.fri-ior.sha256-leading-zero-work.v1"
 
 STATEMENT = "statement"
 APPLICATION_CONTEXT = "application-context"
@@ -92,9 +99,6 @@ QUERY_OCCURRENCES_NAMESPACE = "zkc/fri-ior/query-occurrences/v1"
 
 GRINDING_BITS = 2
 GRINDING_NONCE_BYTES = 4
-MAX_GRINDING_NONCE = (1 << (8 * GRINDING_NONCE_BYTES)) - 1
-MAX_GRINDING_SEARCH_ATTEMPTS = 256
-MAX_REJECTION_ATTEMPTS = 64
 QUERY_DOMAIN_SIZE = D0.order
 
 _GENESIS_DOMAIN = b"zkc.fri-ior.transcript-genesis.v1\x00"
@@ -102,6 +106,202 @@ _ABSORB_DOMAIN = b"zkc.fri-ior.transcript-absorb.v1\x00"
 _SQUEEZE_DOMAIN = b"zkc.fri-ior.transcript-squeeze.v1\x00"
 _QUERY_EXPAND_DOMAIN = b"zkc.fri-ior.query-expand.v1\x00"
 _WORK_DOMAIN = b"zkc.fri-ior.work-check.v1\x00"
+
+
+TRANSCRIPT_HASH_STATE_LAW = SemanticLaw(
+    name="sha256-typed-transcript-state",
+    version=1,
+    parameters=(
+        ("hash", HASH_SUITE),
+        ("genesis-domain-hex", _GENESIS_DOMAIN.hex()),
+        ("absorb-domain-hex", _ABSORB_DOMAIN.hex()),
+        ("squeeze-domain-hex", _SQUEEZE_DOMAIN.hex()),
+        ("digest-bytes", DIGEST_BYTES),
+    ),
+    clauses=(
+        "genesis-hashes-the-selected-model-and-semantic-dependency-identities",
+        "absorb-hashes-domain-then-prior-state-then-one-typed-frame",
+        "squeeze-hashes-domain-then-prior-state-then-one-typed-attempt-frame",
+        "every-successful-squeeze-digest-becomes-the-next-transcript-state",
+    ),
+)
+
+TRANSCRIPT_FRAMING_LAW = SemanticLaw(
+    name="typed-length-delimited-transcript-framing",
+    version=1,
+    parameters=(
+        ("framing", FRAMING),
+        ("byte-order", "big-endian"),
+        ("namespace-length-bytes", 2),
+        ("codec-length-bytes", 2),
+        ("payload-length-bytes", 4),
+        ("namespace-and-codec-alphabet", "ascii"),
+    ),
+    clauses=(
+        "frame-is-namespace-length-namespace-codec-length-codec-payload-length-payload",
+        "namespace-and-codec-must-be-nonempty",
+        "lengths-must-fit-their-fixed-width-unsigned-encodings",
+    ),
+)
+
+TRANSCRIPT_CODEC_LAW = SemanticLaw(
+    name="fri-publication-and-challenge-codecs",
+    version=1,
+    parameters=(
+        ("closed-term", CLOSED_TERM_CODEC),
+        ("cap", CAP_CODEC),
+        ("fp2", FP2_CODEC),
+        ("terminal", TERMINAL_CODEC),
+        ("seed", SEED_CODEC),
+        ("nonce", NONCE_CODEC),
+        ("query-index", QUERY_INDEX_CODEC),
+    ),
+    clauses=(
+        "closed-values-use-the-canonical-closed-finite-term-codec",
+        "caps-use-the-selected-commitment-profile-term",
+        "fp2-values-encode-real-byte-then-imaginary-byte",
+        "terminal-coefficients-encode-in-ascending-degree-order",
+        "seeds-are-exactly-one-sha256-digest",
+        "nonces-use-the-selected-grinding-profile-width",
+        "query-ordinals-use-u16-big-endian",
+    ),
+)
+
+FP2_REJECTION_SAMPLER_LAW = SemanticLaw(
+    name="sha256-u16be-rejection-fp97-extension2",
+    version=1,
+    parameters=(
+        ("sampler", FP2_SAMPLER),
+        ("candidate-bytes", 2),
+        ("byte-order", "big-endian"),
+        ("field-cardinality", MODULUS * MODULUS),
+        ("attempt-codec", "u16be"),
+    ),
+    clauses=(
+        "each-attempt-squeezes-under-the-challenge-namespace",
+        "candidates-at-or-above-the-largest-multiple-of-field-cardinality-are-rejected",
+        "accepted-residue-quotient-is-real-and-remainder-is-imaginary",
+        "attempt-budget-is-validation-resource-state-not-semantic-plan-state",
+    ),
+)
+
+SEED_DERIVATION_LAW = SemanticLaw(
+    name="sha256-bytes32-seed-derivation",
+    version=1,
+    parameters=(
+        ("sampler", SEED_SAMPLER),
+        ("attempt", 0),
+        ("seed-bytes", DIGEST_BYTES),
+    ),
+    clauses=(
+        "seed-is-the-single-squeeze-digest-at-attempt-zero",
+        "the-selected-namespace-distinguishes-work-and-query-seeds",
+    ),
+)
+
+QUERY_SEED_EXPANSION_LAW = SemanticLaw(
+    name="sha256-seed-to-ordered-query-vector",
+    version=1,
+    parameters=(
+        ("sampler", QUERY_SAMPLER),
+        ("expansion-domain-hex", _QUERY_EXPAND_DOMAIN.hex()),
+        ("query-domain-size", QUERY_DOMAIN_SIZE),
+        ("query-count", EXACT_ALGEBRA_PROFILE.ordered_query_count),
+        ("ordinal-codec", "u16be"),
+        ("candidate-bytes", 2),
+    ),
+    clauses=(
+        "each-vector-ordinal-is-expanded-by-a-separate-domain-separated-hash",
+        "the-low-bits-select-an-index-because-the-domain-size-is-a-power-of-two",
+        "vector-order-and-multiplicity-are-preserved",
+        "query-seed-is-construction-internal-and-not-a-core-challenge",
+    ),
+)
+
+EXACT_TRANSCRIPT_LAWS = (
+    TRANSCRIPT_HASH_STATE_LAW,
+    TRANSCRIPT_FRAMING_LAW,
+    TRANSCRIPT_CODEC_LAW,
+    FP2_REJECTION_SAMPLER_LAW,
+    SEED_DERIVATION_LAW,
+    QUERY_SEED_EXPANSION_LAW,
+)
+
+WORK_PREDICATE_LAW = SemanticLaw(
+    name="sha256-leading-zero-work-predicate",
+    version=1,
+    parameters=(
+        ("hash", HASH_SUITE),
+        ("work-domain-hex", _WORK_DOMAIN.hex()),
+        ("namespace", WORK_CHECK_NAMESPACE),
+        ("codec", WORK_RULE),
+        ("nonce-bytes", GRINDING_NONCE_BYTES),
+        ("difficulty-leading-zero-bits", GRINDING_BITS),
+    ),
+    clauses=(
+        "work-payload-is-work-seed-followed-by-big-endian-nonce",
+        "work-digest-hashes-domain-then-one-typed-work-frame",
+        "work-accepts-exactly-when-the-leading-difficulty-bits-are-zero",
+    ),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class GrindingProfile:
+    """The immutable semantic owner of the inserted work predicate."""
+
+    name: str
+    hash_suite: str
+    nonce_bytes: int
+    difficulty_bits: int
+    work_law_id: SemanticId
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.name, str)
+            or not self.name
+            or not isinstance(self.hash_suite, str)
+            or not self.hash_suite
+            or type(self.nonce_bytes) is not int
+            or not 1 <= self.nonce_bytes <= 8
+            or type(self.difficulty_bits) is not int
+            or not 1 <= self.difficulty_bits <= 8 * DIGEST_BYTES
+            or not isinstance(self.work_law_id, SemanticId)
+            or self.work_law_id.subject_kind != "fri-ior-semantic-law"
+        ):
+            raise malformed(
+                "transcript:grinding-profile-formation",
+                "FRI-IOR-TRANSCRIPT-048",
+                "a grinding profile requires exact bounded semantics and one typed work law",
+            )
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "hash_suite": self.hash_suite,
+            "nonce_bytes": self.nonce_bytes,
+            "difficulty_leading_zero_bits": self.difficulty_bits,
+            "work_law_id": self.work_law_id.to_term(),
+        }
+
+    @property
+    def identity(self) -> SemanticId:
+        return semantic_id(
+            "fri-grinding-profile",
+            "fri-ior.grinding-profile.v1",
+            self.to_term(),
+        )
+
+
+EXACT_GRINDING_PROFILE = GrindingProfile(
+    name=GRINDING_PROFILE_NAME,
+    hash_suite=HASH_SUITE,
+    nonce_bytes=GRINDING_NONCE_BYTES,
+    difficulty_bits=GRINDING_BITS,
+    work_law_id=WORK_PREDICATE_LAW.identity,
+)
+
+MAX_GRINDING_NONCE = (1 << (8 * EXACT_GRINDING_PROFILE.nonce_bytes)) - 1
 
 
 def _require_nonempty_text(value: Any, boundary: str, field: str) -> None:
@@ -163,36 +363,48 @@ class TranscriptConstructionPlan:
     """The fixed transcript-profile plan, below Core-level FS admission."""
 
     model: str
-    profile_name: str
-    profile_id: SemanticId
-    hash_suite: str
-    framing: str
-    grinding_bits: int
-    grinding_nonce_bytes: int
-    grinding_search_attempt_bound: int
-    rejection_attempt_bound: int
+    algebra_profile_id: SemanticId
+    commitment_profile_id: SemanticId
+    grinding_profile_id: SemanticId
+    semantic_law_ids: tuple[SemanticId, ...]
     query_domain_size: int
     query_count: int
     steps: tuple[TranscriptPlanStep, ...]
 
     def __post_init__(self) -> None:
         boundary = "transcript:plan-formation"
-        for field_name in ("model", "profile_name", "hash_suite", "framing"):
-            _require_nonempty_text(getattr(self, field_name), boundary, field_name)
-        if not isinstance(self.profile_id, SemanticId):
+        _require_nonempty_text(self.model, boundary, "model")
+        expected_kinds = (
+            (self.algebra_profile_id, "fri-algebra-profile"),
+            (self.commitment_profile_id, "fri-commitment-profile"),
+            (self.grinding_profile_id, "fri-grinding-profile"),
+        )
+        if any(
+            not isinstance(identity, SemanticId)
+            or identity.subject_kind != expected_kind
+            for identity, expected_kind in expected_kinds
+        ):
             raise malformed(
                 boundary,
                 "FRI-IOR-TRANSCRIPT-002",
-                "a transcript plan requires the typed exact-profile identity",
+                "a transcript plan requires typed algebra, commitment, and grinding identities",
             )
-        for field_name in (
-            "grinding_bits",
-            "grinding_nonce_bytes",
-            "grinding_search_attempt_bound",
-            "rejection_attempt_bound",
-            "query_domain_size",
-            "query_count",
+        if (
+            type(self.semantic_law_ids) is not tuple
+            or not self.semantic_law_ids
+            or any(
+                not isinstance(identity, SemanticId)
+                or identity.subject_kind != "fri-ior-semantic-law"
+                for identity in self.semantic_law_ids
+            )
+            or len(set(self.semantic_law_ids)) != len(self.semantic_law_ids)
         ):
+            raise malformed(
+                boundary,
+                "FRI-IOR-TRANSCRIPT-002",
+                "a transcript plan requires one canonical unique semantic-law ID sequence",
+            )
+        for field_name in ("query_domain_size", "query_count"):
             value = getattr(self, field_name)
             if type(value) is not int or value <= 0:
                 raise malformed(
@@ -214,14 +426,12 @@ class TranscriptConstructionPlan:
 
         return {
             "model": self.model,
-            "profile_name": self.profile_name,
-            "profile_id": self.profile_id.to_term(),
-            "hash_suite": self.hash_suite,
-            "framing": self.framing,
-            "grinding_bits": self.grinding_bits,
-            "grinding_nonce_bytes": self.grinding_nonce_bytes,
-            "grinding_search_attempt_bound": self.grinding_search_attempt_bound,
-            "rejection_attempt_bound": self.rejection_attempt_bound,
+            "algebra_profile_id": self.algebra_profile_id.to_term(),
+            "commitment_profile_id": self.commitment_profile_id.to_term(),
+            "grinding_profile_id": self.grinding_profile_id.to_term(),
+            "semantic_law_ids": [
+                identity.to_term() for identity in self.semantic_law_ids
+            ],
             "query_domain_size": self.query_domain_size,
             "query_count": self.query_count,
             "steps": [step.to_term() for step in self.steps],
@@ -258,16 +468,12 @@ def _step(
 
 CANONICAL_CONSTRUCTION_PLAN = TranscriptConstructionPlan(
     model=MODEL,
-    profile_name=EXACT_PROFILE.name,
-    profile_id=EXACT_PROFILE.identity,
-    hash_suite=HASH_SUITE,
-    framing=FRAMING,
-    grinding_bits=GRINDING_BITS,
-    grinding_nonce_bytes=GRINDING_NONCE_BYTES,
-    grinding_search_attempt_bound=MAX_GRINDING_SEARCH_ATTEMPTS,
-    rejection_attempt_bound=MAX_REJECTION_ATTEMPTS,
+    algebra_profile_id=EXACT_ALGEBRA_PROFILE.identity,
+    commitment_profile_id=EXACT_COMMITMENT_PROFILE.identity,
+    grinding_profile_id=EXACT_GRINDING_PROFILE.identity,
+    semantic_law_ids=tuple(law.identity for law in EXACT_TRANSCRIPT_LAWS),
     query_domain_size=QUERY_DOMAIN_SIZE,
-    query_count=EXACT_PROFILE.ordered_query_count,
+    query_count=EXACT_ALGEBRA_PROFILE.ordered_query_count,
     steps=(
         _step(
             ABSORB_PUBLICATION,
@@ -404,14 +610,10 @@ def _first_plan_difference(
     expected = CANONICAL_CONSTRUCTION_PLAN
     scalar_fields = (
         "model",
-        "profile_name",
-        "profile_id",
-        "hash_suite",
-        "framing",
-        "grinding_bits",
-        "grinding_nonce_bytes",
-        "grinding_search_attempt_bound",
-        "rejection_attempt_bound",
+        "algebra_profile_id",
+        "commitment_profile_id",
+        "grinding_profile_id",
+        "semantic_law_ids",
         "query_domain_size",
         "query_count",
     )
@@ -419,7 +621,7 @@ def _first_plan_difference(
         return unsupported(
             boundary,
             "FRI-IOR-TRANSCRIPT-019",
-            "the plan selects a different profile, suite, framing, or intrinsic bound",
+            "the plan selects different semantic dependencies or query-vector shape",
         )
 
     expected_by_occurrence = {step.occurrence: step for step in expected.steps}
@@ -702,7 +904,11 @@ class FiatShamirTranscript:
                 "FRI-IOR-TRANSCRIPT-045",
                 "a completed transcript requires an unsigned 32-bit nonce",
             )
-        if self.work_digest[0] >> (8 - GRINDING_BITS) != 0:
+        if (
+            self.work_digest[0]
+            >> (8 - EXACT_GRINDING_PROFILE.difficulty_bits)
+            != 0
+        ):
             raise malformed(
                 "transcript:phase-formation",
                 "FRI-IOR-TRANSCRIPT-046",
@@ -752,9 +958,9 @@ def _u32(value: int, boundary: str) -> bytes:
         raise malformed(
             boundary,
             "FRI-IOR-TRANSCRIPT-024",
-            "the grinding nonce must be an unsigned 32-bit integer",
+            "the grinding nonce must fit the selected grinding-profile width",
         )
-    return value.to_bytes(GRINDING_NONCE_BYTES, "big")
+    return value.to_bytes(EXACT_GRINDING_PROFILE.nonce_bytes, "big")
 
 
 def _frame(namespace: str, codec: str, payload: bytes) -> bytes:
@@ -818,9 +1024,12 @@ def _genesis(plan: TranscriptConstructionPlan, resources: ResourceCounter) -> by
     payload = _GENESIS_DOMAIN + encode_term(
         {
             "model": plan.model,
-            "profile": EXACT_PROFILE.to_term(),
-            "hash_suite": plan.hash_suite,
-            "framing": plan.framing,
+            "algebra_profile_id": plan.algebra_profile_id.to_term(),
+            "commitment_profile_id": plan.commitment_profile_id.to_term(),
+            "grinding_profile_id": plan.grinding_profile_id.to_term(),
+            "transcript_semantic_law_ids": [
+                identity.to_term() for identity in plan.semantic_law_ids
+            ],
         }
     )
     return _sha256(payload, resources)
@@ -874,7 +1083,8 @@ def _sample_fp2(
 ) -> tuple[Fp2, bytes]:
     cardinality = MODULUS * MODULUS
     acceptance_ceiling = ((1 << 16) // cardinality) * cardinality
-    for attempt in range(MAX_REJECTION_ATTEMPTS):
+    remaining_attempts = resources.limits.sampler_attempts - resources.sampler_attempts
+    for attempt in range(remaining_attempts):
         resources.consume_sampler_attempts(1)
         digest = _squeeze_digest(state, namespace, FP2_SAMPLER, attempt, resources)
         candidate = int.from_bytes(digest[:2], "big")
@@ -885,7 +1095,7 @@ def _sample_fp2(
         OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
         "transcript:fp2-sampling",
         "FRI-IOR-TRANSCRIPT-027",
-        "the intrinsic Fp2 rejection-sampling attempt bound was exhausted",
+        "the selected sampler-attempt resource limit was exhausted",
     )
 
 
@@ -1120,11 +1330,11 @@ def _work_digest(
 
 
 def _work_succeeds(work_seed: bytes, nonce: int, resources: ResourceCounter | None = None) -> bool:
-    """Check the exact two-leading-zero-bit work predicate."""
+    """Check the predicate owned by the selected grinding profile."""
 
     counter = _counter_or_default(resources)
     digest = _work_digest(work_seed, nonce, counter)
-    return digest[0] >> (8 - GRINDING_BITS) == 0
+    return digest[0] >> (8 - EXACT_GRINDING_PROFILE.difficulty_bits) == 0
 
 
 def _find_grinding_nonce(
@@ -1133,16 +1343,12 @@ def _find_grinding_nonce(
     *,
     start_nonce: int = 0,
 ) -> int:
-    """Find the first successful nonce inside the intrinsic search bound.
-
-    The intrinsic bound limits evaluator syntax and runtime independently of a
-    caller's ``ResourceCounter``.  A stricter request-local counter can stop
-    the search earlier with its own resource outcome.
-    """
+    """Find the first successful nonce under the selected resource budget."""
 
     _u32(start_nonce, "transcript:grinding-search")
     counter = _counter_or_default(resources)
-    for offset in range(MAX_GRINDING_SEARCH_ATTEMPTS):
+    remaining_trials = counter.limits.grinding_trials - counter.grinding_trials
+    for offset in range(remaining_trials):
         nonce = start_nonce + offset
         if nonce > MAX_GRINDING_NONCE:
             break
@@ -1152,7 +1358,7 @@ def _find_grinding_nonce(
         OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
         "transcript:grinding-search",
         "FRI-IOR-TRANSCRIPT-035",
-        "the intrinsic grinding search bound was exhausted",
+        "the selected grinding-trial resource limit was exhausted",
     )
 
 
@@ -1184,11 +1390,15 @@ def _complete_transcript(
             counter,
         )
         work_digest = _work_digest(work_state.work_seed, grinding_nonce, counter)
-        if work_digest[0] >> (8 - GRINDING_BITS) != 0:
+        if (
+            work_digest[0]
+            >> (8 - EXACT_GRINDING_PROFILE.difficulty_bits)
+            != 0
+        ):
             return refused(
                 boundary,
                 "FRI-IOR-TRANSCRIPT-037",
-                "the published nonce does not satisfy the two-bit work predicate",
+                "the published nonce does not satisfy the selected grinding profile",
             )
         query_seed = _derive_seed(state, QUERY_SEED_NAMESPACE, counter)
         occurrences = _sample_query_occurrences(query_seed, counter)

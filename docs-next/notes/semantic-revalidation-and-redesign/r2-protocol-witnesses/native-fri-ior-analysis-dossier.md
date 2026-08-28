@@ -190,6 +190,29 @@ Each property profile must fix:
 - the observation and win event; and
 - the complete typed resource basis.
 
+For this FRI profile the Core challenge is the ordered query-occurrence vector,
+not the Fiat--Shamir construction's internal query seed. Fresh samples the
+vector directly; the FS interpretation derives and expands a seed to resolve
+the same typed Core value. Any equivalence, closeness, or security statement
+about those sampling experiments needs its own theorem premises and cannot be
+inferred from same-Core identity.
+
+The executable identity graph now preserves that separation. The
+`FriAlgebraProfile` owns the field, domain chain, binary fold, direct ordered
+query-vector law, native answer projection, and terminal evaluator. A distinct
+`FriCommitmentProfile` owns the leaf and node codecs, salted tree, ordered cap,
+and authentication-path law. The transcript construction plan owns its framing,
+samplers, and query-seed expansion. Consequently a Merkle or transcript change
+does not rotate the native algebra profile, while a change to a fold or native
+query-vector rule does.
+
+The finite native evaluator also stores complete oracle carriers while
+exposing only selected answers through its modeled verifier view. It can test
+observation discipline, but not capability noninterference at the host-language
+boundary. Until owner-side admission issues a restricted query handle, this is
+a retained execution-model residual rather than a discharged capability
+premise.
+
 The native IOPP experiment consumes logical oracle queries. A compiled
 experiment consumes proof-supplied openings and commitment checks. A ROM
 adversary consumes random-oracle queries. Equal numeric counts across those
@@ -261,15 +284,39 @@ occurrence map. A changed cap shape, leaf codec, query-deduplication policy,
 transcript framing rule, grinding position, or initial-oracle convention may
 invalidate applicability without changing the theorem text.
 
+The finite executable catalog represents those bindings as local application
+coordinates. Every question binds one exact source and target Core or Protocol.
+Construction declarations and admitted constructions occupy different typed
+slots: the presently admitted Fiat--Shamir construction is bound exactly,
+whereas commitment-compilation and grinding declarations are bound but their
+checked-construction slots remain explicitly open. No reviewed canonical
+Relations schema or construction-specific opening map is available yet, so
+those slots carry no invented identity and instead point to named open
+applicability obligations. The native logical-query-to-layer-answer projection
+is the one currently bound occurrence map because its exact owner and identity
+already exist.
+
+A bound coordinate is not correspondence evidence. It identifies the local
+candidate to which a theorem might apply; it does not show that a source
+paper's experiment, relation, or resource accounting matches that candidate.
+
 ### 5.6 Theorem import and applicability
 
-Every theorem row needs two identities:
+Every theorem row needs three separately rotating identity layers:
 
 1. a semantic theorem schema containing local binders, source and target
    property schemas, source and target experiment schemas, required views,
    maps, side conditions, resource/loss transform, and conclusion law; and
 2. source validation containing the exact publication revision, artifact
-   digest, theorem and definition locators, and truth-discharge metadata.
+   digest, theorem and definition locators, and truth-discharge metadata; and
+3. a local theorem-question identity containing the source anchor, exact local
+   Core or Protocol endpoints, construction coordinates, relation and map
+   slots, and their open obligations.
+
+Changing only a local endpoint or construction coordinate rotates the third
+identity but not the source theorem schema. Formation leaves `theorem_true`,
+`applicable`, and `property_established` unset, including for rows whose local
+Fiat--Shamir construction identity is already admitted.
 
 Applicability then checks exact protocol correspondence and every side
 condition. A local formula evaluator returns only such outcomes as
@@ -318,8 +365,11 @@ observed exactly:
 - cap, salt, path, and opening correspondence for one exact commitment
   profile;
 - fold equations, terminal-degree rejection, and public-only target replay;
-- complete statement, root, terminal, grinding, and query-seed transcript
-  influence; and
+- complete statement, root, terminal, and grinding influence on the
+  construction-internal query seed and resulting Core query vector;
+- one concrete coupling of the work-augmented Fresh query vector and every
+  one-shot Fiat--Shamir challenge result, without promoting that execution to
+  general construction correctness; and
 - distinct native, committed Fresh, and committed Fiat--Shamir subjects.
 
 Its report must state `NotEvaluated` for proximity soundness, round-by-round

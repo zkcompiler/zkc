@@ -20,11 +20,17 @@ from friiormodel.field import (  # noqa: E402
     polynomial_degree,
 )
 from friiormodel.profile import (  # noqa: E402
+    BINARY_FOLD_EVALUATOR_LAW,
     D0,
     D1,
     D2,
+    DIRECT_QUERY_VECTOR_LAW,
+    EXACT_ALGEBRA_LAWS,
     EXACT_PROFILE,
     EvaluationDomain,
+    QUERY_ANSWER_PROJECTION_LAW,
+    SemanticLaw,
+    TERMINAL_EVALUATOR_LAW,
     admit_exact_profile,
 )
 from friiormodel.terms import (  # noqa: E402
@@ -288,11 +294,133 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(result.subject, EXACT_PROFILE.identity)
         self.assertEqual(EXACT_PROFILE.identity, EXACT_PROFILE.identity)
 
-    def test_well_formed_alternate_profile_is_unsupported(self) -> None:
-        for alternate in (
-            replace(EXACT_PROFILE, name="another-finite-profile"),
-            replace(EXACT_PROFILE, merkle_hash="another-hash"),
+    def test_exact_profile_binds_every_selected_semantic_law(self) -> None:
+        expected_names = (
+            "binary-fri-fold-evaluator",
+            "ordered-direct-query-vector",
+            "fri-layer-query-answer-projection",
+            "fri-terminal-polynomial-evaluator",
+        )
+        self.assertEqual(EXACT_PROFILE.semantic_laws, EXACT_ALGEBRA_LAWS)
+        self.assertEqual(
+            tuple(law.name for law in EXACT_PROFILE.semantic_laws),
+            expected_names,
+        )
+
+        bindings = EXACT_PROFILE.to_term()["semantic_law_ids"]
+        self.assertEqual(len(bindings), len(expected_names))
+        for binding, law in zip(bindings, EXACT_ALGEBRA_LAWS, strict=True):
+            self.assertEqual(binding, law.identity.to_term())
+            self.assertNotIn("source", binding)
+            self.assertNotIn("implementation", binding)
+
+        self.assertEqual(
+            QUERY_ANSWER_PROJECTION_LAW.identity.subject_kind,
+            "fri-occurrence-map-law",
+        )
+        self.assertEqual(
+            QUERY_ANSWER_PROJECTION_LAW.identity.domain,
+            "fri-ior.occurrence-map-law.v1",
+        )
+        for law in (
+            BINARY_FOLD_EVALUATOR_LAW,
+            DIRECT_QUERY_VECTOR_LAW,
+            TERMINAL_EVALUATOR_LAW,
         ):
+            self.assertEqual(law.identity.subject_kind, "fri-ior-semantic-law")
+            self.assertEqual(law.identity.domain, "fri-ior.semantic-law.v1")
+
+        self.assertNotIn("commitment", EXACT_PROFILE.to_term())
+        self.assertNotIn("hash", EXACT_PROFILE.to_term())
+
+    def test_selected_laws_bind_algorithms_not_only_feature_names(self) -> None:
+        self.assertIn(
+            "fold-output-equals-even-plus-challenge-times-odd",
+            BINARY_FOLD_EVALUATOR_LAW.clauses,
+        )
+        self.assertIn(
+            "draws-are-independent-and-sampling-is-with-replacement",
+            DIRECT_QUERY_VECTOR_LAW.clauses,
+        )
+        self.assertIn(
+            "top-level-ordinal-order-and-multiplicity-are-preserved-across-both-layers",
+            QUERY_ANSWER_PROJECTION_LAW.clauses,
+        )
+        self.assertIn(
+            "terminal-evaluation-must-equal-the-second-binary-fold-output",
+            TERMINAL_EVALUATOR_LAW.clauses,
+        )
+
+    def test_semantic_law_change_rotates_law_and_profile_identity(self) -> None:
+        changed_fold = replace(
+            BINARY_FOLD_EVALUATOR_LAW,
+            clauses=BINARY_FOLD_EVALUATOR_LAW.clauses
+            + ("hypothetical-additional-semantic-clause",),
+        )
+        changed_profile = replace(
+            EXACT_PROFILE,
+            semantic_laws=(changed_fold,) + EXACT_ALGEBRA_LAWS[1:],
+        )
+        self.assertNotEqual(
+            changed_fold.identity,
+            BINARY_FOLD_EVALUATOR_LAW.identity,
+        )
+        self.assertNotEqual(changed_profile.identity, EXACT_PROFILE.identity)
+        result = admit_exact_profile(changed_profile)
+        self.assertIs(result.outcome, OutcomeClass.UNSUPPORTED)
+        self.assertEqual(result.code, "FRI-IOR-PROFILE-018")
+
+    def test_semantic_law_and_profile_law_set_fail_closed_at_formation(self) -> None:
+        law_cases = (
+            ({"name": "Bad Name"}, "FRI-IOR-PROFILE-037"),
+            ({"version": 0}, "FRI-IOR-PROFILE-038"),
+            ({"parameters": (("duplicate", 1), ("duplicate", 2))}, "FRI-IOR-PROFILE-039"),
+            ({"clauses": ()}, "FRI-IOR-PROFILE-040"),
+        )
+        for changes, code in law_cases:
+            with self.subTest(changes=changes), self.assertRaises(ModelFailure) as raised:
+                replace(BINARY_FOLD_EVALUATOR_LAW, **changes)
+            self.assertEqual(raised.exception.code, code)
+
+        with self.assertRaises(ModelFailure) as raised:
+            replace(EXACT_PROFILE, semantic_laws=())
+        self.assertEqual(raised.exception.code, "FRI-IOR-PROFILE-041")
+
+        with self.assertRaises(ModelFailure) as raised:
+            replace(EXACT_PROFILE, semantic_laws=tuple(reversed(EXACT_ALGEBRA_LAWS)))
+        self.assertEqual(raised.exception.code, "FRI-IOR-PROFILE-041")
+
+        with self.assertRaises(ModelFailure) as raised:
+            replace(
+                EXACT_PROFILE,
+                semantic_laws=(
+                    SemanticLaw("duplicate", 1, (("x", 1),), ("a",)),
+                    SemanticLaw("duplicate", 2, (("x", 2),), ("b",)),
+                ),
+            )
+        self.assertEqual(raised.exception.code, "FRI-IOR-PROFILE-041")
+
+        changed_query_law = replace(
+            DIRECT_QUERY_VECTOR_LAW,
+            parameters=tuple(
+                (name, 5 if name == "occurrence-count" else value)
+                for name, value in DIRECT_QUERY_VECTOR_LAW.parameters
+            ),
+        )
+        with self.assertRaises(ModelFailure) as raised:
+            replace(
+                EXACT_PROFILE,
+                semantic_laws=(
+                    BINARY_FOLD_EVALUATOR_LAW,
+                    changed_query_law,
+                    QUERY_ANSWER_PROJECTION_LAW,
+                    TERMINAL_EVALUATOR_LAW,
+                ),
+            )
+        self.assertEqual(raised.exception.code, "FRI-IOR-PROFILE-042")
+
+    def test_well_formed_alternate_profile_is_unsupported(self) -> None:
+        for alternate in (replace(EXACT_PROFILE, name="another-finite-profile"),):
             with self.subTest(alternate=alternate.name):
                 result = admit_exact_profile(alternate)
                 self.assertIs(result.outcome, OutcomeClass.UNSUPPORTED)
@@ -303,15 +431,11 @@ class ProfileTest(unittest.TestCase):
             ({"modulus": 101}, "FRI-IOR-PROFILE-025"),
             ({"primitive_generator": 1}, "FRI-IOR-PROFILE-026"),
             ({"extension_nonresidue": 1}, "FRI-IOR-PROFILE-027"),
-            ({"merkle_hash": ""}, "FRI-IOR-PROFILE-028"),
             ({"domains": (D0, D0, D2)}, "FRI-IOR-PROFILE-029"),
             ({"initial_degree_bound_exclusive": 17}, "FRI-IOR-PROFILE-030"),
             ({"terminal_max_coefficient_count": 9}, "FRI-IOR-PROFILE-031"),
             ({"terminal_degree_bound_exclusive": 5}, "FRI-IOR-PROFILE-032"),
             ({"ordered_query_count": 257}, "FRI-IOR-PROFILE-033"),
-            ({"merkle_salt_bytes": 0}, "FRI-IOR-PROFILE-034"),
-            ({"merkle_cap_size": 3}, "FRI-IOR-PROFILE-035"),
-            ({"merkle_cap_size": 4}, "FRI-IOR-PROFILE-036"),
         )
         for changes, expected_code in cases:
             with self.subTest(changes=changes), self.assertRaises(
@@ -464,8 +588,8 @@ class SemanticIdentityTest(unittest.TestCase):
     def test_profile_identity_carries_kind_domain_regime_and_digest(self) -> None:
         identity = EXACT_PROFILE.identity
         self.assertIsInstance(identity, SemanticId)
-        self.assertEqual(identity.subject_kind, "fri-ior-profile")
-        self.assertEqual(identity.domain, "fri-ior.profile.v1")
+        self.assertEqual(identity.subject_kind, "fri-algebra-profile")
+        self.assertEqual(identity.domain, "fri-ior.algebra-profile.v1")
         self.assertEqual(identity.semantic_regime, SEMANTIC_REGIME_ID)
         self.assertEqual(len(identity.digest), 32)
         self.assertEqual(identity.to_term()["digest"], identity.digest.hex())
@@ -484,8 +608,8 @@ class SemanticIdentityTest(unittest.TestCase):
         wrong_kind = replace(EXACT_PROFILE.identity, subject_kind="merkle-cap")
         result = check_semantic_id(
             wrong_kind,
-            expected_subject_kind="fri-ior-profile",
-            expected_domain="fri-ior.profile.v1",
+            expected_subject_kind="fri-algebra-profile",
+            expected_domain="fri-ior.algebra-profile.v1",
         )
         self.assertIs(result.outcome, OutcomeClass.KIND_MISMATCH)
         self.assertEqual(result.code, "FRI-IOR-IDENTITY-009")
@@ -493,12 +617,12 @@ class SemanticIdentityTest(unittest.TestCase):
     def test_wrong_formed_domain_is_a_kind_mismatch(self) -> None:
         wrong_domain = replace(
             EXACT_PROFILE.identity,
-            domain="fri-ior.other-profile.v1",
+            domain="fri-ior.other-algebra-profile.v1",
         )
         result = check_semantic_id(
             wrong_domain,
-            expected_subject_kind="fri-ior-profile",
-            expected_domain="fri-ior.profile.v1",
+            expected_subject_kind="fri-algebra-profile",
+            expected_domain="fri-ior.algebra-profile.v1",
         )
         self.assertIs(result.outcome, OutcomeClass.KIND_MISMATCH)
         self.assertEqual(result.code, "FRI-IOR-IDENTITY-010")
@@ -510,8 +634,8 @@ class SemanticIdentityTest(unittest.TestCase):
         )
         result = check_semantic_id(
             wrong_regime,
-            expected_subject_kind="fri-ior-profile",
-            expected_domain="fri-ior.profile.v1",
+            expected_subject_kind="fri-algebra-profile",
+            expected_domain="fri-ior.algebra-profile.v1",
         )
         self.assertIs(result.outcome, OutcomeClass.UNSUPPORTED)
         self.assertEqual(result.code, "FRI-IOR-IDENTITY-008")
@@ -520,7 +644,7 @@ class SemanticIdentityTest(unittest.TestCase):
         with self.assertRaises(ModelFailure) as raised:
             SemanticId(
                 subject_kind="FriIorProfile",
-                domain="fri-ior.profile.v1",
+                domain="fri-ior.algebra-profile.v1",
                 semantic_regime=SEMANTIC_REGIME_ID,
                 digest=b"\x00" * 32,
             )
@@ -529,8 +653,8 @@ class SemanticIdentityTest(unittest.TestCase):
 
         result = check_semantic_id(
             "sha256:naked-digest",
-            expected_subject_kind="fri-ior-profile",
-            expected_domain="fri-ior.profile.v1",
+            expected_subject_kind="fri-algebra-profile",
+            expected_domain="fri-ior.algebra-profile.v1",
         )
         self.assertIs(result.outcome, OutcomeClass.MALFORMED)
         self.assertEqual(result.code, "FRI-IOR-IDENTITY-005")

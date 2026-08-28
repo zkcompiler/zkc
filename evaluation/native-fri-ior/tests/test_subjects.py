@@ -9,6 +9,9 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import friiormodel.subjects as subjects_model  # noqa: E402
+from friiormodel.commitment import EXACT_COMMITMENT_PROFILE  # noqa: E402
+from friiormodel.profile import EXACT_ALGEBRA_PROFILE  # noqa: E402
 from friiormodel.provenance import (  # noqa: E402
     ArtifactContentId,
     CanonicalContentId,
@@ -65,6 +68,7 @@ from friiormodel.terms import (  # noqa: E402
 )
 from friiormodel.transcript import (  # noqa: E402
     CANONICAL_CONSTRUCTION_PLAN,
+    EXACT_GRINDING_PROFILE,
     admit_construction_plan,
 )
 
@@ -102,6 +106,103 @@ class CoreFactorizationTest(unittest.TestCase):
             with self.subTest(subject=type(subject).__name__):
                 self.assertIsInstance(subject.identity, SemanticId)
                 self.assertEqual(subject.identity, _identity_from_term(subject))
+
+    def test_core_identities_bind_only_their_semantic_dependencies(self) -> None:
+        native_term = NATIVE_FRI_CORE.to_term()
+        committed_term = COMMITTED_FRI_CORE.to_term()
+        work_term = WORK_AUGMENTED_COMMITTED_FRI_CORE.to_term()
+
+        self.assertEqual(
+            native_term["algebra_profile_id"],
+            EXACT_ALGEBRA_PROFILE.identity.to_term(),
+        )
+        self.assertNotIn("commitment_profile_id", native_term)
+        self.assertNotIn("grinding_profile_id", native_term)
+
+        self.assertEqual(
+            committed_term["algebra_profile_id"],
+            EXACT_ALGEBRA_PROFILE.identity.to_term(),
+        )
+        self.assertEqual(
+            committed_term["commitment_profile_id"],
+            EXACT_COMMITMENT_PROFILE.identity.to_term(),
+        )
+        self.assertNotIn("grinding_profile_id", committed_term)
+
+        self.assertEqual(
+            work_term["grinding_profile_id"],
+            EXACT_GRINDING_PROFILE.identity.to_term(),
+        )
+        self.assertEqual(
+            work_term["preserved_committed_core_id"],
+            COMMITTED_FRI_CORE.identity.to_term(),
+        )
+
+    def test_statement_and_application_binding_are_typed_context_ports(self) -> None:
+        expected = [
+            {
+                "occurrence": "statement",
+                "port_kind": "Context",
+                "owner": "PublicEnvironment",
+                "visibility": "Public",
+                "multiplicity": "ExactlyOne",
+                "semantic_purpose": "Statement",
+                "value_type": "ClosedFiniteTerm",
+            },
+            {
+                "occurrence": "application-context",
+                "port_kind": "Context",
+                "owner": "PublicEnvironment",
+                "visibility": "Public",
+                "multiplicity": "ExactlyOne",
+                "semantic_purpose": "ApplicationBinding",
+                "value_type": "ClosedFiniteTerm",
+            },
+        ]
+        self.assertEqual(NATIVE_FRI_CORE.to_term()["public_context_ports"], expected)
+        self.assertEqual(COMMITTED_FRI_CORE.to_term()["public_context_ports"], expected)
+        self.assertEqual(
+            WORK_AUGMENTED_COMMITTED_FRI_CORE.to_term()["public_context_ports"],
+            expected,
+        )
+
+    def test_target_only_profile_changes_do_not_rotate_native_core(self) -> None:
+        native_id = NATIVE_FRI_CORE.identity
+        alternate_commitment_id = semantic_id(
+            "fri-commitment-profile",
+            "fri-ior.commitment-profile.v1",
+            {"variant": "alternate-commitment-semantics"},
+        )
+        alternate_committed = replace(
+            COMMITTED_FRI_CORE,
+            commitment_profile_id=alternate_commitment_id,
+        )
+        alternate_work = replace(
+            WORK_AUGMENTED_COMMITTED_FRI_CORE,
+            committed_core=alternate_committed,
+        )
+        self.assertEqual(NATIVE_FRI_CORE.identity, native_id)
+        self.assertNotEqual(alternate_committed.identity, COMMITTED_FRI_CORE.identity)
+        self.assertNotEqual(
+            alternate_work.identity,
+            WORK_AUGMENTED_COMMITTED_FRI_CORE.identity,
+        )
+
+        alternate_grinding_id = semantic_id(
+            "fri-grinding-profile",
+            "fri-ior.grinding-profile.v1",
+            {"variant": "alternate-work-predicate"},
+        )
+        grinding_changed = replace(
+            WORK_AUGMENTED_COMMITTED_FRI_CORE,
+            grinding_profile_id=alternate_grinding_id,
+        )
+        self.assertEqual(grinding_changed.committed_core.identity, COMMITTED_FRI_CORE.identity)
+        self.assertNotEqual(
+            grinding_changed.identity,
+            WORK_AUGMENTED_COMMITTED_FRI_CORE.identity,
+        )
+        self.assertEqual(NATIVE_FRI_CORE.identity, native_id)
 
     def test_native_core_has_logical_access_without_commitment_or_work(self) -> None:
         term = NATIVE_FRI_CORE.to_term()
@@ -150,11 +251,13 @@ class CoreFactorizationTest(unittest.TestCase):
         work_seed = schedule.index("fresh-work-seed")
         nonce = schedule.index("publish-grinding-nonce")
         work_check = schedule.index("check-work-seed-and-nonce")
-        query_seed = schedule.index("fresh-query-seed")
+        query_vector = schedule.index(
+            "sample-fresh-ordered-query-occurrence-vector"
+        )
         self.assertLess(terminal, work_seed)
         self.assertLess(work_seed, nonce)
         self.assertLess(nonce, work_check)
-        self.assertLess(work_check, query_seed)
+        self.assertLess(work_check, query_vector)
         self.assertIs(augmented["challenge_contract"]["public_coin"], True)
         self.assertEqual(
             tuple(augmented["challenge_contract"]["occurrences"]),
@@ -162,8 +265,17 @@ class CoreFactorizationTest(unittest.TestCase):
                 "fold-challenge[0]",
                 "fold-challenge[1]",
                 "work-seed",
-                "query-seed",
+                "query-occurrences",
             ),
+        )
+        self.assertEqual(
+            augmented["challenge_contract"]["occurrence_types"][-1],
+            {
+                "occurrence": "query-occurrences",
+                "value_type": (
+                    "OrderedQueryOccurrenceVector<length=4,index-domain=D0,with-replacement>"
+                ),
+            },
         )
         self.assertEqual(
             len(augmented["challenge_contract"]["occurrences"]),
@@ -190,7 +302,6 @@ class CoreFactorizationTest(unittest.TestCase):
                 "terminal-polynomial",
                 "work-seed",
                 "grinding-nonce",
-                "query-seed",
                 "query-occurrences",
                 "opening-table-and-occurrence-selectors",
             ),
@@ -232,6 +343,19 @@ class ProtocolFactorizationTest(unittest.TestCase):
         self.assertEqual(fiat_shamir.to_term()["kind"], "FiatShamir")
         self.assertNotIn("transcript_construction", fresh.to_term())
         self.assertIn("transcript_construction", fiat_shamir.to_term())
+        fresh_query = fresh.to_term()["resolution"][-1]
+        self.assertEqual(fresh_query["occurrence"], "query-occurrences")
+        self.assertEqual(
+            fresh_query["source"],
+            "verifier-fresh-direct-uniform-sampling",
+        )
+        fs_query = fiat_shamir.to_term()["core_query_resolution"]
+        self.assertEqual(fs_query["core_occurrence"], "query-occurrences")
+        self.assertEqual(fs_query["construction_internal_state"], "query-seed")
+        self.assertNotIn(
+            "query-seed",
+            fresh.to_term()["challenge_occurrences"],
+        )
         self.assertEqual(
             tuple(fresh.to_term()["nonclaims"]),
             FRESH_INTERPRETATION_NONCLAIMS,
@@ -429,14 +553,35 @@ class CheckedFiatShamirAdmissionTest(unittest.TestCase):
         self.assertEqual(by_name["cap[0]"].transcript_position, 2)
         self.assertEqual(by_name["terminal-polynomial"].transcript_position, 6)
         self.assertEqual(by_name["grinding-nonce"].transcript_position, 8)
-        self.assertEqual(by_name["query-seed"].transcript_position, 10)
         self.assertEqual(by_name["query-occurrences"].transcript_position, 11)
+        self.assertNotIn("query-seed", by_name)
+        plan_by_name = {
+            step.occurrence: (index, step)
+            for index, step in enumerate(CANONICAL_CONSTRUCTION_PLAN.steps)
+        }
+        seed_position, seed_step = plan_by_name["query-seed"]
+        vector_position, vector_step = plan_by_name["query-occurrences"]
+        self.assertEqual(seed_step.kind, "DeriveChallenge")
+        self.assertEqual(vector_step.kind, "SampleOccurrences")
+        self.assertLess(seed_position, vector_position)
+        self.assertIn("query-occurrences", seed_step.protected_occurrences)
         final_response = by_name["opening-table-and-occurrence-selectors"]
         self.assertIsNone(final_response.transcript_position)
         self.assertEqual(
             final_response.disposition,
             POST_FINAL_CHALLENGE_PUBLIC_RESPONSE,
         )
+
+    def test_protection_map_requires_typed_statement_context_ports(self) -> None:
+        term = WORK_AUGMENTED_COMMITTED_FRI_CORE.to_term()
+        term["public_context_ports"] = term["public_context_ports"][:1]
+        with self.assertRaises(ModelFailure) as raised:
+            subjects_model._expected_protection_map(
+                term,
+                CANONICAL_CONSTRUCTION_PLAN,
+            )
+        self.assertIs(raised.exception.outcome, OutcomeClass.REFUSED)
+        self.assertEqual(raised.exception.code, "FRI-IOR-SUBJECT-036")
 
     def test_omitted_extra_and_reordered_map_entries_fail_totality(self) -> None:
         exact = CANONICAL_PUBLIC_OCCURRENCE_PROTECTION_MAP
@@ -617,7 +762,7 @@ class KindAndIdentityBoundaryTest(unittest.TestCase):
             def to_term(self) -> dict[str, object]:
                 term = super().to_term()
                 term["acceptance_affecting_public_occurrences"] = [
-                    "query-seed"
+                    "query-occurrences"
                 ]
                 return term
 
@@ -643,7 +788,18 @@ class KindAndIdentityBoundaryTest(unittest.TestCase):
         self.assertEqual(admission.result.code, "FRI-IOR-SUBJECT-025")
 
     def test_well_formed_alternate_transcript_plan_is_unsupported(self) -> None:
-        alternate = replace(CANONICAL_CONSTRUCTION_PLAN, hash_suite="sha512.v1")
+        alternate_law = semantic_id(
+            "fri-ior-semantic-law",
+            "fri-ior.semantic-law.v1",
+            {"name": "alternate-transcript-hash-law"},
+        )
+        alternate = replace(
+            CANONICAL_CONSTRUCTION_PLAN,
+            semantic_law_ids=(
+                alternate_law,
+                *CANONICAL_CONSTRUCTION_PLAN.semantic_law_ids[1:],
+            ),
+        )
         with self.assertRaises(ModelFailure) as raised:
             FiatShamirChallengeInterpretation(
                 WORK_AUGMENTED_COMMITTED_FRI_CORE,

@@ -1,9 +1,10 @@
-"""The one exact finite FRI/IOR profile admitted by this package.
+"""The one exact finite FRI algebra profile admitted by this package.
 
 The profile is intentionally concrete.  A different generator, round count,
-query count, or Merkle construction is a well-formed but unsupported proposal;
-it is not silently interpreted as this profile.  Request-local evaluator
-limits are deliberately not profile semantics.
+query-vector law, or fold evaluator is a well-formed but unsupported proposal;
+it is not silently interpreted as this profile.  Commitment and transcript
+choices are separate semantic subjects.  Request-local evaluator limits are
+deliberately not profile semantics.
 """
 
 from __future__ import annotations
@@ -32,18 +33,196 @@ from .terms import (
 )
 
 
-PROFILE_NAME = "zkc.fri-ior.f97-binary-two-round.v1"
+ALGEBRA_PROFILE_NAME = "zkc.fri-ior.f97-binary-two-round-algebra.v1"
 FOLDING_ARITY = 2
 INITIAL_DEGREE_BOUND_EXCLUSIVE = 8
 TERMINAL_MAX_COEFFICIENT_COUNT = 5
 TERMINAL_DEGREE_BOUND_EXCLUSIVE = 2
 ROUND_COUNT = 2
 ORDERED_QUERY_COUNT = 4
-MERKLE_HASH = "sha256"
-MERKLE_SALT_BYTES = 16
-MERKLE_CAP_SIZE = 2
+@dataclass(frozen=True, slots=True)
+class SemanticLaw:
+    """One versioned, closed semantic rule selected by the finite profile.
 
-# This is a request-local evaluator default, not part of ``FriIorProfile`` and
+    A law identity names the mathematical or encoding rule itself.  It is not
+    an implementation-source digest and says nothing about which checker
+    implements the rule.  The ordered parameter and clause sequences are part
+    of the law preimage, so changing an encoding byte, an equation, an order,
+    or a projection rotates the law and every profile that selects it.
+    """
+
+    name: str
+    version: int
+    parameters: tuple[tuple[str, str | int | bool], ...]
+    clauses: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.name, str)
+            or not self.name
+            or len(self.name) > 192
+            or any(
+                character not in "abcdefghijklmnopqrstuvwxyz0123456789.-_"
+                for character in self.name
+            )
+        ):
+            raise malformed(
+                "profile:semantic-law-formation",
+                "FRI-IOR-PROFILE-037",
+                "a semantic law requires a bounded lower-case ASCII name",
+            )
+        if type(self.version) is not int or self.version <= 0:
+            raise malformed(
+                "profile:semantic-law-formation",
+                "FRI-IOR-PROFILE-038",
+                "a semantic law version must be a positive integer",
+            )
+        if (
+            type(self.parameters) is not tuple
+            or not self.parameters
+            or any(
+                type(item) is not tuple
+                or len(item) != 2
+                or not isinstance(item[0], str)
+                or not item[0]
+                or type(item[1]) not in (str, int, bool)
+                for item in self.parameters
+            )
+            or len({item[0] for item in self.parameters}) != len(self.parameters)
+        ):
+            raise malformed(
+                "profile:semantic-law-formation",
+                "FRI-IOR-PROFILE-039",
+                "semantic-law parameters must be a unique canonical scalar tuple",
+            )
+        if (
+            type(self.clauses) is not tuple
+            or not self.clauses
+            or any(not isinstance(clause, str) or not clause for clause in self.clauses)
+            or len(set(self.clauses)) != len(self.clauses)
+        ):
+            raise malformed(
+                "profile:semantic-law-formation",
+                "FRI-IOR-PROFILE-040",
+                "a semantic law requires a non-empty unique clause sequence",
+            )
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "version": self.version,
+            "parameters": [
+                {"name": name, "value": value} for name, value in self.parameters
+            ],
+            "clauses": list(self.clauses),
+        }
+
+    @property
+    def identity(self) -> SemanticId:
+        return semantic_id(
+            "fri-ior-semantic-law",
+            "fri-ior.semantic-law.v1",
+            self.to_term(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OccurrenceMapLaw(SemanticLaw):
+    """A semantic law whose subject is specifically an occurrence map."""
+
+    @property
+    def identity(self) -> SemanticId:
+        return semantic_id(
+            "fri-occurrence-map-law",
+            "fri-ior.occurrence-map-law.v1",
+            self.to_term(),
+        )
+
+
+BINARY_FOLD_EVALUATOR_LAW = SemanticLaw(
+    name="binary-fri-fold-evaluator",
+    version=1,
+    parameters=(
+        ("base-field", "F97"),
+        ("extension-field", "F97-u-mod-u2-minus-5"),
+        ("source-pair", "x-then-minus-x"),
+        ("target-point", "x-squared"),
+        ("challenge-type", "F97Extension2"),
+    ),
+    clauses=(
+        "x-must-be-nonzero",
+        "even-equals-positive-plus-negative-times-inverse-of-two",
+        "odd-equals-positive-minus-negative-times-inverse-of-two-x",
+        "fold-output-equals-even-plus-challenge-times-odd",
+    ),
+)
+
+DIRECT_QUERY_VECTOR_LAW = SemanticLaw(
+    name="ordered-direct-query-vector",
+    version=1,
+    parameters=(
+        ("owner", "native-public-environment"),
+        ("distribution", "independent-uniform-with-replacement"),
+        ("domain-size", 16),
+        ("occurrence-count", ORDERED_QUERY_COUNT),
+        ("occurrence-identity", "zero-based-vector-ordinal"),
+    ),
+    clauses=(
+        "the-public-environment-supplies-one-index-per-vector-ordinal",
+        "each-index-is-sampled-uniformly-from-the-initial-domain",
+        "draws-are-independent-and-sampling-is-with-replacement",
+        "equal-indices-remain-distinct-occurrences",
+        "vector-order-and-multiplicity-are-semantic",
+    ),
+)
+
+QUERY_ANSWER_PROJECTION_LAW = OccurrenceMapLaw(
+    name="fri-layer-query-answer-projection",
+    version=1,
+    parameters=(
+        ("initial-domain-order", 16),
+        ("first-fold-domain-order", 8),
+        ("terminal-domain-order", 4),
+        ("layer-order", "initial-then-first-fold"),
+        ("pair-answer-order", "positive-then-antipodal-negative"),
+    ),
+    clauses=(
+        "initial-layer-pair-index-is-top-level-index-modulo-eight",
+        "initial-layer-answer-indices-are-pair-index-then-pair-index-plus-eight",
+        "first-fold-layer-pair-index-is-top-level-index-modulo-four",
+        "first-fold-layer-answer-indices-are-pair-index-then-pair-index-plus-four",
+        "top-level-ordinal-order-and-multiplicity-are-preserved-across-both-layers",
+    ),
+)
+
+TERMINAL_EVALUATOR_LAW = SemanticLaw(
+    name="fri-terminal-polynomial-evaluator",
+    version=1,
+    parameters=(
+        ("coefficient-field", "F97Extension2"),
+        ("coefficient-order", "ascending-degree"),
+        ("evaluation-algorithm", "horner-from-highest-coefficient"),
+        ("maximum-coefficient-count", TERMINAL_MAX_COEFFICIENT_COUNT),
+        ("degree-bound-exclusive", TERMINAL_DEGREE_BOUND_EXCLUSIVE),
+        ("zero-polynomial", "one-zero-coefficient-with-degree-minus-one"),
+        ("evaluation-domain", "D2"),
+    ),
+    clauses=(
+        "nonzero-polynomial-final-coefficient-must-be-nonzero",
+        "terminal-point-is-D2-at-top-level-query-index-modulo-four",
+        "terminal-evaluation-must-equal-the-second-binary-fold-output",
+        "terminal-degree-must-be-strictly-less-than-two",
+    ),
+)
+
+EXACT_ALGEBRA_LAWS = (
+    BINARY_FOLD_EVALUATOR_LAW,
+    DIRECT_QUERY_VECTOR_LAW,
+    QUERY_ANSWER_PROJECTION_LAW,
+    TERMINAL_EVALUATOR_LAW,
+)
+
+# This is a request-local evaluator default, not part of ``FriAlgebraProfile`` and
 # not an input to the profile's semantic identity.  A later ValidationBasis may
 # select any admitted limits at or below the evaluator hard caps.
 DEFAULT_VALIDATION_LIMITS = ResourceLimits(
@@ -122,8 +301,8 @@ class EvaluationDomain:
 
 
 @dataclass(frozen=True, slots=True)
-class FriIorProfile:
-    """Every semantic and representation choice fixed by the finite case."""
+class FriAlgebraProfile:
+    """The algebra, fold, direct-query, and terminal choices of native FRI."""
 
     name: str
     modulus: int
@@ -137,9 +316,7 @@ class FriIorProfile:
     round_count: int
     ordered_query_count: int
     query_occurrences_preserve_order_and_multiplicity: bool
-    merkle_hash: str
-    merkle_salt_bytes: int
-    merkle_cap_size: int
+    semantic_laws: tuple[SemanticLaw, ...]
 
     def __post_init__(self) -> None:
         integer_fields = (
@@ -152,8 +329,6 @@ class FriIorProfile:
             "terminal_degree_bound_exclusive",
             "round_count",
             "ordered_query_count",
-            "merkle_salt_bytes",
-            "merkle_cap_size",
         )
         if not isinstance(self.name, str) or not self.name:
             raise malformed(
@@ -206,20 +381,6 @@ class FriIorProfile:
                 "profile:formation",
                 "FRI-IOR-PROFILE-027",
                 "the quadratic extension parameter must be a non-residue in F_97",
-            )
-        if (
-            not isinstance(self.merkle_hash, str)
-            or not self.merkle_hash
-            or len(self.merkle_hash) > 64
-            or any(
-                character not in "abcdefghijklmnopqrstuvwxyz0123456789.-_"
-                for character in self.merkle_hash
-            )
-        ):
-            raise malformed(
-                "profile:formation",
-                "FRI-IOR-PROFILE-028",
-                "the commitment hash name must be a bounded lower-case ASCII identifier",
             )
         if not isinstance(self.domains, tuple) or not all(
             isinstance(domain, EvaluationDomain) for domain in self.domains
@@ -335,29 +496,57 @@ class FriIorProfile:
                     "FRI-IOR-PROFILE-016",
                     "each target domain generator must square from its source",
                 )
-        if not 1 <= self.merkle_salt_bytes <= 1024:
-            raise malformed(
-                "profile:formation",
-                "FRI-IOR-PROFILE-034",
-                "the Merkle salt width must be positive and bounded",
+        if (
+            type(self.semantic_laws) is not tuple
+            or not self.semantic_laws
+            or any(
+                type(law) not in (SemanticLaw, OccurrenceMapLaw)
+                for law in self.semantic_laws
             )
-        if self.merkle_cap_size < 1 or self.merkle_cap_size & (
-            self.merkle_cap_size - 1
+            or len({law.name for law in self.semantic_laws})
+            != len(self.semantic_laws)
+            or tuple(law.name for law in self.semantic_laws)
+            != tuple(law.name for law in EXACT_ALGEBRA_LAWS)
+            or len(self.semantic_laws) != 4
+            or type(self.semantic_laws[2]) is not OccurrenceMapLaw
+            or any(
+                type(law) is not SemanticLaw
+                for law in (
+                    self.semantic_laws[0],
+                    self.semantic_laws[1],
+                    self.semantic_laws[3],
+                )
+            )
         ):
             raise malformed(
                 "profile:formation",
-                "FRI-IOR-PROFILE-035",
-                "the Merkle cap size must be a positive power of two",
+                "FRI-IOR-PROFILE-041",
+                "an algebra profile requires every exact semantic-law role once and in order",
             )
-        if any(
-            domain.order // 2 < self.merkle_cap_size
-            or (domain.order // 2) % self.merkle_cap_size
-            for domain in self.domains
+        fold_parameters = dict(self.semantic_laws[0].parameters)
+        query_parameters = dict(self.semantic_laws[1].parameters)
+        answer_parameters = dict(self.semantic_laws[2].parameters)
+        terminal_parameters = dict(self.semantic_laws[3].parameters)
+        if (
+            fold_parameters.get("base-field") != "F97"
+            or fold_parameters.get("extension-field")
+            != "F97-u-mod-u2-minus-5"
+            or query_parameters.get("domain-size") != self.domains[0].order
+            or query_parameters.get("occurrence-count") != self.ordered_query_count
+            or answer_parameters.get("initial-domain-order") != self.domains[0].order
+            or answer_parameters.get("first-fold-domain-order")
+            != self.domains[1].order
+            or answer_parameters.get("terminal-domain-order") != self.domains[2].order
+            or terminal_parameters.get("maximum-coefficient-count")
+            != self.terminal_max_coefficient_count
+            or terminal_parameters.get("degree-bound-exclusive")
+            != self.terminal_degree_bound_exclusive
+            or terminal_parameters.get("evaluation-domain") != self.domains[-1].name
         ):
             raise malformed(
                 "profile:formation",
-                "FRI-IOR-PROFILE-036",
-                "the Merkle cap must divide every antipodal-pair leaf count",
+                "FRI-IOR-PROFILE-042",
+                "semantic-law parameters contradict their algebra-profile fields",
             )
 
     def to_term(self) -> dict[str, Any]:
@@ -389,19 +578,19 @@ class FriIorProfile:
             "query_occurrences_preserve_order_and_multiplicity": (
                 self.query_occurrences_preserve_order_and_multiplicity
             ),
-            "commitment": {
-                "hash": self.merkle_hash,
-                "salt_bytes": self.merkle_salt_bytes,
-                "cap_size": self.merkle_cap_size,
-                "leaf_layout": "ordered-antipodal-evaluation-pair",
-            },
+            # The profile binds law identities, not duplicated law bodies.  The
+            # immutable ``SemanticLaw`` subjects above own those terms.  This
+            # keeps repeated profile references compact without weakening the
+            # identity edge: changing a law body rotates its ID and therefore
+            # rotates this profile.
+            "semantic_law_ids": [law.identity.to_term() for law in self.semantic_laws],
         }
 
     @property
     def identity(self) -> SemanticId:
         return semantic_id(
-            "fri-ior-profile",
-            "fri-ior.profile.v1",
+            "fri-algebra-profile",
+            "fri-ior.algebra-profile.v1",
             self.to_term(),
         )
 
@@ -410,8 +599,8 @@ D0 = EvaluationDomain("D0", Fp(8), 16)
 D1 = EvaluationDomain("D1", Fp(64), 8)
 D2 = EvaluationDomain("D2", Fp(22), 4)
 
-EXACT_PROFILE = FriIorProfile(
-    name=PROFILE_NAME,
+EXACT_ALGEBRA_PROFILE = FriAlgebraProfile(
+    name=ALGEBRA_PROFILE_NAME,
     modulus=MODULUS,
     primitive_generator=PRIMITIVE_GENERATOR,
     extension_nonresidue=EXTENSION_NONRESIDUE,
@@ -423,26 +612,30 @@ EXACT_PROFILE = FriIorProfile(
     round_count=ROUND_COUNT,
     ordered_query_count=ORDERED_QUERY_COUNT,
     query_occurrences_preserve_order_and_multiplicity=True,
-    merkle_hash=MERKLE_HASH,
-    merkle_salt_bytes=MERKLE_SALT_BYTES,
-    merkle_cap_size=MERKLE_CAP_SIZE,
+    semantic_laws=EXACT_ALGEBRA_LAWS,
 )
+
+# Transitional spelling for carriers outside this module.  Both names denote
+# the same executable algebra type and object; there is no second profile or
+# second semantic identity.
+FriIorProfile = FriAlgebraProfile
+EXACT_PROFILE = EXACT_ALGEBRA_PROFILE
 
 
 def admit_exact_profile(candidate: object) -> CheckResult:
     """Admit only the exact finite profile, with typed fail-closed outcomes."""
 
     boundary = "profile:admission"
-    if not isinstance(candidate, FriIorProfile):
+    if not isinstance(candidate, FriAlgebraProfile):
         return CheckResult(
             OutcomeClass.MALFORMED,
             boundary,
             "FRI-IOR-PROFILE-017",
-            "profile admission requires a FriIorProfile value",
+            "profile admission requires a FriAlgebraProfile value",
         )
     try:
         candidate_term = candidate.to_term()
-        exact_term = EXACT_PROFILE.to_term()
+        exact_term = EXACT_ALGEBRA_PROFILE.to_term()
         if candidate_term != exact_term:
             return unsupported(
                 boundary,

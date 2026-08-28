@@ -280,7 +280,13 @@ class TerminalPolynomial:
 
 @dataclass(frozen=True, slots=True)
 class RandomQueryDraw:
-    """One top-level verifier-random draw, before layer-query expansion."""
+    """One member of the Core-owned ordered query-occurrence vector.
+
+    Native FRI samples these indices directly and with replacement.  A query
+    seed is not part of the native Core; an FS interpretation may use one as
+    construction-internal derivation state before producing the same ordered
+    vector value.
+    """
 
     ordinal: int
     initial_domain_index: int
@@ -491,6 +497,8 @@ def canonical_structural_fold_chain() -> StructuralFoldChain:
 
 
 def canonical_event_log() -> tuple[NativeEvent, ...]:
+    """Refine the one ordered-vector coin into its four member occurrences."""
+
     events = [
         NativeEvent(0, NativeEventKind.PUBLISH_ORACLE, INITIAL_ORACLE_NAME),
         NativeEvent(1, NativeEventKind.FRESH_CHALLENGE, FIRST_CHALLENGE_NAME),
@@ -511,7 +519,12 @@ def canonical_event_log() -> tuple[NativeEvent, ...]:
 
 @dataclass(frozen=True, slots=True)
 class NativeFriTrace:
-    """A complete caller-supplied native interaction trace."""
+    """A complete caller-supplied native interaction trace.
+
+    ``query_draws`` is the exact ordered query-occurrence-vector value.  The
+    four event entries preserve member occurrence identity and multiplicity;
+    no construction-specific query seed belongs to this carrier.
+    """
 
     profile: FriIorProfile
     initial_oracle: LogicalOracle

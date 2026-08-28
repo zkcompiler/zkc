@@ -21,7 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
-from .profile import EXACT_PROFILE
+from .commitment import EXACT_COMMITMENT_PROFILE
+from .profile import EXACT_ALGEBRA_PROFILE
 from .terms import (
     CheckResult,
     ModelFailure,
@@ -32,6 +33,11 @@ from .terms import (
 )
 from .transcript import (
     CANONICAL_CONSTRUCTION_PLAN,
+    DERIVE_CHALLENGE,
+    EXACT_GRINDING_PROFILE,
+    QUERY_OCCURRENCES,
+    QUERY_SEED,
+    SAMPLE_OCCURRENCES,
     TranscriptConstructionPlan,
 )
 
@@ -155,7 +161,7 @@ FIAT_SHAMIR_CONSTRUCTION_CAPABILITIES = (
     "typed-publication-framing",
     "domain-separated-challenge-derivation",
     "bounded-rejection-sampling",
-    "work-seed-and-query-seed-separation",
+    "work-seed-and-construction-internal-query-seed-separation",
     "ordered-query-occurrence-derivation",
 )
 FIAT_SHAMIR_CONSTRUCTION_REQUIREMENTS = (
@@ -172,8 +178,7 @@ _NATIVE_EVENT_SCHEDULE = (
     "publish-prover-logical-oracle",
     "fresh-fold-challenge-1",
     "publish-terminal-polynomial",
-    "fresh-query-seed",
-    "sample-four-ordered-query-occurrences",
+    "sample-fresh-ordered-query-occurrence-vector",
     "answer-logical-oracle-queries",
     "check-fold-round-0",
     "check-fold-round-1-terminal-evaluation",
@@ -186,8 +191,7 @@ _COMMITTED_EVENT_SCHEDULE = (
     "publish-cap-1",
     "fresh-fold-challenge-1",
     "publish-terminal-polynomial",
-    "fresh-query-seed",
-    "sample-four-ordered-query-occurrences",
+    "sample-fresh-ordered-query-occurrence-vector",
     "publish-opening-table-and-occurrence-selectors",
     "check-opening-coverage-and-authentication",
     "check-fold-round-0",
@@ -204,8 +208,7 @@ _WORK_AUGMENTED_EVENT_SCHEDULE = (
     "fresh-work-seed",
     "publish-grinding-nonce",
     "check-work-seed-and-nonce",
-    "fresh-query-seed",
-    "sample-four-ordered-query-occurrences",
+    "sample-fresh-ordered-query-occurrence-vector",
     "publish-opening-table-and-occurrence-selectors",
     "check-opening-coverage-and-authentication",
     "check-fold-round-0",
@@ -217,7 +220,16 @@ _AUGMENTED_CHALLENGES = (
     "fold-challenge[0]",
     "fold-challenge[1]",
     "work-seed",
-    "query-seed",
+    "query-occurrences",
+)
+_AUGMENTED_CHALLENGE_TYPES = (
+    ("fold-challenge[0]", "F97Extension2"),
+    ("fold-challenge[1]", "F97Extension2"),
+    ("work-seed", "Bytes32"),
+    (
+        "query-occurrences",
+        "OrderedQueryOccurrenceVector<length=4,index-domain=D0,with-replacement>",
+    ),
 )
 _AUGMENTED_ACCEPTANCE_AFFECTING_PUBLIC_OCCURRENCES = (
     "statement",
@@ -229,9 +241,12 @@ _AUGMENTED_ACCEPTANCE_AFFECTING_PUBLIC_OCCURRENCES = (
     "terminal-polynomial",
     "work-seed",
     "grinding-nonce",
-    "query-seed",
     "query-occurrences",
     "opening-table-and-occurrence-selectors",
+)
+_PUBLIC_CONTEXT_PORTS = (
+    ("statement", "Statement"),
+    ("application-context", "ApplicationBinding"),
 )
 
 TRANSCRIPT_FRAME = "TranscriptFrame"
@@ -250,6 +265,21 @@ _PROTECTION_DISPOSITIONS = frozenset(
 
 def _semantic_ref(identity: SemanticId) -> dict[str, Any]:
     return identity.to_term()
+
+
+def _public_context_port_terms() -> list[dict[str, str]]:
+    return [
+        {
+            "occurrence": occurrence,
+            "port_kind": "Context",
+            "owner": "PublicEnvironment",
+            "visibility": "Public",
+            "multiplicity": "ExactlyOne",
+            "semantic_purpose": purpose,
+            "value_type": "ClosedFiniteTerm",
+        }
+        for occurrence, purpose in _PUBLIC_CONTEXT_PORTS
+    ]
 
 
 def _raise_kind_mismatch(where: str, expected: str) -> None:
@@ -292,13 +322,23 @@ class _SemanticSubject:
 class NativeFriCore(_SemanticSubject):
     """Native logical-oracle FRI with no commitment or work capability."""
 
+    algebra_profile_id: SemanticId = EXACT_ALGEBRA_PROFILE.identity
+
     SUBJECT_KIND: ClassVar[str] = "native-fri-core"
     IDENTITY_DOMAIN: ClassVar[str] = "fri-ior.core.native.v1"
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.algebra_profile_id, SemanticId)
+            or self.algebra_profile_id.subject_kind != "fri-algebra-profile"
+        ):
+            _raise_kind_mismatch("algebra_profile_id", "FriAlgebraProfile identity")
 
     def to_term(self) -> dict[str, Any]:
         return {
             "schema": NATIVE_CORE_SCHEMA,
-            "profile_id": _semantic_ref(EXACT_PROFILE.identity),
+            "algebra_profile_id": _semantic_ref(self.algebra_profile_id),
+            "public_context_ports": _public_context_port_terms(),
             "oracle_publication": {
                 "mode": "LogicalAccess",
                 "origins": ["InitialOracle", "ProverOracle"],
@@ -309,6 +349,10 @@ class NativeFriCore(_SemanticSubject):
             "query_model": {
                 "capability": "declared-logical-query-access",
                 "occurrences": "ordered-with-multiplicity",
+                "fresh_randomness": (
+                    "ordered-query-occurrence-vector-with-replacement"
+                ),
+                "query_seed": "absent-from-native-core",
                 "physical_openings": "absent",
             },
             "checks": [
@@ -335,13 +379,40 @@ class NativeFriCore(_SemanticSubject):
 class CommittedFriCore(_SemanticSubject):
     """Public committed FRI with authenticated openings and no work step."""
 
+    algebra_profile_id: SemanticId = EXACT_ALGEBRA_PROFILE.identity
+    commitment_profile_id: SemanticId = EXACT_COMMITMENT_PROFILE.identity
+
     SUBJECT_KIND: ClassVar[str] = "committed-fri-core"
     IDENTITY_DOMAIN: ClassVar[str] = "fri-ior.core.committed.v1"
+
+    def __post_init__(self) -> None:
+        expected = (
+            (
+                self.algebra_profile_id,
+                "fri-algebra-profile",
+                "algebra_profile_id",
+                "typed FriAlgebraProfile identity",
+            ),
+            (
+                self.commitment_profile_id,
+                "fri-commitment-profile",
+                "commitment_profile_id",
+                "typed FriCommitmentProfile identity",
+            ),
+        )
+        for value, subject_kind, field_name, label in expected:
+            if (
+                not isinstance(value, SemanticId)
+                or value.subject_kind != subject_kind
+            ):
+                _raise_kind_mismatch(field_name, label)
 
     def to_term(self) -> dict[str, Any]:
         return {
             "schema": COMMITTED_CORE_SCHEMA,
-            "profile_id": _semantic_ref(EXACT_PROFILE.identity),
+            "algebra_profile_id": _semantic_ref(self.algebra_profile_id),
+            "commitment_profile_id": _semantic_ref(self.commitment_profile_id),
+            "public_context_ports": _public_context_port_terms(),
             "publication_model": {
                 "oracle_publication": "absent",
                 "caps": ["cap[0]", "cap[1]"],
@@ -351,6 +422,10 @@ class CommittedFriCore(_SemanticSubject):
             "event_schedule": list(_COMMITTED_EVENT_SCHEDULE),
             "query_model": {
                 "logical_occurrences": "ordered-with-multiplicity",
+                "fresh_randomness": (
+                    "ordered-query-occurrence-vector-with-replacement"
+                ),
+                "query_seed": "absent-from-committed-core",
                 "physical_openings": "canonical-deduplicated-table",
                 "occurrence_selectors": "total-over-logical-occurrences",
             },
@@ -377,6 +452,7 @@ class WorkAugmentedCommittedFriCore(_SemanticSubject):
     """Committed FRI with an explicit pre-query deterministic work gate."""
 
     committed_core: CommittedFriCore = field(default_factory=CommittedFriCore)
+    grinding_profile_id: SemanticId = EXACT_GRINDING_PROFILE.identity
     public_coin: bool = True
     challenge_occurrences: tuple[str, ...] = _AUGMENTED_CHALLENGES
     acceptance_affecting_public_occurrences: tuple[str, ...] = (
@@ -389,6 +465,14 @@ class WorkAugmentedCommittedFriCore(_SemanticSubject):
     def __post_init__(self) -> None:
         if type(self.committed_core) is not CommittedFriCore:
             _raise_kind_mismatch("committed_core", "CommittedFriCore")
+        if (
+            not isinstance(self.grinding_profile_id, SemanticId)
+            or self.grinding_profile_id.subject_kind != "fri-grinding-profile"
+        ):
+            _raise_kind_mismatch(
+                "grinding_profile_id",
+                "FriGrindingProfile identity",
+            )
         if type(self.public_coin) is not bool:
             _raise_kind_mismatch("public_coin", "boolean")
         for value, where in (
@@ -409,10 +493,18 @@ class WorkAugmentedCommittedFriCore(_SemanticSubject):
             "preserved_committed_core_id": _semantic_ref(
                 self.committed_core.identity
             ),
+            "grinding_profile_id": _semantic_ref(self.grinding_profile_id),
+            "public_context_ports": self.committed_core.to_term()[
+                "public_context_ports"
+            ],
             "event_schedule": list(_WORK_AUGMENTED_EVENT_SCHEDULE),
             "challenge_contract": {
                 "public_coin": self.public_coin,
                 "occurrences": list(self.challenge_occurrences),
+                "occurrence_types": [
+                    {"occurrence": occurrence, "value_type": value_type}
+                    for occurrence, value_type in _AUGMENTED_CHALLENGE_TYPES
+                ],
                 "source": "abstract-verifier-public-coin-interface",
             },
             "acceptance_affecting_public_occurrences": list(
@@ -421,8 +513,8 @@ class WorkAugmentedCommittedFriCore(_SemanticSubject):
             "inserted_work_effects": {
                 "placement": "after-terminal-material-before-query-randomness",
                 "work_seed": "fresh-public-bytes32-challenge",
-                "nonce": "prover-publication-u32be",
-                "check": "sha256-leading-zero-bits-total-predicate",
+                "nonce": "prover-publication-selected-grinding-nonce-type",
+                "check": "selected-grinding-profile-total-predicate",
                 "failure": "Reject",
             },
             "preserved_checks": list(
@@ -482,9 +574,11 @@ class FreshChallengeInterpretation(_SemanticSubject):
                     "value_type": "Bytes32",
                 },
                 {
-                    "occurrence": "query-seed",
-                    "source": "verifier-fresh-public-coin",
-                    "value_type": "Bytes32",
+                    "occurrence": "query-occurrences",
+                    "source": "verifier-fresh-direct-uniform-sampling",
+                    "value_type": (
+                        "OrderedQueryOccurrenceVector<length=4,index-domain=D0,with-replacement>"
+                    ),
                 },
             ],
             "nonclaims": list(FRESH_INTERPRETATION_NONCLAIMS),
@@ -544,6 +638,15 @@ class FiatShamirChallengeInterpretation(_SemanticSubject):
                 transcript_plan_identity(self.construction_plan)
             ),
             "transcript_construction": self.construction_plan.to_term(),
+            "core_query_resolution": {
+                "core_occurrence": "query-occurrences",
+                "core_value_type": (
+                    "OrderedQueryOccurrenceVector<length=4,index-domain=D0,with-replacement>"
+                ),
+                "construction_internal_state": "query-seed",
+                "transcript_result_occurrence": "query-occurrences",
+                "rule": "derive-seed-then-expand-ordered-occurrences",
+            },
             "nonclaims": list(FIAT_SHAMIR_INTERPRETATION_NONCLAIMS),
         }
 
@@ -902,6 +1005,24 @@ def _expected_protection_map(
             "FRI-IOR-SUBJECT-020",
             "the Core occurrence inventory contains duplicates",
         )
+    context_ports = core_term.get("public_context_ports")
+    if context_ports != _public_context_port_terms():
+        raise ModelFailure(
+            OutcomeClass.REFUSED,
+            "subjects:fiat-shamir-admission",
+            "FRI-IOR-SUBJECT-036",
+            (
+                "the Core does not expose the exact public Statement and "
+                "ApplicationBinding context-port occurrences"
+            ),
+        )
+    if any(port["occurrence"] not in occurrences for port in context_ports):
+        raise ModelFailure(
+            OutcomeClass.REFUSED,
+            "subjects:fiat-shamir-admission",
+            "FRI-IOR-SUBJECT-036",
+            "a public Context occurrence is absent from the protection inventory",
+        )
     plan_by_occurrence = {
         step.occurrence: (index, step)
         for index, step in enumerate(plan.steps)
@@ -913,6 +1034,32 @@ def _expected_protection_map(
             "FRI-IOR-SUBJECT-021",
             "the transcript plan contains duplicate occurrences",
         )
+
+    # The Core owns the ordered vector, not the construction's byte seed.
+    # Require the selected plan to expose the exact two-step resolution rather
+    # than accepting `query-occurrences` merely because its text happens to
+    # match a plan occurrence.
+    if QUERY_OCCURRENCES in occurrences:
+        seed_resolution = plan_by_occurrence.get(QUERY_SEED)
+        vector_resolution = plan_by_occurrence.get(QUERY_OCCURRENCES)
+        if (
+            seed_resolution is None
+            or vector_resolution is None
+            or seed_resolution[1].kind != DERIVE_CHALLENGE
+            or vector_resolution[1].kind != SAMPLE_OCCURRENCES
+            or seed_resolution[0] >= vector_resolution[0]
+            or QUERY_OCCURRENCES
+            not in seed_resolution[1].protected_occurrences
+        ):
+            raise ModelFailure(
+                OutcomeClass.REFUSED,
+                "subjects:fiat-shamir-admission",
+                "FRI-IOR-SUBJECT-035",
+                (
+                    "the transcript plan does not derive an internal query seed "
+                    "and expand it into the Core-owned ordered query vector"
+                ),
+            )
 
     expected: list[PublicOccurrenceProtection] = []
     for occurrence in occurrences:
