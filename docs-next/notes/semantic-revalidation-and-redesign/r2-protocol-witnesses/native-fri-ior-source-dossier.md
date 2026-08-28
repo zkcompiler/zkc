@@ -36,9 +36,10 @@ The principal primary sources are:
 - Ben-Sasson, Chiesa, and Spooner, [*Interactive Oracle
   Proofs*](https://eprint.iacr.org/2016/116), especially the transformation and
   state-restoration analysis in Sections 5--7;
-- Block, Holmgren, and Rosen, [*Fiat-Shamir Security of FRI and Related
-  SNARKs*](https://eprint.iacr.org/2023/1071), especially its smooth
-  multiplicative FRI, round-by-round analysis, and concrete discussion; and
+- Block, Garreta, Katz, Thaler, Tiwari, and Zając, [*Fiat-Shamir Security of
+  FRI and Related SNARKs*](https://eprint.iacr.org/2023/1071), especially its
+  smooth multiplicative FRI, round-by-round analysis, and concrete discussion;
+  and
 - Attema, Fehr, and Klooß, [*Fiat--Shamir Transformation of Multi-Round
   Interactive Proofs*](https://eprint.iacr.org/2021/1377), used only for its
   exact multi-round theorem boundary rather than as a generic FRI theorem.
