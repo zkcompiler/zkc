@@ -294,12 +294,13 @@ coordinates. Every question binds one exact source and target Core or Protocol.
 Construction declarations and admitted constructions occupy different typed
 slots: the presently admitted Fiat--Shamir construction is bound exactly,
 whereas commitment-compilation and grinding declarations are bound but their
-checked-construction slots remain explicitly open. No reviewed canonical
-Relations schema or construction-specific opening map is available yet, so
-those slots carry no invented identity and instead point to named open
-applicability obligations. The native logical-query-to-layer-answer projection
-is the one currently bound occurrence map because its exact owner and identity
-already exist.
+checked-construction slots remain explicitly open. The executable package now
+issues owner-local checked construction, Relations-grounding, and occurrence-
+map receipts for its exact finite case. Those validation-bound receipts are
+local evidence, not a reviewed durable Relations schema or Analysis
+applicability authority, so this catalog does not retroactively import their
+identities into theorem questions. The native logical-query-to-layer-answer
+projection remains the occurrence map bound by the question catalog.
 
 A bound coordinate is not correspondence evidence. It identifies the local
 candidate to which a theorem might apply; it does not show that a source
@@ -385,10 +386,12 @@ observed exactly:
   general construction correctness; and
 - distinct native, committed Fresh, and committed Fiat--Shamir subjects.
 
-Its report must state `NotEvaluated` for proximity soundness, round-by-round
-soundness, restoration soundness, ROM/QROM security, knowledge, binding,
-hiding, and parameter security. Negative cases may establish that malformed
-or inconsistent artifacts are rejected; they do not estimate an adversarial
+Its question identities must record `NotEvaluated` for proximity soundness,
+round-by-round soundness, restoration soundness, ROM/QROM security, knowledge,
+binding, hiding, and parameter security. The public report exposes question-
+formation receipts and null theorem/applicability fields rather than claiming
+an Analysis result. Negative cases may establish that malformed or
+inconsistent artifacts are rejected; they do not estimate an adversarial
 success probability.
 
 After the executable case and independent reconstruction pass, the durable

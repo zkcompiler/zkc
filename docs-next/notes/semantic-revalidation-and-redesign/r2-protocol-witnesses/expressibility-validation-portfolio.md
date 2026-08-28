@@ -2,7 +2,8 @@
 
 > **Kind:** Temporary R2 protocol-selection and validation-depth contract
 > **State:** Selected portfolio; repaired/refrozen `P01` is retained at T3
-> after exact-snapshot independent re-review; `P02` is queued next
+> after exact-snapshot independent re-review; one finite `P02` profile has
+> executed, with exact-source correspondence and final retention still open
 > **Authority:** None. This page selects research pressure and evidence depth;
 > it does not define target semantics, supported protocols, theorem
 > applicability, implementation conformance, or the final v0 boundary.
@@ -115,10 +116,13 @@ Each completed case receives exactly one primary classification:
 
 `P01` is a retained T3 result at its exact finite scope. Its repaired 69-test
 packet passed separate lifecycle and provenance cold rechecks on the final
-source-bound identity. `P02` is queued next but has not begun, and it must not
-reuse the fixture-local invented
-acceptance condition withdrawn by `FRI-Grind-1`; it needs a source-faithful
-oracle/query/opening path.
+source-bound identity. `P02` now has one executed early-terminated finite
+profile with a source-explicit delta, public-only target replay, independently
+coded positive reconstruction, and owner-local construction and Relations
+receipts. It does not yet establish exact correspondence to the cited
+three-fold scalar-terminal algorithm, family closure, or a final T3 retention
+decision. It does not reuse the fixture-local invented acceptance condition
+withdrawn by `FRI-Grind-1`.
 
 ### 4.2 Constructive canonical families
 

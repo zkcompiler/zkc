@@ -2,9 +2,9 @@
 
 > **Kind:** Temporary primary-source reconstruction and implementation-profile
 > comparison
-> **State:** Research complete enough for constructive validation; architecture
-> conclusions remain provisional until the executable witness and independent
-> reconstruction pass
+> **State:** Constructive validation and independently coded reconstruction
+> pass for one finite early-terminated profile; exact-source correspondence,
+> theorem applicability, and cross-family conclusions remain provisional
 > **Authority:** None. This page records source facts, deductions, profile
 > choices, and unresolved theorem obligations. It does not define target
 > semantics or establish FRI, commitment, Fiat--Shamir, or implementation
@@ -45,11 +45,12 @@ The principal primary sources are:
   Interactive Proofs*](https://eprint.iacr.org/2021/1377), used only for its
   exact multi-round theorem boundary rather than as a generic FRI theorem.
 
-Exact downloaded-PDF digests and implementation-source manifests belong to
-the executable package's source ledger. A citation locates a source, while a
-digest identifies bytes and checks them only relative to a separately trusted
-expected digest. Neither establishes provenance on its own or proves that a
-local deduction is correct.
+The executable package's source ledger binds five named paper artifacts used as
+design inputs and two implementation snapshots used as comparison inputs. It
+does not bind AFK or the other Analysis and variant-pressure citations in this
+dossier. A citation locates a source, while a digest identifies bytes and checks
+them only relative to a separately trusted expected digest. Neither establishes
+provenance on its own or proves that a local deduction is correct.
 
 ## 2. Native FRI semantics
 
@@ -484,7 +485,7 @@ The following must remain explicit:
 
 ## 8. Selected finite profile
 
-The executable witness uses a clean-room profile chosen to exercise the shared
+The executable witness uses an independently derived profile chosen to exercise the shared
 nucleus and the implementation forks without claiming conformance to either
 library:
 

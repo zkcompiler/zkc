@@ -1,7 +1,8 @@
 # Native FRI/IOR End-to-End Validation Plan
 
 > **Kind:** Temporary protocol-validation work contract
-> **State:** Ready for activation
+> **State:** Executed for one finite early-terminated profile; broader
+> protocol-family closure remains open
 > **Authority:** None. This page fixes the scope and method of one research
 > package. It does not define target semantics, establish protocol support,
 > discharge a theorem, or authorize normative cutover.
@@ -35,7 +36,7 @@ by an assumed implementation. It includes:
 1. primary-source and implementation-profile selection;
 2. source-faithful protocol reconstruction;
 3. current specification and implementation correspondence;
-4. clean-room semantic anatomy;
+4. independently derived semantic anatomy;
 5. alternative architecture generation and comparison;
 6. a complete typed constructive encoding;
 7. an executable finite witness with positive and negative cases;
@@ -55,7 +56,7 @@ The selected source profile must be rich enough to cover the following path:
 
 ```text
 public instance and code/domain parameters
-    -> committed initial logical oracle
+    -> fixed initial logical oracle
     -> verifier folding challenges
     -> derived logical oracles
     -> terminal material and residual condition
@@ -99,7 +100,7 @@ At minimum, reconstruct and compare:
 - at least two real implementation profiles that make different choices for
   leaf layout, cap/root representation, extension-field values, query
   deduplication, openings, salting, grinding, or transcript state; and
-- one clean-room idealization that is not copied from the current zkc model or
+- one implementation-agnostic idealization that is not copied from the current zkc model or
   either implementation.
 
 Every external claim records its exact source, version or retrieval date,
@@ -200,12 +201,15 @@ as an encoding.
 
 The finite witness must be independently reconstructible from frozen public
 source material. It may use a deliberately small field, domain, degree, and
-query count only when the reduction from the selected source profile is exact
-and recorded.
+query count when either the reduction from the selected source profile is
+exact and recorded, or the package defines one exact internal finite profile,
+records every source delta, and makes no theorem or source-correspondence claim
+for that profile.
 
 The executable package must contain:
 
-- frozen public inputs and a separate private-generation lane;
+- frozen public inputs and a separate, explicitly declassified owner-generation
+  lane whose values populate private semantic roles;
 - a source ledger with content digests and versioned provenance;
 - one deterministic reference execution for reproducibility;
 - exact semantic and validation identities;
@@ -318,13 +322,44 @@ decisively explains why they cannot pass.
 | Convergence | Every affected owner accepts one coherent boundary or records the unresolved contradiction |
 | Absorption | Accepted changes, retained evidence, open questions, and deletion targets have exact destinations |
 
+### 12.1 Observed disposition
+
+The executed finite case is a **conservative semantic extension**. One
+early-terminated logical-oracle FRI profile inhabits separate native,
+commitment-compiled, work-augmented, Fresh, and Fiat--Shamir subjects. The
+producer and separately coded replay agree on selected exact positive
+public-execution facts. Two named late negatives reach their expected producer
+boundaries. Owner-local checked construction and Relations operations pass
+under their own validation-bound live receipts. These are distinct evidence
+lanes rather than one shared correspondence result. The package forms Analysis
+questions but does not answer them.
+
+This result preserves the central factorization. It does not close exact
+classical FRI correspondence or protocol-family support. Cross-family source
+pressure identifies verifier-derived oracle access as a real missing
+capability, but `DerivedOracle`/`QueryPlan` remains a candidate rather than an
+accepted design. Static pre-authentication elaboration is the leading next
+test; runtime query expansion would reopen Core execution, receipts,
+composition, and authentication.
+
+The remaining absorption work is therefore intentionally split:
+
+- retain the finite executable package as bounded falsification evidence;
+- carry the logical-access, origin, construction, identity, Relations, and
+  Analysis requirements into their eventual durable owners only after review;
+- construct the exact three-fold scalar-terminal control before claiming
+  classical FRI correspondence; and
+- resolve static derived-query elaboration, face-map capability transport,
+  DEEP-ALI total quotient semantics, and STIR collision semantics before
+  promoting the cross-family seam.
+
 ## 13. Checkpoints and interruption rule
 
 The work proceeds continuously through the following semantic checkpoints:
 
 1. source and implementation-profile selection;
 2. complete source anatomy and current-model reconstruction;
-3. candidate portfolio and clean-room object graphs;
+3. candidate portfolio and independently derived object graphs;
 4. provisional architecture decision with reversal conditions;
 5. executable finite witness and negative suite;
 6. independent replay and cross-domain reconciliation; and

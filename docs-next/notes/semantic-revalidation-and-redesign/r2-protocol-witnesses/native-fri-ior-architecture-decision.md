@@ -1,7 +1,8 @@
 # Native FRI/IOR Provisional Architecture Decision
 
 > **Kind:** Temporary candidate comparison and constructive decision
-> **State:** Provisional; selected for executable falsification
+> **State:** Provisional; the finite factorization survived executable
+> falsification, while cross-family expansion remains open
 > **Authority:** None. The decision may be reopened by the witness, independent
 > reconstruction, cross-domain reconciliation, or external review.
 > **Basis:** [Native FRI/IOR Source Dossier](native-fri-ior-source-dossier.md)
@@ -10,7 +11,7 @@
 
 ## 1. Decision in one view
 
-Use four semantic subjects and three checked constructions:
+Use five semantic subjects and three checked constructions:
 
 ```text
 Native logical FRI IOR Core
@@ -35,7 +36,11 @@ Work-augmented committed FRI Core
   - one nonce publication and deterministic work check
   - query randomness only after valid work
                  |
-                 | CheckedFSConstruction (same augmented Core)
+                 | Fresh challenge interpretation
+                 v
+Work-augmented committed FRI Fresh Protocol
+                 |
+                 | CheckedFSConstruction (shared augmented Core)
                  v
 Work-augmented committed FRI Fiat--Shamir Protocol
   - identical augmented committed interaction
@@ -539,7 +544,10 @@ of the following:
 - exact reconstruction of the inserted work seed before nonce verification;
 - one concrete same-Core coupling from a work-augmented Fresh execution to the
   one-shot Fiat--Shamir execution, including the complete ordered query vector;
-- ordered query occurrences with at least one duplicate;
+- ordered query occurrences whose frozen run includes antipodal positions that
+  select the same physical opening;
+- a separate focused derivation with at least one exactly repeated query
+  position, so repeated draws and antipodal opening reuse are not conflated;
 - a smaller deduplicated opening table with total occurrence coverage;
 - cap, leaf, salt, path, position, fold, and terminal first-boundary refusals;
 - a late fold-consistency negative whose authentication is valid;
@@ -547,7 +555,10 @@ of the following:
 - relation grounding that refuses an outer-relation inference;
 - an independently coded public verifier reaching the same classification;
 - bounded work and copied-checkout replay; and
-- no private-generation or expected-result input read by report construction.
+- no owner-generation, owner-relation, or expected-result input read by report
+  construction.
 
-Until those conditions pass, this page is a hypothesis selected for a hard
-test, not a completed redesign.
+The finite package now passes these acceptance criteria for its exact bounded
+profile. The result retains this factorization as a candidate architecture; it
+does not complete the redesign, establish exact-source correspondence, or
+close the cross-family and durable-absorption obligations above.

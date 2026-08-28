@@ -11,8 +11,11 @@
 > **Current witness:** `P01` Schnorr/Sigma is the retained first T3 anchor. Its
 > prior 62-test snapshot failed cold review; the staged 69-test repair, rotated
 > source-bound report, refrozen projection, copied-checkout replay, and separate
-> lifecycle and provenance cold rechecks now pass. `P02` is queued next but has
-> not begun. All-code reachability remains nonblocking hygiene.
+> lifecycle and provenance cold rechecks now pass. One finite `P02` native
+> FRI/IOR profile has also executed through public replay and owner-local
+> grounding; exact-source correspondence, cross-family closure, and its final
+> T3 retention decision remain open. All-code reachability remains nonblocking
+> hygiene.
 > **Downstream boundary:** Stage 4B remains inactive.
 > **Deletion:** Absorb reviewed results into their durable owners, route open
 > questions forward, then delete this package.
@@ -48,7 +51,7 @@ nor a general non-anticipation property.
 Frozen inputs, reconstruction, and primary-source deductions live in
 [Source Reconstruction and Primary Research](source-and-research.md). Replay
 instructions and the machine-report contract live in the
-[clean-room probe README](../../../../evaluation/r2-protocol-model/README.md).
+[independently derived probe README](../../../../evaluation/r2-protocol-model/README.md).
 The failed first refreeze, accepted repair boundaries, and passing repaired
 refreeze are recorded in
 [FRI-Grind-1 Cold Review and Repair Decision](cold-review-and-repair.md).
@@ -78,6 +81,8 @@ elsewhere are cross-references, not additional inventory ownership.
 | [Native FRI/IOR Source Dossier](native-fri-ior-source-dossier.md) | Primary-source reconstruction, commitment/Fiat--Shamir separation, implementation-profile comparison, and exact finite-profile selection. |
 | [Native FRI/IOR Provisional Architecture Decision](native-fri-ior-architecture-decision.md) | Compared alternatives, selected native/committed/work-augmented construction chain, required semantic extensions, and executable reversal conditions. |
 | [Native FRI/IOR Analysis Dossier](native-fri-ior-analysis-dossier.md) | Source-grounded theorem and variant matrix, Analysis experiment requirements, arithmetic applicability checks, and explicit nonclaims. |
+| [FRI/IOR Variant Pressure Synthesis](fri-ior-variant-pressure-synthesis.md) | Cross-family primary-source comparison, current-model disposition, and a candidate verifier-derived Oracle/query-plan seam pressured independently by DEEP-ALI and STIR, with static elaboration and composition closure still open. |
+| [Native FRI/IOR Executable Package](../../../../evaluation/native-fri-ior/README.md) | Finite public replay, independently coded positive reconstruction, owner-local checked constructions and Relations grounding, exact limits, fixtures, and nonclaims. |
 | [P01 Schnorr/Sigma](p01-schnorr-sigma.md) | P01 source reconstruction, current-target obstruction, and theorem boundary. |
 | [P01 Phase B Repair and Refreeze Decision](p01-phase-b-repair-and-refreeze.md) | Selected finite repair, public evidence boundary, gate states, and reopening conditions. |
 | [R2 State Reconciliation](r2-state-reconciliation.md) | Temporary Phase A status, namespace, evidence, and open-obligation snapshot. |
@@ -224,8 +229,9 @@ Failure is a valid R2 result and must retain its exact inputs and reopening
 conditions. Later work follows the differentiated portfolio rather than making
 every case executable: T1 boundary analyses, T2 constructive encodings, and T3
 executable witnesses carry different evidence. `P01` Schnorr/Sigma is the
-retained first T3 anchor; native FRI/IOR remains the second required T3 anchor
-and is queued but not active. Recent design-set
+retained first T3 anchor. A finite native FRI/IOR profile has now executed as
+the second required anchor, while exact-source correspondence, cross-family
+closure, and final retention remain open. Recent design-set
 variants and withheld cold cases prevent the portfolio from collapsing into a
 list of canonical examples.
 
@@ -268,8 +274,8 @@ target, closes Gate 6. Full diagnostic reachability remains a nonblocking
 hygiene queue. Separate lifecycle and provenance cold rechecks pass on the final
 identity, so P01 is retained at T3; the Phase B decision owns the exact gate
 states. The broader candidate and holdout set is selected by the adjacent
-portfolio, but no other protocol case has begun merely because cross-cutting
-probes exist.
+portfolio, but no protocol case beyond `P01` and this finite `P02` profile has
+begun merely because cross-cutting probes exist.
 
 For P01 specifically, precommitment-before-challenge resolution holds only
 inside the modeled owner-local capability flow. It does not establish out-of-
