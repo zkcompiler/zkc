@@ -17,6 +17,35 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 import reference_model as model  # noqa: E402
 
 
+def activate_analysis_profiles(profiles: object) -> object:
+    """Patch one complete authenticated profile set into the test model."""
+
+    return patch.multiple(
+        model,
+        K3C_ANALYSIS_SEMANTIC_PROFILES=profiles,
+        K3C_ANALYSIS_KERNEL_PROFILE=profiles.kernel,
+        K3C_ANALYSIS_KERNEL_PROFILE_ID=profiles.kernel.identity,
+        K3C_ANALYSIS_PROPERTY_PROFILE=profiles.property,
+        K3C_ANALYSIS_PROPERTY_PROFILE_ID=profiles.property.identity,
+        K3C_ANALYSIS_TRANSPORT_PROFILE=profiles.transport,
+        K3C_ANALYSIS_TRANSPORT_PROFILE_ID=profiles.transport.identity,
+        K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE=(
+            profiles.theorem_source_validation
+        ),
+        K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_ID=(
+            profiles.theorem_source_validation.identity
+        ),
+        K3C_ANALYSIS_KERNEL_PROFILE_BUNDLE=profiles.kernel_bundle,
+        K3C_ANALYSIS_PROPERTY_PROFILE_BUNDLE=profiles.property_bundle,
+        K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE=profiles.transport_bundle,
+        K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE=(
+            profiles.theorem_source_validation_bundle
+        ),
+        K3C_PROFILE_BUNDLE=profiles.bundle,
+        K3C_PROFILE_PREIMAGES=profiles.bundle,
+    )
+
+
 @lru_cache(maxsize=1)
 def fixed_context() -> tuple[object, ...]:
     source, source_model, target_model = model.selected_fixed_member_fixture()
@@ -403,11 +432,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
                 ("validation-only-nonbackflow-probe",),
             )
         )
-        with patch.object(
-            model,
-            "K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE",
-            validation_only.theorem_source_validation,
-        ):
+        with activate_analysis_profiles(validation_only):
             changed_validation_id = model.theorem_source_validation_id(schema)
             self.assertEqual(baseline_schema_id, model.fs_theorem_schema_id(schema))
             self.assertEqual(
@@ -423,11 +448,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
                 ("semantic-transport-forward-rotation-probe",),
             )
         )
-        with patch.object(
-            model,
-            "K3C_ANALYSIS_TRANSPORT_PROFILE",
-            semantic_change.transport,
-        ):
+        with activate_analysis_profiles(semantic_change):
             changed_digest = model.theorem_statement_digest(schema)
             changed_schema_id = model.fs_theorem_schema_id(schema)
             changed_schema = replace(
@@ -437,19 +458,12 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
                     statement_content_sha256=changed_digest,
                 ),
             )
-            with patch.object(
-                model,
-                "K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE",
-                semantic_change.theorem_source_validation,
-            ):
-                changed_validation = model.theorem_source_validation_id(
-                    changed_schema
-                )
+            changed_validation = model.theorem_source_validation_id(changed_schema)
         self.assertNotEqual(baseline_digest, changed_digest)
         self.assertNotEqual(baseline_schema_id, changed_schema_id)
         self.assertNotEqual(baseline_validation_id, changed_validation)
 
-    def test_property_source_identities_ignore_downstream_transport_profile(self) -> None:
+    def test_property_source_identities_follow_their_owning_profiles(self) -> None:
         proposition = model._SCHNORR_PINNED_PROPOSITION
         baseline_schnorr = (
             model.analysis_proposition_id(proposition),
@@ -457,7 +471,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
         family = model.SELECTED_AFK_FAMILY
         authority = model.fixture_ref(
-            "analysis.external-proof-authority",
+            "k3c.external-proof-authority",
             "profile-locality-external-source",
         )
         baseline_hypothesis, baseline_result, _ = model._family_source_components(
@@ -470,11 +484,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
                 ("downstream-only-source-locality-probe",),
             )
         )
-        with patch.object(
-            model,
-            "K3C_ANALYSIS_TRANSPORT_PROFILE",
-            changed.transport,
-        ):
+        with activate_analysis_profiles(changed):
             self.assertEqual(
                 baseline_schnorr,
                 (
@@ -486,8 +496,8 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
                 family,
                 authority,
             )
-            self.assertEqual(baseline_hypothesis, hypothesis)
-            self.assertEqual(baseline_result, result)
+            self.assertNotEqual(baseline_hypothesis, hypothesis)
+            self.assertNotEqual(baseline_result, result)
 
     def test_analysis_law_sources_are_canonical_closed_data(self) -> None:
         for profile in (
@@ -600,9 +610,12 @@ class ImportAndFiniteSourceTest(unittest.TestCase):
     def test_bounded_schnorr_assumption_is_not_a_shadow_theorem_schema(self) -> None:
         self.assertEqual(
             model.SCHNORR_TWO_SPECIAL_SOUNDNESS_THEOREM_ID,
-            model._analysis_id(
-                "analysis.bounded-property-theorem-assumption",
-                model._schnorr_two_special_soundness_theorem_assumption_body(),
+            model.k1.content_id(
+                "k3c.external.theorem-assumption",
+                model.k1.encode_datum(
+                    model._schnorr_two_special_soundness_theorem_assumption_body()
+                ),
+                semantic_regime=model.k1.SEMANTIC_REGIME_ID,
             ),
         )
         self.assertNotIn(
@@ -804,9 +817,18 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
 
     def test_theorem_truth_question_is_exactly_source_free(self) -> None:
         body = model.theorem_truth_question_body(model.afk_v2_theorem_schema())
+        reason = model.analysis_profile_declaration_ref(
+            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            model.K3C_ANALYSIS_PROPERTY_PROFILE,
+            "analysis.semantic-law",
+            "source-free-premise-reason",
+        )
         self.assertEqual(
-            dict(body.fields)[2],
-            model.k1.DatumVariant(0, model.k1.DatumRecord(())),
+            body.context,
+            model.k1.DatumVariant(
+                0,
+                model.analysis_profile_declaration_ref_body(reason),
+            ),
         )
 
     def test_theorem_truth_goal_identity_is_question_only(self) -> None:
@@ -1446,7 +1468,7 @@ class FamilyTransportTest(unittest.TestCase):
             authority_binding=replace(
                 source.authority_binding,
                 owner_id=model.fixture_ref(
-                    "analysis.external-proof-authority", "detached-owner"
+                    "k3c.external-proof-authority", "detached-owner"
                 ),
             ),
         )
@@ -1601,7 +1623,9 @@ class FamilyTransportTest(unittest.TestCase):
             ),
         )
 
-    def test_goal_refuses_conclusion_substitution_after_question_formation(self) -> None:
+    def test_goal_refuses_conclusion_substitution_after_question_formation(
+        self,
+    ) -> None:
         goal = fixed_source_judgment().proposition.goal
         changed = replace(
             goal,
@@ -1629,7 +1653,9 @@ class FamilyTransportTest(unittest.TestCase):
             model.analysis_goal_id(goal),
         )
 
-    def test_conflicting_family_payload_changes_question_and_cannot_poison_goal(self) -> None:
+    def test_conflicting_family_payload_changes_question_and_cannot_poison_goal(
+        self,
+    ) -> None:
         goal = fixed_source_judgment().proposition.goal
         changed_question = replace(
             goal.question,
@@ -1682,9 +1708,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
         )
         self.assertEqual(
             setup.relation_definition_id,
-            model.k3.schnorr_relation_definition_id(
-                source.case.definition_sources[0]
-            ),
+            model.k3.schnorr_relation_definition_id(source.case.definition_sources[0]),
         )
         self.assertEqual(
             setup.relation_definition_id,
@@ -1725,9 +1749,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
             fresh_public_setup=reconstructed,
         )
         with self.assertRaises(model.AuthorityError):
-            model.fixed_public_setup_id(
-                replace(setup, _source_views=forged_views)
-            )
+            model.fixed_public_setup_id(replace(setup, _source_views=forged_views))
 
     def test_cross_axis_execution_view_is_refused(self) -> None:
         correspondence = fixed_context()[4]
@@ -1737,9 +1759,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
             fiat_shamir_execution=setup._source_views.fresh_execution,
         )
         with self.assertRaises(model.AuthorityError):
-            model.fixed_public_setup_id(
-                replace(setup, _source_views=forged_views)
-            )
+            model.fixed_public_setup_id(replace(setup, _source_views=forged_views))
 
     def test_unequal_fresh_fs_public_setup_entries_are_refused(self) -> None:
         source, _, _, _, correspondence, *_ = fixed_context()
@@ -1850,9 +1870,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
         self.assertEqual(reconstructed, capability.live_capability)
         self.assertIsNot(reconstructed, capability.live_capability)
         changed = replace(capability, live_capability=reconstructed)
-        result = model.specialize_afk_family_judgment(
-            family_context()[-1], changed
-        )
+        result = model.specialize_afk_family_judgment(family_context()[-1], changed)
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
     def test_specialization_refuses_inert_correspondence_without_live_use(self) -> None:
@@ -1879,9 +1897,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
         )
         coordinates = model._coordinates_from_correspondence_judgment(judgment)
         context_id = model._family_instance_hypothesis_context_id(coordinates)
-        context = model._formed_analysis_body(
-            context_id, "analysis.hypothesis-context"
-        )
+        context = model._formed_analysis_body(context_id, "analysis.hypothesis-context")
         self.assertEqual(context.roots, (7, 8))
         self.assertEqual(len(judgment.family_support_schema_bindings), 2)
         self.assertEqual(len(judgment.concrete_support_coordinates), 2)
@@ -2236,7 +2252,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
     def test_stock_bounded_rejection_member_is_not_selected(self) -> None:
         source = model.derive_fresh_fs_relation_source(model.k3.schnorr_case())
         source_model = model.fresh_special_soundness_model(k=2, challenge_count=11)
-        target_model = model.adaptive_rom_knowledge_model(k=2, challenge_count=11)
+        target_model = model.adaptive_rom_knowledge_model(k=2, challenge_count=8)
         correspondence = model.derive_fs_correspondence(
             source, source_model, target_model
         )
@@ -2251,10 +2267,63 @@ class PointwiseSpecializationTest(unittest.TestCase):
         )
         self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
 
+    def test_exact_n8_member_with_non_total_sampler_is_not_selected(self) -> None:
+        case = model.total_uniform_schnorr_case()
+        construction = replace(
+            case.construction,
+            application_domain=b"zkc/test/schnorr-n8-bounded-rejection/v0",
+            max_attempts=2,
+        )
+        protocol_id = model.k3.protocol_id(
+            case.core,
+            construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+        )
+        interface = model.k3.default_interface(
+            case.core,
+            construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            expose_all_transports=True,
+        )
+        plan = replace(case.plan, protocol_id=protocol_id)
+        protocol_binding = replace(case.protocol_binding, protocol_id=protocol_id)
+        surface = model.k3.derive_plan_witness_surface(
+            case.core,
+            construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            plan,
+        )
+        plan_binding = replace(
+            case.plan_binding,
+            plan_witness_surface_id=model.k3.plan_witness_surface_id(surface),
+        )
+        source = model.derive_fresh_fs_relation_source(
+            replace(
+                case,
+                construction=construction,
+                interface=interface,
+                plan=plan,
+                protocol_binding=protocol_binding,
+                plan_binding=plan_binding,
+            )
+        )
+        result = model.form_concrete_family_instance_correspondence(
+            model.SELECTED_AFK_FAMILY,
+            source,
+            model.fresh_special_soundness_model(k=2, challenge_count=8),
+            model.adaptive_rom_knowledge_model(k=2, challenge_count=8),
+            (),
+        )
+        self.assertIs(result.kind, model.AttemptKind.CANNOT_ANSWER)
+        self.assertEqual(
+            result.detail,
+            "concrete sampler is not exact total uniform N=8",
+        )
+
     def test_admission_replays_minting_gate_for_bounded_rejection_member(self) -> None:
         source = model.derive_fresh_fs_relation_source(model.k3.schnorr_case())
         source_model = model.fresh_special_soundness_model(k=2, challenge_count=11)
-        target_model = model.adaptive_rom_knowledge_model(k=2, challenge_count=11)
+        target_model = model.adaptive_rom_knowledge_model(k=2, challenge_count=8)
         correspondence = model.derive_fs_correspondence(
             source, source_model, target_model
         )
@@ -2266,9 +2335,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
             fs_correspondence=correspondence,
             fs_correspondence_id=model.fs_correspondence_id(correspondence),
         )
-        result = model.specialize_afk_family_judgment(
-            family_context()[-1], substituted
-        )
+        result = model.specialize_afk_family_judgment(family_context()[-1], substituted)
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
 
     def test_post_authentication_substitution_is_refused(self) -> None:
@@ -2281,9 +2348,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
             ),
         )
         with self.assertRaises(model.AuthorityError):
-            model.require_family_instance_correspondence_judgment(
-                changed_judgment
-            )
+            model.require_family_instance_correspondence_judgment(changed_judgment)
         changed = replace(capability, judgment=changed_judgment)
         result = model.specialize_afk_family_judgment(family_context()[-1], changed)
         self.assertIs(result.kind, model.AttemptKind.REFUSED)
