@@ -734,8 +734,9 @@ nominal role IDs, while the live capability retains and exactly compares the
 original coordinates. Relations therefore imports no downstream vocabulary,
 and consumer/purpose or cross-family substitution changes authority.
 
-The invocation-issued `PublicSetupInvocationView` is the only portable
-source-view exception in this cut: its inert
+The invocation-issued
+[`PublicSetupInvocationView`](../pir/interactive-core.md#134-invocation-issued-public-setup-view)
+is the only portable source-view exception in this cut: its inert
 `PortableSourceAuthorityBinding` is keyed by the view ID, but its live
 capability is still exact and nontransferable. `CheckCorrespondence` consumes
 the exact owner products and cannot call an unqualified raw-body lookup.

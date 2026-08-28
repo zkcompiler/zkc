@@ -58,9 +58,9 @@ The selected source profile must be rich enough to cover the following path:
 public instance and code/domain parameters
     -> fixed initial logical oracle
     -> verifier folding challenges
-    -> derived logical oracles
+    -> folded prover oracles
     -> terminal material and residual condition
-    -> optional checked work augmentation: work seed, nonce, and predicate
+    -> optional work augmentation: work seed, nonce, and predicate
     -> query randomness
     -> query positions with multiplicity
     -> values and authentication openings
@@ -279,10 +279,11 @@ Do not repair one page locally while leaving the contradiction elsewhere.
 The intended result is executable falsification for one finite profile. Its
 strongest permitted positive claim is:
 
-> One source-grounded finite native FRI/IOR profile, including its selected
-> commitment and Fiat--Shamir constructions, inhabited the candidate model and
-> reproduced its named positive and negative boundaries under the frozen
-> evaluator and resource contracts.
+> One source-grounded finite native FRI/IOR profile, including its commitment
+> declaration and one-run validation receipt plus its admitted Fiat--Shamir
+> construction, inhabited the candidate model and reproduced its named
+> positive and negative boundaries under the frozen evaluator and resource
+> contracts.
 
 It does not establish general FRI support, protocol soundness, theorem truth,
 ROM or QROM security, implementation conformance, performance, or support for
@@ -313,7 +314,7 @@ decisively explains why they cannot pass.
 | Design-space coverage | Current model and serious completion, redesign, and capability alternatives compared at equal resolution |
 | Semantic closure | Complete typed subjects, identities, authority, lifecycle, failures, bounds, and non-claims |
 | Protocol closure | Logical-oracle, query, opening, authentication, fold, terminal, and residual boundaries are all explicit |
-| Construction closure | Native IOP, commitment compilation, and Fiat--Shamir relations are separately checked |
+| Construction closure | Native execution and generally admitted Fiat--Shamir construction are checked at their respective scopes; commitment and grinding declarations have separate validation-bound one-run receipts |
 | Relations closure | Statement, residual, and outer-relation grounding are exact; loss and non-implications are visible |
 | Analysis closure | Exact questions and premises are representable without claiming theorem truth |
 | Executable pressure | Frozen positive case and named negative mutations replay under bounded resources |
@@ -329,10 +330,12 @@ early-terminated logical-oracle FRI profile inhabits separate native,
 commitment-compiled, work-augmented, Fresh, and Fiat--Shamir subjects. The
 producer and separately coded replay agree on selected exact positive
 public-execution facts. Two named late negatives reach their expected producer
-boundaries. Owner-local checked construction and Relations operations pass
-under their own validation-bound live receipts. These are distinct evidence
-lanes rather than one shared correspondence result. The package forms Analysis
-questions but does not answer them.
+boundaries. Owner-local construction-validation and Relations operations pass
+under their own validation-bound live receipts. The commitment and grinding
+receipts concern one concrete execution and do not generally admit either
+construction; these are distinct evidence lanes rather than one shared
+correspondence result. The package forms Analysis questions but does not answer
+them.
 
 This result preserves the central factorization. It does not close exact
 classical FRI correspondence or protocol-family support. Cross-family source

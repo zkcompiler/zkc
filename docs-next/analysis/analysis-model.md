@@ -384,11 +384,13 @@ rules.
 
 The selected `analysis.challenge-domain` constructor is the one explicit
 cross-layer boundary to the family-owned shorthand above. It forms a
-property-owned finite projection while retaining an authenticated transport-
-owned family ID as an ordinary predecessor. Its named constructor case fixes
-the property profile and verifies that predecessor; it does not import the
-transport profile backward into the property profile or authorize caller
-choice. The cryptographic-property page owns the exact restriction.
+property-owned finite projection from the exact challenge coordinates in one
+authenticated concrete subject tuple. Its named constructor case fixes the
+property profile and verifies those owner coordinates and the selected
+adequacy evaluator. The body carries no transport-owned family ID and therefore
+verifies no such predecessor; nor does it import the transport profile backward
+into the property profile or authorize caller choice. The cryptographic-
+property page owns the exact restriction.
 
 `RequiredAnalysisLanguageProfile` below selects the kernel profile only for a
 closed family-neutral kernel constructor. A family-owned question, goal,

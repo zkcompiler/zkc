@@ -269,12 +269,14 @@ exact arithmetic operation on them. It cannot accept an ambient integer named
 
 ### 5.5 Construction and theorem separation
 
-The checked oracle-commitment construction may establish deterministic
-correspondence between native queries and authenticated target openings. A
-separate checked grinding augmentation may establish the insertion and
-placement of a work-seed challenge, nonce publication, and work predicate. The
-same-Core Fiat--Shamir construction may establish complete transcript
-influence and deterministic challenge reconstruction. None establishes:
+An eventual generally admitted oracle-commitment construction could establish
+deterministic correspondence between native queries and authenticated target
+openings, and a separately admitted grinding augmentation could establish the
+insertion and placement of a work-seed challenge, nonce publication, and work
+predicate. The present receipts establish those facts only for one concrete
+execution. The already admitted same-Core Fiat--Shamir construction may
+establish complete transcript influence and deterministic challenge
+reconstruction. None establishes:
 
 - collision resistance, binding, hiding, or extractability;
 - native proximity soundness or round-by-round soundness;
@@ -295,12 +297,13 @@ Construction declarations and admitted constructions occupy different typed
 slots: the presently admitted Fiat--Shamir construction is bound exactly,
 whereas commitment-compilation and grinding declarations are bound but their
 checked-construction slots remain explicitly open. The executable package now
-issues owner-local checked construction, Relations-grounding, and occurrence-
-map receipts for its exact finite case. Those validation-bound receipts are
-local evidence, not a reviewed durable Relations schema or Analysis
-applicability authority, so this catalog does not retroactively import their
-identities into theorem questions. The native logical-query-to-layer-answer
-projection remains the occurrence map bound by the question catalog.
+issues owner-local construction-validation, Relations-grounding, and
+occurrence-map receipts for its exact finite case. Those validation-bound
+receipts are local evidence, not a reviewed durable Relations schema or
+Analysis applicability authority, so this catalog does not retroactively
+import their identities into theorem questions. The occurrence map bound by
+the question catalog remains the native logical-query-to-layer-answer
+projection.
 
 A bound coordinate is not correspondence evidence. It identifies the local
 candidate to which a theorem might apply; it does not show that a source
@@ -373,7 +376,8 @@ finite witness into a source-theorem instance.
 The finite FRI package should exercise only structural premises that can be
 observed exactly:
 
-- initial and derived oracle origin, fixation, total domain, and causal order;
+- initial and folded prover oracle origin, fixation, total domain, and causal
+  order;
 - ordered query occurrences, including repetition, separate from physical
   opening deduplication;
 - cap, salt, path, and opening correspondence for one exact commitment

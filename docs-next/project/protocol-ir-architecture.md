@@ -116,12 +116,13 @@ must not share a semantic identity.
 
 ### 3.2 `InteractiveCore`
 
-An `InteractiveCore` is one ordered public-coin protocol, not an unordered
-protocol template. It owns:
+An `InteractiveCore` is one ordered finite verifier-observable interaction,
+not an unordered protocol template. Public-coin eligibility is derived from
+the admitted Core rather than intrinsic to Core formation. It owns:
 
 - roles and canonical typed semantic ports;
 - typed prover and verifier events;
-- fresh public-coin challenge occurrences and distributions;
+- typed challenge declarations and nominal domains;
 - mandatory causal dependencies;
 - one identity-bearing total observable schedule extending those dependencies;
 - the claim, reduction, check, and terminal graph;

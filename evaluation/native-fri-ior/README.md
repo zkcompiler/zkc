@@ -10,11 +10,13 @@ The package tests this factorization:
 ```text
 native logical-oracle FRI Core
         |
-        | checked commitment/opening compilation
+        | commitment/opening construction declaration
+        | + checked one-execution receipt
         v
 committed FRI Core
         |
-        | checked grinding augmentation
+        | grinding augmentation declaration
+        | + checked one-execution receipt
         v
 work-augmented committed FRI Core
         |
@@ -47,8 +49,8 @@ python3 evaluation/native-fri-ior/generate.py --check-fixtures
 The first command currently runs 390 tests. The public runner rebuilds and
 verifies a report from public fixtures before comparing its projection with a
 separately frozen regression golden. The owner command reconstructs five live
-capability results across concrete generation, both checked construction
-steps, construction composition, and Relations grounding. The final command
+capability results across concrete generation, both one-execution construction
+validations, receipt composition, and Relations grounding. The final command
 re-derives every derived vector twice and compares it byte-for-byte without
 changing the checkout.
 
@@ -137,9 +139,11 @@ inspect the Git diff and rerun the non-mutating checks after any interruption.
 ## Research result and remaining pressure
 
 The finite case is best classified as a conservative semantic extension: it
-needs explicit logical-oracle access and origin, checked commitment and work
-constructions, ordered query occurrences, and typed Relations and Analysis
-surfaces, while preserving the central Interactive Core factorization.
+needs explicit logical-oracle access and origin, commitment and work
+construction declarations with validation-bound one-execution receipts,
+ordered query occurrences, and typed Relations and Analysis surfaces, while
+preserving the central Interactive Core factorization. Generally admitted
+commitment and work constructions remain open.
 
 Primary-source pressure from exact and batched FRI, DEEP-FRI and DEEP-ALI,
 STIR, Circle FRI, WHIR, and the BCS compiler supports one further localized

@@ -11,7 +11,9 @@
 
 ## 1. Decision in one view
 
-Use five semantic subjects and three checked constructions:
+Use five semantic subjects, two Core-to-Core construction declarations with
+validation-bound one-run receipts, and one generally admitted same-Core
+Fiat--Shamir construction:
 
 ```text
 Native logical FRI IOR Core
@@ -20,7 +22,8 @@ Native logical FRI IOR Core
   - direct logical queries and answers
   - fold and terminal decision semantics
                  |
-                 | CheckedOracleCommitmentCompilation
+                 | OracleCommitmentCompilationDeclaration
+                 | + CheckedNativeToCommittedFreshRun receipt
                  v
 Committed FRI Core
   - ordered caps
@@ -28,7 +31,8 @@ Committed FRI Core
   - proof-supplied opened fibres and salts
   - authentication, fold, terminal, and decision checks
                  |
-                 | CheckedGrindingAugmentation
+                 | GrindingAugmentationDeclaration
+                 | + CheckedCommittedToWorkFreshRun receipt
                  v
 Work-augmented committed FRI Core
   - the committed interaction above
@@ -40,12 +44,18 @@ Work-augmented committed FRI Core
                  v
 Work-augmented committed FRI Fresh Protocol
                  |
-                 | CheckedFSConstruction (shared augmented Core)
+                 | admitted CheckedFSConstruction (shared augmented Core)
                  v
 Work-augmented committed FRI Fiat--Shamir Protocol
   - identical augmented committed interaction
   - coins derived by one exact transcript profile
 ```
+
+The first two arrows are declared Core-to-Core transforms whose present
+positive evidence consists of validation-bound receipts for one concrete
+execution. They are not generally admitted checked constructions. The final
+arrow is different: its total structural admission produces a reusable
+`CheckedFSConstruction` over the shared augmented Core.
 
 The source and committed Cores have different identities because commitment
 compilation changes verifier-observable messages and capabilities. Adding the
@@ -90,11 +100,15 @@ semantically irrelevant.
 
 **Classification:** semantic loss; rejected.
 
-### 2.3 Distinct source and target Cores with a checked compilation
+### 2.3 Distinct source and target Cores with a declared compilation
 
 The native Core owns logical access. The target Core owns exactly what the
-committed verifier sees. A typed construction relates their schedules, values,
-and decisions without asserting a security theorem.
+committed verifier sees. The selected factorization requires a future typed
+declaration to fix the reusable maps and laws. The present finite instrument
+authenticates only the endpoint IDs and named requirements; its per-run
+candidate carries maps that a validation-bound checker recomputes while
+relating schedules, values, and decisions for one concrete execution. Neither
+layer asserts a security theorem.
 
 This introduces a real construction object and more correspondence work, but
 it preserves both verifier models and permits public-only target replay. It
@@ -108,12 +122,13 @@ multiproofs, or terminal handling without redefining native FRI.
 This alternative would factor a protocol-neutral oracle/query skeleton and
 make native and committed interactions realizations of it. It could eventually
 serve several oracle protocols, but the current evidence does not identify a
-stable law that is both more informative than a checked construction and less
-general than another universal transition algebra.
+stable law that is both more informative than the construction declaration and
+its validator and less general than another universal transition algebra.
 
 The new abstraction would also postpone the concrete question: which values,
-views, and failures belong to each verifier. A checked source-to-target
-construction is sufficient and reversible.
+views, and failures belong to each verifier. An explicit source-to-target
+declaration plus validation-bound receipts is sufficient and reversible at the
+current finite scope.
 
 **Classification:** capability expansion without present justification;
 deferred.
@@ -147,8 +162,9 @@ value purporting to bind the carrier. Public query positions and answers may
 still become exact observations when the protocol declares them public.
 
 An active `LogicalAccess` oracle affecting an accepting sink is not directly
-same-Core Fiat--Shamir eligible. A checked commitment compilation must first
-produce a Core whose prior prover material has public transcript influence.
+same-Core Fiat--Shamir eligible. An eventual generally admitted commitment
+compilation must first produce a Core whose prior prover material has public
+transcript influence.
 
 The finite Python witness uses a trusted evaluator that stores the complete
 finite carrier so that it can check exact-domain formation and answer selected
@@ -213,23 +229,41 @@ an accepted `Absent` variant.
 This is not a general “totality evidence” Boolean. It is an exact algorithmic
 law with a bounded evaluator contract.
 
-### 3.5 Checked oracle-commitment compilation
+### 3.5 Oracle-commitment compilation declaration and run validation
 
-Introduce a PIR-owned structural construction:
+The durable target is a PIR-owned structural construction declaration of the
+following general shape. This is a future proposal, not the declaration
+implemented by the finite instrument:
 
 ```text
-CheckedOracleCommitmentCompilation {
-  source_protocol,
-  target_protocol,
+OracleCommitmentCompilationDeclaration {
+  source_core_id,
+  target_core_id,
   profile,
   oracle_publication_map,
   coin_map,
   query_occurrence_map,
   answer_opening_map,
   decision_map,
-  checked_commutation
+  required_commutation_law
 }
 ```
+
+The current finite declaration authenticates only:
+
+```text
+FiniteCommitmentCompilationDeclaration {
+  source_core_id,
+  target_core_id,
+  required_capabilities,
+  admission_requirements,
+  nonclaims
+}
+```
+
+Its complete maps and selected profile live in one run candidate and are
+recomputed by the validator. They are therefore validation inputs, not a
+reusable construction preimage.
 
 The profile fixes:
 
@@ -242,34 +276,49 @@ The profile fixes:
 - terminal treatment; and
 - intrinsic syntax and algorithm bounds.
 
-Admission checks complete source and target coverage, type equality or an
-explicit value relation, causality, target public replay sufficiency, and exact
-commutation of the selected finite algorithms. It never accepts an authored
-`corresponds` flag.
+The present finite validator checks complete source and target coverage, type
+equality or an explicit value relation, causality, target public replay
+sufficiency, and exact commutation of the selected algorithms for one concrete
+source/target execution. It never accepts an authored `corresponds` flag. On
+affirmation it issues a validation-bound `CheckedNativeToCommittedFreshRun`
+receipt; it does not admit a generally reusable checked compilation subject.
 
-The result proves only structural and deterministic correspondence for its
-named profile. Commitment binding, hiding, extractability, IOP soundness, and
-property transport remain Analysis propositions. Request-local evaluation
-limits and measured work belong to the validation basis, not the construction
+The receipt establishes only structural and deterministic correspondence for
+its named execution and profile. Commitment binding, hiding, extractability,
+IOP soundness, universal construction correctness, and property transport
+remain Analysis propositions or open admission work. Request-local evaluation
+limits and measured work belong to the validation basis, not the declaration
 or Core identity.
 
-### 3.6 Checked grinding augmentation
+### 3.6 Grinding augmentation declaration and run validation
 
-Original FRI has no grinding message or rejection path. The finite committed
-profile adds those effects through a separately checked construction:
+Original FRI has no grinding message or rejection path. A future reusable
+construction could add those effects through the following declaration. This
+display is again a target proposal, not the finite declaration's current
+preimage:
 
 ```text
-CheckedGrindingAugmentation {
-  source_protocol,
-  target_protocol,
+GrindingAugmentationDeclaration {
+  source_core_id,
+  target_core_id,
   preserved_occurrence_map,
   inserted_work_seed_challenge,
   inserted_nonce_publication,
   inserted_work_check,
   query_suffix_map,
-  checked_constructed_trace_commutation
+  required_constructed_trace_commutation_law
 }
 ```
+
+The current finite declaration contains only the two endpoint Core IDs,
+named capability and admission requirements, and nonclaims. The preserved and
+inserted occurrence maps and the decision map belong to its one-run candidate
+and validator.
+
+The present finite validator checks the declaration against one exact
+committed-to-work Fresh execution and, on affirmation, issues a
+validation-bound `CheckedCommittedToWorkFreshRun` receipt. It does not admit a
+generally reusable checked grinding construction.
 
 The source committed Core ends after terminal material, query randomness, and
 its ordinary checks. The target inserts, after terminal material and before
@@ -281,9 +330,9 @@ occurrence.
 Deterministic commutation is required only for target traces constructed with
 a valid work witness. An invalid nonce may reject in the augmented target even
 though the source has no corresponding rejection. Analysis, not this
-construction, states any theorem that prices the added work or transports a
-round-by-round error coordinate. The augmentation does not itself establish
-soundness amplification.
+declaration or its one-run receipt, states any theorem that prices the added
+work or transports a round-by-round error coordinate. The augmentation does
+not itself establish soundness amplification.
 
 ### 3.7 Construction advice
 
@@ -480,8 +529,8 @@ available.
 - Public committed verification does not depend on confidential replay data.
 - Fresh/Fiat--Shamir same-Core factorization survives at the correct layer.
 - Plonky3 caps, Winterfell roots, individual paths, and multiproofs become
-  profiles of one checked construction shape rather than competing meanings of
-  `Oracle`.
+  profiles of one construction-declaration shape with profile-bound validation
+  rather than competing meanings of `Oracle`.
 - Query probability, logical multiplicity, unique opening count, and proof
   size remain measurable as different quantities.
 - Initial-oracle ownership and outer-relation grounding cannot disappear into
@@ -521,7 +570,7 @@ following:
 - commitment advice cannot remain construction-local without changing the
   logical-oracle relation;
 - at least two materially different protocols require a common abstraction
-  that the checked construction cannot express cleanly; or
+  that the declaration-and-validation seam cannot express cleanly; or
 - the required opening relation changes native FRI meaning rather than merely
   relating source and target occurrences.
 

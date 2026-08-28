@@ -2312,6 +2312,14 @@ Symbol:  1 <= max <= 4096
 Seq:     0 <= max <= 2^14
 ```
 
+These constructor-local maxima are outer syntactic caps, not promises that an
+endpoint value is independently admissible. The complete `Worst` tuple below
+must also satisfy every constitutional bound. In particular,
+`Bytes(_,2^20)` is rejected because its framing makes `MaxDatumBytes` exceed
+`2^20`, and `Seq(Unit,2^14)` is rejected because its worst-case node count is
+`1 + 2^14`. A consumer must use admitted schemas, not infer inhabitability from
+one row of this table.
+
 Let `mag(n) = max(1, ceil(bitlength(n)/8))`. For a value type `T`, write
 `MaxDatumBytes(T) = MaxDatumBytes(T.schema)`. The exact maximum payload byte
 size induced by a schema is:

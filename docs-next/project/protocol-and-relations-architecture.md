@@ -368,6 +368,7 @@ Unsupported
 CannotAnswer
 Refused
 Malformed
+DeterministicLimitExceeded
 CheckerFailure
 ```
 

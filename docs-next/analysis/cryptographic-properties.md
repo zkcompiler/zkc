@@ -105,11 +105,13 @@ Every concrete asymptotic-family constructor that defines `F`, an
 language declaration uses `K3CAFKTransportLanguageProfileId`; this includes
 the all-`n` source-property result rather than creating a property-to-transport
 back-edge. The one selected ownership exception is
-`analysis.challenge-domain`: it is a property-owned finite projection from one
-authenticated transport-owned family, not an `F`-parametric experiment,
-theorem, or transport constructor. Its body retains the exact family ID as an
-ordinary predecessor, while the property profile neither imports transport
-declarations nor restates family semantics. A theorem-source validation body,
+`analysis.challenge-domain`: it is a property-owned finite projection from the
+exact challenge coordinates in one authenticated concrete subject tuple, not
+an `F`-parametric experiment, theorem, or transport constructor. Its body
+retains those owner coordinates and the Analysis-owned finite model; it
+contains no transport-family ID. The property profile neither imports
+transport declarations nor restates family semantics. A theorem-source
+validation body,
 or an AFK support/validation/operation-policy/judgment body that consumes or
 governs one, uses
 `K3CAFKTheoremSourceValidationLanguageProfileId`. This is a total named-
@@ -306,8 +308,6 @@ K3CSubjectTuple S = {
   k2_accept_terminal_ref,
   challenge_ref,
   challenge_value_type,
-  challenge_domain_ref,
-  challenge_fresh_law_ref,
   analysis_challenge_values:
     CanonicalNonEmptySortedUniqueSeq<CanonicalValue<challenge_value_type>>,
   public_setup_invocation_views: {
@@ -414,10 +414,26 @@ AFKProofType(S) = CanonicalRecord<
   by the selected FS verifier, excluding the Statement and auxiliary output,
   with each field carrying its owner K2 ValueType and occurrence coordinate>
 
+K3CChallengeRefCoordinate(S) =
+  the unique element of ExactPIRAtomicLeavesUnder(
+    K3COwnerViewCoordinate(S,PublicCoinView),
+    [challenges[S.challenge_ref].challenge_ref])
+
+K3CChallengeNominalDomainCoordinate(S) =
+  the unique element of ExactPIRAtomicLeavesUnder(
+    K3COwnerViewCoordinate(S,PublicCoinView),
+    [challenges[S.challenge_ref].domain])
+
+The displayed paths above are aliases for the profile-fixed ordinal paths.
+Both results are exact `PIRStaticViewFieldCoordinate` values and therefore
+carry the owning `CoreId` through the `PublicCoinView` coordinate. Formation
+also requires both leaves to belong to the same challenge entry selected by
+`S.challenge_ref`.
+
 K3CChallengeDomainBody(S) = {
-  source_challenge_ref: S.challenge_ref,
+  source_challenge_coordinate: K3CChallengeRefCoordinate(S),
   value_type: S.challenge_value_type,
-  source_nominal_domain_ref: S.challenge_domain_ref,
+  source_nominal_domain_coordinate: K3CChallengeNominalDomainCoordinate(S),
   model_values: S.analysis_challenge_values,
   adequacy_evaluator_id: K3CChallengeDomainAdequacyEvaluatorId,
   semantic_status:
@@ -428,9 +444,9 @@ K3CChallengeSemanticStatus =
   FiniteModelRequiringOrdinaryOwnerCorrespondence
 
 K3CChallengeDomainInput = {
-  source_challenge_ref: TypeOf(K3CSubjectTuple.challenge_ref),
+  source_challenge_coordinate: PIRStaticViewFieldCoordinate,
   value_type: ValueType,
-  source_nominal_domain_ref: TypeOf(K3CSubjectTuple.challenge_domain_ref),
+  source_nominal_domain_coordinate: PIRStaticViewFieldCoordinate,
   model_values: CanonicalNonEmptySeq<CanonicalValue<value_type>>,
   semantic_status: exactly
     K3CChallengeSemanticStatus.FiniteModelRequiringOrdinaryOwnerCorrespondence
@@ -438,8 +454,11 @@ K3CChallengeDomainInput = {
 
 K3CChallengeDomainAdequacyEvaluatorId =
   the exact AnalysisAdequacyEvaluatorId<K3CChallengeDomainInput> in the selected
-  cryptographic profile; it checks canonical member representations, exact
-  sorted uniqueness, ModelCardinality equal to sequence length, K1 bounded
+  cryptographic profile; it authenticates both coordinates, checks that they
+  select the `challenge_ref` and `domain` leaves of one entry under the exact
+  owner `PublicCoinView`, checks that the entry's value type equals
+  `value_type`, and checks canonical member representations, exact sorted
+  uniqueness, ModelCardinality equal to sequence length, Foundation-bounded
   totality, and cardinality at least 2
 
 K3CChallengeDomainId(S) =
@@ -447,7 +466,8 @@ K3CChallengeDomainId(S) =
 
 AFKFixedPublicSetupBody(S) = {
   exact_static_sources: [S.shared_core_id, S.transcript_construction_id,
-                         S.challenge_ref,S.fixed_setup_static_sources],
+                         K3CChallengeRefCoordinate(S),
+                         S.fixed_setup_static_sources],
   exact_public_invocation_sources: S.public_setup_invocation_views,
   derived_projection:
     AnalysisLawTerm<AFKFixedPublicSetupProjection> that first requires the
@@ -475,8 +495,9 @@ coordinate or an exact owner-declared field projection; `relation_axis_ingress`,
 grouping records only. The
 finite challenge-value sequence is an Analysis-owned model coordinate bound by
 `K3CChallengeDomainId(S)`; formation proves only its canonical finite shape.
-An ordinary hypothesis must relate the K2 nominal domain ref and value type to
-that model. The separate AFK applicability hypotheses relate the nominal
+An ordinary hypothesis must relate the owner-qualified nominal-domain
+coordinate and value type to that model. The separate AFK applicability
+hypotheses relate the nominal
 fresh-law ref and correlation fields to the required uniform process. The
 fixed-setup body and ID are an Analysis-owned exact projection of their listed
 static owner coordinates and the two PIR-issued
@@ -950,8 +971,8 @@ SchnorrDeterministicExtractorProfileBody(S: K3CSubjectTuple) = {
     outputs: [K3CWitnessType(S)]
   },
   private_state_and_randomness_types: [Unit, Unit],
-  allowed_source_oracle_capabilities: [],
-  rerun_fork_rewind_programming_rights: none,
+  allowed_source_and_oracle_capabilities: [],
+  counterfactual_rights: [],
   state_preservation_relation: deterministic stateless evaluation,
   output_distribution_preservation_relation: deterministic singleton law,
   witness_success_relation:
@@ -1136,11 +1157,13 @@ SchnorrSourcePremiseGoal(S, family, payload, extra_subjects) =
 
 SchnorrChallengeModelGoal(S) = SchnorrSourcePremiseGoal(
   S, ChallengeDomainCorrespondence, {
-    owner_coordinate: S.challenge_ref and its exact ChallengeDecl projection,
+    owner_coordinates:
+      [K3CChallengeRefCoordinate(S),
+       K3CChallengeNominalDomainCoordinate(S)],
     analysis_model: K3CChallengeDomainId(S),
     exact_proposition:
-      the nominal domain ref denotes exactly the model value sequence at the
-      declared value type; its cardinality is the model cardinality
+      the nominal-domain coordinate denotes exactly the model value sequence
+      at the declared value type; its cardinality is the model cardinality
   }, [])
 
 SchnorrAcceptanceRelationGoal(S) = SchnorrSourcePremiseGoal(
@@ -1801,6 +1824,17 @@ AFKAdaptiveQQueryProverProfileBody(S: K3CSubjectTuple) = {
   resource_dimensions: [AFKAdversaryROQueryResourceDimension(S)]
 }
 
+AFKFixedAdversaryInvocationCapabilityABILawRef and
+AFKFixedROSimulationProgrammingCapabilityABILawRef
+  = two pairwise-distinct exact
+    `AnalysisProfileLawRef<K3CCryptographicPropertyLanguageProfileId,
+                           CapabilityABI>` values. Their profile-local
+    ordinals, and therefore their canonical encoded order, are the displayed
+    order. The first declaration owns the black-box invocation ABI for the
+    already selected fixed prover strategy; the second owns the exact lazy
+    random-oracle simulation and programming ABI. Neither ref is a
+    subject-authored ID or a Protocol replay capability.
+
 AFKExtractorProfileBody(S: K3CSubjectTuple) = {
   input_and_output_types: {
     inputs: [StatementLength(K3CStatementType(S))],
@@ -1809,10 +1843,10 @@ AFKExtractorProfileBody(S: K3CSubjectTuple) = {
   },
   private_state_and_randomness_types:
     [extractor state, extractor coins, lazy random-function state],
-  allowed_source_oracle_capabilities:
-    [black-box prover invocation, typed RO simulation and programming],
-  rerun_fork_rewind_programming_rights:
-    exact lazy-sampling, rerun, and programming contract selected here,
+  allowed_source_and_oracle_capabilities:
+    [AFKFixedAdversaryInvocationCapabilityABILawRef,
+     AFKFixedROSimulationProgrammingCapabilityABILawRef],
+  counterfactual_rights: [Rerun, Program],
   state_preservation_relation:
     same-index consistency except exact programmed points under the contract,
   output_distribution_preservation_relation:
@@ -2566,6 +2600,16 @@ AFKFamilyAdversaryInvocationDimension(F) = ResourceDimension {
   aggregation: Expected,
   exact_counter_event: one complete black-box invocation of P^a
 }
+
+AFKFamilyAdversaryInvocationCapabilityABILawRef and
+AFKFamilyROSimulationProgrammingCapabilityABILawRef
+  = two pairwise-distinct exact
+    `AnalysisProfileLawRef<K3CAFKTransportLanguageProfileId,CapabilityABI>`
+    values. Their profile-local ordinals, and therefore their canonical
+    encoded order, are the displayed order. The first declaration owns the
+    `AFKFamilyAdversaryCallSchema` invocation ABI; the second owns the
+    independent lazy family-random-oracle simulation and programming ABI.
+    Neither ref grants access to hidden table entries or Protocol replay.
 ```
 
 The uniform algorithm profiles are logical algorithm schemas. They are not K1
@@ -2578,8 +2622,8 @@ AFKFamilySourceExtractorProfileBody(F) = {
     outputs: [Witness_F(n)]
   },
   private_state_and_randomness_types: [Unit,Unit],
-  allowed_source_oracle_capabilities: [],
-  rerun_fork_rewind_programming_rights: none,
+  allowed_source_and_oracle_capabilities: [],
+  counterfactual_rights: [],
   state_preservation_relation: deterministic stateless evaluation,
   output_distribution_preservation_relation: deterministic singleton law,
   witness_success_relation:
@@ -2626,16 +2670,10 @@ AFKFamilyTargetExtractorProfileBody(F) = {
   },
   private_state_and_randomness_types:
     [family extractor state,fresh extractor coins],
-  allowed_source_oracle_capabilities:
-    black-box P^a invocation and the exact independent family-RO
-    simulation/programming contract,
-  rerun_fork_rewind_programming_rights:
-    create independent lazy random-function tables, invoke and rerun the
-    same deterministic black-box next-message strategy with its initially
-    fixed prover coins retained, inspect only query/answer traffic exposed by
-    the query ABI, and
-    program one not-yet-defined table index to a selected challenge; no K2
-    replay capability and no access to hidden oracle-table entries,
+  allowed_source_and_oracle_capabilities:
+    [AFKFamilyAdversaryInvocationCapabilityABILawRef,
+     AFKFamilyROSimulationProgrammingCapabilityABILawRef],
+  counterfactual_rights: [Rerun, Program],
   state_preservation_relation:
     the theorem-local adaptive construction and lazy-table state relation,
   output_distribution_preservation_relation:

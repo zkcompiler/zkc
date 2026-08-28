@@ -231,15 +231,17 @@ The honest factorization is therefore:
 
 ```text
 native logical-oracle Core
-    -> checked commitment/opening compilation
+    -> commitment/opening declaration + checked one-execution receipt
 committed interactive Core
-    -> checked same-Core Fiat--Shamir interpretation
+    -> admitted checked same-Core Fiat--Shamir construction
 committed noninteractive Protocol
 ```
 
 The first arrow changes the verifier-observable interaction and has distinct
-source and target Core identities. The second arrow changes challenge
-interpretation while sharing the committed Core.
+source and target Core identities. Its present positive evidence is limited to
+one validation-bound source/target execution; general compilation admission
+remains open. The second arrow changes challenge interpretation while sharing
+the committed Core and is generally admitted at its structural scope.
 
 ### 3.3 Initial-oracle fork
 
@@ -304,9 +306,11 @@ prover material.
 
 Original native FRI has no work-seed, nonce, or grinding rejection path. The
 selected committed profile therefore introduces those effects through a
-checked grinding augmentation separate from oracle-commitment compilation.
-Its Fresh and Fiat--Shamir forms then share the same augmented Core: Fresh
-supplies an independent work seed, while the Fiat--Shamir interpretation
+grinding augmentation declaration separate from oracle-commitment compilation.
+The finite witness checks that declaration only for one exact execution and
+issues a validation-bound receipt; generally admitted augmentation remains
+open. Its Fresh and Fiat--Shamir forms then share the same augmented Core:
+Fresh supplies an independent work seed, while the Fiat--Shamir interpretation
 derives that seed from the protected transcript prefix.
 
 ### 4.2 Theorem premises are not structural fields
@@ -325,7 +329,9 @@ budget; the Core still executes one forward interaction.
 
 An Analysis judgment must name at least:
 
-- the exact source and target Protocols and checked construction;
+- the exact source and target Protocols and, where the theorem crosses a
+  construction, its generally admitted checked construction; a one-execution
+  receipt cannot fill this slot;
 - classical or quantum random-oracle model;
 - adversary strategy and oracle-query interface;
 - restricted or unrestricted restoration law, or exact round-by-round law;
@@ -438,10 +444,11 @@ oracles are causal strategy decisions. Treating all three as strategy-authored
 changes the proximity statement. Oracle origin and supply capability therefore
 need explicit ownership.
 
-### 6.4 Checked commitment compilation
+### 6.4 Requirements for eventual checked commitment compilation
 
 The existing same-Core Fiat--Shamir construction is intentionally insufficient
-for an IOP compiler. A checked source-to-target construction must relate:
+for an IOP compiler. Any eventual generally admitted source-to-target
+construction must relate:
 
 - source logical oracle publications to target caps;
 - source query occurrences to target derived positions;
@@ -499,7 +506,7 @@ library:
 | initial semantic degree bound | less than `8` |
 | terminal semantic degree bound | less than `2` |
 | query occurrences | four ordered draws with replacement |
-| logical oracle layers | initial order-16 oracle and one order-8 derived oracle |
+| logical oracle layers | initial order-16 oracle and one order-8 folded prover oracle |
 | terminal | canonical coefficient sequence, syntactically bounded separately from the degree check |
 | commitment | salted SHA-256 binary tree over antipodal-pair leaves |
 | public commitment | ordered cap of two nodes |

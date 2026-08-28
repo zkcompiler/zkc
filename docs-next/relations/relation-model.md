@@ -1777,8 +1777,10 @@ negative to whole coverage.
 
 `WholeRelationPublicCoverage` is the independent source-side question: every
 selected leaf or whole occurrence of every `RelationPublicRef` must be covered
-under the question's exact nonoverlap/partition policy. Neither source-side nor
-target-side coverage implies the other. A profile that requires bijective
+under the fixed `ExactNonoverlappingCover` and `SelectorPartition` law in
+[Protocol Correspondence](protocol-correspondence.md#31-local-references-and-policies).
+The question carries no caller-selected partition policy. Neither source-side
+nor target-side coverage implies the other. A profile that requires bijective
 whole-surface correspondence requests both and additionally requires each
 side's selected partition to be one-to-one.
 
@@ -1808,7 +1810,7 @@ Relations imports the exact `RunBoundary`, `RelationRunCoordinate`,
 `RelationRunReadManifest`, `RelationRunFact`, `RelationRunObservation`,
 `RelationRunSelectedEntry`, `RelationClaimHistory`,
 `RelationReductionHistory`, `RelationRunView`, and issuance law from
-[Interactive Core and Causal Execution](../pir/interactive-core.md#131-execution-issued-relation-grounding-view).
+[Interactive Core and Causal Execution](../pir/interactive-core.md#135-execution-issued-relation-grounding-view).
 It does not define a parallel view or qualification vocabulary.
 
 PIR issues one immutable process-local `RelationRunView` from an admitted
@@ -2771,7 +2773,7 @@ generic object carrier.
 | Question | Exact proposition | Deliberate non-claim |
 |---|---|---|
 | `MappedStatementCorrespondence` | Requested Statement edges resolve and their types/value relations agree | Whole Statement coverage or runtime equality |
-| `WholeRelationPublicCoverage` | Every requested relation public occurrence is covered under the selected partition policy | Whole Protocol Statement coverage |
+| `WholeRelationPublicCoverage` | Every requested relation public occurrence is covered under the fixed `ExactNonoverlappingCover`/`SelectorPartition` law | Whole Protocol Statement coverage |
 | `WholeStatementCoverage` | Requested edge endpoints exactly cover the selected complete Statement surface | External Interface completeness |
 | `MappedPlanWitnessCorrespondence` | Requested witness edges resolve to exact PIR surface entries | Secret possession or satisfaction |
 | `WholeRelationWitnessCoverage` | Every relation witness occurrence has the requested Plan source coverage | Every private Plan input is a witness |
