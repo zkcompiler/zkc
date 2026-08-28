@@ -359,7 +359,7 @@ class ValidationSourceArtifact:
         ):
             raise malformed(
                 "generation:validation-source-formation",
-                "FRI-IOR-GENERATION-038",
+                "FRI-IOR-GENERATION-039",
                 "a validation source requires one exact path, digest, and positive byte length",
             )
 
@@ -381,7 +381,7 @@ def _generation_source_manifest() -> tuple[ValidationSourceArtifact, ...]:
             raise ModelFailure(
                 OutcomeClass.MISSING_DEPENDENCY,
                 "generation:validation-source-load",
-                "FRI-IOR-GENERATION-039",
+                "FRI-IOR-GENERATION-040",
                 "a required evaluator source is not a regular non-symlink file",
             )
         raw = path.read_bytes()

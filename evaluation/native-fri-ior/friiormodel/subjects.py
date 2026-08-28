@@ -1106,7 +1106,7 @@ def admit_fiat_shamir_construction(
             raise ModelFailure(
                 OutcomeClass.KIND_MISMATCH,
                 boundary,
-                "FRI-IOR-SUBJECT-006",
+                "FRI-IOR-SUBJECT-034",
                 "Fiat--Shamir endpoints do not share one Core identity",
             )
         challenge_contract = source_core_term.get("challenge_contract")
