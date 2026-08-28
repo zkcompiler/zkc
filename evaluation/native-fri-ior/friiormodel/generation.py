@@ -24,6 +24,8 @@ one-shot raw-input transcript API before a proof or checked receipt is issued.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
+import stat
 from typing import Any
 
 from .commitment import CommitmentTree, build_commitment
@@ -49,6 +51,11 @@ from .proof import (
     OccurrenceSelector,
     OpeningTableEntry,
     PublicFriProof,
+)
+from .provenance import (
+    ValidationBasisId,
+    artifact_content_id,
+    validation_basis_id,
 )
 from .subjects import (
     CHECKED_FIAT_SHAMIR_CONSTRUCTION,
@@ -81,6 +88,20 @@ from .transcript import (
 GENERATION_SCHEMA = "zkc.fri-ior.native-to-committed-generation.v1"
 EXECUTION_SCHEMA = "zkc.fri-ior.checked-concrete-construction-execution.v1"
 VALIDATION_LAW = "fri-ior.concrete-native-commit-grind-fs-commutation.v1"
+
+_GENERATION_VALIDATION_SOURCES = (
+    "commitment.py",
+    "committed.py",
+    "field.py",
+    "generation.py",
+    "native.py",
+    "profile.py",
+    "proof.py",
+    "provenance.py",
+    "subjects.py",
+    "terms.py",
+    "transcript.py",
+)
 
 # This public material is shared with the existing committed-verifier vector.
 PRIMARY_STATEMENT = {
@@ -320,6 +341,61 @@ class FrozenResourceSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class ValidationSourceArtifact:
+    """One exact evaluator source in a validation-basis manifest."""
+
+    path: str
+    artifact_content_id: str
+    byte_length: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.path) is not str
+            or self.path not in _GENERATION_VALIDATION_SOURCES
+            or type(self.artifact_content_id) is not str
+            or not self.artifact_content_id.startswith("sha256:")
+            or type(self.byte_length) is not int
+            or self.byte_length <= 0
+        ):
+            raise malformed(
+                "generation:validation-source-formation",
+                "FRI-IOR-GENERATION-038",
+                "a validation source requires one exact path, digest, and positive byte length",
+            )
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "path": self.path,
+            "artifact_content_id": self.artifact_content_id,
+            "byte_length": self.byte_length,
+        }
+
+
+def _generation_source_manifest() -> tuple[ValidationSourceArtifact, ...]:
+    root = Path(__file__).resolve().parent
+    manifest: list[ValidationSourceArtifact] = []
+    for relative in _GENERATION_VALIDATION_SOURCES:
+        path = root / relative
+        metadata = path.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            raise ModelFailure(
+                OutcomeClass.MISSING_DEPENDENCY,
+                "generation:validation-source-load",
+                "FRI-IOR-GENERATION-039",
+                "a required evaluator source is not a regular non-symlink file",
+            )
+        raw = path.read_bytes()
+        manifest.append(
+            ValidationSourceArtifact(
+                relative,
+                str(artifact_content_id(raw)),
+                len(raw),
+            )
+        )
+    return tuple(manifest)
+
+
+@dataclass(frozen=True, slots=True)
 class NativeToCommittedExecutionCandidate:
     """Owner-local carrier submitted to the concrete correspondence checker.
 
@@ -466,7 +542,8 @@ class CheckedNativeToCommittedExecution:
 
     candidate: NativeToCommittedExecutionCandidate
     semantic_execution_id: SemanticId
-    validation_basis_id: SemanticId
+    validation_basis_id: ValidationBasisId
+    validation_source_manifest: tuple[ValidationSourceArtifact, ...]
     validation_limits: ResourceLimits
     resource_snapshot: FrozenResourceSnapshot
 
@@ -486,17 +563,23 @@ class CheckedNativeToCommittedExecution:
                 "a checked execution requires the concrete correspondence checker",
             )
         semantic_execution_id = candidate.semantic_execution_id
-        validation_basis_id = semantic_id(
-            "concrete-construction-validation-basis",
-            "fri-ior.concrete-construction-validation-basis.v1",
+        validation_source_manifest = _generation_source_manifest()
+        validation_basis = validation_basis_id(
+            "construction-checker",
             {
                 "law": VALIDATION_LAW,
                 "selected_resource_limits": validation_limits.to_term(),
+                "sources": [source.to_term() for source in validation_source_manifest],
             },
         )
         object.__setattr__(self, "candidate", candidate)
         object.__setattr__(self, "semantic_execution_id", semantic_execution_id)
-        object.__setattr__(self, "validation_basis_id", validation_basis_id)
+        object.__setattr__(self, "validation_basis_id", validation_basis)
+        object.__setattr__(
+            self,
+            "validation_source_manifest",
+            validation_source_manifest,
+        )
         object.__setattr__(self, "validation_limits", validation_limits)
         object.__setattr__(self, "resource_snapshot", resource_snapshot)
 
@@ -513,7 +596,10 @@ class CheckedNativeToCommittedExecution:
             "semantic_execution": self.candidate.semantic_term(),
             "validation": {
                 "law": VALIDATION_LAW,
-                "basis_id": self.validation_basis_id.to_term(),
+                "basis_id": str(self.validation_basis_id),
+                "source_manifest": [
+                    source.to_term() for source in self.validation_source_manifest
+                ],
                 "selected_resource_limits": self.validation_limits.to_term(),
                 "resource_snapshot": self.resource_snapshot.to_term(),
             },
@@ -970,7 +1056,7 @@ def check_native_to_committed_execution(
                 "one native-to-committed, grinding, and Fiat--Shamir execution commutes and accepts",
                 subject=checked.identity,
                 semantic_execution_id=checked.semantic_execution_id,
-                validation_basis_id=checked.validation_basis_id,
+                validation_basis_id=str(checked.validation_basis_id),
                 source_trace_id=candidate.claimed_source_trace_id,
                 target_trace_id=candidate.claimed_target_trace_id,
                 target_proof_id=candidate.claimed_proof_id,
@@ -1213,6 +1299,7 @@ __all__ = [
     "PRIMARY_STATEMENT",
     "PrivateFriGenerationMaterial",
     "PublicFriArtifacts",
+    "ValidationSourceArtifact",
     "check_native_to_committed_execution",
     "generate_honest_native_to_committed_execution",
     "primary_private_generation_material",

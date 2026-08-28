@@ -27,6 +27,7 @@ from friiormodel.profile import (  # noqa: E402
     DEFAULT_VALIDATION_LIMITS,
     EXACT_PROFILE,
 )
+from friiormodel.provenance import ValidationBasisId  # noqa: E402
 from friiormodel.proof import PublicFriProof  # noqa: E402
 from friiormodel.subjects import (  # noqa: E402
     CHECKED_FIAT_SHAMIR_CONSTRUCTION,
@@ -262,6 +263,36 @@ class HonestGenerationTest(unittest.TestCase):
             self.checked.validation_basis_id,
         )
         self.assertNotEqual(alternate.identity, self.checked.identity)
+
+    def test_validation_basis_binds_the_exact_checker_source_closure(self) -> None:
+        self.assertIsInstance(self.checked.validation_basis_id, ValidationBasisId)
+        manifest = self.checked.validation_source_manifest
+        self.assertEqual(
+            tuple(source.path for source in manifest),
+            (
+                "commitment.py",
+                "committed.py",
+                "field.py",
+                "generation.py",
+                "native.py",
+                "profile.py",
+                "proof.py",
+                "provenance.py",
+                "subjects.py",
+                "terms.py",
+                "transcript.py",
+            ),
+        )
+        self.assertTrue(
+            all(
+                source.artifact_content_id.startswith("sha256:")
+                and source.byte_length > 0
+                for source in manifest
+            )
+        )
+        term = self.checked.to_term()["validation"]
+        self.assertEqual(term["basis_id"], str(self.checked.validation_basis_id))
+        self.assertEqual(len(term["source_manifest"]), len(manifest))
 
     def test_resource_snapshot_is_complete_and_frozen(self) -> None:
         snapshot = self.checked.resource_snapshot

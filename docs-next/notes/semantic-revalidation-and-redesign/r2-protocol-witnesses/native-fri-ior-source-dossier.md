@@ -45,8 +45,10 @@ The principal primary sources are:
   exact multi-round theorem boundary rather than as a generic FRI theorem.
 
 Exact downloaded-PDF digests and implementation-source manifests belong to
-the executable package's source ledger. A citation or digest authenticates
-the selected bytes; it does not establish that a local deduction is correct.
+the executable package's source ledger. A citation locates a source, while a
+digest identifies bytes and checks them only relative to a separately trusted
+expected digest. Neither establishes provenance on its own or proves that a
+local deduction is correct.
 
 ## 2. Native FRI semantics
 
