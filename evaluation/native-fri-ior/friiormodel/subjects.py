@@ -451,13 +451,20 @@ class FreshChallengeInterpretation(_SemanticSubject):
                 "core",
                 "WorkAugmentedCommittedFriCore",
             )
+        if self.core.challenge_occurrences != _AUGMENTED_CHALLENGES:
+            raise ModelFailure(
+                OutcomeClass.KIND_MISMATCH,
+                "subjects:challenge-interpretation-formation",
+                "FRI-IOR-SUBJECT-033",
+                "the Fresh interpretation must resolve the Core-owned challenge inventory exactly",
+            )
 
     def to_term(self) -> dict[str, Any]:
         return {
             "schema": CHALLENGE_INTERPRETATION_SCHEMA,
             "kind": "Fresh",
             "core_id": _semantic_ref(self.core.identity),
-            "challenge_occurrences": list(_AUGMENTED_CHALLENGES),
+            "challenge_occurrences": list(self.core.challenge_occurrences),
             "resolution": [
                 {
                     "occurrence": "fold-challenge[0]",
@@ -502,6 +509,13 @@ class FiatShamirChallengeInterpretation(_SemanticSubject):
                 "core",
                 "WorkAugmentedCommittedFriCore",
             )
+        if self.core.challenge_occurrences != _AUGMENTED_CHALLENGES:
+            raise ModelFailure(
+                OutcomeClass.KIND_MISMATCH,
+                "subjects:challenge-interpretation-formation",
+                "FRI-IOR-SUBJECT-033",
+                "the Fiat--Shamir interpretation must resolve the Core-owned challenge inventory exactly",
+            )
         if type(self.construction_plan) is not TranscriptConstructionPlan:
             raise ModelFailure(
                 OutcomeClass.MALFORMED,
@@ -525,7 +539,7 @@ class FiatShamirChallengeInterpretation(_SemanticSubject):
             "schema": CHALLENGE_INTERPRETATION_SCHEMA,
             "kind": "FiatShamir",
             "core_id": _semantic_ref(self.core.identity),
-            "challenge_occurrences": list(_AUGMENTED_CHALLENGES),
+            "challenge_occurrences": list(self.core.challenge_occurrences),
             "transcript_construction_plan_id": _semantic_ref(
                 transcript_plan_identity(self.construction_plan)
             ),

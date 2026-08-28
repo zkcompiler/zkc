@@ -241,6 +241,32 @@ class ProtocolFactorizationTest(unittest.TestCase):
             FIAT_SHAMIR_INTERPRETATION_NONCLAIMS,
         )
 
+    def test_interpretations_cannot_diverge_from_core_challenge_inventory(
+        self,
+    ) -> None:
+        narrowed = WorkAugmentedCommittedFriCore(
+            COMMITTED_FRI_CORE,
+            challenge_occurrences=("fold-challenge[0]",),
+        )
+        for constructor in (
+            lambda: FreshChallengeInterpretation(narrowed),
+            lambda: FiatShamirChallengeInterpretation(
+                narrowed,
+                CANONICAL_CONSTRUCTION_PLAN,
+            ),
+        ):
+            with self.subTest(constructor=constructor):
+                with self.assertRaises(ModelFailure) as raised:
+                    constructor()
+                self.assertIs(
+                    raised.exception.outcome,
+                    OutcomeClass.KIND_MISMATCH,
+                )
+                self.assertEqual(
+                    raised.exception.code,
+                    "FRI-IOR-SUBJECT-033",
+                )
+
     def test_transcript_plan_has_a_separate_semantic_identity(self) -> None:
         result = admit_construction_plan(CANONICAL_CONSTRUCTION_PLAN)
         self.assertIs(result.outcome, OutcomeClass.AFFIRMATIVE)
