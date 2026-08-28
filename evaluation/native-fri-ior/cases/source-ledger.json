@@ -1,0 +1,301 @@
+{
+  "schema": "zkc.native-fri-ior.source-ledger.v1",
+  "scope": "constructive-execution-basis",
+  "frozen_on": "2026-08-28",
+  "papers": [
+    {
+      "id": "bcs-iop-2016-116-r2",
+      "kind": "paper-pdf",
+      "title": "Interactive Oracle Proofs",
+      "landing_url": "https://eprint.iacr.org/2016/116",
+      "artifact_url": "https://eprint.iacr.org/2016/116.pdf",
+      "revision": {
+        "label": "ePrint revision 2",
+        "archive_date": "2016-04-29"
+      },
+      "content": {
+        "artifact_content_id": "sha256:a2dc9bd042665081664287281b9bcf64735be2c818ce9207cce57cc43939fa2f",
+        "byte_length": 3809663
+      },
+      "usage": [
+        "oracle-commitment-compilation"
+      ]
+    },
+    {
+      "id": "eccc-fri-tr17-134-r2",
+      "kind": "paper-pdf",
+      "title": "Fast Reed-Solomon Interactive Oracle Proofs of Proximity",
+      "landing_url": "https://eccc.weizmann.ac.il/report/2017/134/",
+      "artifact_url": "https://eccc.weizmann.ac.il/report/2017/134/revision/2/download",
+      "revision": {
+        "label": "ECCC TR17-134 Revision #2",
+        "archive_date": "2018-01-12"
+      },
+      "content": {
+        "artifact_content_id": "sha256:f9868a06d50c727b349516d54915aa2a9bf8d966d8b04597bce054db73c1294d",
+        "byte_length": 1140342
+      },
+      "usage": [
+        "native-fri-source"
+      ]
+    },
+    {
+      "id": "ethstark-2021-582-r3",
+      "kind": "paper-pdf",
+      "title": "ethSTARK Documentation",
+      "landing_url": "https://eprint.iacr.org/2021/582",
+      "artifact_url": "https://eprint.iacr.org/2021/582.pdf",
+      "revision": {
+        "label": "archive revision 3; document Version 1.2",
+        "archive_date": "2025-06-08"
+      },
+      "content": {
+        "artifact_content_id": "sha256:23b1bd72be468c3b1781bfd76c075a843bb529e8dedc763629c67a080b4f0099",
+        "byte_length": 994149
+      },
+      "usage": [
+        "grinding-placement-and-accounting"
+      ]
+    },
+    {
+      "id": "fri-fs-2023-1071-r7",
+      "kind": "paper-pdf",
+      "title": "Fiat-Shamir Security of FRI and Related SNARKs",
+      "landing_url": "https://eprint.iacr.org/2023/1071",
+      "artifact_url": "https://eprint.iacr.org/2023/1071.pdf",
+      "revision": {
+        "label": "archive revision 7",
+        "archive_date": "2024-03-05"
+      },
+      "content": {
+        "artifact_content_id": "sha256:bb7a7e87b9000c98106de99c9af9d289def2a1b91919a3507ee78bf9bfd16947",
+        "byte_length": 995671
+      },
+      "usage": [
+        "fri-fiat-shamir-separation",
+        "ordered-query-semantics"
+      ]
+    },
+    {
+      "id": "icalp-fri-2018-14",
+      "kind": "paper-pdf",
+      "title": "Fast Reed-Solomon Interactive Oracle Proofs of Proximity",
+      "landing_url": "https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ICALP.2018.14",
+      "artifact_url": "https://drops.dagstuhl.de/storage/00lipics/lipics-vol107-icalp2018/LIPIcs.ICALP.2018.14/LIPIcs.ICALP.2018.14.pdf",
+      "revision": {
+        "label": "ICALP 2018 published version",
+        "archive_date": "2018-07-04"
+      },
+      "content": {
+        "artifact_content_id": "sha256:e244896fb6e7fcab7fe4de00e31a36003b941b6550e062fdb5ee66d78641498d",
+        "byte_length": 562655
+      },
+      "usage": [
+        "native-fri-source",
+        "verifier-query-semantics"
+      ]
+    }
+  ],
+  "implementation_snapshots": [
+    {
+      "id": "plonky3-3da3467-fri-profile",
+      "kind": "git-source-profile",
+      "repository_url": "https://github.com/Plonky3/Plonky3.git",
+      "revision": {
+        "object_format": "sha1",
+        "commit": "3da346791c813433b201299afc3d10bf42f8a078",
+        "tree": "3e9f4076ca8cd681a6d4358ffee1fbb13edf96e7",
+        "committer_date": "2026-07-13T11:42:11+04:00",
+        "subject": "Fix BCHKS25 theorem citation (#1948)"
+      },
+      "selected_files": [
+        {
+          "path": "challenger/src/grinding_challenger.rs",
+          "artifact_content_id": "sha256:6b95acf31840bd00e034036ec1c7cb98ae1fd48e62620bfab9bc9b689e9dae5e",
+          "byte_length": 14406
+        },
+        {
+          "path": "challenger/src/serializing_challenger.rs",
+          "artifact_content_id": "sha256:030810da51b53889316a47aac6378cfe6f8a32978e004f883c8ab9e5804e8fca",
+          "byte_length": 17895
+        },
+        {
+          "path": "commit/src/mmcs.rs",
+          "artifact_content_id": "sha256:d723314212fd4cc1f836d824255183d80cfbfa682ae858667fefb6ade1c0a206",
+          "byte_length": 12880
+        },
+        {
+          "path": "fri/src/config.rs",
+          "artifact_content_id": "sha256:9b4eddc05aff09c5a3530ef3806e5164397c8da154a5fa9ec8440ad8c73b0d06",
+          "byte_length": 8308
+        },
+        {
+          "path": "fri/src/proof.rs",
+          "artifact_content_id": "sha256:5b753fa3abf9a0189ee6534b1dcca09649c771ef6f359dfbf9d2e61bd1fa5e3a",
+          "byte_length": 2955
+        },
+        {
+          "path": "fri/src/prover.rs",
+          "artifact_content_id": "sha256:88f7bec4b2e21753f03e3b4d17250e592a3ad9c195237c79089e883109102ac7",
+          "byte_length": 18261
+        },
+        {
+          "path": "fri/src/two_adic_pcs.rs",
+          "artifact_content_id": "sha256:318e76ddb6e51c04bed4344f4a88307f2491f9d5472e6c876ec5db43958b84ca",
+          "byte_length": 35603
+        },
+        {
+          "path": "fri/src/verifier.rs",
+          "artifact_content_id": "sha256:2d406ef747eeacc1b250be58fe07c0eaa7c882593604ce797841481a2ca8a453",
+          "byte_length": 87462
+        },
+        {
+          "path": "merkle-tree/src/hiding_mmcs.rs",
+          "artifact_content_id": "sha256:fe19d4a894a4878ed42647c73598c30d7521f820deb8ffb8ec6e6a54d6059c16",
+          "byte_length": 16550
+        },
+        {
+          "path": "merkle-tree/src/mmcs/batch.rs",
+          "artifact_content_id": "sha256:e91228643f1d5a48c683c94cfa5fc9d75212c6b64e64d9d93c51b6c7525d713a",
+          "byte_length": 38265
+        },
+        {
+          "path": "merkle-tree/src/mmcs/mod.rs",
+          "artifact_content_id": "sha256:c6af51fcae2dd8a2709f6b17cad2356b6f441203a9a06955d37cc5a5c2216db4",
+          "byte_length": 34868
+        },
+        {
+          "path": "merkle-tree/src/pruning.rs",
+          "artifact_content_id": "sha256:acbad34851adaf33da0713fa158d345c035a4eefeec6995a384f6ac6c610d522",
+          "byte_length": 25444
+        }
+      ],
+      "profile_boundary": "comparison-input-not-conformance-target",
+      "interpretation_constraints": [
+        "cap shape, dynamic folding arity, shared multiproofs, and outer PCS ownership are implementation-profile facts rather than native FRI laws"
+      ]
+    },
+    {
+      "id": "winterfell-2f78ee9-fri-profile",
+      "kind": "git-source-profile",
+      "repository_url": "https://github.com/facebook/winterfell.git",
+      "revision": {
+        "object_format": "sha1",
+        "commit": "2f78ee9bf667a561bdfcdfa68668d0f9b18b8315",
+        "tree": "617fe80a8920aeb4f381d22fe2b71159d5c8667d",
+        "committer_date": "2025-07-19T14:14:51-07:00",
+        "subject": "incremented crate versions to v0.13.1"
+      },
+      "selected_files": [
+        {
+          "path": "crypto/src/commitment.rs",
+          "artifact_content_id": "sha256:280d313081cedaa4e04f6b60d858bdff5d4216e44346837aa174235de9de0993",
+          "byte_length": 3507
+        },
+        {
+          "path": "crypto/src/hash/blake/mod.rs",
+          "artifact_content_id": "sha256:dea12c3b59b053ac5baea3cf062b84effd7d42277fab7d814854931a65041a47",
+          "byte_length": 5033
+        },
+        {
+          "path": "crypto/src/merkle/mod.rs",
+          "artifact_content_id": "sha256:045e3ae26327cc5c5c53bf1586b7c4c1aea76c83000497cd7ae38de195eeaa29",
+          "byte_length": 15463
+        },
+        {
+          "path": "crypto/src/merkle/proofs.rs",
+          "artifact_content_id": "sha256:5809e4cab3e344229df65bbdc54404623c2ca2ba24cac63e44c101cf6550afe7",
+          "byte_length": 17801
+        },
+        {
+          "path": "crypto/src/random/default.rs",
+          "artifact_content_id": "sha256:356866fc0db872c0346b0561ac5a13f061ad3c228f4b2660d2301181c8cebd79",
+          "byte_length": 9611
+        },
+        {
+          "path": "fri/src/folding/mod.rs",
+          "artifact_content_id": "sha256:d77d2a102f1568566d909b6b4aaa6e3ef5250e7c649d30b517fcf5538960cbcf",
+          "byte_length": 8210
+        },
+        {
+          "path": "fri/src/options.rs",
+          "artifact_content_id": "sha256:86ef869c2b32aa56bddd10949c3beea325c95470cbd771e6e79cd17eee6f86fc",
+          "byte_length": 3447
+        },
+        {
+          "path": "fri/src/proof.rs",
+          "artifact_content_id": "sha256:1acc906052c8bb7cc0d2ac544db0015d9bfafed437badd382244e0e05f720848",
+          "byte_length": 14840
+        },
+        {
+          "path": "fri/src/prover/channel.rs",
+          "artifact_content_id": "sha256:69cdd9a38bc1d590221eb89aa14b1ea7f1b05c810bc918640a2cbbdc8befe060",
+          "byte_length": 5477
+        },
+        {
+          "path": "fri/src/prover/mod.rs",
+          "artifact_content_id": "sha256:b5a8fbc8ce577094fea4cb3d14dac5da6a2104828fca34a9886f68e928d659c7",
+          "byte_length": 15675
+        },
+        {
+          "path": "fri/src/utils.rs",
+          "artifact_content_id": "sha256:072ef38d36e51b6d276218665f37fd4d74069c864da03a1c7199e5f556d8f96b",
+          "byte_length": 1106
+        },
+        {
+          "path": "fri/src/verifier/channel.rs",
+          "artifact_content_id": "sha256:8e67a94589c6b4ffb5162c9772aa8c53f76fda65bf18b0a047af7e61839d1e11",
+          "byte_length": 7835
+        },
+        {
+          "path": "fri/src/verifier/mod.rs",
+          "artifact_content_id": "sha256:cdffd26693169a0283a0df2e58db303f67fec057d753d6ff546a1594ea583378",
+          "byte_length": 16061
+        },
+        {
+          "path": "prover/src/channel.rs",
+          "artifact_content_id": "sha256:9f3ba32d696ee9b3dd60c37018f826e1a2d66b7125e27372a083e1060d0e1547",
+          "byte_length": 8786
+        },
+        {
+          "path": "prover/src/lib.rs",
+          "artifact_content_id": "sha256:efadfdf7b156af1db1f5a169b62587acb646b2994e3e5a28aa1a3088af4ca949",
+          "byte_length": 24693
+        },
+        {
+          "path": "verifier/src/lib.rs",
+          "artifact_content_id": "sha256:5b3acf2d230be7e646af39a55ce25ab3c5a6bd4412ea6a76f2107b7972f71407",
+          "byte_length": 17215
+        },
+        {
+          "path": "winterfell/src/lib.rs",
+          "artifact_content_id": "sha256:2e11f000097ef46db358dca0f12de835e35469c255ce3ad044082596e26493f8",
+          "byte_length": 28546
+        }
+      ],
+      "profile_boundary": "comparison-input-not-conformance-target",
+      "interpretation_constraints": [
+        "folding arity four is the selected comparison profile; Winterfell supports factors two, four, eight, and sixteen",
+        "query sorting, deduplication, and initial-oracle ownership occur at the surrounding STARK seam"
+      ]
+    }
+  ],
+  "claim_boundary": {
+    "establishes": [
+      "exact-byte provenance for the five paper artifacts used by the executable construction",
+      "exact Git revisions and selected implementation-source bytes used as comparison inputs"
+    ],
+    "excluded_from_this_ledger": [
+      "AFK multi-round Fiat-Shamir and other analysis-only theorem sources",
+      "Concrete FRI parameter studies",
+      "DEEP-FRI, STIR, Circle FRI, BaseFold, WHIR, and other design-pressure variants",
+      "the complete documentation and theorem corpus"
+    ],
+    "does_not_establish": [
+      "correct interpretation of a source",
+      "theorem truth or applicability",
+      "implementation conformance",
+      "cryptographic security"
+    ]
+  }
+}

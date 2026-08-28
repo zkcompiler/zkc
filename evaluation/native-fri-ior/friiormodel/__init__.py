@@ -10,6 +10,7 @@ from .commitment import (
 from .field import (
     Fp,
     Fp2,
+    POLYNOMIAL_COEFFICIENT_FIELD_OPERATIONS,
     binary_fold,
     canonical_polynomial,
     evaluate_polynomial,
@@ -51,6 +52,7 @@ __all__ = [
     "ModelFailure",
     "OutcomeClass",
     "PairOpening",
+    "POLYNOMIAL_COEFFICIENT_FIELD_OPERATIONS",
     "ResourceCounter",
     "ResourceLimits",
     "SEMANTIC_REGIME_ID",

@@ -459,6 +459,12 @@ class ResourceLimits:
     hash_calls: int
     hash_bytes: int
     merkle_nodes: int
+    transcript_frames: int
+    sampler_attempts: int
+    grinding_trials: int
+    logical_query_occurrences: int
+    unique_openings: int
+    proof_bytes: int
 
     def __post_init__(self) -> None:
         for name in (
@@ -466,6 +472,12 @@ class ResourceLimits:
             "hash_calls",
             "hash_bytes",
             "merkle_nodes",
+            "transcript_frames",
+            "sampler_attempts",
+            "grinding_trials",
+            "logical_query_occurrences",
+            "unique_openings",
+            "proof_bytes",
         ):
             value = getattr(self, name)
             if type(value) is not int or value < 0:
@@ -481,6 +493,12 @@ class ResourceLimits:
             "hash_calls": self.hash_calls,
             "hash_bytes": self.hash_bytes,
             "merkle_nodes": self.merkle_nodes,
+            "transcript_frames": self.transcript_frames,
+            "sampler_attempts": self.sampler_attempts,
+            "grinding_trials": self.grinding_trials,
+            "logical_query_occurrences": self.logical_query_occurrences,
+            "unique_openings": self.unique_openings,
+            "proof_bytes": self.proof_bytes,
         }
 
 
@@ -489,6 +507,12 @@ HARD_RESOURCE_LIMITS = ResourceLimits(
     hash_calls=256,
     hash_bytes=1 << 16,
     merkle_nodes=256,
+    transcript_frames=256,
+    sampler_attempts=4096,
+    grinding_trials=1 << 20,
+    logical_query_occurrences=256,
+    unique_openings=128,
+    proof_bytes=1 << 20,
 )
 
 
@@ -501,6 +525,12 @@ class ResourceCounter:
     hash_calls: int = 0
     hash_bytes: int = 0
     merkle_nodes: int = 0
+    transcript_frames: int = 0
+    sampler_attempts: int = 0
+    grinding_trials: int = 0
+    logical_query_occurrences: int = 0
+    unique_openings: int = 0
+    proof_bytes: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.limits, ResourceLimits):
@@ -574,10 +604,49 @@ class ResourceCounter:
             merkle_nodes=merkle_nodes,
         )
 
+    def consume_transcript_frames(self, frames: int) -> None:
+        self._reserve(transcript_frames=frames)
+
+    def consume_sampler_attempts(self, attempts: int) -> None:
+        self._reserve(sampler_attempts=attempts)
+
+    def consume_grinding_trials(self, trials: int) -> None:
+        self._reserve(grinding_trials=trials)
+
+    def consume_logical_query_occurrences(self, occurrences: int) -> None:
+        self._reserve(logical_query_occurrences=occurrences)
+
+    def consume_unique_openings(self, openings: int) -> None:
+        self._reserve(unique_openings=openings)
+
+    def consume_proof_bytes(self, byte_count: int) -> None:
+        self._reserve(proof_bytes=byte_count)
+
+    def consume_query_opening_resources(
+        self,
+        *,
+        logical_query_occurrences: int,
+        unique_openings: int,
+        proof_bytes: int,
+    ) -> None:
+        """Atomically charge occurrence semantics and deduplicated material."""
+
+        self._reserve(
+            logical_query_occurrences=logical_query_occurrences,
+            unique_openings=unique_openings,
+            proof_bytes=proof_bytes,
+        )
+
     def snapshot(self) -> dict[str, int]:
         return {
             "field_operations": self.field_operations,
             "hash_calls": self.hash_calls,
             "hash_bytes": self.hash_bytes,
             "merkle_nodes": self.merkle_nodes,
+            "transcript_frames": self.transcript_frames,
+            "sampler_attempts": self.sampler_attempts,
+            "grinding_trials": self.grinding_trials,
+            "logical_query_occurrences": self.logical_query_occurrences,
+            "unique_openings": self.unique_openings,
+            "proof_bytes": self.proof_bytes,
         }

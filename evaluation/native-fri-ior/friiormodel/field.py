@@ -18,6 +18,7 @@ MODULUS = 97
 PRIMITIVE_GENERATOR = 5
 EXTENSION_NONRESIDUE = 5
 BINARY_FOLD_FIELD_OPERATIONS = 8
+POLYNOMIAL_COEFFICIENT_FIELD_OPERATIONS = 2
 MAX_POLYNOMIAL_COEFFICIENTS = 8
 
 
@@ -62,6 +63,12 @@ class Fp:
                 "field:codec",
                 "FRI-IOR-FIELD-003",
                 "the finite profile encodes an Fp element as exactly one byte",
+            )
+        if encoded[0] >= MODULUS:
+            raise malformed(
+                "field:codec",
+                "FRI-IOR-FIELD-003",
+                "an encoded Fp byte must be the canonical representative below 97",
             )
         return cls(encoded[0])
 
@@ -153,7 +160,7 @@ class Fp2:
                 "FRI-IOR-FIELD-008",
                 "the finite profile encodes an Fp2 element as exactly two bytes",
             )
-        return cls(Fp(encoded[0]), Fp(encoded[1]))
+        return cls(Fp.from_bytes(encoded[:1]), Fp.from_bytes(encoded[1:]))
 
     def to_bytes(self) -> bytes:
         return self.real.to_bytes() + self.imag.to_bytes()
@@ -311,11 +318,31 @@ def polynomial_degree(coefficients: tuple[Fp2, ...]) -> int:
     return -1 if canonical == (Fp2.zero(),) else len(canonical) - 1
 
 
-def evaluate_polynomial(coefficients: tuple[Fp2, ...], point: Fp) -> Fp2:
-    """Evaluate a canonical bounded coefficient sequence by Horner's rule."""
+def evaluate_polynomial(
+    coefficients: tuple[Fp2, ...],
+    point: Fp,
+    resources: ResourceCounter | None = None,
+) -> Fp2:
+    """Evaluate a canonical bounded coefficient sequence by Horner's rule.
+
+    The abstract cost basis charges one extension-field multiplication and one
+    extension-field addition for every coefficient, including the leading
+    zero-accumulator step.  The full charge is reserved before evaluation, so
+    deterministic limit exhaustion cannot leave a partially charged counter.
+    """
 
     canonical = canonical_polynomial(coefficients)
     base_point = Fp2.from_base(_require_fp_operand(point))
+    if resources is not None:
+        if not isinstance(resources, ResourceCounter):
+            raise malformed(
+                "field:polynomial",
+                "FRI-IOR-FIELD-018",
+                "polynomial evaluation requires a ResourceCounter when metered",
+            )
+        resources.consume_field_operations(
+            len(canonical) * POLYNOMIAL_COEFFICIENT_FIELD_OPERATIONS
+        )
     result = Fp2.zero()
     for coefficient in reversed(canonical):
         result = result * base_point + coefficient

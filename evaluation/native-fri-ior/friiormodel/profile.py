@@ -45,6 +45,12 @@ DEFAULT_VALIDATION_LIMITS = ResourceLimits(
     hash_calls=128,
     hash_bytes=1 << 15,
     merkle_nodes=128,
+    transcript_frames=128,
+    sampler_attempts=1024,
+    grinding_trials=1 << 16,
+    logical_query_occurrences=64,
+    unique_openings=64,
+    proof_bytes=1 << 16,
 )
 
 

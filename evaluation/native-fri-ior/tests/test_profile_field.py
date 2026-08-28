@@ -13,6 +13,7 @@ from friiormodel.field import (  # noqa: E402
     BINARY_FOLD_FIELD_OPERATIONS,
     Fp,
     Fp2,
+    POLYNOMIAL_COEFFICIENT_FIELD_OPERATIONS,
     binary_fold,
     canonical_polynomial,
     evaluate_polynomial,
@@ -74,6 +75,92 @@ class FieldTest(unittest.TestCase):
         self.assertIs(raised.exception.outcome, OutcomeClass.MALFORMED)
         self.assertEqual(raised.exception.code, "FRI-IOR-FIELD-003")
 
+        for encoded in (b"\x61", b"\xff"):
+            with self.subTest(encoded=encoded), self.assertRaises(
+                ModelFailure
+            ) as noncanonical:
+                Fp.from_bytes(encoded)
+            self.assertIs(noncanonical.exception.outcome, OutcomeClass.MALFORMED)
+            self.assertEqual(noncanonical.exception.boundary, "field:codec")
+            self.assertEqual(noncanonical.exception.code, "FRI-IOR-FIELD-003")
+
+        with self.assertRaises(ModelFailure) as extension_noncanonical:
+            Fp2.from_bytes(b"\x00\x61")
+        self.assertIs(
+            extension_noncanonical.exception.outcome,
+            OutcomeClass.MALFORMED,
+        )
+        self.assertEqual(extension_noncanonical.exception.boundary, "field:codec")
+        self.assertEqual(extension_noncanonical.exception.code, "FRI-IOR-FIELD-003")
+
+    def test_polynomial_evaluation_charges_exact_declared_cost(self) -> None:
+        coefficients = (_extension(3), _extension(5, 7), _extension(11, 13))
+        expected_charge = (
+            len(coefficients) * POLYNOMIAL_COEFFICIENT_FIELD_OPERATIONS
+        )
+        counter = ResourceCounter(
+            ResourceLimits(
+                field_operations=expected_charge,
+                hash_calls=0,
+                hash_bytes=0,
+                merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
+            )
+        )
+
+        self.assertEqual(
+            evaluate_polynomial(coefficients, Fp(8), counter),
+            evaluate_polynomial(coefficients, Fp(8)),
+        )
+        self.assertEqual(counter.field_operations, expected_charge)
+        self.assertEqual(
+            counter.snapshot(),
+            {**counter.limits.to_term(), "field_operations": expected_charge},
+        )
+
+    def test_polynomial_evaluation_resource_charge_is_atomic(self) -> None:
+        coefficients = (_extension(3), _extension(5, 7), _extension(11, 13))
+        required = len(coefficients) * POLYNOMIAL_COEFFICIENT_FIELD_OPERATIONS
+        counter = ResourceCounter(
+            ResourceLimits(
+                field_operations=required - 1,
+                hash_calls=0,
+                hash_bytes=0,
+                merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
+            )
+        )
+
+        with self.assertRaises(ModelFailure) as raised:
+            evaluate_polynomial(coefficients, Fp(8), counter)
+        self.assertIs(
+            raised.exception.outcome,
+            OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+        )
+        self.assertEqual(raised.exception.code, "FRI-IOR-RESOURCE-008")
+        self.assertEqual(counter.snapshot(), {name: 0 for name in counter.snapshot()})
+
+    def test_polynomial_evaluation_meter_requires_resource_counter(self) -> None:
+        with self.assertRaises(ModelFailure) as raised:
+            evaluate_polynomial(
+                (_extension(3), _extension(5)),
+                Fp(8),
+                object(),  # type: ignore[arg-type]
+            )
+        self.assertIs(raised.exception.outcome, OutcomeClass.MALFORMED)
+        self.assertEqual(raised.exception.boundary, "field:polynomial")
+        self.assertEqual(raised.exception.code, "FRI-IOR-FIELD-018")
+
     def test_extension_polynomial_is_irreducible_and_u_squared_is_five(self) -> None:
         u = _extension(0, 1)
         self.assertEqual(u * u, _extension(5))
@@ -124,8 +211,34 @@ class ProfileTest(unittest.TestCase):
     def test_request_limits_do_not_enter_profile_identity(self) -> None:
         profile_term = EXACT_PROFILE.to_term()
         profile_identity = EXACT_PROFILE.identity
-        small_request = ResourceCounter(ResourceLimits(8, 1, 64, 0))
-        larger_request = ResourceCounter(ResourceLimits(80, 10, 640, 6))
+        small_request = ResourceCounter(
+            ResourceLimits(
+                field_operations=8,
+                hash_calls=1,
+                hash_bytes=64,
+                merkle_nodes=0,
+                transcript_frames=1,
+                sampler_attempts=2,
+                grinding_trials=3,
+                logical_query_occurrences=4,
+                unique_openings=2,
+                proof_bytes=128,
+            )
+        )
+        larger_request = ResourceCounter(
+            ResourceLimits(
+                field_operations=80,
+                hash_calls=10,
+                hash_bytes=640,
+                merkle_nodes=6,
+                transcript_frames=10,
+                sampler_attempts=20,
+                grinding_trials=30,
+                logical_query_occurrences=40,
+                unique_openings=20,
+                proof_bytes=1280,
+            )
+        )
 
         self.assertNotEqual(small_request.limits, larger_request.limits)
         self.assertNotIn("resources", profile_term)
@@ -144,11 +257,79 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(raised.exception.code, "FRI-IOR-PROFILE-003")
 
     def test_ordinary_hash_charge_does_not_count_a_merkle_node(self) -> None:
-        counter = ResourceCounter(ResourceLimits(0, 1, 32, 0))
+        counter = ResourceCounter(
+            ResourceLimits(
+                field_operations=0,
+                hash_calls=1,
+                hash_bytes=32,
+                merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
+            )
+        )
         counter.consume_hash(32)
         self.assertEqual(counter.hash_calls, 1)
         self.assertEqual(counter.hash_bytes, 32)
         self.assertEqual(counter.merkle_nodes, 0)
+
+    def test_composite_resource_dimensions_are_counted_explicitly(self) -> None:
+        limits = ResourceLimits(
+            field_operations=0,
+            hash_calls=0,
+            hash_bytes=0,
+            merkle_nodes=0,
+            transcript_frames=2,
+            sampler_attempts=3,
+            grinding_trials=4,
+            logical_query_occurrences=5,
+            unique_openings=2,
+            proof_bytes=100,
+        )
+        counter = ResourceCounter(limits)
+        counter.consume_transcript_frames(2)
+        counter.consume_sampler_attempts(3)
+        counter.consume_grinding_trials(4)
+        counter.consume_logical_query_occurrences(5)
+        counter.consume_unique_openings(2)
+        counter.consume_proof_bytes(100)
+        self.assertEqual(counter.snapshot(), limits.to_term())
+
+    def test_query_opening_composite_charge_is_atomic(self) -> None:
+        counter = ResourceCounter(
+            ResourceLimits(
+                field_operations=0,
+                hash_calls=0,
+                hash_bytes=0,
+                merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=4,
+                unique_openings=2,
+                proof_bytes=100,
+            )
+        )
+        counter.consume_query_opening_resources(
+            logical_query_occurrences=3,
+            unique_openings=1,
+            proof_bytes=80,
+        )
+        before = counter.snapshot()
+        with self.assertRaises(ModelFailure) as raised:
+            counter.consume_query_opening_resources(
+                logical_query_occurrences=1,
+                unique_openings=1,
+                proof_bytes=21,
+            )
+        self.assertIs(
+            raised.exception.outcome,
+            OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+        )
+        self.assertEqual(counter.snapshot(), before)
 
 
 class SemanticIdentityTest(unittest.TestCase):
@@ -376,6 +557,12 @@ class BinaryFoldTest(unittest.TestCase):
                 hash_calls=0,
                 hash_bytes=0,
                 merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
             )
         )
         with self.assertRaises(ModelFailure) as raised:

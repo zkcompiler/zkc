@@ -322,8 +322,8 @@ No finite witness in this package establishes those premises.
 ### 5.1 Plonky3
 
 The repository's retained Plonky3 replay pins revision
-`3da346791c813433b201299afc3d10bf42f8a078`. Current official Plonky3 sources
-also demonstrate why an implementation profile cannot be collapsed into
+`3da346791c813433b201299afc3d10bf42f8a078`. The selected files at that pinned
+revision demonstrate why an implementation profile cannot be collapsed into
 generic FRI:
 
 - input commitments may cover matrices of different heights;

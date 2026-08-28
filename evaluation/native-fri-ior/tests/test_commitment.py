@@ -116,6 +116,12 @@ class CommitmentConstructionTest(unittest.TestCase):
                 hash_calls=13,
                 hash_bytes=1 << 15,
                 merkle_nodes=14,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
             )
         )
         with self.assertRaises(ModelFailure) as raised:
@@ -135,6 +141,12 @@ class CommitmentConstructionTest(unittest.TestCase):
                 hash_calls=1,
                 hash_bytes=256,
                 merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
             )
         )
         with self.assertRaises(ModelFailure) as raised:
@@ -210,7 +222,20 @@ class CommitmentVerificationTest(unittest.TestCase):
         self.assertEqual(result.code, "FRI-IOR-COMMITMENT-020")
 
     def test_verification_limit_exhaustion_is_not_a_refusal(self) -> None:
-        counter = ResourceCounter(ResourceLimits(0, 0, 0, 0))
+        counter = ResourceCounter(
+            ResourceLimits(
+                field_operations=0,
+                hash_calls=0,
+                hash_bytes=0,
+                merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
+            )
+        )
         result = verify_pair_opening(D0, self.tree.cap, self.opening, counter)
         self.assertIs(result.outcome, OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED)
         self.assertEqual(result.code, "FRI-IOR-RESOURCE-008")
