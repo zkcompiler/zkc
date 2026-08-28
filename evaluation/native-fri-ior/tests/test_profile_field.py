@@ -28,6 +28,7 @@ from friiormodel.profile import (  # noqa: E402
     EXACT_ALGEBRA_LAWS,
     EXACT_PROFILE,
     EvaluationDomain,
+    LOCAL_PROFILE_DISPOSITION,
     QUERY_ANSWER_PROJECTION_LAW,
     SemanticLaw,
     TERMINAL_EVALUATOR_LAW,
@@ -239,6 +240,16 @@ class FieldTest(unittest.TestCase):
 
 
 class ProfileTest(unittest.TestCase):
+    def test_selected_profile_is_an_early_terminated_structural_witness(self) -> None:
+        self.assertEqual(
+            LOCAL_PROFILE_DISPOSITION,
+            "implementation-style-early-terminated-structural-witness",
+        )
+        self.assertEqual(EXACT_PROFILE.round_count, 2)
+        self.assertEqual(EXACT_PROFILE.terminal_degree_bound_exclusive, 2)
+        self.assertNotIn("source_correspondence", EXACT_PROFILE.to_term())
+        self.assertNotIn("validation_disposition", EXACT_PROFILE.to_term())
+
     def test_resource_carrier_subclasses_cannot_override_accounting(self) -> None:
         class CounterSubclass(ResourceCounter):
             def consume_hash(self, payload_bytes: int, *, merkle_nodes: int = 0) -> None:

@@ -389,9 +389,18 @@ class ConstructionPlanAdmissionTest(unittest.TestCase):
 
     def test_wrong_namespace_codec_and_sampler_have_distinct_boundaries(self) -> None:
         mutations = (
-            (_replace_step(CAP0, namespace="zkc/fri-ior/wrong/v1"), "FRI-IOR-TRANSCRIPT-013"),
-            (_replace_step(CAP0, codec="raw-digest-concatenation.v1"), "FRI-IOR-TRANSCRIPT-014"),
-            (_replace_step(BETA0, sampler="sha256-modulo-biased.v1"), "FRI-IOR-TRANSCRIPT-015"),
+            (
+                _replace_step(CAP0, namespace="zkc/fri-ior/wrong/v1"),
+                "FRI-IOR-TRANSCRIPT-013",
+            ),
+            (
+                _replace_step(CAP0, codec="raw-digest-concatenation.v1"),
+                "FRI-IOR-TRANSCRIPT-014",
+            ),
+            (
+                _replace_step(BETA0, sampler="sha256-modulo-biased.v1"),
+                "FRI-IOR-TRANSCRIPT-015",
+            ),
         )
         for plan, code in mutations:
             with self.subTest(code=code):
@@ -505,9 +514,7 @@ class TranscriptDerivationTest(unittest.TestCase):
             "fb19906929b63dc3cdd2abde07198000ae2995edb10f9a889f93a3e4c1bbba76",
         )
         self.assertEqual(
-            tuple(
-                item.initial_domain_index for item in transcript.query_occurrences
-            ),
+            tuple(item.initial_domain_index for item in transcript.query_occurrences),
             (10, 8, 2, 5),
         )
         self.assertEqual(transcript.beta0, reference["beta0"])
@@ -516,9 +523,7 @@ class TranscriptDerivationTest(unittest.TestCase):
         self.assertEqual(transcript.work_digest, reference["work_digest"])
         self.assertEqual(transcript.query_seed, reference["query_seed"])
         self.assertEqual(
-            tuple(
-                item.initial_domain_index for item in transcript.query_occurrences
-            ),
+            tuple(item.initial_domain_index for item in transcript.query_occurrences),
             reference["query_indices"],
         )
         self.assertEqual(counter.snapshot()["hash_calls"], 23)
@@ -669,7 +674,9 @@ class TranscriptDerivationTest(unittest.TestCase):
         self.assertEqual(result.code, "FRI-IOR-RESOURCE-008")
         self.assertEqual(counter.hash_calls, 8)
 
-    def test_internal_stage_carriers_validate_shape_but_are_not_public_inputs(self) -> None:
+    def test_internal_stage_carriers_validate_shape_but_are_not_public_inputs(
+        self,
+    ) -> None:
         with self.assertRaises(ModelFailure) as raised:
             transcript_model._FirstRoundTranscript(  # noqa: SLF001
                 CANONICAL_CONSTRUCTION_PLAN,

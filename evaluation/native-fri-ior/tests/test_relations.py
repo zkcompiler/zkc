@@ -10,22 +10,31 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from friiormodel.commitment import build_commitment  # noqa: E402
-from friiormodel.field import Fp, Fp2, evaluate_polynomial  # noqa: E402
+from friiormodel.constructions import (  # noqa: E402
+    CheckedConstructionComposition,
+    CheckedNativeToCommittedFreshRun,
+    compose_checked_constructions,
+    generate_committed_to_work_fresh,
+    generate_native_to_committed_fresh,
+)
+from friiormodel.field import Fp, Fp2  # noqa: E402
+from friiormodel.generation import (  # noqa: E402
+    PrivateFriGenerationMaterial,
+    generate_honest_native_to_committed_execution,
+)
 from friiormodel.native import (  # noqa: E402
+    LogicalOracle,
     NativeFriTrace,
     OracleEntry,
-    RandomQueryDraw,
-    derive_honest_native_trace,
 )
-from friiormodel.profile import D0, D1, EXACT_PROFILE  # noqa: E402
+from friiormodel.profile import D0, EXACT_PROFILE  # noqa: E402
 from friiormodel.proof import (  # noqa: E402
     CommittedFriPublicInputs,
-    OccurrenceSelector,
-    OpeningTableEntry,
     PublicFriProof,
 )
 from friiormodel.relations import (  # noqa: E402
+    CapOccurrenceReference,
+    CheckedFriRelationGrounding,
     FriOracleLayer,
     FriRelationGroundingRequest,
     FriTerminalResidualBoundary,
@@ -43,6 +52,7 @@ from friiormodel.relations import (  # noqa: E402
     infer_outer_computation_relation,
     logical_oracle_material_id,
 )
+from friiormodel.subjects import CHECKED_FIAT_SHAMIR_CONSTRUCTION  # noqa: E402
 from friiormodel.terms import (  # noqa: E402
     CheckResult,
     ModelFailure,
@@ -69,22 +79,10 @@ APPLICATION_CONTEXT = {
     "suffix": 71394,
 }
 COEFFICIENT_VALUES = (3, 5, 7, 11, 13, 17, 19, 23)
-EXPECTED_BETA0 = (10, 34)
-EXPECTED_BETA1 = (23, 31)
 
 
 def _fp2(real: int, imaginary: int = 0) -> Fp2:
     return Fp2(Fp.reduce(real), Fp.reduce(imaginary))
-
-
-def _fold_coefficients(
-    coefficients: tuple[Fp2, ...],
-    challenge: Fp2,
-) -> tuple[Fp2, ...]:
-    return tuple(
-        coefficients[index] + challenge * coefficients[index + 1]
-        for index in range(0, len(coefficients), 2)
-    )
 
 
 def _salts(prefix: int, pair_count: int) -> tuple[bytes, ...]:
@@ -97,6 +95,9 @@ class _Case:
     proof: PublicFriProof
     transcript: FiatShamirTranscript
     trace: NativeFriTrace
+    relation_initial_oracle: LogicalOracle
+    commitment_receipt: CheckedNativeToCommittedFreshRun
+    composition_receipt: CheckedConstructionComposition
     statement: RelationStatementOccurrence
     request: FriRelationGroundingRequest
     source_coefficients: tuple[Fp2, ...]
@@ -110,95 +111,82 @@ def _build_case() -> _Case:
         APPLICATION_CONTEXT,
     )
     source_coefficients = tuple(_fp2(value) for value in COEFFICIENT_VALUES)
-    beta0 = _fp2(*EXPECTED_BETA0)
-    beta1 = _fp2(*EXPECTED_BETA1)
-
-    initial_evaluations = tuple(
-        evaluate_polynomial(source_coefficients, point) for point in D0.points()
-    )
-    tree0 = build_commitment(
-        D0,
-        initial_evaluations,
+    private_material = PrivateFriGenerationMaterial(
+        source_coefficients,
         _salts(0x10, D0.order // 2),
+        _salts(0x40, 4),
     )
-    first_coefficients = _fold_coefficients(source_coefficients, beta0)
-    first_evaluations = tuple(
-        evaluate_polynomial(first_coefficients, point) for point in D1.points()
+    concrete_admission = generate_honest_native_to_committed_execution(
+        private_material,
+        public_inputs,
     )
-    tree1 = build_commitment(
-        D1,
-        first_evaluations,
-        _salts(0x40, D1.order // 2),
-    )
-    terminal = _fold_coefficients(first_coefficients, beta1)
+    if concrete_admission.result.outcome is not OutcomeClass.AFFIRMATIVE:
+        raise AssertionError(concrete_admission.result.to_term())
+    if concrete_admission.checked_execution is None:
+        raise AssertionError("affirmative concrete generation omitted its receipt")
+    concrete = concrete_admission.checked_execution
+    proof = concrete.public_artifacts.proof
+    trace = concrete.candidate.source_trace
 
     transcript = construct_fiat_shamir_transcript(
         public_inputs.transcript_plan,
         public_inputs.statement,
         public_inputs.application_context,
-        tree0.cap,
-        tree1.cap,
-        terminal,
+        proof.cap0,
+        proof.cap1,
+        proof.terminal_coefficients,
         ResourceCounter(),
     )
     if isinstance(transcript, CheckResult):
         raise AssertionError(transcript.to_term())
-    if transcript.beta0 != beta0 or transcript.beta1 != beta1:
+    if transcript.beta0 != trace.beta0 or transcript.beta1 != trace.beta1:
         raise AssertionError(
-            "relations test transcript constants drifted: "
-            f"{transcript.beta0!r}, {transcript.beta1!r}"
+            "the issued concrete construction and transcript replay disagree"
         )
-
-    keys = tuple(
-        sorted(
-            {
-                key
-                for occurrence in transcript.query_occurrences
-                for key in (
-                    (0, occurrence.initial_domain_index % (D0.order // 2)),
-                    (1, occurrence.initial_domain_index % (D1.order // 2)),
-                )
-            }
-        )
-    )
-    opening_table = tuple(
-        OpeningTableEntry(
-            layer,
-            (tree0 if layer == 0 else tree1).open_pair(pair_index),
-        )
-        for layer, pair_index in keys
-    )
-    table_index = {entry.key: index for index, entry in enumerate(opening_table)}
-    selectors = tuple(
-        OccurrenceSelector(
-            occurrence.ordinal,
-            table_index[(0, occurrence.initial_domain_index % (D0.order // 2))],
-            table_index[(1, occurrence.initial_domain_index % (D1.order // 2))],
-        )
-        for occurrence in transcript.query_occurrences
-    )
-    proof = PublicFriProof(
-        tree0.cap,
-        tree1.cap,
-        terminal,
-        transcript.grinding_nonce,
-        opening_table,
-        selectors,
-    )
     query_indices = tuple(
         occurrence.initial_domain_index for occurrence in transcript.query_occurrences
     )
-    trace = derive_honest_native_trace(
-        source_coefficients,
-        beta0,
-        beta1,
+    commitment_admission = generate_native_to_committed_fresh(
+        private_material,
+        STATEMENT,
+        APPLICATION_CONTEXT,
+        transcript.beta0,
+        transcript.beta1,
         query_indices,
-        ResourceCounter(),
     )
+    if commitment_admission.result.outcome is not OutcomeClass.AFFIRMATIVE:
+        raise AssertionError(commitment_admission.result.to_term())
+    if commitment_admission.checked_receipt is None:
+        raise AssertionError("affirmative commitment construction omitted its receipt")
+    commitment_receipt = commitment_admission.checked_receipt
+    grinding_admission = generate_committed_to_work_fresh(
+        commitment_receipt,
+        transcript.work_seed,
+        proof.grinding_nonce,
+    )
+    if grinding_admission.result.outcome is not OutcomeClass.AFFIRMATIVE:
+        raise AssertionError(grinding_admission.result.to_term())
+    if grinding_admission.checked_receipt is None:
+        raise AssertionError("affirmative grinding construction omitted its receipt")
+    composition_admission = compose_checked_constructions(
+        commitment_receipt,
+        grinding_admission.checked_receipt,
+        CHECKED_FIAT_SHAMIR_CONSTRUCTION,
+        concrete,
+    )
+    if composition_admission.result.outcome is not OutcomeClass.AFFIRMATIVE:
+        raise AssertionError(composition_admission.result.to_term())
+    if composition_admission.checked_receipt is None:
+        raise AssertionError("affirmative construction composition omitted its receipt")
+    composition_receipt = composition_admission.checked_receipt
+
+    relation_initial_oracle = replace(trace.initial_oracle)
     statement = RelationStatementOccurrence(EXACT_PROFILE.identity, 0, STATEMENT)
     request = canonical_relation_grounding_request(
         statement,
-        trace,
+        relation_initial_oracle,
+        commitment_receipt,
+        composition_receipt,
         public_inputs,
         proof,
     )
@@ -207,6 +195,9 @@ def _build_case() -> _Case:
         proof,
         transcript,
         trace,
+        relation_initial_oracle,
+        commitment_receipt,
+        composition_receipt,
         statement,
         request,
         source_coefficients,
@@ -217,12 +208,18 @@ class RelationGroundingPositiveTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.case = _build_case()
-        cls.result = check_fri_relation_grounding(
+        cls.admission = check_fri_relation_grounding(
             cls.case.request,
-            cls.case.trace,
+            cls.case.relation_initial_oracle,
+            cls.case.commitment_receipt,
+            cls.case.composition_receipt,
             cls.case.public_inputs,
             cls.case.proof,
         )
+        cls.result = cls.admission.result
+        if cls.admission.checked_grounding is None:
+            raise AssertionError(cls.result.to_term())
+        cls.checked = cls.admission.checked_grounding
 
     def test_exact_statement_oracle_cap_and_run_grounding_accepts(self) -> None:
         self.assertIs(self.result.outcome, OutcomeClass.AFFIRMATIVE)
@@ -231,6 +228,16 @@ class RelationGroundingPositiveTest(unittest.TestCase):
         self.assertEqual(
             self.result.subject.subject_kind,
             "checked-fri-relation-grounding",
+        )
+        self.assertIsInstance(self.checked, CheckedFriRelationGrounding)
+        self.assertEqual(self.result.subject, self.checked.identity)
+        self.assertEqual(
+            self.checked.commitment_receipt_id,
+            self.case.commitment_receipt.identity,
+        )
+        self.assertEqual(
+            self.checked.construction_composition_receipt_id,
+            self.case.composition_receipt.identity,
         )
         self.assertEqual(
             self.result.evidence["statement_grounding_id"],
@@ -244,7 +251,11 @@ class RelationGroundingPositiveTest(unittest.TestCase):
     def test_run_grounding_preserves_eight_occurrences_and_physical_dedup(self) -> None:
         evidence = self.result.evidence
         self.assertEqual(evidence["opening_occurrence_grounding_count"], 8)
-        self.assertEqual(evidence["unique_physical_opening_count"], 4)
+        self.assertEqual(
+            evidence["unique_physical_opening_count"],
+            len(self.case.proof.opening_table),
+        )
+        self.assertLess(evidence["unique_physical_opening_count"], 8)
         self.assertEqual(
             tuple(evidence["ordered_grounding_coordinates"]),
             (
@@ -327,14 +338,22 @@ class RelationGroundingPositiveTest(unittest.TestCase):
             self.assertNotIn(forbidden, rendered)
         self.assertEqual(
             tuple(inspect.signature(check_fri_relation_grounding).parameters),
-            ("request", "trace", "public_inputs", "proof"),
+            (
+                "request",
+                "relation_initial_oracle",
+                "commitment_receipt",
+                "composition_receipt",
+                "public_inputs",
+                "proof",
+            ),
         )
         self.assertEqual(
             {item.name for item in fields(FriRelationGroundingRequest)},
             {
                 "statement",
                 "initial_oracle_binding",
-                "commitment_compilation_id",
+                "commitment_receipt_id",
+                "construction_composition_receipt_id",
                 "construction_inputs",
                 "cap_occurrences",
             },
@@ -348,14 +367,32 @@ class ExactGroundingNegativeTest(unittest.TestCase):
     def _check(
         self,
         request: FriRelationGroundingRequest | None = None,
-        trace: NativeFriTrace | None = None,
+        relation_initial_oracle: LogicalOracle | None = None,
+        commitment_receipt: CheckedNativeToCommittedFreshRun | None = None,
+        composition_receipt: CheckedConstructionComposition | None = None,
     ) -> CheckResult:
-        return check_fri_relation_grounding(
+        admission = check_fri_relation_grounding(
             self.case.request if request is None else request,
-            self.case.trace if trace is None else trace,
+            (
+                self.case.relation_initial_oracle
+                if relation_initial_oracle is None
+                else relation_initial_oracle
+            ),
+            (
+                self.case.commitment_receipt
+                if commitment_receipt is None
+                else commitment_receipt
+            ),
+            (
+                self.case.composition_receipt
+                if composition_receipt is None
+                else composition_receipt
+            ),
             self.case.public_inputs,
             self.case.proof,
         )
+        self.assertIsNone(admission.checked_grounding)
+        return admission.result
 
     def test_statement_substitution_refuses_before_execution(self) -> None:
         statement = RelationStatementOccurrence(
@@ -365,7 +402,9 @@ class ExactGroundingNegativeTest(unittest.TestCase):
         )
         request = canonical_relation_grounding_request(
             statement,
-            self.case.trace,
+            self.case.relation_initial_oracle,
+            self.case.commitment_receipt,
+            self.case.composition_receipt,
             self.case.public_inputs,
             self.case.proof,
         )
@@ -382,7 +421,9 @@ class ExactGroundingNegativeTest(unittest.TestCase):
         statement = RelationStatementOccurrence(other_profile_id, 0, STATEMENT)
         request = canonical_relation_grounding_request(
             statement,
-            self.case.trace,
+            self.case.relation_initial_oracle,
+            self.case.commitment_receipt,
+            self.case.composition_receipt,
             self.case.public_inputs,
             self.case.proof,
         )
@@ -422,14 +463,14 @@ class ExactGroundingNegativeTest(unittest.TestCase):
         self.assertIs(result.outcome, OutcomeClass.REFUSED)
         self.assertEqual(result.code, "FRI-IOR-RELATION-022")
 
-    def test_wrong_construction_declaration_is_kind_mismatch(self) -> None:
+    def test_inert_receipt_id_cannot_replace_the_live_capability(self) -> None:
         wrong = semantic_id(
-            "commitment-compilation-declaration",
-            "fri-ior.construction.commitment-compilation.v1",
+            "checked-native-to-committed-fresh-execution",
+            "fri-ior.checked-native-to-committed-fresh-execution.v1",
             {"different": True},
         )
         result = self._check(
-            request=replace(self.case.request, commitment_compilation_id=wrong)
+            request=replace(self.case.request, commitment_receipt_id=wrong)
         )
         self.assertIs(result.outcome, OutcomeClass.KIND_MISMATCH)
         self.assertEqual(result.code, "FRI-IOR-RELATION-024")
@@ -459,102 +500,113 @@ class ExactGroundingNegativeTest(unittest.TestCase):
                 self.assertIs(result.outcome, OutcomeClass.REFUSED)
                 self.assertEqual(result.code, code)
 
-    def test_native_query_occurrence_substitution_refuses(self) -> None:
-        draws = list(self.case.trace.query_draws)
-        changed_index = (draws[0].initial_domain_index + 1) % D0.order
-        draws[0] = RandomQueryDraw(draws[0].ordinal, changed_index)
-        changed_trace = replace(self.case.trace, query_draws=tuple(draws))
-        changed_request = canonical_relation_grounding_request(
-            self.case.statement,
-            changed_trace,
-            self.case.public_inputs,
-            self.case.proof,
-        )
-        result = self._check(request=changed_request, trace=changed_trace)
-        self.assertIs(result.outcome, OutcomeClass.REFUSED)
-        self.assertEqual(result.code, "FRI-IOR-RELATION-029")
-
-    def test_distinct_valid_fold_challenges_refuse_cross_run_grounding(self) -> None:
-        changed_trace = derive_honest_native_trace(
-            self.case.source_coefficients,
-            self.case.transcript.beta0 + _fp2(1),
-            self.case.transcript.beta1,
-            tuple(
-                occurrence.initial_domain_index
-                for occurrence in self.case.transcript.query_occurrences
-            ),
-            ResourceCounter(),
+    def test_relation_oracle_is_supplied_independently_from_the_trace(self) -> None:
+        entries = list(self.case.relation_initial_oracle.entries)
+        entries[-1] = OracleEntry(entries[-1].point, entries[-1].value + _fp2(1))
+        changed_oracle = replace(
+            self.case.relation_initial_oracle,
+            entries=tuple(entries),
         )
         changed_request = canonical_relation_grounding_request(
             self.case.statement,
-            changed_trace,
+            changed_oracle,
+            self.case.commitment_receipt,
+            self.case.composition_receipt,
             self.case.public_inputs,
             self.case.proof,
         )
-        result = self._check(request=changed_request, trace=changed_trace)
+        result = self._check(
+            request=changed_request,
+            relation_initial_oracle=changed_oracle,
+        )
         self.assertIs(result.outcome, OutcomeClass.REFUSED)
-        self.assertEqual(result.code, "FRI-IOR-RELATION-027")
+        self.assertEqual(result.code, "FRI-IOR-RELATION-078")
 
-    def test_distinct_valid_terminal_material_refuses_cross_run_grounding(self) -> None:
-        coefficients = list(self.case.source_coefficients)
-        coefficients[0] = coefficients[0] + _fp2(1)
-        changed_trace = derive_honest_native_trace(
-            tuple(coefficients),
+    def test_two_live_receipts_must_form_the_checked_join(self) -> None:
+        changed_coefficients = list(self.case.source_coefficients)
+        changed_coefficients[0] = changed_coefficients[0] + _fp2(1)
+        alternate_material = PrivateFriGenerationMaterial(
+            tuple(changed_coefficients),
+            _salts(0x10, D0.order // 2),
+            _salts(0x40, 4),
+        )
+        query_indices = tuple(
+            occurrence.initial_domain_index
+            for occurrence in self.case.transcript.query_occurrences
+        )
+        alternate_admission = generate_native_to_committed_fresh(
+            alternate_material,
+            STATEMENT,
+            APPLICATION_CONTEXT,
             self.case.transcript.beta0,
             self.case.transcript.beta1,
-            tuple(
-                occurrence.initial_domain_index
-                for occurrence in self.case.transcript.query_occurrences
-            ),
-            ResourceCounter(),
+            query_indices,
         )
-        changed_request = canonical_relation_grounding_request(
+        self.assertIs(
+            alternate_admission.result.outcome,
+            OutcomeClass.AFFIRMATIVE,
+        )
+        self.assertIsNotNone(alternate_admission.checked_receipt)
+        assert alternate_admission.checked_receipt is not None
+        alternate_receipt = alternate_admission.checked_receipt
+        mixed_request = canonical_relation_grounding_request(
             self.case.statement,
-            changed_trace,
+            replace(alternate_receipt.candidate.source_trace.initial_oracle),
+            alternate_receipt,
+            self.case.composition_receipt,
             self.case.public_inputs,
             self.case.proof,
         )
-        result = self._check(request=changed_request, trace=changed_trace)
-        self.assertIs(result.outcome, OutcomeClass.REFUSED)
-        self.assertEqual(result.code, "FRI-IOR-RELATION-028")
-
-    def test_selected_native_answers_must_equal_authenticated_openings(self) -> None:
-        # Add beta0 - X to the source polynomial.  Its first fold is zero, so
-        # O1 and the terminal remain unchanged while every selected O0 pair is
-        # different.  Both per-side verifiers accept; Relations must still
-        # reject the cross-run answer/opening mismatch.
-        coefficients = list(self.case.source_coefficients)
-        coefficients[0] = coefficients[0] + self.case.transcript.beta0
-        coefficients[1] = coefficients[1] - _fp2(1)
-        changed_trace = derive_honest_native_trace(
-            tuple(coefficients),
-            self.case.transcript.beta0,
-            self.case.transcript.beta1,
-            tuple(
-                occurrence.initial_domain_index
-                for occurrence in self.case.transcript.query_occurrences
+        result = self._check(
+            request=mixed_request,
+            relation_initial_oracle=replace(
+                alternate_receipt.candidate.source_trace.initial_oracle
             ),
-            ResourceCounter(),
+            commitment_receipt=alternate_receipt,
         )
-        changed_request = canonical_relation_grounding_request(
-            self.case.statement,
-            changed_trace,
-            self.case.public_inputs,
-            self.case.proof,
-        )
-        result = self._check(request=changed_request, trace=changed_trace)
         self.assertIs(result.outcome, OutcomeClass.REFUSED)
-        self.assertEqual(result.code, "FRI-IOR-RELATION-054")
+        self.assertEqual(result.code, "FRI-IOR-RELATION-074")
 
     def test_wrong_carrier_kind_is_malformed(self) -> None:
-        result = check_fri_relation_grounding(
+        admission = check_fri_relation_grounding(
             self.case.request.identity,
-            self.case.trace,
+            self.case.relation_initial_oracle,
+            self.case.commitment_receipt,
+            self.case.composition_receipt,
             self.case.public_inputs,
             self.case.proof,
         )
+        result = admission.result
+        self.assertIsNone(admission.checked_grounding)
         self.assertIs(result.outcome, OutcomeClass.MALFORMED)
         self.assertEqual(result.code, "FRI-IOR-RELATION-055")
+
+    def test_receipt_ids_are_not_accepted_as_live_receipts(self) -> None:
+        candidates = (
+            (
+                self.case.commitment_receipt.identity,
+                self.case.composition_receipt,
+                "FRI-IOR-RELATION-057",
+            ),
+            (
+                self.case.commitment_receipt,
+                self.case.composition_receipt.identity,
+                "FRI-IOR-RELATION-058",
+            ),
+        )
+        for commitment, composition, code in candidates:
+            with self.subTest(code=code):
+                admission = check_fri_relation_grounding(
+                    self.case.request,
+                    self.case.relation_initial_oracle,
+                    commitment,
+                    composition,
+                    self.case.public_inputs,
+                    self.case.proof,
+                )
+                self.assertIs(admission.result.outcome, OutcomeClass.MALFORMED)
+                self.assertEqual(admission.result.code, code)
+                self.assertIsNone(admission.checked_grounding)
 
 
 class RepresentationClassificationTest(unittest.TestCase):
@@ -656,14 +708,17 @@ class OuterRelationBoundaryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.case = _build_case()
-        cls.grounding = check_fri_relation_grounding(
+        cls.admission = check_fri_relation_grounding(
             cls.case.request,
-            cls.case.trace,
+            cls.case.relation_initial_oracle,
+            cls.case.commitment_receipt,
+            cls.case.composition_receipt,
             cls.case.public_inputs,
             cls.case.proof,
         )
-        if cls.grounding.subject is None:
-            raise AssertionError(cls.grounding.to_term())
+        if cls.admission.checked_grounding is None:
+            raise AssertionError(cls.admission.result.to_term())
+        cls.grounding = cls.admission.checked_grounding
         cls.outer_relation_id = semantic_id(
             "outer-computation-relation",
             "fri-ior.test.outer-computation-relation.v1",
@@ -676,7 +731,7 @@ class OuterRelationBoundaryTest(unittest.TestCase):
         for premise in OuterInferencePremise:
             with self.subTest(premise=premise.value):
                 request = OuterRelationInferenceRequest(
-                    self.grounding.subject,
+                    self.grounding,
                     self.outer_relation_id,
                     premise,
                 )
@@ -684,13 +739,30 @@ class OuterRelationBoundaryTest(unittest.TestCase):
                 self.assertIs(result.outcome, OutcomeClass.REFUSED)
                 self.assertEqual(result.code, "FRI-IOR-RELATION-069")
 
-    def test_wrong_kind_grounding_cannot_be_used_as_an_inference_premise(self) -> None:
-        request = OuterRelationInferenceRequest(
-            self.case.trace.identity,
-            self.outer_relation_id,
+    def test_id_shaped_pseudo_grounding_is_rejected_at_formation(self) -> None:
+        pseudo = semantic_id(
+            "checked-fri-relation-grounding",
+            "fri-ior.relations.checked-grounding.v2",
+            {"looks": "plausible"},
+        )
+        with self.assertRaises(ModelFailure) as caught:
+            OuterRelationInferenceRequest(
+                pseudo,
+                self.outer_relation_id,
+                OuterInferencePremise.ACCEPTING_EXECUTION,
+            )
+        self.assertEqual(caught.exception.code, "FRI-IOR-RELATION-060")
+
+    def test_defensive_inference_boundary_rechecks_the_live_capability(self) -> None:
+        forged = object.__new__(OuterRelationInferenceRequest)
+        object.__setattr__(forged, "grounding", self.case.trace.identity)
+        object.__setattr__(forged, "outer_relation_id", self.outer_relation_id)
+        object.__setattr__(
+            forged,
+            "premise",
             OuterInferencePremise.ACCEPTING_EXECUTION,
         )
-        result = infer_outer_computation_relation(request)
+        result = infer_outer_computation_relation(forged)
         self.assertIs(result.outcome, OutcomeClass.KIND_MISMATCH)
         self.assertEqual(result.code, "FRI-IOR-RELATION-068")
 
@@ -757,6 +829,33 @@ class RelationCarrierFormationTest(unittest.TestCase):
                     "portable-inert-record-no-live-check-capability",
                 )
                 self.assertTrue(record.identity.subject_kind.endswith("-record"))
+
+    def test_cap_reference_wrong_layer_has_a_typed_failure(self) -> None:
+        ids = tuple(self._inert_id(str(index)) for index in range(2))
+        with self.assertRaises(ModelFailure) as caught:
+            CapOccurrenceReference(
+                "initial",
+                "cap[0]",
+                ids[0],
+                ids[1],
+            )
+        self.assertIs(caught.exception.outcome, OutcomeClass.MALFORMED)
+        self.assertEqual(caught.exception.code, "FRI-IOR-RELATION-013")
+
+    def test_checked_grounding_cannot_be_directly_issued(self) -> None:
+        with self.assertRaises(ModelFailure) as caught:
+            CheckedFriRelationGrounding(
+                None,
+                None,
+                None,
+                None,
+                (),
+                None,
+                {},
+                _token=object(),
+            )
+        self.assertIs(caught.exception.outcome, OutcomeClass.MISSING_DEPENDENCY)
+        self.assertEqual(caught.exception.code, "FRI-IOR-RELATION-079")
 
 
 if __name__ == "__main__":

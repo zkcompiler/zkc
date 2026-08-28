@@ -220,6 +220,34 @@ class SourceAndTheoremQuestionTest(unittest.TestCase):
             source = self.sources[name]
             self.assertEqual(source.artifact_content_id, ArtifactContentId(digest))
             self.assertIsNone(source.to_term()["truth_discharge"])
+        self.assertEqual(
+            self.sources["fri-fs-2023-1071-r7"].locators,
+            (
+                "Theorem 3.15",
+                "Theorem 4.1",
+                "Corollary 4.3",
+                "Section 5.2",
+                "Theorem 4.2",
+                "Corollary 4.4",
+                "Section 5.7 Algorithm 1",
+                "Theorem 5.11",
+            ),
+        )
+
+    def test_current_core_is_locally_refuted_as_algorithm_one_instance(self) -> None:
+        question = self.questions["direct-fri-round-by-round"]
+        correspondence = next(
+            item
+            for item in question.obligations
+            if item.name == "protocol-correspondence"
+        )
+        self.assertIs(
+            correspondence.kind,
+            ObligationKind.PROTOCOL_CORRESPONDENCE,
+        )
+        self.assertIs(correspondence.status, ObligationStatus.LOCALLY_REFUTED)
+        self.assertIn("two-fold", correspondence.reason)
+        self.assertIn("three-fold", correspondence.reason)
 
     def test_source_anchor_does_not_accept_a_semantic_identity_as_artifact(
         self,
@@ -598,7 +626,7 @@ class QuantitativeExpressionTest(unittest.TestCase):
         with self.assertRaises(ModelFailure):
             Rational(1, 0)
 
-    def test_f97_substitution_is_classified_vacuous_without_theorem_claim(self) -> None:
+    def test_f97_extension_substitution_is_vacuous_without_theorem_claim(self) -> None:
         expression = QuantitativeBoundExpression.for_law(
             BoundLaw.DIRECT_FRI_ROUND_BY_ROUND
         )
@@ -609,7 +637,16 @@ class QuantitativeExpressionTest(unittest.TestCase):
             evaluation.algebra_profile_id,
             EXACT_ALGEBRA_PROFILE.identity,
         )
+        self.assertEqual(dict(evaluation.exact_parameters)["field_size"], 9409)
         self.assertIn(
+            "first-term-equals-(3294172/28227)*sqrt(2)",
+            evaluation.derived_facts,
+        )
+        self.assertIn(
+            "first-term-is-strictly-between-165-and-166-by-exact-integer-squaring",
+            evaluation.derived_facts,
+        )
+        self.assertNotIn(
             "first-term-is-greater-than-16009-by-exact-integer-squaring",
             evaluation.derived_facts,
         )

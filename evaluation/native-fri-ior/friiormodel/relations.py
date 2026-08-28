@@ -26,6 +26,10 @@ from types import MappingProxyType
 from typing import Any, ClassVar
 
 from .committed import verify_committed_fri
+from .constructions import (
+    CheckedConstructionComposition,
+    CheckedNativeToCommittedFreshRun,
+)
 from .native import (
     INITIAL_ORACLE_NAME,
     PROVER_ORACLE_NAME,
@@ -40,7 +44,6 @@ from .native import (
 )
 from .profile import D0, EXACT_PROFILE, admit_exact_profile
 from .proof import CommittedFriPublicInputs, PublicFriProof
-from .subjects import COMMITMENT_COMPILATION_DECLARATION
 from .terms import (
     CheckResult,
     ModelFailure,
@@ -451,7 +454,8 @@ class FriRelationGroundingRequest:
 
     statement: RelationStatementOccurrence
     initial_oracle_binding: InitialOracleMaterialBinding
-    commitment_compilation_id: SemanticId
+    commitment_receipt_id: SemanticId
+    construction_composition_receipt_id: SemanticId
     construction_inputs: tuple[ConstructionInputReference, ...]
     cap_occurrences: tuple[CapOccurrenceReference, ...]
 
@@ -471,12 +475,19 @@ class FriRelationGroundingRequest:
                 "FRI-IOR-RELATION-017",
                 "a grounding request requires an InitialOracleMaterialBinding",
             )
-        _require_semantic_id(
-            self.commitment_compilation_id,
-            boundary="relations:grounding-request-formation",
-            code="FRI-IOR-RELATION-018",
-            label="commitment_compilation_id",
-        )
+        for value, label in (
+            (self.commitment_receipt_id, "commitment_receipt_id"),
+            (
+                self.construction_composition_receipt_id,
+                "construction_composition_receipt_id",
+            ),
+        ):
+            _require_semantic_id(
+                value,
+                boundary="relations:grounding-request-formation",
+                code="FRI-IOR-RELATION-018",
+                label=label,
+            )
         if (
             type(self.construction_inputs) is not tuple
             or len(self.construction_inputs) != 2
@@ -504,7 +515,10 @@ class FriRelationGroundingRequest:
             "initial_oracle_binding_id": _semantic_ref(
                 self.initial_oracle_binding.identity
             ),
-            "commitment_compilation_id": _semantic_ref(self.commitment_compilation_id),
+            "commitment_receipt_id": _semantic_ref(self.commitment_receipt_id),
+            "construction_composition_receipt_id": _semantic_ref(
+                self.construction_composition_receipt_id
+            ),
             "construction_inputs": [
                 item.to_term() for item in self.construction_inputs
             ],
@@ -512,6 +526,7 @@ class FriRelationGroundingRequest:
             "requested_correspondence": (
                 "exact-selected-run-openings-not-full-compiler-commutation"
             ),
+            "receipt_id_authority": "inert-until-live-capabilities-are-checked",
         }
 
     @property
@@ -712,21 +727,203 @@ class FriTerminalResidualBoundary:
         )
 
 
+_GROUNDING_RECEIPT_TOKEN = object()
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class CheckedFriRelationGrounding:
+    """Live checker-issued capability for one exact finite grounding.
+
+    The contained occurrence and residual records remain portable and inert.
+    Only an instance issued with the private checker token is accepted as
+    checked correspondence evidence by package-local consumers.
+    """
+
+    request_id: SemanticId
+    statement_grounding_id: SemanticId
+    initial_oracle_binding_id: SemanticId
+    relation_initial_oracle_material_id: SemanticId
+    commitment_receipt_id: SemanticId
+    construction_composition_receipt_id: SemanticId
+    construction_input_occurrence_ids: tuple[SemanticId, ...]
+    cap_occurrence_ids: tuple[SemanticId, ...]
+    opening_occurrence_groundings: tuple[OpeningOccurrenceGrounding, ...]
+    terminal_residual_boundary: FriTerminalResidualBoundary
+    resource_usage: tuple[tuple[str, int], ...]
+
+    def __init__(
+        self,
+        request: FriRelationGroundingRequest,
+        relation_initial_oracle_material_id: SemanticId,
+        commitment_receipt: CheckedNativeToCommittedFreshRun,
+        composition_receipt: CheckedConstructionComposition,
+        opening_occurrence_groundings: tuple[OpeningOccurrenceGrounding, ...],
+        terminal_residual_boundary: FriTerminalResidualBoundary,
+        resource_usage: dict[str, int],
+        *,
+        _token: object,
+    ) -> None:
+        if _token is not _GROUNDING_RECEIPT_TOKEN:
+            raise ModelFailure(
+                OutcomeClass.MISSING_DEPENDENCY,
+                "relations:checked-grounding-formation",
+                "FRI-IOR-RELATION-079",
+                "a checked relation grounding requires the authoritative checker",
+            )
+        values = {
+            "request_id": request.identity,
+            "statement_grounding_id": request.statement.identity,
+            "initial_oracle_binding_id": request.initial_oracle_binding.identity,
+            "relation_initial_oracle_material_id": (
+                relation_initial_oracle_material_id
+            ),
+            "commitment_receipt_id": commitment_receipt.identity,
+            "construction_composition_receipt_id": composition_receipt.identity,
+        }
+        for name, value in values.items():
+            object.__setattr__(self, name, value)
+        object.__setattr__(
+            self,
+            "construction_input_occurrence_ids",
+            tuple(item.source_occurrence_id for item in request.construction_inputs),
+        )
+        object.__setattr__(
+            self,
+            "cap_occurrence_ids",
+            tuple(item.cap_occurrence_id for item in request.cap_occurrences),
+        )
+        object.__setattr__(
+            self,
+            "opening_occurrence_groundings",
+            opening_occurrence_groundings,
+        )
+        object.__setattr__(
+            self,
+            "terminal_residual_boundary",
+            terminal_residual_boundary,
+        )
+        object.__setattr__(
+            self,
+            "resource_usage",
+            tuple(sorted(resource_usage.items())),
+        )
+
+    @property
+    def occurrence_map_identity(self) -> SemanticId:
+        """Identity of the exact checked selected-occurrence correspondence."""
+
+        return semantic_id(
+            "fri-opening-occurrence-map",
+            "fri-ior.relations.opening-occurrence-map.v1",
+            {
+                "request_id": _semantic_ref(self.request_id),
+                "ordered_groundings": [
+                    item.to_term() for item in self.opening_occurrence_groundings
+                ],
+            },
+        )
+
+    def semantic_term(self) -> dict[str, Any]:
+        return {
+            "schema": GROUNDING_RESULT_SCHEMA,
+            "request_id": _semantic_ref(self.request_id),
+            "statement_grounding_id": _semantic_ref(self.statement_grounding_id),
+            "initial_oracle_binding_id": _semantic_ref(
+                self.initial_oracle_binding_id
+            ),
+            "relation_initial_oracle_material_id": _semantic_ref(
+                self.relation_initial_oracle_material_id
+            ),
+            "live_receipt_joins": {
+                "commitment_receipt_id": _semantic_ref(
+                    self.commitment_receipt_id
+                ),
+                "construction_composition_receipt_id": _semantic_ref(
+                    self.construction_composition_receipt_id
+                ),
+            },
+            "construction_input_occurrence_ids": [
+                _semantic_ref(identity)
+                for identity in self.construction_input_occurrence_ids
+            ],
+            "cap_occurrence_ids": [
+                _semantic_ref(identity) for identity in self.cap_occurrence_ids
+            ],
+            "opening_occurrence_map_id": _semantic_ref(
+                self.occurrence_map_identity
+            ),
+            "opening_occurrence_groundings": [
+                item.to_term() for item in self.opening_occurrence_groundings
+            ],
+            "terminal_residual_boundary": (
+                self.terminal_residual_boundary.to_term()
+            ),
+            "construction_relation_class": (
+                RepresentationClass.NON_ISOMORPHIC_CONSTRUCTION_RELATION.value
+            ),
+            "scope": "one-checked-finite-execution-grounding",
+            "nonclaims": [
+                "general-or-full-commitment-compilation",
+                "statement-to-oracle-derivation-predicate",
+                "commitment-binding-hiding-or-extractability",
+                "fri-proximity-or-proximity-preservation",
+                "outer-computation-relation",
+                "protocol-security-theorem",
+            ],
+        }
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "semantic_grounding": self.semantic_term(),
+            "validation": {
+                "resource_usage": dict(self.resource_usage),
+                "authority": "live-private-token-checker-issued-capability",
+            },
+        }
+
+    @property
+    def identity(self) -> SemanticId:
+        return semantic_id(
+            "checked-fri-relation-grounding",
+            "fri-ior.relations.checked-grounding.v2",
+            self.semantic_term(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FriRelationGroundingAdmission:
+    """Typed result plus a live grounding capability only on affirmation."""
+
+    result: CheckResult
+    checked_grounding: CheckedFriRelationGrounding | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.result, CheckResult):
+            raise TypeError("relation grounding admission requires a CheckResult")
+        if self.result.outcome is OutcomeClass.AFFIRMATIVE:
+            if type(self.checked_grounding) is not CheckedFriRelationGrounding:
+                raise TypeError(
+                    "affirmative relation grounding requires a checked capability"
+                )
+        elif self.checked_grounding is not None:
+            raise TypeError("failed relation grounding cannot carry a capability")
+
+
 @dataclass(frozen=True, slots=True)
 class OuterRelationInferenceRequest:
     """One deliberately insufficient attempt to infer an outer relation."""
 
-    grounding_id: SemanticId
+    grounding: CheckedFriRelationGrounding
     outer_relation_id: SemanticId
     premise: OuterInferencePremise
 
     def __post_init__(self) -> None:
-        _require_semantic_id(
-            self.grounding_id,
-            boundary="relations:outer-inference-formation",
-            code="FRI-IOR-RELATION-060",
-            label="grounding_id",
-        )
+        if type(self.grounding) is not CheckedFriRelationGrounding:
+            raise malformed(
+                "relations:outer-inference-formation",
+                "FRI-IOR-RELATION-060",
+                "outer inference requires a live checked grounding capability",
+            )
         _require_semantic_id(
             self.outer_relation_id,
             boundary="relations:outer-inference-formation",
@@ -740,14 +937,29 @@ class OuterRelationInferenceRequest:
                 "an outer inference request requires a typed premise",
             )
 
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "checked_grounding_id": _semantic_ref(self.grounding.identity),
+            "outer_relation_id": _semantic_ref(self.outer_relation_id),
+            "premise": self.premise.value,
+            "requested_inference": "deliberately-unsupported",
+        }
+
 
 def canonical_relation_grounding_request(
     statement: object,
-    trace: object,
+    relation_initial_oracle: object,
+    commitment_receipt: object,
+    composition_receipt: object,
     public_inputs: object,
     proof: object,
 ) -> FriRelationGroundingRequest:
-    """Form inert exact coordinates; the checker recomputes every coordinate."""
+    """Form inert coordinates from explicit relation and receipt inputs.
+
+    The two receipt identities embedded here have no authority by themselves.
+    The checker requires the corresponding live issued objects and recomputes
+    their join before issuing a grounding capability.
+    """
 
     if type(statement) is not RelationStatementOccurrence:
         raise malformed(
@@ -755,26 +967,39 @@ def canonical_relation_grounding_request(
             "FRI-IOR-RELATION-063",
             "request construction requires a RelationStatementOccurrence",
         )
-    if type(trace) is not NativeFriTrace:
+    if type(relation_initial_oracle) is not LogicalOracle:
         raise malformed(
             "relations:grounding-request-construction",
             "FRI-IOR-RELATION-064",
-            "request construction requires a NativeFriTrace",
+            "request construction requires a relation-side LogicalOracle",
+        )
+    if type(commitment_receipt) is not CheckedNativeToCommittedFreshRun:
+        raise malformed(
+            "relations:grounding-request-construction",
+            "FRI-IOR-RELATION-065",
+            "request construction requires an issued commitment receipt",
+        )
+    if type(composition_receipt) is not CheckedConstructionComposition:
+        raise malformed(
+            "relations:grounding-request-construction",
+            "FRI-IOR-RELATION-066",
+            "request construction requires an issued composition receipt",
         )
     if type(public_inputs) is not CommittedFriPublicInputs:
         raise malformed(
             "relations:grounding-request-construction",
-            "FRI-IOR-RELATION-065",
+            "FRI-IOR-RELATION-070",
             "request construction requires committed public inputs",
         )
     if type(proof) is not PublicFriProof:
         raise malformed(
             "relations:grounding-request-construction",
-            "FRI-IOR-RELATION-066",
+            "FRI-IOR-RELATION-071",
             "request construction requires a public FRI proof",
         )
 
-    initial_material = logical_oracle_material_id(trace.initial_oracle)
+    trace = commitment_receipt.candidate.source_trace
+    initial_material = logical_oracle_material_id(relation_initial_oracle)
     initial_binding = InitialOracleMaterialBinding(
         statement.identity,
         0,
@@ -806,7 +1031,8 @@ def canonical_relation_grounding_request(
     return FriRelationGroundingRequest(
         statement,
         initial_binding,
-        COMMITMENT_COMPILATION_DECLARATION.identity,
+        commitment_receipt.identity,
+        composition_receipt.identity,
         construction_inputs,
         cap_occurrences,
     )
@@ -1052,115 +1278,209 @@ def _ground_opening_occurrences(
     return tuple(records)
 
 
+def _failed_grounding(result: CheckResult) -> FriRelationGroundingAdmission:
+    return FriRelationGroundingAdmission(result, None)
+
+
 def check_fri_relation_grounding(
     request: object,
-    trace: object,
+    relation_initial_oracle: object,
+    commitment_receipt: object,
+    composition_receipt: object,
     public_inputs: object,
     proof: object,
-) -> CheckResult:
-    """Check the exact finite Statement/Oracle/cap/run grounding seam."""
+) -> FriRelationGroundingAdmission:
+    """Check one finite grounding using two live construction capabilities."""
 
     boundary = "relations:fri-grounding"
     if type(request) is not FriRelationGroundingRequest:
-        return CheckResult(
-            OutcomeClass.MALFORMED,
-            boundary,
-            "FRI-IOR-RELATION-055",
-            "FRI grounding requires a FriRelationGroundingRequest",
+        return _failed_grounding(
+            CheckResult(
+                OutcomeClass.MALFORMED,
+                boundary,
+                "FRI-IOR-RELATION-055",
+                "FRI grounding requires a FriRelationGroundingRequest",
+            )
         )
-    if type(trace) is not NativeFriTrace:
-        return CheckResult(
-            OutcomeClass.MALFORMED,
-            boundary,
-            "FRI-IOR-RELATION-056",
-            "FRI grounding requires a NativeFriTrace",
+    if type(relation_initial_oracle) is not LogicalOracle:
+        return _failed_grounding(
+            CheckResult(
+                OutcomeClass.MALFORMED,
+                boundary,
+                "FRI-IOR-RELATION-056",
+                "FRI grounding requires a relation-side LogicalOracle",
+            )
+        )
+    if type(commitment_receipt) is not CheckedNativeToCommittedFreshRun:
+        return _failed_grounding(
+            CheckResult(
+                OutcomeClass.MALFORMED,
+                boundary,
+                "FRI-IOR-RELATION-057",
+                "FRI grounding requires an issued commitment receipt",
+            )
+        )
+    if type(composition_receipt) is not CheckedConstructionComposition:
+        return _failed_grounding(
+            CheckResult(
+                OutcomeClass.MALFORMED,
+                boundary,
+                "FRI-IOR-RELATION-058",
+                "FRI grounding requires an issued construction-composition receipt",
+            )
         )
     if type(public_inputs) is not CommittedFriPublicInputs:
-        return CheckResult(
-            OutcomeClass.MALFORMED,
-            boundary,
-            "FRI-IOR-RELATION-057",
-            "FRI grounding requires committed public inputs",
+        return _failed_grounding(
+            CheckResult(
+                OutcomeClass.MALFORMED,
+                boundary,
+                "FRI-IOR-RELATION-072",
+                "FRI grounding requires committed public inputs",
+            )
         )
     if type(proof) is not PublicFriProof:
-        return CheckResult(
-            OutcomeClass.MALFORMED,
-            boundary,
-            "FRI-IOR-RELATION-058",
-            "FRI grounding requires a public FRI proof",
+        return _failed_grounding(
+            CheckResult(
+                OutcomeClass.MALFORMED,
+                boundary,
+                "FRI-IOR-RELATION-073",
+                "FRI grounding requires a public FRI proof",
+            )
         )
 
     try:
         resources = ResourceCounter()
+        trace = commitment_receipt.candidate.source_trace
+        target_run = commitment_receipt.target_run
         profile_admission = admit_exact_profile(public_inputs.profile)
         if profile_admission.outcome is not OutcomeClass.AFFIRMATIVE:
-            return profile_admission
+            return _failed_grounding(profile_admission)
         if request.statement.profile_id != EXACT_PROFILE.identity:
-            return unsupported(
-                "relations:statement-grounding",
-                "FRI-IOR-RELATION-020",
-                "the relation statement names a profile outside this finite case",
+            return _failed_grounding(
+                unsupported(
+                    "relations:statement-grounding",
+                    "FRI-IOR-RELATION-020",
+                    "the relation statement names a profile outside this finite case",
+                )
             )
-        if encode_term(request.statement.value) != encode_term(public_inputs.statement):
-            return refused(
-                "relations:statement-grounding",
-                "FRI-IOR-RELATION-021",
-                "the relation Statement occurrence and transcript Statement differ",
+        if encode_term(request.statement.value) != encode_term(
+            public_inputs.statement
+        ):
+            return _failed_grounding(
+                refused(
+                    "relations:statement-grounding",
+                    "FRI-IOR-RELATION-021",
+                    "the relation Statement occurrence and transcript Statement differ",
+                )
             )
 
-        expected_initial_material = logical_oracle_material_id(trace.initial_oracle)
-        binding = request.initial_oracle_binding
-        if binding.relation_statement_id != request.statement.identity:
-            return refused(
-                "relations:initial-oracle-grounding",
-                "FRI-IOR-RELATION-022",
-                "the material binding names a different relation Statement occurrence",
+        if (
+            request.commitment_receipt_id != commitment_receipt.identity
+            or request.construction_composition_receipt_id
+            != composition_receipt.identity
+        ):
+            return _failed_grounding(
+                kind_mismatch(
+                    "relations:construction-grounding",
+                    "FRI-IOR-RELATION-024",
+                    "the inert request IDs do not name the supplied live receipts",
+                )
+            )
+        if composition_receipt.commitment_receipt_id != commitment_receipt.identity:
+            return _failed_grounding(
+                refused(
+                    "relations:construction-grounding",
+                    "FRI-IOR-RELATION-074",
+                    "the two issued construction capabilities do not form one join",
+                )
             )
         if (
-            trace.initial_oracle.name != INITIAL_ORACLE_NAME
-            or trace.initial_oracle.domain != D0
-            or trace.initial_oracle.origin is not OracleOrigin.INITIAL_ORACLE
-            or trace.initial_oracle.publication_mode
-            is not OraclePublicationMode.LOGICAL_ACCESS
-            or binding.oracle_material_id != expected_initial_material
+            composition_receipt.fiat_shamir_public_inputs_id
+            != public_inputs.identity
+            or composition_receipt.fiat_shamir_public_proof_id != proof.identity
         ):
-            return refused(
-                "relations:initial-oracle-grounding",
-                "FRI-IOR-RELATION-023",
-                "the live initial logical-oracle material does not match its binding",
+            return _failed_grounding(
+                refused(
+                    "relations:construction-grounding",
+                    "FRI-IOR-RELATION-075",
+                    "the composition receipt anchors different FS public artifacts",
+                )
+            )
+        if (
+            encode_term(target_run.statement) != encode_term(public_inputs.statement)
+            or encode_term(target_run.application_context)
+            != encode_term(public_inputs.application_context)
+            or target_run.cap0 != proof.cap0
+            or target_run.cap1 != proof.cap1
+            or target_run.terminal_coefficients != proof.terminal_coefficients
+            or target_run.opening_table != proof.opening_table
+            or target_run.occurrence_selectors != proof.occurrence_selectors
+        ):
+            return _failed_grounding(
+                refused(
+                    "relations:construction-grounding",
+                    "FRI-IOR-RELATION-076",
+                    "the checked Fresh target and the FS public run differ",
+                )
             )
 
-        if request.commitment_compilation_id != (
-            COMMITMENT_COMPILATION_DECLARATION.identity
-        ):
-            return kind_mismatch(
-                "relations:construction-grounding",
-                "FRI-IOR-RELATION-024",
-                "the request names a different commitment-construction declaration",
+        binding = request.initial_oracle_binding
+        if binding.relation_statement_id != request.statement.identity:
+            return _failed_grounding(
+                refused(
+                    "relations:initial-oracle-grounding",
+                    "FRI-IOR-RELATION-022",
+                    "the material binding names a different relation Statement occurrence",
+                )
             )
+        relation_material_id = logical_oracle_material_id(relation_initial_oracle)
+        if (
+            relation_initial_oracle.name != INITIAL_ORACLE_NAME
+            or relation_initial_oracle.domain != D0
+            or relation_initial_oracle.origin is not OracleOrigin.INITIAL_ORACLE
+            or relation_initial_oracle.publication_mode
+            is not OraclePublicationMode.LOGICAL_ACCESS
+            or binding.oracle_material_id != relation_material_id
+        ):
+            return _failed_grounding(
+                refused(
+                    "relations:initial-oracle-grounding",
+                    "FRI-IOR-RELATION-023",
+                    "the separately supplied relation Oracle does not match its binding",
+                )
+            )
+        if relation_material_id != logical_oracle_material_id(trace.initial_oracle):
+            return _failed_grounding(
+                refused(
+                    "relations:initial-oracle-grounding",
+                    "FRI-IOR-RELATION-078",
+                    "the relation Oracle and checked construction input differ",
+                )
+            )
+
         if request.construction_inputs != _expected_construction_inputs(trace):
-            return refused(
-                "relations:construction-grounding",
-                "FRI-IOR-RELATION-025",
-                "the source construction-input occurrence set is not exact",
+            return _failed_grounding(
+                refused(
+                    "relations:construction-grounding",
+                    "FRI-IOR-RELATION-025",
+                    "the source construction-input occurrence set is not exact",
+                )
             )
         if request.cap_occurrences != _expected_cap_occurrences(proof):
-            return refused(
-                "relations:cap-grounding",
-                "FRI-IOR-RELATION-026",
-                "the target cap-publication occurrence set is not exact",
+            return _failed_grounding(
+                refused(
+                    "relations:cap-grounding",
+                    "FRI-IOR-RELATION-026",
+                    "the target cap-publication occurrence set is not exact",
+                )
             )
 
         native_result = verify_native_trace(trace, resources)
         if native_result.outcome is not OutcomeClass.AFFIRMATIVE:
-            return native_result
-        committed_result = verify_committed_fri(
-            public_inputs,
-            proof,
-            resources,
-        )
+            return _failed_grounding(native_result)
+        committed_result = verify_committed_fri(public_inputs, proof, resources)
         if committed_result.outcome is not OutcomeClass.AFFIRMATIVE:
-            return committed_result
+            return _failed_grounding(committed_result)
 
         transcript = derive_fiat_shamir_transcript(
             public_inputs.transcript_plan,
@@ -1173,34 +1493,48 @@ def check_fri_relation_grounding(
             resources,
         )
         if isinstance(transcript, CheckResult):
-            return transcript
+            return _failed_grounding(transcript)
         if type(transcript) is not FiatShamirTranscript:
             raise RuntimeError("the transcript operation returned a wrong-kind value")
 
-        if trace.beta0 != transcript.beta0 or trace.beta1 != transcript.beta1:
-            return refused(
-                "relations:run-occurrence-grounding",
-                "FRI-IOR-RELATION-027",
-                "native and committed runs do not share the exact fold challenges",
+        if (
+            trace.beta0 != transcript.beta0
+            or trace.beta1 != transcript.beta1
+            or target_run.beta0 != transcript.beta0
+            or target_run.beta1 != transcript.beta1
+        ):
+            return _failed_grounding(
+                refused(
+                    "relations:run-occurrence-grounding",
+                    "FRI-IOR-RELATION-027",
+                    "native, Fresh, and FS runs do not share the fold challenges",
+                )
             )
         if trace.terminal.coefficients != transcript.terminal_coefficients:
-            return refused(
-                "relations:terminal-grounding",
-                "FRI-IOR-RELATION-028",
-                "native and committed runs do not share terminal material",
+            return _failed_grounding(
+                refused(
+                    "relations:terminal-grounding",
+                    "FRI-IOR-RELATION-028",
+                    "native and FS runs do not share terminal material",
+                )
             )
         native_draws = tuple(
             (draw.ordinal, draw.initial_domain_index) for draw in trace.query_draws
         )
-        committed_draws = tuple(
+        fresh_draws = tuple(
+            (draw.ordinal, draw.initial_domain_index) for draw in target_run.query_draws
+        )
+        fs_draws = tuple(
             (draw.ordinal, draw.initial_domain_index)
             for draw in transcript.query_occurrences
         )
-        if native_draws != committed_draws:
-            return refused(
-                "relations:run-occurrence-grounding",
-                "FRI-IOR-RELATION-029",
-                "native and committed runs do not share ordered query occurrences",
+        if native_draws != fresh_draws or native_draws != fs_draws:
+            return _failed_grounding(
+                refused(
+                    "relations:run-occurrence-grounding",
+                    "FRI-IOR-RELATION-029",
+                    "native, Fresh, and FS runs do not share ordered query occurrences",
+                )
             )
 
         opening_groundings = _ground_opening_occurrences(
@@ -1210,7 +1544,7 @@ def check_fri_relation_grounding(
             resources,
         )
         if isinstance(opening_groundings, CheckResult):
-            return opening_groundings
+            return _failed_grounding(opening_groundings)
 
         terminal_material_id = semantic_id(
             "fri-terminal-material-occurrence",
@@ -1230,41 +1564,31 @@ def check_fri_relation_grounding(
             terminal_material_id,
             "Accept",
         )
-        result_subject = semantic_id(
-            "checked-fri-relation-grounding",
-            "fri-ior.relations.checked-grounding.v1",
-            {
-                "schema": GROUNDING_RESULT_SCHEMA,
-                "request_id": _semantic_ref(request.identity),
-                "native_verification_id": _semantic_ref(trace.identity),
-                "committed_verification_id": _semantic_ref(committed_result.subject),
-                "opening_occurrence_groundings": [
-                    grounding.to_term() for grounding in opening_groundings
-                ],
-                "terminal_residual_boundary": residual.to_term(),
-                "construction_relation_class": (
-                    RepresentationClass.NON_ISOMORPHIC_CONSTRUCTION_RELATION.value
-                ),
-                "establishes_full_commitment_compilation": False,
-            },
+        checked = CheckedFriRelationGrounding(
+            request,
+            relation_material_id,
+            commitment_receipt,
+            composition_receipt,
+            opening_groundings,
+            residual,
+            resources.snapshot(),
+            _token=_GROUNDING_RECEIPT_TOKEN,
         )
-        return affirmative(
+        result = affirmative(
             boundary,
             "FRI-IOR-RELATION-102",
             (
-                "the exact Statement, Oracle-material association, cap "
-                "coordinates, and selected run occurrences are grounded"
+                "the exact Statement, independently supplied Oracle material, "
+                "live construction receipts, and selected run occurrences are grounded"
             ),
-            subject=result_subject,
+            subject=checked.identity,
             request_id=request.identity,
             statement_grounding_id=request.statement.identity,
             initial_oracle_binding_id=binding.identity,
-            construction_input_occurrence_ids=[
-                item.source_occurrence_id for item in request.construction_inputs
-            ],
-            cap_occurrence_ids=[
-                item.cap_occurrence_id for item in request.cap_occurrences
-            ],
+            relation_initial_oracle_material_id=relation_material_id,
+            commitment_receipt_id=commitment_receipt.identity,
+            construction_composition_receipt_id=composition_receipt.identity,
+            opening_occurrence_map_id=checked.occurrence_map_identity,
             opening_occurrence_grounding_ids=[
                 grounding.identity for grounding in opening_groundings
             ],
@@ -1282,6 +1606,11 @@ def check_fri_relation_grounding(
             ),
             resource_snapshot=resources.snapshot(),
             resource_scope="one-private-counter-for-the-complete-operation",
+            uses_live_checked_commitment_receipt=True,
+            uses_live_checked_composition_receipt=True,
+            relation_side_oracle_supplied_independently=True,
+            establishes_selected_oracle_material_equality=True,
+            establishes_one_checked_construction_execution=True,
             establishes_statement_to_oracle_predicate=False,
             oracle_material_identity_is_confidential=False,
             oracle_material_identity_leaks_equality=True,
@@ -1292,12 +1621,15 @@ def check_fri_relation_grounding(
             establishes_proximity_preservation=False,
             infers_outer_computation_relation=False,
         )
+        return FriRelationGroundingAdmission(result, checked)
     except ModelFailure as error:
-        return error.to_result()
+        return _failed_grounding(error.to_result())
     except Exception as error:  # pragma: no cover - fault-injection boundary
-        return checker_failure(
-            boundary,
-            f"unexpected relation-grounding failure: {type(error).__name__}",
+        return _failed_grounding(
+            checker_failure(
+                boundary,
+                f"unexpected relation-grounding failure: {type(error).__name__}",
+            )
         )
 
 
@@ -1312,15 +1644,17 @@ def infer_outer_computation_relation(candidate: object) -> CheckResult:
             "FRI-IOR-RELATION-067",
             "outer-relation inference requires a formed inference request",
         )
-    if (
-        candidate.grounding_id.subject_kind != "checked-fri-relation-grounding"
-        or candidate.grounding_id.domain != "fri-ior.relations.checked-grounding.v1"
-        or candidate.outer_relation_id.subject_kind != "outer-computation-relation"
-    ):
+    if type(candidate.grounding) is not CheckedFriRelationGrounding:
         return kind_mismatch(
             boundary,
             "FRI-IOR-RELATION-068",
-            "the inference request names a wrong-kind grounding or outer relation",
+            "the inference request lacks a live checked grounding capability",
+        )
+    if candidate.outer_relation_id.subject_kind != "outer-computation-relation":
+        return kind_mismatch(
+            boundary,
+            "FRI-IOR-RELATION-068",
+            "the inference request names a wrong-kind outer relation",
         )
     return refused(
         boundary,
@@ -1334,8 +1668,10 @@ def infer_outer_computation_relation(candidate: object) -> CheckResult:
 
 __all__ = [
     "CapOccurrenceReference",
+    "CheckedFriRelationGrounding",
     "ConstructionInputReference",
     "FriOracleLayer",
+    "FriRelationGroundingAdmission",
     "FriRelationGroundingRequest",
     "InitialOracleMaterialBinding",
     "OuterInferencePremise",

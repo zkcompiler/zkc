@@ -85,7 +85,7 @@ collision; the typed theorem schema must retain the source binding.
 | Source edge | Exact paper-stated shape | Required experiment distinction | Local disposition |
 |---|---|---|---|
 | Original FRI IOPP | For the binary additive Reed--Solomon family with `rho = 2^-R`, `R >= 2`, `rho N > 16`, a `delta`-far word is rejected with probability at least `min(delta, delta0) - 3N/|F|`, where `delta0 >= (1/4)(1 - 3rho) - 1/sqrt(N)`; the paper separately remarks on smooth multiplicative domains. | Native oracle access and a distance promise; no commitment or random oracle. The conclusion is a rejection lower bound, not an execution invariant. | Paper-stated; retained assumption. The selected finite profile is not an instance of the literal binary-additive theorem. |
-| Direct FRI round-by-round result | Under Theorem 4.1's smooth multiplicative hypotheses, `epsilon_rbr = max{ ((m + 1/2)^7 |L0|^2)/(3 rho^(3/2) |F|), (1 - delta)^ell }`. Theorem 5.11 gives the same expression as the round-by-round knowledge error for its named doomed set and extractor. | A vector- or round-indexed doomed-prefix experiment. Knowledge additionally owns an extractor and witness relation. | Paper-stated; retained assumption. The finite positive execution is not a doomed-prefix experiment. |
+| Direct FRI round-by-round result | Under Theorem 4.1's smooth multiplicative hypotheses, `epsilon_rbr = max{ ((m + 1/2)^7 |L0|^2)/(3 rho^(3/2) |F|), (1 - delta)^ell }`. Theorem 5.11 gives the same expression as the round-by-round knowledge error for its named doomed set and extractor. | A vector- or round-indexed doomed-prefix experiment over the exact Section 5.7 Algorithm 1 schedule. Knowledge additionally owns an extractor and witness relation. | Paper-stated; retained assumption. For `d0 = 8`, Algorithm 1 has three folds and a scalar terminal; the finite two-fold, degree-less-than-two execution is not that protocol and is not a doomed-prefix experiment. |
 | Round-by-round to restoration | Round-by-round error `epsilon_rbr` gives restoration error at budget `b` bounded by `b epsilon_rbr`; for a vector, use the theorem-selected aggregate such as `b max_i epsilon_i`. | A branching experiment over previously reached verifier states, with an explicit branch-extension budget. | Paper-stated edge; retained assumption. No Core rollback operation is introduced. |
 | Restoration to round-by-round | Holmgren proves that a public-coin `r`-round protocol that is `(q, epsilon)`-sound against restoration attacks has round-by-round error at most `(r/q) ln(2r/(1-epsilon))`. | Unrestricted restoration and round-by-round experiments remain distinct even though they are asymptotically equivalent. | Paper-stated; retained assumption. The conversion is not lossless. |
 | BCS compilation | Theorem 7.1 gives `epsilon_NI(x,Q,kappa) = barred_s_sr(x,Q) + 3(Q^2 + 1) 2^-kappa`, with the analogous proof-of-knowledge expression, from **restricted** restoration security of the public-coin IOP. | Restricted restoration forbids returning to the empty verifier state after the initial iteration. The target has a random oracle and authenticated openings. | Paper-stated; retained assumption. A SHA-256 fixture is not this random-oracle experiment. |
@@ -107,8 +107,9 @@ Primary sources and exact locators:
   [*On Round-By-Round Soundness and State Restoration Attacks*, Theorems 1.1
   and 3.2](https://eprint.iacr.org/2019/1261.pdf);
 - Block, Garreta, Katz, Thaler, Tiwari, and Zajac,
-  [*Fiat-Shamir Security of FRI and Related SNARKs*, Theorems 3.15, 4.1, and
-  5.11 and Corollary 4.3](https://eprint.iacr.org/2023/1071.pdf);
+  [*Fiat-Shamir Security of FRI and Related SNARKs*, Theorems 3.15, 4.1, 4.2,
+  and 5.11, Corollaries 4.3 and 4.4, Sections 5.2 and 5.7 Algorithm
+  1](https://eprint.iacr.org/2023/1071.pdf);
 - Block, Garreta, Tiwari, and Zajac,
   [*On Soundness Notions for Interactive Oracle Proofs*, Theorems 1.1 and 1.4
   and Corollaries 1.5 and 1.6](https://eprint.iacr.org/2023/1256.pdf);
@@ -125,18 +126,22 @@ named properties while using different premises, extractors, and losses.
 
 ## 4. Bounded-profile arithmetic check
 
-The constructive case selects `F97`, an order-16 multiplicative domain,
-degree bound `d0 = 8`, rate `rho = 1/2`, two folds, and four ordered query
-draws. This supports the following local checks only.
+The constructive case selects `F97`, arithmetic and challenges in the
+quadratic extension `F97^2`, an order-16 multiplicative domain, degree bound
+`d0 = 8`, rate `rho = 1/2`, two folds, and four ordered query draws. This is an
+implementation-style early-terminated structural profile, not the exact
+three-fold scalar-terminal Algorithm 1 instance. It supports the following
+local checks only.
 
 1. The literal binary-additive hypotheses of original FRI Theorem 2 do not
    match: the field is odd, `rho` is not of the required `2^-R` form with
    `R >= 2`, and `rho N = 8` is not greater than `16`.
-2. Even a formula-only substitution using the local domain and field, together
-   with `m = 3`, `delta = 1/10`, and `ell = 4`, makes the first displayed term
-   of `epsilon_rbr` greater than `16009`, while `(1-delta)^ell = 0.6561`.
-   This calculation does not assert that the theorem's other side conditions
-   hold.
+2. A formula-only substitution uses the modeled theorem field cardinality
+   `|F97^2| = 9409`, not the base-field cardinality `97`. Together with
+   `m = 3`, `delta = 1/10`, and `ell = 4`, the first displayed term is exactly
+   `(3294172/28227) sqrt(2)`, strictly between `165` and `166`, while
+   `(1-delta)^ell = 0.6561`. This calculation does not assert protocol
+   correspondence or any other theorem side condition.
 3. The resulting displayed maximum is vacuous as a probability bound, so no
    theorem-applicability or security claim can be obtained from it.
 4. The positive fixture begins with an honestly generated low-degree word. It
@@ -331,8 +336,9 @@ semantic rather than a transcription of binary multiplicative FRI.
 
 | Variant | Source feature that must remain representable | Model pressure; no present claim |
 |---|---|---|
-| DEEP-FRI | A verifier sample outside the evaluation box, a prover-supplied evaluation, and a linked quotient function before the recursive proximity test. | Out-of-domain membership and its failure branch, quotient-oracle origin, and the changed proximity relation must be typed. No theorem for ordinary FRI may be reused by renaming the oracle. |
-| STIR | Recursive rate improvement, changing domain/code parameters, and round-dependent query work. | Domain and rate schedules cannot be globally constant; resource formulas must depend on the exact round profile. This dossier does not claim STIR applicability. |
+| Batched FRI | Several initial oracles, a verifier-sampled coefficient vector, and FRI applied to their random linear combination as specified in ePrint 2023/1071 Section 5.2. | Multiple initial-oracle ownership, shared batching challenges, the combined-oracle derivation, and query correspondence are additive profile obligations. No batched theorem is currently claimed. |
+| DEEP-FRI | In Protocol 5.4 the verifier samples `z`, the prover sends a degree-one polynomial `B_z(X)`, the verifier then samples fold challenge `x`, and the prover supplies the linked quotient oracle. | The polynomial message and causal order `z -> B_z -> x -> quotient oracle`, out-of-domain membership and collision behavior, quotient-oracle origin, and changed proximity relation must be typed. No ordinary-FRI theorem may be reused by renaming the oracle. |
+| STIR | Construction 5.2 combines changing domain/code parameters with out-of-domain replies, a partial `Fill` oracle, virtual quotient and degree-corrected oracles, and query-dependent routing to underlying material. | Domain and rate schedules cannot be globally constant. Derived-oracle dependencies, totality/failure, dynamic query footprints, and round-specific resource formulas remain additive validation obligations. This dossier does not claim STIR applicability. |
 | Circle FRI | Circle-code function spaces and a first quotient by the circle involution, followed by a different projection chain; the first fold uses a different coordinate from later folds. | `multiplicative subgroup`, `x -> x^2`, and one universal fold law cannot be Core invariants. Algebraic domain and fold families need typed profiles. |
 | BaseFold | Multilinear evaluation or inner-product claims, sumcheck polynomials, and FRI-like folds intertwined with shared verifier challenges. | One challenge may simultaneously parameterize multiple reductions. Claim state, fold state, and sumcheck state must compose without claiming that structural commutation proves correlated agreement. |
 | WHIR | Constrained Reed--Solomon codes, sumcheck rounds, out-of-domain samples and answers, shifted logical queries, changing domains, and recursive weighted claims. | Relation and terminal schemas must evolve across recursion. Conjecture-dependent and proved theorem profiles must have different provenance and cannot share a truth capability. |
@@ -340,9 +346,10 @@ semantic rather than a transcription of binary multiplicative FRI.
 Primary variant sources:
 
 - [*DEEP-FRI: Sampling Outside the Box Improves
-  Soundness*](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ITCS.2020.5);
+  Soundness*, Protocols 5.4 and
+  6.4](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ITCS.2020.5);
 - [*STIR: Reed--Solomon Proximity Testing with Fewer
-  Queries*](https://eprint.iacr.org/2024/390.pdf);
+  Queries*, Construction 5.2](https://eprint.iacr.org/2024/390.pdf);
 - [*Circle STARKs*, Section 6 and Protocol
   1](https://eprint.iacr.org/2024/278.pdf);
 - [*Basefold in the List Decoding Regime*, Sections 3 and
@@ -353,6 +360,12 @@ Primary variant sources:
 Passing these pressures would show that the architecture admits the required
 shapes. It would not show source fidelity, theorem applicability, or security
 for any variant.
+
+The immediate exact-source obligation is a separate three-fold,
+scalar-terminal profile for Section 5.7 Algorithm 1. Batched FRI and the
+derived-oracle pressure above follow as additive constructions. They do not
+alter the native-to-committed-to-augmented factorization or turn the current
+finite witness into a source-theorem instance.
 
 ## 7. Constructive validation contract
 

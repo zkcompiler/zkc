@@ -1500,7 +1500,16 @@ def canonical_source_anchors() -> dict[str, SourceAnchor]:
             artifact(
                 "bb7a7e87b9000c98106de99c9af9d289def2a1b91919a3507ee78bf9bfd16947"
             ),
-            ("Theorem 3.15", "Theorem 4.1", "Corollary 4.3", "Theorem 5.11"),
+            (
+                "Theorem 3.15",
+                "Theorem 4.1",
+                "Corollary 4.3",
+                "Section 5.2",
+                "Theorem 4.2",
+                "Corollary 4.4",
+                "Section 5.7 Algorithm 1",
+                "Theorem 5.11",
+            ),
         ),
         SourceAnchor(
             "afk-multi-round-fs-2021-1377-v2",
@@ -1558,6 +1567,17 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
             ObligationKind.SIDE_CONDITION,
             "the theorem-owned side conditions have not all been discharged",
         ),
+    )
+    direct_fri_obligations = tuple(
+        ApplicabilityObligation(
+            "protocol-correspondence",
+            ObligationKind.PROTOCOL_CORRESPONDENCE,
+            ObligationStatus.LOCALLY_REFUTED,
+            "the selected two-fold degree-less-than-two Core is not the three-fold scalar-terminal Algorithm 1 instance for d0=8",
+        )
+        if item.name == "protocol-correspondence"
+        else item
+        for item in common
     )
 
     property_subjects: dict[PropertyKind, SemanticId] = {
@@ -1737,6 +1757,7 @@ def canonical_theorem_questions() -> dict[str, TheoremQuestion]:
             maps=("round-prefix-map", "logical-query-occurrence-map"),
             conditions=("theorem-4.1-smooth-multiplicative-hypotheses",),
             conclusion="conditional-round-by-round-error-vector",
+            obligations=direct_fri_obligations,
             occurrence_maps=(
                 (
                     "logical-query-occurrence-map",
@@ -2074,11 +2095,12 @@ def evaluate_tiny_f97_round_by_round_bound(
 ) -> tuple[BoundEvaluation, CheckResult]:
     """Reproduce the dossier's exact vacuity classification without floats.
 
-    For ``m=3, N=16, rho=1/2, |F|=97`` the first term is
-    ``(3294172/291)*sqrt(2)``.  The integer inequality
-    ``2*3294172^2 > (16009*291)^2`` proves that term is greater than
-    16009.  The other term is exactly ``(9/10)^4 = 6561/10000``.
-    Neither calculation checks any theorem premise.
+    The modeled oracle codomain and fold-challenge field is the quadratic
+    extension, so ``|F|=97^2=9409``.  For ``m=3, N=16, rho=1/2`` the first
+    term is ``(3294172/28227)*sqrt(2)``.  An exact integer-squaring comparison
+    places it strictly between 165 and 166.  The other term is exactly
+    ``(9/10)^4 = 6561/10000``.  Neither calculation checks any theorem premise
+    or protocol correspondence.
     """
 
     boundary = "analysis:local-bound-evaluation"
@@ -2091,27 +2113,46 @@ def evaluate_tiny_f97_round_by_round_bound(
             "the finite evaluator supports only the direct FRI round-by-round expression",
         )
 
-    radical_numerator = 3_294_172
-    radical_denominator = 291
-    threshold = 16_009
-    if 2 * radical_numerator**2 <= (threshold * radical_denominator) ** 2:
-        raise RuntimeError("internal exact inequality for the F97 bound is false")
+    m = 3
+    domain_size = 16
+    field_size = EXACT_ALGEBRA_PROFILE.modulus**2
+    # With rho=1/2, the non-radical coefficient of sqrt(2) is formed
+    # exactly from ((m+1/2)^7*N^2)/(3*rho^(3/2)*|F|).
+    unreduced_numerator = (2 * m + 1) ** 7 * domain_size**2 * 2
+    unreduced_denominator = 2**7 * 3 * field_size
+    divisor = gcd(unreduced_numerator, unreduced_denominator)
+    radical_coefficient = Rational(
+        unreduced_numerator // divisor,
+        unreduced_denominator // divisor,
+    )
+    lower_threshold = 165
+    upper_threshold = 166
+    if (
+        2 * radical_coefficient.numerator**2
+        <= (lower_threshold * radical_coefficient.denominator) ** 2
+        or 2 * radical_coefficient.numerator**2
+        >= (upper_threshold * radical_coefficient.denominator) ** 2
+    ):
+        raise RuntimeError(
+            "internal exact inequality for the F97 quadratic-extension bound is false"
+        )
 
     evaluation = BoundEvaluation(
         expression.identity,
         EXACT_ALGEBRA_PROFILE.identity,
         BoundClassification.VACUOUS_BOUND,
         (
-            ("field_size", 97),
-            ("N", 16),
+            ("field_size", field_size),
+            ("N", domain_size),
             ("rho", Rational(1, 2)),
-            ("m", 3),
+            ("m", m),
             ("delta", Rational(1, 10)),
             ("ell", 4),
         ),
         (
-            "first-term-equals-(3294172/291)*sqrt(2)",
-            "first-term-is-greater-than-16009-by-exact-integer-squaring",
+            "theorem-field-is-the-modeled-f97-quadratic-extension-of-size-9409",
+            "first-term-equals-(3294172/28227)*sqrt(2)",
+            "first-term-is-strictly-between-165-and-166-by-exact-integer-squaring",
             "second-term-equals-6561/10000",
             "displayed-maximum-is-greater-than-one",
             "original-fri-binary-additive-side-conditions-are-not-satisfied",

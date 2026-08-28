@@ -654,6 +654,16 @@ class SharedCommittedCoreVerifierTest(unittest.TestCase):
             ).code,
             "FRI-IOR-COMMITTED-009",
         )
+        self.assertEqual(
+            verify_explicit_committed_prefix(
+                replace(
+                    self.explicit,
+                    algebra_profile_id=alternate_algebra_id,
+                ),
+                ResourceCounter(),
+            ).code,
+            "FRI-IOR-COMMITTED-023",
+        )
 
 
 class CommitmentCompilationMapRefusalTest(unittest.TestCase):
@@ -675,9 +685,7 @@ class CommitmentCompilationMapRefusalTest(unittest.TestCase):
             "FRI-IOR-CONSTRUCTION-015",
         )
         self.assertEqual(
-            self._code(
-                replace(self.candidate, source_public_environment=object())
-            ),
+            self._code(replace(self.candidate, source_public_environment=object())),
             "FRI-IOR-CONSTRUCTION-058",
         )
         changed_environment = FreshPublicEnvironment(

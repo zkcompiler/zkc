@@ -38,7 +38,8 @@ The principal primary sources are:
   state-restoration analysis in Sections 5--7;
 - Block, Garreta, Katz, Thaler, Tiwari, and Zając, [*Fiat-Shamir Security of
   FRI and Related SNARKs*](https://eprint.iacr.org/2023/1071), especially its
-  smooth multiplicative FRI, round-by-round analysis, and concrete discussion;
+  smooth multiplicative FRI, Section 5.2 batched construction, Section 5.7
+  Algorithm 1, round-by-round analysis, and concrete discussion;
   and
 - Attema, Fehr, and Klooß, [*Fiat--Shamir Transformation of Multi-Round
   Interactive Proofs*](https://eprint.iacr.org/2021/1377), used only for its
@@ -505,6 +506,15 @@ library:
 | work | explicit 32-byte work-seed challenge, then a two-bit pre-query grinding predicate |
 | sampling | typed SHA-256 calls and bounded big-endian rejection sampling |
 
+This is an implementation-style **early-terminated structural profile**, not
+the exact protocol instance of Section 5.7 Algorithm 1 in ePrint 2023/1071.
+For `d0 = 8 = 2^3`, that algorithm performs three folds and sends a scalar
+constant after the third fold. The executable profile deliberately performs
+two folds and sends a degree-less-than-two polynomial. Original FRI Section
+3.2 independently gives three binary-localization rounds for the analogous
+`k = 4`, `R = 1`, `eta = 1` parameter calculation. No theorem correspondence
+or early-termination theorem is claimed for the executable choice.
+
 The syntactic terminal carrier permits a canonical polynomial of bounded size;
 the verifier separately checks degree less than `2`. This prevents a parser
 shape from authoring the positive result. The honest fixture uses a nonconstant
@@ -514,6 +524,21 @@ on the positive path.
 Salted leaves, pair grouping, cap height, typed SHA-256 framing, work, and the
 terminal carrier bound are local compilation choices. They are not attributed
 to native FRI.
+
+The following are additive future validation obligations, not current
+features or claims:
+
+1. an exact smooth-multiplicative Algorithm 1 profile with three folds and a
+   scalar terminal, followed by a checked protocol-correspondence question;
+2. the batched FRI schedule of ePrint 2023/1071 Section 5.2, including several
+   initial oracles, the coefficient challenge vector, and the combined oracle;
+3. verifier-derived quotient-oracle views and nested proximity tests from
+   DEEP-ALI Protocol 6.4; and
+4. the virtual quotient, degree-corrected oracle, partial `Fill` oracle, and
+   dynamic query routing of STIR Construction 5.2.
+
+These obligations extend profiles and the oracle/composition seam. They do not
+change the selected native/commitment/augmentation/Fiat--Shamir factorization.
 
 ## 9. Required executable conclusions
 
@@ -532,6 +557,6 @@ The finite package must answer, with independent public reconstruction:
 7. whether the current domain owners can absorb the required extensions
    without introducing a universal FRI object.
 
-A successful finite result establishes only one source-grounded inhabitant and
-its named refusals. Failure at any one of these boundaries is an architecture
-finding, not a reason to weaken the witness.
+A successful finite result establishes only one source-informed structural
+inhabitant and its named refusals. Failure at any one of these boundaries is an
+architecture finding, not a reason to weaken the witness.

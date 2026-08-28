@@ -318,7 +318,14 @@ Logical query multiplicity and physical opening identity remain separate.
 Several occurrence clauses may select one authenticated opening only when they
 derive the same oracle, position, and value under the exact profile.
 
-## 4. Exact finite object graph
+## 4. Exact finite structural object graph
+
+“Exact” in this section means the one object graph admitted by the finite
+evaluator. It does not mean exact correspondence to a cited FRI algorithm. The
+selected Core stops after two folds and checks a degree-less-than-two terminal
+polynomial. It is an implementation-style early-termination witness, not the
+three-fold scalar-terminal protocol specified by Section 5.7 Algorithm 1 of
+ePrint 2023/1071 for `d0 = 8`.
 
 The witness instantiates:
 
@@ -384,6 +391,14 @@ FiatShamirWorkAugmentedProtocol
   same WorkAugmentedCommittedFriCore
 ```
 
+Exact-source validation remains additive. A later profile must separately
+construct the three-fold scalar-terminal Algorithm 1 instance and its protocol
+correspondence. Batched FRI, DEEP-ALI derived quotient views, and STIR virtual
+oracles and dynamic query routing are further validation obligations rather
+than properties attributed to this object graph. None requires merging native
+oracle semantics, commitment compilation, protocol augmentation, or
+Fiat--Shamir interpretation.
+
 The target verifier runs from public input and proof only. It never receives
 `O0`, `O1`, all salts, polynomial coefficients used to generate the oracles,
 or a private replay oracle.
@@ -407,9 +422,12 @@ for that run.
 The public terminal may be `Accept` because the complete finite verifier is
 modeled. The residual scientific proposition remains:
 
-> Under the exact FRI theorem's field, distance, strategy, and coin premises,
-> acceptance bounds the probability that the initial logical oracle is far
-> from the declared Reed--Solomon code.
+> For an exact-source protocol profile with checked protocol correspondence,
+> the exact FRI theorem's field, distance, strategy, and coin premises may
+> bound the probability that the initial logical oracle is far from the
+> declared Reed--Solomon code. Applying such a conclusion to this early-stop
+> profile additionally requires a separate applicable early-termination
+> theorem and correspondence.
 
 That proposition is Analysis-owned and unproved here. It does not imply an
 outer computation relation.

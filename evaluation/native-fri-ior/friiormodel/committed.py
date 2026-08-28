@@ -32,7 +32,14 @@ from .field import (
     polynomial_degree,
 )
 from .native import RandomQueryDraw
-from .profile import D0, D1, D2, EXACT_ALGEBRA_PROFILE, EXACT_PROFILE, admit_exact_profile
+from .profile import (
+    D0,
+    D1,
+    D2,
+    EXACT_ALGEBRA_PROFILE,
+    EXACT_PROFILE,
+    admit_exact_profile,
+)
 from .proof import (
     CommittedFriPublicInputs,
     OccurrenceSelector,
@@ -536,7 +543,7 @@ def verify_explicit_committed_prefix(
         ):
             return unsupported(
                 boundary,
-                "FRI-IOR-COMMITTED-009",
+                "FRI-IOR-COMMITTED-023",
                 "the committed prefix selects unsupported algebra or commitment semantics",
             )
         return affirmative(

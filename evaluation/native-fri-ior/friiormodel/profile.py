@@ -1,9 +1,16 @@
 """The one exact finite FRI algebra profile admitted by this package.
 
-The profile is intentionally concrete.  A different generator, round count,
-query-vector law, or fold evaluator is a well-formed but unsupported proposal;
-it is not silently interpreted as this profile.  Commitment and transcript
-choices are separate semantic subjects.  Request-local evaluator limits are
+Here ``exact`` means exact equality to the local evaluator's admitted profile,
+not correspondence to every round of a cited source protocol.  This profile
+deliberately stops after two folds with a degree-less-than-two terminal
+polynomial.  It is an implementation-style early-terminated structural witness,
+whereas Algorithm 1 of ePrint 2023/1071 would use three folds and a scalar
+terminal at this profile's initial degree bound.
+
+A different generator, round count, query-vector law, or fold evaluator is a
+well-formed but unsupported proposal; it is not silently interpreted as this
+profile.  Commitment and transcript choices are separate semantic subjects.
+Request-local evaluator limits and source-correspondence dispositions are
 deliberately not profile semantics.
 """
 
@@ -34,6 +41,10 @@ from .terms import (
 
 
 ALGEBRA_PROFILE_NAME = "zkc.fri-ior.f97-binary-two-round-algebra.v1"
+# This validation disposition is intentionally absent from ``to_term`` and the
+# semantic identity.  The semantic round and terminal choices already occur in
+# the profile; whether a source theorem corresponds to them belongs to Analysis.
+LOCAL_PROFILE_DISPOSITION = "implementation-style-early-terminated-structural-witness"
 FOLDING_ARITY = 2
 INITIAL_DEGREE_BOUND_EXCLUSIVE = 8
 TERMINAL_MAX_COEFFICIENT_COUNT = 5

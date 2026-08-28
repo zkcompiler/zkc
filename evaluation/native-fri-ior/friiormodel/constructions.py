@@ -161,9 +161,7 @@ def _freeze_public_environment_term(value: Any) -> Any:
 
 def _public_environment_term_copy(value: Any) -> Any:
     if type(value) in (dict, MappingProxyType):
-        return {
-            key: _public_environment_term_copy(item) for key, item in value.items()
-        }
+        return {key: _public_environment_term_copy(item) for key, item in value.items()}
     if isinstance(value, tuple):
         return [_public_environment_term_copy(item) for item in value]
     return value
@@ -1237,9 +1235,7 @@ def check_native_to_committed_fresh(
                 "FRI-IOR-CONSTRUCTION-101",
                 "one native execution and its committed Fresh compilation commute",
                 subject=receipt.identity,
-                public_environment_map_entries=len(
-                    candidate.public_environment_map
-                ),
+                public_environment_map_entries=len(candidate.public_environment_map),
                 publication_map_entries=len(candidate.publication_map),
                 fresh_coin_map_entries=len(candidate.coin_map),
                 query_occurrence_map_entries=len(candidate.query_occurrence_map),

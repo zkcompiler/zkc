@@ -617,7 +617,9 @@ def _first_plan_difference(
         "query_domain_size",
         "query_count",
     )
-    if any(getattr(candidate, field) != getattr(expected, field) for field in scalar_fields):
+    if any(
+        getattr(candidate, field) != getattr(expected, field) for field in scalar_fields
+    ):
         return unsupported(
             boundary,
             "FRI-IOR-TRANSCRIPT-019",
@@ -626,10 +628,9 @@ def _first_plan_difference(
 
     expected_by_occurrence = {step.occurrence: step for step in expected.steps}
     candidate_occurrences = tuple(step.occurrence for step in candidate.steps)
-    if (
-        len(set(candidate_occurrences)) != len(candidate_occurrences)
-        or set(candidate_occurrences) != set(expected_by_occurrence)
-    ):
+    if len(set(candidate_occurrences)) != len(candidate_occurrences) or set(
+        candidate_occurrences
+    ) != set(expected_by_occurrence):
         return refused(
             boundary,
             "FRI-IOR-TRANSCRIPT-010",
@@ -646,9 +647,10 @@ def _first_plan_difference(
             "FRI-IOR-TRANSCRIPT-017",
             "query randomness is derived before terminal material",
         )
-    if positions[GRINDING_NONCE] > positions[QUERY_SEED] or positions[
-        WORK_CHECK
-    ] > positions[QUERY_SEED]:
+    if (
+        positions[GRINDING_NONCE] > positions[QUERY_SEED]
+        or positions[WORK_CHECK] > positions[QUERY_SEED]
+    ):
         return refused(
             boundary,
             "FRI-IOR-TRANSCRIPT-018",
@@ -904,11 +906,7 @@ class FiatShamirTranscript:
                 "FRI-IOR-TRANSCRIPT-045",
                 "a completed transcript requires an unsigned 32-bit nonce",
             )
-        if (
-            self.work_digest[0]
-            >> (8 - EXACT_GRINDING_PROFILE.difficulty_bits)
-            != 0
-        ):
+        if self.work_digest[0] >> (8 - EXACT_GRINDING_PROFILE.difficulty_bits) != 0:
             raise malformed(
                 "transcript:phase-formation",
                 "FRI-IOR-TRANSCRIPT-046",
@@ -1049,9 +1047,7 @@ def _absorb(
             "a transcript state must be one SHA-256 digest",
         )
     return _sha256(
-        _ABSORB_DOMAIN
-        + state
-        + _metered_frame(namespace, codec, payload, resources),
+        _ABSORB_DOMAIN + state + _metered_frame(namespace, codec, payload, resources),
         resources,
     )
 
@@ -1220,7 +1216,9 @@ def _begin_transcript(
     except ModelFailure as error:
         return error.to_result()
     except Exception as error:  # pragma: no cover - fault-injection boundary
-        return checker_failure(boundary, f"unexpected first-round failure: {type(error).__name__}")
+        return checker_failure(
+            boundary, f"unexpected first-round failure: {type(error).__name__}"
+        )
 
 
 def _continue_transcript(
@@ -1259,7 +1257,9 @@ def _continue_transcript(
     except ModelFailure as error:
         return error.to_result()
     except Exception as error:  # pragma: no cover - fault-injection boundary
-        return checker_failure(boundary, f"unexpected second-round failure: {type(error).__name__}")
+        return checker_failure(
+            boundary, f"unexpected second-round failure: {type(error).__name__}"
+        )
 
 
 def _bind_terminal_and_derive_work_seed(
@@ -1301,7 +1301,9 @@ def _bind_terminal_and_derive_work_seed(
     except ModelFailure as error:
         return error.to_result()
     except Exception as error:  # pragma: no cover - fault-injection boundary
-        return checker_failure(boundary, f"unexpected work-seed failure: {type(error).__name__}")
+        return checker_failure(
+            boundary, f"unexpected work-seed failure: {type(error).__name__}"
+        )
 
 
 def _work_digest(
@@ -1329,7 +1331,9 @@ def _work_digest(
     )
 
 
-def _work_succeeds(work_seed: bytes, nonce: int, resources: ResourceCounter | None = None) -> bool:
+def _work_succeeds(
+    work_seed: bytes, nonce: int, resources: ResourceCounter | None = None
+) -> bool:
     """Check the predicate owned by the selected grinding profile."""
 
     counter = _counter_or_default(resources)
@@ -1390,11 +1394,7 @@ def _complete_transcript(
             counter,
         )
         work_digest = _work_digest(work_state.work_seed, grinding_nonce, counter)
-        if (
-            work_digest[0]
-            >> (8 - EXACT_GRINDING_PROFILE.difficulty_bits)
-            != 0
-        ):
+        if work_digest[0] >> (8 - EXACT_GRINDING_PROFILE.difficulty_bits) != 0:
             return refused(
                 boundary,
                 "FRI-IOR-TRANSCRIPT-037",
@@ -1417,7 +1417,10 @@ def _complete_transcript(
     except ModelFailure as error:
         return error.to_result()
     except Exception as error:  # pragma: no cover - fault-injection boundary
-        return checker_failure(boundary, f"unexpected transcript-completion failure: {type(error).__name__}")
+        return checker_failure(
+            boundary,
+            f"unexpected transcript-completion failure: {type(error).__name__}",
+        )
 
 
 def _derive_work_state_from_raw(
