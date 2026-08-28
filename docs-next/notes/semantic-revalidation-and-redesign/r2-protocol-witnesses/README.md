@@ -75,6 +75,9 @@ elsewhere are cross-references, not additional inventory ownership.
 | [FRI-Grind-1 Cold Review and Repair Decision](cold-review-and-repair.md) | Historical failed gates, repair decision, and passing bounded replay. |
 | [ZK-Protocol Expressibility Validation Portfolio](expressibility-validation-portfolio.md) | Reserved protocol, variant, and holdout portfolio with required evidence depth. |
 | [Native FRI/IOR End-to-End Validation Plan](native-fri-ior-validation-plan.md) | Ready work contract for source reconstruction, candidate comparison, executable oracle/query/opening pressure, and cross-domain convergence. |
+| [Native FRI/IOR Source Dossier](native-fri-ior-source-dossier.md) | Primary-source reconstruction, commitment/Fiat--Shamir separation, implementation-profile comparison, and exact finite-profile selection. |
+| [Native FRI/IOR Provisional Architecture Decision](native-fri-ior-architecture-decision.md) | Compared alternatives, selected native/committed/work-augmented construction chain, required semantic extensions, and executable reversal conditions. |
+| [Native FRI/IOR Analysis Dossier](native-fri-ior-analysis-dossier.md) | Source-grounded theorem and variant matrix, Analysis experiment requirements, arithmetic applicability checks, and explicit nonclaims. |
 | [P01 Schnorr/Sigma](p01-schnorr-sigma.md) | P01 source reconstruction, current-target obstruction, and theorem boundary. |
 | [P01 Phase B Repair and Refreeze Decision](p01-phase-b-repair-and-refreeze.md) | Selected finite repair, public evidence boundary, gate states, and reopening conditions. |
 | [R2 State Reconciliation](r2-state-reconciliation.md) | Temporary Phase A status, namespace, evidence, and open-obligation snapshot. |

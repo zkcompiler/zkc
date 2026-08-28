@@ -59,6 +59,7 @@ public instance and code/domain parameters
     -> verifier folding challenges
     -> derived logical oracles
     -> terminal material and residual condition
+    -> optional checked work augmentation: work seed, nonce, and predicate
     -> query randomness
     -> query positions with multiplicity
     -> values and authentication openings
@@ -67,13 +68,16 @@ public instance and code/domain parameters
     -> Accept, Reject, Abort, or exact residual
 ```
 
-The package must distinguish three levels rather than conflating them:
+The package must distinguish four levels rather than conflating them:
 
 1. **Native IOP/IOPP semantics:** verifier access to logical oracles and the
    source protocol's own query and decision structure.
 2. **Commitment compilation:** roots, salts, paths, leaf grouping, query
    deduplication, and authentication supplied by an exact commitment profile.
-3. **Fiat--Shamir interpretation:** statement- and context-bound derivation of
+3. **Grinding augmentation:** an explicit prior work-seed challenge, nonce
+   publication, predicate, placement, and work accounting when the selected
+   profile adds grinding that is absent from native FRI.
+4. **Fiat--Shamir interpretation:** statement- and context-bound derivation of
    interaction coins and final query randomness under an exact transcript,
    framing, sampler, and random-oracle or sponge profile.
 
