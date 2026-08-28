@@ -11,7 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .field import EXTENSION_NONRESIDUE, MODULUS, PRIMITIVE_GENERATOR, Fp
+from .field import (
+    EXTENSION_NONRESIDUE,
+    MAX_POLYNOMIAL_COEFFICIENTS,
+    MODULUS,
+    PRIMITIVE_GENERATOR,
+    Fp,
+)
 from .terms import (
     CheckResult,
     ModelFailure,
@@ -161,6 +167,60 @@ class FriIorProfile:
                 "FRI-IOR-PROFILE-007",
                 "numeric profile parameters must be integers",
             )
+        if (
+            len(self.name) > 192
+            or any(
+                character not in "abcdefghijklmnopqrstuvwxyz0123456789.-_"
+                for character in self.name
+            )
+        ):
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-024",
+                "a profile name must be a bounded lower-case ASCII identifier",
+            )
+        if self.modulus != MODULUS:
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-025",
+                "this finite profile carrier uses Fp values and therefore requires modulus 97",
+            )
+        if not 1 < self.primitive_generator < self.modulus or (
+            pow(self.primitive_generator, self.modulus - 1, self.modulus) != 1
+            or pow(self.primitive_generator, (self.modulus - 1) // 2, self.modulus)
+            == 1
+            or pow(self.primitive_generator, (self.modulus - 1) // 3, self.modulus)
+            == 1
+        ):
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-026",
+                "the declared primitive generator must have order 96 in F_97",
+            )
+        if not 0 < self.extension_nonresidue < self.modulus or pow(
+            self.extension_nonresidue,
+            (self.modulus - 1) // 2,
+            self.modulus,
+        ) != self.modulus - 1:
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-027",
+                "the quadratic extension parameter must be a non-residue in F_97",
+            )
+        if (
+            not isinstance(self.merkle_hash, str)
+            or not self.merkle_hash
+            or len(self.merkle_hash) > 64
+            or any(
+                character not in "abcdefghijklmnopqrstuvwxyz0123456789.-_"
+                for character in self.merkle_hash
+            )
+        ):
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-028",
+                "the commitment hash name must be a bounded lower-case ASCII identifier",
+            )
         if not isinstance(self.domains, tuple) or not all(
             isinstance(domain, EvaluationDomain) for domain in self.domains
         ):
@@ -169,11 +229,23 @@ class FriIorProfile:
                 "FRI-IOR-PROFILE-008",
                 "domains must be a canonical sequence of EvaluationDomain values",
             )
+        if self.round_count < 1 or self.ordered_query_count < 1:
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-012",
+                "a profile requires at least one round and one query occurrence",
+            )
         if len(self.domains) != self.round_count + 1:
             raise malformed(
                 "profile:formation",
                 "FRI-IOR-PROFILE-009",
                 "binary folding requires one more domain than folding rounds",
+            )
+        if len({domain.name for domain in self.domains}) != len(self.domains):
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-029",
+                "evaluation-domain names must be unique",
             )
         if self.folding_arity != 2:
             raise malformed(
@@ -187,17 +259,35 @@ class FriIorProfile:
                 "FRI-IOR-PROFILE-011",
                 "the initial exclusive degree bound must be positive",
             )
+        if self.initial_degree_bound_exclusive > self.domains[0].order:
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-030",
+                "the initial degree bound cannot exceed the initial evaluation domain",
+            )
         if self.terminal_max_coefficient_count <= 0:
             raise malformed(
                 "profile:formation",
                 "FRI-IOR-PROFILE-019",
                 "the terminal syntax must permit at least one coefficient",
             )
+        if self.terminal_max_coefficient_count > MAX_POLYNOMIAL_COEFFICIENTS:
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-031",
+                "the terminal syntax exceeds the finite polynomial carrier",
+            )
         if self.terminal_degree_bound_exclusive <= 0:
             raise malformed(
                 "profile:formation",
                 "FRI-IOR-PROFILE-020",
                 "the terminal semantic degree bound must be positive",
+            )
+        if self.terminal_degree_bound_exclusive > self.domains[-1].order:
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-032",
+                "the terminal degree bound cannot exceed the final evaluation domain",
             )
         if self.terminal_max_coefficient_count < self.terminal_degree_bound_exclusive:
             raise malformed(
@@ -220,11 +310,11 @@ class FriIorProfile:
                 "FRI-IOR-PROFILE-022",
                 "the terminal semantic degree bound disagrees with the fold chain",
             )
-        if self.round_count < 1 or self.ordered_query_count < 1:
+        if self.ordered_query_count > 256:
             raise malformed(
                 "profile:formation",
-                "FRI-IOR-PROFILE-012",
-                "a profile requires at least one round and one query occurrence",
+                "FRI-IOR-PROFILE-033",
+                "the query-occurrence count exceeds the finite carrier",
             )
         if self.query_occurrences_preserve_order_and_multiplicity is not True:
             raise malformed(
@@ -245,6 +335,30 @@ class FriIorProfile:
                     "FRI-IOR-PROFILE-016",
                     "each target domain generator must square from its source",
                 )
+        if not 1 <= self.merkle_salt_bytes <= 1024:
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-034",
+                "the Merkle salt width must be positive and bounded",
+            )
+        if self.merkle_cap_size < 1 or self.merkle_cap_size & (
+            self.merkle_cap_size - 1
+        ):
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-035",
+                "the Merkle cap size must be a positive power of two",
+            )
+        if any(
+            domain.order // 2 < self.merkle_cap_size
+            or (domain.order // 2) % self.merkle_cap_size
+            for domain in self.domains
+        ):
+            raise malformed(
+                "profile:formation",
+                "FRI-IOR-PROFILE-036",
+                "the Merkle cap must divide every antipodal-pair leaf count",
+            )
 
     def to_term(self) -> dict[str, Any]:
         return {

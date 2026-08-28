@@ -282,8 +282,8 @@
   ],
   "claim_boundary": {
     "establishes": [
-      "exact-byte provenance for the five paper artifacts used by the executable construction",
-      "exact Git revisions and selected implementation-source bytes used as comparison inputs"
+      "declared exact-byte bindings for the five paper artifacts used by the executable construction",
+      "declared exact Git revisions and selected implementation-source byte bindings used as comparison inputs"
     ],
     "excluded_from_this_ledger": [
       "AFK multi-round Fiat-Shamir and other analysis-only theorem sources",

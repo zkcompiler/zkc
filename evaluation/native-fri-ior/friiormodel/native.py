@@ -40,10 +40,12 @@ from .terms import (
     ModelFailure,
     OutcomeClass,
     ResourceCounter,
+    SemanticId,
     affirmative,
     checker_failure,
     malformed,
     refusal,
+    semantic_id,
 )
 
 
@@ -75,7 +77,14 @@ class NativeEventKind(str, Enum):
     PUBLISH_ORACLE = "PublishOracle"
     FRESH_CHALLENGE = "FreshChallenge"
     TERMINAL_MATERIAL = "TerminalMaterial"
-    LOGICAL_QUERY = "LogicalQuery"
+    RANDOM_QUERY_DRAW = "RandomQueryDraw"
+
+
+class NativeOracleLayer(str, Enum):
+    """The two logical-oracle layers queried by the native verifier."""
+
+    INITIAL = "InitialLayer"
+    FIRST_FOLD = "FirstFoldLayer"
 
 
 class NativeVerdict(str, Enum):
@@ -100,33 +109,37 @@ class OracleEntry:
 
 
 @dataclass(frozen=True, slots=True)
-class StrategyDecision:
-    """A strategy-authored object and the exact prior objects it read."""
+class DeclaredStrategyDependency:
+    """Caller-declared dependencies for deterministic cold replay.
+
+    This metadata can be checked for internal order consistency.  It is not an
+    observation of a host strategy and establishes no non-anticipation claim.
+    """
 
     subject: str
     authored_at: int
-    read_set: tuple[str, ...]
+    declared_read_set: tuple[str, ...]
 
     def __post_init__(self) -> None:
         if not isinstance(self.subject, str) or not self.subject:
             raise malformed(
-                "native:strategy-formation",
+                "native:declared-strategy-dependency-formation",
                 "FRI-IOR-NATIVE-002",
-                "a strategy decision requires a non-empty subject name",
+                "declared strategy dependencies require a non-empty subject name",
             )
         if type(self.authored_at) is not int or self.authored_at < 0:
             raise malformed(
-                "native:strategy-formation",
+                "native:declared-strategy-dependency-formation",
                 "FRI-IOR-NATIVE-003",
-                "a strategy decision requires a non-negative event index",
+                "declared strategy dependencies require a non-negative event index",
             )
-        if not isinstance(self.read_set, tuple) or not all(
-            isinstance(item, str) and item for item in self.read_set
+        if not isinstance(self.declared_read_set, tuple) or not all(
+            isinstance(item, str) and item for item in self.declared_read_set
         ):
             raise malformed(
-                "native:strategy-formation",
+                "native:declared-strategy-dependency-formation",
                 "FRI-IOR-NATIVE-004",
-                "a strategy read set is a tuple of non-empty object names",
+                "a declared strategy read set is a tuple of non-empty object names",
             )
 
 
@@ -143,7 +156,7 @@ class LogicalOracle:
     domain: EvaluationDomain
     origin: OracleOrigin
     entries: tuple[OracleEntry, ...]
-    strategy_decision: StrategyDecision | None = None
+    declared_strategy_dependency: DeclaredStrategyDependency | None = None
     publication_mode: OraclePublicationMode = OraclePublicationMode.LOGICAL_ACCESS
 
     def __post_init__(self) -> None:
@@ -179,13 +192,13 @@ class LogicalOracle:
                 "FRI-IOR-NATIVE-009",
                 "a logical oracle carrier is a tuple of OracleEntry values",
             )
-        if self.strategy_decision is not None and not isinstance(
-            self.strategy_decision, StrategyDecision
+        if self.declared_strategy_dependency is not None and not isinstance(
+            self.declared_strategy_dependency, DeclaredStrategyDependency
         ):
             raise malformed(
                 "native:oracle-formation",
                 "FRI-IOR-NATIVE-010",
-                "oracle strategy authorship must be a StrategyDecision",
+                "oracle replay metadata must be a DeclaredStrategyDependency",
             )
 
     def publication_observation(self) -> dict[str, Any]:
@@ -244,27 +257,30 @@ class FreshChallenge:
 
 @dataclass(frozen=True, slots=True)
 class TerminalPolynomial:
-    """Strategy-authored bounded syntax, checked semantically only at the end."""
+    """Bounded syntax with declared replay dependencies and a late semantic check."""
 
     coefficients: tuple[Fp2, ...]
-    strategy_decision: StrategyDecision
+    declared_strategy_dependency: DeclaredStrategyDependency
 
     def __post_init__(self) -> None:
         canonical_polynomial(
             self.coefficients,
             EXACT_PROFILE.terminal_max_coefficient_count,
         )
-        if not isinstance(self.strategy_decision, StrategyDecision):
+        if not isinstance(
+            self.declared_strategy_dependency,
+            DeclaredStrategyDependency,
+        ):
             raise malformed(
                 "native:terminal-formation",
                 "FRI-IOR-NATIVE-013",
-                "terminal material requires a StrategyDecision",
+                "terminal replay metadata requires a DeclaredStrategyDependency",
             )
 
 
 @dataclass(frozen=True, slots=True)
-class LogicalQueryOccurrence:
-    """One logical draw; equal indices remain different occurrences."""
+class RandomQueryDraw:
+    """One top-level verifier-random draw, before layer-query expansion."""
 
     ordinal: int
     initial_domain_index: int
@@ -274,14 +290,87 @@ class LogicalQueryOccurrence:
             raise malformed(
                 "native:query-formation",
                 "FRI-IOR-NATIVE-014",
-                "a logical query ordinal must be a non-negative integer",
+                "a random-query ordinal must be a non-negative integer",
             )
         if type(self.initial_domain_index) is not int:
             raise malformed(
                 "native:query-formation",
                 "FRI-IOR-NATIVE-015",
-                "a logical query index must be an integer",
+                "a random-query index must be an integer",
             )
+
+
+@dataclass(frozen=True, slots=True)
+class LayerQueryAnswerOccurrence:
+    """One ordered antipodal-pair query and its two logical answers.
+
+    This is an evaluator- and checked-compilation-facing record.  It is not a
+    protocol publication and does not disclose either oracle's full carrier.
+    Repeated top-level draws produce repeated occurrence records even when
+    their pair indices and answers are equal.
+    """
+
+    top_level_ordinal: int
+    layer: NativeOracleLayer
+    oracle_name: str
+    pair_index: int
+    positive_answer_index: int
+    negative_answer_index: int
+    positive_value: Fp2
+    negative_value: Fp2
+
+    def __post_init__(self) -> None:
+        if type(self.top_level_ordinal) is not int or self.top_level_ordinal < 0:
+            raise malformed(
+                "native:layer-query-formation",
+                "FRI-IOR-NATIVE-053",
+                "a layer-query occurrence requires a non-negative top-level ordinal",
+            )
+        if not isinstance(self.layer, NativeOracleLayer):
+            raise malformed(
+                "native:layer-query-formation",
+                "FRI-IOR-NATIVE-053",
+                "a layer-query occurrence requires a typed native oracle layer",
+            )
+        expected_oracle, half_order = (
+            (INITIAL_ORACLE_NAME, D1.order)
+            if self.layer is NativeOracleLayer.INITIAL
+            else (PROVER_ORACLE_NAME, D2.order)
+        )
+        if self.oracle_name != expected_oracle:
+            raise malformed(
+                "native:layer-query-formation",
+                "FRI-IOR-NATIVE-053",
+                "a layer-query occurrence names the wrong oracle for its layer",
+            )
+        if (
+            type(self.pair_index) is not int
+            or type(self.positive_answer_index) is not int
+            or type(self.negative_answer_index) is not int
+            or not 0 <= self.pair_index < half_order
+            or self.positive_answer_index != self.pair_index
+            or self.negative_answer_index != self.pair_index + half_order
+        ):
+            raise malformed(
+                "native:layer-query-formation",
+                "FRI-IOR-NATIVE-053",
+                "layer-query answer indices must be the ordered antipodal pair",
+            )
+        if not isinstance(self.positive_value, Fp2) or not isinstance(
+            self.negative_value, Fp2
+        ):
+            raise malformed(
+                "native:layer-query-formation",
+                "FRI-IOR-NATIVE-053",
+                "layer-query answers must be canonical Fp2 values",
+            )
+
+    @property
+    def ordered_answers(self) -> tuple[tuple[int, Fp2], tuple[int, Fp2]]:
+        return (
+            (self.positive_answer_index, self.positive_value),
+            (self.negative_answer_index, self.negative_value),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -410,7 +499,11 @@ def canonical_event_log() -> tuple[NativeEvent, ...]:
         NativeEvent(4, NativeEventKind.TERMINAL_MATERIAL, TERMINAL_NAME),
     ]
     events.extend(
-        NativeEvent(5 + ordinal, NativeEventKind.LOGICAL_QUERY, f"query[{ordinal}]")
+        NativeEvent(
+            5 + ordinal,
+            NativeEventKind.RANDOM_QUERY_DRAW,
+            f"query-draw[{ordinal}]",
+        )
         for ordinal in range(EXACT_PROFILE.ordered_query_count)
     )
     return tuple(events)
@@ -426,7 +519,7 @@ class NativeFriTrace:
     prover_oracle: LogicalOracle
     second_challenge: FreshChallenge
     terminal: TerminalPolynomial
-    queries: tuple[LogicalQueryOccurrence, ...]
+    query_draws: tuple[RandomQueryDraw, ...]
     events: tuple[NativeEvent, ...]
     structural_chain: StructuralFoldChain
 
@@ -446,13 +539,13 @@ class NativeFriTrace:
                 "FRI-IOR-NATIVE-021",
                 "a native trace contains a value of the wrong semantic kind",
             )
-        if not isinstance(self.queries, tuple) or not all(
-            isinstance(query, LogicalQueryOccurrence) for query in self.queries
+        if not isinstance(self.query_draws, tuple) or not all(
+            isinstance(draw, RandomQueryDraw) for draw in self.query_draws
         ):
             raise malformed(
                 "native:trace-formation",
                 "FRI-IOR-NATIVE-022",
-                "native queries must be a tuple of LogicalQueryOccurrence values",
+                "native query draws must be a tuple of RandomQueryDraw values",
             )
         if not isinstance(self.events, tuple) or not all(
             isinstance(event, NativeEvent) for event in self.events
@@ -471,19 +564,117 @@ class NativeFriTrace:
     def beta1(self) -> Fp2:
         return self.second_challenge.value
 
+    @property
+    def identity(self) -> SemanticId:
+        """Identify the exact trace and native verdict inputs, not a run."""
+
+        return semantic_id(
+            "native-fri-trace",
+            "fri-ior.native-trace.v1",
+            _native_trace_identity_preimage(self),
+        )
+
+
+def _declared_dependency_term(
+    dependency: DeclaredStrategyDependency | None,
+) -> dict[str, Any] | None:
+    if dependency is None:
+        return None
+    return {
+        "subject": dependency.subject,
+        "authored_at": dependency.authored_at,
+        "declared_read_set": list(dependency.declared_read_set),
+        "authority": "caller-declared-cold-replay-metadata",
+        "establishes_strategy_nonanticipation": False,
+    }
+
+
+def _oracle_identity_term(oracle: LogicalOracle) -> dict[str, Any]:
+    return {
+        "name": oracle.name,
+        "domain": oracle.domain.to_term(),
+        "origin": oracle.origin.value,
+        "publication_mode": oracle.publication_mode.value,
+        "entries": [
+            {
+                "point": entry.point.value,
+                "value": entry.value.to_term(),
+            }
+            for entry in oracle.entries
+        ],
+        "declared_strategy_dependency": _declared_dependency_term(
+            oracle.declared_strategy_dependency
+        ),
+    }
+
+
+def _native_trace_identity_preimage(trace: NativeFriTrace) -> dict[str, Any]:
+    return {
+        "kind": "NativeFriTrace",
+        "version": 1,
+        "profile_dependency": trace.profile.identity.to_term(),
+        "core_shape": {
+            "model": "two-round-native-logical-oracle-fri",
+            "publication_effect": "fix-and-grant-logical-query-access",
+            "query_expansion": "each-random-draw-to-o0-pair-then-o1-pair",
+            "pair_answer_order": "positive-then-antipodal-negative",
+            "verdict_check_order": [
+                "exact-trace-shape",
+                "first-fold-equality",
+                "second-fold-terminal-equality",
+                "terminal-semantic-degree-bound",
+            ],
+            "verdict_scope": "sampled-equations-only",
+        },
+        "initial_oracle": _oracle_identity_term(trace.initial_oracle),
+        "first_challenge": {
+            "name": trace.first_challenge.name,
+            "value": trace.first_challenge.value.to_term(),
+        },
+        "prover_oracle": _oracle_identity_term(trace.prover_oracle),
+        "second_challenge": {
+            "name": trace.second_challenge.name,
+            "value": trace.second_challenge.value.to_term(),
+        },
+        "terminal": {
+            "coefficients": [
+                coefficient.to_term() for coefficient in trace.terminal.coefficients
+            ],
+            "declared_strategy_dependency": _declared_dependency_term(
+                trace.terminal.declared_strategy_dependency
+            ),
+        },
+        "ordered_random_query_draws": [
+            {
+                "ordinal": draw.ordinal,
+                "initial_domain_index": draw.initial_domain_index,
+            }
+            for draw in trace.query_draws
+        ],
+        "events": [
+            {
+                "index": event.index,
+                "kind": event.kind.value,
+                "subject": event.subject,
+            }
+            for event in trace.events
+        ],
+        "structural_records": trace.structural_chain.to_term(),
+    }
+
 
 def _oracle_from_values(
     name: str,
     domain: EvaluationDomain,
     origin: OracleOrigin,
     values: tuple[Fp2, ...],
-    decision: StrategyDecision | None,
+    declared_dependency: DeclaredStrategyDependency | None,
 ) -> LogicalOracle:
     entries = tuple(
         OracleEntry(point, value)
         for point, value in zip(domain.points(), values, strict=True)
     )
-    return LogicalOracle(name, domain, origin, entries, decision)
+    return LogicalOracle(name, domain, origin, entries, declared_dependency)
 
 
 def _trim_polynomial(coefficients: list[Fp2]) -> tuple[Fp2, ...]:
@@ -499,9 +690,7 @@ def _fold_coefficients(
     resources: ResourceCounter,
 ) -> tuple[Fp2, ...]:
     padded = list(coefficients) + [Fp2.zero()] * (2 * target_count - len(coefficients))
-    resources.consume_field_operations(
-        target_count * COEFFICIENT_FOLD_FIELD_OPERATIONS
-    )
+    resources.consume_field_operations(target_count * COEFFICIENT_FOLD_FIELD_OPERATIONS)
     folded = [
         padded[2 * index] + challenge * padded[2 * index + 1]
         for index in range(target_count)
@@ -533,12 +722,6 @@ def derive_honest_native_trace(
         coefficients,
         EXACT_PROFILE.initial_degree_bound_exclusive,
     )
-    if polynomial_degree(polynomial) >= EXACT_PROFILE.initial_degree_bound_exclusive:
-        raise refusal(
-            "native:honest-derivation",
-            "FRI-IOR-NATIVE-025",
-            "the honest source polynomial is outside the exact degree profile",
-        )
     if not isinstance(beta0, Fp2) or not isinstance(beta1, Fp2):
         raise malformed(
             "native:honest-derivation",
@@ -583,7 +766,7 @@ def derive_honest_native_trace(
         )
         for pair_index in range(D1.order)
     )
-    first_decision = StrategyDecision(
+    first_dependency = DeclaredStrategyDependency(
         PROVER_ORACLE_NAME,
         2,
         (INITIAL_ORACLE_NAME, FIRST_CHALLENGE_NAME),
@@ -593,7 +776,7 @@ def derive_honest_native_trace(
         D1,
         OracleOrigin.PROVER_ORACLE,
         first_layer_values,
-        first_decision,
+        first_dependency,
     )
 
     first_coefficients = _fold_coefficients(polynomial, beta0, D1.order // 2, resources)
@@ -605,7 +788,7 @@ def derive_honest_native_trace(
     )
     terminal = TerminalPolynomial(
         terminal_coefficients,
-        StrategyDecision(
+        DeclaredStrategyDependency(
             TERMINAL_NAME,
             4,
             (PROVER_ORACLE_NAME, SECOND_CHALLENGE_NAME),
@@ -619,9 +802,8 @@ def derive_honest_native_trace(
         prover_oracle=first_layer,
         second_challenge=FreshChallenge(SECOND_CHALLENGE_NAME, beta1),
         terminal=terminal,
-        queries=tuple(
-            LogicalQueryOccurrence(ordinal, index)
-            for ordinal, index in enumerate(query_draws)
+        query_draws=tuple(
+            RandomQueryDraw(ordinal, index) for ordinal, index in enumerate(query_draws)
         ),
         events=canonical_event_log(),
         structural_chain=canonical_structural_fold_chain(),
@@ -644,7 +826,7 @@ def _validate_oracle(
     expected_name: str,
     expected_domain: EvaluationDomain,
     expected_origin: OracleOrigin,
-    expects_strategy_decision: bool,
+    expects_declared_dependency: bool,
 ) -> CheckResult | None:
     if oracle.publication_mode is not OraclePublicationMode.LOGICAL_ACCESS:
         return _reject(
@@ -662,10 +844,12 @@ def _validate_oracle(
             "initial and prover-authored oracle origins are not interchangeable",
             oracle=expected_name,
         )
-    if (oracle.strategy_decision is not None) is not expects_strategy_decision:
+    if (
+        oracle.declared_strategy_dependency is not None
+    ) is not expects_declared_dependency:
         return _reject(
             "FRI-IOR-NATIVE-032",
-            "oracle strategy authorship disagrees with its declared origin",
+            "oracle replay-dependency metadata disagrees with its declared origin",
             oracle=expected_name,
         )
     expected_points = expected_domain.points()
@@ -700,22 +884,25 @@ def _validate_event_log(trace: NativeFriTrace) -> CheckResult | None:
     return None
 
 
-def _validate_strategy_decision(
-    decision: StrategyDecision,
+def _validate_declared_strategy_dependency(
+    dependency: DeclaredStrategyDependency,
     *,
     expected_subject: str,
     expected_authored_at: int,
 ) -> CheckResult | None:
-    if decision.subject != expected_subject or decision.authored_at != expected_authored_at:
+    if (
+        dependency.subject != expected_subject
+        or dependency.authored_at != expected_authored_at
+    ):
         return _reject(
             "FRI-IOR-NATIVE-036",
-            "strategy authorship is attached to the wrong event occurrence",
+            "declared replay dependencies are attached to the wrong event occurrence",
             subject=expected_subject,
         )
-    if len(set(decision.read_set)) != len(decision.read_set):
+    if len(set(dependency.declared_read_set)) != len(dependency.declared_read_set):
         return _reject(
             "FRI-IOR-NATIVE-037",
-            "a strategy read set must not repeat an object",
+            "a declared strategy read set must not repeat an object",
             subject=expected_subject,
         )
     occurrence_index = {
@@ -725,22 +912,22 @@ def _validate_strategy_decision(
         SECOND_CHALLENGE_NAME: 3,
         TERMINAL_NAME: 4,
         **{
-            f"query[{ordinal}]": 5 + ordinal
+            f"query-draw[{ordinal}]": 5 + ordinal
             for ordinal in range(EXACT_PROFILE.ordered_query_count)
         },
     }
-    for read in decision.read_set:
+    for read in dependency.declared_read_set:
         if read not in occurrence_index:
             return _reject(
                 "FRI-IOR-NATIVE-038",
-                "a strategy read names an object outside the native protocol view",
+                "a declared strategy read names an object outside the protocol view",
                 subject=expected_subject,
                 read=read,
             )
-        if occurrence_index[read] >= decision.authored_at:
+        if occurrence_index[read] >= dependency.authored_at:
             return _reject(
                 "FRI-IOR-NATIVE-039",
-                "a strategy decision reads itself or a future protocol object",
+                "declared replay dependencies name a current or future object",
                 subject=expected_subject,
                 read=read,
             )
@@ -781,7 +968,7 @@ def _validate_trace_shape(trace: NativeFriTrace) -> CheckResult | None:
             expected_name=name,
             expected_domain=domain,
             expected_origin=origin,
-            expects_strategy_decision=authored,
+            expects_declared_dependency=authored,
         )
         if invalid is not None:
             return invalid
@@ -790,37 +977,39 @@ def _validate_trace_shape(trace: NativeFriTrace) -> CheckResult | None:
     if invalid_events is not None:
         return invalid_events
 
-    assert trace.prover_oracle.strategy_decision is not None
-    for decision, subject, event_index in (
-        (trace.prover_oracle.strategy_decision, PROVER_ORACLE_NAME, 2),
-        (trace.terminal.strategy_decision, TERMINAL_NAME, 4),
+    assert trace.prover_oracle.declared_strategy_dependency is not None
+    for dependency, subject, event_index in (
+        (
+            trace.prover_oracle.declared_strategy_dependency,
+            PROVER_ORACLE_NAME,
+            2,
+        ),
+        (trace.terminal.declared_strategy_dependency, TERMINAL_NAME, 4),
     ):
-        invalid_decision = _validate_strategy_decision(
-            decision,
+        invalid_dependency = _validate_declared_strategy_dependency(
+            dependency,
             expected_subject=subject,
             expected_authored_at=event_index,
         )
-        if invalid_decision is not None:
-            return invalid_decision
+        if invalid_dependency is not None:
+            return invalid_dependency
 
-    if len(trace.queries) != EXACT_PROFILE.ordered_query_count:
+    if len(trace.query_draws) != EXACT_PROFILE.ordered_query_count:
         return _reject(
             "FRI-IOR-NATIVE-042",
-            "the native profile requires exactly four logical query occurrences",
+            "the native profile requires exactly four random query draws",
         )
-    if tuple(query.ordinal for query in trace.queries) != tuple(
+    if tuple(draw.ordinal for draw in trace.query_draws) != tuple(
         range(EXACT_PROFILE.ordered_query_count)
     ):
         return _reject(
             "FRI-IOR-NATIVE-043",
-            "logical query occurrences must retain canonical ordinal order",
+            "random query draws must retain canonical ordinal order",
         )
-    if any(
-        not 0 <= query.initial_domain_index < D0.order for query in trace.queries
-    ):
+    if any(not 0 <= draw.initial_domain_index < D0.order for draw in trace.query_draws):
         return _reject(
             "FRI-IOR-NATIVE-044",
-            "a logical query occurrence lies outside the initial domain",
+            "a random query draw lies outside the initial domain",
         )
 
     if trace.structural_chain != canonical_structural_fold_chain():
@@ -829,6 +1018,92 @@ def _validate_trace_shape(trace: NativeFriTrace) -> CheckResult | None:
             "the structural claim/reduction chain does not name the exact two folds",
         )
     return None
+
+
+def _resolve_layer_query_answers(
+    trace: NativeFriTrace,
+) -> tuple[LayerQueryAnswerOccurrence, ...]:
+    records: list[LayerQueryAnswerOccurrence] = []
+    for draw in trace.query_draws:
+        initial_pair_index = draw.initial_domain_index % D1.order
+        first_fold_pair_index = initial_pair_index % D2.order
+        records.extend(
+            (
+                LayerQueryAnswerOccurrence(
+                    top_level_ordinal=draw.ordinal,
+                    layer=NativeOracleLayer.INITIAL,
+                    oracle_name=INITIAL_ORACLE_NAME,
+                    pair_index=initial_pair_index,
+                    positive_answer_index=initial_pair_index,
+                    negative_answer_index=initial_pair_index + D1.order,
+                    positive_value=trace.initial_oracle.logical_answer_at(
+                        initial_pair_index
+                    ),
+                    negative_value=trace.initial_oracle.logical_answer_at(
+                        initial_pair_index + D1.order
+                    ),
+                ),
+                LayerQueryAnswerOccurrence(
+                    top_level_ordinal=draw.ordinal,
+                    layer=NativeOracleLayer.FIRST_FOLD,
+                    oracle_name=PROVER_ORACLE_NAME,
+                    pair_index=first_fold_pair_index,
+                    positive_answer_index=first_fold_pair_index,
+                    negative_answer_index=first_fold_pair_index + D2.order,
+                    positive_value=trace.prover_oracle.logical_answer_at(
+                        first_fold_pair_index
+                    ),
+                    negative_value=trace.prover_oracle.logical_answer_at(
+                        first_fold_pair_index + D2.order
+                    ),
+                ),
+            )
+        )
+    return tuple(records)
+
+
+def resolve_layer_query_answers(
+    candidate: object,
+    resources: ResourceCounter,
+) -> tuple[LayerQueryAnswerOccurrence, ...] | CheckResult:
+    """Resolve compilation-facing pair answers after exact trace admission.
+
+    The function exposes only the two queried antipodal pairs for each random
+    draw.  It neither publishes nor returns either complete logical-oracle
+    carrier.  Shape admission and the complete eight-occurrence resource
+    reservation happen before the first oracle access.
+    """
+
+    boundary = "native:query-resolution"
+    if not isinstance(candidate, NativeFriTrace):
+        return CheckResult(
+            OutcomeClass.MALFORMED,
+            boundary,
+            "FRI-IOR-NATIVE-054",
+            "layer-query resolution requires a NativeFriTrace",
+        )
+    if not isinstance(resources, ResourceCounter):
+        return CheckResult(
+            OutcomeClass.MALFORMED,
+            boundary,
+            "FRI-IOR-NATIVE-055",
+            "layer-query resolution requires a caller-owned ResourceCounter",
+        )
+
+    try:
+        invalid = _validate_trace_shape(candidate)
+        if invalid is not None:
+            return invalid
+        occurrence_count = 2 * len(candidate.query_draws)
+        resources.consume_logical_query_occurrences(occurrence_count)
+        return _resolve_layer_query_answers(candidate)
+    except ModelFailure as error:
+        return error.to_result()
+    except Exception as error:  # pragma: no cover - fault-injection boundary
+        return checker_failure(
+            boundary,
+            f"unexpected layer-query resolution failure: {type(error).__name__}",
+        )
 
 
 def verify_native_trace(
@@ -854,52 +1129,54 @@ def verify_native_trace(
         )
 
     try:
-        invalid = _validate_trace_shape(candidate)
-        if invalid is not None:
-            return invalid
+        layer_queries = resolve_layer_query_answers(candidate, resources)
+        if isinstance(layer_queries, CheckResult):
+            return layer_queries
 
-        # Every occurrence is executed in order.  Equal draws deliberately
-        # consume a second pair of fold checks rather than being deduplicated.
-        for query in candidate.queries:
-            resources.consume_logical_query_occurrences(1)
-            initial_index = query.initial_domain_index
+        # Each draw expands to one O0 and one O1 pair query.  Equal draws stay
+        # distinct, but every pair is fetched exactly once per occurrence.
+        for draw, initial_query, first_fold_query in zip(
+            candidate.query_draws,
+            layer_queries[::2],
+            layer_queries[1::2],
+            strict=True,
+        ):
+            initial_index = draw.initial_domain_index
             first_index = initial_index % D1.order
-            first_pair_index = first_index % D2.order
 
             expected_first = binary_fold(
-                D0.points()[first_index],
-                candidate.initial_oracle.logical_answer_at(first_index),
-                candidate.initial_oracle.logical_answer_at(first_index + D1.order),
+                D0.points()[initial_query.pair_index],
+                initial_query.positive_value,
+                initial_query.negative_value,
                 candidate.beta0,
                 resources,
             )
-            if expected_first != candidate.prover_oracle.logical_answer_at(first_index):
+            first_fold_answers = dict(first_fold_query.ordered_answers)
+            if expected_first != first_fold_answers[first_index]:
                 return _reject(
                     "FRI-IOR-NATIVE-048",
                     "the first sampled binary-fold equation does not hold",
-                    query_ordinal=query.ordinal,
+                    query_ordinal=draw.ordinal,
                     initial_domain_index=initial_index,
                 )
 
             expected_terminal_value = binary_fold(
-                D1.points()[first_pair_index],
-                candidate.prover_oracle.logical_answer_at(first_pair_index),
-                candidate.prover_oracle.logical_answer_at(
-                    first_pair_index + D2.order
-                ),
+                D1.points()[first_fold_query.pair_index],
+                first_fold_query.positive_value,
+                first_fold_query.negative_value,
                 candidate.beta1,
                 resources,
             )
             terminal_value = evaluate_polynomial(
                 candidate.terminal.coefficients,
-                D2.points()[first_pair_index],
+                D2.points()[first_fold_query.pair_index],
                 resources,
             )
             if expected_terminal_value != terminal_value:
                 return _reject(
                     "FRI-IOR-NATIVE-049",
                     "the second sampled binary-fold equation does not hold",
-                    query_ordinal=query.ordinal,
+                    query_ordinal=draw.ordinal,
                     initial_domain_index=initial_index,
                 )
 
@@ -915,19 +1192,27 @@ def verify_native_trace(
             )
 
         query_indices = tuple(
-            query.initial_domain_index for query in candidate.queries
+            draw.initial_domain_index for draw in candidate.query_draws
         )
+        unique_layer_pairs = {
+            (query.layer, query.pair_index) for query in layer_queries
+        }
         return affirmative(
             boundary,
             "FRI-IOR-NATIVE-100",
             "the exact native logical-oracle verifier accepted this trace",
-            subject=candidate.profile.identity,
+            subject=candidate.identity,
+            profile_dependency=candidate.profile.identity,
             protocol_verdict=NativeVerdict.ACCEPT.value,
-            logical_query_count=len(query_indices),
-            unique_query_count=len(set(query_indices)),
-            ordered_query_indices=query_indices,
+            random_query_draw_count=len(query_indices),
+            unique_random_query_index_count=len(set(query_indices)),
+            ordered_random_query_indices=query_indices,
+            logical_query_occurrence_count=len(layer_queries),
+            unique_logical_pair_count=len(unique_layer_pairs),
             fold_checks=2 * len(query_indices),
             authentication_checks=0,
+            declared_dependency_order_checked=True,
+            establishes_strategy_nonanticipation=False,
             establishes_proximity=False,
             establishes_proximity_preservation=False,
             infers_outer_relation=False,
@@ -942,20 +1227,22 @@ def verify_native_trace(
 
 
 __all__ = [
+    "DeclaredStrategyDependency",
     "FIRST_CHALLENGE_NAME",
     "INITIAL_ORACLE_NAME",
+    "LayerQueryAnswerOccurrence",
     "LogicalOracle",
-    "LogicalQueryOccurrence",
     "NativeEvent",
     "NativeEventKind",
     "NativeFriTrace",
+    "NativeOracleLayer",
     "NativeVerdict",
     "OracleEntry",
     "OracleOrigin",
     "OraclePublicationMode",
     "PROVER_ORACLE_NAME",
+    "RandomQueryDraw",
     "SECOND_CHALLENGE_NAME",
-    "StrategyDecision",
     "StructuralFoldChain",
     "StructuralFoldReduction",
     "StructuralProximityClaim",
@@ -964,5 +1251,6 @@ __all__ = [
     "canonical_event_log",
     "canonical_structural_fold_chain",
     "derive_honest_native_trace",
+    "resolve_layer_query_answers",
     "verify_native_trace",
 ]

@@ -1,8 +1,10 @@
 """Strict, network-free provenance for the native FRI/IOR witness.
 
-The source ledger is a bounded public input.  It authenticates exact bytes and
-selected Git-source bytes; it does not authenticate a theorem, an
-interpretation, a remote server, or an implementation-conformance claim.
+The source ledger is a bounded public input.  It records identifiers and
+metadata for exact paper and selected Git-source bytes; it does not by itself
+retrieve or authenticate those upstream bytes, a theorem, an interpretation,
+a remote server, or an implementation-conformance claim.  Its own bytes are
+externally bound only when the caller supplies an expected artifact identity.
 
 This module deliberately keeps four identity lanes apart.  ``SemanticId`` is
 owned by :mod:`friiormodel.terms` and is never constructed here.
@@ -105,9 +107,9 @@ _CLAIM_KEYS = (
 )
 
 _REQUIRED_ESTABLISHES = (
-    "exact-byte provenance for the five paper artifacts used by the executable "
+    "declared exact-byte bindings for the five paper artifacts used by the executable "
     "construction",
-    "exact Git revisions and selected implementation-source bytes used as "
+    "declared exact Git revisions and selected implementation-source byte bindings used as "
     "comparison inputs",
 )
 _REQUIRED_EXCLUSIONS = (
@@ -1129,12 +1131,23 @@ def check_source_ledger(
             path,
             expected_artifact_id=expected_artifact_id,
         )
+        externally_bound = expected_artifact_id is not None
         return affirmative(
             "provenance:ledger-admission",
             "FRI-IOR-PROVENANCE-100",
-            "the constructive source ledger is formed and exactly bound",
+            (
+                "the constructive source ledger is formed and matches the expected "
+                "exact-byte identity"
+                if externally_bound
+                else "the constructive source ledger is formed and self-identified"
+            ),
             artifact_content_id=str(ledger.artifact_id),
             canonical_content_id=str(ledger.canonical_id),
+            binding_mode=(
+                "expected-exact-byte-identity"
+                if externally_bound
+                else "self-identified-only"
+            ),
             paper_count=len(ledger.papers),
             implementation_snapshot_count=len(ledger.implementation_snapshots),
         )

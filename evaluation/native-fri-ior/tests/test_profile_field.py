@@ -29,6 +29,7 @@ from friiormodel.profile import (  # noqa: E402
 )
 from friiormodel.terms import (  # noqa: E402
     CheckResult,
+    MAX_TERM_BYTES,
     ModelFailure,
     OutcomeClass,
     ResourceCounter,
@@ -36,12 +37,70 @@ from friiormodel.terms import (  # noqa: E402
     SEMANTIC_REGIME_ID,
     SemanticId,
     check_semantic_id,
+    encode_term,
     semantic_id,
 )
 
 
 def _extension(real: int, imag: int = 0) -> Fp2:
     return Fp2(Fp.reduce(real), Fp.reduce(imag))
+
+
+class CanonicalTermTest(unittest.TestCase):
+    def test_host_container_subclasses_are_not_closed_term_authority(self) -> None:
+        class DictSubclass(dict[str, object]):
+            pass
+
+        class ListSubclass(list[object]):
+            pass
+
+        class StringSubclass(str):
+            pass
+
+        class BytesSubclass(bytes):
+            pass
+
+        for value in (
+            DictSubclass({"a": 1}),
+            ListSubclass([1]),
+            StringSubclass("x"),
+            BytesSubclass(b"x"),
+        ):
+            with self.subTest(type=type(value).__name__), self.assertRaises(
+                ModelFailure
+            ) as raised:
+                encode_term(value)
+            self.assertIs(raised.exception.outcome, OutcomeClass.MALFORMED)
+            self.assertEqual(raised.exception.code, "FRI-IOR-TERM-004")
+
+    def test_oversized_scalars_refuse_before_canonical_allocation(self) -> None:
+        values = (
+            "x" * (MAX_TERM_BYTES + 1),
+            b"x" * MAX_TERM_BYTES,
+            1 << (8 * MAX_TERM_BYTES),
+        )
+        for value in values:
+            with self.subTest(type=type(value).__name__), self.assertRaises(
+                ModelFailure
+            ) as raised:
+                encode_term(value)
+            self.assertIs(
+                raised.exception.outcome,
+                OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+            )
+            self.assertEqual(raised.exception.code, "FRI-IOR-TERM-005")
+
+    def test_composite_encoding_enforces_a_cumulative_byte_bound(self) -> None:
+        with self.assertRaises(ModelFailure) as sequence_failure:
+            encode_term(tuple(b"x" * 100 for _ in range(700)))
+        self.assertEqual(sequence_failure.exception.code, "FRI-IOR-TERM-005")
+
+        oversized_keys = {
+            f"key-{index:04d}-" + "x" * 70: None for index in range(1000)
+        }
+        with self.assertRaises(ModelFailure) as map_failure:
+            encode_term(oversized_keys)
+        self.assertEqual(map_failure.exception.code, "FRI-IOR-TERM-005")
 
 
 class FieldTest(unittest.TestCase):
@@ -174,6 +233,33 @@ class FieldTest(unittest.TestCase):
 
 
 class ProfileTest(unittest.TestCase):
+    def test_resource_carrier_subclasses_cannot_override_accounting(self) -> None:
+        class CounterSubclass(ResourceCounter):
+            def consume_hash(self, payload_bytes: int, *, merkle_nodes: int = 0) -> None:
+                return None
+
+        class LimitsSubclass(ResourceLimits):
+            pass
+
+        with self.assertRaises(ModelFailure) as counter_failure:
+            CounterSubclass()
+        self.assertEqual(counter_failure.exception.code, "FRI-IOR-RESOURCE-010")
+
+        with self.assertRaises(ModelFailure) as limits_failure:
+            LimitsSubclass(
+                field_operations=0,
+                hash_calls=0,
+                hash_bytes=0,
+                merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=0,
+                unique_openings=0,
+                proof_bytes=0,
+            )
+        self.assertEqual(limits_failure.exception.code, "FRI-IOR-RESOURCE-009")
+
     def test_primitive_generator_has_order_ninety_six(self) -> None:
         generator = Fp(5)
         self.assertEqual(generator**96, Fp(1))
@@ -203,10 +289,37 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(EXACT_PROFILE.identity, EXACT_PROFILE.identity)
 
     def test_well_formed_alternate_profile_is_unsupported(self) -> None:
-        alternate = replace(EXACT_PROFILE, name="another-finite-profile")
-        result = admit_exact_profile(alternate)
-        self.assertIs(result.outcome, OutcomeClass.UNSUPPORTED)
-        self.assertEqual(result.code, "FRI-IOR-PROFILE-018")
+        for alternate in (
+            replace(EXACT_PROFILE, name="another-finite-profile"),
+            replace(EXACT_PROFILE, merkle_hash="another-hash"),
+        ):
+            with self.subTest(alternate=alternate.name):
+                result = admit_exact_profile(alternate)
+                self.assertIs(result.outcome, OutcomeClass.UNSUPPORTED)
+                self.assertEqual(result.code, "FRI-IOR-PROFILE-018")
+
+    def test_incoherent_profile_parameters_are_malformed_at_formation(self) -> None:
+        cases = (
+            ({"modulus": 101}, "FRI-IOR-PROFILE-025"),
+            ({"primitive_generator": 1}, "FRI-IOR-PROFILE-026"),
+            ({"extension_nonresidue": 1}, "FRI-IOR-PROFILE-027"),
+            ({"merkle_hash": ""}, "FRI-IOR-PROFILE-028"),
+            ({"domains": (D0, D0, D2)}, "FRI-IOR-PROFILE-029"),
+            ({"initial_degree_bound_exclusive": 17}, "FRI-IOR-PROFILE-030"),
+            ({"terminal_max_coefficient_count": 9}, "FRI-IOR-PROFILE-031"),
+            ({"terminal_degree_bound_exclusive": 5}, "FRI-IOR-PROFILE-032"),
+            ({"ordered_query_count": 257}, "FRI-IOR-PROFILE-033"),
+            ({"merkle_salt_bytes": 0}, "FRI-IOR-PROFILE-034"),
+            ({"merkle_cap_size": 3}, "FRI-IOR-PROFILE-035"),
+            ({"merkle_cap_size": 4}, "FRI-IOR-PROFILE-036"),
+        )
+        for changes, expected_code in cases:
+            with self.subTest(changes=changes), self.assertRaises(
+                ModelFailure
+            ) as raised:
+                replace(EXACT_PROFILE, **changes)
+            self.assertIs(raised.exception.outcome, OutcomeClass.MALFORMED)
+            self.assertEqual(raised.exception.code, expected_code)
 
     def test_request_limits_do_not_enter_profile_identity(self) -> None:
         profile_term = EXACT_PROFILE.to_term()

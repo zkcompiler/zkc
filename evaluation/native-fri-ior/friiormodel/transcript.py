@@ -5,15 +5,16 @@ It does not claim that native FRI contains a random oracle or a grinding
 round.  In particular, grinding has an explicit Core-visible ``work_seed``
 challenge: Fiat--Shamir derives that challenge from the protected transcript,
 the prover then publishes a nonce, and the verifier checks the pair before it
-derives independent query randomness.
+derives the separate query randomness.
 
 All transcript payloads are injectively framed by namespace and codec.  The
-fold challenges use bounded big-endian rejection sampling into ``F_97^2``;
-query occurrences use the same kind of sampler over all sixteen ordered
-positions of ``D0``.  Mapping opposite points onto one authenticated pair is
-a later commitment-compilation operation, not transcript sampling.  The four
-query occurrences retain their ordinals, so equal-valued draws are not
-silently deduplicated.
+fold challenges use bounded big-endian rejection sampling into ``F_97^2``.
+The sixteen-element query domain instead admits exact one-draw power-of-two
+sampling from a big-endian ``u16``; it has no rejection-exhaustion branch.
+Mapping opposite points onto one authenticated pair is a later
+commitment-compilation operation, not transcript sampling.  The four query
+occurrences retain their ordinals, so equal-valued draws are not silently
+deduplicated.
 """
 
 from __future__ import annotations
@@ -30,11 +31,13 @@ from .terms import (
     ModelFailure,
     OutcomeClass,
     ResourceCounter,
+    SemanticId,
     affirmative,
     checker_failure,
     encode_term,
     malformed,
     refused,
+    semantic_id,
     unsupported,
 )
 
@@ -67,11 +70,11 @@ FP2_CODEC = "fp97-extension2-u8-pair.v1"
 TERMINAL_CODEC = "ascending-fp2-coefficients.v1"
 SEED_CODEC = "bytes32.v1"
 NONCE_CODEC = "u32be.v1"
-QUERY_INDEX_CODEC = "u16be-rejection-initial-domain-index.v1"
+QUERY_INDEX_CODEC = "u16be-low-bits-initial-domain-index.v1"
 
 FP2_SAMPLER = "sha256-u16be-rejection-fp97-extension2.v1"
 SEED_SAMPLER = "sha256-bytes32.v1"
-QUERY_SAMPLER = "sha256-u16be-rejection-range.v1"
+QUERY_SAMPLER = "sha256-u16be-low-bits-power-of-two-range.v1"
 WORK_RULE = "sha256-leading-zero-bits.v1"
 
 STATEMENT_NAMESPACE = "zkc/fri-ior/statement/v1"
@@ -143,13 +146,25 @@ class TranscriptPlanStep:
                 "protected occurrences must be a canonical text sequence",
             )
 
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "occurrence": self.occurrence,
+            "namespace": self.namespace,
+            "codec": self.codec,
+            "sampler": self.sampler,
+            "feeds_transcript_state": self.feeds_transcript_state,
+            "protected_occurrences": list(self.protected_occurrences),
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class TranscriptConstructionPlan:
-    """The fixed structural, framing, sampling, and work construction."""
+    """The fixed transcript-profile plan, below Core-level FS admission."""
 
     model: str
     profile_name: str
+    profile_id: SemanticId
     hash_suite: str
     framing: str
     grinding_bits: int
@@ -164,6 +179,12 @@ class TranscriptConstructionPlan:
         boundary = "transcript:plan-formation"
         for field_name in ("model", "profile_name", "hash_suite", "framing"):
             _require_nonempty_text(getattr(self, field_name), boundary, field_name)
+        if not isinstance(self.profile_id, SemanticId):
+            raise malformed(
+                boundary,
+                "FRI-IOR-TRANSCRIPT-002",
+                "a transcript plan requires the typed exact-profile identity",
+            )
         for field_name in (
             "grinding_bits",
             "grinding_nonce_bytes",
@@ -187,6 +208,32 @@ class TranscriptConstructionPlan:
                 "FRI-IOR-TRANSCRIPT-002",
                 "plan steps must be a canonical TranscriptPlanStep sequence",
             )
+
+    def to_term(self) -> dict[str, Any]:
+        """Return exactly the semantic preimage; request limits are absent."""
+
+        return {
+            "model": self.model,
+            "profile_name": self.profile_name,
+            "profile_id": self.profile_id.to_term(),
+            "hash_suite": self.hash_suite,
+            "framing": self.framing,
+            "grinding_bits": self.grinding_bits,
+            "grinding_nonce_bytes": self.grinding_nonce_bytes,
+            "grinding_search_attempt_bound": self.grinding_search_attempt_bound,
+            "rejection_attempt_bound": self.rejection_attempt_bound,
+            "query_domain_size": self.query_domain_size,
+            "query_count": self.query_count,
+            "steps": [step.to_term() for step in self.steps],
+        }
+
+    @property
+    def identity(self) -> SemanticId:
+        return semantic_id(
+            "transcript-construction-plan",
+            "fri-ior.transcript-construction-plan.v1",
+            self.to_term(),
+        )
 
 
 def _step(
@@ -212,6 +259,7 @@ def _step(
 CANONICAL_CONSTRUCTION_PLAN = TranscriptConstructionPlan(
     model=MODEL,
     profile_name=EXACT_PROFILE.name,
+    profile_id=EXACT_PROFILE.identity,
     hash_suite=HASH_SUITE,
     framing=FRAMING,
     grinding_bits=GRINDING_BITS,
@@ -357,6 +405,7 @@ def _first_plan_difference(
     scalar_fields = (
         "model",
         "profile_name",
+        "profile_id",
         "hash_suite",
         "framing",
         "grinding_bits",
@@ -459,7 +508,12 @@ def _first_plan_difference(
 
 
 def admit_construction_plan(candidate: object) -> CheckResult:
-    """Admit exactly the fixed strong-FS construction and no opt-out variant."""
+    """Admit the exact transcript profile and plan, not FS eligibility.
+
+    This checker does not inspect a Core, establish public-coin structure, or
+    prove that an occurrence map is total.  Those are obligations of the
+    separate checked Fiat--Shamir construction that consumes this plan.
+    """
 
     boundary = "transcript:plan-admission"
     if not isinstance(candidate, TranscriptConstructionPlan):
@@ -476,7 +530,8 @@ def admit_construction_plan(candidate: object) -> CheckResult:
         return affirmative(
             boundary,
             "FRI-IOR-TRANSCRIPT-100",
-            "the exact typed strong-FS construction plan is admitted",
+            "the exact typed transcript profile and plan are admitted",
+            subject=candidate.identity,
         )
     except ModelFailure as error:
         return error.to_result()
@@ -853,36 +908,25 @@ def _sample_query_occurrences(
             "FRI-IOR-TRANSCRIPT-028",
             "query sampling requires one 32-byte query seed",
         )
-    acceptance_ceiling = ((1 << 16) // QUERY_DOMAIN_SIZE) * QUERY_DOMAIN_SIZE
+    if QUERY_DOMAIN_SIZE & (QUERY_DOMAIN_SIZE - 1) != 0:  # pragma: no cover
+        raise AssertionError("the exact query domain must have power-of-two order")
+    index_mask = QUERY_DOMAIN_SIZE - 1
     occurrences: list[QueryOccurrence] = []
     for ordinal in range(EXACT_PROFILE.ordered_query_count):
-        for attempt in range(MAX_REJECTION_ATTEMPTS):
-            resources.consume_sampler_attempts(1)
-            payload = (
-                _QUERY_EXPAND_DOMAIN
-                + query_seed
-                + _metered_frame(
-                    QUERY_OCCURRENCES_NAMESPACE,
-                    QUERY_SAMPLER,
-                    _u16(ordinal, "transcript:query-sampling")
-                    + _u16(attempt, "transcript:query-sampling"),
-                    resources,
-                )
+        resources.consume_sampler_attempts(1)
+        payload = (
+            _QUERY_EXPAND_DOMAIN
+            + query_seed
+            + _metered_frame(
+                QUERY_OCCURRENCES_NAMESPACE,
+                QUERY_SAMPLER,
+                _u16(ordinal, "transcript:query-sampling"),
+                resources,
             )
-            digest = _sha256(payload, resources)
-            candidate = int.from_bytes(digest[:2], "big")
-            if candidate < acceptance_ceiling:
-                occurrences.append(
-                    QueryOccurrence(ordinal, candidate % QUERY_DOMAIN_SIZE)
-                )
-                break
-        else:
-            raise ModelFailure(
-                OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
-                "transcript:query-sampling",
-                "FRI-IOR-TRANSCRIPT-029",
-                "the intrinsic query rejection-sampling attempt bound was exhausted",
-            )
+        )
+        digest = _sha256(payload, resources)
+        candidate = int.from_bytes(digest[:2], "big")
+        occurrences.append(QueryOccurrence(ordinal, candidate & index_mask))
     return tuple(occurrences)
 
 

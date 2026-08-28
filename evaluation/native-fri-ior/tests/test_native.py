@@ -12,19 +12,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from friiormodel.field import Fp, Fp2  # noqa: E402
 from friiormodel.native import (  # noqa: E402
+    LayerQueryAnswerOccurrence,
+    LogicalOracle,
     NativeEvent,
     NativeEventKind,
+    NativeOracleLayer,
     OracleEntry,
     OracleOrigin,
     TerminalPolynomial,
     derive_honest_native_trace,
+    resolve_layer_query_answers,
     verify_native_trace,
 )
 from friiormodel.profile import D0, D1  # noqa: E402
 from friiormodel.terms import (  # noqa: E402
+    CheckResult,
+    ModelFailure,
     OutcomeClass,
     ResourceCounter,
     ResourceLimits,
+    SemanticId,
 )
 
 
@@ -155,7 +162,104 @@ class NativePublicationTest(unittest.TestCase):
         )
 
 
-class NativeCausalityTest(unittest.TestCase):
+class NativeTraceIdentityTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.trace = _honest_trace()
+
+    def test_affirmative_subject_is_exact_native_trace_not_profile(self) -> None:
+        result = verify_native_trace(self.trace, ResourceCounter())
+
+        self.assertIs(result.outcome, OutcomeClass.AFFIRMATIVE)
+        self.assertIsInstance(result.subject, SemanticId)
+        self.assertEqual(result.subject, self.trace.identity)
+        self.assertEqual(result.subject.subject_kind, "native-fri-trace")
+        self.assertEqual(result.subject.domain, "fri-ior.native-trace.v1")
+        self.assertNotEqual(result.subject, self.trace.profile.identity)
+        self.assertEqual(
+            result.evidence["profile_dependency"],
+            self.trace.profile.identity,
+        )
+
+    def test_identity_binds_every_native_verdict_input_lane(self) -> None:
+        base = self.trace.identity
+        initial_entries = list(self.trace.initial_oracle.entries)
+        initial_entries[0] = replace(
+            initial_entries[0],
+            value=initial_entries[0].value + _extension(1),
+        )
+        changed_event = list(self.trace.events)
+        changed_event[-1] = replace(changed_event[-1], subject="query-draw[changed]")
+        changed_draws = list(self.trace.query_draws)
+        changed_draws[0] = replace(changed_draws[0], initial_domain_index=2)
+        changed_reductions = tuple(reversed(self.trace.structural_chain.reductions))
+
+        variants = (
+            replace(
+                self.trace,
+                profile=replace(self.trace.profile, name="alternate-native-profile"),
+            ),
+            replace(
+                self.trace,
+                initial_oracle=replace(
+                    self.trace.initial_oracle,
+                    entries=tuple(initial_entries),
+                ),
+            ),
+            replace(
+                self.trace,
+                first_challenge=replace(
+                    self.trace.first_challenge,
+                    value=self.trace.beta0 + _extension(1),
+                ),
+            ),
+            replace(
+                self.trace,
+                terminal=replace(
+                    self.trace.terminal,
+                    coefficients=(
+                        self.trace.terminal.coefficients[0] + _extension(1),
+                        self.trace.terminal.coefficients[1],
+                    ),
+                ),
+            ),
+            replace(self.trace, query_draws=tuple(changed_draws)),
+            replace(self.trace, events=tuple(changed_event)),
+            replace(
+                self.trace,
+                structural_chain=replace(
+                    self.trace.structural_chain,
+                    reductions=changed_reductions,
+                ),
+            ),
+        )
+        self.assertTrue(all(variant.identity != base for variant in variants))
+
+    def test_request_limits_do_not_enter_native_trace_identity(self) -> None:
+        identity = self.trace.identity
+        narrow = ResourceCounter(
+            ResourceLimits(
+                field_operations=80,
+                hash_calls=0,
+                hash_bytes=0,
+                merkle_nodes=0,
+                transcript_frames=0,
+                sampler_attempts=0,
+                grinding_trials=0,
+                logical_query_occurrences=8,
+                unique_openings=0,
+                proof_bytes=0,
+            )
+        )
+        wider = ResourceCounter()
+
+        first = verify_native_trace(self.trace, narrow)
+        second = verify_native_trace(self.trace, wider)
+        self.assertEqual(first.subject, identity)
+        self.assertEqual(second.subject, identity)
+        self.assertNotEqual(narrow.limits, wider.limits)
+
+
+class DeclaredDependencyOrderTest(unittest.TestCase):
     def setUp(self) -> None:
         self.trace = _honest_trace()
 
@@ -168,19 +272,22 @@ class NativeCausalityTest(unittest.TestCase):
                 ("PublishOracle", "O1"),
                 ("FreshChallenge", "beta1"),
                 ("TerminalMaterial", "terminal"),
-                ("LogicalQuery", "query[0]"),
-                ("LogicalQuery", "query[1]"),
-                ("LogicalQuery", "query[2]"),
-                ("LogicalQuery", "query[3]"),
+                ("RandomQueryDraw", "query-draw[0]"),
+                ("RandomQueryDraw", "query-draw[1]"),
+                ("RandomQueryDraw", "query-draw[2]"),
+                ("RandomQueryDraw", "query-draw[3]"),
             ),
         )
 
-    def test_prover_oracle_cannot_read_the_future_second_challenge(self) -> None:
-        decision = replace(
-            self.trace.prover_oracle.strategy_decision,
-            read_set=("O0", "beta0", "beta1"),
+    def test_prover_dependency_cannot_declare_future_second_challenge(self) -> None:
+        dependency = replace(
+            self.trace.prover_oracle.declared_strategy_dependency,
+            declared_read_set=("O0", "beta0", "beta1"),
         )
-        oracle = replace(self.trace.prover_oracle, strategy_decision=decision)
+        oracle = replace(
+            self.trace.prover_oracle,
+            declared_strategy_dependency=dependency,
+        )
 
         result = verify_native_trace(
             replace(self.trace, prover_oracle=oracle),
@@ -189,12 +296,15 @@ class NativeCausalityTest(unittest.TestCase):
         self.assertIs(result.outcome, OutcomeClass.REFUSED)
         self.assertEqual(result.code, "FRI-IOR-NATIVE-039")
 
-    def test_terminal_cannot_read_query_randomness(self) -> None:
-        decision = replace(
-            self.trace.terminal.strategy_decision,
-            read_set=("O1", "beta1", "query[0]"),
+    def test_terminal_dependency_cannot_declare_future_query_draw(self) -> None:
+        dependency = replace(
+            self.trace.terminal.declared_strategy_dependency,
+            declared_read_set=("O1", "beta1", "query-draw[0]"),
         )
-        terminal = replace(self.trace.terminal, strategy_decision=decision)
+        terminal = replace(
+            self.trace.terminal,
+            declared_strategy_dependency=dependency,
+        )
 
         result = verify_native_trace(
             replace(self.trace, terminal=terminal),
@@ -229,6 +339,156 @@ class NativeCausalityTest(unittest.TestCase):
         self.assertEqual(result.code, "FRI-IOR-NATIVE-035")
 
 
+class LayerQueryAnswerTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.trace = _honest_trace()
+
+    def test_exact_two_layer_occurrence_sequence_and_answers(self) -> None:
+        resources = ResourceCounter()
+        resolved = resolve_layer_query_answers(self.trace, resources)
+        self.assertIsInstance(resolved, tuple)
+        assert isinstance(resolved, tuple)
+
+        self.assertEqual(
+            tuple(
+                (
+                    record.top_level_ordinal,
+                    record.layer,
+                    record.oracle_name,
+                    record.pair_index,
+                    record.positive_answer_index,
+                    record.negative_answer_index,
+                )
+                for record in resolved
+            ),
+            (
+                (0, NativeOracleLayer.INITIAL, "O0", 1, 1, 9),
+                (0, NativeOracleLayer.FIRST_FOLD, "O1", 1, 1, 5),
+                (1, NativeOracleLayer.INITIAL, "O0", 1, 1, 9),
+                (1, NativeOracleLayer.FIRST_FOLD, "O1", 1, 1, 5),
+                (2, NativeOracleLayer.INITIAL, "O0", 6, 6, 14),
+                (2, NativeOracleLayer.FIRST_FOLD, "O1", 2, 2, 6),
+                (3, NativeOracleLayer.INITIAL, "O0", 3, 3, 11),
+                (3, NativeOracleLayer.FIRST_FOLD, "O1", 3, 3, 7),
+            ),
+        )
+        for record in resolved:
+            oracle = (
+                self.trace.initial_oracle
+                if record.layer is NativeOracleLayer.INITIAL
+                else self.trace.prover_oracle
+            )
+            self.assertEqual(
+                record.ordered_answers,
+                (
+                    (
+                        record.positive_answer_index,
+                        oracle.entries[record.positive_answer_index].value,
+                    ),
+                    (
+                        record.negative_answer_index,
+                        oracle.entries[record.negative_answer_index].value,
+                    ),
+                ),
+            )
+        self.assertEqual(resources.logical_query_occurrences, 8)
+
+    def test_repeated_draw_preserves_repeated_layer_occurrences(self) -> None:
+        resolved = resolve_layer_query_answers(self.trace, ResourceCounter())
+        assert isinstance(resolved, tuple)
+
+        self.assertEqual(len(resolved), 8)
+        for first, repeated in zip(resolved[:2], resolved[2:4], strict=True):
+            self.assertEqual(first.top_level_ordinal, 0)
+            self.assertEqual(repeated.top_level_ordinal, 1)
+            self.assertEqual(first.layer, repeated.layer)
+            self.assertEqual(first.oracle_name, repeated.oracle_name)
+            self.assertEqual(first.pair_index, repeated.pair_index)
+            self.assertEqual(first.ordered_answers, repeated.ordered_answers)
+
+    def test_each_pair_answer_is_fetched_once_per_occurrence(self) -> None:
+        calls: list[tuple[str, int]] = []
+        original = LogicalOracle.logical_answer_at
+
+        def counted(oracle: LogicalOracle, index: int) -> Fp2:
+            calls.append((oracle.name, index))
+            return original(oracle, index)
+
+        with patch.object(LogicalOracle, "logical_answer_at", new=counted):
+            result = verify_native_trace(self.trace, ResourceCounter())
+
+        self.assertIs(result.outcome, OutcomeClass.AFFIRMATIVE)
+        self.assertEqual(
+            calls,
+            [
+                ("O0", 1),
+                ("O0", 9),
+                ("O1", 1),
+                ("O1", 5),
+                ("O0", 1),
+                ("O0", 9),
+                ("O1", 1),
+                ("O1", 5),
+                ("O0", 6),
+                ("O0", 14),
+                ("O1", 2),
+                ("O1", 6),
+                ("O0", 3),
+                ("O0", 11),
+                ("O1", 3),
+                ("O1", 7),
+            ],
+        )
+
+    def test_resolution_requires_admitted_shape_and_typed_inputs(self) -> None:
+        shortened = replace(
+            self.trace.initial_oracle,
+            entries=self.trace.initial_oracle.entries[:-1],
+        )
+        counter = ResourceCounter()
+        refused = resolve_layer_query_answers(
+            replace(self.trace, initial_oracle=shortened),
+            counter,
+        )
+        self.assertIsInstance(refused, CheckResult)
+        assert isinstance(refused, CheckResult)
+        self.assertIs(refused.outcome, OutcomeClass.REFUSED)
+        self.assertEqual(refused.code, "FRI-IOR-NATIVE-033")
+        self.assertEqual(counter.logical_query_occurrences, 0)
+
+        malformed_trace = resolve_layer_query_answers({}, ResourceCounter())
+        self.assertIsInstance(malformed_trace, CheckResult)
+        assert isinstance(malformed_trace, CheckResult)
+        self.assertEqual(malformed_trace.code, "FRI-IOR-NATIVE-054")
+
+        malformed_counter = resolve_layer_query_answers(
+            self.trace,
+            object(),  # type: ignore[arg-type]
+        )
+        self.assertIsInstance(malformed_counter, CheckResult)
+        assert isinstance(malformed_counter, CheckResult)
+        self.assertEqual(malformed_counter.code, "FRI-IOR-NATIVE-055")
+
+        with self.assertRaises(ModelFailure) as malformed_record:
+            LayerQueryAnswerOccurrence(
+                0,
+                NativeOracleLayer.INITIAL,
+                "O1",
+                1,
+                1,
+                9,
+                _extension(1),
+                _extension(2),
+            )
+        self.assertEqual(malformed_record.exception.code, "FRI-IOR-NATIVE-053")
+
+    def test_layer_query_answer_record_is_immutable(self) -> None:
+        resolved = resolve_layer_query_answers(self.trace, ResourceCounter())
+        assert isinstance(resolved, tuple)
+        with self.assertRaises(FrozenInstanceError):
+            resolved[0].pair_index = 2  # type: ignore[misc]
+
+
 class NativeExecutionTest(unittest.TestCase):
     def setUp(self) -> None:
         self.trace = _honest_trace()
@@ -242,18 +502,27 @@ class NativeExecutionTest(unittest.TestCase):
         self.assertEqual(result.evidence["protocol_verdict"], "Accept")
         self.assertEqual(result.evidence["fold_checks"], 8)
         self.assertEqual(result.evidence["authentication_checks"], 0)
-        self.assertEqual(resources.logical_query_occurrences, 4)
+        self.assertEqual(result.evidence["random_query_draw_count"], 4)
+        self.assertEqual(result.evidence["logical_query_occurrence_count"], 8)
+        self.assertEqual(resources.logical_query_occurrences, 8)
         self.assertEqual(resources.field_operations, 80)
+        self.assertTrue(result.evidence["declared_dependency_order_checked"])
+        self.assertFalse(result.evidence["establishes_strategy_nonanticipation"])
 
     def test_duplicate_query_draws_remain_distinct_ordered_occurrences(self) -> None:
         resources = ResourceCounter()
         result = verify_native_trace(self.trace, resources)
 
-        self.assertEqual(result.evidence["ordered_query_indices"], (1, 1, 6, 11))
-        self.assertEqual(result.evidence["logical_query_count"], 4)
-        self.assertEqual(result.evidence["unique_query_count"], 3)
+        self.assertEqual(
+            result.evidence["ordered_random_query_indices"],
+            (1, 1, 6, 11),
+        )
+        self.assertEqual(result.evidence["random_query_draw_count"], 4)
+        self.assertEqual(result.evidence["unique_random_query_index_count"], 3)
+        self.assertEqual(result.evidence["logical_query_occurrence_count"], 8)
+        self.assertEqual(result.evidence["unique_logical_pair_count"], 6)
         self.assertEqual(result.evidence["fold_checks"], 8)
-        self.assertEqual(resources.logical_query_occurrences, 4)
+        self.assertEqual(resources.logical_query_occurrences, 8)
 
     def test_fold_inconsistency_rejects_without_any_authentication_layer(self) -> None:
         entries = list(self.trace.prover_oracle.entries)
@@ -268,6 +537,21 @@ class NativeExecutionTest(unittest.TestCase):
         self.assertEqual(result.code, "FRI-IOR-NATIVE-048")
         self.assertEqual(result.evidence["protocol_verdict"], "Reject")
 
+    def test_second_fold_inconsistency_is_the_first_failure(self) -> None:
+        coefficients = self.trace.terminal.coefficients
+        changed_terminal = TerminalPolynomial(
+            (coefficients[0] + _extension(1), coefficients[1]),
+            self.trace.terminal.declared_strategy_dependency,
+        )
+
+        result = verify_native_trace(
+            replace(self.trace, terminal=changed_terminal),
+            ResourceCounter(),
+        )
+        self.assertIs(result.outcome, OutcomeClass.REFUSED)
+        self.assertEqual(result.boundary, "native:verification")
+        self.assertEqual(result.code, "FRI-IOR-NATIVE-049")
+
     def test_fold_consistent_trace_reaches_late_terminal_degree_boundary(self) -> None:
         honest_coefficients = self.trace.terminal.coefficients
         self.assertEqual(len(honest_coefficients), 2)
@@ -281,7 +565,7 @@ class NativeExecutionTest(unittest.TestCase):
         )
         terminal = TerminalPolynomial(
             same_on_d2,
-            self.trace.terminal.strategy_decision,
+            self.trace.terminal.declared_strategy_dependency,
         )
 
         result = verify_native_trace(
@@ -328,14 +612,14 @@ class NativeExecutionTest(unittest.TestCase):
             self.trace,
             ResourceCounter(
                 ResourceLimits(
-                    field_operations=63,
+                    field_operations=79,
                     hash_calls=0,
                     hash_bytes=0,
                     merkle_nodes=0,
                     transcript_frames=0,
                     sampler_attempts=0,
                     grinding_trials=0,
-                    logical_query_occurrences=4,
+                    logical_query_occurrences=8,
                     unique_openings=0,
                     proof_bytes=0,
                 )

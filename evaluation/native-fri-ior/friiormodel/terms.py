@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
+from types import MappingProxyType
 from typing import Any, Mapping
 
 
@@ -272,6 +273,19 @@ def encode_term(value: Any) -> bytes:
 
     nodes = 0
 
+    def over_byte_bound() -> ModelFailure:
+        return ModelFailure(
+            OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+            "term:encoding",
+            "FRI-IOR-TERM-005",
+            "the canonical term exceeds its byte bound",
+        )
+
+    def extend_bounded(target: bytearray, addition: bytes) -> None:
+        if len(target) + len(addition) > MAX_TERM_BYTES:
+            raise over_byte_bound()
+        target.extend(addition)
+
     def encode(current: Any, depth: int) -> bytes:
         nonlocal nodes
         nodes += 1
@@ -292,40 +306,69 @@ def encode_term(value: Any) -> bytes:
         elif type(current) is int:
             sign = b"+" if current >= 0 else b"-"
             magnitude = abs(current)
-            body = (
-                b"\x00"
-                if magnitude == 0
-                else magnitude.to_bytes((magnitude.bit_length() + 7) // 8, "big")
-            )
+            body_length = max(1, (magnitude.bit_length() + 7) // 8)
+            if 10 + body_length > MAX_TERM_BYTES:
+                raise over_byte_bound()
+            body = b"\x00" if magnitude == 0 else magnitude.to_bytes(body_length, "big")
             result = b"I" + sign + _u64(len(body)) + body
-        elif isinstance(current, str):
+        elif type(current) is str:
+            if len(current) > MAX_TERM_BYTES:
+                raise over_byte_bound()
             body = current.encode("utf-8")
+            if 9 + len(body) > MAX_TERM_BYTES:
+                raise over_byte_bound()
             result = b"S" + _u64(len(body)) + body
-        elif isinstance(current, bytes):
+        elif type(current) is bytes:
+            if 9 + len(current) > MAX_TERM_BYTES:
+                raise over_byte_bound()
             result = b"B" + _u64(len(current)) + current
-        elif isinstance(current, (tuple, list)):
-            children = [encode(child, depth + 1) for child in current]
-            result = b"L" + _u64(len(children)) + b"".join(
-                _u64(len(child)) + child for child in children
-            )
-        elif isinstance(current, Mapping):
+        elif type(current) in (tuple, list):
+            if len(current) > MAX_TERM_NODES:
+                raise ModelFailure(
+                    OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+                    "term:encoding",
+                    "FRI-IOR-TERM-002",
+                    "the canonical term exceeds its node or depth bound",
+                )
+            encoded = bytearray(b"L" + _u64(len(current)))
+            for child_value in current:
+                child = encode(child_value, depth + 1)
+                extend_bounded(encoded, _u64(len(child)))
+                extend_bounded(encoded, child)
+            result = bytes(encoded)
+        elif type(current) in (dict, MappingProxyType):
+            if len(current) > MAX_TERM_NODES:
+                raise ModelFailure(
+                    OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+                    "term:encoding",
+                    "FRI-IOR-TERM-002",
+                    "the canonical term exceeds its node or depth bound",
+                )
             if not all(isinstance(key, str) for key in current):
                 raise malformed(
                     "term:encoding",
                     "FRI-IOR-TERM-003",
                     "canonical maps require text keys",
                 )
-            entries: list[bytes] = []
-            for key in sorted(current, key=lambda item: item.encode("utf-8")):
+            encoded_keys: list[tuple[bytes, str]] = []
+            key_bytes_total = 0
+            for key in current:
+                if len(key) > MAX_TERM_BYTES:
+                    raise over_byte_bound()
+                key_bytes = key.encode("utf-8")
+                key_bytes_total += len(key_bytes)
+                if key_bytes_total > MAX_TERM_BYTES:
+                    raise over_byte_bound()
+                encoded_keys.append((key_bytes, key))
+            encoded = bytearray(b"M" + _u64(len(encoded_keys)))
+            for _, key in sorted(encoded_keys):
                 key_body = encode(key, depth + 1)
                 value_body = encode(current[key], depth + 1)
-                entries.append(
-                    _u64(len(key_body))
-                    + key_body
-                    + _u64(len(value_body))
-                    + value_body
-                )
-            result = b"M" + _u64(len(entries)) + b"".join(entries)
+                extend_bounded(encoded, _u64(len(key_body)))
+                extend_bounded(encoded, key_body)
+                extend_bounded(encoded, _u64(len(value_body)))
+                extend_bounded(encoded, value_body)
+            result = bytes(encoded)
         else:
             raise malformed(
                 "term:encoding",
@@ -334,12 +377,7 @@ def encode_term(value: Any) -> bytes:
             )
 
         if len(result) > MAX_TERM_BYTES:
-            raise ModelFailure(
-                OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
-                "term:encoding",
-                "FRI-IOR-TERM-005",
-                "the canonical term exceeds its byte bound",
-            )
+            raise over_byte_bound()
         return result
 
     return encode(value, 0)
@@ -467,6 +505,12 @@ class ResourceLimits:
     proof_bytes: int
 
     def __post_init__(self) -> None:
+        if type(self) is not ResourceLimits:
+            raise malformed(
+                "resources:formation",
+                "FRI-IOR-RESOURCE-009",
+                "resource limits must use the exact closed carrier type",
+            )
         for name in (
             "field_operations",
             "hash_calls",
@@ -518,7 +562,13 @@ HARD_RESOURCE_LIMITS = ResourceLimits(
 
 @dataclass
 class ResourceCounter:
-    """An atomic, monotone counter under caller-selected bounded limits."""
+    """An evaluator-internal atomic counter under immutable selected limits.
+
+    The mutable object is cooperative instrumentation when passed through a
+    low-level API; it is not itself evidence.  An authoritative top-level
+    validation operation must create the exact carrier privately and publish
+    only its frozen snapshot after the complete operation.
+    """
 
     limits: ResourceLimits = HARD_RESOURCE_LIMITS
     field_operations: int = 0
@@ -533,7 +583,13 @@ class ResourceCounter:
     proof_bytes: int = 0
 
     def __post_init__(self) -> None:
-        if not isinstance(self.limits, ResourceLimits):
+        if type(self) is not ResourceCounter:
+            raise malformed(
+                "resources:formation",
+                "FRI-IOR-RESOURCE-010",
+                "resource counters must use the exact evaluator-owned carrier type",
+            )
+        if type(self.limits) is not ResourceLimits:
             raise malformed(
                 "resources:formation",
                 "FRI-IOR-RESOURCE-002",

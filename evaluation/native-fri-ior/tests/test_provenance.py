@@ -36,11 +36,11 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = PACKAGE_ROOT / "cases" / "source-ledger.json"
 
 EXPECTED_LEDGER_ARTIFACT_ID = (
-    "sha256:49fc9d942f51728df42a8e7b3286ffd3d3cd5a9496dac1a3ac7daedae271d837"
+    "sha256:a767b8ba1526d86b2214f6b4127065e4d3707a6d1c43e76a965d71c222da42b4"
 )
 EXPECTED_LEDGER_CANONICAL_ID = (
     "canonical-sha256:"
-    "0b872b075ffec320a05086b6b312642f956b679e3a2aabf7904c01e32660e019"
+    "b0240e40602156ead345260d442a263a0d9fa2e299c027a34c11ae59bed9624c"
 )
 
 EXPECTED_PAPERS = {
@@ -580,15 +580,26 @@ class OfflineAndDiagnosticTest(unittest.TestCase):
 
         self.assertEqual(observed, set(OutcomeClass))
 
-    def test_affirmative_diagnostic_is_stable_and_binds_both_ids(self) -> None:
+    def test_affirmative_diagnostic_distinguishes_self_identity_from_binding(self) -> None:
         result = check_source_ledger(LEDGER_PATH)
         self.assertIs(result.outcome, OutcomeClass.AFFIRMATIVE)
         self.assertEqual(result.boundary, "provenance:ledger-admission")
         self.assertEqual(result.code, "FRI-IOR-PROVENANCE-100")
+        self.assertEqual(result.evidence["binding_mode"], "self-identified-only")
         self.assertEqual(result.evidence["artifact_content_id"], EXPECTED_LEDGER_ARTIFACT_ID)
         self.assertEqual(
             result.evidence["canonical_content_id"],
             EXPECTED_LEDGER_CANONICAL_ID,
+        )
+
+        bound = check_source_ledger(
+            LEDGER_PATH,
+            expected_artifact_id=ArtifactContentId.parse(EXPECTED_LEDGER_ARTIFACT_ID),
+        )
+        self.assertIs(bound.outcome, OutcomeClass.AFFIRMATIVE)
+        self.assertEqual(
+            bound.evidence["binding_mode"],
+            "expected-exact-byte-identity",
         )
 
 

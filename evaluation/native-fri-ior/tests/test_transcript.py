@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -85,7 +86,7 @@ STATEMENT_TERM = {
 APPLICATION_CONTEXT_TERM = {
     "application": "zkc-native-fri-ior-evaluation",
     "version": 1,
-    "fixture_selector": 2,
+    "fixture_selector": 9,
 }
 CAP0_VALUE = _cap("cap0")
 CAP1_VALUE = _cap("cap1")
@@ -242,24 +243,21 @@ def _reference_reconstruction(nonce: int) -> dict[str, object]:
     query_seed = _reference_squeeze(state, QUERY_SEED_NAMESPACE, SEED_SAMPLER, 0)
     query_indices: list[int] = []
     query_domain_size = plan.query_domain_size
-    ceiling = ((1 << 16) // query_domain_size) * query_domain_size
+    if query_domain_size & (query_domain_size - 1) != 0:
+        raise AssertionError("the fixed query domain is not a power of two")
+    index_mask = query_domain_size - 1
     for ordinal in range(plan.query_count):
-        for attempt in range(plan.rejection_attempt_bound):
-            digest = _reference_hash(
-                QUERY_EXPAND_DOMAIN
-                + query_seed
-                + _reference_frame(
-                    QUERY_OCCURRENCES_NAMESPACE,
-                    QUERY_SAMPLER,
-                    ordinal.to_bytes(2, "big") + attempt.to_bytes(2, "big"),
-                )
+        digest = _reference_hash(
+            QUERY_EXPAND_DOMAIN
+            + query_seed
+            + _reference_frame(
+                QUERY_OCCURRENCES_NAMESPACE,
+                QUERY_SAMPLER,
+                ordinal.to_bytes(2, "big"),
             )
-            candidate = int.from_bytes(digest[:2], "big")
-            if candidate < ceiling:
-                query_indices.append(candidate % query_domain_size)
-                break
-        else:
-            raise AssertionError("reference query sampler exhausted its syntax bound")
+        )
+        candidate = int.from_bytes(digest[:2], "big")
+        query_indices.append(candidate & index_mask)
     return {
         "beta0": beta0,
         "beta1": beta1,
@@ -313,6 +311,7 @@ class ConstructionPlanAdmissionTest(unittest.TestCase):
         result = admit_construction_plan(CANONICAL_CONSTRUCTION_PLAN)
         self.assertIs(result.outcome, OutcomeClass.AFFIRMATIVE)
         self.assertEqual(result.code, "FRI-IOR-TRANSCRIPT-100")
+        self.assertEqual(result.subject, CANONICAL_CONSTRUCTION_PLAN.identity)
 
     def test_non_plan_input_is_malformed(self) -> None:
         result = admit_construction_plan({"model": MODEL})
@@ -391,6 +390,8 @@ class ConstructionPlanAdmissionTest(unittest.TestCase):
         self.assertEqual(result.code, "FRI-IOR-TRANSCRIPT-018")
 
     def test_intrinsic_bounds_are_plan_fields_not_request_limits(self) -> None:
+        plan_identity = CANONICAL_CONSTRUCTION_PLAN.identity
+        plan_term = CANONICAL_CONSTRUCTION_PLAN.to_term()
         first = ResourceCounter(_request_limits(hash_calls=32, hash_bytes=1 << 14))
         second = ResourceCounter(_request_limits(hash_calls=64, hash_bytes=1 << 15))
         self.assertNotEqual(first.limits, second.limits)
@@ -403,34 +404,52 @@ class ConstructionPlanAdmissionTest(unittest.TestCase):
             admit_construction_plan(CANONICAL_CONSTRUCTION_PLAN).outcome,
             OutcomeClass.AFFIRMATIVE,
         )
+        self.assertNotIn("resources", plan_term)
+        self.assertNotIn("resource_limits", plan_term)
+        self.assertEqual(CANONICAL_CONSTRUCTION_PLAN.identity, plan_identity)
+
+    def test_plan_identity_changes_with_plan_semantics(self) -> None:
+        alternate = replace(CANONICAL_CONSTRUCTION_PLAN, grinding_bits=3)
+        self.assertNotEqual(
+            alternate.identity,
+            CANONICAL_CONSTRUCTION_PLAN.identity,
+        )
+        self.assertEqual(
+            CANONICAL_CONSTRUCTION_PLAN.identity.subject_kind,
+            "transcript-construction-plan",
+        )
+        self.assertEqual(
+            CANONICAL_CONSTRUCTION_PLAN.identity.domain,
+            "fri-ior.transcript-construction-plan.v1",
+        )
 
 
 class TranscriptDerivationTest(unittest.TestCase):
-    def test_exact_vector_and_independent_reconstruction(self) -> None:
+    def test_exact_vector_and_separately_coded_transition_reconstruction(self) -> None:
         counter = ResourceCounter()
         transcript = _derive_fixture(resources=counter)
         reference = _reference_reconstruction(transcript.grinding_nonce)
 
-        self.assertEqual(transcript.beta0.to_term(), [66, 86])
-        self.assertEqual(transcript.beta1.to_term(), [32, 48])
-        self.assertEqual(transcript.grinding_nonce, 6)
+        self.assertEqual(transcript.beta0.to_term(), [14, 73])
+        self.assertEqual(transcript.beta1.to_term(), [74, 54])
+        self.assertEqual(transcript.grinding_nonce, 0)
         self.assertEqual(
             transcript.work_seed.hex(),
-            "a62dd0ab813ab82e70350a38085d60c199e73a97bba966c6103c3bbde19ae2e7",
+            "3de488215beab07b28f45c95f9696a565e6ea8efcfba9d87edcc708e4f8b3215",
         )
         self.assertEqual(
             transcript.work_digest.hex(),
-            "23ab5b2b7d433a80c9cb55ed20d494c5627801c62123c2171805805cf991c018",
+            "12b0eda4e70232ea6e006e680d2dccd1d64c8dc2258637d85874032b8cf94b63",
         )
         self.assertEqual(
             transcript.query_seed.hex(),
-            "e1c2856dc758eb5dc0958a5217fd8f3703e7df92fd3d146d42473233dc8859c0",
+            "0e6b42cd957f071c64b44720193c2da13e2584b3b5b681ccb905e71186c4fe29",
         )
         self.assertEqual(
             tuple(
                 item.initial_domain_index for item in transcript.query_occurrences
             ),
-            (12, 6, 14, 12),
+            (6, 6, 1, 9),
         )
         self.assertEqual(transcript.beta0, reference["beta0"])
         self.assertEqual(transcript.beta1, reference["beta1"])
@@ -443,33 +462,41 @@ class TranscriptDerivationTest(unittest.TestCase):
             ),
             reference["query_indices"],
         )
-        self.assertEqual(counter.snapshot()["hash_calls"], 23)
-        self.assertEqual(counter.snapshot()["transcript_frames"], 22)
+        self.assertEqual(counter.snapshot()["hash_calls"], 17)
+        self.assertEqual(counter.snapshot()["transcript_frames"], 16)
         self.assertEqual(counter.snapshot()["sampler_attempts"], 8)
-        self.assertEqual(counter.snapshot()["grinding_trials"], 8)
+        self.assertEqual(counter.snapshot()["grinding_trials"], 2)
         self.assertEqual(counter.snapshot()["logical_query_occurrences"], 0)
 
     def test_equal_query_values_keep_distinct_ordinals(self) -> None:
-        transcript = _derive_fixture()
+        occurrences = _derive_fixture().query_occurrences
         self.assertEqual(
-            tuple(item.ordinal for item in transcript.query_occurrences),
+            tuple(item.ordinal for item in occurrences),
             (0, 1, 2, 3),
         )
-        self.assertEqual(transcript.query_occurrences[0].initial_domain_index, 12)
-        self.assertEqual(transcript.query_occurrences[3].initial_domain_index, 12)
+        self.assertEqual(occurrences[0].initial_domain_index, 6)
+        self.assertEqual(occurrences[1].initial_domain_index, 6)
         self.assertNotEqual(
-            transcript.query_occurrences[0].ordinal,
-            transcript.query_occurrences[3].ordinal,
+            occurrences[0].ordinal,
+            occurrences[1].ordinal,
         )
 
     def test_opposite_initial_points_are_not_collapsed_during_sampling(self) -> None:
-        transcript = _derive_fixture()
-        first = transcript.query_occurrences[1].initial_domain_index
-        opposite = transcript.query_occurrences[2].initial_domain_index
-        self.assertEqual((first, opposite), (6, 14))
+        occurrences = _derive_fixture().query_occurrences
+        first = occurrences[2].initial_domain_index
+        opposite = occurrences[3].initial_domain_index
+        self.assertEqual((first, opposite), (1, 9))
         self.assertNotEqual(first, opposite)
         pair_count = EXACT_PROFILE.domains[0].order // 2
         self.assertEqual(first % pair_count, opposite % pair_count)
+        indices = tuple(item.initial_domain_index for item in occurrences)
+        layer0_pairs = {index % 8 for index in indices}
+        layer1_pairs = {index % 4 for index in indices}
+        self.assertGreaterEqual(len(layer0_pairs), 2)
+        self.assertLess(
+            len(layer0_pairs) + len(layer1_pairs),
+            2 * len(occurrences),
+        )
 
     def test_each_public_prefix_source_influences_its_next_coin(self) -> None:
         transcript = _derive_fixture()
@@ -597,6 +624,46 @@ class TranscriptDerivationTest(unittest.TestCase):
             )
         self.assertIs(raised.exception.outcome, OutcomeClass.MALFORMED)
         self.assertEqual(raised.exception.code, "FRI-IOR-TRANSCRIPT-047")
+
+
+class IntrinsicBoundDiagnosticsTest(unittest.TestCase):
+    def test_fp2_sampler_intrinsic_exhaustion_is_deterministic(self) -> None:
+        with patch.object(
+            transcript_model,
+            "_squeeze_digest",
+            return_value=b"\xff" * 32,
+        ):
+            result = derive_fiat_shamir_transcript(
+                CANONICAL_CONSTRUCTION_PLAN,
+                STATEMENT_TERM,
+                APPLICATION_CONTEXT_TERM,
+                CAP0_VALUE,
+                CAP1_VALUE,
+                TERMINAL_COEFFICIENTS,
+                0,
+            )
+        self.assertIsInstance(result, CheckResult)
+        assert isinstance(result, CheckResult)
+        self.assertIs(
+            result.outcome,
+            OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+        )
+        self.assertEqual(result.code, "FRI-IOR-TRANSCRIPT-027")
+
+    def test_grinding_search_intrinsic_exhaustion_is_deterministic(self) -> None:
+        with (
+            patch.object(transcript_model, "_work_succeeds", return_value=False),
+            self.assertRaises(ModelFailure) as raised,
+        ):
+            transcript_model._find_grinding_nonce(  # noqa: SLF001
+                b"\x00" * 32,
+                ResourceCounter(),
+            )
+        self.assertIs(
+            raised.exception.outcome,
+            OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+        )
+        self.assertEqual(raised.exception.code, "FRI-IOR-TRANSCRIPT-035")
 
 
 if __name__ == "__main__":
