@@ -13,16 +13,19 @@ structural Fresh/Fiat--Shamir pair is treated as proof of a property.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field, fields as dataclass_fields, replace
 from enum import Enum
 from fractions import Fraction
+from functools import wraps
 import hashlib
 import importlib.util
 from pathlib import Path
 import re
 import sys
 from types import MappingProxyType
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +142,19 @@ def _ascii(text: str, what: str) -> str:
         or any(ord(ch) < 0x21 or ord(ch) > 0x7E for ch in text)
     ):
         raise AnalysisError(f"{what} must be nonempty printable ASCII without spaces")
+    return text
+
+
+def _printable_ascii(text: str, what: str) -> str:
+    if (
+        type(text) is not str
+        or not text
+        or text != text.strip(" ")
+        or any(ord(ch) < 0x20 or ord(ch) > 0x7E for ch in text)
+    ):
+        raise AnalysisError(
+            f"{what} must be nonempty printable ASCII without edge spaces"
+        )
     return text
 
 
@@ -454,7 +470,7 @@ ANALYSIS_BODY_SCHEMA_DESCRIPTORS = {
         "AnalysisLossSemanticImportBody",
         ("relations-bridge-id", "lossy-use-scope-and-occurrence-coordinate-schema", "direction", "source-semantics", "declared-result-sort", "admitted-interpretation-rule", "exact-parameter-substitution", "per-occurrence-expression"),
     ),
-    "analysis.semantic-basis": ("AnalysisSemanticBasisBody", ("family", "rule-source", "exact-premise-schemas", "source-read-purposes", "conclusion-schema", "typed-transform-program")),
+    "analysis.semantic-basis": ("AnalysisSemanticBasisBody", ("family", "exact-question-id", "rule-source", "exact-premise-schemas", "source-read-purposes", "conclusion-schema", "typed-transform-program")),
     "analysis.support-instantiation": ("AnalysisSupportInstantiationBody", ("semantic-basis-id", "proposition-id", "non-hypothesis-premise-bindings", "established-hypothesis-node-bindings", "assumed-hypothesis-node-bindings", "source-support-bindings")),
     "analysis.validation-basis": ("AnalysisValidationBasisBody", ("admitted-checker-contract-ids-and-abis", "exact-translation-contracts", "finite-control-contracts", "theorem-source-validation-ids", "residual-trust-roots")),
     "analysis.operation-policy": ("AnalysisOperationPolicyBody", ("supported-families-and-models", "named-consumer-and-typed-purpose-permissions", "capability-freshness-and-lifetime", "disclosure-policy", "unknown-question-disposition", "persistence-policy", "cold-replay-policy")),
@@ -571,7 +587,7 @@ K3C_ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ("finite-special-soundness", "analysis-premise-consumer"),
     ),
     "analysis.qualification": (
-        ("conditional-finite-special-soundness", "conditional-affirmative"),
+        ("finite-special-soundness-result", "conditional-affirmative"),
         ("conditional-assumed-external-all-n", "conditional-affirmative"),
     ),
     "analysis.property-family": (
@@ -645,7 +661,7 @@ K3C_ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ("core-public-coin-view", "pir-owner-view-use"),
         ("transcript-declaration-view", "pir-owner-view-use"),
         ("schnorr-relation-definition-view", "relations-owner-view-use"),
-        ("finite-special-soundness-result", "analysis-result-use"),
+        ("finite-special-soundness", "analysis-result-use"),
     ),
 }
 
@@ -1107,6 +1123,98 @@ K3C_PROFILE_BUNDLE = K3C_ANALYSIS_SEMANTIC_PROFILES.bundle
 K3C_PROFILE_PREIMAGES = K3C_PROFILE_BUNDLE
 
 
+_FAMILY_DERIVATION_VALUES: ContextVar[dict[tuple[object, ...], object] | None] = (
+    ContextVar("analysis_family_derivation_values", default=None)
+)
+_FAMILY_DERIVATION_MISSING = object()
+
+
+@contextmanager
+def _family_derivation_scope() -> Iterable[None]:
+    """Share pure family derivations only within one live operation."""
+
+    current = _FAMILY_DERIVATION_VALUES.get()
+    if current is not None:
+        yield
+        return
+    token = _FAMILY_DERIVATION_VALUES.set({})
+    try:
+        yield
+    finally:
+        _FAMILY_DERIVATION_VALUES.reset(token)
+
+
+def _family_derivation_value(
+    key: tuple[object, ...],
+    form: Callable[[], object],
+) -> object:
+    cache = _FAMILY_DERIVATION_VALUES.get()
+    if cache is None:
+        return form()
+    prior = cache.get(key, _FAMILY_DERIVATION_MISSING)
+    if prior is not _FAMILY_DERIVATION_MISSING:
+        return prior
+    value = form()
+    cache[key] = value
+    return value
+
+
+def _with_family_derivation_scope(function: Callable[..., object]) -> Callable[..., object]:
+    """Give one public operation a nonpersistent pure-derivation cache."""
+
+    @wraps(function)
+    def scoped(*args: object, **kwargs: object) -> object:
+        with _family_derivation_scope():
+            return function(*args, **kwargs)
+
+    return scoped
+
+
+def _active_analysis_profile_id(profile: object) -> object:
+    """Resolve an active profile through its already authenticated coordinate."""
+
+    if type(profile) is not k1.SemanticLanguageProfile:
+        raise AnalysisError("Analysis profile has the wrong exact shape")
+    candidates = (
+        (K3C_ANALYSIS_KERNEL_PROFILE, K3C_ANALYSIS_KERNEL_PROFILE_ID),
+        (K3C_ANALYSIS_PROPERTY_PROFILE, K3C_ANALYSIS_PROPERTY_PROFILE_ID),
+        (K3C_ANALYSIS_TRANSPORT_PROFILE, K3C_ANALYSIS_TRANSPORT_PROFILE_ID),
+        (
+            K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE,
+            K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_ID,
+        ),
+    )
+    for active, identifier in candidates:
+        if profile is active:
+            return identifier
+    matches = tuple(identifier for active, identifier in candidates if profile == active)
+    if len(matches) != 1:
+        raise AnalysisError("unknown or ambiguous active Analysis profile")
+    return matches[0]
+
+
+def _bundled_semantic_profile_id(profile: object) -> object:
+    """Resolve an exact profile already present in the authenticated bundle."""
+
+    if type(profile) is not k1.SemanticLanguageProfile:
+        raise AnalysisError("semantic profile has the wrong exact shape")
+    identical = tuple(
+        identifier
+        for identifier, preimage in K3C_PROFILE_BUNDLE.items()
+        if preimage is profile
+    )
+    if len(identical) == 1:
+        return identical[0]
+    matches = tuple(
+        identifier
+        for identifier, preimage in K3C_PROFILE_BUNDLE.items()
+        if preimage == profile
+    )
+    if len(matches) != 1:
+        raise AnalysisError("semantic profile is absent or ambiguous in its bundle")
+    return matches[0]
+
+
 def _analysis_profile_declaration_ordinal(
     profile: object,
     declaration_kind: str,
@@ -1165,15 +1273,17 @@ def analysis_profile_declaration_ref(
     ordinal = _analysis_profile_declaration_ordinal(
         owner_profile, declaration_kind, label
     )
-    if selected_profile.identity == owner_profile.identity:
+    selected_profile_id = _active_analysis_profile_id(selected_profile)
+    owner_profile_id = _bundled_semantic_profile_id(owner_profile)
+    if selected_profile_id == owner_profile_id:
         reference = k1.ProfileLocalDeclarationRef(declaration_kind, ordinal)
     else:
-        if owner_profile.identity not in _analysis_profile_import_closure(
+        if owner_profile_id not in _analysis_profile_import_closure(
             selected_profile
         ):
             raise AnalysisError("declaration owner is outside the selected profile cone")
         reference = k1.ImportedProfileDeclarationRef(
-            owner_profile.identity, declaration_kind, ordinal
+            owner_profile_id, declaration_kind, ordinal
         )
     k1.profile_declaration_ref_datum(reference)
     return reference
@@ -1237,6 +1347,35 @@ class AnalysisSemanticReadManifestBodyV0:
     source_profile_id: object
     exact_subjects: tuple[object, ...]
     slots: object
+
+
+class AnalysisReadPurpose(str, Enum):
+    SEMANTIC_MEANING = "SemanticMeaning"
+    PREMISE_SUPPORT = "PremiseSupport"
+    OCCURRENCE_EVIDENCE = "OccurrenceEvidence"
+
+
+@dataclass(frozen=True)
+class ConcreteReadPurpose:
+    semantic_read_manifest_id: object
+    semantic_read_slot_ordinal: int
+    exact_purpose: AnalysisReadPurpose
+
+
+@dataclass(frozen=True)
+class FamilyReadPurpose:
+    family_read_manifest_schema_id: object
+    family_read_slot_ordinal: int
+    exact_purpose: AnalysisReadPurpose
+
+
+AnalysisReadPurposeRequirement = ConcreteReadPurpose | FamilyReadPurpose
+
+
+@dataclass(frozen=True)
+class NormalizedAnalysisReadPurpose:
+    requirement: AnalysisReadPurposeRequirement
+    exact_slot: object
 
 
 @dataclass(frozen=True)
@@ -1379,6 +1518,10 @@ class AnalysisChallengeDomainBodyV0:
     model_values: tuple[int, ...]
     adequacy_evaluator_id: object
     semantic_status: object
+    _issuer: object
+
+
+_CHALLENGE_DOMAIN_BODY_ISSUER = object()
 
 
 @dataclass(frozen=True)
@@ -1479,9 +1622,10 @@ class AnalysisPropositionBodyV0:
 @dataclass(frozen=True)
 class AnalysisSemanticBasisBodyV0:
     family: object
+    exact_question_id: object
     rule_source: object
     exact_premise_schemas: object
-    source_read_purposes: object
+    source_read_purposes: tuple[AnalysisReadPurposeRequirement, ...]
     conclusion_schema: object
     typed_transform_program: object
 
@@ -1669,6 +1813,56 @@ def _analysis_hypothesis_context_body(
     )
 
 
+def _challenge_domain_atomic_coordinate_fields(
+    value: object,
+    leaf: k2.StaticViewAtomicLeaf,
+) -> tuple[object, ...]:
+    """Validate one exact atomic PublicCoinView challenge coordinate body."""
+
+    if type(value) is not k1.DatumRecord or tuple(
+        ordinal for ordinal, _ in value.fields
+    ) != tuple(range(6)):
+        raise AnalysisError("challenge-domain coordinate has the wrong exact shape")
+    coordinate = dict(value.fields)
+    owner = coordinate[0]
+    if type(owner) is not k1.DatumRecord or tuple(
+        ordinal for ordinal, _ in owner.fields
+    ) != tuple(range(4)):
+        raise AnalysisError("challenge-domain owner coordinate has the wrong shape")
+    owner_fields = dict(owner.fields)
+    expected_symbols = (
+        (owner_fields[0], k2.StaticViewOwnerKind.CORE.value),
+        (owner_fields[2], k2.StaticViewKind.PUBLIC_COIN.value),
+        (coordinate[1], k2.StaticViewField.PC_CHALLENGES.value),
+        (coordinate[5], leaf.value),
+    )
+    if any(
+        type(actual) is not k1.Symbol or actual.value != expected
+        for actual, expected in expected_symbols
+    ):
+        raise AnalysisError(
+            "challenge-domain coordinate is not one exact Core PublicCoinView leaf"
+        )
+    if (
+        type(owner_fields[1]) is not k1.BytesValue
+        or type(owner_fields[3]) is not k1.BytesValue
+        or type(coordinate[2]) is not k1.Nat
+        or type(coordinate[3]) is not k1.Nat
+        or coordinate[2].value < 0
+        or coordinate[3].value < 0
+        or type(coordinate[4]) is not k1.Symbol
+    ):
+        raise AnalysisError("challenge-domain coordinate has malformed owner fields")
+    _ascii(coordinate[4].value, "challenge occurrence coordinate")
+    return (
+        owner,
+        coordinate[1],
+        coordinate[2],
+        coordinate[3],
+        coordinate[4],
+    )
+
+
 def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
     """Compile the closed active K3-C Analysis body algebra."""
 
@@ -1706,6 +1900,7 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
             )
         )
     elif type(body) is AnalysisSourceProfileBodyV0:
+        _admit_source_profile_read_purposes(body)
         result = k1.DatumRecord(
             (
                 (0, analysis_profile_declaration_ref_body(body.family_tag)),
@@ -1715,8 +1910,7 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
             )
         )
     elif type(body) is AnalysisSemanticReadManifestBodyV0:
-        if type(body.exact_subjects) is not tuple or not body.exact_subjects:
-            raise AnalysisError("semantic read manifest needs nonempty subjects")
+        _admit_concrete_semantic_read_manifest(body)
         result = k1.DatumRecord(
             (
                 (0, _id_datum(body.source_profile_id, "analysis.source-profile")),
@@ -1832,7 +2026,44 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
             )
         )
     elif type(body) is AnalysisChallengeDomainBodyV0:
-        if type(body.model_values) is not tuple or not body.model_values or body.model_values != tuple(range(len(body.model_values))):
+        if body._issuer is not _CHALLENGE_DOMAIN_BODY_ISSUER:
+            raise AuthorityError(
+                "challenge domain was not issued from one live PublicCoinView"
+            )
+        challenge_coordinate = _challenge_domain_atomic_coordinate_fields(
+            body.source_challenge_ref,
+            k2.StaticViewAtomicLeaf.CHALLENGE_OCCURRENCE,
+        )
+        domain_coordinate = _challenge_domain_atomic_coordinate_fields(
+            body.source_nominal_domain_ref,
+            k2.StaticViewAtomicLeaf.CHALLENGE_DOMAIN,
+        )
+        if challenge_coordinate != domain_coordinate:
+            raise PropertyError(
+                "challenge and nominal-domain leaves select different view entries"
+            )
+        expected_status = analysis_profile_declaration_ref_body(
+            analysis_profile_declaration_ref(
+                K3C_ANALYSIS_PROPERTY_PROFILE,
+                K3C_ANALYSIS_PROPERTY_PROFILE,
+                "analysis.semantic-law",
+                "finite-challenge-domain-v0",
+            )
+        )
+        if (
+            body.value_type != k1.value_type_datum(k1.NAT_U64)
+            or body.adequacy_evaluator_id
+            != _challenge_domain_adequacy_evaluator_id()
+            or body.semantic_status != expected_status
+        ):
+            raise PropertyError(
+                "challenge domain has the wrong carrier, evaluator, or semantic law"
+            )
+        if (
+            type(body.model_values) is not tuple
+            or len(body.model_values) < 2
+            or body.model_values != tuple(range(len(body.model_values)))
+        ):
             raise PropertyError("challenge domain needs exact canonical finite values")
         result = k1.DatumRecord(
             (
@@ -1935,14 +2166,16 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
             )
         )
     elif type(body) is AnalysisSemanticBasisBodyV0:
+        _admit_semantic_basis_question_and_reads(body)
         result = k1.DatumRecord(
             (
                 (0, analysis_profile_declaration_ref_body(body.family)),
-                (1, _analysis_datum(body.rule_source, "Analysis rule source")),
-                (2, _analysis_datum(body.exact_premise_schemas, "premise schemas")),
-                (3, _analysis_datum(body.source_read_purposes, "read purposes")),
-                (4, analysis_profile_declaration_ref_body(body.conclusion_schema)),
-                (5, _analysis_datum(body.typed_transform_program, "transform program")),
+                (1, _id_datum(body.exact_question_id, "analysis.question")),
+                (2, _analysis_datum(body.rule_source, "Analysis rule source")),
+                (3, _analysis_datum(body.exact_premise_schemas, "premise schemas")),
+                (4, _read_purpose_requirements_body(body.source_read_purposes)),
+                (5, analysis_profile_declaration_ref_body(body.conclusion_schema)),
+                (6, _analysis_datum(body.typed_transform_program, "transform program")),
             )
         )
     elif type(body) is AnalysisSupportInstantiationBodyV0:
@@ -2034,12 +2267,12 @@ def _registered_profiles_in_value(value: object) -> tuple[object, ...]:
         if type(item) is k1.TypedContentId:
             entry = _ANALYSIS_FORMATION_REGISTRY.get(item.internal_reference())
             if entry is not None:
-                result[entry[1].identity] = entry[1]
+                result[_active_analysis_profile_id(entry[1])] = entry[1]
             return
         if type(item) is k1.BytesValue:
             entry = _ANALYSIS_FORMATION_REGISTRY.get(item.value)
             if entry is not None:
-                result[entry[1].identity] = entry[1]
+                result[_active_analysis_profile_id(entry[1])] = entry[1]
             return
         if type(item) is k1.DatumRecord:
             for _, child in item.fields:
@@ -2084,6 +2317,7 @@ def _require_constructor_profile(
                 "proposition hypothesis context has a different direct profile"
             )
     elif type(body) is AnalysisFamilyReadManifestSchemaBodyV0:
+        _admit_family_manifest_schema_join(body)
         family_profile = _formed_analysis_profile(
             body.family_definition_id, "analysis.asymptotic-protocol-family"
         )
@@ -2160,7 +2394,8 @@ def _form_analysis_profiled_content_id(
 ) -> object:
     if type(profile) is not k1.SemanticLanguageProfile:
         raise AnalysisError("Analysis identity needs one exact language profile")
-    authenticated_profile = K3C_PROFILE_BUNDLE.get(profile.identity)
+    profile_id = _active_analysis_profile_id(profile)
+    authenticated_profile = K3C_PROFILE_BUNDLE.get(profile_id)
     if authenticated_profile != profile or profile not in (
         K3C_ANALYSIS_KERNEL_PROFILE,
         K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -2181,7 +2416,7 @@ def _form_analysis_profiled_content_id(
     domain_body = analysis_domain_body_v0(subject_kind, body)
     identifier = k1.profiled_content_id(
         subject_kind,
-        profile.identity,
+        profile_id,
         domain_body,
         semantic_regime=k1.SEMANTIC_REGIME_ID,
     )
@@ -2192,14 +2427,14 @@ def _form_analysis_profiled_content_id(
         K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_ID: (
             K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE
         ),
-    }[profile.identity]
+    }[profile_id]
     try:
         k1.authenticate_profiled_semantic_content(
             identifier,
-            profile.identity,
+            profile_id,
             domain_body,
             profile_bundle,
-            supported_profiles=(profile.identity,),
+            supported_profiles=(profile_id,),
         )
     except (k1.ModelError, k1.CanonicalError) as error:
         raise AnalysisError(
@@ -2258,6 +2493,761 @@ def _formed_analysis_body(identifier: object, subject_kind: str) -> object:
         else identifier.value
     )
     return _ANALYSIS_FORMATION_REGISTRY[key][2]
+
+
+_ANALYSIS_READ_PURPOSE_ORDINAL = {
+    AnalysisReadPurpose.SEMANTIC_MEANING: 0,
+    AnalysisReadPurpose.PREMISE_SUPPORT: 1,
+    AnalysisReadPurpose.OCCURRENCE_EVIDENCE: 2,
+}
+
+
+def _read_purpose_variant(purpose: AnalysisReadPurpose) -> object:
+    if type(purpose) is not AnalysisReadPurpose:
+        raise AnalysisError("read purpose is not one exact closed case")
+    return k1.DatumVariant(_ANALYSIS_READ_PURPOSE_ORDINAL[purpose], k1.UNIT)
+
+
+def _record_field(record: object, ordinal: int, what: str) -> object:
+    if type(record) is not k1.DatumRecord:
+        raise AnalysisError(f"{what} is not one exact record")
+    fields = dict(record.fields)
+    if ordinal not in fields:
+        raise AnalysisError(f"{what} lacks required field {ordinal}")
+    return fields[ordinal]
+
+
+def _slot_at(slots: object, ordinal: int, what: str) -> object:
+    if type(ordinal) is not int or ordinal < 0:
+        raise AnalysisError(f"{what} ordinal is not one natural")
+    if type(slots) is not k1.DatumSeq:
+        raise AnalysisError(f"{what} catalog is not one exact sequence")
+    matches = tuple(
+        slot
+        for slot in slots.values
+        if type(slot) is k1.DatumRecord
+        and type(dict(slot.fields).get(0)) is k1.Nat
+        and dict(slot.fields)[0].value == ordinal
+    )
+    if len(matches) != 1:
+        raise AnalysisError(f"{what} ordinal does not resolve exactly once")
+    return matches[0]
+
+
+def _slot_schema_and_purpose(
+    source_profile_id: object,
+    ordinal: int,
+    *,
+    allow_occurrence_evidence: bool,
+) -> tuple[object, AnalysisReadPurpose]:
+    profile_body = _formed_analysis_body(
+        source_profile_id,
+        "analysis.source-profile",
+    )
+    if type(profile_body) is not AnalysisSourceProfileBodyV0:
+        raise AnalysisError("read purpose source profile has a wrong exact body")
+    slot_schema = _slot_at(
+        profile_body.slot_schemas,
+        ordinal,
+        "source-profile slot",
+    )
+    encoded_purpose = _record_field(slot_schema, 3, "source-profile slot")
+    if (
+        type(encoded_purpose) is not k1.DatumVariant
+        or encoded_purpose.payload != k1.UNIT
+        or encoded_purpose.case not in tuple(_ANALYSIS_READ_PURPOSE_ORDINAL.values())
+    ):
+        raise AnalysisError("source-profile slot has no exact read purpose")
+    purpose = next(
+        item
+        for item, tag in _ANALYSIS_READ_PURPOSE_ORDINAL.items()
+        if tag == encoded_purpose.case
+    )
+    if (
+        purpose is AnalysisReadPurpose.OCCURRENCE_EVIDENCE
+        and not allow_occurrence_evidence
+    ):
+        raise AnalysisError(
+            "family read purpose cannot claim concrete occurrence evidence"
+        )
+    return slot_schema, purpose
+
+
+def _source_profile_declaration_labels(
+    body: AnalysisSourceProfileBodyV0,
+) -> tuple[object, str, str]:
+    selected = _formed_analysis_profile(
+        body.adequacy_evaluator_id, "analysis.adequacy-evaluator"
+    )
+    _, family_label, _ = _resolved_profile_declaration(
+        selected,
+        body.family_tag,
+        "analysis.source-family",
+    )
+    evaluator = _formed_analysis_body(
+        body.adequacy_evaluator_id, "analysis.adequacy-evaluator"
+    )
+    _, input_label, _ = _resolved_profile_declaration(
+        selected,
+        evaluator.input_schema,
+        "analysis.semantic-law",
+    )
+    return selected, family_label, input_label
+
+
+def _admit_source_profile_read_purposes(
+    body: AnalysisSourceProfileBodyV0,
+) -> None:
+    """Admit one exact concrete or abstract active source-profile constructor."""
+
+    slot_schemas = body.slot_schemas
+    if type(slot_schemas) is not k1.DatumSeq or not slot_schemas.values:
+        raise AnalysisError("source profile needs a nonempty exact slot sequence")
+    selected_profile, family_label, input_label = (
+        _source_profile_declaration_labels(body)
+    )
+    evaluator = _formed_analysis_body(
+        body.adequacy_evaluator_id, "analysis.adequacy-evaluator"
+    )
+    _, failure_partition_label, _ = _resolved_profile_declaration(
+        selected_profile,
+        evaluator.failure_partition,
+        "analysis.semantic-law",
+    )
+    if failure_partition_label != "analysis-attempt-failure-partition-v0":
+        raise AnalysisError(
+            "source profile uses another adequacy failure partition"
+        )
+    exact_failure_partition = analysis_profile_declaration_ref_body(
+        evaluator.failure_partition
+    )
+    concrete_cases = {
+        "schnorr-relation-special-soundness-source": (
+            "schnorr-relation-source-profile-input-v0",
+            _FRESH_SOURCE_SLOT_TOKENS,
+        ),
+        "afk-adaptive-fresh-fs-source": (
+            "afk-fresh-fs-source-profile-input-v0",
+            _AFK_FRESH_FS_SOURCE_SLOT_TOKENS,
+        ),
+    }
+    abstract_cases = {
+        "afk-fresh-family-sources": (
+            "afk-family-source-profile-input-v0",
+            "fresh-source",
+        ),
+        "afk-fs-target-family-sources": (
+            "afk-family-target-profile-input-v0",
+            "adaptive-fs-target",
+        ),
+    }
+    experiment_case = family_label == "bounded-concrete-owner-sources"
+    if (
+        family_label not in concrete_cases
+        and family_label not in abstract_cases
+        and not experiment_case
+    ):
+        raise AnalysisError("source profile names no active constructor")
+    ordinals: list[int] = []
+    for slot in slot_schemas.values:
+        if type(slot) is not k1.DatumRecord:
+            raise AnalysisError("source-profile slot is not one exact record")
+        ordinal = _record_field(slot, 0, "source-profile slot")
+        if type(ordinal) is not k1.Nat:
+            raise AnalysisError("source-profile slot ordinal is not one natural")
+        encoded_purpose = _record_field(slot, 3, "source-profile slot")
+        if (
+            type(encoded_purpose) is not k1.DatumVariant
+            or encoded_purpose.payload != k1.UNIT
+            or encoded_purpose.case
+            not in tuple(_ANALYSIS_READ_PURPOSE_ORDINAL.values())
+        ):
+            raise AnalysisError("source-profile slot has no exact read purpose")
+        ordinals.append(ordinal.value)
+    if tuple(ordinals) != tuple(range(len(ordinals))):
+        raise AnalysisError("source-profile slot ordinals are not contiguous")
+
+    if experiment_case:
+        expected_names = (
+            "strategy-class",
+            "setup-and-input-sampling",
+            "generated-execution-relation",
+        )
+        if input_label != "source-profile-input-v0" or len(slot_schemas.values) != 3:
+            raise AnalysisError("experiment source profile has the wrong active shape")
+        for ordinal, (slot, expected_name) in enumerate(
+            zip(slot_schemas.values, expected_names, strict=True)
+        ):
+            fields = dict(slot.fields)
+            if (
+                tuple(fields) != (0, 1, 2, 3)
+                or fields[0] != k1.Nat(ordinal)
+                or fields[1] != k1.Symbol(expected_name)
+                or fields[3]
+                != _read_purpose_variant(AnalysisReadPurpose.SEMANTIC_MEANING)
+            ):
+                raise AnalysisError("experiment source-profile slot was substituted")
+        strategy_slot, setup_slot, execution_slot = (
+            dict(slot.fields) for slot in slot_schemas.values
+        )
+        strategy_ref = strategy_slot[2]
+        _formed_analysis_body(strategy_ref, "analysis.strategy-class")
+        active_strategy_kinds = {
+            _id_datum(
+                SPECIAL_SOUNDNESS_PAIR_INTERFACE,
+                "analysis.strategy-class",
+            ): "fresh-special-soundness-pair",
+            _id_datum(
+                ADAPTIVE_KNOWLEDGE_INTERFACE,
+                "analysis.strategy-class",
+            ): "adaptive-afk-pair",
+        }
+        expected_bundle_kind = active_strategy_kinds.get(strategy_ref)
+        if expected_bundle_kind is None:
+            raise AnalysisError(
+                "experiment source profile uses no active strategy constructor"
+            )
+        expected_setup = _embedded_component_datum(
+            SCHNORR_SETUP_PROFILE,
+            "analysis.setup-profile",
+        )
+        if setup_slot[2] != expected_setup:
+            raise AnalysisError(
+                "experiment source profile uses another setup constructor"
+            )
+        bundle = execution_slot[2]
+        if (
+            type(bundle) is not k1.DatumVariant
+            or bundle.case != 1
+            or type(bundle.payload) is not k1.DatumRecord
+            or tuple(dict(bundle.payload.fields)) != tuple(range(15))
+        ):
+            raise AnalysisError(
+                "experiment source profile has no exact inline execution bundle"
+            )
+        bundle_fields = dict(bundle.payload.fields)
+        if (
+            bundle_fields[0] != k1.Symbol(expected_bundle_kind)
+            or bundle_fields[2] != strategy_ref
+        ):
+            raise AnalysisError(
+                "experiment source profile execution bundle is detached from its strategy"
+            )
+        expected_closed = k1.DatumSeq(
+            tuple(
+                k1.DatumRecord(((0, k1.Nat(index)), (1, k1.Nat(2))))
+                for index in range(3)
+            )
+        )
+        if body.closed_field_read_set != expected_closed:
+            raise AnalysisError("experiment source-profile closed fields were substituted")
+        return
+
+    if family_label in concrete_cases:
+        expected_input, expected_tokens = concrete_cases[family_label]
+        if input_label != expected_input or len(slot_schemas.values) != len(
+            expected_tokens
+        ):
+            raise AnalysisError("concrete source profile has the wrong active shape")
+        expected_closed = []
+        for ordinal, (slot, (kind, axis)) in enumerate(
+            zip(slot_schemas.values, expected_tokens, strict=True)
+        ):
+            fields = dict(slot.fields)
+            expected_axis = {"shared": 0, "fresh": 1, "fiat-shamir": 2}[axis]
+            if (
+                tuple(fields) != tuple(range(7))
+                or fields[0] != k1.Nat(ordinal)
+                or fields[1] != k1.Nat(_SOURCE_FACT_KIND_ORDINAL[kind])
+                or fields[2] != k1.DatumVariant(expected_axis, k1.UNIT)
+                or fields[3]
+                != _read_purpose_variant(AnalysisReadPurpose.SEMANTIC_MEANING)
+                or fields[4] != k1.DatumVariant(0, k1.UNIT)
+                or fields[5] != k1.DatumVariant(0, k1.UNIT)
+                or fields[6] != exact_failure_partition
+            ):
+                raise AnalysisError("concrete source-profile slot shape was substituted")
+            expected_closed.append(k1.DatumRecord(((0, fields[1]), (1, fields[2]))))
+        if body.closed_field_read_set != k1.DatumSeq(tuple(expected_closed)):
+            raise AnalysisError("concrete source-profile closed fields were substituted")
+        return
+
+    expected_input, expected_axis = abstract_cases[family_label]
+    if (
+        input_label != expected_input
+        or len(slot_schemas.values) != 2
+        or type(body.closed_field_read_set) is not k1.DatumSeq
+    ):
+        raise AnalysisError("abstract family source profile has the wrong active shape")
+    first, second = slot_schemas.values
+    first_fields = dict(first.fields)
+    second_fields = dict(second.fields)
+    if (
+        tuple(first_fields) != (0, 1, 2, 3)
+        or tuple(second_fields) != (0, 1, 2, 3)
+        or first_fields[0] != k1.Nat(0)
+        or first_fields[1] != k1.Symbol(expected_axis)
+        or second_fields[0] != k1.Nat(1)
+        or second_fields[1] != k1.Symbol("family-ro-index-domain")
+        or first_fields[3]
+        != _read_purpose_variant(AnalysisReadPurpose.SEMANTIC_MEANING)
+        or second_fields[3]
+        != _read_purpose_variant(AnalysisReadPurpose.SEMANTIC_MEANING)
+    ):
+        raise AnalysisError(
+            "abstract family source-profile slot or read purpose was substituted"
+        )
+    family = _formed_analysis_body(
+        first_fields[2], "analysis.asymptotic-protocol-family"
+    )
+    family_payload = family.canonical_family_payload
+    if (
+        type(family_payload) is not k1.DatumRecord
+        or _record_field(family_payload, 8, "asymptotic family payload")
+        != second_fields[2]
+    ):
+        raise AnalysisError("abstract source profile is detached from its family")
+    expected_closed = k1.DatumSeq(
+        (
+            k1.DatumRecord(((0, k1.Nat(0)), (1, k1.Nat(2)))),
+            k1.DatumRecord(((0, k1.Nat(1)), (1, k1.Nat(2)))),
+        )
+    )
+    if body.closed_field_read_set != expected_closed:
+        raise AnalysisError("abstract source-profile closed fields were substituted")
+
+
+def _admit_concrete_semantic_read_manifest(
+    body: AnalysisSemanticReadManifestBodyV0,
+) -> None:
+    if type(body.exact_subjects) is not tuple or not body.exact_subjects:
+        raise AnalysisError("semantic read manifest needs nonempty subjects")
+    profile = _formed_analysis_body(body.source_profile_id, "analysis.source-profile")
+    _, family_label, _ = _source_profile_declaration_labels(profile)
+    if family_label not in (
+        "schnorr-relation-special-soundness-source",
+        "afk-adaptive-fresh-fs-source",
+    ):
+        raise AnalysisError("concrete manifest cannot use an abstract source profile")
+    if type(body.slots) is not k1.DatumSeq or len(body.slots.values) != len(
+        profile.slot_schemas.values
+    ):
+        raise AnalysisError("concrete manifest/profile join is not total")
+    owners: list[object] = []
+    seen: set[bytes] = set()
+    owner_kind = {
+        SourceFactKind.CORE: "pir.interactive-core",
+        SourceFactKind.PROTOCOL: "pir.protocol",
+        SourceFactKind.CONSTRUCTION: "pir.transcript-construction",
+        SourceFactKind.RELATION_BINDING: "relations.protocol-binding",
+        SourceFactKind.PLAN_WITNESS_BINDING: "relations.plan-witness-binding",
+        SourceFactKind.STATEMENT_EDGE: "relations.protocol-binding",
+        SourceFactKind.CLAIM_EDGE: "relations.protocol-binding",
+        SourceFactKind.WITNESS_EDGE: "relations.plan-witness-binding",
+    }
+    by_fact_ordinal = {
+        ordinal: owner_kind[kind]
+        for kind, ordinal in _SOURCE_FACT_KIND_ORDINAL.items()
+        if kind in owner_kind
+    }
+    for ordinal, (slot, schema) in enumerate(
+        zip(body.slots.values, profile.slot_schemas.values, strict=True)
+    ):
+        if type(slot) is not k1.DatumRecord or tuple(dict(slot.fields)) != (0, 1, 2):
+            raise AnalysisError("concrete manifest slot has the wrong closed shape")
+        fields = dict(slot.fields)
+        schema_fields = dict(schema.fields)
+        owner = fields[1]
+        fact_ordinal = schema_fields[1]
+        if (
+            fields[0] != k1.Nat(ordinal)
+            or fields[2] != schema_fields[2]
+            or type(owner) is not k1.BytesValue
+            or type(fact_ordinal) is not k1.Nat
+        ):
+            raise AnalysisError("concrete manifest/profile slot join was substituted")
+        owner_body = _ANALYSIS_FORMATION_REGISTRY.get(owner.value)
+        expected_kind = by_fact_ordinal.get(fact_ordinal.value)
+        if owner_body is not None:
+            actual_kind = owner_body[0]
+        else:
+            actual_kind = next(
+                (
+                    subject.subject_kind
+                    for subject in body.exact_subjects
+                    if subject.internal_reference() == owner.value
+                ),
+                None,
+            )
+        if actual_kind != expected_kind:
+            raise AnalysisError("concrete manifest owner has the wrong slot kind")
+        if owner.value not in seen:
+            seen.add(owner.value)
+            owners.append(owner)
+    if tuple(_id_datum(item) for item in body.exact_subjects) != tuple(owners):
+        raise AnalysisError("concrete manifest exact-subject owner coverage is not exact")
+
+
+def _admit_family_manifest_schema_join(
+    body: AnalysisFamilyReadManifestSchemaBodyV0,
+) -> None:
+    profile = _formed_analysis_body(
+        body.member_source_profile_id, "analysis.source-profile"
+    )
+    _, family_label, _ = _source_profile_declaration_labels(profile)
+    if family_label not in (
+        "afk-fresh-family-sources",
+        "afk-fs-target-family-sources",
+    ):
+        raise AnalysisError("family manifest schema needs an abstract source tag")
+    first = _slot_at(profile.slot_schemas, 0, "family source-profile slot")
+    if _record_field(first, 2, "family source-profile slot") != _id_datum(
+        body.family_definition_id, "analysis.asymptotic-protocol-family"
+    ):
+        raise AnalysisError("family manifest schema is detached from its source family")
+
+
+def concrete_manifest_read_purposes(
+    manifest_id: object,
+) -> tuple[ConcreteReadPurpose, ...]:
+    """Derive every concrete requirement from one authenticated manifest/profile join."""
+
+    manifest = _formed_analysis_body(
+        manifest_id,
+        "analysis.semantic-read-manifest",
+    )
+    if type(manifest) is not AnalysisSemanticReadManifestBodyV0:
+        raise AnalysisError("concrete read source has the wrong manifest body")
+    profile = _formed_analysis_body(
+        manifest.source_profile_id,
+        "analysis.source-profile",
+    )
+    if type(profile) is not AnalysisSourceProfileBodyV0:
+        raise AnalysisError("concrete read source has the wrong profile body")
+    if type(manifest.slots) is not k1.DatumSeq:
+        raise AnalysisError("concrete read manifest has no exact slot sequence")
+    if len(manifest.slots.values) != len(profile.slot_schemas.values):
+        raise AnalysisError("concrete manifest/profile join is not total")
+    result: list[ConcreteReadPurpose] = []
+    for ordinal in range(len(profile.slot_schemas.values)):
+        _slot_at(manifest.slots, ordinal, "semantic-read manifest slot")
+        _, purpose = _slot_schema_and_purpose(
+            manifest.source_profile_id,
+            ordinal,
+            allow_occurrence_evidence=True,
+        )
+        result.append(ConcreteReadPurpose(manifest_id, ordinal, purpose))
+    return tuple(result)
+
+
+def family_manifest_read_purposes(
+    manifest_schema_id: object,
+) -> tuple[FamilyReadPurpose, ...]:
+    """Derive every abstract-family requirement from its authenticated profile."""
+
+    schema = _formed_analysis_body(
+        manifest_schema_id,
+        "analysis.family-read-manifest-schema",
+    )
+    if type(schema) is not AnalysisFamilyReadManifestSchemaBodyV0:
+        raise AnalysisError("family read source has the wrong manifest schema")
+    profile = _formed_analysis_body(
+        schema.member_source_profile_id,
+        "analysis.source-profile",
+    )
+    if type(profile) is not AnalysisSourceProfileBodyV0:
+        raise AnalysisError("family read source has the wrong profile body")
+    result: list[FamilyReadPurpose] = []
+    for ordinal in range(len(profile.slot_schemas.values)):
+        _, purpose = _slot_schema_and_purpose(
+            schema.member_source_profile_id,
+            ordinal,
+            allow_occurrence_evidence=False,
+        )
+        result.append(FamilyReadPurpose(manifest_schema_id, ordinal, purpose))
+    return tuple(result)
+
+
+def complete_read_purpose_requirements(
+    *,
+    concrete_manifest_ids: Iterable[object] = (),
+    family_manifest_schema_ids: Iterable[object] = (),
+) -> tuple[AnalysisReadPurposeRequirement, ...]:
+    """Derive the complete canonical purpose set for exact rule source coordinates."""
+
+    requirements = (
+        *(
+            requirement
+            for manifest_id in concrete_manifest_ids
+            for requirement in concrete_manifest_read_purposes(manifest_id)
+        ),
+        *(
+            requirement
+            for schema_id in family_manifest_schema_ids
+            for requirement in family_manifest_read_purposes(schema_id)
+        ),
+    )
+    return canonical_read_purpose_requirements(requirements)
+
+
+def require_complete_read_purpose_requirements(
+    requirements: tuple[AnalysisReadPurposeRequirement, ...],
+    *,
+    concrete_manifest_ids: Iterable[object] = (),
+    family_manifest_schema_ids: Iterable[object] = (),
+) -> None:
+    expected = complete_read_purpose_requirements(
+        concrete_manifest_ids=concrete_manifest_ids,
+        family_manifest_schema_ids=family_manifest_schema_ids,
+    )
+    if requirements != expected:
+        raise AnalysisError(
+            "read purpose requirements omit, duplicate, reorder, or add a source slot"
+        )
+
+
+def _formed_analysis_id(identifier: object, subject_kind: str) -> object:
+    """Recover one typed identifier only from an authenticated formation."""
+
+    if type(identifier) is k1.TypedContentId:
+        _id_datum(identifier, subject_kind)
+        return identifier
+    if type(identifier) is k1.BytesValue:
+        entry = _ANALYSIS_FORMATION_REGISTRY.get(identifier.value)
+        if entry is not None and entry[0] == subject_kind:
+            return entry[3]
+    raise AnalysisError("Analysis reference lacks one exact typed formation")
+
+
+def _semantic_basis_read_sources(
+    question_id: object,
+) -> tuple[tuple[object, ...], tuple[object, ...]]:
+    """Derive the complete read-source coordinates from one exact question.
+
+    The active question algebra has four closed context cases.  The fourth is
+    family-specific: correspondence questions carry both abstract and
+    concrete manifests directly, while fixed-member specialization carries
+    the selected concrete manifest inside its authenticated native projection.
+    """
+
+    question = _formed_analysis_body(question_id, "analysis.question")
+    profile = _formed_analysis_profile(question_id, "analysis.question")
+    _, family_label, _ = _resolved_profile_declaration(
+        profile,
+        question.family,
+        "analysis.property-family",
+    )
+    context = question.context
+    if type(context) is not k1.DatumVariant:
+        raise AnalysisError("semantic-basis question has no closed context case")
+    if context.case == 0:
+        _record = context.payload
+        # Source-free questions carry exactly one admitted reason reference.
+        if type(_record) is not k1.DatumVariant and type(_record) is not k1.DatumRecord:
+            # The current source-free carrier is a declaration-ref datum and
+            # may be either local or imported.  Encoding it is the exact shape
+            # check; it contributes no read source.
+            _analysis_datum(_record, "source-free question reason")
+        return (), ()
+    if type(context.payload) is not k1.DatumRecord:
+        raise AnalysisError("semantic-basis question context is not one record")
+    fields = dict(context.payload.fields)
+    if context.case == 1:
+        if tuple(fields) != (0, 1) or type(fields[0]) is not k1.DatumSeq:
+            raise AnalysisError("concrete semantic question context is incomplete")
+        return tuple(
+            _formed_analysis_id(item, "analysis.semantic-read-manifest")
+            for item in fields[0].values
+        ), ()
+    if context.case == 2:
+        if tuple(fields) != (0, 1, 2) or type(fields[1]) is not k1.DatumSeq:
+            raise AnalysisError("family semantic question context is incomplete")
+        return (), tuple(
+            _formed_analysis_id(item, "analysis.family-read-manifest-schema")
+            for item in fields[1].values
+        )
+    if context.case != 3:
+        raise AnalysisError("semantic-basis question uses an unknown context case")
+    if family_label == "family-instance-correspondence":
+        if (
+            tuple(fields) != (0, 1)
+            or type(fields[0]) is not k1.DatumSeq
+            or type(fields[1]) is not k1.DatumSeq
+        ):
+            raise AnalysisError("correspondence question read context is incomplete")
+        return (
+            tuple(
+                _formed_analysis_id(item, "analysis.semantic-read-manifest")
+                for item in fields[1].values
+            ),
+            tuple(
+                _formed_analysis_id(item, "analysis.family-read-manifest-schema")
+                for item in fields[0].values
+            ),
+        )
+    if family_label == "adaptive-knowledge-extraction-at-fixed-length-q-lt-n":
+        if tuple(fields) != (0, 1, 2, 3, 4):
+            raise AnalysisError("fixed-member question context is incomplete")
+        projection = fields[2]
+        pair_manifest = _record_field(
+            projection,
+            6,
+            "fixed-member native-subject projection",
+        )
+        return (
+            _formed_analysis_id(pair_manifest, "analysis.semantic-read-manifest"),
+        ), ()
+    raise AnalysisError("semantic-basis context case is not valid for its family")
+
+
+def _admit_semantic_basis_question_and_reads(
+    body: AnalysisSemanticBasisBodyV0,
+) -> None:
+    """Bind a basis to one authenticated question and its complete read set."""
+
+    question = _formed_analysis_body(body.exact_question_id, "analysis.question")
+    question_profile = _formed_analysis_profile(
+        body.exact_question_id, "analysis.question"
+    )
+    _, _, question_family_body = _resolved_profile_declaration(
+        question_profile,
+        question.family,
+        "analysis.property-family",
+    )
+    basis_profile = _formed_analysis_profile(
+        body.exact_question_id, "analysis.question"
+    )
+    _, _, basis_family_body = _resolved_profile_declaration(
+        basis_profile,
+        body.family,
+        "analysis.property-family",
+    )
+    if basis_family_body != question_family_body:
+        raise AnalysisError("semantic basis names a different exact question family")
+    concrete, family = _semantic_basis_read_sources(body.exact_question_id)
+    require_complete_read_purpose_requirements(
+        body.source_read_purposes,
+        concrete_manifest_ids=concrete,
+        family_manifest_schema_ids=family,
+    )
+
+
+def _read_purpose_requirement_body(
+    requirement: AnalysisReadPurposeRequirement,
+) -> object:
+    if type(requirement) is ConcreteReadPurpose:
+        return k1.DatumVariant(
+            0,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            requirement.semantic_read_manifest_id,
+                            "analysis.semantic-read-manifest",
+                        ),
+                    ),
+                    (1, k1.Nat(requirement.semantic_read_slot_ordinal)),
+                    (2, _read_purpose_variant(requirement.exact_purpose)),
+                )
+            ),
+        )
+    if type(requirement) is FamilyReadPurpose:
+        return k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            requirement.family_read_manifest_schema_id,
+                            "analysis.family-read-manifest-schema",
+                        ),
+                    ),
+                    (1, k1.Nat(requirement.family_read_slot_ordinal)),
+                    (2, _read_purpose_variant(requirement.exact_purpose)),
+                )
+            ),
+        )
+    raise AnalysisError("read purpose requirement has a foreign variant")
+
+
+def normalize_read_purpose_requirements(
+    requirements: Iterable[AnalysisReadPurposeRequirement],
+) -> tuple[NormalizedAnalysisReadPurpose, ...]:
+    if type(requirements) not in (tuple, list):
+        requirements = tuple(requirements)
+    normalized: list[NormalizedAnalysisReadPurpose] = []
+    for requirement in requirements:
+        if type(requirement) is ConcreteReadPurpose:
+            manifest_body = _formed_analysis_body(
+                requirement.semantic_read_manifest_id,
+                "analysis.semantic-read-manifest",
+            )
+            if type(manifest_body) is not AnalysisSemanticReadManifestBodyV0:
+                raise AnalysisError("concrete read purpose has a wrong manifest body")
+            manifest_slot = _slot_at(
+                manifest_body.slots,
+                requirement.semantic_read_slot_ordinal,
+                "semantic-read manifest slot",
+            )
+            profile_slot, declared_purpose = _slot_schema_and_purpose(
+                manifest_body.source_profile_id,
+                requirement.semantic_read_slot_ordinal,
+                allow_occurrence_evidence=True,
+            )
+            exact_slot = k1.DatumRecord(((0, manifest_slot), (1, profile_slot)))
+        elif type(requirement) is FamilyReadPurpose:
+            schema_body = _formed_analysis_body(
+                requirement.family_read_manifest_schema_id,
+                "analysis.family-read-manifest-schema",
+            )
+            if type(schema_body) is not AnalysisFamilyReadManifestSchemaBodyV0:
+                raise AnalysisError("family read purpose has a wrong manifest schema")
+            exact_slot, declared_purpose = _slot_schema_and_purpose(
+                schema_body.member_source_profile_id,
+                requirement.family_read_slot_ordinal,
+                allow_occurrence_evidence=False,
+            )
+        else:
+            raise AnalysisError("read purpose requirement has a foreign variant")
+        if requirement.exact_purpose is not declared_purpose:
+            raise AnalysisError(
+                "read purpose requirement disagrees with its authenticated slot"
+            )
+        normalized.append(NormalizedAnalysisReadPurpose(requirement, exact_slot))
+
+    def normalized_key(item: NormalizedAnalysisReadPurpose) -> bytes:
+        return k1.encode_datum(_read_purpose_requirement_body(item.requirement))
+
+    ordered = tuple(sorted(normalized, key=normalized_key))
+    keys = tuple(normalized_key(item) for item in ordered)
+    if len(keys) != len(set(keys)):
+        raise AnalysisError("read purpose requirements contain a duplicate atom")
+    return ordered
+
+
+def canonical_read_purpose_requirements(
+    requirements: Iterable[AnalysisReadPurposeRequirement],
+) -> tuple[AnalysisReadPurposeRequirement, ...]:
+    return tuple(
+        item.requirement for item in normalize_read_purpose_requirements(requirements)
+    )
+
+
+def _read_purpose_requirements_body(
+    requirements: tuple[AnalysisReadPurposeRequirement, ...],
+) -> object:
+    if type(requirements) is not tuple:
+        raise AnalysisError("read purpose requirements must use one immutable tuple")
+    canonical = canonical_read_purpose_requirements(requirements)
+    if requirements != canonical:
+        raise AnalysisError(
+            "read purpose requirements are not canonical sorted and unique"
+        )
+    return k1.DatumSeq(
+        tuple(_read_purpose_requirement_body(item) for item in requirements)
+    )
 
 
 def _analysis_id(subject_kind: str, body: object) -> object:
@@ -2565,6 +3555,1775 @@ def _canonical_identifier_set(
     return ordered
 
 
+@dataclass(frozen=True)
+class QualificationSubjectContext:
+    """Candidate-derived input to one finite qualification law."""
+
+    semantic_profile: object
+    proposition_id: object
+    goal_id: object
+    question_id: object
+    family_label: str
+    exact_subjects: tuple[object, ...]
+    question_context: object
+    question_payload: object
+    inherited_hypothesis_context_id: object
+    semantic_basis_id: object
+    semantic_basis: AnalysisSemanticBasisBodyV0
+    support_id: object
+    support: AnalysisSupportInstantiationBodyV0
+    validation_basis_id: object
+    validation_basis: AnalysisValidationBasisBodyV0
+    judgment_record: AnalysisJudgmentRecordBodyV0 | None
+    result_id: object | None
+    outcome_kind: AttemptKind | None
+
+
+@dataclass(frozen=True)
+class _QualificationLawSpec:
+    qualification_label: str
+    exact_family_label: str
+    exact_subject_kinds: tuple[str, ...]
+    exact_context_case: int
+    native_rule_label: str | None
+    conclusion_schema_label: str
+    assumed_binding_mode: str
+    exact_non_hypothesis_binding_count: int
+    exact_source_support_binding_count: int
+    requires_judgment_record: bool
+
+
+_QUALIFICATION_LAW_SPECS = (
+    _QualificationLawSpec(
+        "finite-special-soundness-result",
+        "k-out-of-n-special-soundness",
+        ("pir.protocol", "relations.protocol-binding"),
+        1,
+        "existential-extractor-introduction",
+        "k-out-of-n-conclusion-v0",
+        "hypothesis-context",
+        0,
+        0,
+        True,
+    ),
+    _QualificationLawSpec(
+        "conditional-assumed-external-all-n",
+        "asymptotic-k-out-of-n-special-soundness",
+        ("analysis.asymptotic-protocol-family",),
+        2,
+        "conditional-family-instance-correspondence",
+        "k-out-of-n-conclusion-v0",
+        "hypothesis-context",
+        0,
+        1,
+        False,
+    ),
+    _QualificationLawSpec(
+        "conditional-assumed-theorem-truth",
+        "theorem-truth",
+        ("analysis.theorem-schema",),
+        0,
+        None,
+        "theorem-truth-conclusion-v0",
+        "self-theorem-assumption",
+        0,
+        0,
+        False,
+    ),
+    _QualificationLawSpec(
+        "afk-family-applicability-result",
+        "theorem-applicability",
+        ("analysis.theorem-schema", "analysis.asymptotic-protocol-family"),
+        2,
+        "exact-theorem-applicability-check",
+        "family-applicability-conclusion-v0",
+        "hypothesis-context",
+        0,
+        0,
+        True,
+    ),
+    _QualificationLawSpec(
+        "afk-family-transport-result",
+        "adaptive-knowledge-soundness-q-lt-n",
+        ("analysis.asymptotic-protocol-family",),
+        2,
+        None,
+        "adaptive-knowledge-conclusion-v0",
+        "hypothesis-context",
+        3,
+        3,
+        True,
+    ),
+    _QualificationLawSpec(
+        "afk-family-instance-correspondence-result",
+        "family-instance-correspondence",
+        (
+            "analysis.asymptotic-protocol-family",
+            "analysis.logical-nat-literal",
+            "analysis.native-subject-projection",
+            "analysis.challenge-domain",
+            "analysis.fixed-public-setup",
+        ),
+        3,
+        "conditional-family-instance-correspondence",
+        "family-instance-correspondence-conclusion-v0",
+        "hypothesis-context",
+        0,
+        4,
+        True,
+    ),
+    _QualificationLawSpec(
+        "afk-member-specialization-result",
+        "adaptive-knowledge-extraction-at-fixed-length-q-lt-n",
+        (
+            "analysis.asymptotic-protocol-family",
+            "analysis.logical-nat-literal",
+            "analysis.native-subject-projection",
+            "analysis.challenge-domain",
+            "analysis.fixed-public-setup",
+        ),
+        3,
+        "dependent-family-member-specialization",
+        "fixed-member-knowledge-conclusion-v0",
+        "hypothesis-context",
+        2,
+        1,
+        True,
+    ),
+)
+
+
+def _resolved_profile_declaration(
+    selected_profile: object,
+    reference: object,
+    declaration_kind: str,
+) -> tuple[object, str, object]:
+    """Resolve one exact declaration ref to owner, label, and full body."""
+
+    # Semantic bodies retain the canonical datum form of a declaration
+    # reference.  Decode that closed representation before resolving it; do
+    # not treat the encoded form as a caller-selected label.
+    if type(reference) is k1.DatumVariant:
+        payload = reference.payload
+        if type(payload) is not k1.DatumRecord:
+            raise AuthorityError("qualification declaration has a foreign reference")
+        fields = dict(payload.fields)
+        if (
+            reference.case == 0
+            and tuple(fields) == (0, 1)
+            and type(fields[0]) is k1.Symbol
+            and type(fields[1]) is k1.Nat
+        ):
+            reference = k1.ProfileLocalDeclarationRef(
+                fields[0].value, fields[1].value
+            )
+        elif (
+            reference.case == 1
+            and tuple(fields) == (0, 1, 2)
+            and type(fields[0]) is k1.BytesValue
+            and type(fields[1]) is k1.Symbol
+            and type(fields[2]) is k1.Nat
+        ):
+            imported_matches = tuple(
+                profile_id
+                for profile_id in _analysis_profile_import_closure(selected_profile)
+                if profile_id.internal_reference() == fields[0].value
+            )
+            if len(imported_matches) != 1:
+                raise AuthorityError(
+                    "qualification declaration owner is not imported"
+                )
+            reference = k1.ImportedProfileDeclarationRef(
+                imported_matches[0], fields[1].value, fields[2].value
+            )
+        else:
+            raise AuthorityError("qualification declaration has a foreign reference")
+
+    if type(reference) is k1.ProfileLocalDeclarationRef:
+        owner = selected_profile
+        ordinal = reference.local_ordinal
+        kind = reference.declaration_kind
+    elif type(reference) is k1.ImportedProfileDeclarationRef:
+        owner = K3C_PROFILE_BUNDLE.get(reference.profile_id)
+        if (
+            type(owner) is not k1.SemanticLanguageProfile
+            or reference.profile_id
+            not in _analysis_profile_import_closure(selected_profile)
+        ):
+            raise AuthorityError("qualification declaration owner is not imported")
+        ordinal = reference.local_ordinal
+        kind = reference.declaration_kind
+    else:
+        raise AuthorityError("qualification declaration has a foreign reference")
+    if kind != declaration_kind:
+        raise AuthorityError("qualification declaration has the wrong kind")
+    catalog = k1.profile_declaration_catalogs(owner).get(declaration_kind)
+    if catalog is None or not 0 <= ordinal < len(catalog.values):
+        raise AuthorityError("qualification declaration is outside its catalog")
+    body = catalog.values[ordinal]
+    label = _record_field(body, 0, "qualification declaration")
+    if type(label) is not k1.Symbol:
+        raise AuthorityError("qualification declaration label is malformed")
+    return owner, label.value, body
+
+
+def _derive_qualification_subject_context(
+    *,
+    semantic_profile: object,
+    proposition_id: object,
+    semantic_basis_id: object,
+    support_id: object,
+    validation_basis_id: object,
+    inherited_hypothesis_context_id: object | None = None,
+    judgment_record: AnalysisJudgmentRecordBodyV0 | None = None,
+    result_id: object | None = None,
+    outcome_kind: AttemptKind | None = None,
+) -> QualificationSubjectContext:
+    """Derive qualification inputs only from an already formed candidate."""
+
+    proposition = _formed_analysis_body(proposition_id, "analysis.proposition")
+    goal = _formed_analysis_body(proposition.goal_id, "analysis.goal")
+    question = _formed_analysis_body(goal.question_id, "analysis.question")
+    basis = _formed_analysis_body(semantic_basis_id, "analysis.semantic-basis")
+    support = _formed_analysis_body(support_id, "analysis.support-instantiation")
+    validation = _formed_analysis_body(
+        validation_basis_id, "analysis.validation-basis"
+    )
+    _, family_label, _ = _resolved_profile_declaration(
+        _formed_analysis_profile(goal.question_id, "analysis.question"),
+        question.family,
+        "analysis.property-family",
+    )
+    _, basis_family_label, _ = _resolved_profile_declaration(
+        _formed_analysis_profile(semantic_basis_id, "analysis.semantic-basis"),
+        basis.family,
+        "analysis.property-family",
+    )
+    inherited = proposition.hypothesis_context_id
+    if (
+        inherited_hypothesis_context_id is not None
+        and inherited_hypothesis_context_id != inherited
+    ):
+        raise AuthorityError("qualification inherited context was substituted")
+    if (
+        basis_family_label != family_label
+        or basis.exact_question_id != goal.question_id
+        or support.semantic_basis_id != semantic_basis_id
+        or support.proposition_id != proposition_id
+    ):
+        raise AuthorityError("qualification subject basis or support was substituted")
+    if judgment_record is not None:
+        if type(judgment_record) is not AnalysisJudgmentRecordBodyV0:
+            raise AuthorityError("qualification judgment record has the wrong shape")
+        if (
+            judgment_record.proposition_id != _id_datum(proposition_id)
+            or judgment_record.inherited_hypothesis_context_id != _id_datum(inherited)
+            or judgment_record.semantic_basis_id != _id_datum(semantic_basis_id)
+            or judgment_record.support_coordinate != _id_datum(support_id)
+            or judgment_record.validation_basis_id != _id_datum(validation_basis_id)
+        ):
+            raise AuthorityError("qualification judgment chain was substituted")
+    return QualificationSubjectContext(
+        semantic_profile,
+        proposition_id,
+        proposition.goal_id,
+        goal.question_id,
+        family_label,
+        question.exact_subjects,
+        question.context,
+        question.family_payload,
+        inherited,
+        semantic_basis_id,
+        basis,
+        support_id,
+        support,
+        validation_basis_id,
+        validation,
+        judgment_record,
+        result_id,
+        outcome_kind,
+    )
+
+
+def _qualification_law(label: str) -> _QualificationLawSpec:
+    matches = tuple(
+        law for law in _QUALIFICATION_LAW_SPECS if law.qualification_label == label
+    )
+    if len(matches) != 1:
+        raise AuthorityError("actual qualification has no unique executable law")
+    return matches[0]
+
+
+def _inverse_match_qualified_afk_family(family_id: object) -> AFKAsymptoticFamily:
+    """Recover ``F`` only from its authenticated family constructor."""
+
+    family_body = _formed_analysis_body(
+        family_id, "analysis.asymptotic-protocol-family"
+    )
+    if type(family_body) is not AnalysisAsymptoticProtocolFamilyBodyV0:
+        raise AuthorityError("qualification family has the wrong exact body")
+    _, language_label, _ = _resolved_profile_declaration(
+        K3C_ANALYSIS_TRANSPORT_PROFILE,
+        family_body.family_language,
+        "analysis.asymptotic-family-language",
+    )
+    payload = family_body.canonical_family_payload
+    if (
+        language_label != "afk-schnorr-family-v0"
+        or type(payload) is not k1.DatumRecord
+    ):
+        raise AuthorityError("qualification family is not an AFK family constructor")
+    fields = dict(payload.fields)
+    if tuple(fields) != tuple(range(9)):
+        raise AuthorityError("qualification family payload is incomplete")
+    ro_payload = fields[8]
+    if type(ro_payload) is not k1.DatumRecord:
+        raise AuthorityError("qualification family RO-index domain is malformed")
+    ro_fields = dict(ro_payload.fields)
+    if tuple(ro_fields) != tuple(range(7)):
+        raise AuthorityError("qualification family RO-index domain is incomplete")
+
+    symbol_fields = (0, 1, 5, 6, 7)
+    ro_symbol_fields = (0, 1, 3, 4, 5)
+    if (
+        any(type(fields[index]) is not k1.Symbol for index in symbol_fields)
+        or type(fields[2]) is not k1.Symbol
+        or type(fields[3]) is not k1.Nat
+        or type(fields[4]) is not k1.Nat
+        or any(type(ro_fields[index]) is not k1.Symbol for index in ro_symbol_fields)
+        or type(ro_fields[2]) is not k1.DatumSeq
+        or not ro_fields[2].values
+        or any(type(item) is not k1.Nat for item in ro_fields[2].values)
+        or type(ro_fields[6]) is not k1.DatumSeq
+        or any(type(item) is not k1.Symbol for item in ro_fields[6].values)
+    ):
+        raise AuthorityError("qualification family payload has a foreign carrier")
+
+    family = AFKAsymptoticFamily(
+        fields[0].value,
+        fields[1].value,
+        fields[2].value,
+        fields[3].value,
+        fields[4].value,
+        fields[5].value,
+        fields[6].value,
+        fields[7].value,
+        FamilyROIndexDomain(
+            ro_fields[0].value,
+            ro_fields[1].value,
+            tuple(item.value for item in ro_fields[2].values),
+            ro_fields[3].value,
+            ro_fields[4].value,
+            ro_fields[5].value,
+            tuple(item.value for item in ro_fields[6].values),
+        ),
+        _FAMILY_ISSUER,
+    )
+    if _family_body(family) != payload or family_definition_id(family) != family_id:
+        raise AuthorityError("qualification family does not inverse-match its subject")
+    return family
+
+
+def _qualification_family(
+    law: _QualificationLawSpec,
+    context: QualificationSubjectContext,
+) -> AFKAsymptoticFamily:
+    """Inverse-match the invocation-local ``F`` selected by one law."""
+
+    if law.qualification_label == "afk-family-applicability-result":
+        if context.exact_subjects[0] != AFK_V2_THM4_CLASSICAL_ROM:
+            raise AuthorityError("qualification applicability names another theorem")
+        family_id = context.exact_subjects[1]
+    elif law.qualification_label in (
+        "conditional-assumed-external-all-n",
+        "afk-family-transport-result",
+    ):
+        family_id = context.exact_subjects[0]
+    else:
+        raise AuthorityError("qualification law has no AFK family subject")
+    return _inverse_match_qualified_afk_family(family_id)
+
+
+def _family_source_hypotheses_for_qualification(
+    family: AFKAsymptoticFamily,
+) -> tuple[object, ...]:
+    family_id = family_definition_id(family)
+    labels = (
+        "total-single-valued-family-denotation",
+        "family-projection-coherence",
+        "uniform-prime-order-schnorr-family",
+        "uniform-polynomial-time-relation-membership",
+        "uniform-polynomial-time-verifier",
+    )
+    return canonical_hypotheses(
+        _exact_premise_goal_id(
+            family_label,
+            (family_id,),
+            _family_semantic_context(family, axes=("fresh-source",)),
+            k1.DatumRecord(
+                ((0, _id_datum(family_id)), (1, k1.Nat(ordinal)))
+            ),
+            selected_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
+        )
+        for ordinal, family_label in enumerate(labels)
+    )
+
+
+def _family_transport_hypotheses_for_qualification(
+    family: AFKAsymptoticFamily,
+) -> tuple[object, ...]:
+    return hypothesis_union(
+        family_applicability_premise_ids(family),
+        _family_source_hypotheses_for_qualification(family),
+        (theorem_truth_goal_id(_AFK_GLOBAL_THEOREM_SCHEMA),),
+    )
+
+
+@dataclass(frozen=True)
+class _QualificationExpectation:
+    basis_id: object
+    support_id: object | None
+    conclusion: object | None
+    quantitative: object | None
+    operation_policy_id: object | None
+    policy_closure: object
+    external_result_id: object | None = None
+
+
+def _qualification_family_source_basis_id(
+    family: AFKAsymptoticFamily,
+    hypotheses: tuple[object, ...],
+) -> object:
+    family_id = family_definition_id(family)
+    return _analysis_transport_id(
+        "analysis.semantic-basis",
+        AnalysisSemanticBasisBodyV0(
+            _family_declaration_ref(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                "asymptotic-k-out-of-n-special-soundness",
+                owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
+            ),
+            family_question_id(family, "source-two-special-soundness"),
+            _native_rule_source(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                K3C_ANALYSIS_PROPERTY_PROFILE,
+                "conditional-family-instance-correspondence",
+                k1.DatumRecord(
+                    (
+                        (0, _id_datum(family_id, "analysis.asymptotic-protocol-family")),
+                        (1, k1.Symbol("assumed-all-n-source-property")),
+                    )
+                ),
+            ),
+            _hypothesis_node_requirements(hypotheses, transport=True),
+            complete_read_purpose_requirements(
+                family_manifest_schema_ids=(
+                    family_manifest_schema_id(family, "fresh-source"),
+                ),
+            ),
+            _conclusion_schema_ref(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                K3C_ANALYSIS_PROPERTY_PROFILE,
+                "k-out-of-n-conclusion-v0",
+            ),
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol("external-all-n-source-assumption")),
+                    (1, _id_datum(family_id, "analysis.asymptotic-protocol-family")),
+                )
+            ),
+        ),
+    )
+
+
+def _qualification_theorem_truth_basis_id(schema: FSTheoremSchema) -> object:
+    schema_id = fs_theorem_schema_id(schema)
+    return _analysis_transport_id(
+        "analysis.semantic-basis",
+        AnalysisSemanticBasisBodyV0(
+            _family_declaration_ref(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                "theorem-truth",
+                owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
+            ),
+            _analysis_transport_id(
+                "analysis.question", theorem_truth_question_body(schema)
+            ),
+            _imported_theorem_rule_source(schema_id),
+            k1.DatumSeq(()),
+            (),
+            _conclusion_schema_ref(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                "theorem-truth-conclusion-v0",
+            ),
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol("explicit-assumed-theorem-truth")),
+                    (1, _id_datum(schema_id, "analysis.theorem-schema")),
+                )
+            ),
+        ),
+    )
+
+
+def _qualification_predecessors(
+    support: AnalysisSupportInstantiationBodyV0,
+    *,
+    nested: bool,
+    expected_uses: tuple[tuple[str, str, str], ...],
+) -> tuple[tuple[object, object, object, QualificationSubjectContext], ...]:
+    entries = support.non_hypothesis_premise_bindings
+    portable = support.source_support_bindings
+    if type(entries) is not k1.DatumSeq:
+        raise AuthorityError("qualification predecessor bindings are not a sequence")
+    if len(entries.values) != len(expected_uses) or (not nested and (
+        type(portable) is not k1.DatumSeq
+        or len(portable.values) != len(entries.values)
+    )):
+        raise AuthorityError("qualification predecessor authority bindings are incomplete")
+    result = []
+    for ordinal, entry in enumerate(entries.values):
+        if type(entry) is not k1.DatumRecord:
+            raise AuthorityError("qualification predecessor binding is not a record")
+        fields = dict(entry.fields)
+        if tuple(fields) != (0, 1) or fields[0] != k1.Nat(ordinal):
+            raise AuthorityError("qualification predecessor ordinal was substituted")
+        if nested:
+            payload = fields[1]
+            if type(payload) is not k1.DatumRecord or tuple(dict(payload.fields)) != (0, 1):
+                raise AuthorityError("qualification predecessor pair is incomplete")
+            pair = dict(payload.fields)
+            coordinate_value, portable_value = pair[0], pair[1]
+        else:
+            coordinate_value, portable_value = fields[1], portable.values[ordinal]
+        coordinate = _formed_analysis_id(
+            coordinate_value, "analysis.checked-result-coordinate"
+        )
+        portable_id = _formed_analysis_id(
+            portable_value, "analysis.portable-source-authority-binding"
+        )
+        portable_body = _formed_analysis_body(
+            portable_id, "analysis.portable-source-authority-binding"
+        )
+        envelope = portable_body.envelope
+        if (
+            type(envelope) is not k1.PortableSourceAuthorityBinding
+            or envelope.owner_source_coordinate != coordinate
+        ):
+            raise AuthorityError("portable authority binding names another predecessor")
+        expected_qualification, expected_consumer, expected_purpose = expected_uses[
+            ordinal
+        ]
+        predecessor_context, predecessor_qualification = (
+            _checked_result_qualification_context(coordinate)
+        )
+        _, actual_qualification, _ = _resolved_profile_declaration(
+            predecessor_context.semantic_profile,
+            predecessor_qualification,
+            "analysis.qualification",
+        )
+        requirement_id = envelope.capability_requirement.owner_requirement
+        requirement = _formed_analysis_body(
+            requirement_id, "analysis.capability-requirement-payload"
+        )
+        requirement_profile = _formed_analysis_profile(
+            requirement_id, "analysis.capability-requirement-payload"
+        )
+        _, requirement_label, _ = _resolved_profile_declaration(
+            requirement_profile,
+            requirement.qualification,
+            "analysis.qualification-requirement",
+        )
+        _, consumer_label, _ = _resolved_profile_declaration(
+            requirement_profile,
+            requirement.named_consumer,
+            "analysis.named-consumer",
+        )
+        _, purpose_label, _ = _resolved_profile_declaration(
+            requirement_profile,
+            requirement.typed_purpose,
+            "analysis.typed-purpose",
+        )
+        contract = _formed_analysis_body(
+            envelope.owner_binding_payload, "analysis.source-authority-contract"
+        )
+        closure = _formed_analysis_body(
+            envelope.owner_policy_closure, "analysis.owner-policy-closure"
+        )
+        closure_profile = _formed_analysis_profile(
+            envelope.owner_policy_closure, "analysis.owner-policy-closure"
+        )
+        contract_profile = _formed_analysis_profile(
+            envelope.owner_binding_payload, "analysis.source-authority-contract"
+        )
+        expected_dependencies = _canonical_identifier_set(
+            (*contract.immediate_policy_ids, *contract.transitive_policy_ids),
+            what="portable predecessor policy closure",
+        )
+        if (
+            envelope.owner_domain != k1.Symbol("analysis")
+            or envelope.capability_family != k1.Symbol("checked-result-use")
+            or envelope.capability_requirement.owner_domain != envelope.owner_domain
+            or envelope.capability_requirement.capability_family
+            != envelope.capability_family
+            or type(envelope.operation_policy) is not k1.BoundOwnerOperationPolicy
+            or len(contract.immediate_policy_ids) != 1
+            or envelope.operation_policy.owner_policy_binding
+            != contract.immediate_policy_ids[0]
+            or contract.checked_result_coordinate_id != coordinate
+            or contract.capability_requirement_payload_id != requirement_id
+            or closure.owner_coordinate != contract.owner_coordinate
+            or closure.policy_ids != expected_dependencies
+            or closure.derivation_law
+            != analysis_profile_declaration_ref_body(
+                analysis_profile_declaration_ref(
+                    closure_profile,
+                    K3C_ANALYSIS_KERNEL_PROFILE,
+                    "analysis.semantic-law",
+                    "derived-used-policy-closure-v0",
+                )
+            )
+            or contract_profile != predecessor_context.semantic_profile
+            or requirement_profile != predecessor_context.semantic_profile
+            or requirement.proposition_id != predecessor_context.proposition_id
+            or requirement_label != "exact-inherited-conditional"
+            or actual_qualification != expected_qualification
+            or consumer_label != expected_consumer
+            or purpose_label != expected_purpose
+        ):
+            raise AuthorityError(
+                "portable predecessor authority contract or exact use was substituted"
+            )
+        result.append((coordinate, portable_id, envelope, predecessor_context))
+    return tuple(result)
+
+
+def _qualification_policy_closure(
+    predecessors: tuple[
+        tuple[object, object, object, QualificationSubjectContext], ...
+    ],
+) -> object:
+    dependencies: list[object] = []
+    for _, _, envelope, _ in predecessors:
+        closure = _formed_analysis_body(
+            envelope.owner_policy_closure, "analysis.owner-policy-closure"
+        )
+        dependencies.extend(closure.policy_ids)
+    canonical = _canonical_identifier_set(
+        dependencies, what="qualification source-policy closure"
+    )
+    return k1.DatumSeq(tuple(_id_datum(item) for item in canonical))
+
+
+def _qualification_normalized_concrete_body(normalization_value: object) -> object:
+    normalization_id = _formed_analysis_id(
+        normalization_value, "analysis.pointwise-quantitative-normalization"
+    )
+    normalization = _formed_analysis_body(
+        normalization_id, "analysis.pointwise-quantitative-normalization"
+    )
+    substitution = normalization.logical_index_substitution
+    if type(substitution) is not k1.DatumRecord:
+        raise AuthorityError("pointwise normalization has no exact logical substitution")
+    fields = dict(substitution.fields)
+    if tuple(fields) != (0, 1, 2, 3, 4):
+        raise AuthorityError("pointwise normalization substitution is incomplete")
+    return fields[4]
+
+
+def _qualification_normalization_challenge_domain_id(
+    normalization_value: object,
+) -> object:
+    normalization_id = _formed_analysis_id(
+        normalization_value, "analysis.pointwise-quantitative-normalization"
+    )
+    normalization = _formed_analysis_body(
+        normalization_id, "analysis.pointwise-quantitative-normalization"
+    )
+    value = _record_field(
+        normalization.challenge_cardinality_substitution,
+        1,
+        "pointwise normalization challenge substitution",
+    )
+    return _formed_analysis_id(value, "analysis.challenge-domain")
+
+
+def _qualification_embedded_fixed_setup_id(correspondence_value: object) -> object:
+    if (
+        type(correspondence_value) is not k1.DatumVariant
+        or correspondence_value.case != 1
+        or type(correspondence_value.payload) is not k1.DatumRecord
+    ):
+        raise AuthorityError("family correspondence payload has no exact embedded body")
+    value = _record_field(
+        correspondence_value.payload,
+        19,
+        "embedded FS correspondence",
+    )
+    return _formed_analysis_id(value, "analysis.fixed-public-setup")
+
+
+def _qualification_assumed_node_bindings(
+    nodes: tuple[AnalysisHypothesisNodeV0, ...],
+    *,
+    theorem_validation: bool,
+) -> object:
+    theorem_goal = theorem_truth_goal_id(_AFK_GLOBAL_THEOREM_SCHEMA)
+    return k1.DatumSeq(
+        tuple(
+            k1.DatumRecord(
+                (
+                    (0, k1.Nat(node.local_ordinal)),
+                    (
+                        1,
+                        k1.DatumRecord(
+                            (
+                                (0, _id_datum(node.goal_id, "analysis.goal")),
+                                (1, k1.DatumVariant(0, k1.UNIT)),
+                                (
+                                    2,
+                                    k1.DatumVariant(
+                                        1,
+                                        _id_datum(
+                                            AFK_V2_THM4_SOURCE_VALIDATION,
+                                            "analysis.theorem-source-validation",
+                                        ),
+                                    )
+                                    if theorem_validation
+                                    and node.goal_id == theorem_goal
+                                    else k1.DatumVariant(0, k1.UNIT),
+                                ),
+                            )
+                        ),
+                    ),
+                )
+            )
+            for node in nodes
+        )
+    )
+
+
+def _qualification_exact_concrete_source_support_id(manifest_id: object) -> object:
+    manifest = _formed_analysis_body(
+        manifest_id, "analysis.semantic-read-manifest"
+    )
+    profile = _formed_analysis_body(manifest.source_profile_id, "analysis.source-profile")
+    owners_by_slot: dict[tuple[int, int], object] = {}
+    for slot, schema in zip(
+        manifest.slots.values, profile.slot_schemas.values, strict=True
+    ):
+        slot_fields = dict(slot.fields)
+        schema_fields = dict(schema.fields)
+        fact = schema_fields[1]
+        axis = schema_fields[2]
+        if type(fact) is not k1.Nat or type(axis) is not k1.DatumVariant:
+            raise AuthorityError("concrete source support slot schema is malformed")
+        owners_by_slot.setdefault((fact.value, axis.case), slot_fields[1])
+    core = _SOURCE_FACT_KIND_ORDINAL[SourceFactKind.CORE]
+    protocol = _SOURCE_FACT_KIND_ORDINAL[SourceFactKind.PROTOCOL]
+    construction = _SOURCE_FACT_KIND_ORDINAL[SourceFactKind.CONSTRUCTION]
+    relation = _SOURCE_FACT_KIND_ORDINAL[SourceFactKind.RELATION_BINDING]
+    plan = _SOURCE_FACT_KIND_ORDINAL[SourceFactKind.PLAN_WITNESS_BINDING]
+    if len(manifest.slots.values) == len(_FRESH_SOURCE_SLOT_TOKENS):
+        owner_order = ((core, 0), (protocol, 1), (relation, 1), (plan, 1))
+    elif len(manifest.slots.values) == len(_AFK_FRESH_FS_SOURCE_SLOT_TOKENS):
+        owner_order = (
+            (core, 0),
+            (construction, 2),
+            (protocol, 1),
+            (protocol, 2),
+            (relation, 1),
+            (relation, 2),
+            (plan, 1),
+            (plan, 2),
+        )
+    else:
+        raise AuthorityError("concrete source support manifest has another active shape")
+    try:
+        ordered_owners = tuple(owners_by_slot[item] for item in owner_order)
+    except KeyError as error:
+        raise AuthorityError(
+            "concrete source support manifest omits an owner field"
+        ) from error
+    bindings = k1.DatumSeq(
+        tuple(
+            k1.DatumRecord(
+                ((0, k1.Nat(ordinal)), (1, owner))
+            )
+            for ordinal, owner in enumerate(ordered_owners)
+        )
+    )
+    return _analysis_id(
+        "analysis.source-support",
+        AnalysisSourceSupportBodyV0(manifest_id, bindings, ()),
+    )
+
+
+def _qualification_correspondence_support_id(
+    context: QualificationSubjectContext,
+    basis_id: object,
+    payload: dict[int, object],
+    hypothesis_context: AnalysisHypothesisContextBodyV0,
+    concrete_reads: tuple[object, ...],
+    family_reads: tuple[object, ...],
+) -> object:
+    profile_pairs = payload[9]
+    if type(profile_pairs) is not k1.DatumRecord:
+        raise AuthorityError("correspondence experiment profile join is malformed")
+    pair_fields = dict(profile_pairs.fields)
+    if (
+        tuple(pair_fields) != (0, 1)
+        or type(pair_fields[0]) is not k1.DatumSeq
+        or type(pair_fields[1]) is not k1.DatumSeq
+        or len(pair_fields[0].values) != 2
+        or len(pair_fields[1].values) != 2
+        or len(family_reads) != 2
+        or len(concrete_reads) != 2
+    ):
+        raise AuthorityError("correspondence experiment profile join is incomplete")
+    family_experiments = tuple(
+        _formed_analysis_id(item, "analysis.experiment-profile")
+        for item in pair_fields[0].values
+    )
+    concrete_experiments = tuple(
+        _formed_analysis_id(item, "analysis.experiment-profile")
+        for item in pair_fields[1].values
+    )
+    expected_family = tuple(
+        k1.DatumVariant(
+            0,
+            _family_support_schema_binding(
+                manifest_id,
+                experiment_id,
+                context.inherited_hypothesis_context_id,
+                hypothesis_context.nodes,
+            ),
+        )
+        for manifest_id, experiment_id in zip(
+            family_reads, family_experiments, strict=True
+        )
+    )
+    source_support = context.support.source_support_bindings
+    if type(source_support) is not k1.DatumSeq or len(source_support.values) != 4:
+        raise AuthorityError("correspondence source support is incomplete")
+    expected_concrete = []
+    for ordinal, (manifest_id, experiment_id) in enumerate(
+        zip(concrete_reads, concrete_experiments, strict=True), start=2
+    ):
+        entry = source_support.values[ordinal]
+        if (
+            type(entry) is not k1.DatumVariant
+            or entry.case != 1
+            or type(entry.payload) is not k1.DatumRecord
+        ):
+            raise AuthorityError("correspondence concrete support arm is malformed")
+        fields = dict(entry.payload.fields)
+        if tuple(fields) != (0, 1, 2):
+            raise AuthorityError("correspondence concrete support arm is incomplete")
+        support_id = _formed_analysis_id(fields[2], "analysis.source-support")
+        support_body = _formed_analysis_body(support_id, "analysis.source-support")
+        expected_support_id = _qualification_exact_concrete_source_support_id(
+            manifest_id
+        )
+        if (
+            fields[0] != _id_datum(manifest_id, "analysis.semantic-read-manifest")
+            or fields[1] != _id_datum(experiment_id, "analysis.experiment-profile")
+            or support_body.semantic_read_manifest_id != manifest_id
+            or support_body.derived_owner_policy_dependency_closure != ()
+            or support_id != expected_support_id
+        ):
+            raise AuthorityError(
+                "correspondence concrete source support is cross-axis or detached"
+            )
+        expected_concrete.append(
+            k1.DatumVariant(
+                1,
+                k1.DatumRecord(
+                    (
+                        (0, _id_datum(manifest_id, "analysis.semantic-read-manifest")),
+                        (1, _id_datum(experiment_id, "analysis.experiment-profile")),
+                        (2, _id_datum(support_id, "analysis.source-support")),
+                    )
+                ),
+            )
+        )
+    expected_source_support = k1.DatumSeq(
+        (*expected_family, *expected_concrete)
+    )
+    if source_support != expected_source_support:
+        raise AuthorityError(
+            "correspondence source support order or axis was substituted"
+        )
+    assumed = _qualification_assumed_node_bindings(
+        hypothesis_context.nodes, theorem_validation=False
+    )
+    return _analysis_support_instantiation_id(
+        profile=context.semantic_profile,
+        semantic_basis_id=basis_id,
+        proposition_id=context.proposition_id,
+        assumed_goals=tuple(node.goal_id for node in hypothesis_context.nodes),
+        assumed_hypothesis_node_bindings=assumed,
+        source_support_bindings=expected_source_support,
+    )
+
+
+def _qualification_fixed_support_id(
+    context: QualificationSubjectContext,
+    basis_id: object,
+    hypothesis_context: AnalysisHypothesisContextBodyV0,
+    concrete_reads: tuple[object, ...],
+    predecessors: tuple[
+        tuple[object, object, object, QualificationSubjectContext], ...
+    ],
+) -> object:
+    if len(concrete_reads) != 1:
+        raise AuthorityError("fixed-member support has another concrete read domain")
+    expected_predecessors = k1.DatumSeq(
+        tuple(
+            k1.DatumRecord(
+                (
+                    (0, k1.Nat(ordinal)),
+                    (
+                        1,
+                        k1.DatumRecord(
+                            (
+                                (
+                                    0,
+                                    _id_datum(
+                                        coordinate,
+                                        "analysis.checked-result-coordinate",
+                                    ),
+                                ),
+                                (
+                                    1,
+                                    _id_datum(
+                                        portable_id,
+                                        "analysis.portable-source-authority-binding",
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                )
+            )
+            for ordinal, (coordinate, portable_id, _, _) in enumerate(predecessors)
+        )
+    )
+    if context.support.non_hypothesis_premise_bindings != expected_predecessors:
+        raise AuthorityError("fixed-member predecessor binding order was substituted")
+    source_support = context.support.source_support_bindings
+    if type(source_support) is not k1.DatumSeq or len(source_support.values) != 1:
+        raise AuthorityError("fixed-member concrete source support is incomplete")
+    support_id = _formed_analysis_id(
+        source_support.values[0], "analysis.source-support"
+    )
+    support_body = _formed_analysis_body(support_id, "analysis.source-support")
+    expected_support_id = _qualification_exact_concrete_source_support_id(
+        concrete_reads[0]
+    )
+    if (
+        support_body.semantic_read_manifest_id != concrete_reads[0]
+        or support_body.derived_owner_policy_dependency_closure != ()
+        or support_id != expected_support_id
+    ):
+        raise AuthorityError(
+            "fixed-member source support names another concrete manifest"
+        )
+    expected_source_support = k1.DatumSeq(
+        (_id_datum(support_id, "analysis.source-support"),)
+    )
+    if source_support != expected_source_support:
+        raise AuthorityError("fixed-member source support encoding was substituted")
+    assumed = _qualification_assumed_node_bindings(
+        hypothesis_context.nodes, theorem_validation=True
+    )
+    return _analysis_support_instantiation_id(
+        profile=context.semantic_profile,
+        semantic_basis_id=basis_id,
+        proposition_id=context.proposition_id,
+        assumed_goals=tuple(node.goal_id for node in hypothesis_context.nodes),
+        theorem_validations={
+            theorem_truth_goal_id(_AFK_GLOBAL_THEOREM_SCHEMA): AFK_V2_THM4_SOURCE_VALIDATION
+        },
+        non_hypothesis_premise_bindings=expected_predecessors,
+        assumed_hypothesis_node_bindings=assumed,
+        source_support_bindings=expected_source_support,
+    )
+
+
+def _exact_qualification_expectation(
+    law: _QualificationLawSpec,
+    context: QualificationSubjectContext,
+    qualification: object,
+) -> _QualificationExpectation:
+    label = law.qualification_label
+    empty_closure = k1.DatumSeq(())
+    unit = k1.DatumVariant(0, k1.UNIT)
+
+    if label == "finite-special-soundness-result":
+        policy = _analysis_operation_policy_id(
+            context.proposition_id,
+            (("finite-special-soundness", ("finite-special-soundness",)),),
+            profile=context.semantic_profile,
+        )
+        return _QualificationExpectation(
+            schnorr_semantic_basis_id(_SCHNORR_PINNED_PROPOSITION),
+            _analysis_support_instantiation_id(
+                profile=context.semantic_profile,
+                semantic_basis_id=context.semantic_basis_id,
+                proposition_id=context.proposition_id,
+                assumed_goals=_SCHNORR_PINNED_PROPOSITION.hypotheses,
+            ),
+            _expand_probe_references(
+                _property_conclusion_body(_SCHNORR_PINNED_PROPOSITION.goal.conclusion)
+            ),
+            unit,
+            policy,
+            empty_closure,
+        )
+
+    if label == "conditional-assumed-external-all-n":
+        family = _qualification_family(law, context)
+        hypotheses = _family_source_hypotheses_for_qualification(family)
+        basis = _qualification_family_source_basis_id(family, hypotheses)
+        if (
+            type(context.support.source_support_bindings) is not k1.DatumSeq
+            or len(context.support.source_support_bindings.values) != 1
+        ):
+            raise AuthorityError("external family result lacks one exact authority")
+        authority = context.support.source_support_bindings.values[0]
+        support = _analysis_support_instantiation_id(
+            profile=context.semantic_profile,
+            semantic_basis_id=basis,
+            proposition_id=context.proposition_id,
+            assumed_goals=hypotheses,
+            source_support_bindings=k1.DatumSeq((authority,)),
+        )
+        result_id = k1.content_id(
+            "k3c.external-family-source-result",
+            k1.encode_datum(
+                k1.DatumRecord(
+                    (
+                        (0, authority),
+                        (1, _id_datum(context.proposition_id, "analysis.proposition")),
+                        (2, _id_datum(basis, "analysis.semantic-basis")),
+                        (3, _id_datum(support, "analysis.support-instantiation")),
+                        (4, _id_datum(context.validation_basis_id, "analysis.validation-basis")),
+                        (5, analysis_profile_declaration_ref_body(qualification)),
+                        (6, k1.Symbol("conditional-assumed-all-n-source-result")),
+                    )
+                )
+            ),
+            semantic_regime=k1.SEMANTIC_REGIME_ID,
+        )
+        return _QualificationExpectation(
+            basis, support, None, None, None, empty_closure, result_id
+        )
+
+    if label == "conditional-assumed-theorem-truth":
+        schema = _AFK_GLOBAL_THEOREM_SCHEMA
+        schema_id = fs_theorem_schema_id(schema)
+        basis = _qualification_theorem_truth_basis_id(schema)
+        source_validation = _require_selected_theorem_source_validation(schema)
+        support = _analysis_support_instantiation_id(
+            profile=context.semantic_profile,
+            semantic_basis_id=basis,
+            proposition_id=context.proposition_id,
+            assumed_goals=(context.goal_id,),
+            theorem_validations={context.goal_id: source_validation},
+        )
+        result_id = k1.content_id(
+            "k3c.assumed-theorem-truth-treatment",
+            k1.encode_datum(
+                k1.DatumRecord(
+                    (
+                        (0, _id_datum(schema_id, "analysis.theorem-schema")),
+                        (1, _id_datum(context.proposition_id, "analysis.proposition")),
+                        (2, _id_datum(basis, "analysis.semantic-basis")),
+                        (3, _id_datum(support, "analysis.support-instantiation")),
+                        (4, _id_datum(context.validation_basis_id, "analysis.validation-basis")),
+                        (5, analysis_profile_declaration_ref_body(qualification)),
+                        (6, k1.Symbol("Assumed")),
+                    )
+                )
+            ),
+            semantic_regime=k1.SEMANTIC_REGIME_ID,
+        )
+        return _QualificationExpectation(
+            basis, support, None, None, None, empty_closure, result_id
+        )
+
+    if label == "afk-family-applicability-result":
+        family = _qualification_family(law, context)
+        candidate = derive_family_applicability_input(
+            _AFK_GLOBAL_THEOREM_SCHEMA, family
+        )
+        candidate_id = family_applicability_input_id(candidate)
+        schema_id = fs_theorem_schema_id(_AFK_GLOBAL_THEOREM_SCHEMA)
+        family_id = family_definition_id(family)
+        basis = _family_applicability_semantic_basis_id(
+            _AFK_GLOBAL_THEOREM_SCHEMA, family, candidate
+        )
+        policy = _analysis_operation_policy_id(
+            context.proposition_id,
+            (("afk-family-property-transport", ("exact-family-applicability",)),),
+            profile=context.semantic_profile,
+        )
+        return _QualificationExpectation(
+            basis,
+            _family_applicability_support_id(
+                basis, context.proposition_id, candidate.applicability_premise_ids
+            ),
+            k1.DatumRecord(
+                (
+                    (0, _id_datum(schema_id, "analysis.theorem-schema")),
+                    (1, _id_datum(family_id, "analysis.asymptotic-protocol-family")),
+                    (2, _embedded_component_datum(candidate_id, "analysis.family-theorem-applicability-input")),
+                    (3, k1.Symbol("affirmative-exact-family-applicability")),
+                )
+            ),
+            unit,
+            policy,
+            empty_closure,
+        )
+
+    if label == "afk-family-transport-result":
+        family = _qualification_family(law, context)
+        candidate = derive_family_applicability_input(
+            _AFK_GLOBAL_THEOREM_SCHEMA, family
+        )
+        hypotheses = _family_transport_hypotheses_for_qualification(family)
+        family_id = family_definition_id(family)
+        operator_ids = tuple(
+            family_operator_binding_id(binding) for binding in candidate.operator_bindings
+        )
+        operator_values = k1.DatumSeq(
+            tuple(
+                _embedded_component_datum(item, "analysis.theorem-operator-binding")
+                for item in operator_ids
+            )
+        )
+        basis = _family_judgment_basis_id(
+            AFK_V2_THM4_CLASSICAL_ROM,
+            family,
+            family_id,
+            family_source_property_proposition_id(
+                family,
+                _family_source_hypotheses_for_qualification(family),
+            ),
+            family_applicability_proposition_id(family, candidate),
+            theorem_truth_proposition_id(_AFK_GLOBAL_THEOREM_SCHEMA),
+            family_goal_id(family, "target-adaptive-knowledge-q-lt-N"),
+        )
+        predecessors = _qualification_predecessors(
+            context.support,
+            nested=False,
+            expected_uses=(
+                (
+                    "afk-family-applicability-result",
+                    "afk-family-property-transport",
+                    "exact-family-applicability",
+                ),
+                (
+                    "conditional-assumed-external-all-n",
+                    "afk-family-property-transport",
+                    "all-n-two-special-soundness-source",
+                ),
+                (
+                    "conditional-assumed-theorem-truth",
+                    "afk-family-property-transport",
+                    "selected-afk-theorem-truth",
+                ),
+            ),
+        )
+        support = _analysis_support_instantiation_id(
+            profile=context.semantic_profile,
+            semantic_basis_id=basis,
+            proposition_id=context.proposition_id,
+            assumed_goals=hypotheses,
+            theorem_validations={
+                theorem_truth_goal_id(_AFK_GLOBAL_THEOREM_SCHEMA): AFK_V2_THM4_SOURCE_VALIDATION
+            },
+            non_hypothesis_premise_bindings=context.support.non_hypothesis_premise_bindings,
+            source_support_bindings=context.support.source_support_bindings,
+        )
+        policy = _analysis_operation_policy_id(
+            context.proposition_id,
+            (("afk-member-specialization", ("afk-family-target-specialization",)),),
+            profile=context.semantic_profile,
+        )
+        return _QualificationExpectation(
+            basis,
+            support,
+            k1.DatumRecord(
+                (
+                    (0, _id_datum(AFK_V2_THM4_CLASSICAL_ROM, "analysis.theorem-schema")),
+                    (1, _id_datum(family_id, "analysis.asymptotic-protocol-family")),
+                    (2, operator_values),
+                    (3, k1.Symbol("adaptive-knowledge-soundness-q-lt-N")),
+                )
+            ),
+            operator_values,
+            policy,
+            _qualification_policy_closure(predecessors),
+        )
+
+    question_context = dict(context.question_context.payload.fields)
+    payload = dict(context.question_payload.fields)
+    hypothesis_context = _formed_analysis_body(
+        context.inherited_hypothesis_context_id, "analysis.hypothesis-context"
+    )
+    concrete_reads, family_reads = _semantic_basis_read_sources(context.question_id)
+
+    if label == "afk-family-instance-correspondence-result":
+        concrete_body = _qualification_normalized_concrete_body(payload[7])
+        basis = _analysis_transport_id(
+            "analysis.semantic-basis",
+            AnalysisSemanticBasisBodyV0(
+                _family_declaration_ref(
+                    K3C_ANALYSIS_TRANSPORT_PROFILE,
+                    "family-instance-correspondence",
+                    owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
+                ),
+                context.question_id,
+                _native_rule_source(
+                    K3C_ANALYSIS_TRANSPORT_PROFILE,
+                    K3C_ANALYSIS_PROPERTY_PROFILE,
+                    "conditional-family-instance-correspondence",
+                    k1.DatumRecord(((0, payload[0]), (1, payload[1]), (2, payload[2]))),
+                ),
+                _exact_hypothesis_node_requirements(
+                    context.inherited_hypothesis_context_id, hypothesis_context.nodes
+                ),
+                complete_read_purpose_requirements(
+                    concrete_manifest_ids=concrete_reads,
+                    family_manifest_schema_ids=family_reads,
+                ),
+                _conclusion_schema_ref(
+                    K3C_ANALYSIS_TRANSPORT_PROFILE,
+                    K3C_ANALYSIS_TRANSPORT_PROFILE,
+                    "family-instance-correspondence-conclusion-v0",
+                ),
+                k1.DatumRecord(
+                    (
+                        (0, payload[6]),
+                        (1, payload[7]),
+                        (2, k1.Symbol("conditional-one-member-correspondence-only")),
+                    )
+                ),
+            ),
+        )
+        policy = _analysis_operation_policy_id(
+            context.proposition_id,
+            (("afk-member-specialization", ("afk-exact-family-member-specialization",)),),
+            profile=context.semantic_profile,
+        )
+        support = _qualification_correspondence_support_id(
+            context,
+            basis,
+            payload,
+            hypothesis_context,
+            concrete_reads,
+            family_reads,
+        )
+        return _QualificationExpectation(
+            basis,
+            support,
+            k1.DatumRecord(
+                (
+                    (0, _id_datum(context.exact_subjects[0])),
+                    (1, _id_datum(context.exact_subjects[1])),
+                    (2, _expand_probe_references(_id_datum(context.exact_subjects[2]))),
+                    (3, k1.DatumVariant(1, concrete_body)),
+                    (4, payload[2]),
+                )
+            ),
+            unit,
+            policy,
+            empty_closure,
+        )
+
+    if label != "afk-member-specialization-result":
+        raise AuthorityError("qualification law has no exact result reconstruction")
+    predecessors = _qualification_predecessors(
+        context.support,
+        nested=True,
+        expected_uses=(
+            (
+                "afk-family-transport-result",
+                "afk-member-specialization",
+                "afk-family-target-specialization",
+            ),
+            (
+                "afk-family-instance-correspondence-result",
+                "afk-member-specialization",
+                "afk-exact-family-member-specialization",
+            ),
+        ),
+    )
+    correspondence_context = predecessors[1][3]
+    if correspondence_context.exact_subjects != context.exact_subjects:
+        raise AuthorityError(
+            "fixed-member correspondence predecessor names another exact subject tuple"
+        )
+    correspondence_payload = correspondence_context.question_payload
+    if type(correspondence_payload) is not k1.DatumRecord:
+        raise AuthorityError("fixed-member correspondence predecessor payload is malformed")
+    correspondence_fields = dict(correspondence_payload.fields)
+    if (
+        tuple(correspondence_fields) != tuple(range(10))
+        or question_context[3] != correspondence_fields[6]
+        or question_context[4] != correspondence_fields[7]
+    ):
+        raise AuthorityError(
+            "fixed-member correspondence predecessor has another exact question context"
+        )
+    concrete_body = _qualification_normalized_concrete_body(question_context[4])
+    subject_id = _local_component_id("concrete-family-member-subject", concrete_body)
+    transform = afk_quantitative_transform(k=2, challenge_count=8, subject_id=subject_id)
+    transform_id = afk_quantitative_transform_id(transform)
+    formula_map = afk_quantitative_formula_ids(transform)
+    formula_ids = tuple(formula_map[role] for role in AFK_MEMBER_FORMULA_ROLES)
+    conclusion_id = afk_target_conclusion_id(afk_knowledge_soundness_conclusion(transform))
+    conclusion_value = _embedded_component_datum(
+        conclusion_id, "analysis.property-conclusion"
+    )
+    if payload[0] != conclusion_value:
+        raise AuthorityError("fixed-member question names another quantitative conclusion")
+    capability_requirements = tuple(
+        k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            envelope.capability_requirement.owner_requirement,
+                            "analysis.capability-requirement-payload",
+                        ),
+                    ),
+                    (1, _id_datum(portable_id, "analysis.portable-source-authority-binding")),
+                )
+            ),
+        )
+        for _, portable_id, envelope, _ in predecessors
+    )
+    basis = _analysis_transport_id(
+        "analysis.semantic-basis",
+        AnalysisSemanticBasisBodyV0(
+            _family_declaration_ref(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                "adaptive-knowledge-extraction-at-fixed-length-q-lt-n",
+                owner_profile=K3C_ANALYSIS_PROPERTY_PROFILE,
+            ),
+            context.question_id,
+            _native_rule_source(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                "dependent-family-member-specialization",
+                k1.DatumRecord(
+                    (
+                        (0, _id_datum(predecessors[0][3].proposition_id)),
+                        (1, question_context[3]),
+                        (2, question_context[4]),
+                    )
+                ),
+            ),
+            k1.DatumSeq(
+                (
+                    *_exact_hypothesis_node_requirements(
+                        context.inherited_hypothesis_context_id,
+                        hypothesis_context.nodes,
+                    ).values,
+                    *capability_requirements,
+                )
+            ),
+            complete_read_purpose_requirements(concrete_manifest_ids=concrete_reads),
+            _conclusion_schema_ref(
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                K3C_ANALYSIS_TRANSPORT_PROFILE,
+                "fixed-member-knowledge-conclusion-v0",
+            ),
+            k1.DatumRecord(
+                (
+                    (0, _embedded_component_datum(transform_id, "analysis.quantitative-transform")),
+                    (1, conclusion_value),
+                )
+            ),
+        ),
+    )
+    logical_index = _formed_analysis_body(
+        context.exact_subjects[1], "analysis.logical-nat-literal"
+    ).value
+    policy = _analysis_operation_policy_id(
+        context.proposition_id, (), profile=context.semantic_profile
+    )
+    support = _qualification_fixed_support_id(
+        context,
+        basis,
+        hypothesis_context,
+        concrete_reads,
+        predecessors,
+    )
+    return _QualificationExpectation(
+        basis,
+        support,
+        k1.DatumRecord(
+            (
+                (0, _id_datum(context.exact_subjects[0])),
+                (1, k1.Nat(logical_index)),
+                (2, k1.DatumVariant(1, concrete_body)),
+                (3, conclusion_value),
+            )
+        ),
+        k1.DatumRecord(
+            (
+                (0, _embedded_component_datum(transform_id, "analysis.quantitative-transform")),
+                (
+                    1,
+                    k1.DatumSeq(
+                        tuple(_id_datum(item, "analysis.quantitative-formula") for item in formula_ids)
+                    ),
+                ),
+            )
+        ),
+        policy,
+        _qualification_policy_closure(predecessors),
+    )
+
+
+def _require_exact_question_constructor(
+    law: _QualificationLawSpec,
+    context: QualificationSubjectContext,
+) -> None:
+    question_context = context.question_context
+    if (
+        type(question_context) is not k1.DatumVariant
+        or question_context.case != law.exact_context_case
+    ):
+        raise AuthorityError("qualification question context has the wrong closed case")
+
+    expected_proposition: object | None = None
+    if law.qualification_label == "finite-special-soundness-result":
+        expected_proposition = analysis_proposition_id(_SCHNORR_PINNED_PROPOSITION)
+    elif law.qualification_label == "conditional-assumed-external-all-n":
+        family = _qualification_family(law, context)
+        expected_proposition = family_source_property_proposition_id(
+            family,
+            _family_source_hypotheses_for_qualification(family),
+        )
+    elif law.qualification_label == "conditional-assumed-theorem-truth":
+        expected_proposition = theorem_truth_proposition_id(
+            _AFK_GLOBAL_THEOREM_SCHEMA
+        )
+    elif law.qualification_label == "afk-family-applicability-result":
+        family = _qualification_family(law, context)
+        candidate = derive_family_applicability_input(
+            _AFK_GLOBAL_THEOREM_SCHEMA, family
+        )
+        expected_proposition = family_applicability_proposition_id(
+            family, candidate
+        )
+    elif law.qualification_label == "afk-family-transport-result":
+        family = _qualification_family(law, context)
+        expected_proposition = family_target_property_proposition_id(
+            family,
+            _family_transport_hypotheses_for_qualification(family),
+        )
+    if expected_proposition is not None and context.proposition_id != expected_proposition:
+        raise AuthorityError("qualification proposition is not its exact constructor")
+
+    payload = context.question_payload
+    if type(payload) is not k1.DatumRecord:
+        raise AuthorityError("qualification question payload is not one exact record")
+    payload_fields = dict(payload.fields)
+    if law.qualification_label == "family-instance-correspondence-result" or law.qualification_label == "afk-family-instance-correspondence-result":
+        if tuple(payload_fields) != tuple(range(10)):
+            raise AuthorityError("family correspondence payload is incomplete")
+        if (
+            _id_datum(context.exact_subjects[0]) != payload_fields[0]
+            or _id_datum(context.exact_subjects[1]) != payload_fields[1]
+            or _id_datum(context.exact_subjects[2]) != payload_fields[3]
+            or context.exact_subjects[3]
+            != _qualification_normalization_challenge_domain_id(payload_fields[7])
+            or context.exact_subjects[4]
+            != _qualification_embedded_fixed_setup_id(payload_fields[5])
+        ):
+            raise AuthorityError(
+                "family correspondence challenge domain or fixed setup is detached"
+            )
+    elif law.qualification_label == "afk-member-specialization-result":
+        if (
+            tuple(payload_fields) != (0, 1)
+            or payload_fields[1] != k1.Symbol("exact-fixed-member-specialization")
+        ):
+            raise AuthorityError("fixed-member question payload is incomplete")
+        context_fields = dict(question_context.payload.fields)
+        if (
+            tuple(context_fields) != (0, 1, 2, 3, 4)
+            or _id_datum(context.exact_subjects[0]) != context_fields[0]
+            or _id_datum(context.exact_subjects[1]) != context_fields[1]
+            or analysis_domain_body_v0(
+                "analysis.native-subject-projection",
+                _formed_analysis_body(
+                    context.exact_subjects[2], "analysis.native-subject-projection"
+                ),
+            )
+            != context_fields[2]
+            or context.exact_subjects[3]
+            != _qualification_normalization_challenge_domain_id(context_fields[4])
+        ):
+            raise AuthorityError("fixed-member question context is detached")
+
+
+def _require_exact_basis_constructor(
+    law: _QualificationLawSpec,
+    context: QualificationSubjectContext,
+    expectation: _QualificationExpectation,
+) -> None:
+    basis_profile = _formed_analysis_profile(
+        context.semantic_basis_id, "analysis.semantic-basis"
+    )
+    _, conclusion_label, _ = _resolved_profile_declaration(
+        basis_profile,
+        context.semantic_basis.conclusion_schema,
+        "analysis.semantic-law",
+    )
+    if conclusion_label != law.conclusion_schema_label:
+        raise AuthorityError("qualification semantic basis has another conclusion ABI")
+    rule_source = context.semantic_basis.rule_source
+    if law.native_rule_label is None:
+        if type(rule_source) is not k1.DatumVariant or rule_source.case != 1:
+            raise AuthorityError("qualification needs one exact imported-theorem rule")
+        expected_schema = AFK_V2_THM4_CLASSICAL_ROM
+        if rule_source.payload != _id_datum(expected_schema, "analysis.theorem-schema"):
+            raise AuthorityError("qualification imported another theorem schema")
+    else:
+        if (
+            type(rule_source) is not k1.DatumVariant
+            or rule_source.case != 0
+            or type(rule_source.payload) is not k1.DatumRecord
+        ):
+            raise AuthorityError("qualification needs one exact native-rule constructor")
+        rule_fields = dict(rule_source.payload.fields)
+        if tuple(rule_fields) != (0, 1):
+            raise AuthorityError("qualification native-rule payload is incomplete")
+        _, rule_label, _ = _resolved_profile_declaration(
+            basis_profile,
+            rule_fields[0],
+            "analysis.native-rule",
+        )
+        if rule_label != law.native_rule_label:
+            raise AuthorityError("qualification semantic basis uses another native rule")
+    if (
+        type(context.semantic_basis.exact_premise_schemas) is not k1.DatumSeq
+        or type(context.semantic_basis.typed_transform_program) is not k1.DatumRecord
+    ):
+        raise AuthorityError("qualification semantic basis has an incomplete exact ABI")
+
+    if context.semantic_basis_id != expectation.basis_id:
+        raise AuthorityError("qualification semantic basis is not its exact constructor")
+
+
+def _support_binding_goals(value: object) -> tuple[object, ...]:
+    if type(value) is not k1.DatumSeq:
+        raise AuthorityError("qualification support binding catalog is not a sequence")
+    goals: list[object] = []
+    for ordinal, entry in enumerate(value.values):
+        if type(entry) is not k1.DatumRecord:
+            raise AuthorityError("qualification support binding is not a record")
+        fields = dict(entry.fields)
+        if tuple(fields) != (0, 1) or fields[0] != k1.Nat(ordinal):
+            raise AuthorityError("qualification support binding ordinal is not exact")
+        payload = fields[1]
+        if type(payload) is not k1.DatumRecord:
+            raise AuthorityError("qualification support binding payload is malformed")
+        payload_fields = dict(payload.fields)
+        if tuple(payload_fields) != (0, 1, 2):
+            raise AuthorityError("qualification support binding payload is incomplete")
+        goals.append(payload_fields[0])
+    return tuple(goals)
+
+
+def _require_exact_support_and_validation(
+    law: _QualificationLawSpec,
+    context: QualificationSubjectContext,
+    expectation: _QualificationExpectation,
+) -> None:
+    support = context.support
+    for value in (
+        support.non_hypothesis_premise_bindings,
+        support.established_hypothesis_node_bindings,
+        support.assumed_hypothesis_node_bindings,
+        support.source_support_bindings,
+    ):
+        if type(value) is not k1.DatumSeq:
+            raise AuthorityError("qualification support has a non-sequence ABI field")
+    if support.established_hypothesis_node_bindings.values:
+        raise AuthorityError("active qualification has an undeclared established binding")
+    if (
+        len(support.non_hypothesis_premise_bindings.values)
+        != law.exact_non_hypothesis_binding_count
+        or len(support.source_support_bindings.values)
+        != law.exact_source_support_binding_count
+    ):
+        raise AuthorityError("qualification support constructor has the wrong arity")
+    actual_goals = _support_binding_goals(
+        support.assumed_hypothesis_node_bindings
+    )
+    hypothesis_context = _formed_analysis_body(
+        context.inherited_hypothesis_context_id,
+        "analysis.hypothesis-context",
+    )
+    expected_goals = tuple(_id_datum(node.goal_id) for node in hypothesis_context.nodes)
+    if law.assumed_binding_mode == "self-theorem-assumption":
+        expected_goals = (_id_datum(context.goal_id),)
+    if actual_goals != expected_goals:
+        raise AuthorityError("qualification support does not cover its exact hypotheses")
+    expected_validation = analysis_validation_basis_id(
+        (), profile=context.semantic_profile
+    )
+    if context.validation_basis_id != expected_validation:
+        raise AuthorityError("qualification validation basis is not its exact constructor")
+    if expectation.support_id is not None and context.support_id != expectation.support_id:
+        raise AuthorityError("qualification support is not its exact constructor")
+
+
+def _require_exact_judgment_constructor(
+    law: _QualificationLawSpec,
+    context: QualificationSubjectContext,
+    qualification: object,
+    expectation: _QualificationExpectation,
+) -> None:
+    judgment = context.judgment_record
+    if law.requires_judgment_record != (judgment is not None):
+        raise AuthorityError("qualification result has the wrong judgment carrier")
+    if judgment is None:
+        if (
+            context.outcome_kind is not AttemptKind.AFFIRMATIVE
+            or context.result_id != expectation.external_result_id
+        ):
+            raise AuthorityError("external qualification result preimage was substituted")
+        return
+    if (
+        judgment.polarity != k1.DatumVariant(0, k1.UNIT)
+        or judgment.qualification
+        != analysis_profile_declaration_ref_body(qualification)
+    ):
+        raise AuthorityError("qualification judgment polarity or law was substituted")
+    if (
+        judgment.exact_family_conclusion != expectation.conclusion
+        or judgment.typed_quantitative_result != expectation.quantitative
+        or judgment.operation_policy_id
+        != _id_datum(expectation.operation_policy_id, "analysis.operation-policy")
+        or judgment.derived_source_policy_dependency_closure
+        != expectation.policy_closure
+    ):
+        raise AuthorityError("qualification judgment result ABI was substituted")
+
+
+def _require_actual_qualification(
+    context: QualificationSubjectContext,
+    qualification: object,
+) -> None:
+    _, label, _ = _resolved_profile_declaration(
+        context.semantic_profile,
+        qualification,
+        "analysis.qualification",
+    )
+    law = _qualification_law(label)
+    subject_kinds = tuple(item.subject_kind for item in context.exact_subjects)
+    if (
+        context.family_label != law.exact_family_label
+        or subject_kinds != law.exact_subject_kinds
+    ):
+        raise AuthorityError(
+            "actual qualification rejects this family, subject, or context"
+        )
+    _require_exact_question_constructor(law, context)
+    expectation = _exact_qualification_expectation(law, context, qualification)
+    _require_exact_basis_constructor(law, context, expectation)
+    _require_exact_support_and_validation(law, context, expectation)
+    _require_exact_judgment_constructor(law, context, qualification, expectation)
+
+
+def _require_qualification_requirement(
+    context: QualificationSubjectContext,
+    actual_qualification: object,
+    requirement: object,
+) -> _QualificationLawSpec:
+    _, requirement_label, _ = _resolved_profile_declaration(
+        context.semantic_profile,
+        requirement,
+        "analysis.qualification-requirement",
+    )
+    if requirement_label != "exact-inherited-conditional":
+        raise AuthorityError("qualification requirement has no executable law")
+    _, actual_label, _ = _resolved_profile_declaration(
+        context.semantic_profile,
+        actual_qualification,
+        "analysis.qualification",
+    )
+    law = _qualification_law(actual_label)
+    subject_kinds = tuple(item.subject_kind for item in context.exact_subjects)
+    if (
+        context.family_label != law.exact_family_label
+        or subject_kinds != law.exact_subject_kinds
+    ):
+        raise AuthorityError("exact-inherited requirement rejects this result subject")
+    # This is a separate requirement law, not an alias for the actual
+    # qualification declaration.  It independently reconstructs the same
+    # closed candidate chain before permitting inheritance.
+    _require_exact_question_constructor(law, context)
+    expectation = _exact_qualification_expectation(
+        law, context, actual_qualification
+    )
+    _require_exact_basis_constructor(law, context, expectation)
+    _require_exact_support_and_validation(law, context, expectation)
+    _require_exact_judgment_constructor(
+        law, context, actual_qualification, expectation
+    )
+    return law
+
+
+def _checked_result_qualification_context(
+    checked_result_coordinate: object,
+) -> tuple[QualificationSubjectContext, object]:
+    body = _formed_analysis_body(
+        checked_result_coordinate,
+        "analysis.checked-result-coordinate",
+    )
+    profile = _formed_analysis_profile(
+        checked_result_coordinate,
+        "analysis.checked-result-coordinate",
+    )
+    judgment: AnalysisJudgmentRecordBodyV0 | None = None
+    if getattr(body.result_id, "subject_kind", None) == "analysis.judgment-record":
+        judgment = _formed_analysis_body(body.result_id, "analysis.judgment-record")
+        if (
+            judgment.proposition_id != _id_datum(body.proposition_id)
+            or judgment.semantic_basis_id != _id_datum(body.semantic_basis_id)
+            or judgment.support_coordinate != _id_datum(body.support_id)
+            or judgment.validation_basis_id != _id_datum(body.validation_basis_id)
+            or judgment.qualification
+            != analysis_profile_declaration_ref_body(body.qualification)
+        ):
+            raise AuthorityError("checked-result coordinate is detached from its judgment")
+    context = _derive_qualification_subject_context(
+        semantic_profile=profile,
+        proposition_id=body.proposition_id,
+        semantic_basis_id=body.semantic_basis_id,
+        support_id=body.support_id,
+        validation_basis_id=body.validation_basis_id,
+        judgment_record=judgment,
+        result_id=body.result_id,
+        outcome_kind=AttemptKind(body.outcome_kind.value),
+    )
+    _require_actual_qualification(context, body.qualification)
+    return context, body.qualification
+
+
 def checked_result_coordinate_id(result: InertCheckedResult) -> object:
     if (
         type(result) is not InertCheckedResult
@@ -2574,6 +5333,29 @@ def checked_result_coordinate_id(result: InertCheckedResult) -> object:
         raise AuthorityError("checked-result coordinate has the wrong exact shape")
     if result.outcome_kind not in (AttemptKind.AFFIRMATIVE, AttemptKind.NEGATIVE):
         raise AuthorityError("only a completed semantic result has an inert coordinate")
+    judgment: AnalysisJudgmentRecordBodyV0 | None = None
+    if getattr(result.result_id, "subject_kind", None) == "analysis.judgment-record":
+        judgment = _formed_analysis_body(result.result_id, "analysis.judgment-record")
+        if (
+            judgment.proposition_id != _id_datum(result.proposition_id)
+            or judgment.semantic_basis_id != _id_datum(result.semantic_basis_id)
+            or judgment.support_coordinate != _id_datum(result.support_id)
+            or judgment.validation_basis_id != _id_datum(result.validation_basis_id)
+            or judgment.qualification
+            != analysis_profile_declaration_ref_body(result.qualification_id)
+        ):
+            raise AuthorityError("inert checked result is detached from its judgment")
+    context = _derive_qualification_subject_context(
+        semantic_profile=result.semantic_profile,
+        proposition_id=result.proposition_id,
+        semantic_basis_id=result.semantic_basis_id,
+        support_id=result.support_id,
+        validation_basis_id=result.validation_basis_id,
+        judgment_record=judgment,
+        result_id=result.result_id,
+        outcome_kind=result.outcome_kind,
+    )
+    _require_actual_qualification(context, result.qualification_id)
     return _form_analysis_profiled_content_id(
         "analysis.checked-result-coordinate",
         AnalysisCheckedResultCoordinateBodyV0(
@@ -2610,6 +5392,133 @@ def analysis_capability_requirement_payload_id(
     )
 
 
+@dataclass(frozen=True)
+class _AnalysisUseContractCase:
+    qualification_label: str
+    consumer_label: str
+    purpose_label: str
+    policy_kind: str
+    external_operation: str | None = None
+
+
+_ANALYSIS_USE_CONTRACT_CASES = (
+    _AnalysisUseContractCase(
+        "finite-special-soundness-result",
+        "finite-special-soundness",
+        "finite-special-soundness",
+        "analysis-operation-policy",
+    ),
+    _AnalysisUseContractCase(
+        "conditional-assumed-external-all-n",
+        "afk-family-property-transport",
+        "all-n-two-special-soundness-source",
+        "external-owner-policy",
+        "use-assumed-all-n-source-result",
+    ),
+    _AnalysisUseContractCase(
+        "conditional-assumed-theorem-truth",
+        "afk-family-property-transport",
+        "selected-afk-theorem-truth",
+        "external-owner-policy",
+        "use-selected-theorem-truth-treatment",
+    ),
+    _AnalysisUseContractCase(
+        "afk-family-applicability-result",
+        "afk-family-property-transport",
+        "exact-family-applicability",
+        "analysis-operation-policy",
+    ),
+    _AnalysisUseContractCase(
+        "afk-family-transport-result",
+        "afk-member-specialization",
+        "afk-family-target-specialization",
+        "analysis-operation-policy",
+    ),
+    _AnalysisUseContractCase(
+        "afk-family-instance-correspondence-result",
+        "afk-member-specialization",
+        "afk-exact-family-member-specialization",
+        "analysis-operation-policy",
+    ),
+)
+
+
+def _operation_policy_permits_exact_use(
+    policy_id: object,
+    named_consumer: object,
+    typed_purpose: object,
+) -> None:
+    policy = _formed_analysis_body(policy_id, "analysis.operation-policy")
+    permissions = policy.named_consumer_and_typed_purpose_permissions
+    if type(permissions) is not k1.DatumSeq:
+        raise AuthorityError("operation policy has no finite permission table")
+    consumer_body = analysis_profile_declaration_ref_body(named_consumer)
+    purpose_body = analysis_profile_declaration_ref_body(typed_purpose)
+    matches = []
+    for entry in permissions.values:
+        if type(entry) is not k1.DatumRecord:
+            raise AuthorityError("operation-policy permission is malformed")
+        fields = dict(entry.fields)
+        if tuple(fields) != (0, 1) or type(fields[1]) is not k1.DatumSeq:
+            raise AuthorityError("operation-policy permission has the wrong ABI")
+        if fields[0] == consumer_body and purpose_body in fields[1].values:
+            matches.append(entry)
+    if len(matches) != 1:
+        raise AuthorityError("operation policy does not permit this exact typed use")
+
+
+def _require_exact_use_contract(
+    *,
+    law: _QualificationLawSpec,
+    context: QualificationSubjectContext,
+    requirement: AnalysisCapabilityRequirementPayload,
+    binding: AnalysisSourceAuthorityContract,
+    immediate: tuple[object, ...],
+) -> None:
+    _, consumer_label, _ = _resolved_profile_declaration(
+        context.semantic_profile,
+        requirement.named_consumer,
+        "analysis.named-consumer",
+    )
+    _, purpose_label, _ = _resolved_profile_declaration(
+        context.semantic_profile,
+        requirement.typed_purpose,
+        "analysis.typed-purpose",
+    )
+    matches = tuple(
+        case
+        for case in _ANALYSIS_USE_CONTRACT_CASES
+        if (
+            case.qualification_label == law.qualification_label
+            and case.consumer_label == consumer_label
+            and case.purpose_label == purpose_label
+        )
+    )
+    if len(matches) != 1:
+        raise AuthorityError("result qualification has no exact consumer/use contract")
+    case = matches[0]
+    if case.policy_kind == "analysis-operation-policy":
+        judgment = context.judgment_record
+        if judgment is None or judgment.operation_policy_id not in tuple(
+            _id_datum(item, "analysis.operation-policy") for item in immediate
+        ):
+            raise AuthorityError("exact use lacks its immediate operation policy")
+        _operation_policy_permits_exact_use(
+            judgment.operation_policy_id,
+            requirement.named_consumer,
+            requirement.typed_purpose,
+        )
+        return
+    if case.policy_kind != "external-owner-policy" or case.external_operation is None:
+        raise AuthorityError("exact use contract has an unknown policy constructor")
+    expected = _assumed_external_operation_policy_id(
+        binding.owner_id,
+        case.external_operation,
+    )
+    if expected not in immediate:
+        raise AuthorityError("external result lacks its exact owner operation policy")
+
+
 def analysis_source_authority_contract_id(
     binding: AnalysisSourceAuthorityContract,
 ) -> object:
@@ -2632,6 +5541,27 @@ def analysis_source_authority_contract_id(
         )
     if type(binding.semantic_profile) is not k1.SemanticLanguageProfile:
         raise AuthorityError("source-authority contract needs one exact profile")
+    context, actual_qualification = _checked_result_qualification_context(
+        binding.checked_result_coordinate_id
+    )
+    requirement = binding.capability_requirement
+    if (
+        requirement.semantic_profile != binding.semantic_profile
+        or requirement.proposition_id != context.proposition_id
+    ):
+        raise AuthorityError("authority requirement names another result subject")
+    law = _require_qualification_requirement(
+        context,
+        actual_qualification,
+        requirement.qualification_id,
+    )
+    _require_exact_use_contract(
+        law=law,
+        context=context,
+        requirement=requirement,
+        binding=binding,
+        immediate=immediate,
+    )
     return _form_analysis_profiled_content_id(
         "analysis.source-authority-contract",
         AnalysisSourceAuthorityContractBodyV0(
@@ -2749,7 +5679,7 @@ _ANALYSIS_PURPOSE_DECLARATION_OWNERS = {
     "core-public-coin-view": lambda: K3C_ANALYSIS_PROPERTY_PROFILE,
     "transcript-declaration-view": lambda: K3C_ANALYSIS_PROPERTY_PROFILE,
     "schnorr-relation-definition-view": lambda: K3C_ANALYSIS_PROPERTY_PROFILE,
-    "finite-special-soundness-result": lambda: K3C_ANALYSIS_PROPERTY_PROFILE,
+    "finite-special-soundness": lambda: K3C_ANALYSIS_PROPERTY_PROFILE,
     "exact-family-applicability": lambda: K3C_ANALYSIS_TRANSPORT_PROFILE,
     "all-n-two-special-soundness-source": lambda: K3C_ANALYSIS_TRANSPORT_PROFILE,
     "selected-afk-theorem-truth": lambda: K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -2889,7 +5819,7 @@ def _analysis_operation_policy_id(
     )
     if (
         profile != proposition_profile
-        and proposition_profile.identity
+        and _active_analysis_profile_id(proposition_profile)
         not in _analysis_profile_import_closure(profile)
     ):
         raise AuthorityError("operation policy is outside its proposition profile cone")
@@ -3026,8 +5956,9 @@ def _make_authority_binding(
         raise AuthorityError("checked result has no active Analysis owner profile")
     imported = _analysis_profile_import_closure(selected_profile)
     if any(
-        owner.identity != selected_profile.identity
-        and owner.identity not in imported
+        _bundled_semantic_profile_id(owner)
+        != _active_analysis_profile_id(selected_profile)
+        and _bundled_semantic_profile_id(owner) not in imported
         for owner in (consumer_owner, purpose_owner)
     ):
         raise AuthorityError(
@@ -3104,6 +6035,14 @@ def _require_invocation_capability(
     binding: AnalysisSourceAuthorityContract,
     registry: dict[object, object],
 ) -> None:
+    context, actual_qualification = _checked_result_qualification_context(
+        binding.checked_result_coordinate_id
+    )
+    _require_qualification_requirement(
+        context,
+        actual_qualification,
+        binding.capability_requirement.qualification_id,
+    )
     expected_source_binding = k1_portable_source_authority_binding(binding)
     expected_consumer_id = _analysis_intake_id(
         "analysis.consumer",
@@ -3926,7 +6865,9 @@ def quantitative_formula_id(profile: QuantitativeFormulaProfile) -> object:
             q_domain is None
             or q_domain[2] != "zero-less-than-or-equal-Q-strictly-less-than-N"
             or n_domain is None
-            or n_domain[2] != "N-is-exactly-8-and-at-least-two"
+            or n_domain[2] != "family-constant-N-is-8-and-at-least-two"
+            or n_domain[3]
+            != (family_definition_id(SELECTED_AFK_FAMILY),)
         ):
             raise QuantitativeError(
                 "probability count ratio lacks the exact Q<N and N=8 domains"
@@ -4338,7 +7279,7 @@ def _source_profile_adequacy_evaluator_id(
         "analysis.adequacy-evaluator",
         AnalysisAdequacyEvaluatorBodyV0(
             input_schema,
-            (profile.identity,),
+            (_active_analysis_profile_id(profile),),
             k1.value_type_datum(k1.BOOL),
             _K3C_REFERENCE_CHECKER_ALGORITHM_ID,
             _K3C_REFERENCE_CHECKER_EVALUATION_CONTRACT_ID,
@@ -5166,6 +8107,7 @@ def experiment_model_id(model: ExperimentModel) -> object:
                     (0, k1.Nat(0)),
                     (1, k1.Symbol("strategy-class")),
                     (2, _id_datum(model.strategy_interface_id, "analysis.strategy-class")),
+                    (3, _read_purpose_variant(AnalysisReadPurpose.SEMANTIC_MEANING)),
                 )
             ),
             k1.DatumRecord(
@@ -5173,6 +8115,7 @@ def experiment_model_id(model: ExperimentModel) -> object:
                     (0, k1.Nat(1)),
                     (1, k1.Symbol("setup-and-input-sampling")),
                     (2, _embedded_component_datum(model.setup_profile_id, "analysis.setup-profile")),
+                    (3, _read_purpose_variant(AnalysisReadPurpose.SEMANTIC_MEANING)),
                 )
             ),
             k1.DatumRecord(
@@ -5180,6 +8123,7 @@ def experiment_model_id(model: ExperimentModel) -> object:
                     (0, k1.Nat(2)),
                     (1, k1.Symbol("generated-execution-relation")),
                     (2, _embedded_component_datum(model.execution_body_id, "analysis.experiment-body-bundle")),
+                    (3, _read_purpose_variant(AnalysisReadPurpose.SEMANTIC_MEANING)),
                 )
             ),
         )
@@ -5640,18 +8584,44 @@ def probability_space_profile_id(profile: ProbabilitySpaceProfile) -> object:
     )
 
 
+class RandomOracleActor(str, Enum):
+    ADAPTIVE_PROVER = "adaptive-prover"
+    UNIFORM_BLACK_BOX_EXTRACTOR = "uniform-black-box-extractor"
+
+
+class CounterfactualOperation(str, Enum):
+    """Closed counterfactual operation catalog.
+
+    Fork is deliberately absent: a fork is a checked relation between two
+    accepted sibling receipts, not authority to mutate or resume an execution.
+    Rewind is likewise absent because this model exposes only a reset to the
+    authenticated root frame through ``RERUN``.
+    """
+
+    PROGRAM_SIBLING = "ProgramSibling"
+    RERUN = "Rerun"
+
+
+class CounterfactualTableScope(str, Enum):
+    NONE = "none"
+    EXACT_EXTRACTOR_INVOCATION = "exact-extractor-invocation"
+
+
+class ProverTapeScope(str, Enum):
+    NONE = "none"
+    FIXED_SIBLINGS_FRESH_EXPERIMENT = (
+        "fixed-among-sibling-reruns-fresh-across-experiments"
+    )
+    RESAMPLE_EACH_RERUN = "resample-each-rerun"
+
+
 @dataclass(frozen=True)
 class RandomOracleCapabilityContractProfile:
-    actor_kind: str
-    programming_right: str
-    already_defined_point_rule: str
-    programmed_value_rule: str
-    query_accounting_rule: str
-    rerun_right: str
-    rerun_table_rule: str
-    rerun_prover_state_rule: str
-    authority: str
-    executable_scope: str
+    actor_kind: RandomOracleActor
+    challenge_count: int | None
+    counterfactual_operations: tuple[CounterfactualOperation, ...]
+    table_scope: CounterfactualTableScope
+    tape_scope: ProverTapeScope
 
 
 def random_oracle_capability_contract_id(
@@ -5659,93 +8629,108 @@ def random_oracle_capability_contract_id(
 ) -> object:
     if type(profile) is not RandomOracleCapabilityContractProfile:
         raise ExperimentError("random-oracle capability contract has wrong shape")
-    values = tuple(
-        _ascii(value, "random-oracle capability contract field")
-        for value in (
-            profile.actor_kind,
-            profile.programming_right,
-            profile.already_defined_point_rule,
-            profile.programmed_value_rule,
-            profile.query_accounting_rule,
-            profile.rerun_right,
-            profile.rerun_table_rule,
-            profile.rerun_prover_state_rule,
-            profile.authority,
-            profile.executable_scope,
+    if type(profile.actor_kind) is not RandomOracleActor or any(
+        type(operation) is not CounterfactualOperation
+        for operation in profile.counterfactual_operations
+    ) or type(profile.table_scope) is not CounterfactualTableScope or type(
+        profile.tape_scope
+    ) is not ProverTapeScope:
+        raise ExperimentError("random-oracle capability contract is not typed")
+    prover_profile = RandomOracleCapabilityContractProfile(
+        RandomOracleActor.ADAPTIVE_PROVER,
+        None,
+        (),
+        CounterfactualTableScope.NONE,
+        ProverTapeScope.NONE,
+    )
+    extractor_shape = (
+        profile.actor_kind is RandomOracleActor.UNIFORM_BLACK_BOX_EXTRACTOR
+        and type(profile.challenge_count) is int
+        and profile.challenge_count >= 2
+        and profile.counterfactual_operations
+        == (
+            CounterfactualOperation.PROGRAM_SIBLING,
+            CounterfactualOperation.RERUN,
         )
+        and profile.table_scope
+        is CounterfactualTableScope.EXACT_EXTRACTOR_INVOCATION
+        and profile.tape_scope
+        is ProverTapeScope.FIXED_SIBLINGS_FRESH_EXPERIMENT
     )
-    prover_values = (
-        "adaptive-prover",
-        "forbidden",
-        "not-applicable",
-        "not-applicable",
-        "all-oracle-calls-count-toward-Q",
-        "forbidden",
-        "not-applicable",
-        "not-applicable",
-        "analysis-process-admission",
-        "symbolic-contract-not-local-transition-execution",
-    )
-    extractor_match = re.fullmatch(
-        r"values-remain-in-exact-C([2-9]|[1-9][0-9]*)-random-function-codomain",
-        profile.programmed_value_rule,
-    )
-    extractor_values = (
-        "uniform-black-box-extractor",
-        "theorem-granted",
-        "AFK-v2-Section-5-before-Lemma-4-and-Remark-6-govern-existing-points",
-        profile.programmed_value_rule,
-        "all-adversary-oracle-calls-count-toward-Q",
-        "theorem-granted",
-        "AFK-v2-Remark-6-governs-table-coupling-across-reruns",
-        "AFK-v2-Remark-2-rewind-fixed-deterministic-prover-state-no-coin-resampling",
-        "AssumedTheorem-AFK-v2-Theorem-4-plus-process-correspondence",
-        "symbolic-contract-not-local-transition-execution",
-    )
-    if values != prover_values and (
-        extractor_match is None or values != extractor_values
-    ):
+    if profile != prover_profile and not extractor_shape:
         raise ExperimentError(
             "random-oracle programming/rerun contract was substituted"
         )
+    challenge_count = (
+        k1.DatumVariant(0, k1.Unit())
+        if profile.challenge_count is None
+        else k1.DatumVariant(1, k1.Nat(profile.challenge_count))
+    )
+    operational_laws = (
+        "every-adaptive-prover-call-counts-including-repeats-and-off-image",
+        "program-only-the-baseline-target-with-distinct-in-codomain-values",
+        "all-nontarget-answers-shared-only-within-one-extractor-invocation",
+        "fixed-strategy-root-and-tape-among-siblings-fresh-across-experiments",
+        "exact-protocol-check-terminal-receipts-bind-query-carrier-and-challenge",
+        "accepted-full-transcript-pair-is-derived-not-a-capability",
+        "registered-lineages-do-not-claim-a-generic-strategy-engine",
+        "no-generic-rewind-fork-qrom-execution-replay-or-concrete-hash-claim",
+    )
     return _legacy_component_id(
-        "analysis.random-oracle-capability-contract", _symbol_seq(values)
+        "analysis.random-oracle-capability-contract",
+        k1.DatumRecord(
+            (
+                (0, k1.Symbol(profile.actor_kind.value)),
+                (1, challenge_count),
+                (
+                    2,
+                    _symbol_seq(
+                        tuple(
+                            operation.value
+                            for operation in profile.counterfactual_operations
+                        )
+                    ),
+                ),
+                (3, k1.Symbol(profile.table_scope.value)),
+                (4, k1.Symbol(profile.tape_scope.value)),
+                (5, _symbol_seq(operational_laws)),
+            )
+        ),
     )
 
 
 AFK_PROVER_RO_CAPABILITY_CONTRACT_ID = random_oracle_capability_contract_id(
     RandomOracleCapabilityContractProfile(
-        "adaptive-prover",
-        "forbidden",
-        "not-applicable",
-        "not-applicable",
-        "all-oracle-calls-count-toward-Q",
-        "forbidden",
-        "not-applicable",
-        "not-applicable",
-        "analysis-process-admission",
-        "symbolic-contract-not-local-transition-execution",
+        RandomOracleActor.ADAPTIVE_PROVER,
+        None,
+        (),
+        CounterfactualTableScope.NONE,
+        ProverTapeScope.NONE,
     )
 )
 _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY: dict[bytes, int] = {}
 
 
-def afk_extractor_ro_capability_contract_id(challenge_count: int) -> object:
+def afk_extractor_ro_capability_contract_profile(
+    challenge_count: int,
+) -> RandomOracleCapabilityContractProfile:
     if type(challenge_count) is not int or challenge_count < 2:
         raise ExperimentError("AFK extractor contract requires N >= 2")
+    return RandomOracleCapabilityContractProfile(
+        RandomOracleActor.UNIFORM_BLACK_BOX_EXTRACTOR,
+        challenge_count,
+        (
+            CounterfactualOperation.PROGRAM_SIBLING,
+            CounterfactualOperation.RERUN,
+        ),
+        CounterfactualTableScope.EXACT_EXTRACTOR_INVOCATION,
+        ProverTapeScope.FIXED_SIBLINGS_FRESH_EXPERIMENT,
+    )
+
+
+def afk_extractor_ro_capability_contract_id(challenge_count: int) -> object:
     identifier = random_oracle_capability_contract_id(
-        RandomOracleCapabilityContractProfile(
-            "uniform-black-box-extractor",
-            "theorem-granted",
-            "AFK-v2-Section-5-before-Lemma-4-and-Remark-6-govern-existing-points",
-            f"values-remain-in-exact-C{challenge_count}-random-function-codomain",
-            "all-adversary-oracle-calls-count-toward-Q",
-            "theorem-granted",
-            "AFK-v2-Remark-6-governs-table-coupling-across-reruns",
-            "AFK-v2-Remark-2-rewind-fixed-deterministic-prover-state-no-coin-resampling",
-            "AssumedTheorem-AFK-v2-Theorem-4-plus-process-correspondence",
-            "symbolic-contract-not-local-transition-execution",
-        )
+        afk_extractor_ro_capability_contract_profile(challenge_count)
     )
     key = identifier.internal_reference()
     prior = _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY.get(key)
@@ -5784,7 +8769,7 @@ def lazy_random_function_process_profile_id(
         profile.capability_contract_id,
         "analysis.random-oracle-capability-contract",
     )
-    exact_common = (
+    exact_transition_laws = (
         profile.initial_state,
         profile.index_equality,
         profile.repeat_transition,
@@ -5792,9 +8777,20 @@ def lazy_random_function_process_profile_id(
         profile.query_count_transition,
         profile.bound_binder,
         profile.over_bound,
-        profile.executable_scope,
     )
-    if exact_common != (
+    is_prover_process = (
+        profile.capability_contract_id == AFK_PROVER_RO_CAPABILITY_CONTRACT_ID
+    )
+    is_extractor_process = (
+        profile.capability_contract_id.internal_reference()
+        in _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY
+    )
+    expected_scope = (
+        "typed-classical-query-transition"
+        if is_prover_process
+        else "typed-classical-query-and-counterfactual-transitions"
+    )
+    if exact_transition_laws != (
         "empty-finite-map",
         "byte-equality",
         "lookup-return-no-fresh-draw",
@@ -5802,13 +8798,11 @@ def lazy_random_function_process_profile_id(
         "increment-on-every-call-including-repeat-and-off-image",
         "Q",
         "refuse-before-Q-plus-one-query",
-        "symbolic-process-plus-finite-realized-trace-sanity-only",
-    ) or (
-        profile.capability_contract_id != AFK_PROVER_RO_CAPABILITY_CONTRACT_ID
-        and profile.capability_contract_id.internal_reference()
-        not in _AFK_EXTRACTOR_CONTRACT_CARDINALITY_REGISTRY
+    ) or (not is_prover_process and not is_extractor_process) or (
+        profile.executable_scope != expected_scope
     ):
         raise ExperimentError("lazy random-function process semantics were substituted")
+    exact_common = exact_transition_laws + (profile.executable_scope,)
     return _legacy_component_id(
         "analysis.lazy-random-function-process",
         k1.DatumRecord(
@@ -6069,7 +9063,7 @@ def experiment_execution_body_id(
                 "bind-fixed-setup-before-prover-and-oracle",
                 "initialize-separate-empty-private-random-function-table",
                 "run-uniform-black-box-extractor-on-n-and-prover-oracle",
-                "permit-theorem-granted-lazy-sampling-programming-and-rerun",
+                "permit-theorem-granted-lazy-sampling-program-sibling-and-root-rerun",
                 "count-every-adversary-running-call",
                 "preserve-x-pi-aux-v-law-and-append-w",
             )
@@ -6404,7 +9398,13 @@ def extractor_profile_id(profile: UniformBlackBoxExtractorProfile) -> object:
                 )
             ),
             _symbol_seq(profile.oracle_rights),
-            _symbol_seq(tuple(item for item in profile.oracle_rights if item in ("rerun", "fork", "rewind", "programming"))),
+            _symbol_seq(
+                tuple(
+                    item
+                    for item in profile.oracle_rights
+                    if item in ("program-sibling", "root-rerun")
+                )
+            ),
             k1.Symbol("preserve-fixed-prover-strategy-and-source-state"),
             _symbol_seq(profile.preserves),
             k1.Symbol(_ascii(profile.success_event, "extractor success")),
@@ -6809,7 +9809,7 @@ AFK_EXTRACTOR_PROFILE_BODY = UniformBlackBoxExtractorProfile(
         "prover-code-as-data",
         "hidden-oracle-table",
     ),
-    ("classical-query", "lazy-sampling", "programming", "rerun"),
+    ("classical-query", "lazy-sampling", "program-sibling", "root-rerun"),
     ("x", "pi", "aux", "v", "w"),
     ("x", "pi", "aux", "v"),
     "accept-and-relation-x-w",
@@ -7003,7 +10003,7 @@ def afk_prover_experiment_body_profile(
             "Q",
             "refuse-before-Q-plus-one-query",
             AFK_PROVER_RO_CAPABILITY_CONTRACT_ID,
-            "symbolic-process-plus-finite-realized-trace-sanity-only",
+            "typed-classical-query-transition",
         ),
     )
 
@@ -7081,7 +10081,7 @@ def afk_extractor_experiment_body_profile(
             "bind-fixed-setup-before-prover-and-oracle",
             "initialize-separate-empty-private-random-function-table",
             "run-uniform-black-box-extractor-on-n-and-prover-oracle",
-            "permit-theorem-granted-lazy-sampling-programming-and-rerun",
+            "permit-theorem-granted-lazy-sampling-program-sibling-and-root-rerun",
             "count-every-adversary-running-call",
             "preserve-x-pi-aux-v-law-and-append-w",
         ),
@@ -7100,7 +10100,7 @@ def afk_extractor_experiment_body_profile(
             "Q",
             "refuse-before-Q-plus-one-query",
             afk_extractor_ro_capability_contract_id(challenge_count),
-            "symbolic-process-plus-finite-realized-trace-sanity-only",
+            "typed-classical-query-and-counterfactual-transitions",
         ),
     )
 
@@ -7238,7 +10238,7 @@ def subject_bound_afk_extractor_profile_id(subject_id: object) -> object:
                 tuple(
                     item
                     for item in profile.oracle_rights
-                    if item in ("rerun", "fork", "rewind", "programming")
+                    if item in ("program-sibling", "root-rerun")
                 )
             ),
             k1.Symbol("preserve-fixed-prover-strategy-and-source-state"),
@@ -7403,7 +10403,7 @@ def lazy_random_function_trace(
     outside the verifier image.  A fresh draw is consumed only for the first
     occurrence of each byte-equal index; repeats return the stored value.
     This executes the ideal finite law only and says nothing about SHA-256 or
-    the K2 construction correspondence.
+    the imported transcript-construction correspondence.
     """
 
     if type(challenge_count) is not int or challenge_count < 2:
@@ -7432,6 +10432,915 @@ def lazy_random_function_trace(
             "unused fresh draws would change the modeled probability space"
         )
     return tuple(outputs)
+
+
+class OracleCallActor(str, Enum):
+    ADAPTIVE_PROVER = "adaptive-prover"
+    VERIFIER = "verifier"
+
+
+@dataclass(frozen=True)
+class ClassicalOracleCall:
+    actor: OracleCallActor
+    index: bytes
+
+
+@dataclass(frozen=True)
+class ExactVerifierAcceptanceReceipt:
+    receipt_id: bytes
+    experiment_id: bytes
+    invocation_ordinal: int
+    source_projection_id: object
+    profile_id: object
+    correspondence_id: object
+    target_index: bytes
+    transcript: SchnorrTranscript
+    check_coordinate: str
+    terminal_coordinate: str
+    _token: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class BaselineExecutionReceipt:
+    experiment_id: bytes
+    frame_id: bytes
+    strategy_root_id: bytes
+    tape_lineage_id: bytes
+    table_lineage_id: bytes
+    table_state_before_id: bytes
+    table_state_after_id: bytes
+    target_index: bytes
+    target_value: int
+    transcript: SchnorrTranscript
+    verifier_acceptance: ExactVerifierAcceptanceReceipt
+    oracle_calls: tuple[ClassicalOracleCall, ...]
+    oracle_outputs: tuple[int, ...]
+    adversary_query_count: int
+    invocation_ordinal: int
+    _token: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class ProgrammedSiblingFrame:
+    experiment_id: bytes
+    frame_id: bytes
+    baseline_frame_id: bytes
+    strategy_root_id: bytes
+    tape_lineage_id: bytes
+    table_lineage_id: bytes
+    table_state_id: bytes
+    target_index: bytes
+    programmed_value: int
+    _issuer: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class RerunExecutionReceipt:
+    experiment_id: bytes
+    frame_id: bytes
+    programmed_frame_id: bytes
+    baseline_frame_id: bytes
+    strategy_root_id: bytes
+    tape_lineage_id: bytes
+    table_lineage_id: bytes
+    table_state_before_id: bytes
+    table_state_after_id: bytes
+    target_index: bytes
+    programmed_value: int
+    transcript: SchnorrTranscript
+    verifier_acceptance: ExactVerifierAcceptanceReceipt
+    oracle_calls: tuple[ClassicalOracleCall, ...]
+    oracle_outputs: tuple[int, ...]
+    adversary_query_count: int
+    invocation_ordinal: int
+    _token: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class CounterfactualExecutionCapability:
+    operation: CounterfactualOperation
+    experiment_id: bytes
+    contract_id: object
+    baseline_frame_id: bytes
+    strategy_root_id: bytes
+    tape_lineage_id: bytes
+    table_lineage_id: bytes
+    programmed_frame: ProgrammedSiblingFrame | None
+    required_state_ordinal: int | None
+    _token: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class ExtractorExperimentState:
+    experiment_id: bytes
+    contract_id: object
+    challenge_count: int
+    query_bound: int
+    strategy_root_id: bytes
+    tape_lineage_id: bytes
+    table_lineage_id: bytes
+    table_state_id: bytes
+    shared_table: tuple[tuple[bytes, int], ...]
+    baseline: BaselineExecutionReceipt | None
+    programmed_values: tuple[int, ...]
+    consumed_programmed_frame_ids: tuple[bytes, ...]
+    adversary_invocation_count: int
+    state_ordinal: int
+    _issuer: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class AcceptedSiblingPair:
+    experiment_id: bytes
+    target_index: bytes
+    transcripts: tuple[SchnorrTranscript, SchnorrTranscript]
+    frame_ids: tuple[bytes, bytes]
+    strategy_root_id: bytes
+    tape_lineage_id: bytes
+    table_lineage_id: bytes
+
+
+_COUNTERFACTUAL_OCCURRENCE_ISSUER = object()
+_COUNTERFACTUAL_CAPABILITY_TOKENS: dict[object, CounterfactualExecutionCapability] = {}
+_COUNTERFACTUAL_ACCEPTANCE_TOKENS: dict[object, ExactVerifierAcceptanceReceipt] = {}
+_COUNTERFACTUAL_RUN_RECEIPT_TOKENS: dict[
+    object, BaselineExecutionReceipt | RerunExecutionReceipt
+] = {}
+_CONSUMED_COUNTERFACTUAL_CAPABILITY_TOKENS: set[object] = set()
+_COUNTERFACTUAL_CURRENT_STATES: dict[bytes, ExtractorExperimentState] = {}
+
+
+def _register_counterfactual_capability(
+    capability: CounterfactualExecutionCapability,
+) -> CounterfactualExecutionCapability:
+    _COUNTERFACTUAL_CAPABILITY_TOKENS[capability._token] = capability
+    return capability
+
+
+def _register_counterfactual_acceptance(
+    receipt: ExactVerifierAcceptanceReceipt,
+) -> ExactVerifierAcceptanceReceipt:
+    _COUNTERFACTUAL_ACCEPTANCE_TOKENS[receipt._token] = receipt
+    return receipt
+
+
+def _register_counterfactual_run_receipt(
+    receipt: BaselineExecutionReceipt | RerunExecutionReceipt,
+) -> BaselineExecutionReceipt | RerunExecutionReceipt:
+    _COUNTERFACTUAL_RUN_RECEIPT_TOKENS[receipt._token] = receipt
+    return receipt
+
+
+def _require_counterfactual_acceptance(
+    receipt: ExactVerifierAcceptanceReceipt,
+) -> None:
+    if (
+        type(receipt) is not ExactVerifierAcceptanceReceipt
+        or _COUNTERFACTUAL_ACCEPTANCE_TOKENS.get(receipt._token) is not receipt
+    ):
+        raise ExperimentError("verifier acceptance receipt is absent or forged")
+
+
+def _require_counterfactual_run_receipt(
+    receipt: BaselineExecutionReceipt | RerunExecutionReceipt,
+    expected_type: type[BaselineExecutionReceipt] | type[RerunExecutionReceipt],
+) -> None:
+    if (
+        type(receipt) is not expected_type
+        or _COUNTERFACTUAL_RUN_RECEIPT_TOKENS.get(receipt._token) is not receipt
+    ):
+        raise ExperimentError("counterfactual run receipt is absent or forged")
+
+
+def _counterfactual_bytes(
+    value: object, label: str, *, nonempty: bool = False
+) -> bytes:
+    if type(value) is not bytes or len(value) > k1.MAX_CANONICAL_BYTES or (
+        nonempty and not value
+    ):
+        raise ExperimentError(f"{label} must be bounded exact bytes")
+    return value
+
+
+def _counterfactual_digest(label: str, *parts: bytes) -> bytes:
+    digest = hashlib.sha256()
+    domain = _ascii(label, "counterfactual occurrence domain").encode("ascii")
+    digest.update(len(domain).to_bytes(8, "big"))
+    digest.update(domain)
+    for part in parts:
+        if type(part) is not bytes:
+            raise ExperimentError("counterfactual occurrence digest input is not bytes")
+        digest.update(len(part).to_bytes(8, "big"))
+        digest.update(part)
+    return digest.digest()
+
+
+def _counterfactual_nat(value: int, label: str) -> bytes:
+    if type(value) is not int or value < 0:
+        raise ExperimentError(f"{label} must be a natural")
+    return str(value).encode("ascii")
+
+
+def _canonical_oracle_table(
+    entries: Iterable[tuple[bytes, int]], challenge_count: int
+) -> tuple[tuple[bytes, int], ...]:
+    materialized = tuple(entries)
+    if any(
+        type(item) is not tuple
+        or len(item) != 2
+        or type(item[0]) is not bytes
+        or len(item[0]) > k1.MAX_CANONICAL_BYTES
+        or type(item[1]) is not int
+        or not 0 <= item[1] < challenge_count
+        for item in materialized
+    ):
+        raise ExperimentError("random-oracle table has an invalid exact entry")
+    ordered = tuple(sorted(materialized, key=lambda item: item[0]))
+    if len({index for index, _ in ordered}) != len(ordered):
+        raise ExperimentError("random-oracle table repeats an exact index")
+    return ordered
+
+
+def _oracle_table_state_id(
+    table_lineage_id: bytes,
+    entries: tuple[tuple[bytes, int], ...],
+) -> bytes:
+    parts: list[bytes] = [table_lineage_id]
+    for index, value in entries:
+        parts.extend((index, _counterfactual_nat(value, "oracle table value")))
+    return _counterfactual_digest("analysis.counterfactual-oracle-table-state", *parts)
+
+
+def _require_extractor_experiment_state(
+    state: ExtractorExperimentState,
+    *,
+    require_current: bool = True,
+) -> None:
+    if (
+        type(state) is not ExtractorExperimentState
+        or state._issuer is not _COUNTERFACTUAL_OCCURRENCE_ISSUER
+    ):
+        raise ExperimentError("extractor experiment state was not issued here")
+    if (
+        require_current
+        and _COUNTERFACTUAL_CURRENT_STATES.get(state.experiment_id) is not state
+    ):
+        raise ExperimentError("extractor experiment state is no longer current")
+    if (
+        type(state.challenge_count) is not int
+        or state.challenge_count < 2
+        or type(state.query_bound) is not int
+        or not 0 <= state.query_bound < state.challenge_count
+        or state.contract_id
+        != afk_extractor_ro_capability_contract_id(state.challenge_count)
+    ):
+        raise ExperimentError("extractor experiment parameters were substituted")
+    for value, label in (
+        (state.experiment_id, "experiment identity"),
+        (state.strategy_root_id, "strategy-root identity"),
+        (state.tape_lineage_id, "tape lineage"),
+        (state.table_lineage_id, "table lineage"),
+        (state.table_state_id, "table-state identity"),
+    ):
+        if type(value) is not bytes or len(value) != hashlib.sha256().digest_size:
+            raise ExperimentError(f"{label} has the wrong shape")
+    canonical_table = _canonical_oracle_table(
+        state.shared_table, state.challenge_count
+    )
+    if canonical_table != state.shared_table or state.table_state_id != (
+        _oracle_table_state_id(state.table_lineage_id, canonical_table)
+    ):
+        raise ExperimentError("extractor experiment table state was substituted")
+    if (
+        type(state.adversary_invocation_count) is not int
+        or state.adversary_invocation_count < 0
+        or type(state.state_ordinal) is not int
+        or state.state_ordinal < 0
+        or any(
+            type(value) is not int or not 0 <= value < state.challenge_count
+            for value in state.programmed_values
+        )
+        or len(set(state.programmed_values)) != len(state.programmed_values)
+        or any(
+            type(frame_id) is not bytes
+            or len(frame_id) != hashlib.sha256().digest_size
+            for frame_id in state.consumed_programmed_frame_ids
+        )
+    ):
+        raise ExperimentError("extractor experiment accounting was substituted")
+    if state.baseline is None:
+        if (
+            state.shared_table
+            or state.programmed_values
+            or state.consumed_programmed_frame_ids
+            or state.adversary_invocation_count != 0
+            or state.state_ordinal != 0
+        ):
+            raise ExperimentError("unstarted extractor experiment has live history")
+    elif (
+        type(state.baseline) is not BaselineExecutionReceipt
+        or state.baseline.experiment_id != state.experiment_id
+        or state.baseline.strategy_root_id != state.strategy_root_id
+        or state.baseline.tape_lineage_id != state.tape_lineage_id
+        or state.baseline.table_lineage_id != state.table_lineage_id
+        or not state.programmed_values
+        or state.programmed_values[0] != state.baseline.target_value
+        or state.adversary_invocation_count < 1
+    ):
+        raise ExperimentError("extractor experiment baseline lineage was substituted")
+    if state.baseline is not None:
+        _require_counterfactual_run_receipt(
+            state.baseline, BaselineExecutionReceipt
+        )
+        _require_counterfactual_acceptance(state.baseline.verifier_acceptance)
+
+
+def _register_initial_extractor_experiment_state(
+    state: ExtractorExperimentState,
+) -> ExtractorExperimentState:
+    _require_extractor_experiment_state(state, require_current=False)
+    _COUNTERFACTUAL_CURRENT_STATES[state.experiment_id] = state
+    return state
+
+
+def _advance_extractor_experiment_state(
+    prior: ExtractorExperimentState,
+    successor: ExtractorExperimentState,
+) -> ExtractorExperimentState:
+    _require_extractor_experiment_state(prior)
+    _require_extractor_experiment_state(successor, require_current=False)
+    if successor.experiment_id != prior.experiment_id:
+        raise ExperimentError("extractor state transition changed experiment")
+    _COUNTERFACTUAL_CURRENT_STATES[prior.experiment_id] = successor
+    return successor
+
+
+def begin_extractor_experiment(
+    challenge_count: int,
+    query_bound: int,
+    *,
+    invocation_nonce: bytes,
+    strategy_root: bytes,
+    prover_tape_nonce: bytes,
+) -> ExtractorExperimentState:
+    """Begin one exact extractor invocation with fresh caller-owned nonces.
+
+    This finite instrument does not sample randomness.  The caller supplies a
+    fresh invocation nonce and a fresh prover-tape nonce for each experiment;
+    their raw values are retained in no state field.
+    """
+
+    if type(challenge_count) is not int or challenge_count < 2:
+        raise ExperimentError("counterfactual experiment requires N >= 2")
+    if type(query_bound) is not int or not 0 <= query_bound < challenge_count:
+        raise ExperimentError("counterfactual experiment requires 0 <= Q < N")
+    invocation_nonce = _counterfactual_bytes(
+        invocation_nonce, "extractor invocation nonce", nonempty=True
+    )
+    strategy_root = _counterfactual_bytes(
+        strategy_root, "prover strategy root", nonempty=True
+    )
+    prover_tape_nonce = _counterfactual_bytes(
+        prover_tape_nonce, "prover tape nonce", nonempty=True
+    )
+    contract_id = afk_extractor_ro_capability_contract_id(challenge_count)
+    strategy_root_commitment = _counterfactual_digest(
+        "analysis.counterfactual-strategy-root-commitment", strategy_root
+    )
+    tape_commitment = _counterfactual_digest(
+        "analysis.counterfactual-prover-tape-commitment", prover_tape_nonce
+    )
+    experiment_id = _counterfactual_digest(
+        "analysis.counterfactual-extractor-experiment",
+        contract_id.internal_reference(),
+        invocation_nonce,
+        _counterfactual_nat(challenge_count, "challenge count"),
+        _counterfactual_nat(query_bound, "query bound"),
+        strategy_root_commitment,
+        tape_commitment,
+    )
+    strategy_root_id = _counterfactual_digest(
+        "analysis.counterfactual-strategy-root",
+        experiment_id,
+        strategy_root_commitment,
+    )
+    tape_lineage_id = _counterfactual_digest(
+        "analysis.counterfactual-prover-tape", experiment_id, tape_commitment
+    )
+    table_lineage_id = _counterfactual_digest(
+        "analysis.counterfactual-oracle-table-lineage", experiment_id
+    )
+    empty_table: tuple[tuple[bytes, int], ...] = ()
+    state = ExtractorExperimentState(
+        experiment_id,
+        contract_id,
+        challenge_count,
+        query_bound,
+        strategy_root_id,
+        tape_lineage_id,
+        table_lineage_id,
+        _oracle_table_state_id(table_lineage_id, empty_table),
+        empty_table,
+        None,
+        (),
+        (),
+        0,
+        0,
+        _COUNTERFACTUAL_OCCURRENCE_ISSUER,
+    )
+    return _register_initial_extractor_experiment_state(state)
+
+
+def _execute_counterfactual_oracle_calls(
+    state: ExtractorExperimentState,
+    calls: tuple[ClassicalOracleCall, ...],
+    fresh_draws: tuple[int, ...],
+    *,
+    target_overlay: tuple[bytes, int] | None,
+) -> tuple[tuple[tuple[bytes, int], ...], tuple[int, ...], int, bool]:
+    _require_extractor_experiment_state(state)
+    if type(calls) is not tuple or any(
+        type(call) is not ClassicalOracleCall
+        or type(call.actor) is not OracleCallActor
+        or type(call.index) is not bytes
+        or len(call.index) > k1.MAX_CANONICAL_BYTES
+        for call in calls
+    ):
+        raise ExperimentError("counterfactual oracle call sequence is not typed")
+    if type(fresh_draws) is not tuple or any(
+        type(draw) is not int or not 0 <= draw < state.challenge_count
+        for draw in fresh_draws
+    ):
+        raise ExperimentError("counterfactual fresh draws are outside C_N")
+    if target_overlay is not None:
+        target_index = _counterfactual_bytes(
+            target_overlay[0], "programmed oracle index"
+        )
+        target_value = target_overlay[1]
+        if type(target_value) is not int or not (
+            0 <= target_value < state.challenge_count
+        ):
+            raise ExperimentError("programmed oracle value is outside C_N")
+    else:
+        target_index = b""
+        target_value = -1
+    table = dict(state.shared_table)
+    outputs: list[int] = []
+    draw_ordinal = 0
+    adversary_queries = 0
+    target_seen_by_prover = False
+    for call in calls:
+        if call.actor is OracleCallActor.ADAPTIVE_PROVER:
+            if adversary_queries >= state.query_bound:
+                raise ExperimentError("counterfactual run would exceed Q")
+            adversary_queries += 1
+            if target_overlay is not None and call.index == target_index:
+                target_seen_by_prover = True
+        if target_overlay is not None and call.index == target_index:
+            output = target_value
+        elif call.index in table:
+            output = table[call.index]
+        else:
+            if draw_ordinal >= len(fresh_draws):
+                raise ExperimentError("one fresh oracle index lacks its uniform draw")
+            output = fresh_draws[draw_ordinal]
+            draw_ordinal += 1
+            table[call.index] = output
+        outputs.append(output)
+    if draw_ordinal != len(fresh_draws):
+        raise ExperimentError(
+            "unused fresh draws would change the modeled probability space"
+        )
+    return (
+        _canonical_oracle_table(table.items(), state.challenge_count),
+        tuple(outputs),
+        adversary_queries,
+        target_seen_by_prover,
+    )
+
+
+def _exact_counterfactual_query_carrier(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    correspondence: FSCorrespondence,
+    transcript: SchnorrTranscript,
+) -> bytes:
+    require_schnorr_special_soundness_profile(source, profile)
+    fs_correspondence_id(correspondence)
+    if (
+        native_subject_projection_id(source)
+        != native_subject_projection_id(correspondence.fixed_public_setup._source)
+        or correspondence.source_property_profile_id != profile.profile_id
+    ):
+        raise ExperimentError("verifier correspondence is detached from its source")
+    if type(transcript) is not SchnorrTranscript:
+        raise ExperimentError("counterfactual verifier needs one exact Schnorr transcript")
+    selected = tuple(
+        entry
+        for entry in correspondence.query_encoding_table
+        if entry.statement == transcript.statement
+        and entry.commitment == transcript.commitment
+    )
+    if len(selected) != 1:
+        raise ExperimentError("transcript has no unique checked challenge-query carrier")
+    return selected[0].k2_challenge_query_carrier
+
+
+def _issue_exact_verifier_acceptance(
+    state: ExtractorExperimentState,
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    correspondence: FSCorrespondence,
+    transcript: SchnorrTranscript,
+    target_index: bytes,
+) -> ExactVerifierAcceptanceReceipt:
+    _require_extractor_experiment_state(state)
+    expected_target = _exact_counterfactual_query_carrier(
+        source, profile, correspondence, transcript
+    )
+    if target_index != expected_target:
+        raise ExperimentError("counterfactual target is not the checked query carrier")
+    if (
+        type(transcript.challenge) is not int
+        or not 0 <= transcript.challenge < state.challenge_count
+        or not exact_fresh_transcript_accepts(source, profile, transcript)
+    ):
+        raise ExperimentError(
+            "exact protocol Check and Terminal do not accept the transcript"
+        )
+    source_projection_id = native_subject_projection_id(source)
+    correspondence_id = fs_correspondence_id(correspondence)
+    receipt_id = _counterfactual_digest(
+        "analysis.counterfactual-exact-verifier-acceptance",
+        state.experiment_id,
+        _counterfactual_nat(
+            state.adversary_invocation_count, "adversary invocation ordinal"
+        ),
+        source_projection_id.internal_reference(),
+        profile.profile_id.internal_reference(),
+        correspondence_id.internal_reference(),
+        target_index,
+        _counterfactual_nat(transcript.statement, "Schnorr statement"),
+        _counterfactual_nat(transcript.commitment, "Schnorr commitment"),
+        _counterfactual_nat(transcript.challenge, "Schnorr challenge"),
+        _counterfactual_nat(transcript.response, "Schnorr response"),
+        profile.check_coordinate.encode("ascii"),
+        profile.terminal_coordinate.encode("ascii"),
+    )
+    receipt = ExactVerifierAcceptanceReceipt(
+        receipt_id,
+        state.experiment_id,
+        state.adversary_invocation_count,
+        source_projection_id,
+        profile.profile_id,
+        correspondence_id,
+        target_index,
+        transcript,
+        profile.check_coordinate,
+        profile.terminal_coordinate,
+        object(),
+    )
+    return _register_counterfactual_acceptance(receipt)
+
+
+def run_baseline(
+    state: ExtractorExperimentState,
+    calls: tuple[ClassicalOracleCall, ...],
+    fresh_draws: tuple[int, ...],
+    *,
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    correspondence: FSCorrespondence,
+    transcript: SchnorrTranscript,
+) -> tuple[
+    ExtractorExperimentState,
+    BaselineExecutionReceipt,
+    CounterfactualExecutionCapability,
+]:
+    _require_extractor_experiment_state(state)
+    if state.baseline is not None:
+        raise ExperimentError("one extractor experiment has exactly one baseline")
+    target_index = _exact_counterfactual_query_carrier(
+        source, profile, correspondence, transcript
+    )
+    next_table, outputs, query_count, _ = _execute_counterfactual_oracle_calls(
+        state, calls, fresh_draws, target_overlay=None
+    )
+    prover_target_ordinals = tuple(
+        ordinal
+        for ordinal, call in enumerate(calls)
+        if call.actor is OracleCallActor.ADAPTIVE_PROVER
+        and call.index == target_index
+    )
+    if not prover_target_ordinals:
+        raise ExperimentError("baseline target was not queried by the prover")
+    target_value = outputs[prover_target_ordinals[0]]
+    if target_value != transcript.challenge:
+        raise ExperimentError("baseline oracle answer disagrees with the transcript")
+    verifier_acceptance = _issue_exact_verifier_acceptance(
+        state, source, profile, correspondence, transcript, target_index
+    )
+    table_after_id = _oracle_table_state_id(state.table_lineage_id, next_table)
+    frame_id = _counterfactual_digest(
+        "analysis.counterfactual-baseline-frame",
+        state.experiment_id,
+        state.contract_id.internal_reference(),
+        state.strategy_root_id,
+        state.tape_lineage_id,
+        state.table_lineage_id,
+        _counterfactual_nat(state.state_ordinal, "state ordinal"),
+        state.table_state_id,
+        table_after_id,
+        target_index,
+        verifier_acceptance.receipt_id,
+    )
+    receipt = BaselineExecutionReceipt(
+        state.experiment_id,
+        frame_id,
+        state.strategy_root_id,
+        state.tape_lineage_id,
+        state.table_lineage_id,
+        state.table_state_id,
+        table_after_id,
+        target_index,
+        target_value,
+        transcript,
+        verifier_acceptance,
+        calls,
+        outputs,
+        query_count,
+        state.adversary_invocation_count,
+        object(),
+    )
+    receipt = _register_counterfactual_run_receipt(receipt)
+    assert type(receipt) is BaselineExecutionReceipt
+    next_state = replace(
+        state,
+        table_state_id=table_after_id,
+        shared_table=next_table,
+        baseline=receipt,
+        programmed_values=(target_value,),
+        adversary_invocation_count=state.adversary_invocation_count + 1,
+        state_ordinal=state.state_ordinal + 1,
+    )
+    next_state = _advance_extractor_experiment_state(state, next_state)
+    capability = _register_counterfactual_capability(
+        CounterfactualExecutionCapability(
+            CounterfactualOperation.PROGRAM_SIBLING,
+            state.experiment_id,
+            state.contract_id,
+            frame_id,
+            state.strategy_root_id,
+            state.tape_lineage_id,
+            state.table_lineage_id,
+            None,
+            None,
+            object(),
+        )
+    )
+    return next_state, receipt, capability
+
+
+def _require_counterfactual_capability(
+    state: ExtractorExperimentState,
+    capability: CounterfactualExecutionCapability,
+    operation: CounterfactualOperation,
+) -> None:
+    _require_extractor_experiment_state(state)
+    if (
+        type(capability) is not CounterfactualExecutionCapability
+        or _COUNTERFACTUAL_CAPABILITY_TOKENS.get(capability._token) is not capability
+        or capability._token in _CONSUMED_COUNTERFACTUAL_CAPABILITY_TOKENS
+        or capability.operation is not operation
+        or capability.experiment_id != state.experiment_id
+        or capability.contract_id != state.contract_id
+        or capability.strategy_root_id != state.strategy_root_id
+        or capability.tape_lineage_id != state.tape_lineage_id
+        or capability.table_lineage_id != state.table_lineage_id
+        or state.baseline is None
+        or capability.baseline_frame_id != state.baseline.frame_id
+        or (
+            capability.required_state_ordinal is not None
+            and capability.required_state_ordinal != state.state_ordinal
+        )
+    ):
+        raise ExperimentError("counterfactual capability is unauthorized or stale")
+
+
+def program_sibling(
+    state: ExtractorExperimentState,
+    capability: CounterfactualExecutionCapability,
+    programmed_value: int,
+) -> tuple[
+    ExtractorExperimentState,
+    ProgrammedSiblingFrame,
+    CounterfactualExecutionCapability,
+]:
+    _require_counterfactual_capability(
+        state, capability, CounterfactualOperation.PROGRAM_SIBLING
+    )
+    assert state.baseline is not None
+    if (
+        type(programmed_value) is not int
+        or not 0 <= programmed_value < state.challenge_count
+        or programmed_value in state.programmed_values
+    ):
+        raise ExperimentError(
+            "programmed sibling value must be a new exact member of C_N"
+        )
+    frame_id = _counterfactual_digest(
+        "analysis.counterfactual-programmed-sibling-frame",
+        state.experiment_id,
+        state.contract_id.internal_reference(),
+        state.strategy_root_id,
+        state.tape_lineage_id,
+        state.table_lineage_id,
+        _counterfactual_nat(state.state_ordinal, "state ordinal"),
+        state.baseline.frame_id,
+        state.table_state_id,
+        state.baseline.target_index,
+        _counterfactual_nat(programmed_value, "programmed value"),
+    )
+    frame = ProgrammedSiblingFrame(
+        state.experiment_id,
+        frame_id,
+        state.baseline.frame_id,
+        state.strategy_root_id,
+        state.tape_lineage_id,
+        state.table_lineage_id,
+        state.table_state_id,
+        state.baseline.target_index,
+        programmed_value,
+        _COUNTERFACTUAL_OCCURRENCE_ISSUER,
+    )
+    next_state = replace(
+        state,
+        programmed_values=state.programmed_values + (programmed_value,),
+        state_ordinal=state.state_ordinal + 1,
+    )
+    next_state = _advance_extractor_experiment_state(state, next_state)
+    rerun_capability = _register_counterfactual_capability(
+        CounterfactualExecutionCapability(
+            CounterfactualOperation.RERUN,
+            state.experiment_id,
+            state.contract_id,
+            state.baseline.frame_id,
+            state.strategy_root_id,
+            state.tape_lineage_id,
+            state.table_lineage_id,
+            frame,
+            next_state.state_ordinal,
+            object(),
+        )
+    )
+    return next_state, frame, rerun_capability
+
+
+def rerun_programmed_sibling(
+    state: ExtractorExperimentState,
+    capability: CounterfactualExecutionCapability,
+    calls: tuple[ClassicalOracleCall, ...],
+    fresh_draws: tuple[int, ...],
+    *,
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    correspondence: FSCorrespondence,
+    transcript: SchnorrTranscript,
+) -> tuple[ExtractorExperimentState, RerunExecutionReceipt]:
+    _require_counterfactual_capability(
+        state, capability, CounterfactualOperation.RERUN
+    )
+    frame = capability.programmed_frame
+    if (
+        type(frame) is not ProgrammedSiblingFrame
+        or frame._issuer is not _COUNTERFACTUAL_OCCURRENCE_ISSUER
+        or frame.experiment_id != state.experiment_id
+        or frame.baseline_frame_id != capability.baseline_frame_id
+        or frame.strategy_root_id != state.strategy_root_id
+        or frame.tape_lineage_id != state.tape_lineage_id
+        or frame.table_lineage_id != state.table_lineage_id
+        or frame.table_state_id != state.table_state_id
+        or frame.frame_id in state.consumed_programmed_frame_ids
+    ):
+        raise ExperimentError("programmed sibling frame is foreign, stale, or consumed")
+    expected_target = _exact_counterfactual_query_carrier(
+        source, profile, correspondence, transcript
+    )
+    if expected_target != frame.target_index:
+        raise ExperimentError("rerun transcript selects another query carrier")
+    if transcript.challenge != frame.programmed_value:
+        raise ExperimentError("rerun transcript challenge is not the programmed value")
+    next_table, outputs, query_count, target_seen = (
+        _execute_counterfactual_oracle_calls(
+            state,
+            calls,
+            fresh_draws,
+            target_overlay=(frame.target_index, frame.programmed_value),
+        )
+    )
+    if not target_seen:
+        raise ExperimentError("rerun target was not queried by the prover")
+    verifier_acceptance = _issue_exact_verifier_acceptance(
+        state, source, profile, correspondence, transcript, frame.target_index
+    )
+    table_after_id = _oracle_table_state_id(state.table_lineage_id, next_table)
+    receipt_id = _counterfactual_digest(
+        "analysis.counterfactual-rerun-frame",
+        state.experiment_id,
+        state.contract_id.internal_reference(),
+        state.strategy_root_id,
+        state.tape_lineage_id,
+        state.table_lineage_id,
+        frame.frame_id,
+        state.table_state_id,
+        table_after_id,
+        verifier_acceptance.receipt_id,
+    )
+    receipt = RerunExecutionReceipt(
+        state.experiment_id,
+        receipt_id,
+        frame.frame_id,
+        frame.baseline_frame_id,
+        state.strategy_root_id,
+        state.tape_lineage_id,
+        state.table_lineage_id,
+        state.table_state_id,
+        table_after_id,
+        frame.target_index,
+        frame.programmed_value,
+        transcript,
+        verifier_acceptance,
+        calls,
+        outputs,
+        query_count,
+        state.adversary_invocation_count,
+        object(),
+    )
+    receipt = _register_counterfactual_run_receipt(receipt)
+    assert type(receipt) is RerunExecutionReceipt
+    next_state = replace(
+        state,
+        table_state_id=table_after_id,
+        shared_table=next_table,
+        consumed_programmed_frame_ids=(
+            state.consumed_programmed_frame_ids + (frame.frame_id,)
+        ),
+        adversary_invocation_count=state.adversary_invocation_count + 1,
+        state_ordinal=state.state_ordinal + 1,
+    )
+    next_state = _advance_extractor_experiment_state(state, next_state)
+    _CONSUMED_COUNTERFACTUAL_CAPABILITY_TOKENS.add(capability._token)
+    return next_state, receipt
+
+
+def derive_accepted_sibling_pair(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    baseline: BaselineExecutionReceipt,
+    rerun: RerunExecutionReceipt,
+) -> AcceptedSiblingPair:
+    """Derive a canonical pair; this function grants no execution right."""
+
+    _require_counterfactual_run_receipt(baseline, BaselineExecutionReceipt)
+    _require_counterfactual_run_receipt(rerun, RerunExecutionReceipt)
+    _require_counterfactual_acceptance(baseline.verifier_acceptance)
+    _require_counterfactual_acceptance(rerun.verifier_acceptance)
+    require_schnorr_special_soundness_profile(source, profile)
+    if (
+        baseline.experiment_id != rerun.experiment_id
+        or baseline.frame_id != rerun.baseline_frame_id
+        or baseline.strategy_root_id != rerun.strategy_root_id
+        or baseline.tape_lineage_id != rerun.tape_lineage_id
+        or baseline.table_lineage_id != rerun.table_lineage_id
+        or baseline.target_index != rerun.target_index
+        or baseline.target_value == rerun.programmed_value
+        or baseline.verifier_acceptance.profile_id != profile.profile_id
+        or rerun.verifier_acceptance.profile_id != profile.profile_id
+    ):
+        raise ExperimentError("accepted sibling-pair relation does not hold")
+    ordered = tuple(
+        sorted(
+            (
+                (baseline.transcript, baseline.frame_id),
+                (rerun.transcript, rerun.frame_id),
+            ),
+            key=lambda item: k1.encode_datum(k1.Nat(item[0].challenge)),
+        )
+    )
+    transcripts = (ordered[0][0], ordered[1][0])
+    if not schnorr_admitted_pair_predicate(
+        source, profile, transcripts[0], transcripts[1]
+    ):
+        raise ExperimentError("issued runs do not form one exact admitted pair")
+    return AcceptedSiblingPair(
+        baseline.experiment_id,
+        baseline.target_index,
+        transcripts,
+        (ordered[0][1], ordered[1][1]),
+        baseline.strategy_root_id,
+        baseline.tape_lineage_id,
+        baseline.table_lineage_id,
+    )
 
 
 def two_distinct_lazy_query_joint_law(
@@ -8933,6 +12842,16 @@ def _analysis_judgment_record_id(
         _id_datum(operation_policy_id, "analysis.operation-policy"),
         k1.DatumSeq(tuple(_id_datum(item) for item in closure)),
     )
+    qualification_context = _derive_qualification_subject_context(
+        semantic_profile=profile,
+        proposition_id=proposition_id,
+        semantic_basis_id=semantic_basis_id,
+        support_id=support_id,
+        validation_basis_id=validation_basis_id,
+        inherited_hypothesis_context_id=inherited_hypothesis_context_id,
+        judgment_record=body,
+    )
+    _require_actual_qualification(qualification_context, qualification)
     return _form_analysis_profiled_content_id(
         "analysis.judgment-record",
         body,
@@ -8960,6 +12879,7 @@ def schnorr_semantic_basis_id(
         "analysis.semantic-basis",
         AnalysisSemanticBasisBodyV0(
             family_profile_id(PropertyFamily.K_OUT_OF_N_SPECIAL_SOUNDNESS),
+            analysis_question_id(proposition.goal.question),
             _native_rule_source(
                 K3C_ANALYSIS_PROPERTY_PROFILE,
                 K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -8987,22 +12907,10 @@ def schnorr_semantic_basis_id(
                 proposition.hypotheses,
                 transport=False,
             ),
-            k1.DatumSeq(
-                (
-                    k1.DatumRecord(
-                        (
-                            (
-                                0,
-                                _id_datum(
-                                    proposition.goal.question.semantic_read_closure_id,
-                                    "analysis.semantic-read-manifest",
-                                ),
-                            ),
-                            (1, k1.Nat(0)),
-                            (2, k1.DatumVariant(0, k1.UNIT)),
-                        )
-                    ),
-                )
+            complete_read_purpose_requirements(
+                concrete_manifest_ids=(
+                    proposition.goal.question.semantic_read_closure_id,
+                ),
             ),
             _conclusion_schema_ref(
                 K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -9058,7 +12966,7 @@ def establish_conditionally(
         (
             (
                 "finite-special-soundness",
-                ("finite-special-soundness-result",),
+                ("finite-special-soundness",),
             ),
         ),
         profile=K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -9067,7 +12975,7 @@ def establish_conditionally(
         K3C_ANALYSIS_PROPERTY_PROFILE,
         K3C_ANALYSIS_PROPERTY_PROFILE,
         "analysis.qualification",
-        "conditional-finite-special-soundness",
+        "finite-special-soundness-result",
     )
     context_id = analysis_hypothesis_context_id(proposition.hypotheses)
     judgment_id = _analysis_judgment_record_id(
@@ -9405,6 +13313,10 @@ class SchnorrSpecialSoundnessProfile:
     response_coordinate: str
     extractor_profile_id: object
     extractor_algorithm_id: object
+    statement_anchor_value: int
+    challenge_domain_id: object
+    check_coordinate: str
+    terminal_coordinate: str
     _issuer: object
 
 
@@ -9437,6 +13349,8 @@ def _schnorr_profile_body(profile: SchnorrSpecialSoundnessProfile) -> object:
         (profile.commitment_coordinate, "commitment coordinate"),
         (profile.challenge_coordinate, "challenge coordinate"),
         (profile.response_coordinate, "response coordinate"),
+        (profile.check_coordinate, "Check coordinate"),
+        (profile.terminal_coordinate, "Terminal coordinate"),
     ):
         _ascii(value, what)
     if (
@@ -9450,6 +13364,8 @@ def _schnorr_profile_body(profile: SchnorrSpecialSoundnessProfile) -> object:
         or not 1 < profile.generator < profile.group_modulus
         or not 2 <= profile.extraction_arity <= profile.challenge_count
         or profile.challenge_count > profile.subgroup_order
+        or type(profile.statement_anchor_value) is not int
+        or not 0 <= profile.statement_anchor_value < (1 << 64)
     ):
         raise PropertyError("Schnorr source profile has invalid finite parameters")
     return k1.DatumRecord(
@@ -9485,18 +13401,71 @@ def _schnorr_profile_body(profile: SchnorrSpecialSoundnessProfile) -> object:
                     profile.extractor_algorithm_id, "foundation.portable-algorithm"
                 ),
             ),
+            (16, k1.Nat(profile.statement_anchor_value)),
+            (
+                17,
+                _id_datum(
+                    profile.challenge_domain_id,
+                    "analysis.challenge-domain",
+                ),
+            ),
+            (18, k1.Symbol(profile.check_coordinate)),
+            (19, k1.Symbol(profile.terminal_coordinate)),
         )
+    )
+
+
+def _subject_bound_schnorr_pair_domain_id(
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    """Bind the quantified pair predicate to its exact semantic subjects."""
+
+    body = _schnorr_profile_body(profile)
+    predicate_law = analysis_profile_declaration_ref(
+        K3C_ANALYSIS_PROPERTY_PROFILE,
+        K3C_ANALYSIS_PROPERTY_PROFILE,
+        "analysis.semantic-law",
+        "finite-challenge-domain-v0",
+    )
+    return _legacy_component_id(
+        "analysis.value-domain-profile",
+        k1.DatumRecord(
+            (
+                (0, k1.Symbol("SchnorrSpecialSoundnessPair")),
+                (1, body),
+                (
+                    2,
+                    _id_datum(
+                        profile.challenge_domain_id,
+                        "analysis.challenge-domain",
+                    ),
+                ),
+                (3, analysis_profile_declaration_ref_body(predicate_law)),
+                (
+                    4,
+                    k1.Symbol(
+                        "same-statement-and-commitment-distinct-challenges-"
+                        "exact-protocol-check-terminal-canonical-challenge-order"
+                    ),
+                ),
+            )
+        ),
     )
 
 
 def _schnorr_profile_id(profile: SchnorrSpecialSoundnessProfile) -> object:
-    _schnorr_profile_body(profile)
-    return experiment_model_id(
-        fresh_special_soundness_model(
-            k=profile.extraction_arity,
-            challenge_count=profile.challenge_count,
-        )
+    base = fresh_special_soundness_model(
+        k=profile.extraction_arity,
+        challenge_count=profile.challenge_count,
     )
+    pair_domain_id = _subject_bound_schnorr_pair_domain_id(profile)
+    quantifiers = tuple(
+        replace(quantifier, domain_id=pair_domain_id)
+        if quantifier.kind is QuantifierKind.FOR_ALL_VALUE
+        else quantifier
+        for quantifier in base.quantifiers
+    )
+    return experiment_model_id(replace(base, quantifiers=quantifiers))
 
 
 def schnorr_relation_correspondence_hypothesis_id(
@@ -9662,6 +13631,7 @@ def derive_schnorr_special_soundness_profile(
         or type(binding.public_edges[0].source) is not k3.BindingRef
         or binding.public_edges[0].source.scope != "root"
         or binding.public_edges[0].source.input_name != "statement"
+        or binding.public_edges[0].value_relation != k3.SAME_EXACT_TYPE
         or len(binding.claim_edges) != 1
         or binding.claim_edges[0].instance != "knowledge-instance"
         or binding.claim_edges[0].claim.origin is not k3.ClaimOrigin.INITIAL
@@ -9673,6 +13643,12 @@ def derive_schnorr_special_soundness_profile(
         raise PropertyError(
             "bounded Schnorr Statement, claim, or Witness map was changed"
         )
+    statement_anchor = values["statement"]
+    if type(statement_anchor) is not int or not 0 <= statement_anchor < (1 << 64):
+        raise PropertyError("bounded Schnorr Statement exceeds its exact NAT_U64 carrier")
+    challenge_domain_id = _schnorr_challenge_domain_id_from_projection(
+        _source_schnorr_challenge_projection(source)
+    )
     profile = SchnorrSpecialSoundnessProfile(
         None,
         case.definitions[0].definition_id,
@@ -9690,6 +13666,10 @@ def derive_schnorr_special_soundness_profile(
         "response",
         SCHNORR_TRANSCRIPT_EXTRACTOR_PROFILE_ID,
         SCHNORR_EXTRACTOR_ALGORITHM,
+        statement_anchor,
+        challenge_domain_id,
+        verify.name,
+        occurrence_by_name["terminal"].name,
         _SCHNORR_PROFILE_ISSUER,
     )
     return replace(profile, profile_id=_schnorr_profile_id(profile))
@@ -9708,9 +13688,80 @@ def require_schnorr_special_soundness_profile(
         raise PropertyError("Schnorr source profile was substituted")
 
 
-def schnorr_accepts(
-    profile: SchnorrSpecialSoundnessProfile, transcript: SchnorrTranscript
-) -> bool:
+def _bound_schnorr_statement_value(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> int:
+    """Resolve the exact instance Statement through the checked Fresh edge."""
+
+    try:
+        instance, slot = profile.statement_coordinate.split(":", 1)
+    except ValueError as error:
+        raise PropertyError("Schnorr Statement coordinate is malformed") from error
+    selected = tuple(
+        edge
+        for edge in source.fresh_binding.binding.public_edges
+        if edge.instance == instance and edge.slot == slot
+    )
+    if (
+        len(selected) != 1
+        or type(selected[0].source) is not k3.BindingRef
+        or selected[0].value_relation != k3.SAME_EXACT_TYPE
+    ):
+        raise PropertyError("Schnorr profile has no unique checked Statement edge")
+    binding_ref = selected[0].source
+    if binding_ref.scope != "root":
+        raise PropertyError("bounded Schnorr Statement must use the root scope")
+    value = source.case.invocation.values.get(binding_ref.input_name)
+    if type(value) is not int or value < 0:
+        raise PropertyError("bound Schnorr Statement is not one exact natural")
+    if value != profile.statement_anchor_value:
+        raise PropertyError("bound Schnorr Statement disagrees with profile identity")
+    return value
+
+
+def _source_schnorr_challenge_projection(
+    source: FreshFsRelationSource,
+) -> k2.PublicCoinChallengeProjection:
+    require_fresh_fs_relation_source(source)
+    issued = _affirmative_pir_view(
+        k2.issue_core_static_view(
+            source.case.core,
+            k2.StaticViewKind.PUBLIC_COIN,
+            _K3C_PUBLIC_COIN_VIEW_MANIFEST,
+            consumer_id=_k3c_pir_view_consumer_id(),
+            purpose_id=_k3c_pir_view_purpose_id(
+                "fresh", "public-coin-view"
+            ),
+        ),
+        "Core PublicCoinView",
+    )
+    projection = k2.resolve_public_coin_challenge_projection(
+        issued,
+        0,
+        expected_consumer_id=_k3c_pir_view_consumer_id(),
+        expected_purpose_id=_k3c_pir_view_purpose_id(
+            "fresh", "public-coin-view"
+        ),
+    )
+    challenge_ordinal, challenge = _fixed_setup_challenge(source)
+    if (
+        projection.challenge_coordinate.sequence_ordinal != 0
+        or projection.challenge_coordinate.schedule_ordinal != challenge_ordinal
+        or projection.challenge_coordinate.occurrence_name != challenge.name
+        or projection.challenge_domain != challenge.challenge_domain
+    ):
+        raise PropertyError("Schnorr challenge projection selects another Core leaf")
+    return projection
+
+
+def _schnorr_fresh_owner_substitution(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    transcript: SchnorrTranscript,
+) -> tuple[k2.ValueRef, dict[k2.ValueRef, k2.Value], k2.ValueRef]:
+    """Build the exact protocol Check substitution from authenticated owner refs."""
+
     if type(transcript) is not SchnorrTranscript or any(
         type(item) is not int
         for item in (
@@ -9721,40 +13772,172 @@ def schnorr_accepts(
         )
     ):
         raise PropertyError("Schnorr transcript has the wrong exact shape")
-    if (
-        not 1 <= transcript.statement < profile.group_modulus
-        or not 1 <= transcript.commitment < profile.group_modulus
-        or not 0 <= transcript.challenge < profile.challenge_count
-        or not 0 <= transcript.response < profile.subgroup_order
-        or pow(
+    if any(
+        not 0 <= item < (1 << 64)
+        for item in (
             transcript.statement,
-            profile.subgroup_order,
-            profile.group_modulus,
-        )
-        != 1
-        or pow(
             transcript.commitment,
-            profile.subgroup_order,
-            profile.group_modulus,
+            transcript.challenge,
+            transcript.response,
         )
-        != 1
+    ):
+        raise PropertyError("Schnorr transcript field exceeds its exact NAT_U64 carrier")
+    checks = tuple(
+        occurrence
+        for occurrence in source.case.core.schedule
+        if occurrence.kind is k2.OccurrenceKind.CHECK
+    )
+    terminals = tuple(
+        occurrence
+        for occurrence in source.case.core.schedule
+        if occurrence.kind is k2.OccurrenceKind.TERMINAL
+    )
+    if len(checks) != 1 or len(terminals) != 1:
+        raise PropertyError("bounded Schnorr lane needs one Check and one Terminal")
+    check = checks[0]
+    assert check.check_predicate is not None
+    role_values = {
+        profile.commitment_coordinate: transcript.commitment,
+        profile.challenge_coordinate: transcript.challenge,
+        profile.response_coordinate: transcript.response,
+    }
+    refs = tuple(
+        dict.fromkeys((*check.guard.refs, *check.check_predicate.refs))
+    )
+    substitution: dict[k2.ValueRef, k2.Value] = {}
+    for ref in refs:
+        if ref.kind is k2.RefKind.INPUT:
+            if ref.name == "statement":
+                value = transcript.statement
+            else:
+                value = source.case.invocation.values.get(ref.name)
+        else:
+            value = role_values.get(ref.name)
+        if value is None:
+            raise PropertyError(
+                "Schnorr Check has a value ref outside its exact owner closure"
+            )
+        substitution[ref] = value
+    return (
+        k2.ValueRef.occurrence(check.name),
+        substitution,
+        k2.ValueRef.occurrence(terminals[0].name),
+    )
+
+
+def exact_fresh_transcript_accepts(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    transcript: SchnorrTranscript,
+) -> bool:
+    """Evaluate only the exact Fresh-protocol Check and Terminal semantics."""
+
+    require_schnorr_special_soundness_profile(source, profile)
+    return _exact_fresh_transcript_accepts_after_profile_admission(
+        source,
+        profile,
+        transcript,
+    )
+
+
+def _exact_fresh_transcript_accepts_after_profile_admission(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    transcript: SchnorrTranscript,
+) -> bool:
+    """Evaluate the owner path after the source/profile pair was admitted once."""
+
+    if type(transcript) is not SchnorrTranscript or any(
+        type(item) is not int
+        for item in (
+            transcript.statement,
+            transcript.commitment,
+            transcript.challenge,
+            transcript.response,
+        )
+    ):
+        raise PropertyError("Schnorr transcript has the wrong exact shape")
+    if any(
+        not 0 <= item < (1 << 64)
+        for item in (
+            transcript.statement,
+            transcript.commitment,
+            transcript.challenge,
+            transcript.response,
+        )
     ):
         return False
+    if transcript.statement != _bound_schnorr_statement_value(source, profile):
+        return False
+    projection = _source_schnorr_challenge_projection(source)
+    if not 0 <= transcript.challenge < projection.challenge_domain.modulus:
+        return False
+    check_ref, substitution, terminal_ref = _schnorr_fresh_owner_substitution(
+        source, profile, transcript
+    )
+    check_result = k2.evaluate_check_ref(
+        source.case.core,
+        check_ref,
+        substitution,
+    )
+    if check_result is not True:
+        return False
+    terminal = next(
+        occurrence
+        for occurrence in source.case.core.schedule
+        if occurrence.name == terminal_ref.name
+    )
+    terminal_substitution = {
+        ref: substitution[ref]
+        for ref in terminal.guard.refs
+        if ref in substitution
+    }
+    if len(terminal_substitution) != len(set(terminal.guard.refs)):
+        raise PropertyError(
+            "Schnorr Terminal guard escapes the exact Check substitution"
+        )
     return (
-        pow(
-            profile.generator,
-            transcript.response % profile.subgroup_order,
-            profile.group_modulus,
+        k2.evaluate_terminal_ref(
+            source.case.core,
+            terminal_ref,
+            {check_ref: check_result},
+            terminal_substitution,
         )
-        == (
-            transcript.commitment
-            * pow(
-                transcript.statement,
-                transcript.challenge % profile.subgroup_order,
-                profile.group_modulus,
-            )
-        )
-        % profile.group_modulus
+        is True
+    )
+
+
+def schnorr_admitted_pair_predicate(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    first: SchnorrTranscript,
+    second: SchnorrTranscript,
+) -> bool:
+    """Recognize the one canonical accepted two-transcript representation."""
+
+    require_schnorr_special_soundness_profile(source, profile)
+    if type(first) is not SchnorrTranscript or type(second) is not SchnorrTranscript:
+        raise PropertyError("Schnorr pair needs two exact transcripts")
+    if (
+        first.statement != second.statement
+        or first.commitment != second.commitment
+        or first.challenge == second.challenge
+    ):
+        return False
+    projection = _source_schnorr_challenge_projection(source)
+    if any(
+        not 0 <= transcript.challenge < projection.challenge_domain.modulus
+        for transcript in (first, second)
+    ):
+        return False
+    first_challenge_body = k1.encode_datum(k1.Nat(first.challenge))
+    second_challenge_body = k1.encode_datum(k1.Nat(second.challenge))
+    if not first_challenge_body < second_challenge_body:
+        return False
+    return _exact_fresh_transcript_accepts_after_profile_admission(
+        source, profile, first
+    ) and _exact_fresh_transcript_accepts_after_profile_admission(
+        source, profile, second
     )
 
 
@@ -9767,26 +13950,12 @@ def extract_schnorr_witness(
     """Execute the selected two-transcript algebra, not its universal theorem."""
 
     try:
-        require_schnorr_special_soundness_profile(source, profile)
-        if (
-            type(first) is not SchnorrTranscript
-            or type(second) is not SchnorrTranscript
+        if not schnorr_admitted_pair_predicate(
+            source, profile, first, second
         ):
-            raise PropertyError("Schnorr extraction needs two exact transcripts")
-        if first.statement != second.statement or first.commitment != second.commitment:
             return AttemptOutcome(
                 AttemptKind.CANNOT_ANSWER,
-                detail="transcripts do not share one statement and commitment",
-            )
-        if first.challenge == second.challenge:
-            return AttemptOutcome(
-                AttemptKind.CANNOT_ANSWER,
-                detail="special-soundness challenges are not distinct",
-            )
-        if not schnorr_accepts(profile, first) or not schnorr_accepts(profile, second):
-            return AttemptOutcome(
-                AttemptKind.CANNOT_ANSWER,
-                detail="one selected Schnorr transcript is not accepted",
+                detail="input is not one canonical admitted Schnorr pair",
             )
         denominator = (first.challenge - second.challenge) % profile.subgroup_order
         try:
@@ -10444,6 +14613,73 @@ def _k2_static_view_field_coordinate(issued: object, field_coordinate: object) -
     )
 
 
+def _pir_static_atomic_coordinate_body(
+    coordinate: k2.PIRStaticViewAtomicCoordinate,
+) -> object:
+    if type(coordinate) is not k2.PIRStaticViewAtomicCoordinate:
+        raise TheoremError("PIR static atomic coordinate has the wrong exact shape")
+    return k1.DatumRecord(
+        (
+            (
+                0,
+                k1.DatumRecord(
+                    (
+                        (0, k1.Symbol(coordinate.view_coordinate.owner_kind.value)),
+                        (1, _id_datum(coordinate.view_coordinate.owner_id)),
+                        (2, k1.Symbol(coordinate.view_coordinate.view_kind.value)),
+                        (
+                            3,
+                            _id_datum(
+                                coordinate.view_coordinate.semantic_profile_id,
+                                "foundation.semantic-language-profile",
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            (1, k1.Symbol(coordinate.field.value)),
+            (2, k1.Nat(coordinate.sequence_ordinal)),
+            (3, k1.Nat(coordinate.schedule_ordinal)),
+            (4, k1.Symbol(coordinate.occurrence_name)),
+            (5, k1.Symbol(coordinate.leaf.value)),
+        )
+    )
+
+
+def _fixed_setup_challenge_projection(
+    setup: FixedPublicSetup,
+) -> k2.PublicCoinChallengeProjection:
+    if type(setup) is not FixedPublicSetup:
+        raise TheoremError("fixed setup challenge source has the wrong exact shape")
+    _require_pir_analysis_source_views(setup._source, setup._source_views)
+    expected_ordinal, expected_occurrence = _fixed_setup_challenge(setup._source)
+    projection = k2.resolve_public_coin_challenge_projection(
+        setup._source_views.public_coin,
+        0,
+        expected_consumer_id=_k3c_pir_view_consumer_id(),
+        expected_purpose_id=_k3c_pir_view_purpose_id(
+            "fresh", "public-coin-view"
+        ),
+    )
+    coordinate = projection.challenge_coordinate
+    if (
+        coordinate.sequence_ordinal != 0
+        or coordinate.schedule_ordinal != expected_ordinal
+        or coordinate.occurrence_name != expected_occurrence.name
+        or projection.domain_coordinate.view_coordinate
+        != coordinate.view_coordinate
+        or projection.domain_coordinate.sequence_ordinal
+        != coordinate.sequence_ordinal
+        or projection.domain_coordinate.schedule_ordinal
+        != coordinate.schedule_ordinal
+        or projection.domain_coordinate.occurrence_name
+        != coordinate.occurrence_name
+        or projection.challenge_domain != expected_occurrence.challenge_domain
+    ):
+        raise TheoremError("fixed setup challenge leaves select another Core entry")
+    return projection
+
+
 def _relation_definition_field_coordinate_body(coordinate: object) -> object:
     if (
         type(coordinate) is not k3.RelationDefinitionFieldCoordinate
@@ -10474,19 +14710,8 @@ def _relation_definition_field_coordinate_body(coordinate: object) -> object:
 
 
 def _fixed_setup_challenge_ref(setup: FixedPublicSetup) -> object:
-    ordinal, occurrence = _fixed_setup_challenge(setup._source)
-    return k1.DatumRecord(
-        (
-            (
-                0,
-                _k2_static_view_field_coordinate(
-                    setup._source_views.public_coin,
-                    k2.StaticViewField.PC_CHALLENGES,
-                ),
-            ),
-            (1, k1.Nat(ordinal)),
-            (2, k1.Symbol(occurrence.name)),
-        )
+    return _pir_static_atomic_coordinate_body(
+        _fixed_setup_challenge_projection(setup).challenge_coordinate
     )
 
 
@@ -11741,7 +15966,7 @@ def _challenge_domain_adequacy_evaluator_id() -> object:
         "analysis.adequacy-evaluator",
         AnalysisAdequacyEvaluatorBodyV0(
             input_schema,
-            (profile.identity,),
+            (_active_analysis_profile_id(profile),),
             k1.value_type_datum(k1.BOOL),
             _K3C_REFERENCE_CHECKER_ALGORITHM_ID,
             _K3C_REFERENCE_CHECKER_EVALUATION_CONTRACT_ID,
@@ -11752,13 +15977,25 @@ def _challenge_domain_adequacy_evaluator_id() -> object:
     )
 
 
-def selected_afk_challenge_domain_id(
-    family: object | None = None,
+def selected_schnorr_challenge_domain_id(
+    setup: FixedPublicSetup,
 ) -> object:
-    family = SELECTED_AFK_FAMILY if family is None else family
-    if type(family) is not AFKAsymptoticFamily or family.challenge_cardinality < 2:
-        raise QuantitativeError("AFK challenge domain needs one admitted family")
-    family_id = family_definition_id(family)
+    """Form the finite model from exact live PIR PublicCoinView leaves."""
+
+    fixed_public_setup_id(setup)
+    return _schnorr_challenge_domain_id_from_projection(
+        _fixed_setup_challenge_projection(setup)
+    )
+
+
+def _schnorr_challenge_domain_id_from_projection(
+    projection: k2.PublicCoinChallengeProjection,
+) -> object:
+    if type(projection) is not k2.PublicCoinChallengeProjection:
+        raise QuantitativeError("Schnorr challenge source is not one PIR projection")
+    modulus = projection.challenge_domain.modulus
+    if type(modulus) is not int or modulus < 2:
+        raise QuantitativeError("Schnorr challenge domain needs at least two values")
     semantic_status = analysis_profile_declaration_ref(
         K3C_ANALYSIS_PROPERTY_PROFILE,
         K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -11768,18 +16005,33 @@ def selected_afk_challenge_domain_id(
     return _analysis_id(
         "analysis.challenge-domain",
         AnalysisChallengeDomainBodyV0(
-            _id_datum(family_id, "analysis.asymptotic-protocol-family"),
-            k1.value_type_datum(k1.NAT_U64),
-            k1.DatumRecord(
-                (
-                    (0, k1.Symbol("family-challenge-cardinality")),
-                    (1, k1.Nat(family.challenge_cardinality)),
-                )
+            _pir_static_atomic_coordinate_body(
+                projection.challenge_coordinate
             ),
-            tuple(range(family.challenge_cardinality)),
+            k1.value_type_datum(k1.NAT_U64),
+            _pir_static_atomic_coordinate_body(
+                projection.domain_coordinate
+            ),
+            tuple(range(modulus)),
             _challenge_domain_adequacy_evaluator_id(),
             analysis_profile_declaration_ref_body(semantic_status),
+            _CHALLENGE_DOMAIN_BODY_ISSUER,
         ),
+    )
+
+
+def afk_family_challenge_cardinality_parameter_domain_id(
+    family: AFKAsymptoticFamily,
+) -> object:
+    """Form abstract AFK ``N`` without treating it as a concrete challenge set."""
+
+    if type(family) is not AFKAsymptoticFamily or family.challenge_cardinality < 2:
+        raise QuantitativeError("AFK family cardinality needs one admitted family")
+    return formula_parameter_domain_id(
+        "N",
+        "challenge-count",
+        f"family-constant-N-is-{family.challenge_cardinality}-and-at-least-two",
+        family_definition_id(family),
     )
 
 
@@ -11794,9 +16046,6 @@ def _afk_formula_parameter_domains(
         raise QuantitativeError(
             "bounded formula domains require the selected fixed family cardinality"
         )
-    selected_challenge_domain_id = selected_afk_challenge_domain_id(
-        selected_family
-    )
     return {
         "q_KS": formula_parameter_domain_id(
             "q_KS",
@@ -11820,11 +16069,8 @@ def _afk_formula_parameter_domains(
             afk_query_abi_id(challenge_count),
             subject_id,
         ),
-        "N": formula_parameter_domain_id(
-            "N",
-            "challenge-count",
-            f"N-is-exactly-{challenge_count}-and-at-least-two",
-            selected_challenge_domain_id,
+        "N": afk_family_challenge_cardinality_parameter_domain_id(
+            selected_family
         ),
         "Pa": formula_parameter_domain_id(
             "Pa",
@@ -12267,15 +16513,15 @@ _SCHNORR_PINNED_PROPOSITION = form_special_soundness_proposition(
 
 AFK_PDF_SHA256 = "93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c"
 AFK_PRIMARY_SOURCE_LOCATORS = (
-    "Remark-2",
-    "Remark-6",
-    "Definition-4",
-    "Definition-10",
-    "Definition-11",
-    "Section-5-prose-immediately-before-Lemma-4",
-    "Lemma-4",
-    "Section-6.3-adaptive-construction-immediately-before-Theorem-4",
-    "Theorem-4",
+    "Definition 4",
+    "Definition 10",
+    "Definition 11",
+    "Section 4 Figure 3 and consistency prose immediately before Lemma 4",
+    "Lemma 4",
+    "Section 6.3 adaptive construction immediately before Theorem 4",
+    "Remark 2",
+    "Remark 6",
+    "Theorem 4",
 )
 
 
@@ -12792,7 +17038,7 @@ def _selected_statement_template_body(
 # from the body it authenticates: a statement edit must fail closed until a
 # reviewer deliberately rotates the literal and the accompanying source record.
 AFK_SELECTED_STATEMENT_CONTENT_SHA256 = (
-    "dea40bdec3e81668fc10289aafbcbc5be9cce1b0078f1df302e7ba6e5cd2cd49"
+    "e1436cc2f5e51a7f0e380465d20f19cdc6af0061e9232214d33b4ba5a778682e"
 )
 
 
@@ -12864,7 +17110,9 @@ def _theorem_authority_body(authority: AFKTheoremAuthority) -> object:
                 5,
                 k1.DatumSeq(
                     tuple(
-                        k1.BytesValue(_ascii(item, "source locator").encode("ascii"))
+                        k1.BytesValue(
+                            _printable_ascii(item, "source locator").encode("ascii")
+                        )
                         for item in authority.exact_locators
                     )
                 ),
@@ -12988,7 +17236,7 @@ def theorem_statement_digest(schema: FSTheoremSchema) -> str:
         "analysis.theorem-schema", _theorem_schema_carrier(schema)
     )
     profiled_body = k1.profiled_semantic_body(
-        K3C_ANALYSIS_TRANSPORT_PROFILE.identity,
+        K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
         domain_body,
     )
     return hashlib.sha256(k1.encode_datum(profiled_body)).hexdigest()
@@ -13278,7 +17526,7 @@ def _family_body(family: AFKAsymptoticFamily) -> object:
     )
 
 
-def family_definition_id(family: AFKAsymptoticFamily) -> object:
+def _form_family_definition_id(family: AFKAsymptoticFamily) -> object:
     family_language = analysis_profile_declaration_ref(
         K3C_ANALYSIS_TRANSPORT_PROFILE,
         K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -13292,6 +17540,20 @@ def family_definition_id(family: AFKAsymptoticFamily) -> object:
             _family_body(family),
         ),
     )
+
+
+def family_definition_id(family: AFKAsymptoticFamily) -> object:
+    """Share the family identity only within one live derivation scope."""
+
+    with _family_derivation_scope():
+        return _family_derivation_value(
+            (
+                "family-definition",
+                K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
+                family,
+            ),
+            lambda: _form_family_definition_id(family),
+        )
 
 
 SELECTED_AFK_FAMILY = form_afk_asymptotic_family(
@@ -13560,6 +17822,12 @@ def family_member_source_profile_id(
                                     "analysis.asymptotic-protocol-family",
                                 ),
                             ),
+                            (
+                                3,
+                                _read_purpose_variant(
+                                    AnalysisReadPurpose.SEMANTIC_MEANING
+                                ),
+                            ),
                         )
                     ),
                     k1.DatumRecord(
@@ -13567,6 +17835,12 @@ def family_member_source_profile_id(
                             (0, k1.Nat(1)),
                             (1, k1.Symbol("family-ro-index-domain")),
                             (2, _family_ro_index_domain_body(family.ro_index_domain)),
+                            (
+                                3,
+                                _read_purpose_variant(
+                                    AnalysisReadPurpose.SEMANTIC_MEANING
+                                ),
+                            ),
                         )
                     ),
                 )
@@ -13912,7 +18186,7 @@ def _parameter_substitution_body(
     )
 
 
-def family_applicability_premise_ids(
+def _form_family_applicability_premise_ids(
     family: AFKAsymptoticFamily,
 ) -> tuple[object, ...]:
     family_id = family_definition_id(family)
@@ -13952,6 +18226,22 @@ def family_applicability_premise_ids(
         )
         for ordinal, family_label in enumerate(families)
     )
+
+
+def family_applicability_premise_ids(
+    family: AFKAsymptoticFamily,
+) -> tuple[object, ...]:
+    """Share the exact premise set only within one live derivation scope."""
+
+    with _family_derivation_scope():
+        return _family_derivation_value(
+            (
+                "family-applicability-premises",
+                K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
+                family,
+            ),
+            lambda: _form_family_applicability_premise_ids(family),
+        )
 
 
 def family_source_property_proposition_id(
@@ -13994,7 +18284,7 @@ class AFKFamilyApplicabilityInput:
     operator_bindings: tuple[AFKFamilyOperatorBinding, ...]
 
 
-def derive_family_applicability_input(
+def _form_family_applicability_input(
     schema: FSTheoremSchema,
     family: AFKAsymptoticFamily,
 ) -> AFKFamilyApplicabilityInput:
@@ -14024,6 +18314,24 @@ def derive_family_applicability_input(
         ),
         family_operator_bindings(family),
     )
+
+
+def derive_family_applicability_input(
+    schema: FSTheoremSchema,
+    family: AFKAsymptoticFamily,
+) -> AFKFamilyApplicabilityInput:
+    """Share one immutable input only within a live derivation scope."""
+
+    with _family_derivation_scope():
+        return _family_derivation_value(
+            (
+                "family-applicability-input",
+                K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
+                schema,
+                family,
+            ),
+            lambda: _form_family_applicability_input(schema, family),
+        )
 
 
 def _family_applicability_input_body(
@@ -14284,6 +18592,7 @@ def _family_applicability_semantic_basis_id(
                 "theorem-applicability",
                 owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
             ),
+            family_applicability_question_id(family, candidate),
             _native_rule_source(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -14312,7 +18621,11 @@ def _family_applicability_semantic_basis_id(
                 candidate.applicability_premise_ids,
                 transport=True,
             ),
-            k1.DatumSeq(()),
+            complete_read_purpose_requirements(
+                family_manifest_schema_ids=(
+                    candidate.family_read_manifest_schema_ids
+                ),
+            ),
             _conclusion_schema_ref(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -14451,6 +18764,7 @@ def _family_applicability_components(
     return result, binding
 
 
+@_with_family_derivation_scope
 def check_afk_family_applicability(
     schema: FSTheoremSchema,
     family: AFKAsymptoticFamily,
@@ -14516,6 +18830,7 @@ def check_afk_family_applicability(
         return AttemptOutcome(AttemptKind.MALFORMED, detail=str(error))
 
 
+@_with_family_derivation_scope
 def require_family_applicability_port(
     port: AFKFamilyApplicabilityPort,
 ) -> None:
@@ -14645,6 +18960,7 @@ def _family_source_components(
                 "asymptotic-k-out-of-n-special-soundness",
                 owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
             ),
+            family_question_id(family, "source-two-special-soundness"),
             _native_rule_source(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -14663,17 +18979,10 @@ def _family_source_components(
                 ),
             ),
             _hypothesis_node_requirements(source_hypotheses, transport=True),
-            k1.DatumSeq(
-                (
-                    analysis_profile_declaration_ref_body(
-                        analysis_profile_declaration_ref(
-                            K3C_ANALYSIS_TRANSPORT_PROFILE,
-                            K3C_ANALYSIS_TRANSPORT_PROFILE,
-                            "analysis.typed-purpose",
-                            "all-n-two-special-soundness-source",
-                        )
-                    ),
-                )
+            complete_read_purpose_requirements(
+                family_manifest_schema_ids=(
+                    family_manifest_schema_id(family, "fresh-source"),
+                ),
             ),
             _conclusion_schema_ref(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -14759,6 +19068,7 @@ def _family_source_components(
     return source_hypotheses, result, binding
 
 
+@_with_family_derivation_scope
 def assume_external_family_source_capability_for_fixture(
     family: AFKAsymptoticFamily,
     *,
@@ -14879,9 +19189,12 @@ def _theorem_truth_components(
                 "theorem-truth",
                 owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
             ),
+            _analysis_transport_id(
+                "analysis.question", theorem_truth_question_body(schema)
+            ),
             _imported_theorem_rule_source(schema_id),
             k1.DatumSeq(()),
-            k1.DatumSeq(()),
+            (),
             _conclusion_schema_ref(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -15045,6 +19358,7 @@ _FAMILY_TRANSPORT_QUALIFICATION_ID = analysis_profile_declaration_ref(
 
 def _family_judgment_basis_id(
     theorem_schema_id: object,
+    family: AFKAsymptoticFamily,
     family_id: object,
     source_proposition_id: object,
     applicability_proposition_id: object,
@@ -15059,6 +19373,7 @@ def _family_judgment_basis_id(
                 "adaptive-knowledge-soundness-q-lt-n",
                 owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
             ),
+            _formed_analysis_body(target_goal_id, "analysis.goal").question_id,
             _imported_theorem_rule_source(theorem_schema_id),
             k1.DatumSeq(
                 (
@@ -15073,7 +19388,11 @@ def _family_judgment_basis_id(
                     ),
                 )
             ),
-            k1.DatumSeq(()),
+            complete_read_purpose_requirements(
+                family_manifest_schema_ids=(
+                    family_manifest_schema_id(family, "adaptive-fs-target"),
+                ),
+            ),
             _conclusion_schema_ref(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -15213,6 +19532,7 @@ def _family_transport_support_id(
     )
 
 
+@_with_family_derivation_scope
 def transport_afk_family_knowledge(
     source_capability: FamilySourcePropertyCapability | None,
     applicability_port: AFKFamilyApplicabilityPort,
@@ -15268,6 +19588,7 @@ def transport_afk_family_knowledge(
         )
         basis_id = _family_judgment_basis_id(
             applicability_port.theorem_schema_id,
+            family,
             family_definition_id(family),
             source_capability.checked_result.proposition_id,
             applicability_port.checked_result.proposition_id,
@@ -15373,6 +19694,7 @@ def transport_afk_family_knowledge(
         return AttemptOutcome(AttemptKind.MALFORMED, detail=str(error))
 
 
+@_with_family_derivation_scope
 def require_family_knowledge_judgment(
     judgment: AFKFamilyKnowledgeJudgment,
 ) -> None:
@@ -15437,6 +19759,7 @@ def require_family_knowledge_judgment(
     )
     expected_basis = _family_judgment_basis_id(
         judgment.theorem_schema_id,
+        judgment.family,
         judgment.family_definition_id,
         expected_source_result.proposition_id,
         expected_applicability_result.proposition_id,
@@ -15672,71 +19995,77 @@ def concrete_member_subject_id(
     )
     return _legacy_component_id(
         "analysis.concrete-family-member-subject",
-        k1.DatumRecord(
-            (
+        _expand_probe_references(
+            k1.DatumRecord(
                 (
-                    0,
-                    _id_datum(
-                        family_definition_id(family),
-                        "analysis.asymptotic-protocol-family",
+                    (
+                        0,
+                        _id_datum(
+                            family_definition_id(family),
+                            "analysis.asymptotic-protocol-family",
+                        ),
                     ),
-                ),
-                (1, k1.Nat(1)),
-                (
-                    2,
-                    _id_datum(
-                        native_subject_projection_id(source),
-                        "analysis.native-subject-projection",
+                    (1, k1.Nat(1)),
+                    (
+                        2,
+                        _id_datum(
+                            native_subject_projection_id(source),
+                            "analysis.native-subject-projection",
+                        ),
                     ),
-                ),
-                (
-                    3,
-                    _id_datum(source_selector_id, "analysis.family-member-selector"),
-                ),
-                (
-                    4,
-                    _id_datum(target_selector_id, "analysis.family-member-selector"),
-                ),
-                (
-                    5,
-                    k1.DatumSeq(
-                        tuple(
-                            _id_datum(item, "relations.definition")
-                            for item in relation_definition_ids
-                        )
+                    (
+                        3,
+                        _id_datum(
+                            source_selector_id, "analysis.family-member-selector"
+                        ),
                     ),
-                ),
-                (
-                    6,
-                    k1.DatumSeq(
-                        tuple(
-                            _id_datum(item, "relations.interface")
-                            for item in relation_interface_ids
-                        )
+                    (
+                        4,
+                        _id_datum(
+                            target_selector_id, "analysis.family-member-selector"
+                        ),
                     ),
-                ),
-                (
-                    7,
-                    _id_datum(
-                        correspondence.fresh_binding_id,
-                        "relations.protocol-binding",
+                    (
+                        5,
+                        k1.DatumSeq(
+                            tuple(
+                                _id_datum(item, "relations.definition")
+                                for item in relation_definition_ids
+                            )
+                        ),
                     ),
-                ),
-                (
-                    8,
-                    _id_datum(
-                        correspondence.fiat_shamir_binding_id,
-                        "relations.protocol-binding",
+                    (
+                        6,
+                        k1.DatumSeq(
+                            tuple(
+                                _id_datum(item, "relations.interface")
+                                for item in relation_interface_ids
+                            )
+                        ),
                     ),
-                ),
-                (
-                    9,
-                    _id_datum(
-                        correspondence.fixed_public_setup_id,
-                        "analysis.fixed-public-setup",
+                    (
+                        7,
+                        _id_datum(
+                            correspondence.fresh_binding_id,
+                            "relations.protocol-binding",
+                        ),
                     ),
-                ),
-                (10, k1.Symbol("exact-native-relation-member-at-n0")),
+                    (
+                        8,
+                        _id_datum(
+                            correspondence.fiat_shamir_binding_id,
+                            "relations.protocol-binding",
+                        ),
+                    ),
+                    (
+                        9,
+                        _id_datum(
+                            correspondence.fixed_public_setup_id,
+                            "analysis.fixed-public-setup",
+                        ),
+                    ),
+                    (10, k1.Symbol("exact-native-relation-member-at-n0")),
+                )
             )
         ),
     )
@@ -15975,7 +20304,9 @@ def family_instance_role_maps(
         raise TheoremError("selected member challenge lacks a finite domain")
     if challenge_occurrence.challenge_domain.modulus != family.challenge_cardinality:
         raise TheoremError("native and family challenge cardinalities disagree")
-    native_challenge_domain_id = selected_afk_challenge_domain_id(family)
+    native_challenge_domain_id = selected_schnorr_challenge_domain_id(
+        correspondence.fixed_public_setup
+    )
     source_selector_id = fixed_family_member_selector_id(source, "fresh")
     target_selector_id = fixed_family_member_selector_id(source, "fiat-shamir")
     concrete_subject = concrete_member_subject_id(
@@ -16418,6 +20749,7 @@ def _pointwise_formula_correspondence_id(
     correspondence: PointwiseFormulaCorrespondence,
     family: AFKAsymptoticFamily,
     concrete_subject_id: object,
+    fixed_setup: FixedPublicSetup,
 ) -> object:
     if type(correspondence) is not PointwiseFormulaCorrespondence:
         raise TheoremError(
@@ -16466,12 +20798,15 @@ def _pointwise_formula_correspondence_id(
         raise TheoremError(
             "pointwise formula correspondence is detached from its exact formulas or AST"
         )
-    return pointwise_quantitative_normalization_id(family, concrete_subject_id)
+    return pointwise_quantitative_normalization_id(
+        family, concrete_subject_id, fixed_setup
+    )
 
 
 def pointwise_quantitative_normalization_id(
     family: AFKAsymptoticFamily,
     concrete_subject_id: object,
+    fixed_setup: FixedPublicSetup,
 ) -> object:
     """Compile the four checked equalities into one durable AFK contract."""
 
@@ -16483,7 +20818,14 @@ def pointwise_quantitative_normalization_id(
         )
     )
     logical_index_id = logical_nat_literal_id(1)
-    challenge_domain_id = selected_afk_challenge_domain_id(family)
+    challenge_domain_id = selected_schnorr_challenge_domain_id(fixed_setup)
+    if (
+        _fixed_setup_challenge_projection(fixed_setup).challenge_domain.modulus
+        != family.challenge_cardinality
+    ):
+        raise TheoremError(
+            "pointwise normalization maps unequal abstract and concrete cardinalities"
+        )
     correspondences = pointwise_formula_correspondences(
         family,
         concrete_subject_id,
@@ -16656,7 +20998,9 @@ def _family_instance_exact_subjects(
         family_definition_id(family),
         logical_nat_literal_id(1),
         native_subject_projection_id(source),
-        selected_afk_challenge_domain_id(family),
+        selected_schnorr_challenge_domain_id(
+            correspondence.fixed_public_setup
+        ),
         correspondence.fixed_public_setup_id,
     )
 
@@ -16846,15 +21190,16 @@ def fixed_member_formula_adequacy_hypothesis_id(
     family: AFKAsymptoticFamily,
     concrete_subject_id: object,
 ) -> object:
-    normalization_id = pointwise_quantitative_normalization_id(
-        family,
-        concrete_subject_id,
-    )
     source = _SCHNORR_PINNED_SOURCE
     correspondence = derive_fs_correspondence(
         source,
         _SCHNORR_PINNED_MODEL,
         adaptive_rom_knowledge_model(k=2, challenge_count=8),
+    )
+    normalization_id = pointwise_quantitative_normalization_id(
+        family,
+        concrete_subject_id,
+        correspondence.fixed_public_setup,
     )
     return _family_instance_premise_goal_id(
         family,
@@ -17155,6 +21500,7 @@ def _fixed_member_hypothesis_nodes(
     )
 
 
+@_with_family_derivation_scope
 def fixed_member_required_hypotheses(
     family: AFKAsymptoticFamily,
     source: FreshFsRelationSource,
@@ -17342,7 +21688,9 @@ def _family_instance_correspondence_coordinates(
     logical_index_id = logical_nat_literal_id(1)
     role_map_ids = tuple(_family_instance_role_map_id(item) for item in role_maps)
     normalization_id = pointwise_quantitative_normalization_id(
-        family, concrete_subject_id
+        family,
+        concrete_subject_id,
+        correspondence.fixed_public_setup,
     )
     family_manifests = tuple(
         family_manifest_schema_id(family, axis)
@@ -17650,10 +21998,14 @@ def _family_instance_correspondence_components(
         support_body = _formed_analysis_body(
             support_id, "analysis.source-support"
         )
+        expected_support_id = _qualification_exact_concrete_source_support_id(
+            manifest_id
+        )
         if (
             type(support_body) is not AnalysisSourceSupportBodyV0
             or support_body.semantic_read_manifest_id != manifest_id
             or support_body.derived_owner_policy_dependency_closure != ()
+            or support_id != expected_support_id
         ):
             raise AuthorityError("concrete manifest support was substituted")
     goal_id = _family_instance_correspondence_goal_id(coordinates)
@@ -17664,15 +22016,9 @@ def _family_instance_correspondence_components(
             context_id,
         ),
     )
-    source_purposes = k1.DatumSeq(
-        tuple(
-            k1.DatumRecord(
-                ((0, k1.Nat(ordinal)), (1, _id_datum(item)))
-            )
-            for ordinal, item in enumerate(
-                (*coordinates.family_manifest_schema_ids, *coordinates.concrete_manifest_ids)
-            )
-        )
+    source_purposes = complete_read_purpose_requirements(
+        concrete_manifest_ids=coordinates.concrete_manifest_ids,
+        family_manifest_schema_ids=coordinates.family_manifest_schema_ids,
     )
     semantic_basis_id = _analysis_transport_id(
         "analysis.semantic-basis",
@@ -17682,6 +22028,7 @@ def _family_instance_correspondence_components(
                 "family-instance-correspondence",
                 owner_profile=K3C_ANALYSIS_TRANSPORT_PROFILE,
             ),
+            _formed_analysis_body(goal_id, "analysis.goal").question_id,
             _native_rule_source(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_PROPERTY_PROFILE,
@@ -17880,6 +22227,7 @@ def _family_instance_correspondence_components(
     return judgment, checked_result, authority_binding
 
 
+@_with_family_derivation_scope
 def require_family_instance_correspondence_judgment(
     judgment: FamilyInstanceCorrespondenceJudgment,
 ) -> None:
@@ -17892,6 +22240,7 @@ def require_family_instance_correspondence_judgment(
         raise AuthorityError("family-instance correspondence judgment was substituted")
 
 
+@_with_family_derivation_scope
 def form_concrete_family_instance_correspondence(
     family: AFKAsymptoticFamily,
     source: FreshFsRelationSource,
@@ -17992,7 +22341,12 @@ def form_concrete_family_instance_correspondence(
             else formula_correspondences
         )
         for mapping in selected_formulas:
-            _pointwise_formula_correspondence_id(mapping, family, concrete_subject_id)
+            _pointwise_formula_correspondence_id(
+                mapping,
+                family,
+                concrete_subject_id,
+                selected_correspondence.fixed_public_setup,
+            )
         if selected_formulas != expected_formulas:
             return AttemptOutcome(
                 AttemptKind.MALFORMED,
@@ -18489,6 +22843,7 @@ def _fixed_member_semantic_basis_id(
                 "adaptive-knowledge-extraction-at-fixed-length-q-lt-n",
                 owner_profile=K3C_ANALYSIS_PROPERTY_PROFILE,
             ),
+            _fixed_member_question_id(correspondence, conclusion_id),
             _native_rule_source(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -18527,7 +22882,11 @@ def _fixed_member_semantic_basis_id(
             k1.DatumSeq(
                 (*node_requirements.values, *capability_requirements)
             ),
-            k1.DatumSeq(()),
+            complete_read_purpose_requirements(
+                concrete_manifest_ids=(
+                    correspondence.concrete_manifest_ids[1],
+                ),
+            ),
             _conclusion_schema_ref(
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
                 K3C_ANALYSIS_TRANSPORT_PROFILE,
@@ -18731,6 +23090,7 @@ def _fixed_member_judgment_id(
     )
 
 
+@_with_family_derivation_scope
 def specialize_afk_family_judgment(
     family_capability: AFKFamilyKnowledgeCapability,
     correspondence: ConcreteFamilyInstanceCorrespondence | None,
@@ -18864,6 +23224,7 @@ def specialize_afk_family_judgment(
         return AttemptOutcome(AttemptKind.MALFORMED, detail=str(error))
 
 
+@_with_family_derivation_scope
 def require_concrete_member_judgment(
     judgment: ConcreteMemberKnowledgeJudgment,
 ) -> None:

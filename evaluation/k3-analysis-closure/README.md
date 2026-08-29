@@ -1,9 +1,10 @@
-# K3-C Analysis closure reference instrument
+# Analysis closure reference instrument
 
 This package is a bounded executable pressure test for the first Analysis
-consumer above K3-B. It imports K3-B exactly and reaches K2 and K1 only through
-that import chain. It does not copy their Protocol, Plan, Relations, execution,
-or identity semantics into an Analysis-owned shadow model.
+consumer above the Relations layer. It imports that layer exactly and reaches
+Protocol IR and Foundation only through the authenticated import chain. It does
+not copy their Protocol, Plan, Relations, execution, or identity semantics into
+an Analysis-owned shadow model.
 
 The instrument has three deliberately separate layers.
 
@@ -15,24 +16,18 @@ contains closed templates for the source and target properties, both experiment
 shapes, required semantic views and maps, side conditions, four local
 quantitative operators, the transform program, and the conclusion law.
 
-It contains no Schnorr family identity, native K1/K2/K3 subject, fixed member,
-model instantiation, selector, or concrete formula identity. Those coordinates
-belong to later layers. Creating or changing a family therefore does not rotate
-the global theorem identity.
+It contains no Schnorr family identity, native Foundation/PIR/Relations
+subject, fixed member, model instantiation, selector, or concrete formula
+identity. Those coordinates belong to later layers. Creating or changing a
+family therefore does not rotate the global theorem identity.
 
 The theorem-statement digest is derived from the exact profiled semantic
-schema body; it is not a second, independently encoded statement copy. A
-separate source-validation record pins:
-
-- the verified PDF SHA-256
-  `93837e2dd7c0e99ef3d06bbb4f235d9ed0dcafb8b96e56d867e7548751e9122c`;
-- Definition 4, Definitions 10--11, the Section 5 prose immediately before
-  Lemma 4 for already-defined oracle points, Lemma 4, the adaptive
-  construction in Section 6.3 immediately before Theorem 4, Remark 2 for
-  deterministic next-message access and rewinding, Remark 6 for consistent
-  oracle answers across subextractor reruns, and Theorem 4; and
-- the `ImportedPaperOnly` truth-discharge status, with no admitted proof
-  artifact.
+schema body; it is not a second, independently encoded statement copy. The
+single source of truth for the PDF digest, ordered locator tuple, and
+`ImportedPaperOnly` status is `AFKV2SelectedSourceAuthority` in the
+[cryptographic property profile](../../docs-next/analysis/cryptographic-properties.md#5-afk-theorem-profile).
+This instrument asserts that source record byte for byte rather than restating
+it.
 
 Schema formation establishes identity and shape only. The theorem's truth is a
 separate goal and remains `Assumed`; no proof artifact is admitted here.
@@ -79,27 +74,28 @@ prover code as data, or a hidden oracle table. The conclusion preserves the
 full `(x, pi, aux, v)` law and adds `w`, with success defined as verifier
 acceptance and the family relation holding for `(x,w)`.
 
-The outer prover experiment may sample a randomized prover's coin tape. For
-the theorem-granted extractor interaction, that tape is fixed into one
-deterministic next-message strategy before any rerun. Rewinding retains that
-same strategy state and coin fixing; it never resamples prover coins between
-reruns. This is the Remark 2 condition used by the `Q + 1` argument.
+The outer prover experiment may sample a randomized prover's coin tape. Within
+one theorem-granted extractor invocation, that tape is fixed into one
+deterministic next-message strategy and every authorized sibling run resets to
+its authenticated root frame. A new extractor invocation receives a fresh tape
+and a fresh lazy-function table. The executable contract exposes only
+`ProgramSibling` and root `Rerun`; it exposes no ambient `Rewind` or `Fork`.
 
 ## 3. Pointwise `n0` specialization
 
 Only after family transport may a checked correspondence specialize the result
 to the executable `n0=1` member. The selected witness uses the same
-prime-order-11 group as the stock K3-B Schnorr fixture but challenge set
-`C={0,...,7}`. One uniformly sampled byte and one attempt decode totally and
-uniformly because 8 divides 256.
+prime-order-11 group as the stock Relations-layer Schnorr fixture but challenge
+set `C={0,...,7}`. One uniformly sampled byte and one attempt decode totally
+and uniformly because 8 divides 256.
 
-This layer alone owns the concrete K1/K2/K3 subject projection, Fresh and FS
-member selectors, models, manifests, fixed public setup, full 20-role map,
-four formula correspondences, and exact K2 challenge-query encoding. The role
+This layer alone owns the concrete Foundation/PIR/Relations subject projection,
+Fresh and FS member selectors, models, manifests, fixed public setup, full 20-role map,
+four formula correspondences, and exact PIR challenge-query encoding. The role
 coordinates are symbolic catalog positions, while separate resolved endpoints
-bind every abstract and native role to family or K1/K2/K3 content. The gate
-checks both endpoints and the exact twenty-entry shape; the verifier and
-verifier-output roles resolve specifically to the K2 check and accepting
+bind every abstract and native role to family or Foundation/PIR/Relations
+content. The gate checks both endpoints and the exact twenty-entry shape; the verifier and
+verifier-output roles resolve specifically to the PIR check and accepting
 terminal occurrences. The
 claim that those paired coordinates have the same denotation remains an
 explicit pointwise premise; structural equality is not promoted into semantic
@@ -108,9 +104,9 @@ independently from the concrete typed expressions, then checked for exact
 canonical AST equality after substitution, and every member formula identity
 is re-derived from its ordinal, subject, and authenticated transform. The AFK
 Statement is raw `Y`; `(g,q,p,session,application-domain,namespace,framing)` is
-fixed public setup. Its timing flags are derived from the immutable K2 source
+fixed public setup. Its timing flags are derived from the immutable PIR source
 objects and exact pre-challenge influence prefix; the remaining family-process
-adequacy is still a premise. The table checks the exact K2 carrier for all 121
+adequacy is still a premise. The table checks the exact PIR carrier for all 121
 valid `(Y,A)` pairs and verifies injectivity on that finite domain.
 
 The conditional correspondence is formed over one exact nine-node hypothesis
@@ -134,9 +130,9 @@ extra, reordered, or cross-axis support does not admit the correspondence.
 
 The family oracle index is finite bounded bitstrings. Its authenticated bound
 is a closed polynomial `u(n)`; at `n0`, the gate evaluates that polynomial and
-requires the result to match the bit length of K1's maximum raw canonical-datum
-encoding. This is the raw encoded query index, not the smaller payload capacity
-of a nested K1 `BytesValue`. The selected native statement length is derived
+requires the result to match the bit length of Foundation's maximum raw
+canonical-datum encoding. This is the raw encoded query index, not the smaller
+payload capacity of a nested Foundation `BytesValue`. The selected native statement length is derived
 from the raw Statement and retained alongside an explicit pointwise length-
 embedding premise; it is not a free literal. Prover queries may be outside the
 verifier image but remain inside that bound, and all calls, including repeats
@@ -146,8 +142,29 @@ it is not evidence for the adaptive process correspondence.
 
 The stock modulus-11 bounded-rejection fixture is not selected for this
 specialization. Concrete SHA-256 execution is never random-oracle evidence.
-Programming, rerun, forking, and lazy sampling are theorem-level contracts,
-not K2 `ReplayRun` operations.
+The finite helper executes `BeginExtractorExperiment`, one `Baseline`, and
+typed `ProgramSibling`/`Rerun` transitions over immutable frame, tape, and table
+lineages. Experiment identity commits the exact capability contract, invocation
+nonce, independent root and tape commitments, `N`, and `Q`. Baseline and rerun
+acceptance are internally issued only after the checked PIR challenge-query
+carrier, observed or programmed challenge, and exact bounded Schnorr Check and
+Terminal rules agree. The derived pair retains both full transcripts and
+applies the exact admitted-pair predicate; it is not an execution capability.
+Every adaptive-prover oracle call spends the per-invocation `Q`, including
+repeats and off-image calls; verifier calls and programming do not. Non-target
+table answers are shared only inside that extractor invocation, and successful
+rerun authority is process-locally consumed even against an older state value.
+Only one exact state occurrence per experiment is current; every successful
+transition supersedes the predecessor, preventing stale immutable states from
+forking or reverting the persistent lazy table.
+
+These tests establish only the transition invariants and exact bounded
+Schnorr/PIR acceptance joins of this finite classical instrument. Root and tape
+commitments label lineage; the helper consumes caller-supplied finite call
+traces and does not authenticate or execute a generic adaptive-prover strategy.
+The tests therefore do not establish theorem truth, the adaptive process
+correspondence, ROM security, concrete-hash security, QROM behavior, or a PIR
+`ReplayRun` interpretation.
 
 Correspondence formation produces a portable inert judgment, inert checked
 result, and owner authority binding. It separately issues a fresh,
@@ -181,6 +198,14 @@ native bound or for the stock modulus-11 bounded-rejection member, and
 post-issuance substitutions are refused when the inert or live authority
 boundary is consumed.
 
+Qualification is executable for exactly the seven active result constructors.
+Each law reconstructs its exact question-bound semantic basis and result
+carrier; judgment-backed results also reconstruct their conclusion,
+quantitative witness, operation policy, and used-source policy closure.
+External assumed results reconstruct their complete opaque result preimage.
+Concrete and experiment source profiles likewise admit only their exact active
+slot payloads, including the failure partition and strategy/execution join.
+
 ## Quantitative boundary
 
 For `k=2`, the four theorem-local operators are:
@@ -208,13 +233,28 @@ python3 -B evaluation/k3-analysis-closure/run.py --check
 Passing the gate establishes only constructor behavior, conditional judgments,
 one finite specialization, and the listed falsifiers. It does not prove
 Schnorr special soundness, the AFK theorem, the assumed all-`n` family source
-property, family uniformity or efficiency, the K2-to-ideal-oracle process
+property, family uniformity or efficiency, the PIR-to-ideal-oracle process
 correspondence, SHA-256/ROM correspondence, asymptotic security, QROM security,
 production security, or arbitrary protocol-family coverage. The N=8 member is
 a research witness, not a production challenge size. Constructor guards model
 identity and authority attenuation; they are not a Python security boundary.
 
-Directional-loss import remains a separate negative probe: even a checked K3-B
+The exact-acceptance tests execute only the selected Schnorr fixture with one
+`Check`, one `Terminal`, and direct references; they do not execute generic
+derived-value or multi-`Check` owner-closure semantics.
+
+The bounded executable also has no checked finite-cover enumerator and no
+portable Schnorr pair-to-Witness extractor. The authenticated candidate
+algorithm used by the fixture is a generic modulus surface, while complete
+extraction remains host-language occurrence code. Consequently finite
+evaluation mints no affirmative fixed-extractor universal judgment: the
+Schnorr source judgment retains its explicit fixed-extractor correctness
+assumption. A future discharge must authenticate a normalization/quotient
+cover, streaming representative enumeration, and separate coverage,
+congruence, and success-transfer certificates. It would discharge only fixed
+correctness, not the independent polynomial-time premise.
+
+Directional-loss import remains a separate negative probe: even a checked Relations
 loss occurrence plus matching fixture fact returns `CannotAnswer` until an
 owner-issued Relations semantic rule binds the occurrence, bridge, premise,
 sort, and formula.

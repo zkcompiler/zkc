@@ -2088,6 +2088,40 @@ class StaticViewProjection:
     entries: tuple[StaticViewEntry, ...]
 
 
+class StaticViewAtomicLeaf(str, Enum):
+    """Closed leaf names exported by the bounded static-view resolvers."""
+
+    CHALLENGE_OCCURRENCE = "challenge-occurrence"
+    CHALLENGE_DOMAIN = "challenge-domain"
+
+
+@dataclass(frozen=True)
+class PIRStaticViewAtomicCoordinate:
+    """One exact atomic leaf below an owner-qualified static-view entry.
+
+    ``sequence_ordinal`` is local to the selected static-view field.  It is
+    deliberately distinct from ``schedule_ordinal``, which is local to the
+    owning Core schedule.  Consumers therefore cannot silently use a schedule
+    position as an index into a filtered view field.
+    """
+
+    view_coordinate: StaticViewCoordinate
+    field: StaticViewField
+    sequence_ordinal: int
+    schedule_ordinal: int
+    occurrence_name: str
+    leaf: StaticViewAtomicLeaf
+
+
+@dataclass(frozen=True)
+class PublicCoinChallengeProjection:
+    """Exact occurrence and nominal-domain leaves for one public coin."""
+
+    challenge_coordinate: PIRStaticViewAtomicCoordinate
+    domain_coordinate: PIRStaticViewAtomicCoordinate
+    challenge_domain: ChallengeDomain
+
+
 class _NonTransferableAuthority:
     """Process-local bearer state: identity, not structural equality, matters."""
 
@@ -2986,6 +3020,96 @@ def validate_issued_pir_static_view(
         and binding.operation_policy.owner_no_policy_declaration == no_policy_id
         and binding.owner_policy_closure == closure_id
         and binding.capability_requirement == requirement
+    )
+
+
+def resolve_public_coin_challenge_projection(
+    issued: object,
+    challenge_entry_ordinal: int,
+    *,
+    profiles: K2SemanticProfiles = K2_SEMANTIC_PROFILES,
+    profile_support: K2SemanticProfileSupport = K2_PROFILE_SUPPORT,
+    expected_consumer_id: object | None = None,
+    expected_purpose_id: object | None = None,
+) -> PublicCoinChallengeProjection:
+    """Resolve one exact challenge-domain leaf from a live PublicCoinView.
+
+    This is an owner operation, not structural decoding of a copied tuple.  It
+    authenticates the live view and its consumer/purpose binding, checks the
+    field against the exact owning Core, and returns both the filtered-field
+    ordinal and the distinct Core-schedule ordinal.
+    """
+
+    if type(challenge_entry_ordinal) is not int or challenge_entry_ordinal < 0:
+        raise ModelError("public-coin challenge entry ordinal must be a natural")
+    if not validate_issued_pir_static_view(
+        issued,
+        profiles=profiles,
+        profile_support=profile_support,
+        expected_consumer_id=expected_consumer_id,
+        expected_purpose_id=expected_purpose_id,
+    ):
+        raise ModelError("public-coin challenge projection lacks live PIR authority")
+    assert type(issued) is IssuedPIRStaticView
+    projection = issued.projection
+    coordinate = projection.coordinate
+    if (
+        coordinate.owner_kind is not StaticViewOwnerKind.CORE
+        or coordinate.view_kind is not StaticViewKind.PUBLIC_COIN
+        or StaticViewField.PC_CHALLENGES not in projection.manifest
+    ):
+        raise ModelError("static view is not an issued PublicCoinView challenge field")
+    selected_entries = tuple(
+        entry
+        for entry in projection.entries
+        if entry.field is StaticViewField.PC_CHALLENGES
+    )
+    if len(selected_entries) != 1 or type(selected_entries[0].value) is not tuple:
+        raise ModelError("PublicCoinView has no unique immutable challenge sequence")
+    challenges = selected_entries[0].value
+    if challenge_entry_ordinal >= len(challenges):
+        raise ModelError("public-coin challenge entry ordinal is out of range")
+    challenge = challenges[challenge_entry_ordinal]
+    if (
+        type(challenge) is not Occurrence
+        or challenge.kind is not OccurrenceKind.CHALLENGE
+        or type(challenge.challenge_domain) is not ChallengeDomain
+    ):
+        raise ModelError("PublicCoinView entry is not one finite challenge")
+    core = issued.capability._source
+    if type(core) is not Core:
+        raise ModelError("PublicCoinView live source is not its owning Core")
+    admit_core(core)
+    expected_challenges = tuple(
+        occurrence
+        for occurrence in core.schedule
+        if occurrence.kind is OccurrenceKind.CHALLENGE
+    )
+    if challenges != expected_challenges or core_id(core, profiles=profiles) != coordinate.owner_id:
+        raise ModelError("PublicCoinView challenge field is detached from its owning Core")
+    schedule_ordinals = tuple(
+        ordinal
+        for ordinal, occurrence in enumerate(core.schedule)
+        if occurrence is challenge
+    )
+    if len(schedule_ordinals) != 1:
+        raise ModelError("PublicCoinView challenge has no unique Core schedule position")
+    schedule_ordinal = schedule_ordinals[0]
+
+    def atomic(leaf: StaticViewAtomicLeaf) -> PIRStaticViewAtomicCoordinate:
+        return PIRStaticViewAtomicCoordinate(
+            coordinate,
+            StaticViewField.PC_CHALLENGES,
+            challenge_entry_ordinal,
+            schedule_ordinal,
+            challenge.name,
+            leaf,
+        )
+
+    return PublicCoinChallengeProjection(
+        atomic(StaticViewAtomicLeaf.CHALLENGE_OCCURRENCE),
+        atomic(StaticViewAtomicLeaf.CHALLENGE_DOMAIN),
+        challenge.challenge_domain,
     )
 
 
@@ -4448,6 +4572,149 @@ def _predicate(predicate: Predicate, values: Mapping[ValueRef, Value]) -> bool:
         digest = hashlib.sha256(value).digest()
         return int.from_bytes(digest, "big") < (1 << (256 - bits))
     raise ExecutionError("unsupported fixture predicate")
+
+
+def _core_reference_sorts(core: Core) -> Mapping[ValueRef, ValueSort]:
+    """Return the exact admitted sort of every Core value reference."""
+
+    admit_core(core)
+    sorts: dict[ValueRef, ValueSort] = {
+        ValueRef.input(item.name): item.value_sort for item in core.inputs
+    }
+    for occurrence in core.schedule:
+        sorts[ValueRef.occurrence(occurrence.name)] = _occurrence_sort(
+            occurrence, sorts
+        )
+    return MappingProxyType(sorts)
+
+
+def _resolve_occurrence_ref(
+    core: Core,
+    occurrence_ref: ValueRef,
+    expected_kind: OccurrenceKind,
+) -> Occurrence:
+    if (
+        type(occurrence_ref) is not ValueRef
+        or occurrence_ref.kind is not RefKind.OCCURRENCE
+    ):
+        raise ExecutionError("occurrence evaluation needs one exact occurrence ref")
+    selected = tuple(
+        occurrence
+        for occurrence in core.schedule
+        if occurrence.name == occurrence_ref.name
+        and occurrence.kind is expected_kind
+    )
+    if len(selected) != 1:
+        raise ExecutionError(
+            f"occurrence ref does not select one admitted {expected_kind.value}"
+        )
+    return selected[0]
+
+
+def _admit_exact_predicate_substitution(
+    core: Core,
+    predicates: tuple[Predicate, ...],
+    substitution: Mapping[ValueRef, Value],
+) -> Mapping[ValueRef, Value]:
+    if not isinstance(substitution, Mapping):
+        raise ExecutionError("predicate substitution must be one exact mapping")
+    required = tuple(
+        dict.fromkeys(ref for predicate in predicates for ref in predicate.refs)
+    )
+    supplied = tuple(substitution)
+    if len(supplied) != len(required) or set(supplied) != set(required):
+        raise ExecutionError(
+            "predicate substitution must cover exactly its authenticated refs"
+        )
+    sorts = _core_reference_sorts(core)
+    result: dict[ValueRef, Value] = {}
+    for ref in required:
+        if type(ref) is not ValueRef or ref not in sorts:
+            raise ExecutionError("predicate substitution contains an unknown ref")
+        value = substitution[ref]
+        if not _sort_accepts(value, sorts[ref]):
+            raise ExecutionError("predicate substitution value has the wrong Core sort")
+        _datum(value)
+        result[ref] = value
+    return MappingProxyType(result)
+
+
+def evaluate_check_ref(
+    core: Core,
+    check_ref: ValueRef,
+    substitution: Mapping[ValueRef, Value],
+) -> bool | None:
+    """Evaluate one admitted Check under its exact closed substitution.
+
+    ``None`` is the exact skipped result when the authenticated occurrence
+    guard is false.  No relation predicate or external judgment is consulted.
+    """
+
+    admit_core(core)
+    occurrence = _resolve_occurrence_ref(core, check_ref, OccurrenceKind.CHECK)
+    assert occurrence.check_predicate is not None
+    values = _admit_exact_predicate_substitution(
+        core,
+        (occurrence.guard, occurrence.check_predicate),
+        substitution,
+    )
+    if not _predicate(occurrence.guard, values):
+        return None
+    return _predicate(occurrence.check_predicate, values)
+
+
+def evaluate_terminal_ref(
+    core: Core,
+    terminal_ref: ValueRef,
+    prior_check_outcomes: Mapping[ValueRef, bool | None],
+    substitution: Mapping[ValueRef, Value],
+) -> bool | None:
+    """Apply the admitted terminal law to every prior Check outcome.
+
+    The check map is exact and complete.  ``None`` denotes a skipped Check or,
+    for the return value, a skipped terminal.  As in generated protocol execution,
+    skipped checks do not make an executed terminal reject.
+    """
+
+    admit_core(core)
+    terminal = _resolve_occurrence_ref(
+        core, terminal_ref, OccurrenceKind.TERMINAL
+    )
+    terminal_ordinal = next(
+        ordinal
+        for ordinal, occurrence in enumerate(core.schedule)
+        if occurrence is terminal
+    )
+    required_checks = tuple(
+        ValueRef.occurrence(occurrence.name)
+        for occurrence in core.schedule[:terminal_ordinal]
+        if occurrence.kind is OccurrenceKind.CHECK
+    )
+    if not isinstance(prior_check_outcomes, Mapping):
+        raise ExecutionError("terminal check outcomes must be one exact mapping")
+    supplied = tuple(prior_check_outcomes)
+    if len(supplied) != len(required_checks) or set(supplied) != set(required_checks):
+        raise ExecutionError(
+            "terminal check outcomes must cover exactly every prior Check ref"
+        )
+    for outcome in prior_check_outcomes.values():
+        if outcome is not None and type(outcome) is not bool:
+            raise ExecutionError("terminal check outcome is not Boolean or skipped")
+    values = _admit_exact_predicate_substitution(
+        core,
+        (terminal.guard,),
+        substitution,
+    )
+    if not _predicate(terminal.guard, values):
+        return None
+    return all(
+        outcome is True
+        for outcome in (
+            prior_check_outcomes[check_ref]
+            for check_ref in required_checks
+        )
+        if outcome is not None
+    )
 
 
 def _verifier_value(rule: VerifierRule, dependencies: tuple[Value, ...]) -> Value:

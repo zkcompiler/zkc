@@ -1357,9 +1357,64 @@ AnalysisFamilySemanticsContract = {
     AnalysisProfileLawRef<ClosedFamilyQuantitativeResultSchema>,
   affirmative_and_negative_meaning:
     AnalysisProfileLawRef<FamilyPolarityMeaning>,
+  finite_cover_discharge_contract:
+    None | AnalysisFiniteCoverFamilyContract,
   failure_classification:
     AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
 }
+
+AnalysisFiniteCoverFamilyContract = {
+  finite_cover_target_reconstruction_law:
+    AnalysisProfileLawRef<TotalFiniteCoverTargetReconstruction>,
+  operation_checker_binding_admission_law:
+    AnalysisProfileLawRef<TotalFiniteCoverCheckerBindingAdmission>,
+  exact_cover_schema:
+    AnalysisProfileLawRef<ClosedFiniteCoverSchema>,
+  exact_representative_success_schema:
+    AnalysisProfileLawRef<ClosedFiniteRepresentativeSuccessSchema>,
+  exact_candidate_algorithm_schema:
+    AnalysisProfileLawRef<ClosedFiniteCandidateAlgorithmSchema>,
+  exact_coverage_certificate_schema:
+    AnalysisProfileLawRef<ClosedFiniteCoverageCertificateSchema>,
+  exact_congruence_certificate_schema:
+    AnalysisProfileLawRef<ClosedFiniteCongruenceCertificateSchema>,
+  exact_success_transfer_certificate_schema:
+    AnalysisProfileLawRef<ClosedFiniteSuccessTransferCertificateSchema>
+}
+
+The law and schema sorts in that contract have closed signatures:
+
+```text
+TotalFiniteCoverTargetReconstruction =
+  total law from one authenticated proposition, its question, its singleton
+  finite-value experiment, and its resolved family contract to exactly one
+  AnalysisFiniteCoverTarget; it accepts no validation basis, checker, receipt,
+  certificate occurrence, support binding, or future judgment coordinate
+
+ClosedFiniteCoverSchema =
+  exact schema over the target's raw and representative types, both domain
+  predicates and ABIs, normalization, representative embedding, canonical
+  representative-stream algorithm and ABI, and output-congruence law and ABI
+
+ClosedFiniteCandidateAlgorithmSchema =
+  exact schema over the candidate extractor profile, portable algorithm, and
+  candidate ABI in one AnalysisFiniteCoverTarget
+
+ClosedFiniteRepresentativeSuccessSchema =
+  exact schema over the representative-success and raw-member-success
+  predicates and their ABIs in one AnalysisFiniteCoverTarget
+
+ClosedFiniteCoverageCertificateSchema,
+ClosedFiniteCongruenceCertificateSchema,
+ClosedFiniteSuccessTransferCertificateSchema =
+  three pairwise-distinct exact goal-body schemas for, respectively, only the
+  coverage, congruence, and success-transfer obligations stated below
+```
+
+These are semantic schemas. They do not name an implementation of a checker.
+Their law-source bytes are fixed by the selected family profile, and
+`ExactFiniteCoverTargetOf` executes or applies every one of them. None is a
+display label or an unconstrained extension point.
 
 ResolvedAnalysisFamilyContract(P,family) =
   the one property-family contract in P's authenticated
@@ -1417,6 +1472,19 @@ BasisNeutralQuantitativeExpr<S> =
   a canonical typed MetaValueV0 expression admitted by the authenticated
   quantitative-expression grammar of the selected Analysis language profile
 ```
+
+An `AnalysisFiniteCoverFamilyContract` is a fixed profile contract, not a
+table of future subjects or a declaration that one raw carrier is feasible to
+enumerate. Its reconstruction law receives and authenticates a candidate
+proposition, question, and experiment at application time and derives the raw
+target, representative cover, predicates, and candidate algorithm from those
+bodies. The law-source bytes contain only the closed reconstruction and
+checker-binding admission laws plus the schemas above; they contain no
+governed proposition, experiment, extractor, algorithm, checker, certificate
+occurrence, semantic-basis, validation-basis, or judgment ID. `None` is a
+structural prohibition: a family without this exact contract cannot acquire
+finite-cover discharge merely because one of its fixtures or experiment
+profiles happens to have a finite carrier.
 
 #### Exact Analysis body compiler
 
@@ -1921,6 +1989,11 @@ AnalysisRuleSource =
 AnalysisQualificationRequirementCoordinate =
   AnalysisProfileDeclarationRef<"analysis.qualification-requirement">
 
+AnalysisPolarity = Affirmative | FamilyDefinedNegative
+
+AnalysisQualificationCoordinate =
+  AnalysisProfileDeclarationRef<"analysis.qualification">
+
 AnalysisNamedConsumerCoordinate =
   AnalysisProfileDeclarationRef<"analysis.named-consumer">
 
@@ -1943,11 +2016,24 @@ AnalysisUsePurposeIntakeId(p) =
   AnalysisId<"analysis.use-purpose",ProfileOf(p)>(
     B,AnalysisUsePurposeIntakeBody {purpose: p})
 
+AnalysisQualificationSemanticsContract = {
+  subject_parametric_acceptance_law:
+    AnalysisProfileLawRef<SubjectParametricQualificationAcceptanceLaw>,
+  failure_classification:
+    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+}
+
+AnalysisQualificationRequirementSemanticsContract = {
+  requirement_to_law_resolver:
+    AnalysisProfileLawRef<QualificationRequirementToAcceptanceLawResolver>,
+  failure_classification:
+    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+}
+
 AnalysisUseSemanticsContract = {
   accepted_subject_and_result_kinds:
     CanonicalNonEmptySortedUniqueSeq<MetaSymbol>,
-  qualification_predicate_or_exact_match:
-    AnalysisProfileLawRef<QualificationAcceptanceLaw>,
+  required_qualification: AnalysisQualificationRequirementCoordinate,
   capability_attenuation_law:
     AnalysisProfileLawRef<CapabilityAttenuationLaw>,
   operation_policy_compatibility_law:
@@ -1958,8 +2044,25 @@ AnalysisUseSemanticsContract = {
 
 ResolvedAnalysisUseContract(P,use_coordinate) =
   the one exact use contract resolved from P's authenticated law source for a
-  complete qualification-requirement, named-consumer, or typed-purpose
-  declaration coordinate and body
+  complete named-consumer or typed-purpose declaration coordinate and body
+
+ResolvedAnalysisQualificationContract(P,qualification_coordinate) =
+  the one exact AnalysisQualificationSemanticsContract resolved from P's
+  authenticated law source for the complete qualification declaration
+  coordinate and body
+
+ResolvedAnalysisQualificationRequirementContract(P,requirement_coordinate) =
+  the one exact AnalysisQualificationRequirementSemanticsContract resolved
+  from P's authenticated law source for the complete qualification-
+  requirement declaration coordinate and body
+
+ResolvedQualificationRequirementAcceptanceLaw(P,requirement_coordinate) =
+  resolve ResolvedAnalysisQualificationRequirementContract(
+    P,requirement_coordinate); execute its fixed
+  requirement_to_law_resolver on that complete declaration coordinate and
+  body; require exactly one resulting
+  AnalysisProfileLawRef<SubjectParametricQualificationAcceptanceLaw> in P's
+  authenticated law-source/import closure; and return that law ref
 
 AnalysisExtractorWitnessQuantifierKind =
     ExistsExtractor
@@ -1989,11 +2092,82 @@ AnalysisPremiseRequirement =
       quantified_role: AnalysisQuantifiedWitnessRole
     }
 
-ReadPurposeRequirement = {
-  semantic_read_manifest_id: AnalysisSemanticReadManifestId,
-  semantic_read_slot_ordinal: Natural,
-  exact_purpose: SemanticMeaning | PremiseSupport | OccurrenceEvidence
-}
+AnalysisReadPurposeRequirement =
+    ConcreteReadPurpose {
+      semantic_read_manifest_id: AnalysisSemanticReadManifestId,
+      semantic_read_slot_ordinal: Natural,
+      exact_purpose: SemanticMeaning | PremiseSupport | OccurrenceEvidence
+    }
+  | FamilyReadPurpose {
+      family_read_manifest_schema_id: AnalysisFamilyReadManifestSchemaId,
+      family_read_slot_ordinal: Natural,
+      exact_purpose: SemanticMeaning | PremiseSupport
+    }
+
+NormalizedAnalysisReadPurpose =
+    ConcreteReadPurposeAtom {
+      requirement: ConcreteReadPurpose,
+      semantic_read_manifest_id: AnalysisSemanticReadManifestId,
+      semantic_read_slot_ordinal: Natural,
+      exact_manifest_slot: AnalysisSemanticReadSlot,
+      exact_profile_slot_schema: AnalysisSourceReadSlotSchema,
+      exact_purpose: SemanticMeaning | PremiseSupport | OccurrenceEvidence
+    }
+  | FamilyReadPurposeAtom {
+      requirement: FamilyReadPurpose,
+      family_read_manifest_schema_id: AnalysisFamilyReadManifestSchemaId,
+      family_read_slot_ordinal: Natural,
+      exact_slot_schema: AnalysisFamilyRoleReadSlotSchema,
+      exact_purpose: SemanticMeaning | PremiseSupport
+    }
+
+CanonicalConcreteReadPurposeExpansion(r: ConcreteReadPurpose) =
+  authenticate r.semantic_read_manifest_id and its exact concrete source
+  profile; select the one manifest slot and the one profile slot schema at
+  r.semantic_read_slot_ordinal; require the profile slot's read_purpose to
+  equal r.exact_purpose; and return ConcreteReadPurposeAtom {
+    requirement: r,
+    semantic_read_manifest_id: r.semantic_read_manifest_id,
+    semantic_read_slot_ordinal: r.semantic_read_slot_ordinal,
+    exact_manifest_slot: that manifest slot,
+    exact_profile_slot_schema: that profile slot schema,
+    exact_purpose: r.exact_purpose
+  }
+
+CanonicalFamilyReadPurposeExpansion(r: FamilyReadPurpose) =
+  authenticate r.family_read_manifest_schema_id, its family definition, and
+  its uniformly abstract member source profile; select the one abstract slot
+  schema at r.family_read_slot_ordinal in the source profile's canonical slot
+  sequence; require that slot's read_purpose to equal r.exact_purpose; and
+  return FamilyReadPurposeAtom {
+    requirement: r,
+    family_read_manifest_schema_id: r.family_read_manifest_schema_id,
+    family_read_slot_ordinal: r.family_read_slot_ordinal,
+    exact_slot_schema: that slot schema,
+    exact_purpose: r.exact_purpose
+  }
+
+CanonicalReadPurposeExpansion(r: AnalysisReadPurposeRequirement) =
+  case r of
+    ConcreteReadPurpose -> CanonicalConcreteReadPurposeExpansion(r)
+    FamilyReadPurpose   -> CanonicalFamilyReadPurposeExpansion(r)
+
+NormalizeReadPurposeRequirements(requirements) =
+  expand every entry with CanonicalReadPurposeExpansion; reject an invalid,
+  out-of-range, wrong-purpose, wrong-variant, duplicate, or conflicting
+  expanded atom; order the expanded atoms by exact Foundation
+  `M(AB(requirement))` bytes over the variant tag and complete fields, never
+  by a host tuple or identifier order; and
+  return the CanonicalSortedUniqueSeq<AnalysisReadPurposeRequirement> obtained
+  by projecting each atom's exact original requirement in that order
+
+CompleteReadPurposeRequirements(concrete_manifest_ids,
+                                family_manifest_schema_ids) =
+  authenticate every named manifest or schema; derive one concrete atom for
+  every slot in each concrete manifest/profile join and one family atom for
+  every slot in each abstract member source profile; normalize their union by
+  NormalizeReadPurposeRequirements; and reject an omitted, duplicated,
+  reordered, or extra atom at rule formation
 
 ExactPremiseBinding =
     PortableAffirmativeJudgmentBinding(PortableAnalysisJudgmentRecordId)
@@ -2039,19 +2213,319 @@ AnalysisFiniteControlContractRef = {
   exhaustion_disposition: exactly DeterministicLimitExceeded
 }
 
+FiniteCoverPredicateABI<Input> = {
+  input: Input,
+  output: MetaBooleanFalse | MetaBooleanTrue,
+  totality: AnalysisProfileLawRef<TotalFinitePredicateEvaluation>
+}
+
+FiniteCoverOutputCongruenceABI<RawOutput,RepresentativeOutput> = {
+  inputs: [RawOutput,RepresentativeOutput],
+  output: MetaBooleanFalse | MetaBooleanTrue,
+  totality: AnalysisProfileLawRef<TotalFiniteCongruenceEvaluation>
+}
+
+FiniteCoverRepresentativeStreamABI<Representative> = {
+  state_type: ValueType,
+  initial_state: CanonicalValue<state_type>,
+  input: CanonicalValue<state_type>,
+  output:
+      Yield {representative: Representative,
+             successor_state: CanonicalValue<state_type>}
+    | Terminal(CanonicalValue<FiniteCoverStreamTerminal>),
+  determinism_and_progress:
+    AnalysisProfileLawRef<DeterministicFiniteStreamProgress>
+}
+
+FiniteCoverStreamTerminal = {
+  exact_representative_count: Natural,
+  ordered_representative_stream_digest: Bytes
+}
+
+FiniteControlKind = RepresentativeStreamSteps | RepresentativeEvaluations
+
+FiniteUniversalDomainPredicate<Raw>,
+FiniteRepresentativeDomainPredicate<Representative>,
+FiniteRepresentativeSuccessPredicate<Representative,CandidateOutput>, and
+FiniteUniversalMemberSuccessPredicate<Raw,CandidateOutput>
+  = four pairwise-distinct total typed predicate-law signatures with
+    `MetaBooleanFalse | MetaBooleanTrue` output
+
+FiniteCoverOutputCongruence<RawOutput,RepresentativeOutput> =
+  one total typed `MetaBooleanFalse | MetaBooleanTrue` relation-law signature
+
+FiniteCoverNormalizationABI<Raw,Representative> =
+  one total deterministic portable-algorithm ABI from Raw to Representative
+
+FiniteCoverRepresentativeEmbeddingABI<Representative,Raw> =
+  one total deterministic portable-algorithm ABI from Representative to Raw
+
+FiniteCoverCandidateAlgorithmABI<Raw,CandidateOutput> =
+  one total deterministic portable-algorithm ABI from Raw to CandidateOutput
+
+TotalFinitePredicateEvaluation =
+  total law that evaluates one exact typed predicate ABI and returns only
+  MetaBooleanFalse or MetaBooleanTrue
+
+TotalFiniteCongruenceEvaluation =
+  total law that evaluates one exact output-congruence ABI on its ordered pair
+  and returns only MetaBooleanFalse or MetaBooleanTrue
+
+DeterministicFiniteStreamProgress =
+  law requiring one exact initial state, one deterministic successor per
+  nonterminal state, no successor after Terminal, and no repeated state before
+  the exact finite control bound
+
+TotalFiniteCoverCheckerBindingAdmission =
+  total family-profile law on one exact AnalysisFiniteCoverSemanticOperation,
+  one AnalysisCheckerContractRef, and exact input/output translation contracts;
+  it accepts exactly when the translations connect the checker's schemas to
+  that operation's ABI and the checker implements that semantic operation
+
+AnalysisFiniteCoverSemanticOperation =
+    RepresentativeStreamOperation {
+      algorithm_ref: PortableAlgorithmRef,
+      exact_abi: AnalysisProfileLawRef<
+        FiniteCoverRepresentativeStreamABI>
+    }
+  | RepresentativeDomainOperation {
+      predicate: AnalysisLawTerm<FiniteRepresentativeDomainPredicate>,
+      exact_abi: AnalysisProfileLawRef<FiniteCoverPredicateABI>
+    }
+  | RepresentativeEmbeddingOperation {
+      algorithm_ref: PortableAlgorithmRef,
+      exact_abi: AnalysisProfileLawRef<FiniteCoverRepresentativeEmbeddingABI>
+    }
+  | CandidateOperation {
+      algorithm_ref: PortableAlgorithmRef,
+      exact_abi: AnalysisProfileLawRef<FiniteCoverCandidateAlgorithmABI>
+    }
+  | RepresentativeSuccessOperation {
+      predicate: AnalysisLawTerm<FiniteRepresentativeSuccessPredicate>,
+      exact_abi: AnalysisProfileLawRef<FiniteCoverPredicateABI>
+    }
+
+AnalysisFiniteCoverCheckerBinding = {
+  exact_semantic_operation: AnalysisFiniteCoverSemanticOperation,
+  checker_contract: AnalysisCheckerContractRef,
+  exact_input_translation: AnalysisTranslationContractRef,
+  exact_output_translation: AnalysisTranslationContractRef
+}
+
+AnalysisFiniteCoverTarget = {
+  proposition_id: AnalysisPropositionId,
+  experiment_profile_id: AnalysisExperimentProfileId,
+  raw_value_type: ValueType,
+  exact_raw_domain_predicate:
+    AnalysisLawTerm<FiniteUniversalDomainPredicate>,
+  exact_raw_domain_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  representative_value_type: ValueType,
+  exact_representative_domain_predicate:
+    AnalysisLawTerm<FiniteRepresentativeDomainPredicate>,
+  exact_representative_domain_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  exact_normalization_algorithm_ref: PortableAlgorithmRef,
+  exact_normalization_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverNormalizationABI>,
+  exact_representative_embedding_algorithm_ref: PortableAlgorithmRef,
+  exact_representative_embedding_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverRepresentativeEmbeddingABI>,
+  exact_representative_stream_algorithm_ref: PortableAlgorithmRef,
+  exact_representative_stream_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverRepresentativeStreamABI>,
+  exact_candidate_extractor_profile_id: AnalysisExtractorProfileId,
+  exact_candidate_algorithm_ref: PortableAlgorithmRef,
+  exact_candidate_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverCandidateAlgorithmABI>,
+  exact_output_congruence:
+    AnalysisLawTerm<FiniteCoverOutputCongruence>,
+  exact_output_congruence_abi:
+    AnalysisProfileLawRef<FiniteCoverOutputCongruenceABI>,
+  exact_representative_success_predicate:
+    AnalysisLawTerm<FiniteRepresentativeSuccessPredicate>,
+  exact_representative_success_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  exact_raw_member_success_predicate:
+    AnalysisLawTerm<FiniteUniversalMemberSuccessPredicate>,
+  exact_raw_member_success_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  coverage_goal_id: AnalysisGoalId,
+  congruence_goal_id: AnalysisGoalId,
+  success_transfer_goal_id: AnalysisGoalId
+}
+
+ExactFiniteCoverTargetOf(P,proposition_id) =
+  authenticate proposition_id, its goal, question, exact family contract, and
+  question context under P; require the family contract's
+  finite_cover_discharge_contract to be present; require the question context
+  to be exactly one concrete `SemanticExperimentContext` with exactly one
+  experiment profile, never a family, family-instance, or source-free context;
+  authenticate that profile and require its complete quantifier prefix to be
+  exactly one `ForAllValue` over `raw_value_type` and
+  `exact_raw_domain_predicate`; execute the family's fixed
+  `finite_cover_target_reconstruction_law`; require every returned algorithm,
+  ABI, predicate, schema, and certificate goal to resolve under P's
+  authenticated law-source/import closure; require the normalization ABI to be
+  total from raw values to representatives and the embedding ABI to be total
+  from representatives to raw values; validate the returned cover fields,
+  candidate fields, and success fields against, respectively, the family
+  contract's exact_cover_schema, exact_candidate_algorithm_schema, and
+  exact_representative_success_schema; validate coverage_goal_id against
+  exact_coverage_certificate_schema, congruence_goal_id against
+  exact_congruence_certificate_schema, and success_transfer_goal_id against
+  exact_success_transfer_certificate_schema; require the three goals to state
+  exactly the coverage, congruence, and success-transfer obligations below;
+  and return the one resulting `AnalysisFiniteCoverTarget`
+
+The three target-derived certificate goals have disjoint meanings:
+
+1. `coverage_goal_id` states that every raw-domain member normalizes to an
+   admitted representative, every admitted representative has the exact
+   canonical embedded raw member selected by the cover, and the selected
+   `exact_representative_stream_algorithm_ref` reaches every representative
+   exactly once before its terminal marker under
+   `exact_representative_stream_algorithm_abi`;
+2. `congruence_goal_id` states that normalization and representative embedding
+   preserve every candidate-observable input distinction used by the exact
+   candidate ABI and relate candidate outputs by the target's exact output
+   congruence; and
+3. `success_transfer_goal_id` states that representative success, together
+   with that output congruence, entails the raw member-success predicate for
+   every raw-domain member covered by that representative.
+
+An affirmative result for one goal cannot fill either of the other two. A
+certificate is an exact affirmative Analysis judgment capability for its
+derived goal, not an unchecked proof byte string, checker assertion, or stream
+digest.
+
+ExactFiniteCoverSemanticRulePayload = {
+  proposition_id: AnalysisPropositionId,
+  experiment_profile_id: AnalysisExperimentProfileId,
+  raw_value_type: ValueType,
+  exact_raw_domain_predicate:
+    AnalysisLawTerm<FiniteUniversalDomainPredicate>,
+  exact_raw_domain_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  representative_value_type: ValueType,
+  exact_representative_domain_predicate:
+    AnalysisLawTerm<FiniteRepresentativeDomainPredicate>,
+  exact_representative_domain_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  exact_normalization_algorithm_ref: PortableAlgorithmRef,
+  exact_normalization_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverNormalizationABI>,
+  exact_representative_embedding_algorithm_ref: PortableAlgorithmRef,
+  exact_representative_embedding_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverRepresentativeEmbeddingABI>,
+  exact_representative_stream_algorithm_ref: PortableAlgorithmRef,
+  exact_representative_stream_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverRepresentativeStreamABI>,
+  exact_candidate_extractor_profile_id: AnalysisExtractorProfileId,
+  exact_candidate_algorithm_ref: PortableAlgorithmRef,
+  exact_candidate_algorithm_abi:
+    AnalysisProfileLawRef<FiniteCoverCandidateAlgorithmABI>,
+  exact_output_congruence:
+    AnalysisLawTerm<FiniteCoverOutputCongruence>,
+  exact_output_congruence_abi:
+    AnalysisProfileLawRef<FiniteCoverOutputCongruenceABI>,
+  exact_representative_success_predicate:
+    AnalysisLawTerm<FiniteRepresentativeSuccessPredicate>,
+  exact_representative_success_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  exact_raw_member_success_predicate:
+    AnalysisLawTerm<FiniteUniversalMemberSuccessPredicate>,
+  exact_raw_member_success_predicate_abi:
+    AnalysisProfileLawRef<FiniteCoverPredicateABI>,
+  coverage_goal_id: AnalysisGoalId,
+  congruence_goal_id: AnalysisGoalId,
+  success_transfer_goal_id: AnalysisGoalId
+}
+
+ExactFiniteCoverSemanticRulePayload(target: AnalysisFiniteCoverTarget) =
+  the field-for-field canonical projection of target into the record above
+
+AnalysisFiniteCoverValidationSelection = {
+  operation_checker_bindings:
+    CanonicalMap<AnalysisFiniteCoverSemanticOperation,
+                 AnalysisFiniteCoverCheckerBinding>,
+  representative_stream_bound: AnalysisFiniteControlContractRef,
+  representative_evaluation_bound: AnalysisFiniteControlContractRef
+}
+
+AnalysisFiniteCoverStreamReceipt = {
+  target: AnalysisFiniteCoverTarget,
+  validation_basis_id: AnalysisValidationBasisId,
+  enumerator_contract_id: EvaluationContractId,
+  exact_representative_count: Natural,
+  ordered_representative_stream_digest: Bytes,
+  ordered_evaluation_stream_digest: Bytes,
+  exact_terminal_marker: CanonicalValue<FiniteCoverStreamTerminal>,
+  consumed_enumerator_steps: Natural,
+  consumed_member_evaluations: Natural
+}
+
+CheckedFiniteCoverUniversalDischargeContract(
+    P,proposition_id,semantic_basis_id,support_coordinate,
+    validation_basis_id,validation_selection,stream_receipt) =
+  1. let target = ExactFiniteCoverTargetOf(P,proposition_id);
+  2. authenticate semantic_basis_id and require its native rule contract to be
+     the profile-owned checked-finite-cover rule, its canonical payload to equal
+     `ExactFiniteCoverSemanticRulePayload(target)`, its conclusion to be exactly
+     proposition_id's goal, and its complete premise requirements to include
+     exactly target.coverage_goal_id, target.congruence_goal_id, and
+     target.success_transfer_goal_id in addition to the source obligations
+     derived by the family contract; the semantic basis contains no checker,
+     stream output, run result, or resource limit;
+  3. authenticate support_coordinate and require exact affirmative capability
+     bindings for all three certificate goals plus every other derived premise;
+     no opaque certificate body or self-asserted checker result may substitute;
+  4. authenticate validation_basis_id and require validation_selection to be
+     its exact no-extra checker/control projection; require exactly one checked
+     operation binding for the target's representative stream, representative
+     predicate, embedding, candidate, and representative-success operations;
+     require every binding's semantic operation to equal the corresponding
+     target field, require its input/output translations to connect the
+     checker's exact schemas to that operation's exact ABI; require exactly one
+     canonical assignment of the validation basis's no-extra checker and
+     translation entries to those five bindings; execute the resolved finite-
+     cover family contract's fixed
+     operation_checker_binding_admission_law on every binding; require the two
+     controls to cover the declared representative stream and member-evaluation
+     counts;
+  5. rerun the canonical representative stream enumerator from its unique
+     initial state; for each yielded representative, require strict canonical
+     successor order, successful representative-domain admission, successful
+     embedding, successful execution of the exact portable candidate, and a
+     true representative-success result; update the two ordered digests and
+     counters incrementally without materializing either the raw carrier or a
+     carrier-sized outcome map;
+  6. require the enumerator to produce its exact terminal marker within the
+     declared bound and require the recomputed contract ID, counts, digests,
+     terminal marker, and consumed resources to equal stream_receipt exactly;
+  7. reauthenticate the three certificate capabilities against this same
+     target, including its semantic stream algorithm, normalization, embedding,
+     output congruence, candidate ABI, and success predicates; only their
+     conjunction transfers the successful representative run to the complete
+     raw universal; and
+  8. return permission to form the ordinary affirmative Analysis judgment for
+     exactly proposition_id; return no affirmative permission after a missing
+     certificate, incomplete stream, duplicate or reordered representative,
+     false outcome, unsupported operation, MissingDependency, KindMismatch,
+     malformed value, semantic DomainFailure, refusal, CannotAnswer, checker
+     disagreement, nontermination, or deterministic limit exhaustion
+
 AnalysisResidualTrustRootRef =
   AnalysisProfileDeclarationRef<"analysis.residual-trust-root">
 
-AnalysisPolarity = Affirmative | FamilyDefinedNegative
-AnalysisQualificationCoordinate =
-  AnalysisProfileDeclarationRef<"analysis.qualification">
-
 AnalysisSemanticBasisBody = {
   family: AnalysisFamilyCoordinate,
+  exact_question_id: AnalysisQuestionId,
   rule_source: AnalysisRuleSource,
   exact_premise_schemas:
     CanonicalSortedUniqueSeq<AnalysisPremiseRequirement>,
-  source_read_purposes: CanonicalSortedUniqueSeq<ReadPurposeRequirement>,
+  source_read_purposes:
+    CanonicalSortedUniqueSeq<AnalysisReadPurposeRequirement>,
   conclusion_schema: AnalysisProfileLawRef<FamilyConclusionSchema>,
   typed_transform_program: AnalysisLawTerm<TypedBasisTransform>
 }
@@ -2107,6 +2581,59 @@ AnalysisJudgmentRecordBody = {
     CanonicalSortedUniqueSeq<TypedContentId>
 }
 
+AnalysisJudgmentCandidate = {
+  exact_direct_profile_id: SemanticLanguageProfileId,
+  proposed_body: AnalysisJudgmentRecordBody
+}
+
+QualificationSubjectContext = {
+  candidate_proposition_id: AnalysisPropositionId,
+  candidate_goal_id: AnalysisGoalId,
+  candidate_question_id: AnalysisQuestionId,
+  family: AnalysisFamilyCoordinate,
+  exact_subjects: CanonicalNonEmptySeq<TypedSemanticSubjectRef>,
+  question_context: AnalysisQuestionContext,
+  polarity: AnalysisPolarity,
+  exact_family_conclusion: ExactFamilyConclusion<family>,
+  inherited_hypothesis_context_id: AnalysisHypothesisContextId,
+  exact_quantified_witness_coordinates:
+    CanonicalSortedUniqueSeq<TypedSemanticSubjectRef>,
+  candidate_qualification: AnalysisQualificationCoordinate
+}
+
+DeriveQualificationSubjectContext(P,candidate) =
+  require candidate.exact_direct_profile_id to equal P; validate every field
+  of candidate.proposed_body except qualification acceptance; authenticate its
+  proposition, goal, question, family contract, and hypothesis context under
+  the uniquely required profiles; derive every field of
+  QualificationSubjectContext from those authenticated bodies and the
+  candidate polarity, conclusion, and qualification; require the derived
+  conclusion and inherited context to equal the candidate fields; derive
+  exact_quantified_witness_coordinates from every authenticated
+  ExactQuantifiedWitnessRequirement in the candidate semantic basis and its
+  uniquely matching support binding; and return that one context
+
+QualificationRequirementAccepts(P,requirement_coordinate,candidate) =
+  let context = DeriveQualificationSubjectContext(P,candidate); resolve the
+  candidate qualification through ResolvedAnalysisQualificationContract;
+  let requirement_law =
+    ResolvedQualificationRequirementAcceptanceLaw(P,requirement_coordinate);
+  require both the qualification contract's subject-parametric acceptance law
+  and requirement_law to accept exactly (candidate.proposed_body,
+  Authenticate(context.candidate_proposition_id),context); return true only
+  when both complete evaluations succeed
+
+AnalysisUsePairAccepts(
+    P,requirement_coordinate,named_consumer,typed_purpose,candidate) =
+  resolve the consumer and purpose through ResolvedAnalysisUseContract;
+  require both contracts.required_qualification to equal
+  requirement_coordinate; require the candidate's exact result kind to be
+  admitted by both accepted-kind contracts;
+  require QualificationRequirementAccepts(
+    P,requirement_coordinate,candidate); then apply the two fixed attenuation
+  and policy-compatibility laws to that same candidate and return true only
+  when the pair agrees without strengthening the result
+
 AnalysisQuestionId =
   AnalysisId<"analysis.question">(B, AnalysisQuestionBody)
 
@@ -2138,6 +2665,68 @@ PortableAnalysisJudgmentRecordId =
   AnalysisId<"analysis.judgment-record">(B, AnalysisJudgmentRecordBody)
 ```
 
+The concrete manifest intentionally carries no purpose field. Its source
+profile is the sole authority for slot schema and purpose, while the manifest
+is the sole authority for the exact owner occurrence coordinate/value. The
+ordinal is their checked join key. Active bounded rule constructors derive
+their entire read-purpose sequence with `CompleteReadPurposeRequirements`; no
+rule may author a preferred subset such as slot zero.
+
+`CheckedFiniteCoverUniversalDischargeContract` is defined only for the exact
+singleton `ForAllValue` shape above. The target experiment cannot contain
+`ForAllFamilyValue`, `ForAllLogicalNat`, `ForAllStrategy`, `ExistsStrategy`,
+`Sample`, an extractor existential, a quantitative universal, or any other
+quantifier beside that one finite-value universal. Consequently this contract
+cannot discharge a protocol-family, asymptotic, uniform-strategy,
+distributional, probabilistic, expected-value, total-polynomial-time, or other
+resource proposition. A finite set of tested indices or sampled executions
+cannot be re-encoded as its target. Termination of one bounded representative
+stream is not evidence that the candidate algorithm is polynomial time.
+
+The four inputs to this contract have disjoint authority. The semantic basis
+identifies the exact logical rule, raw target, checked cover obligations,
+candidate algorithm, and success predicates. The support binds independently
+established coverage, congruence, and success-transfer judgments. The
+validation basis identifies the independently admitted streaming enumerator,
+evaluators, ABIs, finite controls, and residual trust used to carry out that
+rule. The stream receipt is occurrence-local replay evidence; it has no
+`AnalysisBodyV0` arm, semantic ID, qualification, or authority and cannot fill
+the semantic, support, or validation basis. Conversely, representative
+enumeration without all three exact certificate capabilities establishes
+nothing about the raw universal. Successful application permits the ordinary
+affirmative `AnalysisJudgmentRecord` for the target proposition; no special
+proof token or premise-binding variant is created.
+
+`AnalysisReadPurposeRequirement` is a closed two-variant algebra. A concrete
+requirement selects one slot of one exact admitted concrete manifest. A family
+requirement selects one abstract role-slot schema of one exact admitted family
+manifest schema. Formation of a semantic basis runs
+`NormalizeReadPurposeRequirements` and requires its authored sequence to have
+exactly the same canonical order and members as the normalized result. A bare
+manifest ID or family-schema ID is not a read-purpose requirement.
+
+Variant tags are semantic. A family atom never expands over `LogicalNat`, and
+it never aliases a concrete atom even when a separately checked family-member
+correspondence maps their roles to equal-looking fields. Two concrete atoms
+under different manifests, or two family atoms under different schemas, also
+remain distinct. Equality requires the same variant, complete manifest or
+schema ID, in-range slot ordinal, exact resolved slot, and purpose. Duplicate
+requirements are rejected rather than silently collapsed. A specialization
+from a family atom to a concrete atom is a separate checked transform with its
+own correspondence premise; it is not read-purpose normalization.
+
+The normalized sequence must equal the complete read-purpose requirement
+sequence derived by the resolved native or theorem rule for the authenticated
+`exact_question_id` and its exact question context. The basis family must equal
+that question's resolved family, and a later proposition may use the basis only
+when its goal names that same question. Every concrete requirement must name a manifest present on the
+concrete side of that context; every family requirement must name a family
+schema present on its abstract side; and `SourceFree` requires the empty
+sequence. A missing required slot, an extra ambient slot, a concrete/family
+substitution, or a purpose that differs from the resolved slot refuses basis
+formation. Source support later binds the manifests and schemas selected here;
+it does not reinterpret their purposes.
+
 Every native rule coordinate and body must resolve through
 `ResolvedAnalysisNativeRuleContract(P,rule_coordinate)`. Admission checks its canonical payload,
 allowed conclusion family, complete premise-requirement sequence, and typed
@@ -2167,10 +2756,52 @@ with another family's conclusion, choose a second conclusion admitted by the
 same carrier schema, or change an encoded duplicate while retaining the same
 question.
 
-Every qualification requirement, named consumer, and typed purpose must likewise
-resolve through `ResolvedAnalysisUseContract(P,use_coordinate)`. These
-coordinates select exact capability acceptance and attenuation laws; display
-text and caller-selected strings do not. For an
+Every actual-result qualification resolves through
+`ResolvedAnalysisQualificationContract`; every qualification requirement
+resolves through `ResolvedAnalysisQualificationRequirementContract`; and every
+named consumer and typed purpose resolves through
+`ResolvedAnalysisUseContract`. A use contract names one qualification-
+requirement coordinate, and that requirement selects its one fixed
+subject-parametric acceptance law through
+`ResolvedQualificationRequirementAcceptanceLaw`. Display text,
+caller-selected strings, and byte equality between a requirement tag and an
+actual qualification do not define acceptance.
+
+The requirement-to-law resolver is total only on the exact closed requirement
+declarations admitted by its profile. It receives only the complete
+requirement coordinate and body, not the candidate, and returns one typed law
+ref already present in the authenticated law-source/import closure. It cannot
+consult a runtime registry, choose a law from candidate data, or synthesize a
+new law term. Zero results, multiple results, a wrong signature, or a law from
+outside the closure refuses resolution before qualification evaluation.
+
+Qualification admission is well-founded in this order: authenticate the fixed
+profile and law source; authenticate the already formed proposition, goal,
+question, and hypothesis context; validate every nonqualification field of one
+`AnalysisJudgmentCandidate`; derive its `QualificationSubjectContext`; resolve
+the candidate's actual qualification and the required acceptance law; and only
+then admit the complete judgment body. A fixed profile law receives the
+candidate body, authenticated proposition, and derived context as invocation
+arguments. Its law-source bytes contain no candidate proposition, goal,
+question, hypothesis-context, semantic-basis, support, validation-basis, or
+future judgment ID. The law may branch only on closed declaration coordinates
+and fields derived from the authenticated candidate. It cannot predict a
+future governed ID, accept an authored context literal, or select a second
+profile at evaluation time. This order applies equally when an existing
+judgment is checked for a later use: authentication recovers the candidate
+body, and acceptance is recomputed rather than inherited from its display
+qualification.
+
+An `ExactAffirmativeJudgmentCapabilityBinding` is accepted only through
+`AnalysisUsePairAccepts` using its one requirement, consumer, purpose, and the
+authenticated bound judgment as candidate. The consumer and purpose must name
+that same requirement; two individually valid declarations that resolve to
+different requirements cannot be paired. The actual-result qualification law,
+requirement law, kind filters, attenuation laws, and policy-compatibility laws
+therefore all evaluate the same derived subject context. No literal
+qualification tag or context ID can bypass the resolver.
+
+For an
 `ExactQuantifiedWitnessRequirement`, admission resolves
 `quantified_role.experiment_profile_id`, selects the in-range quantifier at
 `quantifier_ordinal`, and requires its constructor and bound extractor profile
@@ -2269,19 +2900,23 @@ basis. Missing, extra, duplicated, wrong-purpose, wrong-theorem, or wrong-
 qualification bindings are malformed or refused according to the common
 outcome rules.
 
-An `AnalysisSemanticBasisBody` is admitted only for one exact proposition goal:
-its `family` equals `GoalFamily` of the resolved goal, its
-`conclusion_schema` reconstructs that exact goal body, and its rule source's
-resolved contract admits that family, the complete premise-requirement sequence,
-and the typed transform. Each hypothesis-node requirement names the proposition's
-exact hypothesis context and authenticated node; every non-hypothesis premise is
-disjoint from that node domain. A basis is a reusable semantic derivation schema,
-so it contains no support coordinate, live capability, established/assumed
-choice, or future judgment ID.
+An `AnalysisSemanticBasisBody` is admitted only for its authenticated
+`exact_question_id`: its `family` equals the question's resolved family, its
+`conclusion_schema` reconstructs exactly that question's hypothesis-free goal
+body, its complete read-purpose sequence is derived from that question
+context, and its rule source's resolved contract admits the family, complete
+premise-requirement sequence, and typed transform. When the basis is applied to
+one proposition, each hypothesis-node requirement must name that proposition's
+exact hypothesis context and authenticated node; every non-hypothesis premise
+is disjoint from that node domain. A basis is reusable only across proposition
+applications of that exact question for which the same resolved rule
+requirements hold, so it contains no support coordinate, live capability,
+established/assumed choice, or future judgment ID.
 
 An `AnalysisSupportInstantiationBody` resolves both its proposition and semantic
 basis and requires the exact proposition/family/goal triple admitted by that
-basis. Its non-hypothesis bindings fill every and only the corresponding premise
+basis, including equality between the proposition goal's question and the
+basis's `exact_question_id`. Its non-hypothesis bindings fill every and only the corresponding premise
 requirements; its two hypothesis maps partition every reachable node; and its
 source-support domain equals the resolved question context as specified below.
 No binding for another proposition, family member, manifest, purpose, or local
@@ -2326,9 +2961,8 @@ ExactAffirmativeAnalysisJudgmentBody(
   authenticate the proposition, its goal and question, the semantic basis,
   support, validation basis, qualification contract, and operation policy;
   require the basis and support to select that exact proposition and each
-  other, the qualification to admit that family/polarity/context, and the
-  quantitative result to inhabit the family's exact result schema; then return
-  AnalysisJudgmentRecordBody {
+  other and the quantitative result to inhabit the family's exact result
+  schema; derive body = AnalysisJudgmentRecordBody {
     proposition_id: proposition_id,
     polarity: Affirmative,
     exact_family_conclusion:
@@ -2345,7 +2979,15 @@ ExactAffirmativeAnalysisJudgmentBody(
     derived_source_policy_dependency_closure:
       DerivedJudgmentPolicyDependencyClosure(
         operation_policy_id,Authenticate(support_coordinate))
-  }
+  }; derive candidate = AnalysisJudgmentCandidate {
+    exact_direct_profile_id:
+      RequiredAnalysisLanguageProfile(
+        ExactConstructorCaseOf(body),"analysis.judgment-record",body,
+        AuthenticatedPredecessors(body)),
+    proposed_body: body
+  }; derive its QualificationSubjectContext and require the resolved
+  qualification contract's subject_parametric_acceptance_law to accept
+  exactly (body,Authenticate(proposition_id),that context); then return body
 ```
 
 The support and hypothesis graphs are authenticated and acyclic before this

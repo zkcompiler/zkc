@@ -2554,5 +2554,153 @@ class OwnerIssuedViewContractTest(unittest.TestCase):
                 pickle.dumps(live)
 
 
+class OwnerEvaluationProjectionTest(unittest.TestCase):
+    def setUp(self) -> None:
+        (
+            self.core,
+            self.construction,
+            self.invocation,
+            self.strategy,
+        ) = model.schnorr_fixture()
+
+    def public_coin_view(self) -> object:
+        manifest = model.required_static_view_read_closure(
+            model.StaticViewKind.PUBLIC_COIN,
+            (model.StaticViewField.PC_CHALLENGES,),
+        )
+        outcome = model.issue_core_static_view(
+            self.core,
+            model.StaticViewKind.PUBLIC_COIN,
+            manifest,
+            consumer_id=model.core_id(self.core),
+            purpose_id=model.protocol_id(
+                self.core,
+                None,
+                model.ChallengeInterpretation.FRESH,
+            ),
+        )
+        self.assertIs(outcome.kind, model.QualifiedViewOutcomeKind.AFFIRMATIVE)
+        return outcome.value
+
+    def schnorr_substitution(
+        self,
+        *,
+        statement: int = 8,
+        commitment: int = 16,
+        challenge: int = 1,
+        response: int = 18,
+    ) -> dict[model.ValueRef, model.Value]:
+        return {
+            model.ValueRef.input("g"): 2,
+            model.ValueRef.input("statement"): statement,
+            model.ValueRef.occurrence("commitment"): commitment,
+            model.ValueRef.occurrence("challenge"): challenge,
+            model.ValueRef.occurrence("response"): response,
+            model.ValueRef.input("p"): 23,
+        }
+
+    def test_public_coin_atomic_coordinate_separates_field_and_schedule_ordinals(self) -> None:
+        issued = self.public_coin_view()
+        projection = model.resolve_public_coin_challenge_projection(
+            issued,
+            0,
+            expected_consumer_id=model.core_id(self.core),
+            expected_purpose_id=model.protocol_id(
+                self.core,
+                None,
+                model.ChallengeInterpretation.FRESH,
+            ),
+        )
+        self.assertEqual(projection.challenge_coordinate.sequence_ordinal, 0)
+        self.assertEqual(projection.challenge_coordinate.schedule_ordinal, 1)
+        self.assertEqual(projection.challenge_coordinate.occurrence_name, "challenge")
+        self.assertIs(
+            projection.challenge_coordinate.leaf,
+            model.StaticViewAtomicLeaf.CHALLENGE_OCCURRENCE,
+        )
+        self.assertIs(
+            projection.domain_coordinate.leaf,
+            model.StaticViewAtomicLeaf.CHALLENGE_DOMAIN,
+        )
+        self.assertEqual(projection.challenge_domain, model.ChallengeDomain(11))
+
+    def test_public_coin_atomic_coordinate_requires_live_bound_authority(self) -> None:
+        issued = self.public_coin_view()
+        with self.assertRaisesRegex(model.ModelError, "live PIR authority"):
+            model.resolve_public_coin_challenge_projection(
+                issued,
+                0,
+                expected_purpose_id=model.core_id(self.core),
+            )
+        with self.assertRaisesRegex(model.ModelError, "out of range"):
+            model.resolve_public_coin_challenge_projection(issued, 1)
+
+    def test_check_and_terminal_helpers_apply_exact_k2_laws(self) -> None:
+        check_ref = model.ValueRef.occurrence("verify")
+        terminal_ref = model.ValueRef.occurrence("terminal")
+        check = model.evaluate_check_ref(
+            self.core,
+            check_ref,
+            self.schnorr_substitution(),
+        )
+        self.assertIs(check, True)
+        self.assertIs(
+            model.evaluate_terminal_ref(
+                self.core,
+                terminal_ref,
+                {check_ref: check},
+                {},
+            ),
+            True,
+        )
+        rejected = model.evaluate_check_ref(
+            self.core,
+            check_ref,
+            self.schnorr_substitution(response=0),
+        )
+        self.assertIs(rejected, False)
+        self.assertIs(
+            model.evaluate_terminal_ref(
+                self.core,
+                terminal_ref,
+                {check_ref: rejected},
+                {},
+            ),
+            False,
+        )
+
+    def test_check_helper_has_no_hidden_group_or_statement_anchor_predicate(self) -> None:
+        self.assertIs(
+            model.evaluate_check_ref(
+                self.core,
+                model.ValueRef.occurrence("verify"),
+                self.schnorr_substitution(
+                    statement=1,
+                    commitment=1,
+                    challenge=0,
+                    response=0,
+                ),
+            ),
+            True,
+        )
+
+    def test_check_and_terminal_helpers_reject_inexact_maps(self) -> None:
+        substitution = self.schnorr_substitution()
+        substitution.pop(model.ValueRef.input("p"))
+        with self.assertRaisesRegex(model.ExecutionError, "cover exactly"):
+            model.evaluate_check_ref(
+                self.core,
+                model.ValueRef.occurrence("verify"),
+                substitution,
+            )
+        with self.assertRaisesRegex(model.ExecutionError, "every prior Check"):
+            model.evaluate_terminal_ref(
+                self.core,
+                model.ValueRef.occurrence("terminal"),
+                {},
+                {},
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
