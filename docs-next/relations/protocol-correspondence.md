@@ -36,20 +36,25 @@ never a correspondence source.
 The K3-B Relations language selects the companion page's standalone
 `RelationsProfileId`. It imports exactly
 `{PIRInterfacePlanProfileId}` and therefore reaches the two K2 PIR profiles
-only through that transitive edge. Its supported subject-kind catalog is the
-closed `RelationsId` subject set owned by the companion Relation Model plus
-`"relations.correspondence-question"`, `"relations.source-binding-payload"`,
-`"relations.source-capability-requirement"`, `"relations.source-consumer"`,
-`"relations.source-no-policy"`, `"relations.source-policy-closure"`, and
-`"relations.source-purpose"`. Its inline declaration catalogs contain
-the exact Relations bodies, correspondence-question algebra, complete read
-vocabulary, owner-view schemas, closure and field-expansion laws, and checked
-correspondence result schema, plus the Relations-local source-binding payload,
-no-policy, policy-closure, typed consumer/purpose, and capability-requirement
-subject kinds. Analysis, OIR, realization, theorem, and evidence
-profiles are absent. A consumer authenticates the exact no-extra four-profile
-closure; it cannot supply a shadow PIR profile, flatten imports into module
-roots, or add a consumer-authored declaration catalog.
+only through that transitive edge. Its supported subject-kind namespace is
+exactly `RelationsSemanticSubjectKindCatalogV0`, and its module-declaration
+namespace is exactly the disjoint
+`RelationsDeclarationContractKindCatalogV0`, both owned in
+[Relation Model, Section 2](relation-model.md#2-reused-foundations-and-common-rules).
+This page supplies the body grammar for the correspondence question and the
+six source-authority subjects already named by that semantic catalog; it does
+not append kinds. Analysis, OIR, realization, theorem, and evidence profiles
+are absent. A consumer authenticates the exact no-extra four-profile closure;
+it cannot supply a shadow PIR profile, flatten imports into module roots, add
+a consumer-authored declaration catalog, or treat a declaration kind as a
+semantic subject.
+
+The Relations profile's `declaration_catalogs` field is exactly empty. The
+14-kind declaration sequence belongs to the final Relations semantic-law
+source rather than to that profile field. The bounded executable independently
+enumerates the sequence for dispatch tests, but the currently unpublished
+semantic-law bytes do not yet publish or authenticate that full dispatch.
+
 The Relations issuer requires only `RelationsProfileId` in evaluator support;
 the three imported profiles are authenticated preimages, not three additional
 evaluator-support requirements. Conversely, the three-entry Interface/Plan
@@ -670,7 +675,9 @@ IssueProtocolStaticCorrespondenceView(
 IssueProtocolInterfaceCorrespondenceView(
   exact AdmittedProtocolInterface,
   exact Interface submanifest,
-  exact Interface admission/source binding and matching fresh capability)
+  exact Interface admission/source binding and matching fresh capability,
+  exact consumer: same-regime SemanticContentId<Kconsumer>,
+  exact purpose: same-regime SemanticContentId<Kpurpose>)
     -> CorrespondenceOwnerViewIssueOutcome<ProtocolInterfaceCorrespondenceView>
 
 IssuePlanSurfaceCorrespondenceView(
@@ -682,7 +689,9 @@ IssuePlanSurfaceCorrespondenceView(
 IssueRelationsCorrespondenceView(
   every and only exact admitted Relations operand named by the submanifest,
   every exact admitted/check-result source binding and matching capability,
-  exact Relations submanifest)
+  exact Relations submanifest,
+  exact consumer: RelationsDownstreamCoordinate,
+  exact purpose: RelationsDownstreamCoordinate)
     -> CorrespondenceOwnerViewIssueOutcome<RelationsCorrespondenceView>
 
 CorrespondenceOwnerViewIssueOutcome<V> =
@@ -691,52 +700,333 @@ CorrespondenceOwnerViewIssueOutcome<V> =
       exact_owner_view_authority_binding: OwnerLocalSourceAuthorityBinding,
       fresh_owner_view_capability
     })
-  | CannotAnswer | Unsupported | Refused | Malformed
+  | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+  | Refused | Malformed
   | DeterministicLimitExceeded | CheckerFailure
 ```
 
 Every owner independently rederives its required closure and source values.
 Requested reads, realized reads, returned entries, and the appropriate
-canonical submanifest must agree exactly. A missing required entry or source
-capability is `CannotAnswer`; an unsupported owner constructor is
-`Unsupported`; a wrong subject, stale capability, or unauthenticated source is
-`Refused`; an extra, duplicate, aliased, reordered, unconsumed, or ill-formed
-entry is `Malformed`. None is Negative, and no partial carrier or binding is
-returned.
+canonical submanifest must agree exactly. An absent exact named subject,
+module, declaration, algorithm, or profile preimage after its coordinate forms
+is `MissingDependency`; an authenticated supported source whose required live
+read or capability is unavailable is `CannotAnswer`; an unsupported owner
+constructor is `Unsupported`; a wrong namespace, kind, regime, or exact ABI is
+`KindMismatch`; a stale capability or failed authenticated owner/purpose
+predicate is `Refused`; and an extra, duplicate, aliased, reordered,
+unconsumed, or ill-formed entry is `Malformed`. None is Negative, and no
+partial carrier or binding is returned.
 
 For `IssueRelationsCorrespondenceView`, the identity set of supplied Relations
 operands equals the identity set requested by the Relations submanifest. A
-missing requested transform is `CannotAnswer`; an unrequested extra transform
-is `Malformed` even when every returned entry happens to ignore it. The live
-capability retains exactly that equal source set, never a larger ambient owner
-environment.
+requested transform whose exact ID forms but whose named preimage is absent is
+`MissingDependency`; an admitted transform whose required live owner handle is
+unavailable is `CannotAnswer`; an unrequested extra transform is `Malformed`
+even when every returned entry happens to ignore it. The live capability
+retains exactly that equal source set, never a larger ambient owner
+environment. Its binding satisfies the Section 4.3 predicate for family
+`"relations-correspondence-view"`, source
+`CorrespondenceViewSource(view.requested_reads)`, and manifest
+`CorrespondenceViewReads(view.requested_reads)`; the local coordinate is the
+identical issued view object.
+
+The transform branch applies a fixed precedence before source lookup: a
+formed coordinate with the wrong namespace, kind, or regime is `KindMismatch`;
+only an exact same-kind transform coordinate can reach the lookup and become
+`MissingDependency`; and any unrequested supplied transform is `Malformed`.
+The bounded executable has no independently admitted live transform handle
+that can become unavailable after its durable preimage is present, so it does
+not currently exercise this operation's `CannotAnswer` branch. Adding a test-
+only availability flag would not be evidence for that semantic distinction.
 
 Each static owner binding specializes K1
 `OwnerLocalSourceAuthorityBinding`. The PIR Interface binding has owner `"pir"`
-and family `"interface-correspondence-view"`; the Relations binding has owner
-`"relations"` and family `"relations-correspondence-view"`. In both cases the local coordinate is
-the exact issued view object. The domain-profiled binding payload names the
-complete source and closed submanifest, while an explicit no-policy declaration,
-policy closure, and `OwnerCapabilityRequirement` bind the exact typed consumer
-and purpose. The fresh capability retains that identical envelope object plus
-the admitted handles, submanifest, realized reads, evaluator, and issuance
-occurrence. Local bindings, capabilities, and issued aggregates are
-noncopyable and nonserializable. Passing the identical capability object is the
-only bearer delegation; reconstructed, cross-owner, cross-family, or
-cross-purpose substitutes grant no source authority.
+and family `"interface-correspondence-view"`; the Relations binding is formed
+only by the closed Relations specialization below.
 
-Consumer and purpose intake follows the same open downstream-coordinate,
-closed owner-role rule as PIR. Each may be any exact same-regime downstream
-`TypedContentId`; Relations wraps it under `RelationsProfileId` as a distinct
-`relations.source-consumer` or `relations.source-purpose` identity over
-`(family,ContentRef(coordinate))`. The payload and owner requirement use those
-nominal role IDs, while the live capability retains and exactly compares the
-original coordinates. Relations therefore imports no downstream vocabulary,
-and consumer/purpose or cross-family substitution changes authority.
+### 4.3 Exact Relations source-authority subjects
+
+Foundation owns the inert `PortableSourceAuthorityBinding` and
+`OwnerLocalSourceAuthorityBinding` envelopes but deliberately does not assign
+meaning to their owner fields. Relations selects exactly five capability
+families for the source operations in this target:
+
+```text
+RelationsSourceCapabilityFamilyV0 =
+  MetaSymbol in {
+    "relation-definition-view",
+    "relations-correspondence-view",
+    "relation-instance-field",
+    "private-witness-field",
+    "artifact-observation-field"
+  }
+
+RelationsSourceFamilySymbol(f) = f
+```
+
+There is no unknown-family or custom-family arm. A family outside this sum is
+`Unsupported`; accepting another family requires a Relations profile/law
+change rather than an open-default parse.
+
+The consumer and purpose roles are open only in the coordinate they wrap. A
+`RelationsDownstreamCoordinate` is one exact same-regime
+`SemanticContentId<K>` for some exact kind `K`; that kind is retained by the
+typed ID but is not interpreted or re-encoded by Relations:
+
+```text
+RelationsSourceConsumer = {
+  family: RelationsSourceCapabilityFamilyV0,
+  downstream_coordinate: RelationsDownstreamCoordinate
+}
+
+RelationsSourcePurpose = {
+  family: RelationsSourceCapabilityFamilyV0,
+  downstream_coordinate: RelationsDownstreamCoordinate
+}
+
+RelationsSourceConsumerBody =
+  RelationsBodyV0(RelationsSourceConsumer)
+RelationsSourcePurposeBody =
+  RelationsBodyV0(RelationsSourcePurpose)
+
+RelationsSourceConsumerId =
+  RelationsId<"relations.source-consumer">(
+    B, RelationsSourceConsumerBody)
+RelationsSourcePurposeId =
+  RelationsId<"relations.source-purpose">(
+    B, RelationsSourcePurposeBody)
+```
+
+`RB(RelationsDownstreamCoordinate)` is exactly `O(ContentRefV0(id))`; no label, fixture name,
+display string, or untyped bytes can stand in for the downstream coordinate.
+The role bodies contain the family tag and that one content reference, in
+written field order. Swapping roles, coordinates, or families changes the
+role ID.
+
+The source and manifest fields are closed indexed sums, not arbitrary
+`MetaValueV0` payloads:
+
+```text
+RelationInstanceSourceEndpoint =
+    RelationPublicValue(RelationPublicRef, TypedValueSelector)
+  | RelationPhaseValue(RelationPhaseRef, TypedValueSelector)
+  | RelationOraclePublicBindingValue(RelationOracleRef, TypedValueSelector)
+
+RelationWitnessSourceEndpoint =
+  RelationWitnessValue(RelationWitnessRef, TypedValueSelector)
+
+ArtifactObservationSourceEndpoint =
+  ArtifactValue(ArtifactFactSelector)
+
+RelationsSourceDescriptorV0 =
+    DefinitionViewSource {
+      coordinate: RelationDefinitionViewCoordinate
+    }
+  | CorrespondenceViewSource {
+      requested_reads: CanonicalSortedUniqueSeq<RelationsRead>
+    }
+  | InstanceSource {
+      instance_id: RelationInstanceId
+    }
+  | PrivateWitnessSource {
+      instance_id: RelationInstanceId
+    }
+  | ArtifactObservationSource {
+      observation_id: RelationArtifactObservationId
+    }
+
+RelationsSourceManifestV0 =
+    DefinitionViewFields(RelationDefinitionReadManifest)
+  | CorrespondenceViewReads(
+      CanonicalSortedUniqueSeq<RelationsRead>)
+  | InstanceField(RelationInstanceSourceEndpoint)
+  | PrivateWitnessField(RelationWitnessSourceEndpoint)
+  | ArtifactObservationField(ArtifactObservationSourceEndpoint)
+```
+
+The payload and remaining owner subjects are:
+
+```text
+RelationsSourceBindingPayload = {
+  owner_domain: "relations",
+  family: RelationsSourceCapabilityFamilyV0,
+  source: RelationsSourceDescriptorV0,
+  manifest: RelationsSourceManifestV0,
+  consumer_id: RelationsSourceConsumerId,
+  purpose_id: RelationsSourcePurposeId
+}
+
+RelationsSourceNoPolicy = {
+  family: RelationsSourceCapabilityFamilyV0,
+  payload_id: RelationsSourceBindingPayloadId,
+  disposition: "owner-defines-no-additional-operation-policy"
+}
+
+RelationsSourceCapabilityRequirement = {
+  family: RelationsSourceCapabilityFamilyV0,
+  payload_id: RelationsSourceBindingPayloadId,
+  consumer_id: RelationsSourceConsumerId,
+  purpose_id: RelationsSourcePurposeId,
+  bearer_law: "fresh-identical-bearer-capability"
+}
+
+RelationsSourcePolicyClosure = {
+  family: RelationsSourceCapabilityFamilyV0,
+  payload_id: RelationsSourceBindingPayloadId,
+  no_policy_id: RelationsSourceNoPolicyId,
+  requirement_id: RelationsSourceCapabilityRequirementId
+}
+
+RelationsSourceBindingPayloadBody =
+  RelationsBodyV0(RelationsSourceBindingPayload)
+RelationsSourceNoPolicyBody =
+  RelationsBodyV0(RelationsSourceNoPolicy)
+RelationsSourceCapabilityRequirementBody =
+  RelationsBodyV0(RelationsSourceCapabilityRequirement)
+RelationsSourcePolicyClosureBody =
+  RelationsBodyV0(RelationsSourcePolicyClosure)
+
+RelationsSourceBindingPayloadId =
+  RelationsId<"relations.source-binding-payload">(
+    B, RelationsSourceBindingPayloadBody)
+RelationsSourceNoPolicyId =
+  RelationsId<"relations.source-no-policy">(
+    B, RelationsSourceNoPolicyBody)
+RelationsSourceCapabilityRequirementId =
+  RelationsId<"relations.source-capability-requirement">(
+    B, RelationsSourceCapabilityRequirementBody)
+RelationsSourcePolicyClosureId =
+  RelationsId<"relations.source-policy-closure">(
+    B, RelationsSourcePolicyClosureBody)
+```
+
+The fixed strings above are exact semantic symbols. They are not prose slots.
+All records and variants use the written field and alternative order under
+`RelationsBodyV0`; each of the six subjects therefore has one exact body
+compiler without introducing another ID constructor.
+
+Formation requires all of the following:
+
+1. the payload owner is exactly `"relations"`, and every subject has the exact
+   `RelationsProfileId` and one common semantic regime;
+2. the consumer and purpose IDs authenticate their complete bodies, have the
+   payload family, and wrap the exact supplied downstream coordinates in their
+   respective roles;
+3. the family selects exactly the matching source/manifest pair in this table:
+
+   | family | source descriptor | manifest | envelope coordinate |
+   |---|---|---|---|
+   | `"relation-definition-view"` | the admitted definition and exact profile coordinate | the exact nonempty canonical definition-field manifest | the exact issued view object, owner-local |
+   | `"relations-correspondence-view"` | the exact canonical Relations read sequence | the identical exact read sequence | the exact issued view object, owner-local |
+   | `"relation-instance-field"` | one admitted `RelationInstanceId` | one public, phase, or Oracle-public-binding endpoint belonging to that instance's Interface | `RelationInstanceId`, portable |
+   | `"private-witness-field"` | the exact `instance_id` retained by one fresh `PrivateWitnessAssignment` | one witness endpoint belonging to that instance's Interface | the exact assignment occurrence, owner-local |
+   | `"artifact-observation-field"` | one admitted `RelationArtifactObservationId` | one artifact selector belonging to that observation's admitted profile | `RelationArtifactObservationId`, portable |
+
+4. every selector forms against its admitted owner and derives its type; equal
+   values, another field, another instance or observation, another assignment
+   occurrence, or another process generation do not match;
+5. the no-policy subject contains exactly the payload ID and fixed disposition;
+   the requirement contains exactly the same payload, consumer, purpose, and
+   fixed bearer law; and the closure contains exactly that payload, no-policy,
+   and requirement triple, with no omitted or extra policy input; and
+6. strict decode consumes the complete body and re-encoding reproduces it.
+
+The three field-source issuance operations make the role intake explicit:
+
+```text
+IssueRelationInstanceFieldSource(
+  exact admitted RelationInstance,
+  exact RelationInstanceSourceEndpoint belonging to that instance,
+  exact consumer: RelationsDownstreamCoordinate,
+  exact purpose: RelationsDownstreamCoordinate)
+  -> RelationsFieldSourceIssueOutcome<PortableSourceAuthorityBinding>
+
+IssuePrivateWitnessFieldSource(
+  exact fresh PrivateWitnessAssignment and secret-value capability,
+  exact RelationWitnessSourceEndpoint belonging to its instance,
+  exact consumer: RelationsDownstreamCoordinate,
+  exact purpose: RelationsDownstreamCoordinate)
+  -> RelationsFieldSourceIssueOutcome<OwnerLocalSourceAuthorityBinding>
+
+IssueArtifactObservationFieldSource(
+  exact admitted RelationArtifactObservation,
+  exact matching fresh interpretation-or-replay authority,
+  exact ArtifactObservationSourceEndpoint belonging to its profile,
+  exact consumer: RelationsDownstreamCoordinate,
+  exact purpose: RelationsDownstreamCoordinate)
+  -> RelationsFieldSourceIssueOutcome<PortableSourceAuthorityBinding>
+
+RelationsFieldSourceIssueOutcome<B> =
+    Affirmative({binding: B, fresh_source_capability})
+  | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+  | Refused | Malformed | DeterministicLimitExceeded | CheckerFailure
+```
+
+Each operation constructs the consumer and purpose role IDs from exactly its
+two intake coordinates and copies those IDs into the payload and requirement.
+No ambient default, diagnostic label, or caller-authored role ID is accepted.
+There is no semantic Negative: a field source is issued exactly or returns one
+qualified noncompletion.
+
+For either envelope, `owner_domain = "relations"`, `capability_family` is
+`RelationsSourceFamilySymbol(family)`, `owner_binding_payload` is the exact
+payload ID, `operation_policy` is
+`OwnerDefinesNoPolicy(no_policy_id)`, `owner_policy_closure` is the exact
+closure ID, and `capability_requirement` is
+`OwnerCapabilityRequirement("relations", family_symbol, requirement_id)`.
+Foundation validates this carrier agreement; Relations authenticates the six
+profiled bodies and the table-specific source law.
+
+`RelationsSourceAuthorityBindingMatches(f,source,manifest,consumer,purpose,b)`
+is exactly the conjunction of those formation equations, the matching table
+row, and equality of every written envelope field. It is a predicate over the
+one Foundation envelope `b`, not a seventh binding type, content ID, or receipt.
+`RelationsLiveSourceAuthorityMatches(f,source,manifest,consumer,purpose,b,c)`
+holds exactly when the binding predicate holds, `c` is the identical live
+bearer atomically issued by Relations for that exact `b`, and `c` retains the
+same family, source, manifest, original downstream coordinates, admitted owner
+handles, issuance/assignment occurrence, process generation, evaluator,
+lifetime, and revocation state. A document that merely says “exact source
+authority” without selecting the binding predicate's six arguments, and the
+live predicate's seventh bearer argument, does not satisfy the corresponding
+predicate.
+
+The definition and correspondence views and the private-witness field use an
+`OwnerLocalSourceAuthorityBinding`; their local coordinate is respectively
+the exact issued view or exact `PrivateWitnessAssignment` occurrence. The
+relation-instance and artifact-observation fields use a
+`PortableSourceAuthorityBinding` whose portable coordinate is respectively
+the exact `RelationInstanceId` or `RelationArtifactObservationId`. Portability
+does not move authority: the inert envelope can be stored, but cold use must
+reauthenticate the subject and recreate the exact fresh owner capability.
+
+Every live capability retains the identical envelope object, original
+downstream consumer and purpose coordinates, admitted owner handles, complete
+manifest, selected field and derived type where applicable, issuance or
+assignment occurrence, process generation, evaluator, lifetime, and
+revocation state. Passing that identical live bearer is the only delegation.
+A relation-instance source must read the exact total-map entry. A private-
+witness source must read the exact secret capability in the named assignment.
+An artifact source must read an `Observed` field under fresh interpretation or
+affirmative replay authority; `Unread`, a missing `At` occurrence, or an
+unavailable otherwise matching read is `CannotAnswer` and issues no live source
+capability. `Whole` over `Observed([])` remains the exact empty sequence rather
+than absence of a source.
+A reconstructed envelope, copied capability, equal value, stale generation,
+cross-family role, or different consumer or purpose is `Refused`; an absent or
+expired otherwise matching live source is `CannotAnswer`. The private-witness
+payload contains no secret value or occurrence reference, and neither local
+binding has a canonical body.
+
+These are the complete source families selected by this document. They do not
+silently define a generic checked-result source family. A checked operation
+may issue its fresh operation-local capability as specified, but exporting a
+result through a Foundation source-authority envelope requires an additional exact
+Relations family, descriptor, and manifest in a later profile/law revision.
 
 The invocation-issued
 [`PublicSetupInvocationView`](../pir/interactive-core.md#134-invocation-issued-public-setup-view)
-is the only portable source-view exception in this cut: its inert
+is the only portable exception among the four correspondence owner views: its inert
 `PortableSourceAuthorityBinding` is keyed by the view ID, but its live
 capability is still exact and nontransferable. `CheckCorrespondence` consumes
 the exact owner products and cannot call an unqualified raw-body lookup.
@@ -822,10 +1112,13 @@ Endpoint type, selector type, and expected-value type mismatches make question
 formation malformed; they cannot produce an admitted proposition and therefore
 have no disagreement constructor.
 
-Only completed affirmative or negative results receive the ordinary exact
-question-, operand-, consumer-, and purpose-bound checked-result binding and a
-fresh live capability. IDs, serialized records, manifests, and source bindings
-are inert and grant no authority.
+Only completed affirmative or negative results receive the exact
+question-, operand-, and manifest-bound fresh operation-local capability.
+IDs, serialized records, manifests, and source bindings are inert and grant no
+authority. Section 4.3 deliberately does not invent a generic checked-result
+source family: exporting this result to another owner requires a later exact
+family, typed consumer and purpose, source descriptor, and manifest rather
+than treating this operation-local capability as transferable authority.
 
 ## 6. Structural and coverage operations
 
@@ -1005,6 +1298,13 @@ issuance authority must retain the exact invocation and source binding required
 by the operation. Its payload contains every and only the public coordinates
 in `ManifestFor(question)`; the full `CompletedProtocolRecord` remains in
 PIR's private source binding and is not a correspondence read.
+
+For every lossy-source authority used by this operation, both downstream
+coordinates supplied to the two nominal role constructors are the exact
+`CorrespondenceQuestionId` of `q`. The resulting consumer and purpose IDs are
+still distinct because their subject kinds differ. This binds the source to
+this exact run-grounding proposition without adding a label or a new purpose
+registry; a different question ID cannot reuse the authority.
 
 For every `RelationBoundValue` check, Relations selects the exact instance
 value and exact `Available` run value and applies the edge's admitted

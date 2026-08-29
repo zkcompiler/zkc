@@ -15,6 +15,36 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 import reference_model as model  # noqa: E402
 
 
+def owner_roles(label: str) -> dict[str, object]:
+    """Explicit downstream coordinates for one bounded owner-view issuance."""
+
+    return {
+        "consumer_id": model.fixture_semantic_ref(
+            "evaluation.owner-view-consumer",
+            f"{label}-consumer",
+        ),
+        "purpose_id": model.fixture_semantic_ref(
+            "evaluation.owner-view-purpose",
+            f"{label}-purpose",
+        ),
+    }
+
+
+def malformed_content_id(source: object) -> object:
+    """Build one exact host type whose digest fails semantic-ID formation."""
+
+    if type(source) is not model.k1.TypedContentId:
+        raise AssertionError("malformed-ID fixture needs a TypedContentId source")
+    candidate = object.__new__(model.k1.TypedContentId)
+    for field in fields(source):
+        object.__setattr__(
+            candidate,
+            field.name,
+            b"too-short" if field.name == "digest" else getattr(source, field.name),
+        )
+    return candidate
+
+
 def axes(case: model.DependentSurfaceCase) -> tuple[object | None, object]:
     if case.name == "verifier-private":
         return None, model.k2.ChallengeInterpretation.FRESH
@@ -124,6 +154,149 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             profiles=profiles,
         )
 
+    def test_relations_catalog_partition_and_profile_routing_are_exact(self) -> None:
+        semantic_subjects = (
+            "relations.artifact-comparison-question",
+            "relations.artifact-observation",
+            "relations.artifact-profile",
+            "relations.artifact-profile-count-question",
+            "relations.commitment-grounding",
+            "relations.correspondence-question",
+            "relations.definition",
+            "relations.definition-model-question",
+            "relations.grounding-equation",
+            "relations.instance",
+            "relations.interface",
+            "relations.plan-witness-binding",
+            "relations.protocol-binding",
+            "relations.refinement-question",
+            "relations.semantic-model",
+            "relations.source-binding-payload",
+            "relations.source-capability-requirement",
+            "relations.source-consumer",
+            "relations.source-no-policy",
+            "relations.source-policy-closure",
+            "relations.source-purpose",
+            "relations.transform",
+            "relations.value-bridge",
+        )
+        declaration_contracts = (
+            "relations.artifact-fact",
+            "relations.artifact-format",
+            "relations.artifact-interpreter",
+            "relations.commitment-construction",
+            "relations.definition-language",
+            "relations.definition-model-law",
+            "relations.loss-export",
+            "relations.loss-source-premise",
+            "relations.model-assumption",
+            "relations.oracle-access-law",
+            "relations.private-transform-contract",
+            "relations.refinement-law",
+            "relations.satisfaction-evaluator",
+            "relations.value-bridge-law",
+        )
+        bounded_body_kinds = frozenset(
+            {
+                "relations.definition",
+                "relations.grounding-equation",
+                "relations.interface",
+                "relations.plan-witness-binding",
+                "relations.protocol-binding",
+                "relations.source-binding-payload",
+                "relations.source-capability-requirement",
+                "relations.source-consumer",
+                "relations.source-no-policy",
+                "relations.source-policy-closure",
+                "relations.source-purpose",
+                "relations.transform",
+                "relations.value-bridge",
+            }
+        )
+        unimplemented_target_bodies = frozenset(
+            {
+                "relations.artifact-comparison-question",
+                "relations.artifact-observation",
+                "relations.artifact-profile",
+                "relations.artifact-profile-count-question",
+                "relations.commitment-grounding",
+                "relations.correspondence-question",
+                "relations.definition-model-question",
+                "relations.instance",
+                "relations.refinement-question",
+                "relations.semantic-model",
+            }
+        )
+
+        self.assertEqual(len(semantic_subjects), 23)
+        self.assertEqual(len(declaration_contracts), 14)
+        self.assertEqual(model.RELATIONS_SEMANTIC_SUBJECT_KINDS_V0, semantic_subjects)
+        self.assertEqual(
+            model.RELATIONS_DECLARATION_CONTRACT_KINDS_V0,
+            declaration_contracts,
+        )
+        self.assertEqual(model.RELATIONS_BOUNDED_BODY_KINDS, bounded_body_kinds)
+        self.assertEqual(
+            model.RELATIONS_UNIMPLEMENTED_TARGET_BODY_KINDS,
+            unimplemented_target_bodies,
+        )
+        self.assertTrue(bounded_body_kinds < set(semantic_subjects))
+        self.assertFalse(set(semantic_subjects) & set(declaration_contracts))
+        self.assertEqual(
+            tuple(
+                item.value
+                for item in model.RELATIONS_PROFILE.supported_subject_kinds
+            ),
+            semantic_subjects,
+        )
+        self.assertEqual(
+            model.RELATIONS_PROFILE.declaration_catalogs,
+            model.k1.DatumSeq(()),
+        )
+        self.assertEqual(
+            dict(model.k1.profile_declaration_catalogs(model.RELATIONS_PROFILE)),
+            {},
+        )
+
+        nonempty_catalog_profile = replace(
+            model.RELATIONS_PROFILE,
+            declaration_catalogs=model._profile_catalog(
+                "relations.invalid-profile-local-catalog",
+                ("must-not-be-profile-local",),
+            ),
+        )
+        with self.assertRaisesRegex(
+            model.K3Error,
+            "profile-local declaration catalog must be exactly empty",
+        ):
+            model.K3BSemanticProfiles(
+                model.K3B_SEMANTIC_PROFILES.k2_profiles,
+                model.PIR_INTERFACE_PLAN_PROFILE,
+                nonempty_catalog_profile,
+            )
+
+        changed = model.make_k3b_semantic_profiles(
+            relations_law=b"zkc-k3b-relations-catalog-routing-law-v1"
+        )
+        for subject_kind in semantic_subjects:
+            with self.subTest(profiled_subject=subject_kind):
+                self.assertNotEqual(
+                    self.identity(subject_kind, model.K3B_SEMANTIC_PROFILES),
+                    self.identity(subject_kind, changed),
+                )
+        for subject_kind in (
+            *declaration_contracts,
+            *sorted(model.RELATIONS_BOUNDED_LEGACY_REFERENCE_KINDS),
+        ):
+            with self.subTest(nonprofiled_reference=subject_kind):
+                self.assertNotIn(subject_kind, semantic_subjects)
+                self.assertEqual(
+                    self.identity(subject_kind, model.K3B_SEMANTIC_PROFILES),
+                    self.identity(subject_kind, changed),
+                )
+        with self.assertRaisesRegex(model.K3Error, "outside its exact profile catalog"):
+            self.identity("relations.unknown-subject", model.K3B_SEMANTIC_PROFILES)
+
     def test_each_k3b_profile_root_has_its_exact_no_extra_closure(self) -> None:
         expected_sizes = {
             model.PIR_INTERFACE_PLAN_PROFILE_ID: 3,
@@ -176,6 +349,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             case.interface,
             manifest,
             profile_support=model.K3B_INTERFACE_PROFILE_SUPPORT,
+            **owner_roles("interface-support-only"),
         )
         self.assertIs(issued.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
         relation_id = model.relation_interface_id(case.relation_interfaces[0])
@@ -192,12 +366,14 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             (transform,),
             relation_manifest,
             profile_support=model.K3B_INTERFACE_PROFILE_SUPPORT,
+            **owner_roles("relations-support-refusal"),
         )
         self.assertIs(refused.kind, model.k2.QualifiedViewOutcomeKind.UNSUPPORTED)
 
     def test_real_owner_views_enforce_support_and_profile_locality(self) -> None:
         case = model.schnorr_case()
         interpretation = model.k2.ChallengeInterpretation.FIAT_SHAMIR
+        shared_roles = owner_roles("interface-profile-locality")
         baseline_manifest = model.external_statement_read_manifest(
             case.interface,
             ("statement.statement",),
@@ -208,6 +384,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             interpretation,
             case.interface,
             baseline_manifest,
+            **shared_roles,
         )
         self.assertIs(baseline.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
 
@@ -232,6 +409,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             changed_interface,
             changed_manifest,
             profiles=changed,
+            **shared_roles,
         )
         self.assertIs(
             unsupported.kind,
@@ -245,6 +423,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             changed_manifest,
             profiles=changed,
             profile_support=model.make_k3b_profile_support(changed),
+            **shared_roles,
         )
         self.assertIs(supported.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
         assert type(baseline.value) is model.IssuedProtocolInterfaceCorrespondenceView
@@ -280,6 +459,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             same_manifest,
             profiles=relations_only,
             profile_support=model.make_k3b_profile_support(relations_only),
+            **shared_roles,
         )
         self.assertIs(unaffected.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
         assert type(unaffected.value) is model.IssuedProtocolInterfaceCorrespondenceView
@@ -308,6 +488,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
         baseline = model.issue_relations_correspondence_view(
             (transform,),
             baseline_manifest,
+            **owner_roles("baseline-relations-profile"),
         )
         self.assertIs(baseline.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
 
@@ -322,6 +503,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             (transform,),
             changed_manifest,
             profiles=changed,
+            **owner_roles("unsupported-relations-profile"),
         )
         self.assertIs(
             unsupported.kind,
@@ -332,6 +514,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             changed_manifest,
             profiles=changed,
             profile_support=model.make_k3b_profile_support(changed),
+            **owner_roles("supported-relations-profile"),
         )
         self.assertIs(supported.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
         assert type(baseline.value) is model.IssuedRelationsCorrespondenceView
@@ -397,6 +580,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
                         profile_support=model.make_k3b_profile_support(
                             interface_bundle
                         ),
+                        **owner_roles(f"interface-missing-{omitted_kind}"),
                     )
                 )
                 self.assertIs(
@@ -437,6 +621,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
                     profile_support=model.make_k3b_profile_support(
                         relations_bundle
                     ),
+                    **owner_roles(f"relations-missing-{omitted_kind}"),
                 )
                 self.assertIs(
                     refused_relations.kind,
@@ -670,23 +855,21 @@ class SemanticProfileIdentityTest(unittest.TestCase):
                     profiles=changed_transcript,
                 ),
             ),
-            (
-                model._grounded_value_id(coordinate, b"x", profiles=baseline),
-                model._grounded_value_id(
-                    coordinate,
-                    b"x",
-                    profiles=changed_public,
-                ),
-                model._grounded_value_id(
-                    coordinate,
-                    b"x",
-                    profiles=changed_transcript,
-                ),
-            ),
         )
         for baseline_id, public_id, transcript_id in locality_subjects:
             self.assertEqual(baseline_id, public_id)
             self.assertNotEqual(baseline_id, transcript_id)
+        # A run value is owner-local in the target model.  The bounded helper's
+        # typed digest is only a fixture handle and therefore must not pretend
+        # to be a Relations-profile subject or rotate with that profile.
+        self.assertEqual(
+            model._grounded_value_id(coordinate, b"x", profiles=baseline),
+            model._grounded_value_id(
+                coordinate,
+                b"x",
+                profiles=changed_transcript,
+            ),
+        )
 
     def test_carrier_and_run_view_do_not_relabel_baseline_execution(self) -> None:
         changed = model.make_k3b_semantic_profiles(
@@ -1182,6 +1365,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
             model.k2.ChallengeInterpretation.FIAT_SHAMIR,
             case.interface,
             manifest,
+            **owner_roles("interface-closure"),
         )
         self.assertIs(outcome.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
         self.assertIs(type(outcome.value), model.IssuedProtocolInterfaceCorrespondenceView)
@@ -1214,6 +1398,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
             model.k2.ChallengeInterpretation.FIAT_SHAMIR,
             case.interface,
             incomplete,
+            **owner_roles("interface-incomplete"),
         )
         self.assertIs(
             outcome.kind,
@@ -1242,6 +1427,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
             model.k2.ChallengeInterpretation.FIAT_SHAMIR,
             aliased,
             slot_read,
+            **owner_roles("interface-aliased"),
         )
         self.assertIs(
             aliased_outcome.kind,
@@ -1262,6 +1448,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
         outcome = model.issue_relations_correspondence_view(
             (transform,),
             manifest,
+            **owner_roles("relations-transform"),
         )
         self.assertIs(outcome.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
         self.assertIs(type(outcome.value), model.IssuedRelationsCorrespondenceView)
@@ -1274,7 +1461,11 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
         self.assertIs(issued.capability.source_binding, issued.source_binding)
         self.assertTrue(model.validate_issued_relations_correspondence_view(issued))
 
-        missing = model.issue_relations_correspondence_view((), manifest)
+        missing = model.issue_relations_correspondence_view(
+            (),
+            manifest,
+            **owner_roles("relations-transform-missing"),
+        )
         self.assertIs(
             missing.kind,
             model.k2.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
@@ -1289,10 +1480,34 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
         extra_outcome = model.issue_relations_correspondence_view(
             (transform, extra),
             manifest,
+            **owner_roles("relations-transform-extra"),
         )
         self.assertIs(
             extra_outcome.kind,
             model.k2.QualifiedViewOutcomeKind.MALFORMED,
+        )
+
+        wrong_kind_id = model.fixture_semantic_ref(
+            "relations.definition",
+            "wrong-kind-transform-coordinate",
+        )
+        wrong_kind_manifest = model.CorrespondenceReadManifest(
+            (),
+            (
+                model.RelationsRead(
+                    model.RelationsReadKind.RELATION_TRANSFORM,
+                    wrong_kind_id,
+                ),
+            ),
+        )
+        wrong_kind = model.issue_relations_correspondence_view(
+            (),
+            wrong_kind_manifest,
+            **owner_roles("relations-transform-wrong-kind"),
+        )
+        self.assertIs(
+            wrong_kind.kind,
+            model.k2.QualifiedViewOutcomeKind.KIND_MISMATCH,
         )
 
     def test_correspondence_views_cannot_be_self_authored(self) -> None:
@@ -1306,6 +1521,157 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
         with self.assertRaises(model.RelationError):
             model.RelationsCorrespondenceView((), (), object())
 
+    def test_owner_view_roles_are_explicit_direct_content_references(self) -> None:
+        roles = owner_roles("direct-role-body")
+        family = model.k1.Symbol("relations-correspondence-view")
+        consumer_role_id = model._source_authority_role_id(
+            model.RELATIONS_PROFILE,
+            "relations.source-consumer",
+            family,
+            roles["consumer_id"],
+            "test consumer",
+        )
+        expected_consumer_role_id = model._source_authority_id(
+            model.RELATIONS_PROFILE,
+            "relations.source-consumer",
+            model.k1.DatumRecord(
+                (
+                    (0, family),
+                    (
+                        1,
+                        model.k1.BytesValue(
+                            roles["consumer_id"].internal_reference()
+                        ),
+                    ),
+                )
+            ),
+        )
+        legacy_variant_role_id = model._source_authority_id(
+            model.RELATIONS_PROFILE,
+            "relations.source-consumer",
+            model.k1.DatumRecord(
+                (
+                    (0, family),
+                    (
+                        1,
+                        model.k1.DatumVariant(
+                            1,
+                            model.k1.BytesValue(
+                                roles["consumer_id"].internal_reference()
+                            ),
+                        ),
+                    ),
+                )
+            ),
+        )
+        purpose_role_id = model._source_authority_role_id(
+            model.RELATIONS_PROFILE,
+            "relations.source-purpose",
+            family,
+            roles["consumer_id"],
+            "test purpose",
+        )
+        self.assertEqual(consumer_role_id, expected_consumer_role_id)
+        self.assertNotEqual(consumer_role_id, legacy_variant_role_id)
+        self.assertNotEqual(consumer_role_id, purpose_role_id)
+
+    def test_owner_view_issuance_refuses_absent_malformed_and_cross_role_coordinates(
+        self,
+    ) -> None:
+        case = model.schnorr_case()
+        interface_manifest = model.external_statement_read_manifest(
+            case.interface,
+            ("statement.statement",),
+        )
+        with self.assertRaises(TypeError):
+            model.issue_protocol_interface_correspondence_view(
+                case.core,
+                case.construction,
+                model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+                case.interface,
+                interface_manifest,
+            )
+
+        relation_id = model.relation_interface_id(case.relation_interfaces[0])
+        transform = model.RelationTransform(
+            "required-role-transform",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        relation_manifest = model.claim_reduction_transform_read_manifest(
+            (model.relation_transform_id(transform),)
+        )
+        with self.assertRaises(TypeError):
+            model.issue_relations_correspondence_view(
+                (transform,),
+                relation_manifest,
+                consumer_id=owner_roles("missing-purpose")["consumer_id"],
+            )
+
+        definition = case.definition_sources[0]
+        definition_manifest = model.schnorr_fixed_setup_manifest(definition)
+        with self.assertRaises(TypeError):
+            model.issue_relation_definition_view(
+                definition,
+                definition_manifest,
+                purpose_id=owner_roles("missing-consumer")["purpose_id"],
+            )
+
+        malformed_roles = owner_roles("malformed-role")
+        malformed = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            interface_manifest,
+            consumer_id="not-a-semantic-content-id",
+            purpose_id=malformed_roles["purpose_id"],
+        )
+        self.assertIs(
+            malformed.kind,
+            model.k2.QualifiedViewOutcomeKind.KIND_MISMATCH,
+        )
+
+        malformed_id = malformed_content_id(malformed_roles["consumer_id"])
+        structurally_malformed = model.issue_protocol_interface_correspondence_view(
+            case.core,
+            case.construction,
+            model.k2.ChallengeInterpretation.FIAT_SHAMIR,
+            case.interface,
+            interface_manifest,
+            consumer_id=malformed_id,
+            purpose_id=malformed_roles["purpose_id"],
+        )
+        self.assertIs(
+            structurally_malformed.kind,
+            model.k2.QualifiedViewOutcomeKind.MALFORMED,
+        )
+
+        transform = model.RelationTransform(
+            "cross-role-transform",
+            (relation_id,),
+            (relation_id,),
+            model.IDENTITY_CODEC,
+        )
+        relation_manifest = model.claim_reduction_transform_read_manifest(
+            (model.relation_transform_id(transform),)
+        )
+        roles = owner_roles("cross-role")
+        issued = model.issue_relations_correspondence_view(
+            (transform,),
+            relation_manifest,
+            **roles,
+        ).value
+        self.assertIs(type(issued), model.IssuedRelationsCorrespondenceView)
+        self.assertFalse(
+            model.validate_issued_relations_correspondence_view(
+                issued,
+                expected_consumer_id=roles["purpose_id"],
+                expected_purpose_id=roles["consumer_id"],
+            )
+        )
+
     def test_interface_authority_refuses_copy_reconstruction_and_wrong_purpose(self) -> None:
         case = model.schnorr_case()
         manifest = model.external_statement_read_manifest(
@@ -1318,6 +1684,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
             model.k2.ChallengeInterpretation.FIAT_SHAMIR,
             case.interface,
             manifest,
+            **owner_roles("interface-authority"),
         ).value
         alternate = model.issue_protocol_interface_correspondence_view(
             case.core,
@@ -1325,6 +1692,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
             model.k2.ChallengeInterpretation.FIAT_SHAMIR,
             case.interface,
             manifest,
+            consumer_id=issued.capability.consumer_id,
             purpose_id=model._source_authority_id(
                 model.PIR_INTERFACE_PLAN_PROFILE,
                 "pir.source-purpose",
@@ -1387,6 +1755,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
         issued = model.issue_relations_correspondence_view(
             (transform,),
             manifest,
+            **owner_roles("relations-authority"),
         ).value
         assert type(issued) is model.IssuedRelationsCorrespondenceView
         self.assertTrue(model.validate_issued_relations_correspondence_view(issued))
@@ -1419,6 +1788,7 @@ class CorrespondenceOwnerViewTest(unittest.TestCase):
             model.k2.ChallengeInterpretation.FIAT_SHAMIR,
             case.interface,
             interface_manifest,
+            **owner_roles("interface-cross-family"),
         ).value
         assert type(interface_issued) is model.IssuedProtocolInterfaceCorrespondenceView
         cross_family = replace(
@@ -1439,7 +1809,11 @@ class RelationDefinitionOwnerViewTest(unittest.TestCase):
             model.schnorr_relation_definition_id(definition),
         )
         manifest = model.schnorr_fixed_setup_manifest(definition)
-        outcome = model.issue_relation_definition_view(definition, manifest)
+        outcome = model.issue_relation_definition_view(
+            definition,
+            manifest,
+            **owner_roles("definition-fixed-setup"),
+        )
         self.assertIs(outcome.kind, model.k2.QualifiedViewOutcomeKind.AFFIRMATIVE)
         issued = outcome.value
         assert type(issued) is model.IssuedRelationDefinitionView
@@ -1464,9 +1838,52 @@ class RelationDefinitionOwnerViewTest(unittest.TestCase):
         definition = model.selected_schnorr_relation_definition()
         manifest = model.schnorr_fixed_setup_manifest(definition)
         substituted = replace(definition, generator=3)
-        substitution = model.issue_relation_definition_view(substituted, manifest)
+        substitution = model.issue_relation_definition_view(
+            substituted,
+            manifest,
+            **owner_roles("definition-substitution"),
+        )
         self.assertIs(
             substitution.kind,
+            model.k2.QualifiedViewOutcomeKind.REFUSED,
+        )
+
+        wrong_kind_coordinate = replace(
+            manifest[0].view_coordinate,
+            definition_id=model.IDENTITY_CODEC,
+        )
+        wrong_kind_manifest = (
+            replace(manifest[0], view_coordinate=wrong_kind_coordinate),
+            *manifest[1:],
+        )
+        wrong_kind = model.issue_relation_definition_view(
+            definition,
+            wrong_kind_manifest,
+            **owner_roles("definition-wrong-kind"),
+        )
+        self.assertIs(
+            wrong_kind.kind,
+            model.k2.QualifiedViewOutcomeKind.KIND_MISMATCH,
+        )
+
+        malformed_definition_id = malformed_content_id(
+            manifest[0].view_coordinate.definition_id
+        )
+        malformed_coordinate = replace(
+            manifest[0].view_coordinate,
+            definition_id=malformed_definition_id,
+        )
+        malformed_manifest = (
+            replace(manifest[0], view_coordinate=malformed_coordinate),
+            *manifest[1:],
+        )
+        malformed = model.issue_relation_definition_view(
+            definition,
+            malformed_manifest,
+            **owner_roles("definition-malformed-coordinate"),
+        )
+        self.assertIs(
+            malformed.kind,
             model.k2.QualifiedViewOutcomeKind.MALFORMED,
         )
 
@@ -1477,11 +1894,21 @@ class RelationDefinitionOwnerViewTest(unittest.TestCase):
             definition,
             profiles=changed,
         )
+        cross_profile = model.issue_relation_definition_view(
+            definition,
+            changed_manifest,
+            **owner_roles("definition-cross-profile"),
+        )
+        self.assertIs(
+            cross_profile.kind,
+            model.k2.QualifiedViewOutcomeKind.REFUSED,
+        )
         changed_outcome = model.issue_relation_definition_view(
             definition,
             changed_manifest,
             profiles=changed,
             profile_support=model.make_k3b_profile_support(changed),
+            **owner_roles("definition-changed-profile"),
         )
         self.assertIs(
             changed_outcome.kind,

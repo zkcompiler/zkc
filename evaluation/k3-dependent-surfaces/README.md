@@ -11,7 +11,16 @@ The instrument checks these discriminators:
   Transcript/FS profiles it interprets, and one Relations/correspondence
   profile imports Interface/Plan; the five-profile convenience container is
   distinct from the three-entry Interface and four-entry Relations no-extra
-  closures. Real owner-view issuance checks the selected root's evaluator
+  closures. The Relations profile advertises the exact 23-kind target semantic
+  subject catalog and has an exactly empty `declaration_catalogs` field. A
+  separate executable constant independently enumerates the exact 14-kind
+  module-declaration dispatch grammar; it is not a profile declaration
+  catalog. The placeholder `semantic_law_source` bytes do not publish or
+  authenticate that final dispatch. The executable explicitly names the
+  smaller 13-kind subset for which it constructs bounded bodies and the
+  complementary 10-kind unimplemented target-body set; catalog routing is not
+  represented as complete body semantics. Real owner-view
+  issuance checks the selected root's evaluator
   support and complete emitted subject-kind set. Real Interface, Plan,
   Relations, checked-binding, carrier, and replay paths retain that selected
   profile bundle rather than silently relabeling content under repository
@@ -24,7 +33,10 @@ The instrument checks these discriminators:
   canonical and transitively closed, and issuance returns an inert exact-source
   K1 owner-local binding plus a fresh exact-object guarded capability, with
   domain-profiled payload, no-policy/closure/requirement identities, and typed
-  consumer and purpose;
+  consumer and purpose. Both downstream coordinates are required exact
+  `SemanticContentId` inputs: there is no label-derived or implicit default,
+  and each nominal role body contains exactly its family and a direct
+  `ContentRef` to that coordinate;
 - Plan admission checks its own finite typed shape independently from
   `PlanRealizes`; the latter checks exact K2 decision coverage and the legacy
   owner's scope-gated public-input and closed order/guard availability rules
@@ -52,9 +64,13 @@ The instrument checks these discriminators:
   second free graph;
 - Relations-owned transform reads use authenticated `RelationTransformId`
   coordinates and owner-issued exact views under a distinct K1 owner-local
-  envelope family; absent transforms, reconstructed/cross-family envelopes,
-  wrong-purpose use, self-authored view carriers, and unrequested extra source
-  transforms are refused or classified as malformed by their exact branch;
+  envelope family. Wrong-kind coordinates are `KindMismatch` before lookup,
+  exact same-kind absent transforms are `MissingDependency`, and unrequested
+  supplied transforms are `Malformed`. Definition-view substitution by a
+  formed same-kind definition or profile coordinate is `Refused`, while a
+  malformed coordinate or manifest is `Malformed`; reconstructed/cross-family
+  envelopes, wrong-purpose use, and self-authored view carriers do not issue
+  authority;
 - a replay-qualified PIR-issued `RelationRunView` is an immutable,
   explicit-manifest, public-only attenuation of one real K2 execution, with
   transitive verifier-private influence closed over guards, predicates,
@@ -94,11 +110,19 @@ python3 -B evaluation/k3-dependent-surfaces/run.py --check
 
 ## Evidence boundary
 
-Passing the 47-test gate demonstrates only the finite positive and mutation
+Passing the 50-test gate demonstrates only the finite positive and mutation
 cases in `tests/test_reference_model.py`. The fixture semantic references are
 K1-backed content identities, but their labels do not provide the algorithms,
 theorems, or security properties they name. The K2 executor remains the only
 execution model used here.
+
+The owner-view tests assert the empty Relations profile declaration catalog,
+the separate 14-kind dispatch constant, explicit consumer and purpose
+coordinates, direct role-body encoding, and the selected `KindMismatch`,
+`MissingDependency`, `Refused`, and `Malformed` precedence. They do not exercise
+`CannotAnswer`: this bounded in-memory model has no independently admitted live
+source handle that can become unavailable after its durable source is present.
+A test-only availability toggle would not truthfully model that operation.
 
 The Plan instrument is a route-shaped finite proxy over the legacy K2
 executable, not an implementation of the durable recipe DAG or its complete

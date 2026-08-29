@@ -81,6 +81,14 @@ class RefusedK3BSemanticProfileError(K3Error):
     pass
 
 
+class KindMismatchK3Error(K3Error):
+    """A formed coordinate belongs to the wrong typed semantic lane."""
+
+
+class RefusedK3AuthorityError(K3Error):
+    """A formed same-kind source or authority substitution is not authorized."""
+
+
 class InterfaceError(K3Error):
     pass
 
@@ -173,6 +181,124 @@ def _profile_imports(*profiles: object) -> tuple[object, ...]:
     )
 
 
+# This is the exact target Relations subject catalog.  Catalog routing is a
+# smaller claim than body support: this bounded instrument constructs only the
+# subset named by RELATIONS_BOUNDED_BODY_KINDS below.
+RELATIONS_SEMANTIC_SUBJECT_KINDS_V0 = (
+    "relations.artifact-comparison-question",
+    "relations.artifact-observation",
+    "relations.artifact-profile",
+    "relations.artifact-profile-count-question",
+    "relations.commitment-grounding",
+    "relations.correspondence-question",
+    "relations.definition",
+    "relations.definition-model-question",
+    "relations.grounding-equation",
+    "relations.instance",
+    "relations.interface",
+    "relations.plan-witness-binding",
+    "relations.protocol-binding",
+    "relations.refinement-question",
+    "relations.semantic-model",
+    "relations.source-binding-payload",
+    "relations.source-capability-requirement",
+    "relations.source-consumer",
+    "relations.source-no-policy",
+    "relations.source-policy-closure",
+    "relations.source-purpose",
+    "relations.transform",
+    "relations.value-bridge",
+)
+
+# These are module-declaration contract grammars, not RelationsId subjects.
+# Their bodies are committed through their owning SemanticModuleId; the
+# bounded fixture references below must therefore never advertise them as
+# supported Relations-profile subjects.
+RELATIONS_DECLARATION_CONTRACT_KINDS_V0 = (
+    "relations.artifact-fact",
+    "relations.artifact-format",
+    "relations.artifact-interpreter",
+    "relations.commitment-construction",
+    "relations.definition-language",
+    "relations.definition-model-law",
+    "relations.loss-export",
+    "relations.loss-source-premise",
+    "relations.model-assumption",
+    "relations.oracle-access-law",
+    "relations.private-transform-contract",
+    "relations.refinement-law",
+    "relations.satisfaction-evaluator",
+    "relations.value-bridge-law",
+)
+
+# Subject kinds for which this finite executable contains a bounded body
+# constructor.  This does not claim that each proxy body is the final durable
+# schema.  Absence means that only target-catalog routing is exercised here,
+# not formation, admission, or operational semantics.
+RELATIONS_BOUNDED_BODY_KINDS = frozenset(
+    {
+        "relations.definition",
+        "relations.grounding-equation",
+        "relations.interface",
+        "relations.plan-witness-binding",
+        "relations.protocol-binding",
+        "relations.source-binding-payload",
+        "relations.source-capability-requirement",
+        "relations.source-consumer",
+        "relations.source-no-policy",
+        "relations.source-policy-closure",
+        "relations.source-purpose",
+        "relations.transform",
+        "relations.value-bridge",
+    }
+)
+RELATIONS_UNIMPLEMENTED_TARGET_BODY_KINDS = frozenset(
+    RELATIONS_SEMANTIC_SUBJECT_KINDS_V0
+) - RELATIONS_BOUNDED_BODY_KINDS
+
+# These two names survive only inside bounded legacy fixture mechanics.  A run
+# value is an owner-local occurrence in the target, and the bridge image test
+# is represented by a declaration-owned portable algorithm.  Neither name is
+# a durable Relations semantic subject or declaration-contract kind.
+RELATIONS_BOUNDED_LEGACY_REFERENCE_KINDS = frozenset(
+    {
+        "relations.grounded-value-occurrence",
+        "relations.predicate",
+    }
+)
+_RELATIONS_BOUNDED_NONPROFILED_REFERENCE_KINDS = frozenset(
+    RELATIONS_DECLARATION_CONTRACT_KINDS_V0
+) | RELATIONS_BOUNDED_LEGACY_REFERENCE_KINDS
+
+
+def _validate_relations_catalog_partition() -> None:
+    semantic = RELATIONS_SEMANTIC_SUBJECT_KINDS_V0
+    declarations = RELATIONS_DECLARATION_CONTRACT_KINDS_V0
+    if semantic != tuple(sorted(semantic)) or len(semantic) != len(set(semantic)):
+        raise K3Error("Relations semantic subject catalog must be sorted and unique")
+    if declarations != tuple(sorted(declarations)) or len(declarations) != len(
+        set(declarations)
+    ):
+        raise K3Error(
+            "Relations declaration-contract catalog must be sorted and unique"
+        )
+    if set(semantic) & set(declarations):
+        raise K3Error(
+            "Relations subjects and module declaration contracts must be disjoint"
+        )
+    if not RELATIONS_BOUNDED_BODY_KINDS.issubset(semantic):
+        raise K3Error(
+            "bounded Relations body coverage must be a subset of the target catalog"
+        )
+    if RELATIONS_BOUNDED_LEGACY_REFERENCE_KINDS & (
+        set(semantic) | set(declarations)
+    ):
+        raise K3Error("legacy fixture references must stay outside both catalogs")
+
+
+_validate_relations_catalog_partition()
+
+
 @dataclass(frozen=True)
 class K3BSemanticProfiles:
     k2_profiles: object
@@ -197,6 +323,10 @@ class K3BSemanticProfiles:
             self.interface_plan
         ):
             raise K3Error("the Relations profile must import Interface/Plan")
+        if self.relations_correspondence.declaration_catalogs != k1.DatumSeq(()):
+            raise K3Error(
+                "the Relations profile-local declaration catalog must be exactly empty"
+            )
 
     @property
     def bundle(self) -> dict[object, object]:
@@ -254,50 +384,8 @@ def make_k3b_semantic_profiles(
         k1.Symbol("zkc.relations.correspondence"),
         0,
         _profile_imports(interface_plan),
-        tuple(
-            k1.Symbol(item)
-            for item in sorted(
-                (
-                    "relations.correspondence-question",
-                    "relations.definition",
-                    "relations.grounded-value-occurrence",
-                    "relations.grounding-equation",
-                    "relations.interface",
-                    "relations.loss-export",
-                    "relations.loss-source-premise",
-                    "relations.oracle-access-law",
-                    "relations.plan-witness-binding",
-                    "relations.predicate",
-                    "relations.protocol-binding",
-                    "relations.source-binding-payload",
-                    "relations.source-capability-requirement",
-                    "relations.source-consumer",
-                    "relations.source-no-policy",
-                    "relations.source-policy-closure",
-                    "relations.source-purpose",
-                    "relations.transform",
-                    "relations.value-bridge",
-                    "relations.value-bridge-law",
-                )
-            )
-        ),
-        _profile_catalog(
-            "relations.correspondence-declaration",
-            (
-                "binding-body-v0",
-                "bridge-body-v0",
-                "bridge-law-reference-v0",
-                "correspondence-question-body-v0",
-                "correspondence-owner-view-catalog-v0",
-                "correspondence-read-body-v0",
-                "grounding-body-v0",
-                "relation-definition-owner-view-catalog-v0",
-                "schnorr-relation-definition-body-v0",
-                "relation-interface-body-v0",
-                "relation-transform-body-v0",
-                "relations-source-authority-envelope-specialization-v0",
-            ),
-        ),
+        tuple(k1.Symbol(item) for item in RELATIONS_SEMANTIC_SUBJECT_KINDS_V0),
+        k1.DatumSeq(()),
         relations_law,
     )
     return K3BSemanticProfiles(
@@ -553,29 +641,19 @@ def _semantic_id(
         "pir.source-purpose",
     }:
         profile = profiles.interface_plan
-    elif subject_kind in {
-        "relations.correspondence-question",
-        "relations.definition",
-        "relations.grounded-value-occurrence",
-        "relations.grounding-equation",
-        "relations.interface",
-        "relations.loss-export",
-        "relations.loss-source-premise",
-        "relations.oracle-access-law",
-        "relations.plan-witness-binding",
-        "relations.predicate",
-        "relations.protocol-binding",
-        "relations.source-binding-payload",
-        "relations.source-capability-requirement",
-        "relations.source-consumer",
-        "relations.source-no-policy",
-        "relations.source-policy-closure",
-        "relations.source-purpose",
-        "relations.transform",
-        "relations.value-bridge",
-        "relations.value-bridge-law",
-    }:
+    elif subject_kind in RELATIONS_SEMANTIC_SUBJECT_KINDS_V0:
         profile = profiles.relations_correspondence
+    elif subject_kind in _RELATIONS_BOUNDED_NONPROFILED_REFERENCE_KINDS:
+        # The reference model has no SemanticModule carrier.  It represents a
+        # module declaration reference (and two explicitly legacy local
+        # fixture references) by an unprofiled typed content ID.  This keeps
+        # existing finite fixtures usable without falsely routing these names
+        # through RelationsProfileId.
+        return k1.content_id(
+            subject_kind,
+            k1.encode_datum(body),
+            semantic_regime=k1.SEMANTIC_REGIME_ID,
+        )
     elif subject_kind.startswith(("pir.", "relations.")):
         raise K3Error(
             "K3-B cannot identify an owner subject outside its exact profile catalog"
@@ -1109,10 +1187,33 @@ def _source_authority_id(
 
 
 def _source_authority_ref(identifier: object, what: str) -> object:
+    if type(identifier) is not k1.TypedContentId:
+        raise KindMismatchK3Error(
+            f"{what} must be one exact SemanticContentId coordinate"
+        )
     try:
-        return _id_datum(identifier)
-    except (K3Error, k1.ModelError, k1.CanonicalError) as error:
-        raise K3Error(f"{what} must be one exact typed content ID") from error
+        identifier.__post_init__()
+    except (k1.ModelError, k1.CanonicalError) as error:
+        raise K3Error(f"{what} is a malformed SemanticContentId coordinate") from error
+    if identifier.semantic_regime != k1.SEMANTIC_REGIME_ID:
+        raise KindMismatchK3Error(
+            f"{what} belongs to another semantic regime"
+        )
+    return k1.BytesValue(identifier.internal_reference())
+
+
+def _require_semantic_coordinate(
+    identifier: object,
+    expected_subject_kind: str,
+    what: str,
+) -> None:
+    _source_authority_ref(identifier, what)
+    assert type(identifier) is k1.TypedContentId
+    if identifier.subject_kind != expected_subject_kind:
+        raise KindMismatchK3Error(
+            f"{what} has subject kind {identifier.subject_kind!r}; "
+            f"expected {expected_subject_kind!r}"
+        )
 
 
 def _source_authority_role_id(
@@ -1128,13 +1229,7 @@ def _source_authority_role_id(
         k1.DatumRecord(
             (
                 (0, family),
-                (
-                    1,
-                    k1.DatumVariant(
-                        1,
-                        _source_authority_ref(identifier, what),
-                    ),
-                ),
+                (1, _source_authority_ref(identifier, what)),
             )
         ),
     )
@@ -1147,42 +1242,22 @@ def _source_authority_components(
     capability_family: str,
     source_body: object,
     manifest_body: object,
-    purpose_label: str,
-    consumer_id: object | None,
-    purpose_id: object | None,
+    consumer_coordinate: object,
+    purpose_coordinate: object,
 ) -> tuple[object, object, object, object, object, object]:
     family = k1.Symbol(_ascii(capability_family, "capability family"))
-    if consumer_id is None:
-        consumer_id = _source_authority_id(
-            profile,
-            f"{subject_namespace}.source-consumer",
-            k1.DatumRecord(
-                ((0, family), (1, k1.Symbol("bounded-downstream-consumer")))
-            ),
-        )
     owner_consumer_id = _source_authority_role_id(
         profile,
         f"{subject_namespace}.source-consumer",
         family,
-        consumer_id,
+        consumer_coordinate,
         "authority consumer",
     )
-    if purpose_id is None:
-        purpose_id = _source_authority_id(
-            profile,
-            f"{subject_namespace}.source-purpose",
-            k1.DatumRecord(
-                (
-                    (0, family),
-                    (1, k1.Symbol(_ascii(purpose_label, "authority purpose"))),
-                )
-            ),
-        )
     owner_purpose_id = _source_authority_role_id(
         profile,
         f"{subject_namespace}.source-purpose",
         family,
-        purpose_id,
+        purpose_coordinate,
         "authority purpose",
     )
     consumer_ref = _source_authority_ref(
@@ -1249,8 +1324,8 @@ def _source_authority_components(
         requirement_id,
     )
     return (
-        consumer_id,
-        purpose_id,
+        consumer_coordinate,
+        purpose_coordinate,
         payload_id,
         no_policy_id,
         closure_id,
@@ -1466,8 +1541,8 @@ _INTERFACE_VIEW_LIVE_ISSUANCES: dict[int, object] = {}
 
 def _interface_view_authority_components(
     view: ProtocolInterfaceCorrespondenceView,
-    consumer_id: object | None,
-    purpose_id: object | None,
+    consumer_coordinate: object,
+    purpose_coordinate: object,
     profiles: K3BSemanticProfiles,
 ) -> tuple[object, object, object, object, object, object]:
     return _source_authority_components(
@@ -1479,9 +1554,8 @@ def _interface_view_authority_components(
             ((0, _id_datum(view.protocol_interface_id, "pir.protocol-interface")),)
         ),
         _correspondence_manifest_body(view.requested_reads),
-        "consume-interface-correspondence-view",
-        consumer_id,
-        purpose_id,
+        consumer_coordinate,
+        purpose_coordinate,
     )
 
 
@@ -1494,10 +1568,12 @@ def issue_protocol_interface_correspondence_view(
     *,
     profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
     profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
-    consumer_id: object | None = None,
-    purpose_id: object | None = None,
+    consumer_id: object,
+    purpose_id: object,
 ) -> object:
     try:
+        _source_authority_ref(consumer_id, "authority consumer coordinate")
+        _source_authority_ref(purpose_id, "authority purpose coordinate")
         _require_supported_k3b_profile(
             profiles,
             profile_support,
@@ -1538,7 +1614,17 @@ def issue_protocol_interface_correspondence_view(
             k2.QualifiedViewOutcomeKind.MALFORMED,
             detail=(str(error),),
         )
+    except KindMismatchK3Error as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.KIND_MISMATCH,
+            detail=(str(error),),
+        )
     except InterfaceError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MALFORMED,
+            detail=(str(error),),
+        )
+    except K3Error as error:
         return k2.QualifiedViewOutcome(
             k2.QualifiedViewOutcomeKind.MALFORMED,
             detail=(str(error),),
@@ -1779,8 +1865,8 @@ _RELATIONS_VIEW_LIVE_ISSUANCES: dict[int, object] = {}
 
 def _relations_view_authority_components(
     view: RelationsCorrespondenceView,
-    consumer_id: object | None,
-    purpose_id: object | None,
+    consumer_coordinate: object,
+    purpose_coordinate: object,
     profiles: K3BSemanticProfiles,
 ) -> tuple[object, object, object, object, object, object]:
     return _source_authority_components(
@@ -1792,9 +1878,8 @@ def _relations_view_authority_components(
             ((0, _correspondence_manifest_body(view.requested_reads)),)
         ),
         _correspondence_manifest_body(view.requested_reads),
-        "consume-relations-correspondence-view",
-        consumer_id,
-        purpose_id,
+        consumer_coordinate,
+        purpose_coordinate,
     )
 
 
@@ -1804,10 +1889,12 @@ def issue_relations_correspondence_view(
     *,
     profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
     profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
-    consumer_id: object | None = None,
-    purpose_id: object | None = None,
+    consumer_id: object,
+    purpose_id: object,
 ) -> object:
     try:
+        _source_authority_ref(consumer_id, "authority consumer coordinate")
+        _source_authority_ref(purpose_id, "authority purpose coordinate")
         _require_supported_k3b_profile(
             profiles,
             profile_support,
@@ -1836,6 +1923,14 @@ def issue_relations_correspondence_view(
         canonical = tuple(sorted(set(manifest.relations), key=_relations_read_key))
         if canonical != manifest.relations:
             raise RelationError("Relations submanifest is not canonical and unique")
+        for read in manifest.relations:
+            if read.kind is not RelationsReadKind.RELATION_TRANSFORM:
+                raise RelationError("Relations submanifest has an unsupported read kind")
+            _require_semantic_coordinate(
+                read.coordinate,
+                "relations.transform",
+                "relation transform read coordinate",
+            )
         requested_transform_ids = {
             read.coordinate
             for read in manifest.relations
@@ -1872,12 +1967,22 @@ def issue_relations_correspondence_view(
             k2.QualifiedViewOutcomeKind.MALFORMED,
             detail=(str(error),),
         )
+    except KindMismatchK3Error as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.KIND_MISMATCH,
+            detail=(str(error),),
+        )
     except KeyError as error:
         return k2.QualifiedViewOutcome(
             k2.QualifiedViewOutcomeKind.MISSING_DEPENDENCY,
             detail=(error.args[0],),
         )
     except RelationError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.MALFORMED,
+            detail=(str(error),),
+        )
+    except K3Error as error:
         return k2.QualifiedViewOutcome(
             k2.QualifiedViewOutcomeKind.MALFORMED,
             detail=(str(error),),
@@ -2914,8 +3019,8 @@ def _relation_definition_manifest_body(
 
 def _relation_definition_view_authority_components(
     view: RelationDefinitionView,
-    consumer_id: object | None,
-    purpose_id: object | None,
+    consumer_coordinate: object,
+    purpose_coordinate: object,
     profiles: K3BSemanticProfiles,
 ) -> tuple[object, object, object, object, object, object]:
     return _source_authority_components(
@@ -2942,9 +3047,8 @@ def _relation_definition_view_authority_components(
             )
         ),
         _relation_definition_manifest_body(view.manifest),
-        "consume-relation-definition-view",
-        consumer_id,
-        purpose_id,
+        consumer_coordinate,
+        purpose_coordinate,
     )
 
 
@@ -2965,10 +3069,12 @@ def issue_relation_definition_view(
     *,
     profiles: K3BSemanticProfiles = K3B_SEMANTIC_PROFILES,
     profile_support: K3BSemanticProfileSupport = K3B_PROFILE_SUPPORT,
-    consumer_id: object | None = None,
-    purpose_id: object | None = None,
+    consumer_id: object,
+    purpose_id: object,
 ) -> object:
     try:
+        _source_authority_ref(consumer_id, "authority consumer coordinate")
+        _source_authority_ref(purpose_id, "authority purpose coordinate")
         _require_supported_k3b_profile(
             profiles,
             profile_support,
@@ -2994,13 +3100,28 @@ def issue_relation_definition_view(
         )
         if type(manifest) is not tuple or not manifest:
             raise RelationError("relation definition manifest must be nonempty")
-        if any(
-            type(item) is not RelationDefinitionFieldCoordinate
-            or item.view_coordinate != expected_view_coordinate
-            or type(item.field) is not RelationDefinitionField
-            for item in manifest
-        ):
-            raise RelationError("relation definition manifest selects another source")
+        for item in manifest:
+            if (
+                type(item) is not RelationDefinitionFieldCoordinate
+                or type(item.view_coordinate) is not RelationDefinitionViewCoordinate
+                or type(item.field) is not RelationDefinitionField
+            ):
+                raise RelationError("relation definition manifest is malformed")
+            _require_semantic_coordinate(
+                item.view_coordinate.definition_id,
+                "relations.definition",
+                "relation definition view coordinate",
+            )
+            _require_semantic_coordinate(
+                item.view_coordinate.semantic_profile_id,
+                "foundation.semantic-language-profile",
+                "relation definition profile coordinate",
+            )
+            if item.view_coordinate != expected_view_coordinate:
+                raise RefusedK3AuthorityError(
+                    "relation definition manifest substitutes another "
+                    "same-kind definition or profile"
+                )
         canonical = tuple(
             sorted(
                 set(manifest),
@@ -3026,7 +3147,17 @@ def issue_relation_definition_view(
             k2.QualifiedViewOutcomeKind.REFUSED,
             detail=(str(error),),
         )
-    except (MalformedK3BSemanticProfileError, RelationError) as error:
+    except RefusedK3AuthorityError as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.REFUSED,
+            detail=(str(error),),
+        )
+    except KindMismatchK3Error as error:
+        return k2.QualifiedViewOutcome(
+            k2.QualifiedViewOutcomeKind.KIND_MISMATCH,
+            detail=(str(error),),
+        )
+    except (MalformedK3BSemanticProfileError, RelationError, K3Error) as error:
         return k2.QualifiedViewOutcome(
             k2.QualifiedViewOutcomeKind.MALFORMED,
             detail=(str(error),),

@@ -55,10 +55,10 @@ RelationsProfile = {
   profile_family: "zkc.relations.correspondence",
   revision: 0,
   profile_imports: {PIRInterfacePlanProfileId},
-  supported_subject_kinds:
-    the closed Relations kind set in this page and protocol-correspondence.md,
-  declaration_catalogs: the inline Relations grammar/law catalog,
-  semantic_law_source: the exact Relations v0 law source
+  supported_subject_kinds: RelationsSemanticSubjectKindCatalogV0,
+  declaration_catalogs: [],
+  semantic_law_source: the exact Relations v0 law source, including
+    RelationsDeclarationContractKindCatalogV0 and its Section 2.4 body dispatch
 }
 
 RelationsProfileId =
@@ -68,10 +68,54 @@ RelationsId<K>(B, b: MetaValueV0) =
   ProfiledSemanticId<K>(B, RelationsProfileId, b)
 ~~~
 
-This page must still publish the complete owner-local
-`SemanticLanguageProfileBody`, including the exact catalog values and
-semantic-law-source bytes, together with its independently reconstructible
-full typed `RelationsProfileId`. The bounded executable fixture's deterministic
+`RelationsSemanticSubjectKindCatalogV0` is the following exact canonical
+sorted-unique sequence. It is the complete semantic-subject namespace selected
+by this target; prose mentions and executable fixtures cannot add entries to
+it:
+
+~~~text
+RelationsSemanticSubjectKindCatalogV0 = [
+  "relations.artifact-comparison-question",
+  "relations.artifact-observation",
+  "relations.artifact-profile",
+  "relations.artifact-profile-count-question",
+  "relations.commitment-grounding",
+  "relations.correspondence-question",
+  "relations.definition",
+  "relations.definition-model-question",
+  "relations.grounding-equation",
+  "relations.instance",
+  "relations.interface",
+  "relations.plan-witness-binding",
+  "relations.protocol-binding",
+  "relations.refinement-question",
+  "relations.semantic-model",
+  "relations.source-binding-payload",
+  "relations.source-capability-requirement",
+  "relations.source-consumer",
+  "relations.source-no-policy",
+  "relations.source-policy-closure",
+  "relations.source-purpose",
+  "relations.transform",
+  "relations.value-bridge"
+]
+~~~
+
+The six `relations.source-*` entries are ordinary Relations-profiled semantic
+subjects. Their exact bodies and formation laws are owned by
+[Protocol Correspondence, Section 4.3](protocol-correspondence.md#43-exact-relations-source-authority-subjects).
+They are not module declarations, live capabilities, receipts, or a second
+authority carrier. A kind absent from this sequence is unsupported as a
+Relations semantic subject; it cannot be admitted through a declaration
+catalog or an open-default body compiler.
+
+Relations selects no profile-local declarations: all 14 extensible contracts
+are module-owned `ModuleDeclarationRef` grammar and therefore belong to the
+Relations semantic law, not to Foundation's `ProfileDeclarationCatalog`
+field. This page must still publish the complete owner-local
+`SemanticLanguageProfileBody`, including the exact semantic-law-source bytes,
+together with its independently reconstructible full typed
+`RelationsProfileId`. The bounded executable fixture's deterministic
 profile object tests the selected topology, authentication, and rotation laws;
 it is evidence and does not own Relations meaning. Publication is required
 before any dependent K4 ID is treated as persistent and before K5 freeze.
@@ -157,21 +201,36 @@ Relations operations use the project qualified-outcome split:
 ~~~text
 Completed(Affirmative | Negative(exact disagreements, retained agreements))
 Unsupported(exact unsupported meaning)
-CannotAnswer(exact missing semantic input or read)
+MissingDependency(exact named durable preimage absent after its coordinate forms)
+CannotAnswer(exact supported formed operation lacks a required semantic
+             premise, live read, or authority)
+KindMismatch(exact formed coordinate has the wrong namespace, kind, regime,
+             arity, or ABI)
 Refused(exact authority or policy failure)
 Malformed(exact structural or framing defect)
 DeterministicLimitExceeded(exact exhausted K1 or owner-driver limit)
 CheckerFailure(exact operational failure; no semantic conclusion)
 ~~~
 
-Only a completed affirmative or negative creates an owner-defined checked-
-result payload embedded in exactly one K1 `PortableSourceAuthorityBinding` or
-`OwnerLocalSourceAuthorityBinding`, plus a fresh process-local capability.
-`ExactCheckedResultAuthorityBinding` is only the predicate that the Relations
-payload, K1 envelope, and live bearer match; it is not another carrier type.
-Stored IDs and result records are inert. They locate preimages but grant no
-authority. Missing support, missing secret material, an unread fact, an
-unavailable evaluator, or an execution limit is never negative truth.
+Only a completed affirmative or negative may create the operation's exact
+fresh process-local checked capability. Stored IDs and result records are
+inert. They locate preimages but grant no authority. Export through a Foundation
+`PortableSourceAuthorityBinding` or `OwnerLocalSourceAuthorityBinding` is a
+separate owner decision and forms only when an exact Relations source family,
+payload, manifest, policy closure, and requirement have been published. The
+five currently selected source families are closed in the companion
+[source-authority section](protocol-correspondence.md#43-exact-relations-source-authority-subjects);
+none is a generic checked-result family. Missing support, missing secret
+material, an unread fact, an unavailable evaluator, or an execution limit is
+never negative truth.
+
+The partition follows Foundation's shared meanings. An absent exact named
+profile, module, subject, declaration, or algorithm preimage after its typed
+coordinate forms is `MissingDependency`. A formed supported operation whose
+authenticated semantic inputs exist but whose exact premise, live value read,
+or live bearer cannot be obtained is `CannotAnswer`. Neither may be folded into
+the other, and a wrong typed coordinate is `KindMismatch` rather than either
+absence class. Each operation below fixes its own payload and precedence.
 
 This page relies on the generic owner admission, purpose-bound view,
 checked-result, and replay lifecycle defined by K1, with Project supplying only
@@ -191,6 +250,41 @@ typed-failure row unless the result is explicitly a tagged ordinary value.
 `Lift(DT)` denotes the unique outward K1 `ValueType` obtained by resolving that
 declaration-local type through its exact admitted owner module; it is a
 derived function, not a caller-supplied cast.
+
+The declaration-kind namespace is this second exact canonical sorted-unique
+sequence:
+
+~~~text
+RelationsDeclarationContractKindCatalogV0 = [
+  "relations.artifact-fact",
+  "relations.artifact-format",
+  "relations.artifact-interpreter",
+  "relations.commitment-construction",
+  "relations.definition-language",
+  "relations.definition-model-law",
+  "relations.loss-export",
+  "relations.loss-source-premise",
+  "relations.model-assumption",
+  "relations.oracle-access-law",
+  "relations.private-transform-contract",
+  "relations.refinement-law",
+  "relations.satisfaction-evaluator",
+  "relations.value-bridge-law"
+]
+
+set(RelationsSemanticSubjectKindCatalogV0)
+  intersect set(RelationsDeclarationContractKindCatalogV0) = {}
+~~~
+
+The disjointness equation is an admission invariant, not documentation
+advice. A declaration kind is resolved only at an authenticated module
+ordinal and has no `RelationsId<K>` body grammar. A semantic-subject kind is
+formed only under `RelationsProfileId` and cannot be supplied as a module
+declaration. Moving a name between these catalogs changes Relations language
+meaning and therefore requires a profile/law revision; a consumer cannot
+reinterpret one namespace as the other. This 14-kind sequence and the dispatch
+below are committed through `semantic_law_source`; they are not entries in the
+profile's empty `declaration_catalogs` field.
 
 ~~~text
 DefinitionLanguageContractV0 = {
@@ -495,13 +589,37 @@ every and only the requested coordinates in canonical order. Missing,
 duplicate, reordered, interior, wrong-definition, or wrong-profile coordinates
 do not form an affirmative view.
 
+Definition-view failure classification has this precedence. A malformed
+coordinate or manifest carrier is `Malformed`. A structurally formed
+coordinate in the wrong namespace, subject kind, or semantic regime is
+`KindMismatch`. A formed same-kind definition or Relations-profile coordinate
+that differs from the admitted source is an authenticated-owner substitution
+and is `Refused`. Duplicate, reordered, interior, or extra selectors are
+`Malformed` after coordinate formation. A wrong-kind coordinate therefore
+does not fall through to an absent-source result, and a same-kind substitution
+is not mislabeled as a framing defect.
+
+~~~text
+IssueRelationDefinitionView(
+  exact admitted RelationDefinition,
+  exact RelationDefinitionReadManifest,
+  exact consumer: RelationsDownstreamCoordinate,
+  exact purpose: RelationsDownstreamCoordinate)
+  -> CorrespondenceOwnerViewIssueOutcome<RelationDefinitionView>
+~~~
+
 `IssueRelationDefinitionView` authenticates and admits the exact definition,
 derives the leaves from that owner object, and returns a K1
 `OwnerLocalSourceAuthorityBinding` plus a fresh identical-bearer capability
-bound to the exact consumer and purpose. The view, binding, capability, and
-issuance aggregate are process-local and nonserializable. Equal values, a
-reconstructed binding, a copied capability, another profile, or another
-definition cannot authorize consumption.
+bound to the exact consumer and purpose. The binding must satisfy the companion
+`RelationsSourceAuthorityBindingMatches` predicate for family
+`"relation-definition-view"`, source
+`DefinitionViewSource(view.coordinate)`, and
+manifest `DefinitionViewFields(view.manifest)`; its local coordinate is the
+identical issued view object. The view, binding, capability, and issuance
+aggregate are process-local and nonserializable. Equal values, a reconstructed
+binding, a copied capability, another profile, or another definition cannot
+authorize consumption.
 
 The selected Schnorr pressure case uses one admitted definition-language
 payload with the exact typed leaves
@@ -2438,35 +2556,54 @@ LossySourceOccurrence(equations,request) =
   request.invocation.operands[
     GroundingOperandSlotForSource(LossySourceSelector(equations,request))]
 
-K4UnresolvedLossySourceAuthority<Owner,SourceFamily>(b) =
-  an as-yet-unselected owner predicate over exactly one K1
-    PortableSourceAuthorityBinding or OwnerLocalSourceAuthorityBinding;
-  it has no canonical body, ID, constructor, or authority of its own
-
 LossySourceAuthorityBinding =
     RelationInstanceFieldSource {
       endpoint:
         RelationPublicValue | RelationPhaseValue |
         RelationOraclePublicBindingValue,
       instance_id: RelationInstanceId,
+      consumer: RelationsDownstreamCoordinate,
+      purpose: RelationsDownstreamCoordinate,
       authority:
-        exact K1 binding satisfying
-          K4UnresolvedLossySourceAuthority<Relations,RelationInstance>
+        exact PortableSourceAuthorityBinding satisfying
+          RelationsSourceAuthorityBindingMatches(
+            "relation-instance-field",
+            InstanceSource(instance_id),
+            InstanceField(endpoint),
+            consumer,
+            purpose,
+            authority)
     }
   | PrivateWitnessFieldSource {
       endpoint: RelationWitnessValue,
+      instance_id: RelationInstanceId,
       assignment_occurrence: PrivateWitnessAssignment,
+      consumer: RelationsDownstreamCoordinate,
+      purpose: RelationsDownstreamCoordinate,
       authority:
         exact OwnerLocalSourceAuthorityBinding satisfying
-          K4UnresolvedLossySourceAuthority<Relations,PrivateWitnessAssignment>
+          RelationsSourceAuthorityBindingMatches(
+            "private-witness-field",
+            PrivateWitnessSource(instance_id),
+            PrivateWitnessField(endpoint),
+            consumer,
+            purpose,
+            authority)
     }
   | ArtifactObservationFieldSource {
       endpoint: ArtifactValue,
       observation_id: RelationArtifactObservationId,
+      consumer: RelationsDownstreamCoordinate,
+      purpose: RelationsDownstreamCoordinate,
       authority:
-        exact K1 binding satisfying
-          K4UnresolvedLossySourceAuthority<Relations,
-                                                  RelationArtifactObservation>
+        exact PortableSourceAuthorityBinding satisfying
+          RelationsSourceAuthorityBindingMatches(
+            "artifact-observation-field",
+            ArtifactObservationSource(observation_id),
+            ArtifactObservationField(endpoint),
+            consumer,
+            purpose,
+            authority)
     }
 
 LossySourceBinding =
@@ -2528,6 +2665,8 @@ CheckedLossyUsePremiseSet = {
 CheckLossyUsePremises(
   exact LossyUseSelection,
   matching fresh affirmative authority for its exact bridge_use_set,
+  exact source consumer and purpose RelationsDownstreamCoordinate values
+    fixed by the consuming operation,
   exact LossyUsePremiseRequestSet,
   exact LossyGroundingAdmissionSet and matching fresh admission capabilities,
   exact LossyBridgeSemanticAdmissionSet and matching fresh admission
@@ -2548,26 +2687,38 @@ CheckedLossyUseConsumerSource = {
 CheckLossyUseAtConsumerSource(
   exact overall-Affirmative CheckedLossyUsePremiseSet and fresh capability,
   exact lossy BridgeUseCoordinate in that set,
+  exact source consumer and purpose RelationsDownstreamCoordinate values
+    fixed by this consumer,
   exact consumer-issued LossySourceAuthorityBinding and matching fresh source
     capability)
   -> Qualified<CheckedLossyUseConsumerSource>
 ~~~
 
-`K4UnresolvedLossySourceAuthority` explicitly replaces the earlier schematic
-uses of `ExactSourceAuthorityBinding` and
-`ExactAdmittedSubjectAuthorityBinding` in this lossy-use lane. K1 defines no
-such extra records. K4 must select the exact Relations owner payload,
-requirement, policy-closure derivation, live-bearer equality, and portability
-predicate for the instance and artifact-observation arms before these two
-operations activate. This page does not guess whether either arm is portable.
-The private-witness arm is necessarily owner-local because
-`PrivateWitnessAssignment` is an `OwnerLocalOccurrence`; equal secret values or
-a reconstructed envelope cannot change that constraint.
+The three arms select the exact Relations source-authority vocabulary from
+[Protocol Correspondence, Section 4.3](protocol-correspondence.md#43-exact-relations-source-authority-subjects).
+There is no `ExactSourceAuthorityBinding`,
+`ExactAdmittedSubjectAuthorityBinding`, or lossy-specific carrier beyond the
+one Foundation envelope and the written owner predicate.
 
-The bounded K3-E P01/Schnorr witness did not execute this lossy-use lane, so
-this explicit deferral does not weaken its joined result. Native FRI/IOR and
-lossy-projection pressure in K4 must close the predicate before use, and K5
-cannot freeze this broader Relations surface while it remains unresolved.
+The instance arm is portable because an admitted `RelationInstanceId`
+content-addresses all of its public, phase, and Oracle-public-binding values;
+the payload additionally commits to the one exact typed endpoint. The artifact
+arm is portable because an admitted `RelationArtifactObservationId`
+content-addresses the complete expectation-free observation, while the
+payload commits to the selected artifact endpoint. Both portable bindings are
+inert: cold use must reauthenticate the complete subject and obtain a fresh
+matching owner capability. The private-witness arm is necessarily owner-local
+because `PrivateWitnessAssignment` is an `OwnerLocalOccurrence`; its semantic
+payload commits only to the instance and typed witness endpoint, while the Foundation
+local coordinate and live capability retain the exact assignment occurrence,
+secret-value capability, and process generation. Equal secret values or a
+reconstructed envelope cannot change that constraint.
+
+This selection closes the semantic portability and body-shape question for
+these three source families. It does not claim executable implementation or
+native protocol coverage of the lossy-use lane. The bounded Schnorr witness
+did not execute this lane; native IOP/IOR, folding, and concrete lossy-
+projection pressure remain required before a broader evidence or freeze claim.
 
 For an admitted lossy bridge `b`, `LossPremiseInputType(b)` and
 `LossPremiseAnchorType(b)` are exactly the lifted `premise_input_type` and
@@ -2595,6 +2746,10 @@ admitted declarations must equal the references resolved from that key; every
 map is extra-key-free, and each admission result has a separately matching
 fresh capability. Neither an ID nor the bridge-use-set result substitutes for
 these semantic admission inputs.
+The consuming operation, not the source caller, fixes the exact downstream
+consumer and purpose coordinates. Every source arm and live capability in the
+request set must bind those identical coordinates; a mixed set or caller-
+selected substitute is `Refused` before premise evaluation.
 The completed result's `bindings` map is copied mechanically from the request
 map over that same exact key domain. It therefore retains the equation, output,
 and source anchor for Affirmative and Negative alike; disagreement tags cannot
@@ -2625,15 +2780,18 @@ source cannot anchor the use.
 `GroundingOperandSource` selected by that anchor's slot in the request's
 `GroundingInvocation`; it is inert and grants no authority. The checker
 combines it with the source owner's exact K1 binding satisfying the selected
-K4 lossy-source predicate and matching fresh capability to create the live
+`RelationsSourceAuthorityBindingMatches` predicate and matching fresh
+`RelationsLiveSourceAuthorityMatches` capability to create the live
 `LossySourceBinding`, retaining the exact endpoint, owner, occurrence,
 capability family, and process generation.
 The endpoint selects exactly one `LossySourceAuthorityBinding` arm. Its
 `instance_id`, `assignment_occurrence`, or `observation_id` must equal the
 corresponding `RelationInstance`, `WitnessOccurrence`, or
-`ArtifactObservation` operand returned above, and its endpoint including the
-typed selector must equal `use.left_endpoint`. Any cross-arm or field mismatch
-is `Refused`, not a value disagreement.
+`ArtifactObservation` operand returned above; for the witness arm the exact
+owner-associated assignment body must also name that `instance_id`. Its
+endpoint including the typed selector must equal `use.left_endpoint`. Any
+cross-arm, occurrence, instance, or field mismatch is `Refused`, not a value
+disagreement.
 This is an independently explicit source-occurrence context, so a guarded
 target need not have executed merely to form the conservative static-site
 check. A later run-grounded consumer may use it only after requiring complete
@@ -2676,7 +2834,7 @@ no quantitative authority. Exported canonical values alone are inert.
 `CheckLossyUseAtConsumerSource` is the only consumer join. It retrieves the
 live `LossySourceBinding` for the exact coordinate from the overall-Affirmative
 capability, authenticates the consumer's exact K1 binding under the same
-selected K4 lossy-source predicate, and requires complete binding equality plus
+Relations source-authority predicate, and requires complete binding equality plus
 equality of the two live associations: owner, selected endpoint/field
 coordinate, local occurrence where applicable, process generation, capability
 family/ABI, and authority lifetime. A mismatch is `Refused`, a missing or
@@ -3017,6 +3175,9 @@ dispatch; it is an owner grammar, not another durable object or registry:
 "relations.commitment-construction"      -> CommitmentConstructionContractV0
 
 RelationsDeclarationBodyV0<K>(x) = RB<selected complete schema>(x)
+
+keys(RelationsDeclarationContractCatalogV0) =
+  set(RelationsDeclarationContractKindCatalogV0)
 ~~~
 
 The `version` field is field `0` in every declaration schema and must encode
@@ -3082,33 +3243,44 @@ The selected model rejects:
 - hardcoding one universal artifact-fact list; and
 - storing full relation artifacts or private assignments in Protocol identity.
 
-At its stated boundary, K3-B is selected, statically closed, and bounded-
-complete. Its finite pressure cases and static/invariant instruments exercised
-the selected seam shapes, identities, types, authority boundaries, and refusal
-classes. They did not execute every full native protocol contract or every live
+At its stated boundary, the Relations algebra and its bounded pressure result
+are selected, but the domain is not yet eligible for a persistent-profile or
+semantic-freeze claim. Its finite pressure cases and static/invariant
+instruments exercised the selected seam shapes, identities, types, authority
+boundaries, and refusal classes. They did not execute every full native
+protocol contract, the new lossy source-authority constructors, or every live
 capability path, and they are not evidence of those stronger claims.
 
-The remaining work is therefore post-K3-B evidence or dependent-owner freeze
-work:
+The remaining work is exact profile publication, implementation/evidence, and
+dependent-owner freeze work:
 
-1. K4 owns native P02 FRI/IOR validation of the exact Oracle
-   publication/query/answer target union and commitment-grounding sources, and
-   native P09 Nova/folding validation of the ordered claim-instance and
-   transform occurrence graph.
-2. Bounded K3-E exercised only the selected finite P01 relation/Plan grounding
-   path. It did not close live `PlanWitnessSurface` extraction and substituted-
-   Plan controls, causal `RelationRunView` issuance and grounding, or exemplar
-   derived-exhaustive and certificate-backed bridge-law bases without an
-   ambient checker registry. Their named PIR and Relations owners retain the
-   semantic contracts; owner-carrier implementation correspondence and broader
-   portfolio evidence remain later-stage obligations. K4 pressures them with
-   native P02/P09 cases, and K5 cannot freeze a broader claim without the
-   corresponding independently checked evidence.
-3. K3-C selected the initial relation-bound and Fresh-to-Fiat--Shamir Analysis
-   profiles and their exact source/support bindings without restating relation
-   facts. Broader refinement, commitment, and lossy-projection property
-   profiles remain later Analysis work; the concrete `sha256-216` reduction
-   and quantitative price are still open.
+1. The exact semantic-subject and declaration-kind catalogs, source-authority
+   body schemas, and lossy-source portability choices are selected, but the
+   complete six-field `SemanticLanguageProfileBody`, exact semantic-law-source
+   bytes, and independently reconstructible full typed
+   `RelationsProfileId` remain a publication obligation. No persistent-ID or
+   semantic-freeze claim is made before that publication.
+2. The source-authority selection has not yet acquired executable constructor,
+   cold-replay, stale-generation, cross-field, cross-consumer, or
+   cross-purpose evidence across all three lossy source arms. Such evidence
+   may falsify these laws; it cannot redefine them silently.
+3. Native FRI/IOR validation remains required for the exact Oracle
+   publication/query/answer target union and commitment-grounding sources;
+   native Nova/folding validation remains required for the ordered
+   claim-instance and transform occurrence graph.
+4. The bounded integrated Schnorr witness exercises only one finite
+   relation/Plan grounding path. It does not close live `PlanWitnessSurface`
+   extraction and substituted-Plan controls, causal `RelationRunView` issuance
+   and grounding, or exemplar derived-exhaustive and certificate-backed
+   bridge-law bases without an ambient checker registry. Their named PIR and
+   Relations owners retain the semantic contracts; native IOP/IOR and folding
+   pressure, owner-carrier implementation correspondence, and independent
+   freeze evidence remain obligations.
+5. The current Analysis target selects the initial relation-bound and
+   Fresh-to-Fiat--Shamir profiles and their exact source/support bindings
+   without restating relation facts. Broader refinement, commitment, and
+   lossy-projection property profiles remain open; the concrete `sha256-216`
+   reduction and quantitative price are also open.
 
 These gates may falsify an implementation or expose a specification defect,
 but their pending execution does not make the bounded K3-B selection

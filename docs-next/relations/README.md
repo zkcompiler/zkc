@@ -46,6 +46,19 @@ later questions automatically.
   grounding equations, and commitment grounding; and
 - the closed correspondence-question algebra and its checked results.
 
+The exact namespace is one 23-entry semantic-subject catalog. It is disjoint
+from the 14-entry module declaration-contract catalog; neither prose nor an
+executable fixture can add a kind or move one between the two. The literal
+semantic catalog and still-open profile-preimage boundary are in
+[Relation Model, Section 2.1](relation-model.md#21-k1-identity-language-profile-and-values),
+and the declaration catalog is in
+[Section 2.4](relation-model.md#24-closed-declaration-contract-catalog).
+The 14 declarations are module-owned grammar that the final Relations semantic
+law source must commit; the profile-local `declaration_catalogs` field is
+exactly empty. The bounded executable independently enumerates all 14 kinds,
+but its placeholder law bytes neither publish nor authenticate their complete
+dispatch grammar.
+
 Semantic proposition identity is separate from validation basis. Certificates,
 assumption evidence, exhaustive-check controls, evaluator charging contracts,
 request limits, and replay inputs do not enter a proposition or bridge identity.
@@ -105,12 +118,29 @@ Run grounding consumes only a PIR-issued public occurrence view produced by a
 live causal execution or an affirmative exact replay. A raw record, equal value,
 caller-built tuple, or stored result ID cannot mint that view.
 
+Lossy-source authority now has one closed Relations specialization of the Foundation
+envelope. Public `RelationInstance` fields and durable
+`RelationArtifactObservation` fields use inert portable bindings keyed by their
+exact subject IDs; a `PrivateWitnessAssignment` field is owner-local because
+the assignment is a fresh nonserializable occurrence. All three additionally
+bind the exact typed field, consumer, purpose, no-policy declaration, closure,
+and fresh identical-bearer requirement. Equal values and reconstructed
+envelopes grant no authority. This is a semantic target decision, not a claim
+that the full lossy lane has executable or protocol-family evidence.
+
 ## Outcomes and authority
 
 A well-formed completed disagreement is Negative. `Unsupported`,
-`CannotAnswer`, `Refused`, `Malformed`, `DeterministicLimitExceeded`, and
-`CheckerFailure` are not Negative. Only a completed result creates a fresh
-process-local checked capability; portable IDs and reports are inert.
+`MissingDependency`, `CannotAnswer`, `KindMismatch`, `Refused`, `Malformed`,
+`DeterministicLimitExceeded`, and `CheckerFailure` are not Negative.
+`MissingDependency` is an absent exact named durable preimage after its typed
+coordinate forms; `CannotAnswer` is a supported formed operation unable to
+obtain a required premise, live read, or authority. Only a completed result
+creates a fresh process-local checked capability; portable IDs and reports are
+inert. The five selected source families have exact bodies in
+[Protocol Correspondence, Section 4.3](protocol-correspondence.md#43-exact-relations-source-authority-subjects).
+There is no open family or generic checked-result source binding; exporting a
+new family requires a Relations profile/law revision.
 
 Relations has no OIR dependency in K3-B. Future verifier-to-relation descent
 remains unavailable until OIR defines and admits its exact source result.
@@ -157,18 +187,27 @@ remains normative until explicit consolidation and cutover.
 
 ## Remaining gates
 
-- K3-C has selected bounded Analysis games, theorem-applicability rules, and
+- The exact 23/14 catalogs and six source-authority body schemas are selected,
+  but the complete six-field `SemanticLanguageProfileBody`, exact semantic-
+  law-source bytes, and independently reconstructible
+  `RelationsProfileId` remain unpublished. No persistent-ID or semantic-freeze
+  claim follows from the catalog closure alone.
+- The instance/artifact portable and private-witness owner-local source laws
+  are now specified. Executable correspondence for those constructors, native
+  protocol pressure, cold replay, and negative authority tests remain evidence
+  obligations.
+
+- The bounded Analysis target selects games, theorem-applicability rules, and
   quantitative contracts that consume these exact sources without restating
-  them. Broader property families and concrete theorem discharge remain later
-  Analysis work.
-- K3-D selected OIR-specific purpose views and the projection identity split;
-  `PlanWitnessSurface` remains Relations-specific and grants no OIR authority.
-  Full OIR syntax and protocol-family coverage remain later work.
-- Native P02 FRI/IOR and P09 Nova/folding remain executable portfolio pressure
-  for commitment/opening and relation-changing reduction paths.
-- K3-E has completed bounded integrated deduplication and joined read closure
-  for the selected P01 relation/Plan grounding path. It did not exercise the
-  full bridge-law portfolio or general relation execution. K4 owns native
-  P02/P09 and broader portfolio pressure; K5 owns independent freeze, and
-  later stages own normative encodings, implementation correspondence, and
-  migration.
+  them. Broader property families and concrete theorem discharge remain open.
+- The bounded OIR projection uses OIR-specific purpose views and a separate
+  projection identity; `PlanWitnessSurface` remains Relations-specific and
+  grants no OIR authority. Full OIR syntax and protocol-family coverage remain
+  open.
+- Native FRI/IOR and Nova/folding cases remain required executable pressure for
+  commitment/opening and relation-changing reduction paths.
+- The integrated Schnorr witness exercises bounded deduplication and joined
+  read closure for one relation/Plan grounding path. It does not exercise the
+  full bridge-law portfolio or general relation execution. Broader portfolio
+  pressure, independent freeze review, normative encodings, implementation
+  correspondence, and migration remain open.
