@@ -1527,7 +1527,8 @@ independent evaluator budget yields no semantic completion.
 Foundation requires consumers to preserve the following distinctions but does
 not define one universal `Result`, payload enum, diagnostic vocabulary, or
 multi-defect precedence for every domain. Section 7.2 fixes only the selected
-portable-evaluation contract's precedence:
+portable-evaluation contract's precedence. Each domain selects the subset its
+operations expose and owns those operations' exact payloads and precedence:
 
 - semantic `Success` and typed `DomainFailure` are completed ABI values;
 - `Unsupported` means an exact same-kind, same-regime authenticated basis,
@@ -1535,6 +1536,11 @@ portable-evaluation contract's precedence:
   including an absent primitive provider or cost rule;
 - `MissingDependency` means a required exact named preimage is absent after its
   typed coordinate forms;
+- `CannotAnswer` means an exact supported, structurally formed operation cannot
+  obtain a required semantic premise, live read, or authority needed to answer
+  its question. It is neither the absence of a named durable preimage nor a
+  negative semantic conclusion, and therefore is distinct from
+  `MissingDependency`;
 - `KindMismatch` means an exact formed typed subject, reference, or header has
   the wrong namespace, kind, regime, arity, or exact ABI coordinate;
 - invalid carrier, noncanonical bytes, or failed structural formation before
@@ -2158,14 +2164,14 @@ completion-maximum=MaximumCompletionSize:=17+max({MaxDatumBytes(success)}-union-
 completion-schema=RootVariant([(0,success)]-concatenated-with-[(i+1,failures[i].payload-type)-for-0<=i<length(failures)])-shape;its-schema-structure-and-Worst-measure-must-be-admitted-and-MaximumCompletionSize<=1048576
 completion-envelope-nonauthority=the-derived-tagged-variant-is-only-the-exact-ABI-envelope-for-one-derived-function-type;it-is-not-a-universal-Foundation-result-type
 completion-preflight=MaximumCompletionSize-is-checked-against-maximum-completion-bytes-before-first-term-entry;actual-complete-envelope-size-is-charged-on-completion;equal-to-limit-is-allowed
-operational-noncompletion=unsupported,missing-dependency,kind-mismatch,malformed,refused,deterministic-limit-exhaustion,and-checker-or-conformance-failure-are-distinct-from-Success-and-DomainFailure
-operational-outcome-partition=Unsupported,MissingDependency,KindMismatch,Malformed,Refused,DeterministicLimitExceeded,and-CheckerFailure-are-pairwise-distinct;MissingDependency-means-a-required-exact-named-preimage-is-absent-after-typed-coordinate-formation;KindMismatch-means-an-exact-formed-typed-subject,reference,or-header-names-the-wrong-namespace,kind,regime,arity,or-exact-ABI-coordinate-under-the-authenticated-basis;Unsupported-means-an-exact-same-kind-and-same-regime-authenticated-basis,subject,or-request-pair-lacks-evaluator-selected-interpretation-or-coverage,including-an-absent-primitive-provider-or-cost-rule;Malformed-means-an-invalid-carrier,forbidden-subclass,noncanonical-bytes,failed-asserted-ID-and-body-authentication,or-failed-structural-formation-before-a-closed-semantic-predicate-is-defined;Refused-means-an-authenticated-structurally-formed-candidate-reached-and-failed-a-supported-closed-resolution,typing,owner-admission,or-compatibility-predicate,including-a-present-work-rule-incompatible-with-the-exact-call-ABI;DeterministicLimitExceeded-means-a-declared-finite-request,closure,or-evaluation-bound-is-exhausted-before-the-associated-work-and-produces-no-semantic-completion;CheckerFailure-means-an-evaluator-advertised-or-selected-support-entry,derived-ABI,provider-postcondition,or-request-local-typed-ID-binding-is-internally-inconsistent;strict-input-decode-failure-is-Malformed-and-post-decode-owner-admission-failure-is-Refused
+operational-noncompletion=unsupported,missing-dependency,cannot-answer,kind-mismatch,malformed,refused,deterministic-limit-exhaustion,and-checker-or-conformance-failure-are-distinct-from-Success-and-DomainFailure
+operational-outcome-partition=Unsupported,MissingDependency,CannotAnswer,KindMismatch,Malformed,Refused,DeterministicLimitExceeded,and-CheckerFailure-are-pairwise-distinct;MissingDependency-means-a-required-exact-named-preimage-is-absent-after-typed-coordinate-formation;CannotAnswer-means-an-exact-supported-and-structurally-formed-operation-cannot-obtain-a-required-semantic-premise,live-read,or-authority-needed-to-answer-and-is-neither-a-missing-named-durable-preimage-nor-a-negative-semantic-conclusion;KindMismatch-means-an-exact-formed-typed-subject,reference,or-header-names-the-wrong-namespace,kind,regime,arity,or-exact-ABI-coordinate-under-the-authenticated-basis;Unsupported-means-an-exact-same-kind-and-same-regime-authenticated-basis,subject,or-request-pair-lacks-evaluator-selected-interpretation-or-coverage,including-an-absent-primitive-provider-or-cost-rule;Malformed-means-an-invalid-carrier,forbidden-subclass,noncanonical-bytes,failed-asserted-ID-and-body-authentication,or-failed-structural-formation-before-a-closed-semantic-predicate-is-defined;Refused-means-an-authenticated-structurally-formed-candidate-reached-and-failed-a-supported-closed-resolution,typing,owner-admission,or-compatibility-predicate,including-a-present-work-rule-incompatible-with-the-exact-call-ABI;DeterministicLimitExceeded-means-a-declared-finite-request,closure,or-evaluation-bound-is-exhausted-before-the-associated-work-and-produces-no-semantic-completion;CheckerFailure-means-an-evaluator-advertised-or-selected-support-entry,derived-ABI,provider-postcondition,or-request-local-typed-ID-binding-is-internally-inconsistent;strict-input-decode-failure-is-Malformed-and-post-decode-owner-admission-failure-is-Refused
 host-failure=process-death,unrecordable-allocation-failure,or-unavailable-device-may-produce-no-record-and-is-never-a-semantic-completion
 nonclaims=no-universal-result-type-or-resource-or-judgment;no-security-property;no-distribution-property;no-constant-time-property;no-provider-conformance;no-unconditional-hash-binding-or-collision-resistance;no-protocol-relation-analysis-compiler-or-endpoint-admission
 ```
 
-The byte string has length `45,669` and SHA-256 digest
-`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`.
+The byte string has length `45,933` and SHA-256 digest
+`f603cee6ce7acc601ca92a35b3de3787dcd9b9ea47a85486c8f4fb2732212658`.
 The digest here is only an exact transcription check; descriptor field `1`
 contains the bytes themselves.
 
@@ -2185,11 +2191,11 @@ SemanticRegimeDescriptorV0 = R {
 }
 ```
 
-It has `length(M(SemanticRegimeDescriptorV0)) = 46,606`; those encoded
+It has `length(M(SemanticRegimeDescriptorV0)) = 46,870`; those encoded
 descriptor bytes have SHA-256 digest
-`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`,
+`f9a91f67c10a1efd92e40f6f7fb31cdb1ab37524a8ed961ac4b66124d1eeba06`,
 and its prior-meta `SemanticRegimeId` digest is
-`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`.
+`0c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef`.
 The embedded law source, not an external appendix fiat, authenticates the
 selected semantic law. This appendix reproduces that law and expands its
 notation for readers; it cannot assign extra meaning to the same descriptor

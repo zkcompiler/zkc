@@ -5209,6 +5209,39 @@ class SemanticFailureAbiTest(unittest.TestCase):
         )
 
 
+class SharedNoncompletionVocabularyTest(unittest.TestCase):
+    def test_cannot_answer_is_distinct_and_never_completion(self) -> None:
+        shared_noncompletion = (
+            model.Outcome.UNSUPPORTED,
+            model.Outcome.MISSING_DEPENDENCY,
+            model.Outcome.CANNOT_ANSWER,
+            model.Outcome.KIND_MISMATCH,
+            model.Outcome.MALFORMED,
+            model.Outcome.REFUSED,
+            model.Outcome.DETERMINISTIC_LIMIT_EXCEEDED,
+            model.Outcome.CHECKER_FAILURE,
+        )
+
+        self.assertEqual(len(shared_noncompletion), len(set(shared_noncompletion)))
+        self.assertEqual(
+            set(model.Outcome),
+            {model.Outcome.COMPLETED, *shared_noncompletion},
+        )
+        self.assertNotIn(model.Outcome.COMPLETED, shared_noncompletion)
+        self.assertIsNot(
+            model.Outcome.CANNOT_ANSWER,
+            model.Outcome.MISSING_DEPENDENCY,
+        )
+        self.assertEqual(model.Outcome.CANNOT_ANSWER.value, "CannotAnswer")
+        self.assertIn(
+            b"CannotAnswer-means-an-exact-supported-and-structurally-formed-"
+            b"operation-cannot-obtain-a-required-semantic-premise,live-read,or-"
+            b"authority-needed-to-answer-and-is-neither-a-missing-named-durable-"
+            b"preimage-nor-a-negative-semantic-conclusion",
+            model.SEMANTIC_CORE_LAW_SOURCE,
+        )
+
+
 class EvaluationContractAndLimitTest(unittest.TestCase):
     def transcript_case(
         self,

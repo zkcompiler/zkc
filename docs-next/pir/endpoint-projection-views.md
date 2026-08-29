@@ -164,7 +164,7 @@ atomic coordinates, root optionality, policy, receipts, and selector
 subroutines.
 
 `K3DProjectionV0` accepts only the selected v0 `SemanticRegimeId`
-`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`
+`0c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef`
 and its exact K1 `SemanticLanguageProfileId` import chain:
 
 ```text

@@ -177,7 +177,7 @@ HashSuiteId digest       = c24b580c31bf26bf314e746c87a93cb7ff61d3c33880fbd0ad8e3
 Their canonical descriptor bodies and the exact regime-root descriptor are in
 `cases/requests.jsonl`; `cases/expected.jsonl` freezes their computed IDs. The
 selected root has digest
-`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`
+`0c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef`
 and the following identity-bearing shape:
 
 ```text
@@ -201,8 +201,8 @@ Record {
 `EXACT_SEMANTIC_CORE_LAW_SOURCE` is an ASCII octet string with a final LF. It
 is stored in full, as lowercase hexadecimal, in the `id-regime-root` request;
 that frozen request is the exact oracle input rather than a prose
-reconstruction. The installed source is 45,669 octets and has SHA-256 digest
-`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`.
+reconstruction. The installed source is 45,933 octets and has SHA-256 digest
+`f603cee6ce7acc601ca92a35b3de3787dcd9b9ea47a85486c8f4fb2732212658`.
 It fixes the declaration-reference grammar and resolution law, declaration-
 local type lifting, root and module value-domain support boundaries, exact
 primitive declaration binding, derived direct primitive references,
@@ -210,9 +210,9 @@ primitive declaration binding, derived direct primitive references,
 the exact standalone-semantic-kind catalog and one-body-mode law, the
 semantic-language-profile and effective-context envelopes, the inert
 source-authority envelope, term typing and evaluation, charging, and
-validation precedence. The complete encoded regime descriptor is 46,606
+validation precedence. The complete encoded regime descriptor is 46,870
 octets and has SHA-256 digest
-`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`.
+`f9a91f67c10a1efd92e40f6f7fb31cdb1ab37524a8ed961ac4b66124d1eeba06`.
 Because these exact octets are in the root preimage, they are authenticated
 laws rather than prose names that an implementation may reinterpret.
 
@@ -236,7 +236,7 @@ Record {
 Its fixture has no imports, exact semantic-failure and semantic-primitive
 declaration catalogs, and a Unit domain payload. Its ordinary semantic-module
 digest is
-`933f1998db8b6b37fa4fc77c06845e598e71bcd8f42bdada494e0df27b965052`.
+`f73da3d143f0f4f43c7ed8f2949cb8e04623f889c542bd4b4688459db9e220be`.
 The oracle computes an identity over those exact bytes. It does not validate
 declaration meaning, import-DAG admission, or exact-used closure.
 

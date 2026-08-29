@@ -48,6 +48,10 @@ It is not the place for every concept that several documents mention.
 - reusable typed subject-reference, closure-manifest, identity-effect,
   capability-effect, outcome, and replay mechanisms whose semantics are shown
   to be identical across domains;
+- the shared meanings of `Unsupported`, `MissingDependency`, `CannotAnswer`,
+  `KindMismatch`, `Malformed`, `Refused`, `DeterministicLimitExceeded`, and
+  `CheckerFailure`, while each domain owns the subset it exposes, its exact
+  payloads, and its operation-local precedence;
 - the minimal inert source-authority envelope that preserves exact
   owner-profiled references, owner/family agreement, and same-regime shape
   without interpreting or transporting authority;
@@ -178,5 +182,5 @@ These are topics, not directories to create in advance.
 - What minimum registry envelope, if any beyond exact supplied profile and
   dependency bundles, remains independent of the concrete vocabularies and
   admission predicates it cites?
-- What exact shared vocabulary enumerates lifecycle and qualified-outcome terms
-  without collapsing domain-local result variants?
+- Which additional lifecycle terms, if any, have genuinely identical semantics
+  across domains without collapsing domain-local result variants?

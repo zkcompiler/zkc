@@ -23,21 +23,21 @@ Run the bounded gate from the repository root:
 python3 -B evaluation/k1-executable-foundations/run.py --check
 ```
 
-The final bounded gate runs 103 reference/parity tests and 26
-independent-oracle tests over 24 frozen oracle vectors: 129/129 pass. The
-reference/parity lane contains 101 direct `reference_model` tests, one
+The final bounded gate runs 104 reference/parity tests and 26
+independent-oracle tests over 24 frozen oracle vectors: 130/130 pass. The
+reference/parity lane contains 102 direct `reference_model` tests, one
 record-by-record cross-check, and one exact durable-law transcription check.
 The record cross-check recomputes exact shared positive
 constructions and checks bounded contrasts or declared projections for the
 remaining records; it is not an equivalent reference implementation of every
 raw oracle request. The package covers exact finite fixtures only.
 
-The frozen semantic-core law source is exactly 45,669 bytes with SHA-256
-`96bd8574d064e06a4d379c0a4afd82d526186231c3f092f143bf66e482789cfc`.
-The complete encoded regime descriptor is exactly 46,606 bytes with SHA-256
-`01c0112364714a764d2e287c8b710022d6c3791e34dd7cc5101cfb91293dcf4f`.
+The frozen semantic-core law source is exactly 45,933 bytes with SHA-256
+`f603cee6ce7acc601ca92a35b3de3787dcd9b9ea47a85486c8f4fb2732212658`.
+The complete encoded regime descriptor is exactly 46,870 bytes with SHA-256
+`f9a91f67c10a1efd92e40f6f7fb31cdb1ab37524a8ed961ac4b66124d1eeba06`.
 Its semantic-regime digest is
-`a36c5cc0d431a16bd6e96e933101e8f2d20ad5f4f3a770327ddb6362f071203c`.
+`0c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef`.
 
 ## Evidence boundary
 
@@ -63,10 +63,10 @@ The instrument demonstrates, over its frozen cases:
   `BoundedIterate` constructor;
 - state-passing transcript hashing, bounded rejection search, explicit lossy
   projection, and semantic partiality;
-- pairwise separation of unsupported, missing-dependency, kind-mismatch,
-  malformed, refused, deterministic-limit, checker-failure, and completed
-  domain-failure outcomes, including strict-decode versus post-decode owner
-  admission and structural versus typing failure;
+- pairwise separation of unsupported, missing-dependency, cannot-answer,
+  kind-mismatch, malformed, refused, deterministic-limit, checker-failure, and
+  completed domain-failure outcomes, including strict-decode versus
+  post-decode owner admission and structural versus typing failure;
 - rejection of one failure declaration carrying conflicting payload types;
 - inert portable authority-envelope formation, owner/family and same-regime
   checks, field sensitivity, and refusal to serialize, hash, copy, deep-copy,
