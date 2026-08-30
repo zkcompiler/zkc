@@ -5,7 +5,8 @@
 > **Design maturity:** Reconstruction with selected Stage 1--4A semantic,
 > transition, Protocol, canonical PIR, Relations, Analysis, and Compiler
 > backbone, bounded consumer integration, and one retained native FRI/IOR
-> conservative extension; remaining portfolio and freeze pending
+> conservative extension, with commitment-opening and complete-argument
+> pressure absorbed; accumulation/recursion, holdouts, and freeze pending
 > **Provisional owner:** `project`
 > **Authority:** Non-normative. This page is a reconstruction and design
 > surface for `docs-next/`. The current specifications, status, architecture,
@@ -160,6 +161,19 @@
 > correspondence, and all cryptographic properties remain with Plan,
 > Relations, and Analysis. No generic queryable object or universal batch-
 > opening construction is selected.
+
+> **Complete-argument organization update — 2026-08-31:** Source-grounded
+> reconstruction of PLONK/Plookup, Groth16, Bulletproofs, and two recent lookup
+> variants retains one flat finite verifier Core rather than adding an
+> `Argument` or runtime child-Core subject. Protocol-produced proof fields keep
+> their causal message occurrences; Interface and OIR may project them into one
+> package without changing transcript order. Pairing-only and inner-product
+> checks remain ordinary Core checks unless they match an exact commitment-
+> opening claim/evidence profile. A zero-challenge Core has its ordinary Fresh
+> Protocol but cannot form the canonical-framed Fiat--Shamir construction,
+> because no challenge would be transformed. Public prover-only setup material
+> exposes a Plan lifecycle question that is intentionally co-designed with the
+> next accumulation package before any dependent identity is rotated.
 
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
@@ -922,15 +936,14 @@ with candidate target contracts promoted at package resolution under
 satisfaction/correspondence boundary, and the four PIR semantic pages refined
 for owner-created source bindings and qualified outcomes. Those historical
 package results do not establish current integrated closure; the design program
-owns that gate. K3-B subsequently reconciled the dependent Interface/Plan,
-carrier, and Relations targets to K1/K2. K3-C reconciled the bounded minimum
-Analysis profiles to those exact sources without reopening K2 or activating
-Stage 4B, while leaving AFK family transport unanswered unless independent
-proof authority supplies its uniform all-`n` source capability. K3-D has now
-selected the bounded endpoint-projection contract without activating Stage 4B;
-K3-E has reclosed the joined finite boundary. K4 protocol-portfolio pressure
-is next; K5 independent freeze remains pending, and this architecture is not
-yet frozen or normative.
+owns that gate. Subsequent integration reconciled dependent Interface/Plan,
+carrier, Relations, bounded Analysis, and endpoint-projection contracts while
+leaving AFK family transport unanswered unless independent proof authority
+supplies its uniform all-`n` source capability. Joined Schnorr, native FRI/IOR,
+commitment-opening, and complete-argument pressure have now reclosed their
+declared bounded scopes. Accumulation/recursion and holdout pressure come next;
+independent freeze remains pending, and this architecture is not yet frozen or
+normative.
 
 ## 12. Deliberate non-decisions
 

@@ -33,6 +33,15 @@ coexist for one Protocol. Substituting either cannot change Core occurrences,
 visibility, transcript framing, challenge interpretation, checks, claims,
 reductions, terminals, accepted language, or any Protocol-only result.
 
+A user-facing proof package is not another PIR subject. The Interface may
+expose several protocol-produced slots, each with its one exact Core origin;
+OIR or Realization may place those slots in one record or byte string under an
+exact projection and codecs. Physical co-location never merges semantic
+message occurrences or moves a publication across a Challenge. A protocol
+with several causal prover messages therefore remains several Core messages
+even when its endpoint transports one proof blob, while a genuinely
+zero-challenge one-message protocol may use one record-valued message.
+
 This page consumes, without redefining:
 
 - K1 `PriorMetaAuthenticationBasis`, `SemanticContentId<K>`, `ValueType`,

@@ -1632,6 +1632,16 @@ The binding may cite only K2 source coordinates already owned by the admitted
 Protocol. It cannot create a second transcript declaration, claim flow,
 oracle lifecycle, effect, or terminal meaning.
 
+Binding a Protocol to a `RelationDefinition` does not establish that a Core
+`PublicParameter`, verification key, proving parameter, or preprocessed value
+was generated from that definition or from the same setup occurrence. When
+both compared values and an exact deterministic relation are structurally
+available, a purpose-specific grounding equation may ask that narrower
+question. Randomized setup provenance, common-origin claims, ceremony honesty,
+trapdoor destruction, and theorem applicability remain Analysis/Evidence
+premises; labels, equal digests, or successful Protocol execution cannot
+manufacture them.
+
 Its `relation_interfaces` set equals every and only Interface reached from its
 edges, recipes, transforms, and commitment material. Every grounding run slot
 names the binding's exact `ProtocolId`. Missing, unused, extra, wrong-Protocol,

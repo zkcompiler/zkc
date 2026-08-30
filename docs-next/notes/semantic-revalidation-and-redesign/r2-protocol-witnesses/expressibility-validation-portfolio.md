@@ -4,8 +4,9 @@
 > **State:** Selected portfolio; repaired/refrozen `P01` is retained at T3
 > after exact-snapshot independent re-review; `P02` native FRI/IOR is retained
 > at T3 as a two-lane `ConservativeExtension`; `V01` is retained at T3 as a
-> source-shaped operational sibling; and the `V02`/`P05` commitment cluster is
-> closed at T2 with no activated security theorem
+> source-shaped operational sibling; the `V02`/`P05` commitment cluster is
+> closed at T2; and the `P06`--`P08`/`V05` complete-argument cluster is closed
+> at its assigned T1/T2 depths with no activated security theorem
 > **Authority:** None. This page selects research pressure and evidence depth;
 > it does not define target semantics, supported protocols, theorem
 > applicability, implementation conformance, or the final v0 boundary.
@@ -184,6 +185,23 @@ endpoint support is active. The packed result makes no RAM-consistency or PCS-
 support claim. The assigned algebraic constructive depth and duplex executable
 depth are complete for these four entries.
 
+### 4.3.2 Current complete-argument disposition
+
+The source-grounded complete-argument package retains exactly one primary
+classification for each case:
+
+| Case | Classification | Assigned depth |
+|---|---|---:|
+| `P06` PLONK + Plookup | `ProfileOrModule` | T2 |
+| `P07` Groth16/QAP | `Native` | T2 |
+| `P08` Bulletproofs range + IPA | `Native` | T2 |
+| `V05` LogUp-GKR + Logup* | `Native` | T1 |
+
+The public prover-parameter Plan lane is a deferred cross-case lifecycle
+candidate, not a second `P07` classification and not a source-expressibility
+repair. It is routed into the accumulation package because that package has
+independently exposed a post-challenge Plan-finalization question.
+
 ### 4.4 Holdout and frontier cases
 
 Only the named selection rationale is visible before freeze; detailed encoding
@@ -247,13 +265,15 @@ Cases proceed by semantic dependency rather than publication date:
 8. **R2 convergence:** classify all cases, retain obstructions and extension
    boundaries, and derive only the bounded R3 research questions they require.
 
-The current cursor is step 4. The retained `P02` result is a fixed baseline,
+The current cursor is step 5. The retained `P02` result is a fixed baseline,
 not work to repeat. The completed `V02`/`P05` package selected one narrow
 verifier-side setup/claim/evidence profile, repaired Oracle authentication to
 consume it, and kept the materially different KZG operations separate. The
-next large package studies complete argument organizations (`P06`, `P07`,
-`P08`, then `V05`) and reopens the commitment boundary only if that integrated
-pressure exposes a contradiction.
+[complete-argument package](complete-argument-organizations/README.md) then
+retained a flat Core and Interface/OIR proof projection, rejected a universal
+Argument root, made the canonical FS use boundary nonempty, and routed one
+public prover-parameter candidate into the next Plan co-design. The next package
+studies accumulation and recursion (`P09`, `V04`, then `P10`).
 
 A cluster may stop early when a fundamental obstruction invalidates the model.
 Repair and refreeze precede later dependent cases. Independent families should

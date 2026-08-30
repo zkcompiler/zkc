@@ -33,6 +33,14 @@ polynomial or Oracle material, relation grounding, a setup ceremony, or a
 cryptographic property. Those remain with Plan or a construction-specific
 producer adapter, Relations, Evidence, and Analysis respectively.
 
+The mathematical word “commitment” is not sufficient to use this profile. The
+attachment forms only for the exact verifier shape defined here: ordered
+commitment/query/asserted-answer claims, explicit public evidence, public
+verifier setup, and an exact bounded verification algorithm. A pairing-only
+proof equation, vector-commitment residual, or algebraic check without that
+claim/evidence split remains an ordinary Core check. Dummy query, answer, or
+evidence fields may not be introduced merely to reuse this profile.
+
 ## 2. Semantic profile and declaration intake
 
 For one exact Foundation `PriorMetaAuthenticationBasis B`, this owner consumes
@@ -384,6 +392,25 @@ Each setup binding resolves to a `PublicBindingDecl` whose class is exactly
 not substitute. Every setup role appears once and no other binding enters the
 packed assignment.
 
+For this page, verifier-public provenance is the following owner-derived
+predicate over the admitted Core's Section 11 dependency graph:
+
+```text
+PublicVerificationValue(C,v) :=
+  every node in
+    {ValueProducerNode_C(v)} union
+    TransitivePredecessors(PCGraph(C), ValueProducerNode_C(v))
+  has Section-11 class in {StaticPublic, PublicHistory}
+```
+
+Every claim commitment, query, asserted answer, context value, and opening-
+evidence value named by a use must satisfy `PublicVerificationValue` in
+addition to ordinary type and availability checks. Consequently, a value
+whose inclusive dependency closure contains a `VerifierPrivateInput`, invalid
+effect, or unsupported module edge cannot enter this public-verification
+profile. A Prover publication remains eligible as `PublicHistory`; the rule
+does not require the value to have existed before execution.
+
 For each group, the named `DerivedValueDecl`s use the exact profile packers and
 precisely the listed input `ValueRef`s in written order. The named checks use
 the exact profile check algorithms and inputs:
@@ -400,7 +427,7 @@ opening_check.inputs =
 Both checks must occur after all their inputs and must be required true by
 every reachable accepting terminal. A `ChallengeOutput` context role resolves
 to the output of exactly one Core Challenge occurrence. An `AnyPublicValue`
-role must be in the Core's public dependency closure at its use boundary.
+role must satisfy `PublicVerificationValue`.
 
 Admission substitutes the exact group coordinates into every profile schedule
 constraint. For a value atom, its boundary is the Core occurrence that first
@@ -431,9 +458,11 @@ and checks, in order:
 
 1. same basis, regime, profile import, and exact ID/body equations;
 2. exact setup-role totality, class, type, and packer wiring;
-3. exact group cardinality, value types, and claim order;
-4. context role types and source requirements;
-5. evidence type and availability;
+3. exact group cardinality, value types, claim order, and verifier-public
+   provenance of every claim coordinate;
+4. context role types, source requirements, and verifier-public provenance of
+   every context coordinate;
+5. evidence type, availability, and verifier-public provenance;
 6. exact packer algorithms, inputs, outputs, and bounds;
 7. exact group and opening check algorithms and inputs;
 8. every profile-local schedule constraint after exact coordinate
@@ -459,7 +488,9 @@ CommitmentOpeningUseDefect =
   | SetupTypeMismatch | SetupPackerMismatch
   | ContextRoleMismatch | ContextSourceMismatch | ContextPackerMismatch
   | ClaimCountMismatch | ClaimTypeMismatch | ClaimOrderMismatch
-  | ClaimPackerMismatch | EvidenceTypeMismatch
+  | ClaimPublicClosureFailure | ClaimPackerMismatch
+  | ContextPublicClosureFailure
+  | EvidenceTypeMismatch | EvidencePublicClosureFailure
   | ClaimGroupCheckMismatch | OpeningCheckMismatch
   | ScheduleConstraintMismatch | CausalityViolation | AcceptingClosureFailure
   | IntrinsicBoundMismatch
@@ -496,14 +527,19 @@ profile unless the value was intentionally embedded as a Core constant.
 Ceremony identity, contribution history, updateability, entropy, and trapdoor
 destruction are not implied by a canonical setup value.
 
-Public replay uses only the admitted Core invocation, complete public record,
-exact setup view, and the algorithms already required by Core replay. It
-reruns all packers and both checks. It needs no private polynomial, complete
-logical Oracle, commitment randomness, opening randomness, setup trapdoor,
-ProverPlan, prior receipt, or security theorem.
+The opening use's verification subcomputation is publicly replayable from its
+admitted Core invocation, selected public coordinates, exact setup view, and
+the named algorithms. It reruns all packers and both checks. That
+subcomputation needs no private polynomial, commitment randomness, opening
+randomness, setup trapdoor, ProverPlan, prior receipt, or security theorem.
+This local result does not weaken ordinary whole-Core replay requirements: a
+Core containing unrelated confidential logical-Oracle access or another
+capability-dependent effect still needs the exact capabilities required by
+`ReplayRun`.
 
-Core execution and replay are already authoritative for the check results.
-This page introduces no parallel run receipt or producer-owned proof record.
+Core execution and its qualified replay remain authoritative for the check
+results. This page introduces no parallel run receipt or producer-owned proof
+record.
 
 ## 6. Exact profile families
 

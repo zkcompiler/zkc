@@ -57,8 +57,10 @@ for relation-witness attachment. Minimum Analysis consumers, purpose-specific
 endpoint views, and the joined owner-view/read/authority boundary have also
 been reconciled without changing the verifier-observable Core or the
 Fresh/Fiat--Shamir factorization. This bounded closure does not freeze the
-integrated kernel: broader protocol-family pressure and independent freeze
-review remain pending.
+integrated kernel. Complete-argument pressure retains the same flat Core,
+routes physical proof packages through Interface/OIR, and makes canonical FS
+inapplicable to zero-challenge Cores. Accumulation/recursion, holdouts, and
+independent freeze review remain pending.
 
 ## Owns
 
@@ -276,7 +278,8 @@ projection, and the joined owner-view/read/authority paths at their stated
 resolutions. It includes exact static views, an affirmative checked FS
 construction and issued FS view, an Interface correspondence view, and an
 affirmative `CheckedPlanRealizes` path. It is not yet a protocol-portfolio
-freeze. Later work includes:
+freeze. Complete-argument research has retained the flat Core and proof-
+package projection boundary; later work includes:
 
 - broader Analysis theorem profiles, independent proof authority, checkers,
   and producers beyond the selected finite applicability profile;

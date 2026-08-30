@@ -348,6 +348,16 @@ consumer first reauthenticates and readmits serialized subjects through its own
 evaluator; an ID or record never transfers another evaluator's admission
 authority.
 
+A zero-challenge Core is valid and has the ordinary `Fresh` Protocol; its
+resolver is never called. No separate `Direct` or `Native` interpretation tag
+exists. A Fiat--Shamir family may form only when its exact construction
+profile has at least one declared Challenge occurrence to transform. The
+canonical-framed profile enforces this directly, while the duplex-sponge
+profile already requires a positive source-round count. Transcript-like proof
+hashing or audit logging over a zero-challenge Core is not a
+`ChallengeInterpretation` and must
+remain with Interface, OIR, or Evidence.
+
 ## 4. Parties, inputs, values, and scopes
 
 ### 4.1 Parties and external sources

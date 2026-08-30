@@ -26,7 +26,10 @@ also retained as a two-lane conservative extension with only deterministic
 source-schedule correspondence. A subsequent source-grounded commitment
 package selects a shared verifier-side setup/claim/evidence profile, repairs
 Oracle evidence coverage, and keeps four KZG opening/aggregation shapes
-distinct. The remaining protocol portfolio and independent freeze are pending;
+distinct. Complete-argument pressure then retains one flat verifier Core,
+routes proof packaging through Interface/OIR, and repairs canonical
+Fiat--Shamir exact use for zero-challenge Cores without adding an Argument
+root. Accumulation/recursion, holdouts, and independent freeze remain pending;
 the semantic kernel is not frozen and full Stage 4B remains inactive.
 
 ## Where current truth lives
@@ -190,8 +193,11 @@ causal confidential Relations connection without changing the central
 factorization. Polynomial-commitment pressure then added a verifier-side
 commitment-opening profile, explicit public setup assignment, and
 claim/evidence separation while rejecting a universal batching abstraction.
-The remaining portfolio and independent freeze are still pending; none of
-these results is semantic freeze or Stage 4B activation.
+Complete-argument pressure subsequently rejected a universal Argument root,
+retained flat finite execution, and made canonical FS require at least one
+declared Challenge occurrence.
+Accumulation/recursion, holdouts, and independent freeze are still pending;
+none of these results is semantic freeze or Stage 4B activation.
 
 The first semantic reconstruction result is the
 [Candidate v0 Semantic Architecture](project/v0-semantic-architecture.md). It

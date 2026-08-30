@@ -306,7 +306,12 @@ TranscriptConstruction = {
 ```
 
 `challenge_rules` is in ascending `ChallengeRef` order and is total over every
-Core challenge. The canonical body is in Appendix A:
+Core challenge. The Core challenge sequence must be nonempty. An empty map over
+a zero-challenge Core is not a Fiat--Shamir construction: it transforms no
+public coin while adding transcript initialization, absorption, resource, and
+noncompletion behavior. Proof hashing or audit logging without a transformed
+challenge belongs to Interface, OIR, or Evidence rather than
+`ChallengeInterpretation`. The canonical body is in Appendix A:
 
 ```text
 TranscriptConstructionId =
@@ -913,8 +918,10 @@ substitute another evaluator. It proceeds in this order:
    application-domain and sampling-failure declarations, algorithm IDs/bodies,
    evaluation contracts, primitives, and exact-used module closure in one K1
    ledger;
-2. validate Appendix A shape, bounds, ordered total challenge-rule map, exact
-   references, and no unknown fields;
+2. validate Appendix A shape and bounds, require the supplied Core to contain
+   at least one Challenge, then require an ordered total nonempty challenge-
+   rule map over every and only those challenges, exact references, and no
+   unknown fields;
 3. require exact equality between the candidate `core_id` and the supplied
    admitted Core;
 4. require `PublicCoinEligible(core) = true`, including the empty intersection
@@ -966,7 +973,9 @@ AdmitFS(
 ```
 
 requires `T.core_id = C.id` and rechecks the exact retained public-coin and
-module-support results. It also requires literal equality of the evaluator
+module-support results. It also requires `C.challenges` to be nonempty; a
+zero-challenge Core remains Fresh-valid but cannot form a canonical-framed FS
+Protocol. It also requires literal equality of the evaluator
 identities retained by `C` and `T`; a same-ID construction admitted elsewhere
 is cold-reauthenticated and readmitted before use. The returned FS Protocol
 handle retains that evaluator identity. It forms:

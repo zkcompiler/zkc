@@ -68,11 +68,11 @@ sequencing. This is a documentation dependency, not a semantic dependency.
 - [Documentation Manifest](documentation-manifest.md)
 
 The candidate v0 architecture began as the first semantic reconstruction
-result in this tree and now integrates the selected Stage 1 subject, Stage 2
-transition, Stage 3 Protocol-and-Relations backbone, Stage 4A
-Analysis-and-Compiler architecture, bounded K3-D endpoint projection, and the
-bounded K3-E joined closure of their exact profile, view, read, and authority
-boundaries. It remains a
+result in this tree and now integrates the selected subject, transition,
+Protocol-and-Relations, Analysis-and-Compiler, bounded endpoint-projection,
+and joined profile/view/read/authority backbones. Later protocol pressure has
+retained native FRI/IOR, explicit commitment-opening semantics, and flat
+complete-argument organization without claiming portfolio closure. It remains a
 non-normative decision surface: it records the reconstructed current model,
 the selected target spine, later-stage redesign questions, and the work
 sequence required before specification migration.
@@ -145,8 +145,10 @@ Schnorr witness reclosed that seam with the preceding owners. Native FRI/IOR is
 now retained as a separate two-lane conservative extension: a checked
 logical-Oracle-to-committed-Core construction precedes the same-Core
 Fresh/Fiat--Shamir split, while Analysis properties remain separate. The
-remaining protocol portfolio and independent freeze remain later, and Stage 4B
-remains inactive.
+commitment and complete-argument packages further select exact verifier-side
+opening profiles, flat finite Cores, and Interface/OIR proof packaging while
+rejecting universal batching and Argument roots. Accumulation/recursion,
+holdouts, and independent freeze remain later, and Stage 4B remains inactive.
 
 Future durable documents may include a charter, current status, roadmap, and
 decision index. They will be created only when content is migrated and their

@@ -11,11 +11,10 @@
 > joined Schnorr path are complete at their declared bounded scopes. The native
 > FRI/IOR deep case is also retained as a two-lane
 > `ConservativeExtension`: an early-terminated control and a frozen exact
-> three-fold/scalar-terminal control remain distinct. The remaining protocol
-> and variant portfolio and independent semantic freeze are pending. The
-> Oracle/polynomial-commitment cluster is complete at constructive
-> architecture depth and advances the portfolio to complete argument
-> organizations. Stage 4B remains inactive.
+> three-fold/scalar-terminal control remain distinct. The Oracle/polynomial-
+> commitment and complete-argument clusters are complete at their assigned
+> constructive depths. Accumulation/recursion, holdouts, and independent
+> semantic freeze remain pending. Stage 4B remains inactive.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -109,6 +108,11 @@ below are reader cross-references rather than inventory edges.
   reconstructs the binary-field IOPCS and distinct KZG opening/aggregation
   shapes, selects a verifier-side setup/claim/evidence profile, repairs Oracle
   evidence coverage, and records the next portfolio boundary.
+- [Complete Argument Organizations](r2-protocol-witnesses/complete-argument-organizations/README.md)
+  reconstructs PLONK/Plookup, Groth16, Bulletproofs, and recent lookup variants,
+  retains a flat verifier Core and Interface/OIR proof projection, repairs the
+  zero-challenge Fiat--Shamir exact-use boundary, and routes one Plan lifecycle
+  candidate into accumulation research.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

@@ -4,8 +4,9 @@
 > **State:** Active R2 program; repaired `FRI-Grind-1` is closed at its finite
 > source-residual scope, the differentiated protocol-expressibility portfolio
 > is selected, the Schnorr/Sigma and native FRI/IOR deep anchors are retained
-> at their exact bounded scopes, and Oracle/polynomial-commitment semantics are
-> closed at architecture-level constructive depth
+> at their exact bounded scopes, Oracle/polynomial-commitment semantics are
+> closed at architecture-level constructive depth, and complete-argument
+> organizations are closed at their assigned T1/T2 depths
 > **Authority:** None. A witness can falsify a candidate or recover a
 > requirement; it cannot ratify target semantics, a theorem, implementation
 > conformance, or migration policy.
@@ -82,6 +83,7 @@ elsewhere are cross-references, not additional inventory ownership.
 | [Algebraic Interaction and Reduction](algebraic-interaction-and-reduction/README.md) | Completed constructive cross-case package for classical Sumcheck, layered GKR, stateful duplex Fiat--Shamir, and the packed Boolean GKR variant; it preserves the flat Core, classifies the first, second, and fourth cases as native, and routes one local Fiat--Shamir construction extension. |
 | [Duplex-Sponge Transcript Construction](duplex-sponge-transcript-construction/README.md) | Completed source, architecture, identity, execution, and falsification package for the sibling transcript-construction extension routed by the algebraic-interaction research. |
 | [Oracle and Polynomial-Commitment Semantics](oracle-and-polynomial-commitment-semantics/README.md) | Completed source-grounded comparison of the binary-field IOPCS and four KZG opening/aggregation shapes; selects a narrow verifier profile, repairs Oracle evidence coverage, and rejects a universal batch-opening abstraction. |
+| [Complete Argument Organizations](complete-argument-organizations/README.md) | Completed PLONK/Plookup, Groth16, Bulletproofs, and lookup-variant pressure; retains flat Core and proof projection, repairs zero-challenge FS use, and routes a Plan lifecycle candidate forward without adding an Argument root. |
 | [Native FRI/IOR End-to-End Validation Plan](native-fri-ior-validation-plan.md) | Ready work contract for source reconstruction, candidate comparison, executable oracle/query/opening pressure, and cross-domain convergence. |
 | [Native FRI/IOR Source Dossier](native-fri-ior-source-dossier.md) | Primary-source reconstruction, commitment/Fiat--Shamir separation, implementation-profile comparison, and exact finite-profile selection. |
 | [Native FRI/IOR Provisional Architecture Decision](native-fri-ior-architecture-decision.md) | Compared alternatives, selected native/committed/work-augmented construction chain, required semantic extensions, and executable reversal conditions. |
@@ -241,11 +243,13 @@ anchor through a combined packet whose early-terminated and exact classical
 lanes remain separately identified. Its deterministic Algorithm 1 schedule
 correspondence is closed at the fixed-coin structural boundary; cross-family
 closure and every property claim remain open. The Oracle and polynomial-
-commitment cluster is now also closed at T2. It retains the executable native
-FRI/IOR case as its regression anchor, adds no new cryptographic evaluator, and
-advances the portfolio to complete argument organizations. Recent design-set
-variants and withheld cold cases prevent the portfolio from collapsing into a
-list of canonical examples.
+commitment cluster is now also closed at T2. The complete-argument cluster is
+closed at the assigned T1/T2 depths: it retains the flat Core, treats proof
+packages as Interface/OIR projections, repairs canonical FS exact use for
+zero-challenge Cores, and routes the public prover-parameter question forward.
+It adds no new cryptographic evaluator and advances the portfolio to
+accumulation and recursion. Recent design-set variants and withheld cold cases
+prevent the portfolio from collapsing into a list of canonical examples.
 
 ## 6. Status and non-claims
 
@@ -286,10 +290,11 @@ target, closes Gate 6. Full diagnostic reachability remains a nonblocking
 hygiene queue. Separate lifecycle and provenance cold rechecks pass on the final
 identity, so P01 is retained at T3; the Phase B decision owns the exact gate
 states. The broader candidate and holdout set is selected by the adjacent
-portfolio, but no protocol case beyond the two retained anchors has begun
-merely because cross-cutting probes exist. The native FRI/IOR case's exact
-classification, source boundary, absorption destinations, and reopening
-conditions are owned by its
+portfolio. Cases through the complete-argument cluster have now reached their
+assigned research depth, but only the two named anchors carry T3 executable
+evidence; cross-cutting probes do not promote the others. The native FRI/IOR
+case's exact classification, source boundary, absorption destinations, and
+reopening conditions are owned by its
 [final retention record](native-fri-ior-final-classification-and-retention.md).
 
 For P01 specifically, precommitment-before-challenge resolution holds only
