@@ -226,10 +226,11 @@ Promoting either family therefore requires an explicit profile/catalog
 revision rather than treating the control as an active judgment.
 
 Source-grounded constructive encodings of classical Sumcheck, modern layered
-GKR, a packed Boolean GKR variant, and ideal-overwrite-duplex Fiat--Shamir now
+GKR, a packed Boolean GKR variant, and duplex-sponge Fiat--Shamir now
 add further pressure outside the active profile set. They establish that the
 first three interactions can be represented structurally and that the literal
-duplex transform needs a distinct PIR construction profile. They do not add a
+duplex-sponge transform needs a distinct PIR construction alternative. They do
+not add a
 Sumcheck or GKR soundness family, a GKR property-composition rule, a word-RAM
 cost judgment, a state-restoration premise, a duplex theorem schema, or a
 Fresh-to-duplex transport result. Every such conclusion remains

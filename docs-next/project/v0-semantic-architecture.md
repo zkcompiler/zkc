@@ -34,13 +34,13 @@
 > owns that live gate. Stage 4B remains unactivated.
 
 > **Algebraic-interaction research update — 2026-08-31:** Primary-source
-> reconstruction of classical Sumcheck, modern layered GKR, ideal-overwrite-
-> duplex Fiat--Shamir, and the packed Boolean GKR variant preserves the flat
+> reconstruction of classical Sumcheck, modern layered GKR, duplex-sponge
+> Fiat--Shamir, and the packed Boolean GKR variant preserves the flat
 > Interactive Core and claim/reduction factorization. Direct finite Sumcheck
 > and GKR encodings require no child runtime or universal transition algebra.
-> The active Fiat--Shamir owner is now stated narrowly as one strong-framed
-> profile; literal duplex correspondence requires a conservative construction-
-> profile extension for runtime initialization and proof-carried public
+> The active Fiat--Shamir owner is now stated narrowly as one canonical-framed
+> construction; literal duplex-sponge correspondence requires a conservative
+> construction alternative for runtime initialization and proof-carried public
 > material. The historical general Core-composition specification remains
 > research input, not an active target contract. No protocol theorem, cost
 > judgment, or implementation support follows from this update.

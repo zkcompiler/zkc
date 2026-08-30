@@ -43,7 +43,7 @@ The design set contains four contrasting cases:
 1. classical Sumcheck as the minimum multi-round algebraic reduction;
 2. canonical layered GKR as nested Sumcheck with layer-to-layer claim
    evolution and verifier-held state;
-3. the ideal-duplex Fiat--Shamir transform as a stateful challenge
+3. the duplex-sponge Fiat--Shamir transform as a stateful challenge
    interpretation over an unchanged public-coin interaction; and
 4. the recent Boolean-circuit/RAM GKR construction as pressure from packed
    words, univariate and binary-polynomial representations, PCS use, and an

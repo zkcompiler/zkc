@@ -17,8 +17,8 @@ Five candidates were compared against all four cases.
 | A. Preserve the current Core and the current single FS construction unchanged | Direct flat encoding succeeds. | Fails runtime initialization, salt, codec, and squeeze semantics. | Succeeds with profile-local algebra/cost. | Rejected as the complete answer; preserves too narrow an FS support claim. |
 | B. Add runtime child-protocol calls and a universal transition algebra | Can encode nesting, but duplicates flat execution authority and makes observationally equal elaborations semantically different. | Does not solve the FS envelope. | Adds no value. | Rejected. |
 | C. Replace mandatory framing with an authored per-event absorb/skip map | Can emulate the paper. | Lets a construction omit protected statements or messages and author its own affirmative boundary. | Irrelevant. | Rejected. |
-| D. Treat every transcript as the current canonical frames and seek theorem transport afterward | Retains strong framing. | Represents a different construction; the paper theorem cannot be attached directly. | Irrelevant. | Retained only as a distinct zkc profile, not as literal duplex correspondence. |
-| E. Preserve the flat Core, retain strong framing as one closed profile, and add one closed ideal-overwrite-duplex profile with FS-local public material | Direct encoding remains unchanged. | Source-exact construction becomes representable without weakening the default. | Remains native; specialized algebra and cost stay in their existing owners. | Selected model request. |
+| D. Treat every transcript as the current canonical frames and seek theorem transport afterward | Retains mandatory canonical framing. | Represents a different construction; the paper theorem cannot be attached directly. | Irrelevant. | Retained only as the existing zkc construction, not as literal duplex-sponge correspondence. |
+| E. Preserve the flat Core, retain its canonical-framed construction, and add one closed duplex-sponge construction with Fiat--Shamir-specific public material | Direct encoding remains unchanged. | Source-exact construction becomes representable without weakening the existing construction. | Remains native; specialized algebra and cost stay in their existing owners. | Selected model request. |
 
 The selected architecture is:
 
@@ -29,13 +29,14 @@ The selected architecture is:
               Fresh challenge                 Fiat--Shamir
                 interpretation                 interpretation
                                                     |
-                                      one exact construction profile
+                                      one exact construction kind
                                       /                          \
-                         StrongFramedV0          IdealOverwriteDuplexV0
-                         no extra material       proof-carried public salt
+                    CanonicalFramed             DuplexSponge
+                    no extra material           proof-carried public salt
 ```
 
-The new arm is a conservative extension of the challenge interpretation. It
+The new construction alternative is a conservative extension of the challenge
+interpretation. It
 does not add an Interactive Core effect, a third party, nested execution, or a
 general escape callback.
 
@@ -132,7 +133,8 @@ There is no setup, Oracle, PCS, or private verifier state. The finite Core has
 two prover messages, two scalar challenges, three checks, two reductions,
 three guarded Reject paths, and one Accept terminal. Ill-typed or absent
 messages are strategy failures; unavailable Fresh coins are operational
-noncompletion; strong-framed sampling exhaustion is an interpretation failure.
+noncompletion; canonical-framed sampling exhaustion is an interpretation
+failure.
 
 ### 3.2 Occurrence trace
 
@@ -157,7 +159,7 @@ noncompletion; strong-framed sampling exhaustion is an interpretation failure.
 required challenge. A causal prover strategy producing `p2` sees `r1` but not
 `r2`.
 
-The Fresh Protocol samples the two values. The current strong-framed FS
+The Fresh Protocol samples the two values. The current canonical-framed FS
 Protocol absorbs `S`, then `p1` before `r1`, and cumulatively `p2` before `r2`.
 That establishes structural correspondence only, not the classical theorem or
 a Fresh-to-FS theorem.
@@ -287,10 +289,10 @@ The complete honest interaction is:
 
 Every false check has its own guarded Reject terminal before the next
 challenge. An ill-typed message is an illegal strategy move, missing Fresh
-randomness is operational noncompletion, and exhausted strong-framed sampling
-is an interpretation failure rather than Core rejection. The finite Core has
-three prover messages, four challenges, five checks, four reductions, one
-Accept terminal, and five guarded Reject paths. Its exact wiring evaluator is
+randomness is operational noncompletion, and exhausted canonical-framed
+sampling is an interpretation failure rather than Core rejection. The finite
+Core has three prover messages, four challenges, five checks, four reductions,
+one Accept terminal, and five guarded Reject paths. Its exact wiring evaluator is
 a declared public algorithm, not ambient host computation.
 
 ## 5. Packed Boolean GKR encoding
@@ -388,24 +390,32 @@ The paper's separate binary-polynomial commitment stops at a typed downstream
 dependency. It does not enter this GKR Core or receive security authority from
 this encoding.
 
-## 6. Ideal-overwrite-duplex construction request
+## 6. Duplex-sponge construction request
 
-The target extension is a closed construction arm, not a caller-authored
-event map:
+The target extension is a closed construction alternative, not a
+caller-authored event map.
+
+The name denotes the semantic construction family. `Overwrite` remains the
+declared absorption mode, the ideal-permutation experiment remains an Analysis
+premise, and format evolution is handled by construction identity and regime
+rather than a version suffix. None of those belongs in the type name.
+
+The resulting closed construction sum is:
 
 ```text
 TranscriptConstruction =
-    StrongFramedV0(StrongFramedConstruction)
-  | IdealOverwriteDuplexV0(IdealOverwriteDuplexConstruction)
+    CanonicalFramed(CanonicalFramedTranscriptConstruction)
+  | DuplexSponge(DuplexSpongeTranscriptConstruction)
 
-IdealOverwriteDuplexConstruction = {
+DuplexSpongeTranscriptConstruction = {
   core_id,
-  exact source-profile declaration,
+  exact source-construction declaration,
   alphabet and bounded symbol-string types,
   rate and capacity,
   runtime-instance codec,
   Start_h algorithm and contract,
-  overwrite-mode Absorb_p algorithm and contract,
+  absorption_mode: Overwrite,
+  Absorb_p algorithm and contract,
   Squeeze_p and state-advance algorithms and contracts,
   total map from prover-message occurrences to
     injective codecs and exact encoded lengths,
@@ -434,21 +444,21 @@ state_0 = Start_h(instance_bytes)
 state_1 = Absorb_p(state_0, salt)
 ```
 
-Each active prover-message occurrence has exactly one profile-owned codec and
+Each active prover-message occurrence has exactly one construction-owned codec and
 absorb action. Each Challenge has a one-shot squeeze and total decoder. The
-closed profile fixes the final-message behavior and proves total coverage of
-the source round schedule. It has no optional skip bit. The paper profile has
-no zkc namespace, retry, header, label, or length frame.
+closed construction fixes the final-message behavior and proves total coverage
+of the source round schedule. It has no optional skip bit. The paper
+construction has no zkc namespace, retry, header, label, or length frame.
 
-`StrongFramedV0` retains all current statement/message coverage, canonical
-typed framing, namespaces, and retry laws. The two profiles necessarily have
-different construction and Protocol IDs while they may refer to the same
+`CanonicalFramed` retains all current statement/message coverage, canonical
+typed framing, namespaces, and retry laws. The two constructions necessarily
+have different construction and Protocol IDs while they may refer to the same
 Core. Neither theorem transfers between them without an explicit Analysis
 applicability result.
 
 ### 6.1 Duplex transition falsifiers
 
-The construction profile must distinguish at least:
+The duplex-sponge construction must distinguish at least:
 
 1. partial squeeze followed by overwrite absorption;
 2. empty absorption after a partial squeeze;
@@ -464,7 +474,7 @@ The construction profile must distinguish at least:
 12. a classical theorem relabeled as QROM or UC.
 
 These are source-correspondence and theorem-applicability distinctions. They do
-not weaken the existing strong-framed admission rules.
+not weaken the existing canonical-framed admission rules.
 
 ## 7. Why no executable promotion was needed
 

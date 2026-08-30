@@ -2,19 +2,19 @@
 
 > **Document kind:** Target semantic specification
 > **Document state:** Active non-normative redesign target
-> **Target status:** The bounded strong-framed construction, influence, and
-> same-Core eligibility model is complete at its stated profile. Source-exact
-> transcript profiles with different initialization, proof material, or
-> framing remain separate extension work; theorem applicability and property
-> transport remain open Analysis work.
+> **Target status:** The bounded canonical-framed construction, influence, and
+> same-Core eligibility model is complete at its stated construction boundary.
+> Source-exact constructions with different initialization, proof material,
+> or framing remain separate extension work; theorem applicability and
+> property transport remain open Analysis work.
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Fiat--Shamir
 > semantics remain under [`docs/`](../../docs/README.md).
 
 ## 1. Contract
 
-This page is the sole target definition owner for the current strong-framed
-profile's:
+This page is the sole target definition owner for the current canonical-framed
+construction's:
 
 - transcript-construction identity, authentication, admission, and support;
 - initialization, typed framing, absorption, squeezing, challenge decoding,
@@ -1329,9 +1329,10 @@ Passing these structural boundaries establishes none of the following:
 - causal generation of a record that was only replayed; or
 - production support for the identified algorithms or construction.
 
-### 14.1 Exact profile boundary
+### 14.1 Exact construction boundary
 
-The construction defined on this page is one closed **strong-framed** profile,
+The construction defined on this page is one closed **canonical-framed**
+construction,
 not a universal normal form for every Fiat--Shamir transform. Its fixed
 initial state, Core/construction/application headers, typed binding and message
 frames, derived challenge namespaces, and bounded retry are all semantic
@@ -1350,12 +1351,13 @@ The unsupported part is the present construction envelope.
 Treating the salt as Core SessionContext or as an extra Core prover message
 would change the Fresh source interaction. Treating typed zkc frames as the
 paper's raw codec would claim correspondence to a different transcript. Neither
-is an admissible workaround. A source-exact duplex profile requires a distinct
-construction arm and FS-local public invocation material while leaving this
-strong-framed profile unchanged. Until that arm is specified and admitted,
-the literal duplex construction is outside the selected profile and none of
-its security theorems applies to this page's construction without a separate
-Analysis correspondence and applicability result.
+is an admissible workaround. A source-exact `DuplexSponge` construction
+requires a distinct construction alternative and Fiat--Shamir-specific public
+invocation material while leaving this canonical-framed construction
+unchanged. Until that alternative is specified and admitted, the literal
+duplex-sponge construction is outside the selected construction family and none
+of its security theorems applies to this page's construction without a
+separate Analysis correspondence and applicability result.
 
 ## 15. Bounded executable evidence
 

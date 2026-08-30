@@ -87,10 +87,10 @@ review remain pending.
   and admitted flat `InteractiveCore`, with no child execution handle retained;
   a reusable checked elaboration/composition satellite is not active yet;
 - separately admitted `TranscriptConstruction`, deterministic Fresh-to-Fiat--
-  Shamir construction under the current strong-framed profile, independently
-  admitted target Protocol, and exact `CheckedFSConstruction` structural
-  result, while Analysis retains ownership of exact theorem applicability and
-  property-specific transport;
+  Shamir construction under the current canonical-framed construction,
+  independently admitted target Protocol, and exact `CheckedFSConstruction`
+  structural result, while Analysis retains ownership of exact theorem
+  applicability and property-specific transport;
 - separately admitted exact Oracle-commitment constructions that elaborate a
   logical-Oracle source Core into an independently admitted commitment-and-
   opening target Core, together with total occurrence maps, construction-owned
@@ -113,8 +113,8 @@ review remain pending.
 - backend emission, deployment, invocation, or concrete runtime suppliers;
 - evidence grades or current implementation support;
 - a currently active generic Core-composition construction, runtime child-Core
-  invocation, or source-exact transcript profile beyond the strong-framed
-  construction; or
+  invocation, or source-exact transcript construction beyond the
+  canonical-framed construction; or
 - MLIR classes and pass structure as architectural boundaries.
 
 Structural predicates such as formation, `WF`, linearity, binding, closure,

@@ -169,8 +169,8 @@ the same semantic law.
 The cross-case
 [Algebraic Interaction and Reduction](algebraic-interaction-and-reduction/README.md)
 package has completed its constructive records for classical Sumcheck,
-layered GKR, the ideal-overwrite-duplex transform, and packed Boolean GKR. The
-provisional classifications are respectively `Native`, `Native`,
+layered GKR, the duplex-sponge Fiat--Shamir transform, and packed Boolean GKR.
+The provisional classifications are respectively `Native`, `Native`,
 `ConservativeExtension`, and `Native`.
 
 The Sumcheck classification is bounded to an explicit finite polynomial;

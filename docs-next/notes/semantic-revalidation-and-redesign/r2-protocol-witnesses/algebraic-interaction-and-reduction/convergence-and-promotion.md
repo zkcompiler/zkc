@@ -20,8 +20,8 @@ one asymmetric result:
    hierarchy of child protocols;
 3. packed Boolean GKR is the same interaction category with profile-local
    algebra and realization-local cost choices; and
-4. the ideal-overwrite-duplex transform requires a conservative extension to
-   the Fiat--Shamir construction envelope, not a change to the source Core.
+4. the duplex-sponge Fiat--Shamir transform requires a conservative extension
+   to the Fiat--Shamir construction envelope, not a change to the source Core.
 
 The package therefore preserves the central architecture while narrowing one
 overbroad support description. It does not implement the duplex extension or
@@ -34,7 +34,7 @@ activate any new Analysis family.
 | Classical Sumcheck with an explicit bounded polynomial | `Native` | Its messages, local checks, challenges, derived claims, reductions, rejection paths, and final evaluation form one finite typed interaction. |
 | Fixed-depth modern Boolean-MLE GKR | `Native` | Output compression, every layer Sumcheck, line reduction, and the final input check can be authenticated as one flat occurrence and claim graph. |
 | Packed Boolean GKR from the reviewed recent construction | `Native` | The existing typed algorithm/module and Relations dependencies express the high-degree first round, interpolation domain, Boolean identities, and degree bounds; packing and word-RAM optimizations are Plan or realization choices. |
-| Ideal-overwrite-duplex Fiat--Shamir | `ConservativeExtension` | Its state-transition shape fits the Foundation algorithm/module substrate, but the active Fiat--Shamir envelope cannot express runtime-instance initialization, transform-owned proof salt, and its exact codec/squeeze discipline without changing the named construction. |
+| Duplex-sponge Fiat--Shamir | `ConservativeExtension` | Its state-transition shape fits the Foundation algorithm/module substrate, but the active Fiat--Shamir envelope cannot express runtime-instance initialization, transform-owned proof salt, and its exact codec/squeeze discipline without changing the named construction. |
 
 These classifications apply only to the reconstructed forms and assigned
 constructive depth. They do not imply family-wide implementation support or
@@ -54,10 +54,10 @@ relation-bound statement and residual claims
        Fresh              Fiat--Shamir
    interpretation        interpretation
                               |
-                   one closed construction arm
+              one closed construction alternative
                      /                    \
-             strong-framed       ideal-overwrite-duplex
-                 active          requested, not active
+          CanonicalFramed             DuplexSponge
+              active               requested, not active
 ```
 
 The Core records interaction and structural claim flow. Relations supplies the
@@ -77,7 +77,7 @@ or ownership statement was inaccurate.
 
 | Durable owner | Promoted correction |
 |---|---|
-| `pir/fiat-shamir.md` | Narrows the active target to the strong-framed profile, states the exact source mismatch with the ideal-overwrite-duplex construction, and records the conservative reopening condition. |
+| `pir/fiat-shamir.md` | Narrows the active target to the canonical-framed construction, states the exact source mismatch with the duplex-sponge construction, and records the conservative reopening condition. |
 | `pir/README.md` | Replaces the inactive generic runtime-composition claim with the finite flat-Core boundary and states that a reusable checked elaboration satellite is not active. |
 | `analysis/README.md` | Records that the constructive cases activate no Sumcheck, GKR, duplex, property-composition, or cost family. |
 | `project/v0-semantic-architecture.md` | Integrates the cross-case conclusion and its support nonclaims into the architecture overview. |
@@ -85,7 +85,7 @@ or ownership statement was inaccurate.
 No Core or Protocol grammar, canonical carrier, implementation, endpoint, or
 evidence package was changed. The revisions are support-boundary, source-view,
 and ownership corrections, not a partial implementation of the requested
-construction arm.
+construction alternative.
 
 ## 5. Deliberately not promoted
 
@@ -119,8 +119,8 @@ cases and a decisive typed obstruction for the fourth:
   compression through the public-input terminal check;
 - an exact finite packed-GKR schedule including both the novel univariate and
   ordinary within-copy rounds; and
-- an exact field-by-field obstruction comparison between the active strong-
-  framed construction and the paper's duplex construction.
+- an exact field-by-field obstruction comparison between the active canonical-
+  framed construction and the paper's duplex-sponge construction.
 
 The decisive negatives are independent of implementation spelling:
 
@@ -144,11 +144,12 @@ architecture question.
 The research package is complete at constructive depth, but the broader model
 is not frozen. The resulting work is ordered by dependency:
 
-1. specify and pressure a closed `IdealOverwriteDuplexV0` construction arm
+1. specify and pressure a closed `DuplexSpongeTranscriptConstruction`
+   alternative
    with runtime-instance initialization, transform-owned public construction
    material, exact codecs, exact state transitions, and distinct identity;
 2. rerun the existing Fresh/Fiat--Shamir structural cases against the extended
-   closed sum without weakening the strong-framed arm;
+   closed sum without weakening the canonical-framed alternative;
 3. define a Sumcheck/GKR Analysis family only when theorem applicability and
    quantitative soundness become the next selected research question;
 4. add checked reusable elaboration only if a later protocol requires retained

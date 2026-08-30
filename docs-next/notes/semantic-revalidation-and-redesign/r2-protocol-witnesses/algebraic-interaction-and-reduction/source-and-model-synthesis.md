@@ -15,7 +15,7 @@ The selected cases do not support one symmetric conclusion.
 |---|---|---|
 | Classical Sumcheck | A fixed-round, explicit-polynomial form is directly representable as a chain of typed claims and reductions. | No new Core primitive. A realistic symbolic polynomial Oracle and the classical soundness family remain separate open capabilities. |
 | Modern layered GKR | A fixed-depth protocol is directly representable as one flat Core containing output compression, Sumcheck chains, line reductions, and a final input check. | No nested runtime protocol. Reusable child elaboration and property composition remain satellites, not Core effects. |
-| Ideal-duplex Fiat--Shamir | The state machine fits the portable-algorithm substrate, but the literal transform does not fit the current construction envelope. | A narrow construction-profile extension is required for runtime instance initialization, transform-owned public proof material, and raw fixed-codec absorption. |
+| Duplex-sponge Fiat--Shamir | The state machine fits the portable-algorithm substrate, but the literal transform does not fit the current construction envelope. | A narrow construction alternative is required for runtime instance initialization, transform-owned public proof material, and raw fixed-codec absorption. |
 | Packed Boolean GKR | The verifier remains GKR over a hybrid polynomial representation. “RAM operations” are a prover cost measure, not RAM-consistency semantics. | Native use of existing typed algorithms and relation dependencies; input Booleanity must be an explicit premise rather than inferred from output bits. |
 
 The central `InteractiveCore + ChallengeInterpretation` factorization survives.
@@ -188,7 +188,7 @@ evaluation algorithm, an admitted preprocessing artifact, or another exact
 capability must be selected. “The verifier can evaluate the wiring predicate”
 is not an ambient privilege.
 
-## 5. Ideal-duplex Fiat--Shamir
+## 5. Duplex-sponge Fiat--Shamir
 
 The paper's state is `(s,i_A,i_S)`, where `s` has a rate and capacity segment.
 Absorption overwrites the rate segment, and squeezing mutates the same state.
@@ -232,13 +232,13 @@ Construction 4.3 nevertheless fails at the envelope:
 
 Putting `tau` in SessionContext or adding it as a Core message is not a fix.
 Both change the Fresh source interaction for transform-only material and break
-the literal same-Core relation. Likewise, calling the current strong-framed
+the literal same-Core relation. Likewise, calling the current canonical-framed
 construction “DSFS” would attach the paper theorem to a different transcript.
 
-The correct boundary is a closed, separately identified transcript-
-construction profile with one FS-local public-material input. The strong-
-framed profile remains unchanged and default. The selected shape is detailed
-in the candidate decision.
+The correct boundary is a closed, separately identified transcript
+construction alternative with one Fiat--Shamir-specific public-material input.
+The canonical-framed construction remains unchanged and default. The selected
+shape is detailed in the candidate decision.
 
 ## 6. Packed Boolean GKR and the word-RAM claim
 
