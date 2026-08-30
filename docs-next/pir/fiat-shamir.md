@@ -2,16 +2,19 @@
 
 > **Document kind:** Target semantic specification
 > **Document state:** Active non-normative redesign target
-> **Target status:** The bounded construction, strong-influence, and same-Core
-> eligibility model is complete; theorem applicability and property transport
-> remain separate open Analysis work.
+> **Target status:** The bounded strong-framed construction, influence, and
+> same-Core eligibility model is complete at its stated profile. Source-exact
+> transcript profiles with different initialization, proof material, or
+> framing remain separate extension work; theorem applicability and property
+> transport remain open Analysis work.
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Fiat--Shamir
 > semantics remain under [`docs/`](../../docs/README.md).
 
 ## 1. Contract
 
-This page is the sole target definition owner for:
+This page is the sole target definition owner for the current strong-framed
+profile's:
 
 - transcript-construction identity, authentication, admission, and support;
 - initialization, typed framing, absorption, squeezing, challenge decoding,
@@ -1204,7 +1207,7 @@ TranscriptDeclarationViewBody = {
   state_type,
   absorbed_bytes_type,
   initial_state,
-  initialize_algorithm_and_contract,
+  fixed_initial_state_and_derived_initialization_schedule,
   absorb_algorithm_and_contract,
   squeeze_bytes_algorithm_and_contract,
   advance_state_algorithm_and_contract,
@@ -1326,6 +1329,34 @@ Passing these structural boundaries establishes none of the following:
 - causal generation of a record that was only replayed; or
 - production support for the identified algorithms or construction.
 
+### 14.1 Exact profile boundary
+
+The construction defined on this page is one closed **strong-framed** profile,
+not a universal normal form for every Fiat--Shamir transform. Its fixed
+initial state, Core/construction/application headers, typed binding and message
+frames, derived challenge namespaces, and bounded retry are all semantic
+parts of this profile.
+
+In particular, this page does not literally represent Construction 4.3 of
+Chiesa and Orrù's
+[*A Fiat--Shamir Transformation From Duplex Sponges*](https://eprint.iacr.org/2025/536).
+That construction initializes from the runtime instance, absorbs one
+proof-carried salt owned by the transform, absorbs raw fixed-codec prover
+messages without zkc headers or namespaces, and uses one-shot total decoding.
+Its explicit mutable duplex state-transition shape fits the Foundation
+algorithm/module substrate; no exact admitted duplex module is activated here.
+The unsupported part is the present construction envelope.
+
+Treating the salt as Core SessionContext or as an extra Core prover message
+would change the Fresh source interaction. Treating typed zkc frames as the
+paper's raw codec would claim correspondence to a different transcript. Neither
+is an admissible workaround. A source-exact duplex profile requires a distinct
+construction arm and FS-local public invocation material while leaving this
+strong-framed profile unchanged. Until that arm is specified and admitted,
+the literal duplex construction is outside the selected profile and none of
+its security theorems applies to this page's construction without a separate
+Analysis correspondence and applicability result.
+
 ## 15. Bounded executable evidence
 
 The repository package
@@ -1353,7 +1384,7 @@ commitment-security theorem nor any FRI or Fiat--Shamir security property.
 
 ## 16. Reopening conditions
 
-Reopen the K2 construction if a K4 inhabitant requires:
+Reopen this construction if a later protocol inhabitant requires:
 
 - challenge derivation from verifier-private state under a justified transform;
 - an exact distribution that cannot use a total decoder or bounded semantic
@@ -1365,7 +1396,10 @@ Reopen the K2 construction if a K4 inhabitant requires:
   module rule;
 - a dynamic Statement introduced after its active scope's first challenge;
 - theorem-qualified pre-challenge prover material that must deliberately remain
-  unabsorbed without weakening the default strong-FS rule; or
+  unabsorbed without weakening the default strong-FS rule;
+- runtime-instance initialization, transform-owned public proof material, or
+  a source-exact fixed-codec transcript whose semantics differ from this
+  profile's canonical frames and namespaces; or
 - a same-Core transformation whose verifier-observable interaction actually
   changes.
 

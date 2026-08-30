@@ -164,6 +164,22 @@ explicit requirement or candidate before R3. Paper-specific mechanisms remain
 in profiles or modules unless at least two materially different families need
 the same semantic law.
 
+### 4.3.1 Current algebraic-interaction disposition
+
+The cross-case
+[Algebraic Interaction and Reduction](algebraic-interaction-and-reduction/README.md)
+package has completed its constructive records for classical Sumcheck,
+layered GKR, the ideal-overwrite-duplex transform, and packed Boolean GKR. The
+provisional classifications are respectively `Native`, `Native`,
+`ConservativeExtension`, and `Native`.
+
+The Sumcheck classification is bounded to an explicit finite polynomial;
+generic polynomial-oracle semantics remain open. The GKR classification uses
+one flat finite Core; reusable checked elaboration remains deferred. The
+duplex construction is not yet an active profile, and the packed result makes
+no RAM-consistency or PCS-support claim. The assigned constructive depth and
+one bounded closure review are complete for these four entries.
+
 ### 4.4 Holdout and frontier cases
 
 Only the named selection rationale is visible before freeze; detailed encoding

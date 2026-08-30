@@ -82,15 +82,15 @@ review remain pending.
 - structural formation, well-formedness, linearity, binding, closure,
   canonical authentication, and whole-Protocol admission judgments;
 - projection obligations exported to endpoint consumers;
-- authoring `link` as proposal construction, and semantic Protocol composition
-  through an independently admitted `CoreCompositionSpec`, construction and
-  whole-Protocol admission of a new `InteractiveCore`, and an exact
-  `CheckedCoreComposition` structural result;
+- authoring `link` as proposal construction and the finite composition
+  boundary: all child references must be resolved into one newly authenticated
+  and admitted flat `InteractiveCore`, with no child execution handle retained;
+  a reusable checked elaboration/composition satellite is not active yet;
 - separately admitted `TranscriptConstruction`, deterministic Fresh-to-Fiat--
-  Shamir construction, independently admitted target Protocol, and exact
-  `CheckedFSConstruction` structural result, while Analysis retains ownership
-  of exact theorem applicability and property-specific transport (the
-  historical packages' `FSCompile` umbrella);
+  Shamir construction under the current strong-framed profile, independently
+  admitted target Protocol, and exact `CheckedFSConstruction` structural
+  result, while Analysis retains ownership of exact theorem applicability and
+  property-specific transport;
 - separately admitted exact Oracle-commitment constructions that elaborate a
   logical-Oracle source Core into an independently admitted commitment-and-
   opening target Core, together with total occurrence maps, construction-owned
@@ -111,7 +111,10 @@ review remain pending.
 - compiler search, scoring, or selection merely because it produces PIR;
 - OIR or realized endpoint coverage;
 - backend emission, deployment, invocation, or concrete runtime suppliers;
-- evidence grades or current implementation support; or
+- evidence grades or current implementation support;
+- a currently active generic Core-composition construction, runtime child-Core
+  invocation, or source-exact transcript profile beyond the strong-framed
+  construction; or
 - MLIR classes and pass structure as architectural boundaries.
 
 Structural predicates such as formation, `WF`, linearity, binding, closure,
@@ -149,10 +152,11 @@ first being found by the optimizer or successfully projected to every target.
 - `analysis/` consumes exact admitted Protocol subjects and narrow PIR-owned
   authenticated views; it adds an admitted `TranscriptConstruction`,
   affirmative `CheckedFSConstruction`, exact checked Oracle-commitment
-  construction, admitted `CoreCompositionSpec`, affirmative
-  `CheckedCoreComposition`, Interface, or Plan only when its exact family
-  question or rule reads that structural satellite or result; none of those
-  PIR-owned structural results establishes a property by itself;
+  construction, Interface, or Plan only when its exact family question or rule
+  reads that structural satellite or result; none of those PIR-owned
+  structural results establishes a property by itself. A future checked
+  elaboration or composition result must be added as a new exact operand rather
+  than inferred from the historical candidate;
 - `relations/` consumes an admitted Protocol, independently admitted relation
   subjects, and a `ProtocolRelationBinding` for structural correspondence. A
   separate `PlanWitnessBinding` may attach relation-witness occurrences to one
@@ -215,12 +219,12 @@ cutover.
 ## Lifecycle and bridge ownership
 
 PIR owns proposal formation and closure, normalization, Protocol
-authentication and admission, representation changes, authority loss, and
-abstract composition semantics. Authentication and admission remain logically
-distinct even when one implementation shares a traversal. Official Protocol
-persistence is admission-gated; a workbench cache must use an unmistakably
-unauthoritative envelope. Decoding produces a carrier, not authority, and
-reopening preserves only lineage.
+authentication and admission, representation changes, authority loss, and the
+finite flat-Core composition boundary. Authentication and admission remain
+logically distinct even when one implementation shares a traversal. Official
+Protocol persistence is admission-gated; a workbench cache must use an
+unmistakably unauthoritative envelope. Decoding produces a carrier, not
+authority, and reopening preserves only lineage.
 
 PIR owns every exported Protocol view's source facts and checked derivation.
 The consumer owns its closed read manifest, adequacy requirement, and
