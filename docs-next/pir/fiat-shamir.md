@@ -1115,9 +1115,14 @@ construction ordinarily creates or relates a concrete Core in which:
 
 The BCS relation, commitment-binding assumption, random-oracle purpose
 separation, RBR/state-restoration hypotheses, and quantitative loss are not
-`CheckedFSConstruction`. They need a separate checked IOR-to-concrete-Core
-construction and Analysis result. Plain same-Core FS may be used after that
-step.
+`CheckedFSConstruction`. The separate
+[Oracle-Commitment Construction](oracle-commitment-construction.md) now owns
+the exact structural transformation from a logical-Oracle Core to a concrete
+commitment-and-opening Core. Its checked authority establishes deterministic
+bounded elaboration and total static correspondence only. Analysis must still
+supply every cryptographic assumption, theorem-applicability result, and
+property transport. Plain same-Core FS may be used after the concrete target
+Core is independently admitted.
 
 An ideal Oracle Core fails this construction exactly when a descendant of its
 verifier-private Query or Answer reaches `PCSinks(core)`, or when the Core's
@@ -1302,6 +1307,14 @@ and module-sink algebra, first-class reduction effects, generic typed Oracle
 indices, or OIR serialization. Fixture success is therefore structural and
 behavioral evidence for the named finite cases, not implementation conformance,
 cryptographic security, or theorem evidence.
+
+The additive
+[`evaluation/native-fri-ior/`](../../evaluation/native-fri-ior/README.md)
+package includes an exact three-fold, scalar-terminal classical FRI control.
+It exercises a logical-Oracle source Core, an independently elaborated
+committed Core, statement-bound Fresh and strong-Fiat--Shamir executions, and
+a separately coded public replay. That finite control establishes neither a
+commitment-security theorem nor any FRI or Fiat--Shamir security property.
 
 ## 16. Reopening conditions
 

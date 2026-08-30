@@ -34,6 +34,13 @@ research packages, routed through the
 preserve the comparative evidence. Current normative Protocol semantics
 remain under `docs/` until explicit cutover.
 
+Native-oracle pressure now also selects a distinct, exact
+[Oracle-Commitment Construction](oracle-commitment-construction.md). It maps
+one admitted logical-Oracle Core to one independently admitted committed Core
+through deterministic bounded elaboration and total static maps. This is a
+Core-changing construction, unlike the same-Core Fresh/Fiat--Shamir
+construction, and it establishes no cryptographic property by itself.
+
 K3-B has now reconciled the canonical carrier, `ProtocolInterface`, and
 `ProverPlan` targets to the active K1/K2 definitions. It also selects the
 narrow source-ID-free `PlanWitnessSurface` needed for relation-witness
@@ -86,6 +93,11 @@ K4 portfolio pressure is next and K5 independent freeze remains pending.
   `CheckedFSConstruction` structural result, while Analysis retains ownership
   of exact theorem applicability and property-specific transport (the
   historical packages' `FSCompile` umbrella);
+- separately admitted exact Oracle-commitment constructions that elaborate a
+  logical-Oracle source Core into an independently admitted commitment-and-
+  opening target Core, together with total occurrence maps, construction-owned
+  advice, intrinsic bounds, process-local checked authority, and inert
+  execution receipts;
 - PIR carrier semantics, the canonical Protocol identity projection, and
   artifact format; and
 - authenticated structural facts explicitly exported to later consumers.
@@ -138,18 +150,20 @@ first being found by the optimizer or successfully projected to every target.
 
 - `analysis/` consumes exact admitted Protocol subjects and narrow PIR-owned
   authenticated views; it adds an admitted `TranscriptConstruction`,
-  affirmative `CheckedFSConstruction`, admitted `CoreCompositionSpec`,
-  affirmative `CheckedCoreComposition`, Interface, or Plan only when its exact
-  family question or rule reads that structural satellite or result; none of
-  those PIR-owned structural results establishes a property by itself;
+  affirmative `CheckedFSConstruction`, exact checked Oracle-commitment
+  construction, admitted `CoreCompositionSpec`, affirmative
+  `CheckedCoreComposition`, Interface, or Plan only when its exact family
+  question or rule reads that structural satellite or result; none of those
+  PIR-owned structural results establishes a property by itself;
 - `relations/` consumes an admitted Protocol, independently admitted relation
   subjects, and a `ProtocolRelationBinding` for structural correspondence. A
   separate `PlanWitnessBinding` may attach relation-witness occurrences to one
   source-ID-free `PlanWitnessSurface`. An admitted `ProtocolInterface` is an
   additional operand only for questions about external presentation; it is not
   a universal relation dependency. Checked artifact, equation, commitment, and
-  run-grounding prerequisites remain question-specific, and raw observations
-  cannot substitute for their checked results;
+  run-grounding prerequisites—including any exact Oracle-commitment
+  construction view and matching live authority—remain question-specific,
+  and raw observations cannot substitute for their checked results;
 - `compiler/` may propose successors, but PIR alone authenticates and admits
   each target; a separate relation-specific checker must then relate exact
   predecessor and successor subjects;
@@ -169,6 +183,9 @@ first being found by the optimizer or successfully projected to every target.
   standard Oracle lifecycle
 - [Fiat--Shamir Construction](fiat-shamir.md) — active K2 definition owner for
   transcript semantics and the same-Core Fresh/FS construction
+- [Oracle-Commitment Construction](oracle-commitment-construction.md) — exact
+  logical-Oracle-to-committed-Core elaboration, admission, authority, and run
+  validation boundary
 - [Canonical PIR](canonical-pir.md)
 - [Protocol Interfaces and Prover Plans](interfaces-and-plans.md)
 - [Endpoint Projection Views](endpoint-projection-views.md)

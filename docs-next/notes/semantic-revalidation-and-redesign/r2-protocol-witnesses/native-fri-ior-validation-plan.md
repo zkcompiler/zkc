@@ -399,3 +399,21 @@ This package does not attempt to:
 These exclusions bound the package; they do not prevent reopening a shared v0
 decision when native FRI/IOR supplies concrete evidence that the decision is
 wrong.
+
+## 15. Exact classical follow-up disposition
+
+The requested exact follow-up is now executable without replacing the earlier
+order-16 early-stop case. It adds the Goldilocks order-64 three-fold control,
+one exact structural logical-Oracle-to-committed-Core construction, Fresh and
+strong-Fiat--Shamir execution over one committed Core, and a separately coded
+public verifier. The construction checker owns stable static maps and live
+process-local authority; its portable receipt validates one concrete
+source/target pair only.
+
+Relations and Analysis pressure found two deliberate promotion boundaries.
+The current Relations instrument grounds initial G0 from a declassified full
+trace, so a durable result first needs a PIR-owned purpose-specific
+confidential Oracle view and live capability. The Analysis instrument forms
+questions and checks non-vacuous arithmetic but establishes no theorem truth,
+applicability, or property. General FRI/IOR, BCS, derived-oracle, commitment
+security, and outer-relation claims remain outside this follow-up.

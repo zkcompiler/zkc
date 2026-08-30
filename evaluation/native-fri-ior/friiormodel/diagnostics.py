@@ -37,7 +37,9 @@ from .provenance import ValidationBasisId, validation_basis_id
 
 
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-_CODE_PATTERN = re.compile(r"^FRI-IOR-([A-Z0-9]+)-([0-9]{3})$")
+_CODE_PATTERN = re.compile(
+    r"^FRI-IOR-([A-Z0-9]+(?:-[A-Z0-9]+)*)-([0-9]{3})$"
+)
 _REPORT_TOKEN = object()
 
 # The positional index of the diagnostic ``code`` argument.  ``None`` denotes
@@ -90,6 +92,12 @@ _CODE_TRANSPORTS = frozenset(
         ("friiormodel.diagnostics", "_contract_failure", "CheckResult", "error"),
         ("friiormodel.terms", "to_result", "CheckResult", "self"),
         ("independent", "verify_public_fri", "_outcome", "error"),
+        (
+            "classical_independent",
+            "verify_public_classical_fri",
+            "_outcome",
+            "error",
+        ),
     }
 )
 
@@ -377,6 +385,39 @@ _CURRENT_CODES = frozenset().union(
     _span("DIAGNOSTIC", 1, 7),
     _numbers("DIAGNOSTIC", (10, 12, 13, 14, 15, 16, 17, 18)),
     _numbers("DIAGNOSTIC", (100,)),
+    _span("CLASSICAL-ANALYSIS", 1, 24),
+    _numbers("CLASSICAL-ANALYSIS", (100, 101)),
+    _span("CLASSICAL-CASE", 1, 5),
+    _span("CLASSICAL-COMMITMENT", 1, 20),
+    _span("CLASSICAL-COMMITTED", 1, 10),
+    _span("CLASSICAL-COMMITTED", 21, 23),
+    _numbers("CLASSICAL-COMMITTED", (100,)),
+    _span("CLASSICAL-CONSTRUCTION", 1, 65),
+    _numbers("CLASSICAL-CONSTRUCTION", (100, 101)),
+    _span("CLASSICAL-CORE", 1, 6),
+    _span("CLASSICAL-FIELD", 1, 9),
+    _span("CLASSICAL-FORMATION", 1, 8),
+    _span("CLASSICAL-FS", 1, 9),
+    _numbers("CLASSICAL-FS", (11, 12, 13, 14)),
+    _span("CLASSICAL-GENERATION", 1, 7),
+    _span("CLASSICAL-INDEPENDENT", 1, 21),
+    _span("CLASSICAL-INDEPENDENT", 30, 33),
+    _numbers("CLASSICAL-INDEPENDENT", (40, 41, 50, 51, 52, 53)),
+    _span("CLASSICAL-INDEPENDENT", 90, 92),
+    _numbers("CLASSICAL-INDEPENDENT", (99, 100)),
+    _span("CLASSICAL-NATIVE", 1, 9),
+    _span("CLASSICAL-NATIVE", 20, 22),
+    _numbers("CLASSICAL-NATIVE", (100,)),
+    _span("CLASSICAL-ORACLE", 1, 4),
+    _span("CLASSICAL-PROFILE", 1, 11),
+    _span("CLASSICAL-PROOF", 1, 8),
+    _span("CLASSICAL-PUBLIC", 1, 9),
+    _span("CLASSICAL-QUERY", 1, 5),
+    _span("CLASSICAL-RELATION", 1, 28),
+    _numbers("CLASSICAL-RELATION", (100, 101, 102)),
+    _numbers("CLASSICAL-RESOURCE", (1,)),
+    _span("CLASSICAL-RUN", 1, 6),
+    _span("CLASSICAL-SCHEDULE", 1, 3),
 )
 
 
@@ -420,6 +461,31 @@ _FORMATION_CODES = frozenset().union(
     _span("TRANSCRIPT", 38, 40),
     _span("TRANSCRIPT", 41, 47),
     _numbers("TRANSCRIPT", (48,)),
+    _span("CLASSICAL-ANALYSIS", 1, 24),
+    _span("CLASSICAL-CASE", 1, 5),
+    _span("CLASSICAL-COMMITMENT", 1, 15),
+    _span("CLASSICAL-CONSTRUCTION", 1, 10),
+    _numbers("CLASSICAL-CONSTRUCTION", (20, 27)),
+    _span("CLASSICAL-CONSTRUCTION", 28, 43),
+    _span("CLASSICAL-CONSTRUCTION", 45, 48),
+    _span("CLASSICAL-CONSTRUCTION", 57, 59),
+    _numbers("CLASSICAL-CONSTRUCTION", (62, 63)),
+    _span("CLASSICAL-CORE", 1, 6),
+    _span("CLASSICAL-FIELD", 1, 9),
+    _span("CLASSICAL-FORMATION", 1, 8),
+    _span("CLASSICAL-FS", 1, 9),
+    _span("CLASSICAL-GENERATION", 1, 7),
+    _span("CLASSICAL-INDEPENDENT", 1, 21),
+    _numbers("CLASSICAL-INDEPENDENT", (91, 92)),
+    _span("CLASSICAL-ORACLE", 1, 4),
+    _span("CLASSICAL-PROFILE", 1, 11),
+    _span("CLASSICAL-PROOF", 1, 8),
+    _span("CLASSICAL-PUBLIC", 1, 9),
+    _span("CLASSICAL-QUERY", 1, 5),
+    _span("CLASSICAL-RELATION", 1, 21),
+    _numbers("CLASSICAL-RESOURCE", (1,)),
+    _span("CLASSICAL-RUN", 1, 6),
+    _span("CLASSICAL-SCHEDULE", 1, 3),
 )
 
 _FAULT_REASONS = MappingProxyType(
@@ -459,6 +525,10 @@ _FAULT_REASONS = MappingProxyType(
         "FRI-IOR-INDEPENDENT-099": (
             "the independent replay emits this only when an unexpected host "
             "exception escapes its typed failure paths"
+        ),
+        "FRI-IOR-CLASSICAL-INDEPENDENT-099": (
+            "the exact classical replay emits this only when an unexpected "
+            "host exception escapes its typed failure paths"
         ),
         "FRI-IOR-RESOURCE-006": (
             "only the evaluator-private resource reservation helper can supply "
@@ -619,6 +689,7 @@ _FIXED_OUTCOME = {
     "_hex": OutcomeClass.MALFORMED.value,
     "_fp2": OutcomeClass.MALFORMED.value,
     "_reject": OutcomeClass.REFUSED.value,
+    "_defect": OutcomeClass.REFUSED.value,
     "_require_semantic_id": OutcomeClass.MALFORMED.value,
     "_validate_identifier": OutcomeClass.MALFORMED.value,
     "_ContractViolation": OutcomeClass.CHECKER_FAILURE.value,
@@ -996,6 +1067,14 @@ def _site_boundary(
 ) -> tuple[str, ...]:
     if name == "_reject" and module == "friiormodel.native":
         return ("native:verification",)
+    if name == "_defect" and module == "friiormodel.oracle_construction":
+        return ("oracle-construction:admission",)
+    if name == "_run_failure" and module == "friiormodel.oracle_construction":
+        return ("oracle-construction:run-check",)
+    if name == "_fail" and module == "classical_independent":
+        if len(call.args) >= 2:
+            return _static_strings(call.args[1], bindings)
+        return ()
     if name == "_validate_identifier":
         return ("identity:formation",)
     if name == "_require_semantic_id":
@@ -1044,7 +1123,14 @@ def _site_outcome(
     fixed = _FIXED_OUTCOME.get(name)
     if fixed is not None:
         return (fixed,)
-    if name not in {"CheckResult", "ModelFailure", "_failure", "_outcome"}:
+    if name not in {
+        "CheckResult",
+        "ModelFailure",
+        "_failure",
+        "_fail",
+        "_outcome",
+        "_run_failure",
+    }:
         return ()
     if not call.args:
         return ()

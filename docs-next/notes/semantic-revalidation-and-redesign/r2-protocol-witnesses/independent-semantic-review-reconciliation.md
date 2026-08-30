@@ -445,3 +445,21 @@ This reconciliation does not establish:
 
 It establishes only the disposition of review findings and the evidence gates
 required before those stronger claims can be considered.
+
+## 10. Exact construction follow-up
+
+The previously open construction gate now has an exact bounded structural
+owner for the selected Goldilocks three-fold classical FRI Core pair. Admission
+rederives the committed target, total static maps, advice ownership, public
+replay closure, and intrinsic bounds before minting process-local authority.
+Concrete validation independently checks one native/Fresh pair and emits an
+inert receipt; that receipt cannot authorize a second run or substitute for the
+stable construction capability.
+
+This closes only the structural source/target/profile triple. It does not
+establish universal FRI-family compilation, commitment security, BCS theorem
+applicability, round-by-round or restoration soundness, or Fiat--Shamir
+security. The current Relations and Analysis controls remain bounded pressure
+because their durable owner-view and profile/catalog contracts are not yet
+defined. Those residual obligations replace, rather than conceal, the older
+generic construction gate.

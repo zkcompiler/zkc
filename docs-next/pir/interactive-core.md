@@ -839,7 +839,9 @@ or binding evaluation is qualified noncompletion, never a successful match.
 
 A commitment root, authentication path, and opening check are ordinary public
 values/messages/checks around this lifecycle. They do not replace the logical
-Oracle or allow an answer to define it retroactively.
+Oracle or allow an answer to define it retroactively. A checked transformation
+that inserts those effects and changes the Core is owned by the separate
+[Oracle-Commitment Construction](oracle-commitment-construction.md).
 
 ## 8. Exact-used semantic extensions
 
@@ -2194,6 +2196,14 @@ Core carrier and does not execute every exact `AlgorithmUse`, capability,
 here. Its successful cases are finite inhabitance and falsification evidence,
 not implementation conformance, capability nontransportability, protocol-family
 coverage, or a cryptographic theorem.
+
+The additive
+[`evaluation/native-fri-ior/`](../../evaluation/native-fri-ior/README.md)
+package exercises the standard logical-Oracle lifecycle on an exact
+three-fold classical FRI control and then checks a distinct commitment-and-
+opening target Core. It supplies finite causal, occurrence, and acceptance
+evidence only; the checked Core-changing construction is specified separately
+in [Oracle-Commitment Construction](oracle-commitment-construction.md).
 
 This page establishes no cryptographic property, strategy implementation
 conformance, distribution truth, relation satisfaction, endpoint coverage, or

@@ -214,6 +214,17 @@ These profiles are different propositions with different source authority. A
 concrete run may pressure-test their occurrence maps; it never proves any
 universal or asymptotic property.
 
+An additive exact classical FRI control now supplies bounded candidate
+pressure outside this active profile set. It forms distinct round-by-round and
+restricted state-restoration questions, checks the three-fold scalar-terminal
+Algorithm-1 shape, and evaluates one exact rational substitution as
+non-vacuous. The question statuses remain `NotEvaluated`; theorem truth is
+`NotEstablished`; theorem applicability is `NotEvaluated`; no property is
+established. The instrument uses a bespoke finite carrier rather than the
+durable Analysis profile, body, source-manifest, and authority contracts.
+Promoting either family therefore requires an explicit profile/catalog
+revision rather than treating the control as an active judgment.
+
 ## Qualified outcomes
 
 Analysis preserves these outer distinctions:
@@ -239,7 +250,8 @@ The following earlier Stage 4A surfaces are not active K3-C contracts:
 - general Protocol equality, trace refinement, declared change,
   distributional distance, and cost families;
 - plain soundness, zero knowledge, malicious-verifier games, QROM,
-  round-by-round and restoration families, and multi-prover independence;
+  general round-by-round and restoration families, and multi-prover
+  independence; the exact classical FRI candidate above remains pressure only;
 - generic property composition, structural Core composition, coverage,
   persistence formats, caches, proof languages, theorem libraries, and
   external certificate systems; and

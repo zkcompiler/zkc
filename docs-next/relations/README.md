@@ -204,8 +204,15 @@ remains normative until explicit consolidation and cutover.
   projection identity; `PlanWitnessSurface` remains Relations-specific and
   grants no OIR authority. Full OIR syntax and protocol-family coverage remain
   open.
-- Native FRI/IOR and Nova/folding cases remain required executable pressure for
-  commitment/opening and relation-changing reduction paths.
+- One exact three-fold, scalar-terminal classical FRI control now supplies
+  executable pressure for Oracle publications, twelve logical opening
+  coordinates, construction maps, and a scalar terminal residual. Its current
+  Relations instrument reads a declassified complete native trace, so it is
+  not yet a lawful durable correspondence source. Promotion requires a PIR-
+  owned, purpose-specific initial-Oracle view and matching live authority.
+  General FRI/IOR correspondence, opening security, proximity, and outer-
+  relation inference remain open, as does native Nova/folding pressure for
+  relation-changing reductions.
 - The integrated Schnorr witness exercises bounded deduplication and joined
   read closure for one relation/Plan grounding path. It does not exercise the
   full bridge-law portfolio or general relation execution. Broader portfolio

@@ -5936,3 +5936,12 @@ multi-prover independence, generic state restoration, IOP/IOR-to-concrete-Core
 transforms, concrete hash security, and generic property composition. It does
 not infer ordinary soundness, zero knowledge, EUF-CMA, round-by-round
 soundness, or whole-protocol security from the two selected profiles.
+
+The exact classical FRI research instrument does not widen this active
+catalog. It separately forms candidate round-by-round and restricted-
+restoration questions, authenticates a three-fold scalar-terminal structural
+shape, and classifies one exact theorem-parameter substitution as non-vacuous.
+Its theorem-truth and applicability coordinates remain unresolved and its
+property status remains unevaluated. Durable activation requires exact family,
+experiment, adversary, source-manifest, question, proposition, support, and
+authority bodies under an explicit Analysis profile revision.

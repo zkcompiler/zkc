@@ -35,6 +35,13 @@ augmentation, and challenge interpretation. It does not establish that the
 model supports every FRI variant or IOP, and it does not establish any
 soundness, proximity, knowledge, binding, hiding, ROM, or QROM theorem.
 
+The package also contains a separate exact classical control. That additive
+lane instantiates the three-fold, scalar-terminal schedule, admits one exact
+structural logical-Oracle-to-commitment construction, runs Fresh and strong
+Fiat--Shamir interpretations over the same committed Core, and reconstructs
+the public Fiat--Shamir execution in a separately coded verifier. It does not
+replace or silently reinterpret the earlier control.
+
 ## Run
 
 From the repository root:
@@ -46,7 +53,7 @@ python3 evaluation/native-fri-ior/generate.py
 python3 evaluation/native-fri-ior/generate.py --check-fixtures
 ```
 
-The first command currently runs 390 tests. The public runner rebuilds and
+The first command currently runs 445 tests. The public runner rebuilds and
 verifies a report from public fixtures before comparing its projection with a
 separately frozen regression golden. The owner command reconstructs five live
 capability results across concrete generation, both one-execution construction
@@ -75,7 +82,7 @@ That agreement is implementation-diversity and finite falsification evidence.
 The second verifier still shares the published term and transcript contract;
 it is not independent semantic authority.
 
-## Exact finite scope
+## Earlier structural control
 
 The selected case uses the quadratic extension of the 97-element field, an
 order-16 initial domain, two binary folds, a degree-less-than-two terminal
@@ -89,6 +96,47 @@ initial degree bound eight. That source profile performs three folds and sends
 a scalar terminal. The executable case is an early-terminated structural
 profile, and the source ledger explicitly makes no exact algorithm, theorem,
 or implementation-profile correspondence claim.
+
+## Exact classical control
+
+The additive classical lane uses the Goldilocks prime field, an order-64
+initial multiplicative domain, degree bound eight, three binary folds, and one
+scalar terminal. Four labelled query draws expand to twelve logical layer
+occurrences. Three salted SHA-256 pair-leaf trees commit the source and two
+folded Oracles; a canonical physical opening table may deduplicate entries
+without erasing logical order or multiplicity.
+
+The source Core retains native logical-Oracle publication/query/answer
+semantics. A distinct target Core publishes roots and openings. Their exact
+structural construction rederives the target, preserves the exact public
+Statement and application-context coordinates through its public-environment
+map, and checks total publication/coin/query/answer/check/outcome maps,
+construction-owned advice shape, public replay closure, and intrinsic bounds
+before minting process-local authority. Static construction owns the canonical
+physical-opening derivation law and its maximum bound; each run derives and
+checks its concrete deduplicated table from the logical occurrences. A
+separate one-run checker rebuilds all three roots, verifies native and target
+executions independently, and emits an inert receipt for that pair only. Its
+semantic receipt identity excludes validation limits and resource snapshots;
+a separate validation-basis identity binds those non-semantic conditions.
+
+The committed target has separate Fresh and strong-Fiat--Shamir Protocol
+identities over one unchanged Core. The strong transcript binds the complete
+public Statement and application context, each prior root, each prior fold
+challenge, the scalar terminal before query sampling, and distinct labels.
+The separate public verifier independently reimplements term framing,
+sampling, Merkle authentication, occurrence coverage, Goldilocks arithmetic,
+and all twelve fold equations.
+
+The Relations/Analysis additions remain bounded pressure instruments. They
+ground the exact statement and initial Oracle only through a declassified
+evaluation seam, derive a scalar residual with proximity `NotEvaluated`, form
+distinct round-by-round and restricted-restoration questions, and classify one
+direct-FRI parameter substitution as non-vacuous. They establish no theorem
+truth, applicability, proximity, soundness, outer relation, or property
+transport. Durable Relations promotion first requires a PIR-owned, purpose-
+specific confidential initial-Oracle view; durable Analysis promotion requires
+an explicit profile and catalog revision.
 
 ## Fixture and authority boundaries
 
@@ -138,20 +186,22 @@ inspect the Git diff and rerun the non-mutating checks after any interruption.
 
 ## Research result and remaining pressure
 
-The finite case is best classified as a conservative semantic extension: it
-needs explicit logical-oracle access and origin, commitment and work
-construction declarations with validation-bound one-execution receipts,
-ordered query occurrences, and typed Relations and Analysis surfaces, while
-preserving the central Interactive Core factorization. Generally admitted
-commitment and work constructions remain open.
+The combined cases are best classified as a conservative semantic extension:
+they need explicit logical-oracle access and origin, Core-changing commitment
+construction, work augmentation, ordered query occurrences, and typed
+Relations and Analysis surfaces while preserving the central Interactive Core
+factorization. The exact classical lane closes a reusable structural
+Oracle-commitment construction for one bounded source/target/profile triple;
+it does not generalize that result to other FRI or commitment profiles. The
+earlier work-augmentation construction remains validation-bound to one run.
 
 Primary-source pressure from exact and batched FRI, DEEP-FRI and DEEP-ALI,
 STIR, Circle FRI, WHIR, and the BCS compiler supports one further localized
 proposal: a finite nonadaptive verifier-derived Oracle and query-plan seam.
-That proposal is not implemented or durable yet. The exact classical profile,
-the derived-oracle seam, and representative batched, DEEP, STIR, Circle, WHIR,
-and BCS constructions remain constructive tests before broad family support
-can be claimed.
+That proposal is not implemented or durable yet. The exact classical profile
+is now executable, while the derived-oracle seam and representative batched,
+DEEP, STIR, Circle, WHIR, and BCS constructions remain constructive tests
+before broad family support can be claimed.
 
 The research basis and current decisions are recorded in:
 

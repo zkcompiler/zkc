@@ -2915,8 +2915,14 @@ soundness of a Protocol check. Those require separate Analysis judgments.
 
 Opening messages and checks are deliberately absent from
 `CommitmentGrounding`: K3-B has not selected a general opening-security
-contract. FRI/IOR opening correspondence remains an explicit post-K3-B K4 P02
-gate rather than an unsupported claim carried by unconnected lists.
+contract. An exact three-fold classical FRI control now exercises commitment
+roots, twelve logical opening coordinates, construction maps, and scalar
+residual formation as bounded executable pressure. It establishes neither a
+general opening-security contract nor a durable correspondence result: the
+instrument currently reads a declassified complete native trace, while the
+durable algebra accepts only owner-issued purpose-specific views and live
+authority. A PIR-owned initial-Oracle view is therefore a prerequisite to
+promoting this path.
 
 A commitment is deliberately not modeled as a lossy projection: material and
 commitment have different semantic roles, and cryptographic binding is not a
@@ -3019,7 +3025,7 @@ behavioral theorem from structural shape.
 | Schnorr/Sigma | public statement `Y`, local witness `x`, separate nonce randomness, message occurrence `A`, initial claim, terminal | Relation witness cannot mean all private prover input; message occurrence needs no object wrapper |
 | R1CS | structured public vector, witness assignment, constraint/artifact facts | Typed K1 values and selectors preserve order and multiplicity without scalar-port explosion |
 | randomized AIR | public instance, trace/oracle material, post-commitment verifier challenges | `PhaseInput` is a first-class fourth role |
-| FRI/IOR | public statement, logical oracle statement, publication/query/answer occurrences, opening messages/checks | `OracleStatement` and typed K2 Oracle/occurrence coordinates are required; K4 P02 retains full native-path validation |
+| FRI/IOR | public statement, logical oracle statement, publication/query/answer occurrences, opening messages/checks | `OracleStatement` and typed Oracle/occurrence coordinates are required. One exact classical control exercises the shape, but its declassified raw-trace grounding cannot enter the durable correspondence algebra without a PIR-owned purpose-specific initial-Oracle view. |
 | Nova/folding | ordered input claim-instance occurrences, cross-term publication, challenge, output accumulator instance, evolved witness | Claim/reduction correspondence is an occurrence graph plus relation transform; K4 P09 retains executable end-to-end validation |
 | `sha256-216` | exact 256-to-216 directional uses and grounded source-preimage premise | A separate lossy lane and derived occurrence count are mandatory |
 
@@ -3264,9 +3270,13 @@ dependent-owner freeze work:
    cold-replay, stale-generation, cross-field, cross-consumer, or
    cross-purpose evidence across all three lossy source arms. Such evidence
    may falsify these laws; it cannot redefine them silently.
-3. Native FRI/IOR validation remains required for the exact Oracle
-   publication/query/answer target union and commitment-grounding sources;
-   native Nova/folding validation remains required for the ordered
+3. One exact native classical FRI control now validates the three-publication,
+   twelve-logical-opening, construction-map, and scalar-residual shape. It does
+   not validate the durable source-authority path because it uses a
+   declassified complete trace where the selected algebra requires a purpose-
+   specific owner view and live capability. General FRI/IOR correspondence,
+   commitment/opening security, proximity, and outer-relation inference remain
+   open; native Nova/folding validation remains required for the ordered
    claim-instance and transform occurrence graph.
 4. The bounded integrated Schnorr witness exercises only one finite
    relation/Plan grounding path. It does not close live `PlanWitnessSurface`

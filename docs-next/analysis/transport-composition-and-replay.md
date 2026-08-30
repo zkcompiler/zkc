@@ -632,6 +632,12 @@ Its extractor capabilities, state relation, scheduling, and distribution law
 belong to that theorem's Analysis experiment. They are not implemented by K2
 replay and are unavailable outside the theorem profile.
 
+The exact classical FRI instrument under
+[`evaluation/native-fri-ior/`](../../evaluation/native-fri-ior/README.md)
+forms one restricted-restoration question as bounded candidate pressure. That
+formed question is neither replay authority, an affirmative restoration
+judgment, theorem applicability, nor property transport.
+
 ### 5.3 Analysis cold replay
 
 Cold replay reauthenticates portable semantic bodies, reconstructs source

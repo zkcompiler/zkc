@@ -436,3 +436,26 @@ This dossier does not claim that:
 
 Those are open Analysis obligations, not defects to conceal behind the
 executable witness.
+
+## 9. Exact classical control disposition
+
+The additive executable control now inhabits the selected order-64
+Goldilocks, degree-bound-eight, three-fold, scalar-terminal shape with four
+query repetitions and twelve labelled layer occurrences. Its separately coded
+public verifier agrees with the producer on the exact strong-Fiat--Shamir
+challenges, queries, acceptance, and resource vector, and its mutation cases
+reach authentication, selector, fold, transcript-influence, and limit
+boundaries.
+
+The Analysis surface intentionally stops before a property result. It forms
+distinct round-by-round and restricted state-restoration questions and checks
+the selected direct-FRI substitution with `rho = 1/8`, `m = 3`, `eta = 1/20`,
+`delta = 1/2`, and `ell = 4`. The selected bound is `1/16`, so the arithmetic
+is non-vacuous, but theorem truth is `NotEstablished`, applicability is
+`NotEvaluated`, and the property remains `NotEvaluated`.
+
+These objects remain executable candidate pressure rather than active durable
+Analysis families. Promotion requires exact profile/catalog, experiment,
+adversary, source-manifest, proposition, support, and authority contracts. The
+checked Oracle-commitment construction does not supply those premises and the
+BCS shortcut remains refused.
