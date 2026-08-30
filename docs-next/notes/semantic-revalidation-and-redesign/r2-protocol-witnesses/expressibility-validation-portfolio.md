@@ -3,8 +3,9 @@
 > **Kind:** Temporary R2 protocol-selection and validation-depth contract
 > **State:** Selected portfolio; repaired/refrozen `P01` is retained at T3
 > after exact-snapshot independent re-review; `P02` native FRI/IOR is retained
-> at T3 as a two-lane `ConservativeExtension` result; `V01` is retained at T3
-> as a source-shaped operational sibling with no activated security theorem
+> at T3 as a two-lane `ConservativeExtension`; `V01` is retained at T3 as a
+> source-shaped operational sibling; and the `V02`/`P05` commitment cluster is
+> closed at T2 with no activated security theorem
 > **Authority:** None. This page selects research pressure and evidence depth;
 > it does not define target semantics, supported protocols, theorem
 > applicability, implementation conformance, or the final v0 boundary.
@@ -246,11 +247,13 @@ Cases proceed by semantic dependency rather than publication date:
 8. **R2 convergence:** classify all cases, retain obstructions and extension
    boundaries, and derive only the bounded R3 research questions they require.
 
-The current cursor is step 3. The retained `P02` result is a fixed baseline,
-not work to repeat. The next large package studies `V02` first and then `P05`
-single/batched KZG at equal architectural resolution before deciding whether
-their Oracle, setup, commitment, claim, challenge, opening, and verification
-boundaries justify one shared checked construction.
+The current cursor is step 4. The retained `P02` result is a fixed baseline,
+not work to repeat. The completed `V02`/`P05` package selected one narrow
+verifier-side setup/claim/evidence profile, repaired Oracle authentication to
+consume it, and kept the materially different KZG operations separate. The
+next large package studies complete argument organizations (`P06`, `P07`,
+`P08`, then `V05`) and reopens the commitment boundary only if that integrated
+pressure exposes a contradiction.
 
 A cluster may stop early when a fundamental obstruction invalidates the model.
 Repair and refreeze precede later dependent cases. Independent families should

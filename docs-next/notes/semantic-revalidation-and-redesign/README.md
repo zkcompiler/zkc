@@ -12,8 +12,10 @@
 > FRI/IOR deep case is also retained as a two-lane
 > `ConservativeExtension`: an early-terminated control and a frozen exact
 > three-fold/scalar-terminal control remain distinct. The remaining protocol
-> and variant portfolio and independent semantic freeze are pending. Stage 4B
-> remains inactive.
+> and variant portfolio and independent semantic freeze are pending. The
+> Oracle/polynomial-commitment cluster is complete at constructive
+> architecture depth and advances the portfolio to complete argument
+> organizations. Stage 4B remains inactive.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -103,6 +105,10 @@ below are reader cross-references rather than inventory edges.
   retains the two finite FRI/IOR lanes, classifies the case as a conservative
   extension, fixes the deterministic source-correspondence boundary, and
   routes remaining Analysis and portfolio obligations.
+- [Oracle and Polynomial-Commitment Semantics](r2-protocol-witnesses/oracle-and-polynomial-commitment-semantics/README.md)
+  reconstructs the binary-field IOPCS and distinct KZG opening/aggregation
+  shapes, selects a verifier-side setup/claim/evidence profile, repairs Oracle
+  evidence coverage, and records the next portfolio boundary.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

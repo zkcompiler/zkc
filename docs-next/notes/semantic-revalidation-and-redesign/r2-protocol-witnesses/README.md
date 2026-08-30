@@ -3,8 +3,9 @@
 > **Kind:** Temporary executable-witness charter and index
 > **State:** Active R2 program; repaired `FRI-Grind-1` is closed at its finite
 > source-residual scope, the differentiated protocol-expressibility portfolio
-> is selected, and the Schnorr/Sigma and native FRI/IOR deep anchors are
-> retained at their exact bounded scopes
+> is selected, the Schnorr/Sigma and native FRI/IOR deep anchors are retained
+> at their exact bounded scopes, and Oracle/polynomial-commitment semantics are
+> closed at architecture-level constructive depth
 > **Authority:** None. A witness can falsify a candidate or recover a
 > requirement; it cannot ratify target semantics, a theorem, implementation
 > conformance, or migration policy.
@@ -80,6 +81,7 @@ elsewhere are cross-references, not additional inventory ownership.
 | [ZK-Protocol Expressibility Validation Portfolio](expressibility-validation-portfolio.md) | Reserved protocol, variant, and holdout portfolio with required evidence depth. |
 | [Algebraic Interaction and Reduction](algebraic-interaction-and-reduction/README.md) | Completed constructive cross-case package for classical Sumcheck, layered GKR, stateful duplex Fiat--Shamir, and the packed Boolean GKR variant; it preserves the flat Core, classifies the first, second, and fourth cases as native, and routes one local Fiat--Shamir construction extension. |
 | [Duplex-Sponge Transcript Construction](duplex-sponge-transcript-construction/README.md) | Completed source, architecture, identity, execution, and falsification package for the sibling transcript-construction extension routed by the algebraic-interaction research. |
+| [Oracle and Polynomial-Commitment Semantics](oracle-and-polynomial-commitment-semantics/README.md) | Completed source-grounded comparison of the binary-field IOPCS and four KZG opening/aggregation shapes; selects a narrow verifier profile, repairs Oracle evidence coverage, and rejects a universal batch-opening abstraction. |
 | [Native FRI/IOR End-to-End Validation Plan](native-fri-ior-validation-plan.md) | Ready work contract for source reconstruction, candidate comparison, executable oracle/query/opening pressure, and cross-domain convergence. |
 | [Native FRI/IOR Source Dossier](native-fri-ior-source-dossier.md) | Primary-source reconstruction, commitment/Fiat--Shamir separation, implementation-profile comparison, and exact finite-profile selection. |
 | [Native FRI/IOR Provisional Architecture Decision](native-fri-ior-architecture-decision.md) | Compared alternatives, selected native/committed/work-augmented construction chain, required semantic extensions, and executable reversal conditions. |
@@ -238,7 +240,10 @@ retained first T3 anchor. Native FRI/IOR is retained as the second required
 anchor through a combined packet whose early-terminated and exact classical
 lanes remain separately identified. Its deterministic Algorithm 1 schedule
 correspondence is closed at the fixed-coin structural boundary; cross-family
-closure and every property claim remain open. Recent design-set
+closure and every property claim remain open. The Oracle and polynomial-
+commitment cluster is now also closed at T2. It retains the executable native
+FRI/IOR case as its regression anchor, adds no new cryptographic evaluator, and
+advances the portfolio to complete argument organizations. Recent design-set
 variants and withheld cold cases prevent the portfolio from collapsing into a
 list of canonical examples.
 

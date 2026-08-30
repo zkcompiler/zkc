@@ -150,6 +150,17 @@
 > Analysis questions remain candidate or unsupported pending an explicit
 > owner profile and complete premise authority.
 
+> **Commitment-opening semantics update — 2026-08-31:** Source-grounded
+> comparison of the binary-field IOPCS and four KZG opening/aggregation shapes
+> selects one narrow verifier-side profile for explicit public setup, ordered
+> `(commitment, query, asserted answer)` claims, evidence, and bounded checks.
+> Oracle authentication consumes that profile but retains its source-to-target
+> construction and replaces universal equality deduplication with profile-local
+> evidence coverage. Private polynomials, producer algorithms, material
+> correspondence, and all cryptographic properties remain with Plan,
+> Relations, and Analysis. No generic queryable object or universal batch-
+> opening construction is selected.
+
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
 > is the sole durable owner of the current integrated gate. This architecture page

@@ -117,6 +117,13 @@ exact relation, artifact, and PIR sources; commitment grounding names the exact
 construction and equation position but proves no binding, hiding, extraction,
 or opening theorem.
 
+A PIR commitment-opening verifier profile supplies only public claim and check
+coordinates. It does not assert that a private polynomial or Oracle material
+produced the commitment, that the asserted answer is the source evaluation, or
+that a producer algorithm is correct. Add an exact evaluation-correspondence or
+material-grounding relation only when a named consumer needs that proposition;
+do not infer it from successful verifier execution.
+
 Public run grounding consumes only a PIR-issued public occurrence view produced
 by a live causal execution or an affirmative exact replay. Initial logical-
 Oracle material agreement is separate: it consumes one matching Relations

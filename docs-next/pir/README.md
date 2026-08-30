@@ -40,6 +40,17 @@ through deterministic bounded elaboration and total static maps. This is a
 Core-changing construction, unlike the same-Core Fresh/Fiat--Shamir
 construction, and it establishes no cryptographic property by itself.
 
+Polynomial-commitment pressure selects a smaller shared
+[Commitment-Opening Verification](commitment-opening-verification.md) boundary.
+One exact verifier profile fixes public setup roles, ordered
+`(commitment, query, asserted answer)` claims, public evidence, and bounded
+verification; an exact Core use supplies those coordinates without importing
+private polynomial or producer semantics. Oracle authentication consumes this
+profile but keeps its own source-to-target construction. KZG single opening,
+original multipoint opening, same-point proof aggregation, and independent-
+proof verification aggregation remain distinct profile shapes rather than one
+universal batch operation.
+
 The durable target now aligns the canonical carrier, `ProtocolInterface`, and
 `ProverPlan`, including the narrow source-ID-free `PlanWitnessSurface` needed
 for relation-witness attachment. Minimum Analysis consumers, purpose-specific
@@ -96,6 +107,9 @@ review remain pending.
   opening target Core, together with total occurrence maps, construction-owned
   advice, intrinsic bounds, process-local checked authority, and inert
   execution receipts;
+- separately identified verifier-side commitment-opening profiles and exact
+  Core uses, including explicit runtime public-setup assignment, claim/evidence
+  separation, profile-local claim grouping, and public replay;
 - PIR carrier semantics, the canonical Protocol identity projection, and
   artifact format; and
 - authenticated structural facts explicitly exported to later consumers.
@@ -197,6 +211,9 @@ first being found by the optimizer or successfully projected to every target.
 - [Oracle-Commitment Construction](oracle-commitment-construction.md) — exact
   logical-Oracle-to-committed-Core elaboration, admission, authority, and run
   validation boundary
+- [Commitment-Opening Verification](commitment-opening-verification.md) — exact
+  verifier-side setup, claim, evidence, Core-use, replay, and family-profile
+  boundary for Merkle and polynomial commitments
 - [Canonical PIR](canonical-pir.md)
 - [Protocol Interfaces and Prover Plans](interfaces-and-plans.md)
 - [Endpoint Projection Views](endpoint-projection-views.md)

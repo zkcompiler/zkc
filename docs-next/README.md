@@ -23,9 +23,11 @@ promoted candidate is mutually closed or semantically frozen. The
 owns that live integrated-design gate. The minimum consumer seams and one
 joined Schnorr path are complete at their bounded scopes. Native FRI/IOR is
 also retained as a two-lane conservative extension with only deterministic
-source-schedule correspondence. The remaining protocol portfolio and
-independent freeze are pending; the semantic kernel is not frozen and full
-Stage 4B remains inactive.
+source-schedule correspondence. A subsequent source-grounded commitment
+package selects a shared verifier-side setup/claim/evidence profile, repairs
+Oracle evidence coverage, and keeps four KZG opening/aggregation shapes
+distinct. The remaining protocol portfolio and independent freeze are pending;
+the semantic kernel is not frozen and full Stage 4B remains inactive.
 
 ## Where current truth lives
 
@@ -185,8 +187,11 @@ leaving full Stage 4B unactivated, then reclosed one finite joined Schnorr path.
 The retained native FRI/IOR case subsequently added typed logical-Oracle
 origin/access, one checked structural Oracle-commitment construction, and a
 causal confidential Relations connection without changing the central
-factorization. The remaining portfolio and independent freeze are still
-pending; none of these results is semantic freeze or Stage 4B activation.
+factorization. Polynomial-commitment pressure then added a verifier-side
+commitment-opening profile, explicit public setup assignment, and
+claim/evidence separation while rejecting a universal batching abstraction.
+The remaining portfolio and independent freeze are still pending; none of
+these results is semantic freeze or Stage 4B activation.
 
 The first semantic reconstruction result is the
 [Candidate v0 Semantic Architecture](project/v0-semantic-architecture.md). It

@@ -217,6 +217,14 @@ These profiles are different propositions with different source authority. A
 concrete run may pressure-test their occurrence maps; it never proves any
 universal or asymptotic property.
 
+The verifier-side commitment-opening profiles selected by PIR add no active
+Analysis family. Commitment correctness, binding, hiding, extractability,
+knowledge of opening, trusted-setup assumptions, BCS applicability, aggregation
+equivalence, and quantitative batching loss remain separately unsupported or
+`CannotAnswer` until an exact experiment, source manifest, theorem or rule
+edge, and premise basis are added here. A successful Merkle or pairing check
+cannot fill any of those roles.
+
 An additive exact classical FRI control now supplies bounded candidate
 pressure outside this active profile set. It forms distinct round-by-round and
 restricted state-restoration questions, checks the three-fold scalar-terminal

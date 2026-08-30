@@ -54,6 +54,7 @@ separately identified satellites
   ProverPlan[ProtocolId]
   Relation subjects, bindings, and checked correspondence
   FSConstruction[source ProtocolId, target ProtocolId]
+  CommitmentOpeningVerifierProfile + exact Core use
   OracleCommitmentConstruction[source CoreId, target CoreId, profile]
   CoreComposition[ordered child occurrences, target CoreId]
 
@@ -132,6 +133,14 @@ forms both Cores and rederives every exact construction map before minting
 profile-bound process-local authority. Because verifier-observable interaction
 changes, source and target have different `CoreId`s. Fresh and Fiat--Shamir are
 formed only after the committed Core exists and share that target `CoreId`.
+
+The committed target may attach an exact verifier-side commitment-opening
+profile. That profile owns public setup roles, ordered commitment/query/answer
+claims, evidence types, and bounded verification. It does not own a private
+polynomial, honest producer, relation grounding, or security theorem. The
+Oracle construction consumes the profile with a construction-local evidence-
+coverage law; native KZG profiles may use it directly without pretending that
+KZG is a logical-Oracle compilation.
 
 Neither checked arrow establishes randomized coin correspondence, commitment
 binding or hiding, an IOP-to-argument theorem, or a security property. Analysis
