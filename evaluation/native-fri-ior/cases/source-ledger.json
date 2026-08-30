@@ -1,7 +1,7 @@
 {
   "schema": "zkc.native-fri-ior.source-ledger.v1",
   "scope": "consulted-design-input-manifest",
-  "frozen_on": "2026-08-28",
+  "frozen_on": "2026-08-30",
   "papers": [
     {
       "id": "bcs-iop-2016-116-r2",
@@ -72,6 +72,7 @@
         "byte_length": 995671
       },
       "usage": [
+        "algorithm-1-three-fold-scalar-terminal-structural-schedule",
         "fri-fiat-shamir-separation",
         "ordered-query-semantics"
       ]

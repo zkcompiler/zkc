@@ -136,14 +136,17 @@ owns the reopened integrated-closure gate. Stage 4B remains unactivated, and
 none of these target pages claims semantic freeze, normative cutover, or
 implementation.
 
-K3-D's bounded result is owned by PIR's
+The bounded endpoint result is owned by PIR's
 [Endpoint Projection Views](../pir/endpoint-projection-views.md) and OIR's
 [Endpoint and Projection Contract](../oir/projection-contract.md). It selects
 the minimum FS verifier and Plan-specialized prover read/relation seam without
-selecting a complete OIR language or activating Stage 4B. Bounded K3-E has
-reclosed that seam with the preceding K1--K3-C owners over one finite joined
-witness. K4 bounded protocol-portfolio pressure is next; K5 independent
-freeze remains later, and Stage 4B remains inactive.
+selecting a complete OIR language or activating Stage 4B. One finite joined
+Schnorr witness reclosed that seam with the preceding owners. Native FRI/IOR is
+now retained as a separate two-lane conservative extension: a checked
+logical-Oracle-to-committed-Core construction precedes the same-Core
+Fresh/Fiat--Shamir split, while Analysis properties remain separate. The
+remaining protocol portfolio and independent freeze remain later, and Stage 4B
+remains inactive.
 
 Future durable documents may include a charter, current status, roadmap, and
 decision index. They will be created only when content is migrated and their

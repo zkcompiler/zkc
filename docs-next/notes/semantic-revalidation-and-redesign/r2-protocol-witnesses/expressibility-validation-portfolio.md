@@ -2,8 +2,8 @@
 
 > **Kind:** Temporary R2 protocol-selection and validation-depth contract
 > **State:** Selected portfolio; repaired/refrozen `P01` is retained at T3
-> after exact-snapshot independent re-review; one finite `P02` profile has
-> executed, with exact-source correspondence and final retention still open
+> after exact-snapshot independent re-review; `P02` native FRI/IOR is retained
+> at T3 as a two-lane `ConservativeExtension` result
 > **Authority:** None. This page selects research pressure and evidence depth;
 > it does not define target semantics, supported protocols, theorem
 > applicability, implementation conformance, or the final v0 boundary.
@@ -116,13 +116,17 @@ Each completed case receives exactly one primary classification:
 
 `P01` is a retained T3 result at its exact finite scope. Its repaired 69-test
 packet passed separate lifecycle and provenance cold rechecks on the final
-source-bound identity. `P02` now has one executed early-terminated finite
-profile with a source-explicit delta, public-only target replay, independently
-coded positive reconstruction, and owner-local construction and Relations
-receipts. It does not yet establish exact correspondence to the cited
-three-fold scalar-terminal algorithm, family closure, or a final T3 retention
-decision. It does not reuse the fixture-local invented acceptance condition
-withdrawn by `FRI-Grind-1`.
+source-bound identity. `P02` is retained through one combined packet with two
+distinct lanes: an early-terminated finite profile with the full historical
+replay packet and an exact three-fold/scalar-terminal classical control with
+frozen public replay. The exact lane closes fixed-coin deterministic verifier-
+shape correspondence to the cited Algorithm 1, not the randomized source
+Protocol or any theorem. The case-level primary classification is
+`ConservativeExtension`; family closure, BCS, property Analysis, and the outer
+relation remain open. It does not reuse the fixture-local invented acceptance
+condition withdrawn by `FRI-Grind-1`. The
+[final retention record](native-fri-ior-final-classification-and-retention.md)
+owns the precise gate and reopening boundary.
 
 ### 4.2 Constructive canonical families
 
@@ -287,6 +291,10 @@ R2 can converge when:
   and
 - no protocol-security, theorem-applicability, general expressiveness, or
   implementation-support claim is inferred from the portfolio.
+
+The first exit row is now satisfied by the two retained deep anchors. Every
+other row remains active: the remaining protocol, variant, and holdout cases
+have not been waived or implied by the FRI/IOR result.
 
 ## 10. Known risks and non-claims
 

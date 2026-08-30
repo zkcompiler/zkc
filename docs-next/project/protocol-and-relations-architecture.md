@@ -54,11 +54,19 @@ separately identified satellites
   ProverPlan[ProtocolId]
   Relation subjects, bindings, and checked correspondence
   FSConstruction[source ProtocolId, target ProtocolId]
+  OracleCommitmentConstruction[source CoreId, target CoreId, profile]
   CoreComposition[ordered child occurrences, target CoreId]
 
 admitted Stage 3 subjects and exact checked structural results
   +--> Stage 4A Analysis, then Compiler
   `--> Stage 4B OIR, then Realization
+
+native logical-Oracle specialization
+  admitted source Core
+      -> checked Oracle-commitment construction
+      -> admitted committed Core
+      -> Fresh Protocol | FiatShamir Protocol over that same committed Core
+      -> Analysis question only through an exact profile and premise basis
 ```
 
 The language-independent algebra is the selected target mathematical meaning,
@@ -116,6 +124,20 @@ Fresh and Fiat--Shamir interpretations over the same `CoreId` have different
 `ProtocolId`s. A Fiat--Shamir Protocol carries only the exact construction
 reference and dependency; `TranscriptConstruction` remains a separately
 identified subject.
+
+An Oracle-commitment construction is a different structural relation. Its
+source Core may expose an `InitialOracle` through `LogicalAccess`, while its
+target Core exposes commitments, openings, and checks. Admission independently
+forms both Cores and rederives every exact construction map before minting
+profile-bound process-local authority. Because verifier-observable interaction
+changes, source and target have different `CoreId`s. Fresh and Fiat--Shamir are
+formed only after the committed Core exists and share that target `CoreId`.
+
+Neither checked arrow establishes randomized coin correspondence, commitment
+binding or hiding, an IOP-to-argument theorem, or a security property. Analysis
+must form a separate question over the exact source and target experiments,
+construction profile, strategy and coin laws, theorem truth and assumptions,
+resources, and losses. A structural capability cannot fill any of those slots.
 
 `CoreId` is an embedded semantic subidentity, not a second official artifact
 root. The canonical graph has one `pir.protocol` root containing the Core and
@@ -239,6 +261,16 @@ Nothing in this seam establishes relation truth, satisfiability, witness
 validity, or a cryptographic property. A private witness assignment remains an
 occurrence-local confidential capability rather than a mandatory public
 content-addressed object.
+
+An initial `LogicalAccess` Oracle adds no public publication value for
+Relations to select. PIR instead may issue one causally generated, purpose-
+bound confidential whole-carrier view for an exact correspondence question.
+Relations can compare that view with the matching relation-side Oracle material
+only while both original live authorities remain valid. The public run view is
+not widened, replay cannot issue the confidential view, and no result body
+retains the carrier, a trace, or a secret-derived identifier. This agreement is
+still structural/run-grounded correspondence, not proximity, satisfaction,
+opening security, or property Analysis.
 
 ## 5. Fiat--Shamir construction
 

@@ -36,11 +36,11 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = PACKAGE_ROOT / "cases" / "source-ledger.json"
 
 EXPECTED_LEDGER_ARTIFACT_ID = (
-    "sha256:ba4dada5a922a782e701aec30f3c336f99d09a615098786197d7c2f43e2b48d6"
+    "sha256:3273c81c294e6ddac201de8b9e692efd9496e03ceefd3e4cc0bbd60509b0e66b"
 )
 EXPECTED_LEDGER_CANONICAL_ID = (
     "canonical-sha256:"
-    "21052df00223647824a877e5a23941aadd8295658f29dda3e1e1537d2ed62839"
+    "c9e3a0291dac413cf6836746cc4f55002353621ff7fb177ce8ee1cbe5b157c7e"
 )
 
 EXPECTED_PAPERS = {
@@ -317,6 +317,10 @@ class SourceLedgerFixtureTest(unittest.TestCase):
         )
         for identifier in ("eccc-fri-tr17-134-r2", "icalp-fri-2018-14"):
             self.assertIn("native-fri-design-reference", papers[identifier]["usage"])
+        self.assertIn(
+            "algorithm-1-three-fold-scalar-terminal-structural-schedule",
+            papers["fri-fs-2023-1071-r7"]["usage"],
+        )
 
         boundary = self.ledger.normalized_value["claim_boundary"]
         self.assertTrue(

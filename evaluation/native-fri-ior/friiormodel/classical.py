@@ -27,8 +27,10 @@ from .terms import (
     checker_failure,
     deterministic_limit_failure,
     encode_term,
+    kind_mismatch,
     malformed,
     refusal,
+    refused,
     semantic_id,
 )
 
@@ -547,10 +549,122 @@ EXACT_COMMITTED_SCHEDULE = tuple(
 )
 
 
+def derive_first_active_terminal_influence_cone(
+    source_node: str,
+    direct_edges: tuple[tuple[str, str], ...],
+    occurrence_activity_nodes: tuple[str, ...],
+    terminal_decisions: tuple[tuple[int, str], ...],
+) -> frozenset[str]:
+    """Derive descendants with exact first-active-terminal control edges.
+
+    ``direct_edges`` are producer-to-consumer semantic dependencies.
+    ``occurrence_activity_nodes`` is the total occurrence order, and each
+    terminal pair gives its occurrence ordinal and decision node.  Every such
+    decision controls the activity of every later occurrence because a run
+    reaches that occurrence only when the earlier terminal was inactive.  The
+    caller supplies formed, acyclic model coordinates; this helper adds no
+    generic schedule-prefix dependency.
+    """
+
+    adjacency: dict[str, set[str]] = {}
+    for producer, consumer in direct_edges:
+        adjacency.setdefault(producer, set()).add(consumer)
+    for terminal_ordinal, decision_node in terminal_decisions:
+        for activity_node in occurrence_activity_nodes[terminal_ordinal + 1 :]:
+            adjacency.setdefault(decision_node, set()).add(activity_node)
+
+    reached = {source_node}
+    pending = [source_node]
+    while pending:
+        producer = pending.pop()
+        for consumer in adjacency.get(producer, ()):
+            if consumer not in reached:
+                reached.add(consumer)
+                pending.append(consumer)
+    reached.remove(source_node)
+    return frozenset(reached)
+
+
+@dataclass(frozen=True, slots=True)
+class ClassicalOracleDeclaration:
+    """One value-free Oracle coordinate owned by the native Core."""
+
+    layer: int
+    name: str
+    domain_id: SemanticId
+    origin: str
+    publication_mode: str
+
+    def __post_init__(self) -> None:
+        if type(self.layer) is not int or not 0 <= self.layer < FOLD_ROUNDS:
+            raise malformed(
+                "classical-fri:oracle-declaration-formation",
+                "FRI-IOR-CLASSICAL-ORACLE-005",
+                "an Oracle declaration layer must be one of 0, 1, or 2",
+            )
+        if self.name != f"G{self.layer}":
+            raise malformed(
+                "classical-fri:oracle-declaration-formation",
+                "FRI-IOR-CLASSICAL-ORACLE-006",
+                "an Oracle declaration name must match its exact layer",
+            )
+        if self.domain_id != CLASSICAL_DOMAINS[self.layer].identity:
+            raise malformed(
+                "classical-fri:oracle-declaration-formation",
+                "FRI-IOR-CLASSICAL-ORACLE-007",
+                "an Oracle declaration must name the exact layer domain",
+            )
+        expected_origin = "InitialOracle" if self.layer == 0 else "ProverOracle"
+        if self.origin != expected_origin:
+            raise malformed(
+                "classical-fri:oracle-declaration-formation",
+                "FRI-IOR-CLASSICAL-ORACLE-008",
+                "G0 is initial input while G1 and G2 are prover-supplied",
+            )
+        if self.publication_mode != "LogicalAccess":
+            raise malformed(
+                "classical-fri:oracle-declaration-formation",
+                "FRI-IOR-CLASSICAL-ORACLE-009",
+                "the native Core exposes each Oracle only through logical access",
+            )
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "layer": self.layer,
+            "name": self.name,
+            "domain_id": self.domain_id.to_term(),
+            "origin": self.origin,
+            "publication_mode": self.publication_mode,
+            "publication_outputs": [],
+            "fixation_observation": "ValueFreeLogicalOracleMarker",
+        }
+
+    @property
+    def identity(self) -> SemanticId:
+        return semantic_id(
+            "classical-fri-oracle-coordinate",
+            "classical-fri.oracle-coordinate.v1",
+            self.to_term(),
+        )
+
+
+EXACT_CLASSICAL_ORACLE_DECLARATIONS = tuple(
+    ClassicalOracleDeclaration(
+        layer=layer,
+        name=f"G{layer}",
+        domain_id=CLASSICAL_DOMAINS[layer].identity,
+        origin="InitialOracle" if layer == 0 else "ProverOracle",
+        publication_mode="LogicalAccess",
+    )
+    for layer in range(FOLD_ROUNDS)
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ClassicalNativeCore:
     profile_id: SemanticId
     schedule: tuple[ClassicalScheduleEvent, ...]
+    oracle_declarations: tuple[ClassicalOracleDeclaration, ...]
 
     def __post_init__(self) -> None:
         if self.profile_id != EXACT_CLASSICAL_FRI_PROFILE.identity:
@@ -565,6 +679,12 @@ class ClassicalNativeCore:
                 "FRI-IOR-CLASSICAL-CORE-002",
                 "the native Core must retain the exact source schedule",
             )
+        if self.oracle_declarations != EXACT_CLASSICAL_ORACLE_DECLARATIONS:
+            raise malformed(
+                "classical-fri:native-core-formation",
+                "FRI-IOR-CLASSICAL-CORE-007",
+                "the native Core must declare exact initial and prover Oracle roles",
+            )
 
     def to_term(self) -> dict[str, Any]:
         return {
@@ -574,7 +694,10 @@ class ClassicalNativeCore:
                 _public_environment_coordinate_schema()
             ),
             "schedule": [event.to_term() for event in self.schedule],
-            "oracle_layers": ["G0", "G1", "G2"],
+            "oracle_declarations": [
+                declaration.to_term()
+                for declaration in self.oracle_declarations
+            ],
             "terminal": "C:GoldilocksElement",
             "query_occurrences": LAYER_QUERY_OCCURRENCES,
         }
@@ -591,6 +714,42 @@ class ClassicalNativeCore:
 EXACT_CLASSICAL_NATIVE_CORE = ClassicalNativeCore(
     EXACT_CLASSICAL_FRI_PROFILE.identity,
     EXACT_NATIVE_SCHEDULE,
+    EXACT_CLASSICAL_ORACLE_DECLARATIONS,
+)
+
+EXACT_CLASSICAL_NATIVE_FRESH_PROTOCOL_ID = semantic_id(
+    "classical-fri-native-protocol",
+    "classical-fri.native-protocol.v1",
+    {
+        "native_core_id": EXACT_CLASSICAL_NATIVE_CORE.identity.to_term(),
+        "challenge_interpretation": "Fresh",
+    },
+)
+
+EXACT_INITIAL_ORACLE_FIXATION_COORDINATE_ID = semantic_id(
+    "classical-fri-oracle-fixation-coordinate",
+    "classical-fri.oracle-fixation-coordinate.v1",
+    {
+        "native_core_id": EXACT_CLASSICAL_NATIVE_CORE.identity.to_term(),
+        "oracle_coordinate_id": (
+            EXACT_CLASSICAL_ORACLE_DECLARATIONS[0].identity.to_term()
+        ),
+        "schedule_ordinal": 0,
+        "event_kind": "FixInitialOracle",
+        "publication_mode": "LogicalAccess",
+    },
+)
+
+EXACT_NATIVE_TERMINAL_COORDINATE_ID = semantic_id(
+    "classical-fri-native-terminal-coordinate",
+    "classical-fri.native-terminal-coordinate.v1",
+    {
+        "native_core_id": EXACT_CLASSICAL_NATIVE_CORE.identity.to_term(),
+        "schedule_ordinal": 6,
+        "event_kind": "PublishTerminalScalar",
+        "name": "C",
+        "value_type": "GoldilocksElement",
+    },
 )
 
 
@@ -2129,6 +2288,48 @@ def classical_protocol_id(interpretation: str) -> SemanticId:
                 else None
             ),
         },
+    )
+
+
+def check_classical_strong_fiat_shamir_core(core: object) -> CheckResult:
+    """Admit strong FS only after logical Oracles become public commitments."""
+
+    boundary = "classical-fri:fiat-shamir-core-admission"
+    if type(core) is ClassicalNativeCore:
+        if any(
+            declaration.publication_mode == "LogicalAccess"
+            for declaration in core.oracle_declarations
+        ):
+            return refused(
+                boundary,
+                "FRI-IOR-CLASSICAL-FS-015",
+                "same-Core Fiat--Shamir is unavailable when logical Oracle access reaches acceptance data or control",
+            )
+        return kind_mismatch(
+            boundary,
+            "FRI-IOR-CLASSICAL-FS-016",
+            "the native Core does not expose the exact committed transcript surface",
+        )
+    if type(core) is not ClassicalCommittedCore:
+        return kind_mismatch(
+            boundary,
+            "FRI-IOR-CLASSICAL-FS-016",
+            "strong Fiat--Shamir admission requires an exact Core carrier",
+        )
+    if core != EXACT_CLASSICAL_COMMITTED_CORE:
+        return refused(
+            boundary,
+            "FRI-IOR-CLASSICAL-FS-017",
+            "the committed Core substituted the exact public replay surface",
+        )
+    return affirmative(
+        boundary,
+        "FRI-IOR-CLASSICAL-FS-100",
+        "the distinct committed Core exposes the exact strong-FS transcript surface",
+        subject=core.identity,
+        source_core_id=core.source_core_id,
+        same_core=False,
+        public_replay=True,
     )
 
 

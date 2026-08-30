@@ -4,7 +4,8 @@
 > **Document state:** Active
 > **Design maturity:** Reconstruction with selected Stage 1--4A semantic,
 > transition, Protocol, canonical PIR, Relations, Analysis, and Compiler
-> backbone plus bounded K3-E integrated closure; K4 next and K5 freeze pending
+> backbone, bounded consumer integration, and one retained native FRI/IOR
+> conservative extension; remaining portfolio and freeze pending
 > **Provisional owner:** `project`
 > **Authority:** Non-normative. This page is a reconstruction and design
 > surface for `docs-next/`. The current specifications, status, architecture,
@@ -108,13 +109,25 @@
 > purpose-bound adapter closes only the selected finite path; its richer
 > future-owner facts remain a carrier residual. The Analysis lane
 > deterministically rederives its selected records and checks stable IDs; no
-> live Analysis capability crosses into K3-D or is exercised by K3-E. K4
-> portfolio pressure is next, K5 independent freeze remains pending, and
-> Stage 4B remains inactive.
+> live Analysis capability crosses into endpoint projection or is exercised by
+> the joined finite path. The protocol portfolio and independent freeze remain
+> pending, and Stage 4B remains inactive.
+
+> **Native FRI/IOR closure update — 2026-08-30:** One combined two-lane case
+> retains the earlier early-terminated control and a separate frozen exact
+> three-fold/scalar-terminal control. PIR now distinguishes initial and prover
+> Oracles, owns logical access and a checked profile-bound Oracle-commitment
+> construction, and issues one causal purpose-bound confidential initial-
+> Oracle view. Relations owns the matching material-agreement question without
+> widening the public run view or retaining a secret-derived identity. The
+> committed Core then has distinct Fresh and Fiat--Shamir Protocols over one
+> unchanged `CoreId`. This is structural authority only: exact classical
+> Analysis questions remain candidate or unsupported pending an explicit
+> owner profile and complete premise authority.
 
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
-> is the sole durable owner of the current K0--K5 gate. This architecture page
+> is the sole durable owner of the current integrated gate. This architecture page
 > records selected structure and open research surfaces rather than duplicating
 > subphase status.
 

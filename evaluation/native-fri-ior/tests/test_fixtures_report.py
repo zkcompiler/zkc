@@ -20,6 +20,8 @@ PUBLIC_MODEL_MODULES = (
     "analysis.py",
     "commitment.py",
     "committed.py",
+    "classical.py",
+    "classical_fixtures.py",
     "field.py",
     "fixtures.py",
     "native.py",
@@ -79,6 +81,11 @@ class FrozenFixtureTest(unittest.TestCase):
             _loaded("public-native-vector.json").value["native_trace_id"],
         )
         self.assertGreater(limits.proof_bytes, proof.canonical_byte_length)
+
+        classical_limits = report_module.parse_classical_replay_policy(
+            _loaded("exact-classical-replay-policy.json").value
+        )
+        self.assertEqual(classical_limits.logical_query_occurrences, 12)
 
     def test_parsers_reject_extra_keys_bad_enums_and_duplicate_json_keys(self) -> None:
         inputs = deepcopy(_loaded("public-inputs.json").value)
@@ -187,6 +194,7 @@ class PublicReportTest(unittest.TestCase):
         self.assertNotIn("owner-generation-input", joined)
         self.assertNotIn("expected-results", joined)
         self.assertNotIn("owner-relation-input", joined)
+        self.assertNotIn("exact-classical-owner-generation-input", joined)
 
     def test_public_report_never_imports_generation_or_names_private_expected_paths(
         self,
@@ -198,6 +206,7 @@ class PublicReportTest(unittest.TestCase):
         self.assertNotIn("owner-generation-input.json", source)
         self.assertNotIn("expected-results.json", source)
         self.assertNotIn("owner-relation-input.json", source)
+        self.assertNotIn("exact-classical-owner-generation-input.json", source)
 
     def test_report_source_basis_is_the_complete_public_local_import_closure(
         self,
@@ -205,7 +214,12 @@ class PublicReportTest(unittest.TestCase):
         closure = set(_source_closure(ROOT, SOURCE_BASES["report"]))
         self.assertEqual(
             closure,
-            {*PUBLIC_MODEL_MODULES, "../independent.py", "../run.py"},
+            {
+                *PUBLIC_MODEL_MODULES,
+                "../independent.py",
+                "../classical_independent.py",
+                "../run.py",
+            },
         )
         self.assertTrue(
             {
@@ -253,6 +267,48 @@ class PublicReportTest(unittest.TestCase):
                 )
             ],
         )
+
+    def test_exact_classical_public_path_uses_only_raw_frozen_terms(self) -> None:
+        actual = report_module._load_classical_independent()
+        calls: list[tuple[object, object, object]] = []
+
+        class RecordingIndependent:
+            @staticmethod
+            def verify_public_classical_fri(inputs, proof, *, limits):
+                calls.append((inputs, proof, limits))
+                return actual.verify_public_classical_fri(
+                    inputs,
+                    proof,
+                    limits=limits,
+                )
+
+        with (
+            patch(
+                "friiormodel.report._load_classical_independent",
+                return_value=RecordingIndependent(),
+            ),
+            patch(
+                "friiormodel.classical.verify_committed_fiat_shamir",
+                side_effect=AssertionError("producer verifier is not public authority"),
+            ),
+        ):
+            built = build_public_report(ROOT)
+        self.assertEqual(
+            calls,
+            [
+                (
+                    _loaded("exact-classical-public-inputs.json").value,
+                    _loaded("exact-classical-public-proof.json").value,
+                    _loaded("exact-classical-replay-policy.json").value["limits"],
+                )
+            ],
+        )
+        exact = built["report"]["exact_classical_execution"]
+        self.assertEqual(
+            (exact["independent_replay"]["outcome"], exact["independent_replay"]["code"]),
+            ("Affirmative", "FRI-IOR-CLASSICAL-INDEPENDENT-100"),
+        )
+        self.assertFalse(exact["uses_owner_generation_input"])
 
     def test_report_policy_rejects_self_authored_negative_success(self) -> None:
         positive = parse_public_proof(_loaded("public-proof.json").value)
@@ -342,6 +398,10 @@ class PublicReportTest(unittest.TestCase):
                     package / "friiormodel" / name,
                 )
             shutil.copy2(PACKAGE / "independent.py", package / "independent.py")
+            shutil.copy2(
+                PACKAGE / "classical_independent.py",
+                package / "classical_independent.py",
+            )
             shutil.copy2(PACKAGE / "run.py", package / "run.py")
             (package / "cases").mkdir()
             for name in (
@@ -350,6 +410,9 @@ class PublicReportTest(unittest.TestCase):
                 "public-native-vector.json",
                 "public-negative-proofs.json",
                 "replay-policy.json",
+                "exact-classical-public-inputs.json",
+                "exact-classical-public-proof.json",
+                "exact-classical-replay-policy.json",
                 "source-ledger.json",
             ):
                 shutil.copy2(PACKAGE / "cases" / name, package / "cases" / name)
@@ -359,6 +422,9 @@ class PublicReportTest(unittest.TestCase):
             )
             self.assertFalse((package / "cases/expected-results.json").exists())
             self.assertFalse((package / "cases/owner-relation-input.json").exists())
+            self.assertFalse(
+                (package / "cases/exact-classical-owner-generation-input.json").exists()
+            )
             self.assertFalse((package / "friiormodel/generation.py").exists())
             self.assertFalse((package / "friiormodel/constructions.py").exists())
             self.assertFalse((package / "friiormodel/diagnostics.py").exists())
@@ -398,6 +464,9 @@ class PublicReportTest(unittest.TestCase):
             )
             (package / "cases/owner-relation-input.json").write_text(
                 '{"ignored":"relation mutation"}\n', encoding="utf-8"
+            )
+            (package / "cases/exact-classical-owner-generation-input.json").write_text(
+                '{"ignored":"exact owner mutation"}\n', encoding="utf-8"
             )
             changed = subprocess.run(
                 command, cwd=copied, capture_output=True, check=True

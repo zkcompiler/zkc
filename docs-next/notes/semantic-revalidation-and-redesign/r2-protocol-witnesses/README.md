@@ -3,18 +3,19 @@
 > **Kind:** Temporary executable-witness charter and index
 > **State:** Active R2 program; repaired `FRI-Grind-1` is closed at its finite
 > source-residual scope, the differentiated protocol-expressibility portfolio
-> is selected, and repaired/refrozen `P01` Schnorr/Sigma is retained at T3
-> after exact-snapshot independent re-review
+> is selected, and the Schnorr/Sigma and native FRI/IOR deep anchors are
+> retained at their exact bounded scopes
 > **Authority:** None. A witness can falsify a candidate or recover a
 > requirement; it cannot ratify target semantics, a theorem, implementation
 > conformance, or migration policy.
 > **Current witness:** `P01` Schnorr/Sigma is the retained first T3 anchor. Its
 > prior 62-test snapshot failed cold review; the staged 69-test repair, rotated
 > source-bound report, refrozen projection, copied-checkout replay, and separate
-> lifecycle and provenance cold rechecks now pass. One finite `P02` native
-> FRI/IOR profile has also executed through public replay and owner-local
-> grounding; exact-source correspondence, cross-family closure, and its final
-> T3 retention decision remain open. All-code reachability remains nonblocking
+> lifecycle and provenance cold rechecks now pass. `P02` native FRI/IOR is now
+> retained as one two-lane T3 packet: the earlier early-terminated control and
+> the frozen exact three-fold/scalar-terminal control remain distinct. Its
+> primary classification is `ConservativeExtension`; cross-family closure and
+> property results remain open. All-code reachability remains nonblocking
 > hygiene.
 > **Downstream boundary:** Stage 4B remains inactive.
 > **Deletion:** Absorb reviewed results into their durable owners, route open
@@ -83,6 +84,7 @@ elsewhere are cross-references, not additional inventory ownership.
 | [Native FRI/IOR Analysis Dossier](native-fri-ior-analysis-dossier.md) | Source-grounded theorem and variant matrix, Analysis experiment requirements, arithmetic applicability checks, and explicit nonclaims. |
 | [FRI/IOR Variant Pressure Synthesis](fri-ior-variant-pressure-synthesis.md) | Cross-family primary-source comparison, current-model disposition, and a candidate verifier-derived Oracle/query-plan seam pressured independently by DEEP-ALI and STIR, with static elaboration and composition closure still open. |
 | [Independent Semantic Review Reconciliation](independent-semantic-review-reconciliation.md) | Adjudication of the post-FRI independent review, factual repair ledger, bounded indexed-elaboration decision, consolidation policy, and ordered closure gates. |
+| [Native FRI/IOR Final Classification and Retention](native-fri-ior-final-classification-and-retention.md) | Final two-lane case classification, exact deterministic source boundary, gate disposition, absorption map, nonclaims, and reopening conditions. |
 | [Native FRI/IOR Executable Package](../../../../evaluation/native-fri-ior/README.md) | Earlier finite replay plus an additive exact Goldilocks three-fold/scalar-terminal control, structurally admitted Oracle-commitment construction, Fresh/strong-Fiat--Shamir runs, separately coded public replay, bounded Relations/Analysis pressure, and explicit nonclaims. |
 | [P01 Schnorr/Sigma](p01-schnorr-sigma.md) | P01 source reconstruction, current-target obstruction, and theorem boundary. |
 | [P01 Phase B Repair and Refreeze Decision](p01-phase-b-repair-and-refreeze.md) | Selected finite repair, public evidence boundary, gate states, and reopening conditions. |
@@ -230,9 +232,11 @@ Failure is a valid R2 result and must retain its exact inputs and reopening
 conditions. Later work follows the differentiated portfolio rather than making
 every case executable: T1 boundary analyses, T2 constructive encodings, and T3
 executable witnesses carry different evidence. `P01` Schnorr/Sigma is the
-retained first T3 anchor. A finite native FRI/IOR profile has now executed as
-the second required anchor, while exact-source correspondence, cross-family
-closure, and final retention remain open. Recent design-set
+retained first T3 anchor. Native FRI/IOR is retained as the second required
+anchor through a combined packet whose early-terminated and exact classical
+lanes remain separately identified. Its deterministic Algorithm 1 schedule
+correspondence is closed at the fixed-coin structural boundary; cross-family
+closure and every property claim remain open. Recent design-set
 variants and withheld cold cases prevent the portfolio from collapsing into a
 list of canonical examples.
 
@@ -275,8 +279,11 @@ target, closes Gate 6. Full diagnostic reachability remains a nonblocking
 hygiene queue. Separate lifecycle and provenance cold rechecks pass on the final
 identity, so P01 is retained at T3; the Phase B decision owns the exact gate
 states. The broader candidate and holdout set is selected by the adjacent
-portfolio, but no protocol case beyond `P01` and this finite `P02` profile has
-begun merely because cross-cutting probes exist.
+portfolio, but no protocol case beyond the two retained anchors has begun
+merely because cross-cutting probes exist. The native FRI/IOR case's exact
+classification, source boundary, absorption destinations, and reopening
+conditions are owned by its
+[final retention record](native-fri-ior-final-classification-and-retention.md).
 
 For P01 specifically, precommitment-before-challenge resolution holds only
 inside the modeled owner-local capability flow. It does not establish out-of-

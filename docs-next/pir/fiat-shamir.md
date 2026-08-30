@@ -1,16 +1,17 @@
 # Fiat--Shamir Construction
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K2 target
-> **Target status:** Bounded K2 candidate complete; K3 theorem integration
-> remains open
+> **Document state:** Active non-normative redesign target
+> **Target status:** The bounded construction, strong-influence, and same-Core
+> eligibility model is complete; theorem applicability and property transport
+> remain separate open Analysis work.
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Fiat--Shamir
 > semantics remain under [`docs/`](../../docs/README.md).
 
 ## 1. Contract
 
-This page is the sole K2 definition owner for:
+This page is the sole target definition owner for:
 
 - transcript-construction identity, authentication, admission, and support;
 - initialization, typed framing, absorption, squeezing, challenge decoding,
@@ -370,9 +371,18 @@ TranscriptFrame =
   | OraclePublication {
       occurrence: OccurrenceRef,
       oracle: OracleRef,
-      publication_mode: OraclePublicationMode,
-      public_material_type: ValueType,
-      public_material: CanonicalValue<public_material_type>
+      publication:
+          PublishedMaterial {
+            publication_mode:
+              FullCanonicalOracle | PublicBinding,
+            public_material_type: ValueType,
+            public_material: CanonicalValue<public_material_type>
+          }
+        | LogicalAccessFixed {
+            origin: OracleOrigin,
+            domain_law:
+              ProtocolDeclarationRef<"pir.oracle-domain-law">
+          }
     }
   | OracleQuery {
       occurrence: OccurrenceRef,
@@ -460,7 +470,8 @@ construction derives:
 | active Prover message | absorb one `ProverMessage` frame |
 | active deterministic Verifier message | absorb one `VerifierMessage` frame |
 | active Challenge | absorb its condition frames, then run Section 7 |
-| active Oracle publication | absorb its full canonical oracle value or public binding material, according to its admitted mode |
+| active full or bound Oracle publication | absorb its full canonical oracle value or public binding material |
+| active logical-access Oracle publication | absorb only `LogicalAccessFixed(origin,domain_law)`; no carrier or carrier-derived digest enters the frame |
 | active Public Oracle query | absorb one `OracleQuery` frame |
 | active Public Oracle answer | absorb one `OracleAnswer` frame |
 | Verifier-only Oracle query/answer | no FS frame; any path from such activity to `PCSinks(core)` is rejected by Section 8 |
@@ -471,6 +482,13 @@ An `Always` occurrence has no guard frame. An inactive guarded occurrence has
 only its false guard frame. Thus an absent publication cannot alias an empty or
 different publication, and two control histories reaching a later challenge
 have distinct typed frame sequences.
+
+The logical fixation frame proves only that the exact declaration occurrence
+was activated. It is invariant across carrier choices and cannot be treated as
+a commitment, publication of unqueried entries, or authority to disclose the
+carrier. Interactive Core admission rejects same-Core FS whenever that opaque
+carrier can influence acceptance; the marker exists only to frame any
+semantically dead logical publication without a control-history alias.
 
 Semantically dead verifier-private Oracle activity may coexist with an FS
 interpretation when it reaches no member of `PCSinks(core)`. It emits no frame
@@ -649,7 +667,8 @@ over `InfluenceAtom`. Its base cases select:
    ancestry;
 4. every active prior Prover message;
 5. every active prior Verifier message;
-6. every active prior Oracle publication's exact public material;
+6. every active prior Oracle publication's exact public material or exact
+   logical-access fixation marker;
 7. every active prior public Oracle query and answer;
 8. every nontrivial prior guard outcome;
 9. every `ChallengeConditionAtom(c,j)` in declared condition order and every
@@ -885,7 +904,10 @@ substitute another evaluator. It proceeds in this order:
    references, and no unknown fields;
 3. require exact equality between the candidate `core_id` and the supplied
    admitted Core;
-4. require `PublicCoinEligible(core) = true`;
+4. require `PublicCoinEligible(core) = true`, including the empty intersection
+   between each logical-access influence cone and the Core's acceptance sinks,
+   with first-active-terminal preemption included as an exact control
+   dependency;
 5. admit the state, bytes, natural, Boolean, and initial-state values, require
    all three common algorithm ABIs from Section 3.1, and preflight each exact
    K1 maximum tagged-completion schema;
@@ -1124,11 +1146,24 @@ supply every cryptographic assumption, theorem-applicability result, and
 property transport. Plain same-Core FS may be used after the concrete target
 Core is independently admitted.
 
-An ideal Oracle Core fails this construction exactly when a descendant of its
-verifier-private Query or Answer reaches `PCSinks(core)`, or when the Core's
-special Challenge transfer is invalid. Such a Core remains Fresh-valid but
-cannot receive this FS interpretation. Semantically dead verifier-private
-activity does not fail merely by existing.
+`LogicalAccess` is intentionally not a hidden same-Core shortcut. Its
+publication frame is only a typed fixation marker and commits to no carrier
+entry. If its publication influence cone reaches an accepting Check,
+Reduction, Terminal, or acceptance-relevant module sink, structural public-coin
+eligibility fails and no transcript construction is admitted for that Core.
+The influence cone includes first-active-terminal control: an Oracle answer
+that guards an earlier `Reject`, `Abort`, or `Accept` reaches every later
+accepting sink that the earlier terminal can preempt. Thus an Oracle-dependent
+early `Reject` cannot evade the gate merely because the final fallback
+`Accept` has no direct data operand from that Oracle. The separately checked
+commitment-and-opening target is the route that makes the prover's prior Oracle
+material publicly binding before later challenges.
+
+An Oracle Core also fails same-Core FS when a descendant of its verifier-private
+Query or Answer reaches `PCSinks(core)`, or when the Core's special Challenge
+transfer is invalid. Such a Core remains Fresh-valid but cannot receive this FS
+interpretation. Semantically dead verifier-private or logical-access activity
+does not fail merely by existing.
 An Oracle Core whose binding, live public queries, answers, and accepting
 computation are publicly reconstructible can pass, subject to its exact module
 and theorem obligations.
@@ -1427,10 +1462,21 @@ FSModuleEffectCoordinateBody(x) = R {
 OraclePublicationFrameBody = R {
   0:N(occurrence_ref),
   1:N(oracle_ref),
-  2:OraclePublicationModeBody(mode),
-  3:CanonicalValueTypeBody(public_material_type),
-  4:public_material.datum
+  2:
+    V(0,R{
+      0:OraclePublicationModeBody(mode),
+      1:CanonicalValueTypeBody(public_material_type),
+      2:public_material.datum})
+  | V(1,R{
+      0:OracleOriginBody(origin),
+      1:ModuleDeclarationRefBody(domain_law)})
 }
+
+The outer publication tag `0` forms only when `mode` is
+`FullCanonicalOracle` or `PublicBinding`; tag `1` forms only for the exact
+`LogicalAccess` declaration and carries its Core-owned origin and domain-law
+reference. A logical carrier, carrier digest, invented binding value, or
+published-material tag with logical mode is malformed.
 
 OracleQueryFrameBody = R {
   0:N(occurrence_ref),
@@ -1449,10 +1495,12 @@ OracleAnswerFrameBody = R {
 ```
 
 Here `K1BooleanDatum(false) = MF` and `K1BooleanDatum(true) = MT`; neither case
-is a `MetaVariant`. An Oracle answer datum is likewise the exact Core-owned
-lookup-result sum: `V(0,Unit)` when absent or `V(1,element.datum)` when present.
-Both cases are admitted at `OracleAnswerOutputType(o) =
-OracleLookupResultType(o)`, never at bare `o.element_type`.
+is a `MetaVariant`. For a `FullCanonicalOracle` or `PublicBinding` Oracle, an
+answer datum is the exact Core-owned lookup-result sum: `V(0,Unit)` when absent
+or `V(1,element.datum)` when present. For `LogicalAccess`, the exact-domain law
+makes absence unformable and the answer datum is the bare element admitted at
+`o.element_type`. In both cases the framing type is exactly
+`OracleAnswerOutputType(o)` and no frame may choose the other arm.
 
 The exact influence and transition-input bodies are:
 

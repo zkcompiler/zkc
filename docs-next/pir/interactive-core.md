@@ -1,19 +1,18 @@
 # Interactive Core and Causal Execution
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K2 target with K3-B consumer view
-> **Target status:** K2 identity-bearing Core and execution body complete;
-> K3-B execution-issued relation grounding view, bounded K3-C Analysis
-> consumption, bounded K3-D endpoint projection, and finite K3-E executable
-> integration evidence recorded; owner profile preimages remain open, K4 is
-> next, and K5 freeze remains pending
+> **Document state:** Active non-normative redesign target
+> **Target status:** The identity-bearing Core, causal execution, public and
+> confidential owner views, bounded consumer integrations, and executable
+> integration evidence are recorded. Complete owner-profile preimages,
+> remaining protocol-family pressure, and independent freeze remain pending.
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Protocol
 > semantics remain under [`docs/`](../../docs/README.md).
 
 ## 1. Contract
 
-This page is the sole K2 definition owner for:
+This page is the sole target definition owner for:
 
 - the finite verifier-observable `InteractiveCore`;
 - its identity, formation, admission, and structural source views;
@@ -23,7 +22,9 @@ This page is the sole K2 definition owner for:
 - legal actor-visible histories and prover decisions;
 - causal strategy-generated execution and non-authoritative replay; and
 - structural public-coin eligibility; and
-- the execution-issued, occurrence-scoped view used by Relations grounding.
+- the execution-issued, occurrence-scoped public view used by Relations
+  grounding; and
+- the causally generated, purpose-bound confidential initial-Oracle view.
 
 The companion [Fiat--Shamir Construction](fiat-shamir.md) owns transcript
 state, derived required influence, challenge sampling, and the checked Fresh/FS
@@ -108,6 +109,8 @@ declaration kinds
 `"pir.public-coin-law"`, `"pir.coin-correlation-group"`,
 `"pir.challenge-sharing-contract"`, `"pir.claim-contract"`,
 `"pir.reduction-contract"`, and `"pir.oracle-binding-contract"`.
+The closure also recognizes the executable declaration kind
+`"pir.oracle-domain-law"` with the exact body and admission law in Section 7.1.
 `ModuleDeclarationRefBody` is the mandatory Foundation union injection: a bare
 `ModuleDeclarationRef` is never passed directly to `DeclarationRefBody` and a
 module ID is never encoded as an untyped digest. The reference is an
@@ -121,22 +124,28 @@ meaning.
 
 ### 3.1 Exact PIR language-profile split
 
-K2 does not place one catch-all PIR language above every subject. It selects
-three standalone K1 `SemanticLanguageProfile` owners and the following exact
+The target does not place one catch-all PIR language above every subject. It
+selects three standalone Foundation `SemanticLanguageProfile` owners and the following exact
 import topology. This display is a symbolic owner schema, not publication of
-the complete six-field K1 profile preimages or their full typed IDs:
+the complete six-field profile preimages or their full typed IDs:
 
 ```text
 PIRInteractionProfile = {
   profile_imports: {},
   supported_subject_kinds:
     {"pir.interactive-core", "pir.protocol", "pir.invocation",
+     "pir.confidential-initial-oracle-disclosure-policy",
      "pir.source-binding-payload", "pir.source-capability-requirement",
      "pir.source-consumer", "pir.source-no-policy",
      "pir.source-policy-closure", "pir.source-purpose"},
   declarations:
     {InteractiveCoreBody, FreshProtocolBody, CoreInvocationBody,
-     CoreStaticViewSchemas, ProtocolExecutionViewSchema}
+     CoreStaticViewSchemas, ProtocolExecutionViewSchema,
+     OracleDomainLawDeclarationBody,
+     ConfidentialInitialOracleDisclosurePolicyBody,
+     ConfidentialInitialOracleBindingPayloadBody,
+     ConfidentialInitialOracleCapabilityRequirementBody,
+     ConfidentialInitialOraclePolicyClosureBody}
 }
 
 PIRTranscriptFSProfile =
@@ -718,6 +727,8 @@ guarded terminals are allowed.
 ### 7.1 Oracle declarations
 
 ```text
+OracleOrigin = InitialOracle | ProverOracle
+
 OraclePublicationMode =
     FullCanonicalOracle
   | PublicBinding {
@@ -727,9 +738,14 @@ OraclePublicationMode =
       binding_algorithm: PortableAlgorithmRef,
       evaluation_contract: EvaluationContractId
     }
+  | LogicalAccess {
+      domain_law:
+        ProtocolDeclarationRef<"pir.oracle-domain-law">
+    }
 
 OracleDecl = {
   scope: ScopeRef,
+  origin: OracleOrigin,
   index_type: ValueType,
   element_type: ValueType,
   maximum_entries: Natural, // 0 .. 2^14
@@ -747,13 +763,65 @@ OracleLookupResultType(o) =
 
 CanonicalFiniteOracle<o> = CanonicalValue<OracleCarrierType(o)>
 
-OraclePublicationOutputType(o) =
+OraclePublicationValueType(o) =
   if o.publication_mode = FullCanonicalOracle
   then OracleCarrierType(o)
-  else o.publication_mode.binding_type
+  else if o.publication_mode = PublicBinding
+  then o.publication_mode.binding_type
+  else undefined
 
-OracleAnswerOutputType(o) = OracleLookupResultType(o)
+OraclePublicationOutputTypes(o) =
+  if o.publication_mode = LogicalAccess
+  then []
+  else [OraclePublicationValueType(o)]
+
+OracleAnswerOutputType(o) =
+  if o.publication_mode = LogicalAccess
+  then o.element_type
+  else OracleLookupResultType(o)
 ```
+
+`InitialOracle` and `ProverOracle` are declaration semantics, not runtime
+labels. The former is supplied through the exact pre-execution capability in
+Section 12.2; the latter is supplied by the strategy at its publication
+occurrence. Equal carriers do not make the origins interchangeable.
+
+The exact declaration body resolved by a `LogicalAccess.domain_law` is:
+
+```text
+OracleDomainLawDeclarationBody = {
+  index_type: DeclarationValueType,
+  exact_indices: CanonicalSeq<MetaValueV0>
+}
+
+OracleDomainPredicateABI(law) =
+  [LiftDeclarationValueType(law.index_type)] -> RootBool
+
+EvaluateOracleDomainPredicate(law,index) =
+  true exactly when index is equal, under the lifted domain-owned equality,
+  to one member of law.exact_indices
+```
+
+After authenticating its owner module, admission lifts `index_type` through
+that module and requires exact equality with the Oracle's outward
+`index_type`. It then admits every datum at that type and requires
+`exact_indices` to be strictly ascending by canonical bytes and unique under
+the domain-owned equality. Its length is at most `maximum_entries`; the whole
+declaration and lifted value sequence must pass the Foundation body, node,
+edge, depth, and value bounds. This finite executable predicate is the complete
+v0 domain law. Its predicate ABI, output type, total failure-free scan, and
+equality operation are fixed by `PIRInteractionProfile`; there is no
+request-selected evaluator or second predicate algorithm. A nominal
+declaration, authored totality Boolean, callback, or late registry enumerator
+cannot replace it.
+
+`OracleDomainPredicateStepCount(law,index)` and `LookupStepCount(o,index)` are
+one plus the number of exact indices visited by their canonical ascending scan,
+and are bounded by `1 + maximum_entries`. Preparation preflights the sum of all
+initial-carrier admission and domain scans; execution and replay preflight each
+query and answer against their supplied deterministic limits before scanning.
+No host-map construction or uncharged alternate lookup is semantically
+equivalent.
 
 The three root-type constructors above are the exact K1 aliases in the Core's
 semantic regime; `0` and `1` are exact record/case ordinals. A finite Oracle's
@@ -774,21 +842,30 @@ Foundation domain-owned equality for the exact `index_type`. Unique canonical
 representatives make an equal index have equal canonical bytes, but lookup
 uses the domain-owned equality, not host byte equality or a language map.
 
-`Lookup(o, index)` scans that bounded sequence in order and returns the exact
-`OracleLookupResultType(o)` value `V(0,Unit)` when absent or
-`V(1,element.datum)` for the unique equal index. This total definition removes
-an ambient missing-index exception. Publication output and Answer output have
-the exact derived types above; neither output type is inferred from a receipt.
+For `FullCanonicalOracle` and `PublicBinding`, `Lookup(o, index)` scans that
+bounded sequence in order and returns the exact `OracleLookupResultType(o)`
+value `V(0,Unit)` when absent or `V(1,element.datum)` for the unique equal
+index. For `LogicalAccess`, carrier admission first requires its index sequence
+to equal the resolved domain law's `exact_indices` exactly; lookup at a legal
+query index--one for which `EvaluateOracleDomainPredicate` returns true--
+therefore returns the element directly. An index for which it returns false
+refuses the query rather than manufacturing absence. Publication and Answer
+output sequences have the exact derived types above; neither is inferred from
+a receipt.
 
-The Oracle carrier is strategy-supplied once at publication, strictly admitted
-as `CanonicalFiniteOracle<o>`, and snapshotted immutably by the execution
-engine. `FullCanonicalOracle` publishes that exact carrier. `PublicBinding`
-keeps the carrier confidential and publishes the result of the named admitted,
-total, failure-free algorithm whose exact ABI is
+Every carrier is strictly admitted as `CanonicalFiniteOracle<o>` and
+snapshotted immutably by the execution engine. An `InitialOracle` is admitted
+before execution through an owner-local input capability and remains dormant
+until its unique publication occurrence. A `ProverOracle` is admitted atomically
+from the strategy move at that occurrence. `FullCanonicalOracle` publishes the
+exact carrier. `PublicBinding` keeps it confidential and publishes the result
+of the named admitted, total, failure-free algorithm whose exact ABI is
 `[OracleCarrierType(o)] -> binding_type`. Its evaluation contract is checked by
-K1. The nominal binding contract records the intended cryptographic relation
-for K3; it does not replace executable binding computation or prove the
-relation secure.
+Foundation. `LogicalAccess` publishes no carrier, digest, binding, or canonical
+value: its zero-output fixation marker activates only the engine's restricted
+query handle. The nominal binding contract records intended cryptographic
+meaning only; it does not replace executable binding computation or prove that
+meaning.
 
 ### 7.2 Oracle effects
 
@@ -806,10 +883,14 @@ OracleEffect =
 ```
 
 Each Oracle has exactly one `PublishOracle`, and that occurrence's scope equals
-`OracleDecl.scope`. Publication is a prover decision, output 0 has
-`OraclePublicationOutputType(o)`, and both parties observe that exact public
-value. There is no second strategy-supplied `public_material` that could
-disagree with it.
+`OracleDecl.scope`. A `ProverOracle` publication is a prover decision; an
+`InitialOracle` publication deterministically activates the matching dormant
+pre-execution capability and is not a strategy call. The occurrence output
+sequence equals `OraclePublicationOutputTypes(o)`. Both parties observe the one
+public value for `FullCanonicalOracle` or `PublicBinding`; for `LogicalAccess`
+they observe only the typed fixation marker `(occurrence, oracle, origin,
+domain_law)` and no carrier-derived bytes. There is no second
+strategy-supplied `public_material` that could disagree with either result.
 
 A Query occurs strictly after publication, uses one available value of exact
 `index_type`, and lies in the Oracle scope or a descendant whose scope path
@@ -821,7 +902,7 @@ has no Core output.
 `AnswerOracle` names one earlier unmatched Query, has exactly the Query's scope
 and visibility, and its guard must imply the Query guard. It performs
 `Lookup(o,index)` and creates output 0 of exact
-`OracleLookupResultType(o)`. Every active Query has exactly one active Answer
+`OracleAnswerOutputType(o)`. Every active Query has exactly one active Answer
 before any dependent use or terminal; an inactive Query has no Answer on that
 path. Wrong Oracle, wrong index type, answer before query, duplicate answer,
 scope/guard mismatch, mutation after publication, or a recorded answer unequal
@@ -829,13 +910,20 @@ under Foundation equality at that exact result type refuses generation/replay
 at the first affected boundary.
 
 Replay reconstructs a `FullCanonicalOracle` by strict decoding of its
-publication output. For `PublicBinding`, the replay capability supplies one
-exact `CanonicalFiniteOracle<o>`; replay reruns the binding algorithm and
-requires Foundation equality with the recorded publication output. It then
+publication output. For `PublicBinding` or `LogicalAccess`, the replay
+capability supplies one exact `CanonicalFiniteOracle<o>` and reruns its complete
+carrier and, for logical access, exact-domain admission. For `PublicBinding` it
+also reruns the binding algorithm and requires Foundation equality with the
+recorded publication output. It then
 recomputes every Query index from the Core state and every Answer with
 `Lookup`, comparing the receipt and occurrence output at their exact types.
 Missing/extra Oracle witnesses or receipts refuse; unsupported domain equality
 or binding evaluation is qualified noncompletion, never a successful match.
+
+Logical-access replay proves only that the supplied candidate explains every
+recorded query and answer. Because the public record intentionally does not
+bind unqueried entries, replay neither identifies the originally consumed
+carrier nor authorizes its confidential disclosure.
 
 A commitment root, authentication path, and opening check are ordinary public
 values/messages/checks around this lifecycle. They do not replace the logical
@@ -907,7 +995,10 @@ Observation =
     PublicBindingOpened(BindingRef, CanonicalValue)
   | MessageObserved(OccurrenceRef, Party, CanonicalValue)
   | ChallengeObserved(OccurrenceRef, CanonicalValue)
-  | OraclePublished(OccurrenceRef, OracleRef, public_material)
+  | OraclePublished(
+      OccurrenceRef, OracleRef,
+      PublishedValue(CanonicalValue<OraclePublicationValueType>)
+        | LogicalAccessFixed(OracleOrigin,domain_law))
   | OracleQueryObserved(OccurrenceRef, OracleRef, CanonicalValue)
   | OracleAnswerObserved(OccurrenceRef, CanonicalValue)
   | PublicTerminalObserved(OccurrenceRef, TerminalRef,
@@ -944,7 +1035,7 @@ ProverDecisionPoint = {
 ProverDecisionPointRef =
   OccurrenceRef restricted to an occurrence whose effect is
     ProverMessage
-  | PublishOracle
+  | PublishOracle whose OracleDecl.origin = ProverOracle
   | supported ModuleEffect with decision class
       ProverDecision or ProverPublication
 
@@ -966,6 +1057,11 @@ ProverView = {
   current_decision: ProverDecisionPoint
 }
 ```
+
+`SupplyOracle` and `OracleValue` form only for `ProverOracle`. The
+`PublishOracle` occurrence of an `InitialOracle` remains in the schedule but is
+not a decision point and cannot consume a strategy move. Conversely, an
+invocation capability cannot pre-supply a `ProverOracle`.
 
 `ProverDecisionPointRef` is therefore a Core-local dense occurrence ordinal,
 not a second authored sequence or an ordinal into a derived host table. The
@@ -1021,10 +1117,12 @@ or prior move is guaranteed exactly when its exact source occurrence precedes
 its K2 visibility includes Prover, the source scope and every ancestor on its
 declared scope path deterministically open before `d`, and
 `GuardImplies(guard(d), guard(source))`. For a module observation, the supported
-declaration must export that exact ordinal as Prover-visible. For a Public
-Oracle query or answer visibility includes Prover; a Verifier-only coordinate
-never passes. `PriorOwnMove` additionally requires the named source to be an
-exact earlier prover decision.
+declaration must export that exact ordinal as Prover-visible. For an Oracle
+publication the guaranteed read is its public value or logical-access fixation
+marker, never the confidential carrier. For a Public Oracle query or answer
+visibility includes Prover; a Verifier-only coordinate never passes.
+`PriorOwnMove` additionally requires the named source to be an exact earlier
+prover decision, so it can never name an `InitialOracle` publication.
 
 These checks use Core order, deterministic scope ancestry/opening, owner-derived
 visibility, and the closed Section 10 `GuardImplies` rule only. Since a run that
@@ -1067,14 +1165,15 @@ logic.
    declaration and extension, derive every algorithm ABI, and refuse an unknown
    constructor;
 4. type constants, inputs, derived values, guards, messages, checks,
-   challenges, oracles, claims, reductions, terminals, and occurrence outputs;
+   challenges, Oracle origins and modes, exact logical-access domain laws,
+   claims, reductions, terminals, and occurrence outputs;
 5. validate the rooted scope tree, the exact simultaneous-opening order,
    binding completeness and uniqueness, value availability, and occurrence
    scope membership;
 6. validate the total occurrence order, guard availability, one-to-one
    Challenge/Check/Reduction/Terminal/Oracle occurrence backlinks, the exact
-   finite-Oracle carrier/lookup/output laws, and standard effect lifetime and
-   scope rules;
+   finite-Oracle carrier/lookup/output laws, origin-dependent decision class,
+   zero-output logical fixation, and standard effect lifetime and scope rules;
 7. derive party visibility and reject a use that is unavailable to its actor;
 8. validate challenge laws, joint-group closure, derived namespace
    distinguishability, the exact `ReductionConsumers` sequence, and its
@@ -1136,22 +1235,35 @@ nodes above and the following edges:
 1. a derived-value node receives its declared input producer nodes;
 2. a scope-opening node receives its parent opening, and a binding-observation
    node receives its scope opening and bound value producer;
-3. occurrence activity receives its scope opening and exact guard producers;
+3. occurrence activity receives its scope opening, exact guard producers, and
+   the `TerminalDecisionNode` of every earlier terminal occurrence; the latter
+   edges are the exact liveness dependencies induced by first-active-terminal
+   execution--a later occurrence is attempted only when no earlier terminal
+   stopped the run;
 4. occurrence effect receives activity plus all constructor operands:
    message/check inputs, challenge conditions and prior joint members, Oracle
    publication/query dependencies, reduction claims/side inputs/challenges/
    publications, terminal checks/claims/public outputs, or the exact supported
-   module dependency list;
+   module dependency list; every Oracle Query receives the unique publication
+   effect and its index producer, and every Answer receives both its Query and
+   that same publication effect;
 5. every occurrence output receives its effect node; claim, reduction, and
    terminal nodes receive their exact source/effect nodes; and
 6. module control/output nodes receive precisely the declaration-owned ordered
    edges, with every outward module output connected to its occurrence output.
 
-No implicit schedule-prefix edge is added: order alone is not data or control
-dependence. Admission has already made the resulting graph acyclic and forward;
-the graph is bounded by Section 2. Its deterministic topological order is
-Kahn's algorithm, selecting at each step the available node with the least
-`M(PCNodeBody(node))`; failure to exhaust every node refuses admission.
+`TerminalDecisionNode(t)` is the control coordinate recording whether `t`
+became the stopping terminal, together with its declaration-fixed verdict when
+active. A later activity depends on the earlier node's non-stopping outcome;
+if it records a stop, that later activity is never evaluated.
+
+No generic schedule-prefix edge is added: order alone is not data or control
+dependence. The terminal-preemption edges in item 3 are the sole order-derived
+control edges, because execution liveness explicitly depends on every earlier
+terminal decision. Admission has already made the resulting graph acyclic and
+forward; the graph is bounded by Section 2. Its deterministic topological
+order is Kahn's algorithm, selecting at each step the available node with the
+least `M(PCNodeBody(node))`; failure to exhaust every node refuses admission.
 
 Evaluate its unique topological order in the lattice:
 
@@ -1203,6 +1315,34 @@ consume it. Unused Verifier-private inputs are therefore harmless; any path
 from one to a sink is mechanically rejecting. The finite node/edge tables and
 final classes are retained in `PublicCoinView`.
 
+Logical access has an additional representation obligation that is not a
+fourth `PCClass`. Let `AcceptanceSinks(core)` be the subset consisting of every
+invoked Check, reduction transition, accepting Terminal decision/public output,
+and module control/output declared acceptance-relevant. For each Oracle `o`
+with mode `LogicalAccess`, let `LogicalAccessInfluenceCone(o)` be the exact
+descendants in `PCGraph(core)` of its unique publication-effect node. Direct
+same-Core Fiat--Shamir eligibility additionally requires
+
+```text
+LogicalAccessInfluenceCone(o) intersect AcceptanceSinks(core) = {}
+```
+
+for every such `o`. The public fixation marker and subsequently revealed
+public answers may be framed, but they do not commit to the unqueried carrier;
+therefore an acceptance-relevant logical Oracle must first be elaborated by a
+separately checked commitment-and-opening construction. A semantically dead
+logical Oracle may remain in an FS Core, and its fixation marker still prevents
+control-history aliasing.
+
+This test is control-aware. Because every later occurrence activity receives
+the decisions of all earlier terminals, a logical-Oracle answer that guards an
+early `Reject`, `Abort`, or `Accept` which can preempt a later accepting sink is
+in the transitive predecessor cone of that sink. In particular, an
+Oracle-dependent guarded `Reject` followed by an unconditional fallback
+`Accept` fails the empty-intersection test. Considering only the direct inputs
+or verdict of the fallback `Accept` is not a valid implementation of
+`AcceptanceSinks`.
+
 This predicate proves no distribution, independence, soundness, or random-
 oracle property. It identifies the exact Core structure for which a
 Fiat--Shamir interpretation can be formed. A false result refuses FS admission
@@ -1250,6 +1390,7 @@ CoreState = {
   open_scopes,
   canonical_values,
   party_visible_histories,
+  dormant_initial_oracle_handles,
   immutable_oracles,
   pending_queries,
   check_results,
@@ -1270,6 +1411,31 @@ Appendix A. The invocation handle and ID may be confidential when the Fresh
 Core has Verifier-private inputs; content addressing never authorizes
 disclosure.
 
+Initial-Oracle material is invocation-supplied but deliberately not a field of
+`CoreInvocation`, `CoreInvocationBody`, or `CoreInvocationId`. It enters through
+one owner-local preparation operation:
+
+```text
+PrepareInitialOracleInputs(
+  exact admitted Protocol,
+  exact CoreInvocation,
+  TotalMap<every and only InitialOracle OracleRef,
+           CanonicalFiniteOracle<declared Oracle>>,
+  exact PIR evaluator and deterministic limits)
+  -> Affirmative(ExactInitialOracleInvocationCapabilities)
+   | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+   | DeterministicLimitExceeded | CheckerFailure
+```
+
+Preparation authenticates the exact Core declarations, checks the total key
+set, strictly admits every carrier and logical domain law, and creates one
+fresh noncopyable capability per Oracle. The aggregate is bound to the live
+Protocol and invocation handles, exact Oracle refs and carriers, evaluator,
+limits, issuance occurrence, and process generation. It has no canonical body,
+ID, digest surrogate, serialization, cache representation, or FFI form. An
+extra, missing, stale, copied, cross-Protocol, cross-invocation, or
+`ProverOracle` entry refuses. No partially prepared aggregate is returned.
+
 The capability arguments and evaluation control are exact runtime bindings,
 not semantic shortcuts:
 
@@ -1282,7 +1448,9 @@ ExecutionEvaluationControl = {
 ExactCheckAndExtensionCapabilities =
   total bindings for every used primitive/module effect
 ExactOracleReplayCapabilities =
-  TotalMap<PublicBinding OracleRef, CanonicalFiniteOracle<declared Oracle>>
+  TotalMap<OracleRef whose publication omits its carrier,
+           exact owner-local replay capability for
+           CanonicalFiniteOracle<declared Oracle>>
 ```
 
 Each binding is checked against the ID or declaration already committed by the
@@ -1303,6 +1471,7 @@ construction when present, and Protocol before execution.
 GenerateRun(
   AdmittedProtocol,
   CoreInvocation,
+  ExactInitialOracleInvocationCapabilities,
   ProverStrategyCapability,
   ChallengeResolverCapability,
   ExactCheckAndExtensionCapabilities,
@@ -1313,12 +1482,17 @@ GenerateRun(
    | qualified operational noncompletion
 ```
 
-Execution opens due scopes, evaluates each guard, and applies active effects in
+Before opening a scope or invoking a strategy, execution requires the exact
+total initial-capability aggregate for the supplied Protocol and invocation and
+installs its handles as dormant state. Execution then opens due scopes,
+evaluates each guard, and applies active effects in
 occurrence order. At a prover decision it constructs the exact current
 `ProverView`, invokes one strategy step, validates one move, and commits it
-atomically. A capability request for a value outside the view refuses strategy
-generation at that decision. At a Challenge it invokes the exact resolver. At
-the first active terminal it records completion and stops.
+atomically. An active initial-Oracle publication activates its matching dormant
+handle without invoking the strategy; an active prover-Oracle publication does
+the converse. A capability request for a value outside the view refuses
+strategy generation at that decision. At a Challenge it invokes the exact
+resolver. At the first active terminal it records completion and stops.
 
 `InterpretationFailed` is the completed typed-failure lane of the selected
 challenge interpretation. It is not a Core terminal. `StrategyStopped` is not
@@ -1333,7 +1507,9 @@ be relabeled as a Core rejection, strategy stop, or interpretation failure.
 `CausalGenerationCapability` is a nonserializable, process-local capability
 minted only by this invocation of `GenerateRun` after its restricted strategy
 calls and terminal complete. It is bound to the live admitted-Protocol handle,
-invocation handle, evaluator instance, and returned record object. It has no
+invocation handle, identical initial-Oracle capability aggregate and activated
+initial- and prover-Oracle carrier handles, evaluator instance, and returned
+record object. It has no
 canonical body, ID, receipt field, Boolean surrogate, or replay constructor and
 expires with that process-local execution scope. A consumer requiring causal
 generation must receive this capability directly; possession, serialization,
@@ -1362,11 +1538,12 @@ ChallengeResolverReceipt =
 
 OracleReceipt =
     Published(occurrence, oracle,
-              CanonicalValue<OraclePublicationOutputType(oracle)>)
+              CanonicalSeq<CanonicalValue>
+                exactly OraclePublicationOutputTypes(oracle))
   | Queried(occurrence, oracle,
             CanonicalValue<oracle.index_type>, visibility)
   | Answered(occurrence, oracle,
-             CanonicalValue<OracleLookupResultType(oracle)>, visibility)
+             CanonicalValue<OracleAnswerOutputType(oracle)>, visibility)
 
 RunRecord = {
   protocol_id: ProtocolId,
@@ -1405,8 +1582,9 @@ type, visibility, and effect-specific payload are derived from the exact Core;
 a receipt cannot add an output or hide an expected one. The records are typed
 execution data rather than independently authoritative subjects. Private
 strategy state, witness, advice, randomness, and an opaque oracle body under
-`PublicBinding` are absent. Exact replay receives any required confidential
-oracle witness through a separate capability and checks every exposed answer.
+`PublicBinding` or `LogicalAccess` are absent. Exact replay receives any
+required confidential oracle witness through a separate capability and checks
+every exposed answer.
 A Plan-specific confidential generation record may bind private material
 separately.
 `PartialRunRecord` is diagnostic execution data for `StrategyStopped`, not a
@@ -1460,6 +1638,11 @@ live `CausalGenerationCapability`, that capability attests only that this
 semantic engine used the restricted generation relation for that one call;
 successful replay never creates or strengthens it. Implementation isolation
 and host side channels remain Evidence questions.
+
+In particular, a logical-access replay capability may explain every recorded
+answer while differing at an unqueried index. `ReplayMatched` therefore cannot
+issue, substitute for, or strengthen the confidential initial-Oracle view in
+Section 13.6.
 
 `CheckedReplayMatch` is a fresh opaque process-local capability minted only by
 that successful `ReplayRun` call. It is bound to the live admitted-Protocol
@@ -1933,7 +2116,7 @@ RelationRunFact(c: RelationRunCoordinate) =
     ChallengeValue           -> CanonicalValue<challenge value type>
     OraclePublication        -> CanonicalValue<publication output type>
     PublicOracleQuery        -> CanonicalValue<oracle index type>
-    PublicOracleAnswer       -> CanonicalValue<oracle lookup-result type>
+    PublicOracleAnswer       -> CanonicalValue<OracleAnswerOutputType(oracle)>
     ClaimHistory             -> RelationClaimHistory
     ReductionHistory         -> RelationReductionHistory
     CheckResult              -> MetaBooleanFalse | MetaBooleanTrue
@@ -2045,8 +2228,9 @@ occurrence activity/effect and `TerminalDecisionNode`; for an FS interpretation
 failure it includes the Challenge activity/effect/output and the complete
 public prefix/condition basis consumed by the admitted resolver. Formation
 requires `record.protocol_id = protocol.id`; neither the ID nor ambient lookup
-supplies the Core. This is a disclosure-only derived set; it adds no
-schedule-prefix edge to `PCGraph`.
+supplies the Core. This is a disclosure-only derived set; it adds no generic
+schedule-prefix edge to `PCGraph` beyond the exact terminal-preemption
+dependencies already defined by Section 11.
 
 `RunFactBasis(protocol,record,c,fact)` is the exact realized-node set in
 `PCGraph(protocol.core)`, under the same record/Protocol equality, selected by
@@ -2163,6 +2347,141 @@ causality; `ReplayQualified` may not be widened to that role. Neither
 qualification proves relation satisfaction, soundness, completeness,
 knowledge, cryptographic security, or implementation isolation.
 
+### 13.6 Causal confidential initial-Oracle view
+
+The public relation-run view intentionally cannot reveal an opaque Oracle
+body. A Relations question that must ground one exact invocation-supplied
+initial word instead uses this separate, whole-carrier, purpose-bound owner
+operation. It is not a new public observation or a replay quotient.
+
+```text
+ConfidentialInitialOracleFamily = "confidential-initial-oracle-view"
+ConfidentialInitialOracleQualification = CausallyGeneratedOnly
+
+ConfidentialInitialOracleCoordinate = {
+  protocol_id: ProtocolId,
+  oracle: OracleRef,
+  publication: OccurrenceRef
+}
+
+ConfidentialInitialOracleView = {
+  coordinate: ConfidentialInitialOracleCoordinate,
+  qualification: CausallyGeneratedOnly,
+  oracle_declaration: exact owner-derived OracleDecl,
+  carrier: CanonicalFiniteOracle<coordinate.oracle>
+}
+```
+
+Coordinate formation requires that `publication` is the unique admitted
+`PublishOracle(oracle)`, that the Oracle origin is `InitialOracle`, and that its
+mode is `LogicalAccess`. The view has exactly one disclosure extent--the whole
+carrier--and no selector, prefix, digest-only, query-only, or caller-extensible
+arm. It is a typed process-local object with no canonical body or semantic ID.
+
+The exact operation policy is identity-bearing but contains no runtime secret:
+
+```text
+ConfidentialInitialOracleDisclosurePolicy = {
+  family: ConfidentialInitialOracleFamily,
+  coordinate: ConfidentialInitialOracleCoordinate,
+  extent: WholeCanonicalCarrier,
+  qualification: CausallyGeneratedOnly,
+  consumer_id: PIRSourceConsumerRoleId(family,consumer),
+  purpose_id: PIRSourcePurposeRoleId(family,purpose)
+}
+
+ConfidentialInitialOracleDisclosurePolicyId =
+  ProfiledSemanticId<
+    "pir.confidential-initial-oracle-disclosure-policy">(
+      B, PIRInteractionProfileId,
+      ConfidentialInitialOracleDisclosurePolicyBody(policy))
+
+ConfidentialInitialOracleBindingPayload = {
+  family, coordinate, disclosure_policy_id, consumer_id, purpose_id,
+  result_schema: "whole-confidential-initial-oracle-v1"
+}
+
+ConfidentialInitialOracleCapabilityRequirement = {
+  family, binding_payload_id, disclosure_policy_id,
+  consumer_id, purpose_id,
+  bearer_law: "fresh-identical-bearer-and-causal-generation"
+}
+
+ConfidentialInitialOraclePolicyClosure = {
+  family, binding_payload_id, disclosure_policy_id,
+  capability_requirement_id
+}
+
+ConfidentialInitialOracleBindingPayloadId =
+  ProfiledSemanticId<"pir.source-binding-payload">(
+    B, PIRInteractionProfileId,
+    ConfidentialInitialOracleBindingPayloadBody(payload))
+ConfidentialInitialOracleCapabilityRequirementId =
+  ProfiledSemanticId<"pir.source-capability-requirement">(
+    B, PIRInteractionProfileId,
+    ConfidentialInitialOracleCapabilityRequirementBody(requirement))
+ConfidentialInitialOraclePolicyClosureId =
+  ProfiledSemanticId<"pir.source-policy-closure">(
+    B, PIRInteractionProfileId,
+    ConfidentialInitialOraclePolicyClosureBody(closure))
+```
+
+The payload, requirement, and closure use the already selected
+`"pir.source-binding-payload"`,
+`"pir.source-capability-requirement"`, and
+`"pir.source-policy-closure"` profiled subject kinds. Their exact bodies are in
+Appendix A. Every repeated family, coordinate, consumer, purpose, policy, and
+payload reference must agree. The Foundation policy disposition is
+`BoundTo(ConfidentialInitialOracleDisclosurePolicyId)`, not
+`OwnerDefinesNoPolicy`.
+
+`CheckedConfidentialInitialOracleViewAuthority` is exactly a Foundation
+`OwnerLocalSourceAuthorityBinding` whose owner is `"pir"`, family is
+`ConfidentialInitialOracleFamily`, local coordinate is the identical issued
+view object, payload and policy closure are the exact IDs above, operation
+policy is the exact `BoundTo` disposition, and capability requirement wraps the
+exact requirement ID. It has no canonical body or content ID.
+
+```text
+IssueConfidentialInitialOracleView(
+  exact admitted Protocol,
+  exact CoreInvocation,
+  identical terminal-completion RunRecord,
+  exact ConfidentialInitialOracleCoordinate,
+  exact consumer and purpose coordinates,
+  exact ConfidentialInitialOracleDisclosurePolicyId,
+  still-live matching CausalGenerationCapability,
+  exact PIR evaluator and deterministic limits)
+  -> Affirmative({
+       view: ConfidentialInitialOracleView,
+       authority: CheckedConfidentialInitialOracleViewAuthority,
+       capability: ConfidentialInitialOracleViewCapability
+     })
+   | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+   | DeterministicLimitExceeded | CheckerFailure
+```
+
+Issuance requires exact Protocol/invocation/record equality, an active completed
+publication, and the identical initial-Oracle input capability retained by the
+causal-generation capability. It reconstructs the static coordinate and policy
+independently, checks the whole carrier and domain law again under the supplied
+limits, and returns atomically. `ConfidentialInitialOracleViewCapability` is a
+fresh noncopyable bearer retaining the exact view, authority binding, source
+Protocol and invocation handles, completed record, causal-generation
+capability, initial-Oracle input capability and carrier, evaluator, consumer,
+purpose, policy, issuance occurrence, lifetime, and process generation.
+
+No portable policy, payload, requirement, closure, record, or ID contains the
+carrier, a carrier-derived digest, `CoreInvocationId`, or a completed-record
+digest. The confidential material exists only in the owner-local view and live
+capabilities. A replay match, public relation-run view, copied view, equal
+carrier, reconstructed binding, stale bearer, different consumer or purpose,
+different policy, inactive publication, prover-origin Oracle, partial-carrier
+request, or selector request refuses and returns no partial view. The operation
+establishes only which whole initial carrier that one causal execution
+consumed; it establishes no proximity, relation satisfaction, actor knowledge,
+or security property.
+
 ## 14. Composition and finite recurrence boundary
 
 Canonical composition must produce a new `InteractiveCore` body, authenticate
@@ -2187,10 +2506,10 @@ be encoded through labels or opaque effects.
 ## 15. Evidence boundary, nonclaims, and reopening conditions
 
 The standalone
-[K2 reference instrument](../../evaluation/k2-protocol-fiat-shamir/README.md)
+[protocol and Fiat--Shamir reference instrument](../../evaluation/k2-protocol-fiat-shamir/README.md)
 provides bounded executable pressure for selected lifecycle, ordering,
 strategy/replay, public-input binding, Oracle, claim, and refusal shapes. It
-reuses K1 identity machinery, but its compact Python carrier is not the durable
+reuses Foundation identity machinery, but its compact Python carrier is not the durable
 Core carrier and does not execute every exact `AlgorithmUse`, capability,
 `PCNode`/module-sink rule, generic Oracle type, or `PublicBinding` path defined
 here. Its successful cases are finite inhabitance and falsification evidence,
@@ -2203,7 +2522,9 @@ package exercises the standard logical-Oracle lifecycle on an exact
 three-fold classical FRI control and then checks a distinct commitment-and-
 opening target Core. It supplies finite causal, occurrence, and acceptance
 evidence only; the checked Core-changing construction is specified separately
-in [Oracle-Commitment Construction](oracle-commitment-construction.md).
+in [Oracle-Commitment Construction](oracle-commitment-construction.md). Its raw
+declassified relation fixture motivated Section 13.6 but is not evidence that
+the durable confidential-view capability has been implemented.
 
 This page establishes no cryptographic property, strategy implementation
 conformance, distribution truth, relation satisfaction, endpoint coverage, or
@@ -2212,21 +2533,22 @@ observationally different, that a binding digest is collision resistant, or
 that access receipts exclude host side channels.
 
 The owner-local relation-run view exposes only the closed public coordinates in
-Section 13.5. It supplies no verifier-private grounding channel. A later need to
-ground a relation in confidential run state requires a separately designed
-PIR-owned disclosure contract and purpose-specific view; a Relations manifest
-cannot enable it. The derived decision references, structural read table,
-replay-match capability, and relation-run view add no field to
+Section 13.5. The distinct Section 13.6 operation exposes one whole initial
+logical Oracle only to its exact consumer and purpose under causal authority;
+a Relations manifest alone cannot enable it. All other verifier-private run
+state remains closed. The derived decision references, structural read table,
+replay-match capability, public relation-run view, and confidential owner-local
+view add no field to
 `InteractiveCoreBody`, `ProtocolBody`, `CoreInvocationBody`, or any record body,
 and therefore do not rotate `CoreId`, `ProtocolId`, or `CoreInvocationId`.
 
-Reopen this Core if a K4 protocol requires one of the following without a
+Reopen this Core if later protocol-family pressure requires one of the following without a
 faithful finite supported extension:
 
 - independent noncommunicating provers or distributed verifier knowledge;
 - a statement introduced after the first challenge of its active scope;
 - scheduler nondeterminism as protocol meaning;
-- a necessary conditional-use implication outside the closed K2 syntactic
+- a necessary conditional-use implication outside the closed syntactic
   `GuardImplies` law;
 - an oracle whose publication/query/answer lifecycle cannot inhabit Section 7;
 - a relation whose necessary run grounding is verifier-private and cannot use a
@@ -2315,19 +2637,24 @@ ChallengeBody(x) = R {
   6: S[ ValueRefBody(condition) ... ]
 }
 
+OracleOriginBody = V(0,Unit) | V(1,Unit)
+// InitialOracle | ProverOracle
+
 OraclePublicationModeBody =
   V(0,Unit)
 | V(1,R{0:ValueTypeBody(binding_type),
         1:ModuleDeclarationRefBody(binding_contract),
         2:ContentRef(binding_algorithm),
         3:ContentRef(evaluation_contract)})
+| V(2,ModuleDeclarationRefBody(domain_law))
 
 OracleBody(x) = R {
   0: N(x.scope),
-  1: ValueTypeBody(x.index_type),
-  2: ValueTypeBody(x.element_type),
-  3: N(x.maximum_entries),
-  4: OraclePublicationModeBody(x.publication_mode)
+  1: OracleOriginBody(x.origin),
+  2: ValueTypeBody(x.index_type),
+  3: ValueTypeBody(x.element_type),
+  4: N(x.maximum_entries),
+  5: OraclePublicationModeBody(x.publication_mode)
 }
 
 CheckBody(x) = R {
@@ -2439,6 +2766,51 @@ CoreInvocationBody(core_id, I) = R {
        0:N(verifier_private_input_ref),
        1:CanonicalValueTypeBody(declared_type),
        2:value.datum} ... in VerifierPrivateInputRef order ]
+}
+
+OracleDomainLawDeclarationBody(x) = R {
+  0: DeclarationValueTypeBody(x.index_type),
+  1: S[ datum ... in x.exact_indices order ]
+}
+
+ConfidentialInitialOracleCoordinateBody(x) = R {
+  0: ContentRef(x.protocol_id),
+  1: N(x.oracle),
+  2: N(x.publication)
+}
+
+ConfidentialInitialOracleDisclosurePolicyBody(x) = R {
+  0: Q("confidential-initial-oracle-view"),
+  1: ConfidentialInitialOracleCoordinateBody(x.coordinate),
+  2: V(0,Unit), // WholeCanonicalCarrier
+  3: V(0,Unit), // CausallyGeneratedOnly
+  4: ContentRef(x.consumer_id),
+  5: ContentRef(x.purpose_id)
+}
+
+ConfidentialInitialOracleBindingPayloadBody(x) = R {
+  0: Q("confidential-initial-oracle-view"),
+  1: ConfidentialInitialOracleCoordinateBody(x.coordinate),
+  2: ContentRef(x.disclosure_policy_id),
+  3: ContentRef(x.consumer_id),
+  4: ContentRef(x.purpose_id),
+  5: Q("whole-confidential-initial-oracle-v1")
+}
+
+ConfidentialInitialOracleCapabilityRequirementBody(x) = R {
+  0: Q("confidential-initial-oracle-view"),
+  1: ContentRef(x.binding_payload_id),
+  2: ContentRef(x.disclosure_policy_id),
+  3: ContentRef(x.consumer_id),
+  4: ContentRef(x.purpose_id),
+  5: Q("fresh-identical-bearer-and-causal-generation")
+}
+
+ConfidentialInitialOraclePolicyClosureBody(x) = R {
+  0: Q("confidential-initial-oracle-view"),
+  1: ContentRef(x.binding_payload_id),
+  2: ContentRef(x.disclosure_policy_id),
+  3: ContentRef(x.capability_requirement_id)
 }
 
 PCNodeBody =

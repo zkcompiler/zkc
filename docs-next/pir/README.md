@@ -13,9 +13,8 @@
 
 ## Purpose
 
-Stage 1 selected `pir/` as the conceptual owner of a distinct small closed
-canonical Protocol level in MLIR. Stage 3 selected and promoted a candidate at
-its package resolution: in that candidate, PIR denotes
+The design program selects `pir/` as the conceptual owner of a distinct small
+closed canonical Protocol level in MLIR. In the selected target, PIR denotes
 exactly one Protocol under one typed semantic regime, with one physically
 canonical carrier bijective to a finite language-independent operational
 model. Rich authoring, import, and synthesis forms remain in an upstream MLIR
@@ -28,7 +27,7 @@ contract. The selected
 [Transition and Bridge Architecture](../project/transition-and-bridge-architecture.md)
 fixes the Protocol lifecycle and its downstream authority boundaries. The
 selected [Protocol and Relations Architecture](../project/protocol-and-relations-architecture.md)
-records the Stage 3 package-selection snapshot and alternatives. The completed
+records the package-selection snapshot and alternatives. The completed
 research packages, routed through the
 [temporary workspace inventory](../notes/README.md#working-note-inventory),
 preserve the comparative evidence. Current normative Protocol semantics
@@ -41,23 +40,21 @@ through deterministic bounded elaboration and total static maps. This is a
 Core-changing construction, unlike the same-Core Fresh/Fiat--Shamir
 construction, and it establishes no cryptographic property by itself.
 
-K3-B has now reconciled the canonical carrier, `ProtocolInterface`, and
-`ProverPlan` targets to the active K1/K2 definitions. It also selects the
-narrow source-ID-free `PlanWitnessSurface` needed for relation-witness
-attachment. This bounded closure does not freeze the integrated kernel;
-K3-C has consumed the exact source views for its bounded minimum Analysis
-profiles without changing the K2 Core/Fiat--Shamir meaning. K3-D then selected
-the purpose-specific PIR endpoint views and bounded source-to-OIR projection
-contract. Bounded K3-E has reclosed the joined profile, owner-view, read, and
-authority boundary. Its repair rotated the shared K1 profile/regime and exact
-K2/K3-B profile/export identities, but preserved the verifier-observable Core,
-Fresh/Fiat--Shamir interpretation, and transcript-construction architecture.
-K4 portfolio pressure is next and K5 independent freeze remains pending.
+The durable target now aligns the canonical carrier, `ProtocolInterface`, and
+`ProverPlan`, including the narrow source-ID-free `PlanWitnessSurface` needed
+for relation-witness attachment. Minimum Analysis consumers, purpose-specific
+endpoint views, and the joined owner-view/read/authority boundary have also
+been reconciled without changing the verifier-observable Core or the
+Fresh/Fiat--Shamir factorization. This bounded closure does not freeze the
+integrated kernel: broader protocol-family pressure and independent freeze
+review remain pending.
 
 ## Owns
 
 - the exact `InteractiveCore`, challenge interpretation, and complete abstract
   Protocol semantics realized bijectively by canonical PIR;
+- exact `InitialOracle` and `ProverOracle` origins, finite exact-domain logical
+  access, owner-local initial-input preparation, and causal Oracle lifetimes;
 - transcript spine ordering and protected protocol effects;
 - claims, reductions, checks, challenges, material bindings, routes, and
   terminal closure;
@@ -80,6 +77,7 @@ K4 portfolio pressure is next and K5 independent freeze remains pending.
   persistence, decoding, re-authentication, and re-admission;
 - question-scoped authenticated Protocol views whose definitions remain owned
   by PIR and whose additional judgment semantics remain with each consumer;
+- the causal, purpose-bound, whole-carrier confidential initial-Oracle view;
 - reopening as an independent mutable branch that inherits no output authority;
 - structural formation, well-formedness, linearity, binding, closure,
   canonical authentication, and whole-Protocol admission judgments;
@@ -162,8 +160,11 @@ first being found by the optimizer or successfully projected to every target.
   additional operand only for questions about external presentation; it is not
   a universal relation dependency. Checked artifact, equation, commitment, and
   run-grounding prerequisites—including any exact Oracle-commitment
-  construction view and matching live authority—remain question-specific,
-  and raw observations cannot substitute for their checked results;
+  construction view and matching live authority—remain question-specific. A
+  confidential initial logical Oracle is available only through the PIR-owned
+  `ConfidentialInitialOracleView` and its matching causal, purpose-bound live
+  capability; raw observations and replay candidates cannot substitute for
+  either checked result;
 - `compiler/` may propose successors, but PIR alone authenticates and admits
   each target; a separate relation-specific checker must then relate exact
   predecessor and successor subjects;
@@ -178,10 +179,11 @@ first being found by the optimizer or successfully projected to every target.
 
 - [Selected Protocol IR Architecture](../project/protocol-ir-architecture.md)
 - [Selected Protocol and Relations Architecture](../project/protocol-and-relations-architecture.md)
-- [Interactive Core and Causal Execution](interactive-core.md) — active K2
+- [Interactive Core and Causal Execution](interactive-core.md) — active target
   definition owner for Core, Protocol, causal execution, public coin, and the
-  standard Oracle lifecycle
-- [Fiat--Shamir Construction](fiat-shamir.md) — active K2 definition owner for
+  standard Oracle lifecycle, including initial/prover origins, logical access,
+  and the confidential initial-Oracle view
+- [Fiat--Shamir Construction](fiat-shamir.md) — active target owner for
   transcript semantics and the same-Core Fresh/FS construction
 - [Oracle-Commitment Construction](oracle-commitment-construction.md) — exact
   logical-Oracle-to-committed-Core elaboration, admission, authority, and run
@@ -189,23 +191,22 @@ first being found by the optimizer or successfully projected to every target.
 - [Canonical PIR](canonical-pir.md)
 - [Protocol Interfaces and Prover Plans](interfaces-and-plans.md)
 - [Endpoint Projection Views](endpoint-projection-views.md)
-- [Protocol Semantic Model](protocol-model.md) — pre-K2 semantic snapshot
+- [Protocol Semantic Model](protocol-model.md) — superseded semantic snapshot
 - [Fiat--Shamir Construction and Semantic Core Composition](fiat-shamir-and-composition.md)
-  — pre-K2 FS snapshot and historical composition candidate
+  — superseded FS snapshot and historical composition candidate
 - [Candidate Protocol Subject and Lifecycle](protocol-lifecycle.md)
 
-The two project architecture pages are selected non-normative Stage 1 and
-Stage 3 decisions. K2 revalidated and replaced the Core/Protocol and
-Fiat--Shamir definition surfaces with the first two active K2 pages above. A
+The two project architecture pages are selected non-normative research
+decisions. Later revalidation replaced the Core/Protocol and Fiat--Shamir
+definition surfaces with the first two active target pages above. A
 narrow reclosure preserved that architecture while repairing exact transcript
 bodies and evidence boundaries; its validation record owns the details.
-K3-B reconciled the carrier and Interface/Plan pages to the active K1/K2
-owners. They are the current non-normative target definitions at that bounded
-scope. The two explicitly marked snapshots remain research history, not
-parallel authority. K3-C selected the bounded Analysis sources and profiles
-that consume these owners. K3-D has selected exact OIR-purpose reads, quotient
-identities, adequacy, and checked extraction; the target relation remains
-independently owned by OIR. The lifecycle page is the
+The carrier and Interface/Plan pages are the current non-normative target
+definitions at that bounded scope. The two explicitly marked snapshots remain
+research history, not parallel authority. Bounded Analysis sources and exact
+OIR-purpose reads, quotient identities, adequacy, and checked extraction now
+consume these owners; the target relation remains independently owned by OIR.
+The lifecycle page is the
 superseded baseline candidate and remains useful for current-model
 reconstruction. None replaces the current Protocol Kernel, Carrier,
 Boundaries, Vocabularies, or Versioning specifications before normative
@@ -228,7 +229,7 @@ additional proposition:
 - a PIR-owned fact view plus an Analysis question is interpreted by
   `analysis/`;
 - admitted Protocol plus exact Interface and role, together with the exact
-  affirmative purpose-specific endpoint views selected by K3-D, belongs to
+  affirmative purpose-specific endpoint views, belongs to
   `oir/`;
 - Protocol-to-relation correspondence and Plan-witness attachment belong to
   separate `relations/` bindings; an external Interface enters only a question
@@ -243,34 +244,18 @@ transport a property. Target admission alone proves no source/target relation.
 
 ## Reopened integrated-closure and later-owner questions
 
-Stage 3 selected the Core/Protocol grammar, canonical carrier, Interface, Plan,
-Fiat--Shamir construction, and structural Core-composition candidate at its
-then-current resolution. Post-selection revalidation reopened the exact kernel
-closure. K1 and the narrowly reclosed K2 closed executable Foundation and PIR
-semantics at their bounded resolutions; K3-B has now reconciled the dependent
-Interface/Plan, carrier, and Relations seams without reopening the K2 Core.
-K3-C closed the minimum Analysis source, experiment, applicability, and
-quantitative contracts at its bounded profile without changing K2 Core
-meaning. K3-D selected the bounded OIR source read, semantic skeleton, and
-projection contract. K3-E has now joined those paths with exact K2 static
-views, one affirmative checked FS construction and issued FS view, a K3-B
-Interface correspondence view, and an affirmative `CheckedPlanRealizes` for
-the Prover path. K4 and K5 still own the bounded protocol portfolio and
-independent freeze. Later work includes:
+The current package closes executable Foundation/PIR semantics, dependent
+Interface/Plan and Relations seams, minimum Analysis contracts, bounded OIR
+projection, and the joined owner-view/read/authority paths at their stated
+resolutions. It includes exact static views, an affirmative checked FS
+construction and issued FS view, an Interface correspondence view, and an
+affirmative `CheckedPlanRealizes` path. It is not yet a protocol-portfolio
+freeze. Later work includes:
 
-- Stage 4A selected the exact Analysis model families and theorem/profile
-  architecture for what its historical package called `FSCompile`, composition
-  properties, and property transport, together with Compiler relations and
-  selection boundaries, and
-  reconciled the four PIR semantic pages with its exact cross-owner source-
-  binding contract;
-  K3-C replaced that umbrella with separate structural applicability and
-  property-specific transport, selected one AFK profile, and left broader
-  profiles, independent proof authority, checkers, and producers as later
-  work;
-- Stage 4B completes OIR syntax and execution beyond the bounded K3-D skeleton,
-  then assigns concrete supplier, deployment, and runtime meaning in
-  Realization;
-- Stage 7 selects exact normative wording, stable semantic encodings, hash
-  primitives, compatibility policy, and authority cutover; and
-- Stage 8 establishes implementation correspondence and migration work.
+- broader Analysis theorem profiles, independent proof authority, checkers,
+  and producers beyond the selected finite applicability profile;
+- OIR syntax and execution beyond the bounded semantic skeleton, followed by
+  concrete supplier, deployment, and runtime meaning in Realization;
+- exact normative wording, stable semantic encodings, hash primitives,
+  compatibility policy, and authority cutover; and
+- implementation correspondence and migration work.

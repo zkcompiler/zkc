@@ -5,7 +5,7 @@
 > **Provisional owner:** `relations`
 > **Authority:** None during the transition. Current relation semantics remain
 > governed by the [Relations specification](../../docs/spec/relations.md).
-> **Closure interpretation:** This index routes the selected K3-B target. It
+> **Closure interpretation:** This index routes the current selected target. It
 > does not assert semantic freeze, implementation conformance, protocol-family
 > support, or normative cutover. The
 > [v0 Semantic Design Program](../project/v0-design-program.md#14-progress-and-change-control)
@@ -44,7 +44,9 @@ later questions automatically.
   embedding, and directional lossy projection;
 - relation artifact profiles, expectation-free observations, typed comparison,
   grounding equations, and commitment grounding; and
-- the closed correspondence-question algebra and its checked results.
+- the closed correspondence-question algebra, including separate public run
+  facts and causal confidential initial logical-Oracle material agreement, and
+  its checked results.
 
 The exact namespace is one 23-entry semantic-subject catalog. It is disjoint
 from the 14-entry module declaration-contract catalog; neither prose nor an
@@ -70,7 +72,7 @@ The two attachment paths are deliberately independent:
 
 | Subject | Reads | Does not read |
 |---|---|---|
-| `ProtocolRelationBinding` | one exact `ProtocolId`, relation Interfaces, typed K2 Statement/challenge/Oracle/claim/reduction occurrences | external `ProtocolInterface`, `ProverPlan`, secret assignments |
+| `ProtocolRelationBinding` | one exact `ProtocolId`, relation Interfaces, typed PIR Statement/challenge/Oracle/claim/reduction occurrences | external `ProtocolInterface`, `ProverPlan`, secret assignments |
 | `PlanWitnessBinding` | one PIR-owned source-ID-free `PlanWitnessSurfaceId`, one `RelationInterfaceId`, typed witness occurrences | `ProverPlanId`, Plan-local nodes, private source maps, Protocol correspondence |
 
 An external `ProtocolInterface` is an additional operand only for questions
@@ -84,7 +86,8 @@ whole-surface agreement, and mapped-edge agreement are separate questions.
 ## Satisfaction
 
 The admitted satisfaction-evaluator declaration commits to exact role types,
-model program, state type, and K1 `start`/per-Oracle `resume` algorithms. The
+model program, state type, and Foundation `start`/per-Oracle `resume`
+algorithms. The
 Relations owner runs the closed command machine and alone holds restricted
 Oracle lookup capabilities. Portable algorithms receive neither Oracle material
 nor a capability.
@@ -99,12 +102,12 @@ result establishes no Protocol acceptance or cryptographic property.
 ## Values, artifacts, and grounding
 
 A value bridge relates representations only. Relation refinement, commitment
-construction, and a K2 reduction are different subjects with different laws.
+construction, and a PIR reduction are different subjects with different laws.
 Lossy projection carries an exact collision relation and exact use coordinates;
-K3-B closes occurrence-premise and count consumption only for the run-grounded
-relation-instance seam. Structural Plan and artifact mappings acquire no
-implicit live-source or quantitative claim. Analysis, not Relations, owns any
-quantitative security price.
+the current target closes occurrence-premise and count consumption only for
+the run-grounded relation-instance seam. Structural Plan and artifact mappings
+acquire no implicit live-source or quantitative claim. Analysis, not Relations,
+owns any quantitative security price.
 
 Artifact interpretation is optional and expectation-free. `Unread` differs
 from `Observed([])`. The interpreter consumes one exact format-derived byte
@@ -114,9 +117,15 @@ exact relation, artifact, and PIR sources; commitment grounding names the exact
 construction and equation position but proves no binding, hiding, extraction,
 or opening theorem.
 
-Run grounding consumes only a PIR-issued public occurrence view produced by a
-live causal execution or an affirmative exact replay. A raw record, equal value,
-caller-built tuple, or stored result ID cannot mint that view.
+Public run grounding consumes only a PIR-issued public occurrence view produced
+by a live causal execution or an affirmative exact replay. Initial logical-
+Oracle material agreement is separate: it consumes one matching Relations
+`OracleMaterialAssignment` and one PIR-issued, causal-only, purpose-bound
+confidential view of the exact whole carrier. Exact same-type equality is the
+only affirmative law. A raw trace, equal reconstructed value, caller-built
+tuple, stored result ID, carrier digest, or replay-qualified source cannot mint
+that authority. Neither secret body nor a secret-derived identifier enters a
+durable Relations subject or result.
 
 Lossy-source authority now has one closed Relations specialization of the Foundation
 envelope. Public `RelationInstance` fields and durable
@@ -142,8 +151,9 @@ inert. The five selected source families have exact bodies in
 There is no open family or generic checked-result source binding; exporting a
 new family requires a Relations profile/law revision.
 
-Relations has no OIR dependency in K3-B. Future verifier-to-relation descent
-remains unavailable until OIR defines and admits its exact source result.
+Relations has no OIR dependency in this target. Future verifier-to-relation
+descent remains unavailable until OIR defines and admits its exact source
+result.
 
 ## Does not own
 
@@ -173,16 +183,17 @@ remains unavailable until OIR defines and admits its exact source result.
   instances, confidential satisfaction, transforms, bridges, split bindings,
   artifacts, and grounding
 - [Protocol Correspondence](protocol-correspondence.md) — closed question
-  grammar, one derived read manifest, checked operations, outcomes, and run
-  grounding
+  grammar, one derived read manifest, checked operations, outcomes, public run
+  grounding, and causal confidential initial-Oracle agreement
 - [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md) — PIR-
   owned external presentation, strategy recipes, `PlanRealizes`, and
   `PlanWitnessSurface`
-- [Interactive Core and Causal Execution](../pir/interactive-core.md) — K2-
-  owned occurrence, execution, replay, and public run-view sources
+- [Interactive Core and Causal Execution](../pir/interactive-core.md) — PIR-
+  owned occurrence, execution, replay, and public and confidential run-view
+  sources
 
 The selected project architecture pages remain historical rationale. These
-durable domain pages own the current K3-B target definitions. Current `docs/`
+durable domain pages own the current target definitions. Current `docs/`
 remains normative until explicit consolidation and cutover.
 
 ## Remaining gates
@@ -204,12 +215,14 @@ remains normative until explicit consolidation and cutover.
   projection identity; `PlanWitnessSurface` remains Relations-specific and
   grants no OIR authority. Full OIR syntax and protocol-family coverage remain
   open.
-- One exact three-fold, scalar-terminal classical FRI control now supplies
+- One exact three-fold, scalar-terminal classical FRI control supplies bounded
   executable pressure for Oracle publications, twelve logical opening
-  coordinates, construction maps, and a scalar terminal residual. Its current
-  Relations instrument reads a declassified complete native trace, so it is
-  not yet a lawful durable correspondence source. Promotion requires a PIR-
-  owned, purpose-specific initial-Oracle view and matching live authority.
+  coordinates, construction maps, and a scalar terminal residual. The target
+  Relations path now distinguishes public-bound and logical Oracle edges and
+  requires causal, purpose-bound, whole-carrier authority for initial-Oracle
+  material agreement. Its bounded executable evidence and explicit nonclaims
+  are tracked by the
+  [native FRI/IOR validation package](../../evaluation/native-fri-ior/README.md).
   General FRI/IOR correspondence, opening security, proximity, and outer-
   relation inference remain open, as does native Nova/folding pressure for
   relation-changing reductions.

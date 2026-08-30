@@ -3,17 +3,13 @@
 > **Document kind:** Design-research execution plan
 > **Document state:** Active
 > **Program status:** Active. Stages 0--4A are historically package-complete at
-> their recorded selection gates. Integrated semantic-kernel closure K0
-> completed on 2026-08-25; bounded K1 executable foundations and bounded K2
-> Protocol/Fiat--Shamir closure completed on 2026-08-26 and was narrowly
-> reclosed after exact-body repair without an architectural change. K3-A
-> consumer-boundary reconstruction, bounded K3-B dependent-surface,
-> Relations, and carrier co-design, bounded K3-C minimum Analysis closure, and
-> bounded K3-D endpoint-projection closure completed on 2026-08-28 after a
-> static/dynamic scope correction and adversarial revalidation. Bounded K3-E
-> integrated closure then completed at its finite P01/Schnorr scope. K4
-> bounded protocol-portfolio pressure is next; K5 independent freeze remains
-> later. The kernel is not frozen, and Stage 4B remains unactivated.
+> their recorded selection gates. The freeze contract, executable foundations,
+> Protocol/Fiat--Shamir kernel, minimum consumer seams, and one joined Schnorr
+> path are complete at their declared bounded scopes. Native FRI/IOR is now
+> retained as a two-lane conservative extension with deterministic source-
+> schedule correspondence. The remaining protocol portfolio and independent
+> freeze remain later. The kernel is not frozen, and Stage 4B remains
+> unactivated.
 > **Provisional owner:** `project`
 > **Authority:** This is the single execution plan for semantic redesign inside
 > `docs-next/`. It does not replace current product planning or roadmap
@@ -642,7 +638,7 @@ the promoted candidate is mutually closed and ready to freeze.
 | Stage 2 | Historical package complete | Selected [Transition and Bridge Architecture](transition-and-bridge-architecture.md), supported by the Stage 2 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
 | Stage 3 | Historical package complete | Selected [Protocol and Relations Architecture](protocol-and-relations-architecture.md), candidate PIR/Relations target owners at package resolution, research evidence, and separate Stage 4A/4B entry contracts |
 | Stage 4A | Historical package complete | Selected [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md), candidate Analysis/Compiler target owners at package resolution, Relations/PIR reconciliation, research evidence, and an unactivated Stage 4B peer boundary |
-| Integrated semantic-kernel closure K0--K5 | K0--K2 complete after bounded reclosure; K3-A through bounded K3-E complete; K4 next; K5 freeze pending | K3-E joined the selected finite P01/Schnorr path across exact shared K1/K2/K3-B implementations, K3-C Analysis, and K3-D endpoint projection. The repair locally rotated the K1 profile/regime and inert authority-envelope basis, added exact K2/K3-B profile and owner-export surfaces, and reclosed the affected K3-C and K3-D boundaries. It did not add a verifier-observable Core field or change the `InteractiveCore + ChallengeInterpretation` factorization, Fresh/Fiat--Shamir meaning, or transcript-construction architecture. The joined authority basis distinguishes K2 static owner views; one affirmative `CheckedFSConstruction` and its issued FS view; the K3-B Interface correspondence view; and, for the Prover only, one affirmative `CheckedPlanRealizes` result. It does not treat a Plan as a view. The Analysis lane deterministically rederives the selected records and checks stable IDs; no live Analysis capability crosses into K3-D or is exercised by K3-E. K3-D's richer endpoint facts remain an explicit future-owner supplement: absence is `MissingDependency`, a reconstructed or portable-only bearer is refused, and the bounded purpose-bound adapter closes only after exact overlap with current owner-issued facts. Those residual facts still need durable owner-issued carriers. K4 now owns differentiated protocol-family pressure; K5 owns independent freeze. The result is not protocol-family coverage, a theorem or security proof, general implementation correspondence, a final OIR language, semantic freeze, or Stage 4B activation. |
+| Integrated semantic-kernel closure | Bounded foundation, Protocol, consumer, joined-Schnorr, and native FRI/IOR work complete; remaining portfolio and freeze pending | The joined Schnorr path preserved the `InteractiveCore + ChallengeInterpretation` factorization and kept owner views, checked FS construction, Interface correspondence, and Prover-only Plan realization distinct. Native FRI/IOR then added initial logical-Oracle origin/access, one checked structural Oracle-commitment construction, and one causal confidential Relations connection. The exact classical control closes only fixed-coin deterministic verifier shape; Analysis property questions remain candidate or unsupported. The result is not protocol-family coverage, a theorem or security proof, general implementation correspondence, a final OIR language, semantic freeze, or Stage 4B activation. |
 | Stage 4B | Historical entry contract ready; activation blocked | OIR then Realization may activate only after integrated semantic-kernel freeze and a separate explicit decision. |
 | Stages 5--8 | Not started as decision packages | Later stages may be surveyed for design forces but cannot finalize contracts that depend on unresolved earlier-stage results |
 

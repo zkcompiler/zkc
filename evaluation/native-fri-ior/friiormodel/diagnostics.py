@@ -50,6 +50,7 @@ _BASE_CODE_POSITIONS: Mapping[str, int | None] = MappingProxyType(
     {
         "CheckResult": 2,
         "ModelFailure": 2,
+        "OracleMaterialAgreementResult": 2,
         "_ContractViolation": 0,
         "_ReplayFailure": 2,
         "_outcome": 2,
@@ -392,13 +393,19 @@ _CURRENT_CODES = frozenset().union(
     _span("CLASSICAL-COMMITTED", 1, 10),
     _span("CLASSICAL-COMMITTED", 21, 23),
     _numbers("CLASSICAL-COMMITTED", (100,)),
+    _span("CLASSICAL-CONFIDENTIAL", 1, 17),
+    _span("CLASSICAL-CONFIDENTIAL", 20, 26),
+    _numbers("CLASSICAL-CONFIDENTIAL", (100, 101)),
     _span("CLASSICAL-CONSTRUCTION", 1, 65),
     _numbers("CLASSICAL-CONSTRUCTION", (100, 101)),
-    _span("CLASSICAL-CORE", 1, 6),
+    _span("CLASSICAL-CORE", 1, 7),
     _span("CLASSICAL-FIELD", 1, 9),
+    _span("CLASSICAL-FIXTURE", 1, 3),
+    _span("CLASSICAL-FIXTURE", 10, 12),
     _span("CLASSICAL-FORMATION", 1, 8),
     _span("CLASSICAL-FS", 1, 9),
-    _numbers("CLASSICAL-FS", (11, 12, 13, 14)),
+    _span("CLASSICAL-FS", 11, 17),
+    _numbers("CLASSICAL-FS", (100,)),
     _span("CLASSICAL-GENERATION", 1, 7),
     _span("CLASSICAL-INDEPENDENT", 1, 21),
     _span("CLASSICAL-INDEPENDENT", 30, 33),
@@ -408,13 +415,15 @@ _CURRENT_CODES = frozenset().union(
     _span("CLASSICAL-NATIVE", 1, 9),
     _span("CLASSICAL-NATIVE", 20, 22),
     _numbers("CLASSICAL-NATIVE", (100,)),
-    _span("CLASSICAL-ORACLE", 1, 4),
+    _span("CLASSICAL-ORACLE", 1, 9),
     _span("CLASSICAL-PROFILE", 1, 11),
     _span("CLASSICAL-PROOF", 1, 8),
     _span("CLASSICAL-PUBLIC", 1, 9),
     _span("CLASSICAL-QUERY", 1, 5),
     _span("CLASSICAL-RELATION", 1, 28),
-    _numbers("CLASSICAL-RELATION", (100, 101, 102)),
+    _span("CLASSICAL-RELATION", 30, 38),
+    _numbers("CLASSICAL-RELATION", (40, 41)),
+    _numbers("CLASSICAL-RELATION", (100, 101, 102, 103)),
     _numbers("CLASSICAL-RESOURCE", (1,)),
     _span("CLASSICAL-RUN", 1, 6),
     _span("CLASSICAL-SCHEDULE", 1, 3),
@@ -464,25 +473,31 @@ _FORMATION_CODES = frozenset().union(
     _span("CLASSICAL-ANALYSIS", 1, 24),
     _span("CLASSICAL-CASE", 1, 5),
     _span("CLASSICAL-COMMITMENT", 1, 15),
+    _span("CLASSICAL-CONFIDENTIAL", 1, 17),
     _span("CLASSICAL-CONSTRUCTION", 1, 10),
     _numbers("CLASSICAL-CONSTRUCTION", (20, 27)),
     _span("CLASSICAL-CONSTRUCTION", 28, 43),
     _span("CLASSICAL-CONSTRUCTION", 45, 48),
     _span("CLASSICAL-CONSTRUCTION", 57, 59),
     _numbers("CLASSICAL-CONSTRUCTION", (62, 63)),
-    _span("CLASSICAL-CORE", 1, 6),
+    _span("CLASSICAL-CORE", 1, 7),
     _span("CLASSICAL-FIELD", 1, 9),
+    _span("CLASSICAL-FIXTURE", 1, 3),
+    _span("CLASSICAL-FIXTURE", 10, 12),
     _span("CLASSICAL-FORMATION", 1, 8),
     _span("CLASSICAL-FS", 1, 9),
     _span("CLASSICAL-GENERATION", 1, 7),
     _span("CLASSICAL-INDEPENDENT", 1, 21),
     _numbers("CLASSICAL-INDEPENDENT", (91, 92)),
-    _span("CLASSICAL-ORACLE", 1, 4),
+    _span("CLASSICAL-ORACLE", 1, 9),
     _span("CLASSICAL-PROFILE", 1, 11),
     _span("CLASSICAL-PROOF", 1, 8),
     _span("CLASSICAL-PUBLIC", 1, 9),
     _span("CLASSICAL-QUERY", 1, 5),
     _span("CLASSICAL-RELATION", 1, 21),
+    _numbers("CLASSICAL-RELATION", (25, 28)),
+    _span("CLASSICAL-RELATION", 30, 36),
+    _numbers("CLASSICAL-RELATION", (40,)),
     _numbers("CLASSICAL-RESOURCE", (1,)),
     _span("CLASSICAL-RUN", 1, 6),
     _span("CLASSICAL-SCHEDULE", 1, 3),
@@ -1031,6 +1046,15 @@ def _static_strings(
                 return (OutcomeClass[expression.attr].value,)
             except KeyError:
                 return ()
+        if expression.value.id == "OracleMaterialAgreementOutcome":
+            return {
+                "AFFIRMATIVE": ("Affirmative",),
+                "NEGATIVE": ("Negative",),
+                "CANNOT_ANSWER": ("CannotAnswer",),
+                "KIND_MISMATCH": ("KindMismatch",),
+                "MALFORMED": ("Malformed",),
+                "REFUSED": ("Refused",),
+            }.get(expression.attr, ())
     if isinstance(expression, ast.JoinedStr):
         components: list[tuple[str, ...]] = []
         for part in expression.values:
@@ -1069,6 +1093,8 @@ def _site_boundary(
         return ("native:verification",)
     if name == "_defect" and module == "friiormodel.oracle_construction":
         return ("oracle-construction:admission",)
+    if name == "_material_result" and module == "friiormodel.classical_relations":
+        return ("classical-relations:initial-oracle-grounding",)
     if name == "_run_failure" and module == "friiormodel.oracle_construction":
         return ("oracle-construction:run-check",)
     if name == "_fail" and module == "classical_independent":
@@ -1126,6 +1152,8 @@ def _site_outcome(
     if name not in {
         "CheckResult",
         "ModelFailure",
+        "OracleMaterialAgreementResult",
+        "_material_result",
         "_failure",
         "_fail",
         "_outcome",
@@ -1246,12 +1274,20 @@ def _approved_non_emission_literal(
             return True
         return bool(
             _assignment_target_names(node, parents)
-            & {"EXPECTED_POSITIVE_CODES", "EXPECTED_NEGATIVE_CODES"}
+            & {
+                "EXPECTED_POSITIVE_CODES",
+                "EXPECTED_NEGATIVE_CODES",
+                "EXPECTED_EXACT_CLASSICAL_CODE",
+            }
         )
     if module == "generate":
         return bool(
             _assignment_target_names(node, parents)
-            & {"_OWNER_RESULT_CONTRACTS", "_NEGATIVE_RESULT_CONTRACTS"}
+            & {
+                "_OWNER_RESULT_CONTRACTS",
+                "_NEGATIVE_RESULT_CONTRACTS",
+                "_EXACT_CLASSICAL_OWNER_RESULT_CODES",
+            }
         )
     return False
 

@@ -1,8 +1,8 @@
 # Independent Semantic Review Reconciliation
 
 > **Kind:** Temporary peer-review adjudication and action record
-> **State:** Active while the native FRI/IOR result and follow-up experiments
-> are being reconciled
+> **State:** Reconciled for the retained native FRI/IOR case; unrelated
+> follow-up experiments and cross-family questions remain open
 > **Authority:** None. This page records evidence classifications and work
 > gates; it does not change durable semantics.
 > **Input boundary:** An independent private review of the semantic redesign at
@@ -56,7 +56,7 @@ general versions remain open.
 
 | Topic | Current classification | Reason |
 |---|---|---|
-| Oracle-commitment compilation | `PartiallySuperseded` | A Core-to-Core construction declaration and validation-bound one-execution receipt now exist, but no generally admitted construction or durable owner exists. |
+| Oracle-commitment compilation | `SupersededAtBoundedScope` | PIR now owns one checked structural construction for the exact classical source/target/profile triple, while an inert receipt validates one execution. Universal FRI-family compilation and security remain open. |
 | Grinding augmentation | `PartiallySuperseded` | A separate Core-to-Core declaration and one-execution receipt exist; general admission and any amplification theorem remain open. |
 | State-restoration and round-by-round vocabulary | `PartiallySuperseded` | The finite FRI instrument forms distinct experiments and questions, but answers none and changes no durable Analysis catalog. |
 | Verifier-derived or virtual oracles | `ConfirmedOpen` | DEEP-ALI and STIR pressure identifies a candidate `DerivedOracle`/`QueryPlan` seam; it remains unimplemented and non-durable. |
@@ -65,8 +65,9 @@ general versions remain open.
 | Family versus exact instance | `PartiallySuperseded` | A bounded experiment now authenticates a complete closed program AST, elaborates FRI and sumcheck shapes through one generic interpreter, and retains exact Core authority. Durable adoption and any unbounded-family theorem remain open. |
 
 The native FRI/IOR result must therefore be reported as a finite architecture
-falsifier. It does not close general BCS correspondence, protocol-family
-coverage, exact paper-algorithm correspondence, or a security theorem.
+falsifier. It closes fixed-coin deterministic verifier-shape correspondence to
+the selected paper algorithm, but not the randomized source Protocol, general
+BCS correspondence, protocol-family coverage, or a security theorem.
 
 ## 3. Immediate factual repairs
 
@@ -88,16 +89,18 @@ noncontroversial repairs in the current working change:
   formation; and
 - the shared noncompletion list includes `DeterministicLimitExceeded`.
 
-The native FRI/IOR notes also now distinguish three evidence strengths:
+The native FRI/IOR result distinguishes three evidence strengths:
 
 1. a construction declaration;
 2. a validation-bound receipt for one concrete execution; and
 3. a generally admitted checked construction.
 
-Only the Fiat--Shamir relation currently reaches the third strength. Core-to-
-Core pseudocode now uses Core IDs, and ordinary folded prover publications are
-not called `DerivedOracle`; that term is reserved for verifier-defined,
-non-materialized views.
+The exact classical Oracle-commitment construction and the Fiat--Shamir
+relation reach the third strength at their separately bounded structural
+scopes. The earlier commitment and grinding controls remain validation-bound
+receipts. Core-to-Core pseudocode uses Core IDs, and ordinary folded prover
+publications are not called `DerivedOracle`; that term is reserved for
+verifier-defined, non-materialized views.
 
 The focused Analysis test regression is an instrument migration defect, not a
 durable semantic contradiction. Its stale kinds, body accessor, profile
@@ -178,7 +181,7 @@ fork orientation, enumerate the complete fixed domain independently, and
 execute the exact admitted extractor. Relations correspondence remains a
 separate premise rather than being folded into protocol acceptance.
 
-### 4.3 Generally admitted Core-to-Core construction
+### 4.3 Checked Core-to-Core construction
 
 The current FRI declaration identifies the right factorization:
 
@@ -194,12 +197,13 @@ committed Core
 augmented committed Core
 ```
 
-The reusable construction layer still needs exact identity or declaration
-shape, admission inputs, complete source/target maps, defect algebra,
-commutation laws, salting ownership, bounds, and owner-local checked
-capability. Analysis must separately receive commitment assumptions and
-state-restoration or round-by-round propositions. One-run trace agreement is
-not universal construction admission.
+The exact classical profile now supplies the previously missing structural
+owner: admission binds exact identities and inputs, rederives the target and
+complete maps, checks advice ownership and bounds, and mints an owner-local
+capability only for that source/target/profile triple. The one-run receipt
+remains weaker and cannot authorize reuse. Analysis must separately receive
+commitment assumptions and state-restoration or round-by-round propositions;
+neither the construction nor trace agreement is universal FRI-family admission.
 
 ### 4.4 Derived oracles and scale
 
@@ -385,26 +389,18 @@ They are not blanket-pruning candidates. Relations embedding and peripheral
 presentation/count machinery may be deferred only after an exact consumer and
 preservation audit.
 
-## 7. Ordered action gates
+## 7. Remaining ordered gates
 
-The follow-up order is:
+The review-driven factual repairs, bounded Analysis and indexed-schema
+reclosures, common noncompletion and Relations catalog work, architecture
+consolidation, and exact classical Oracle-commitment construction have been
+handled at their declared scopes. The remaining order is:
 
-1. land the factual documentation repairs;
-2. restore and run the complete Analysis instrument gate;
-3. complete and independently review the bounded `IndexedCoreSchema`
-   experiment, then decide whether the optional authoring layer has earned a
-   durable subject;
-4. decide Foundation ownership of shared noncompletion meanings and publish
-   one exact Relations subject-kind catalog;
-5. reclose the Analysis qualification, read-purpose, fixed-pair, extractor,
-   and finite-discharge joints;
-6. consolidate active architecture decisions and transition ownership before
-   adding another durable schema family;
-7. specify and validate a generally admitted oracle-commitment construction,
-   then promote only the compact FRI/IOR laws it actually exercises;
-8. publish complete owner-local profile preimages bottom-up after the final
-   semantic rotation in the preceding gates; and
-9. run a cold independent review before freezing the semantic kernel.
+1. publish complete owner-local profile preimages bottom-up after known
+   semantic rotations;
+2. continue the differentiated protocol and variant portfolio without
+   generalizing the native FRI/IOR result; and
+3. run a cold independent review before freezing the semantic kernel.
 
 Derived-oracle, large-carrier, and preprocessing experiments enter at their
 first exact consuming witness. Generic Compiler implementation remains
@@ -412,9 +408,9 @@ deferred. The profile-publication carrier and independent cold encoder may be
 built earlier, but publishing supposedly persistent profile IDs before these
 known semantic rotations would create avoidable churn.
 
-## 8. Verification record
+## 8. Historical verification record
 
-The final handoff used separate evidence lanes:
+At that snapshot, the recorded checks came from distinct evidence sources:
 
 - the uncapped pre-addition Analysis suite passed 151/151 in 4,991.862
   seconds; the newly added exact-`N=8` non-total-sampler regression then
@@ -430,7 +426,8 @@ The final handoff used separate evidence lanes:
   boundary-partial, and 5 boundary-uncovered.
 
 These are regression, executable-pressure, and evidence-scope results. They do
-not upgrade any nonclaim below.
+not upgrade any nonclaim below and do not substitute for the final retained-
+case checkpoint after the exact fixture and durable owner changes.
 
 ## 9. Non-claims
 
@@ -438,7 +435,7 @@ This reconciliation does not establish:
 
 - a cryptographic security property;
 - general FRI, BCS, sumcheck, or family correspondence;
-- exact correspondence to a cited paper algorithm;
+- randomized-Protocol or theorem correspondence to a cited paper algorithm;
 - a durable indexed-schema or preprocessing design;
 - implementation conformance of the redesigned carrier; or
 - readiness to freeze persistent identities.
@@ -459,7 +456,12 @@ stable construction capability.
 This closes only the structural source/target/profile triple. It does not
 establish universal FRI-family compilation, commitment security, BCS theorem
 applicability, round-by-round or restoration soundness, or Fiat--Shamir
-security. The current Relations and Analysis controls remain bounded pressure
-because their durable owner-view and profile/catalog contracts are not yet
-defined. Those residual obligations replace, rather than conceal, the older
-generic construction gate.
+security. The causal, purpose-bound PIR confidential view and the Relations
+material-agreement operation now close the exact initial-Oracle connection
+without promoting a trace or secret-derived ID. Analysis remains bounded
+pressure because no explicit classical-FRI owner profile and premise authority
+produces a property result. Those residual obligations replace, rather than
+conceal, the older generic construction gate.
+
+The case-level classification and reopening boundary are consolidated in the
+[final retention record](native-fri-ior-final-classification-and-retention.md).

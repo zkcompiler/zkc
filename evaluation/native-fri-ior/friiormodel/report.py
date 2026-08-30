@@ -6,6 +6,7 @@ import ast
 import importlib.util
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 from .analysis import (
@@ -13,6 +14,7 @@ from .analysis import (
     canonical_theorem_questions,
     check_question_formation,
 )
+from .classical_fixtures import parse_classical_replay_policy
 from .committed import verify_committed_fri
 from .fixtures import (
     PACKAGE_ROOT,
@@ -35,14 +37,23 @@ from .provenance import (
 from .terms import CheckResult, ModelFailure, OutcomeClass, ResourceCounter
 
 
-REPORT_SCHEMA = "zkc.native-fri-ior.public-validation-report.v2"
-EXPECTED_SCHEMA = "zkc.native-fri-ior.expected-report-projection.v2"
+REPORT_SCHEMA = "zkc.native-fri-ior.public-validation-report.v3"
+EXPECTED_SCHEMA = "zkc.native-fri-ior.expected-report-projection.v3"
 PUBLIC_CASES = {
     "public_inputs": "evaluation/native-fri-ior/cases/public-inputs.json",
     "public_proof": "evaluation/native-fri-ior/cases/public-proof.json",
     "public_native_vector": "evaluation/native-fri-ior/cases/public-native-vector.json",
     "negative_proofs": "evaluation/native-fri-ior/cases/public-negative-proofs.json",
     "replay_policy": "evaluation/native-fri-ior/cases/replay-policy.json",
+    "exact_classical_public_inputs": (
+        "evaluation/native-fri-ior/cases/exact-classical-public-inputs.json"
+    ),
+    "exact_classical_public_proof": (
+        "evaluation/native-fri-ior/cases/exact-classical-public-proof.json"
+    ),
+    "exact_classical_replay_policy": (
+        "evaluation/native-fri-ior/cases/exact-classical-replay-policy.json"
+    ),
     "source_ledger": "evaluation/native-fri-ior/cases/source-ledger.json",
 }
 
@@ -53,8 +64,15 @@ SOURCE_BASES = {
     "committed": ("fixtures.py", "committed.py"),
     "analysis-formation": ("analysis.py",),
     "independent-replay": ("../independent.py",),
-    # independent.py is loaded dynamically, so it is an explicit report root.
-    "report": ("report.py", "../independent.py", "../run.py"),
+    "exact-classical-independent-replay": ("../classical_independent.py",),
+    # Both reconstruction modules are loaded dynamically, so they are explicit
+    # report roots rather than invisible runtime dependencies.
+    "report": (
+        "report.py",
+        "../independent.py",
+        "../classical_independent.py",
+        "../run.py",
+    ),
 }
 
 NONCLAIMS = (
@@ -67,6 +85,7 @@ NONCLAIMS = (
     "owner-local construction receipts are checked separately and are not public-report inputs",
     "validation source bases bind selected local Python bytes, not the interpreter, standard library, or complete runtime environment",
     "one positive execution and two refusals do not establish protocol-family coverage or refusal completeness",
+    "the exact classical replay establishes one finite structural execution, not source-theorem applicability or probabilistic FRI correspondence",
 )
 
 EXPECTED_POSITIVE_CODES = {
@@ -74,6 +93,7 @@ EXPECTED_POSITIVE_CODES = {
     "committed": "FRI-IOR-COMMITTED-100",
     "independent_replay": "FRI-IOR-INDEPENDENT-100",
 }
+EXPECTED_EXACT_CLASSICAL_CODE = "FRI-IOR-CLASSICAL-INDEPENDENT-100"
 EXPECTED_NEGATIVE_CODES = {
     "authenticated-fold-inconsistency": "FRI-IOR-COMMITTED-020",
     "fold-consistent-terminal-degree-excess": "FRI-IOR-COMMITTED-022",
@@ -220,6 +240,20 @@ def _load_independent() -> Any:
     return module
 
 
+def _load_classical_independent() -> Any:
+    path = PACKAGE_ROOT / "classical_independent.py"
+    spec = importlib.util.spec_from_file_location(
+        "fri_ior_exact_classical_independent_replay",
+        path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("exact classical independent replay module is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _case(
     name: str, result: CheckResult, resources: ResourceCounter | None = None
 ) -> dict[str, Any]:
@@ -254,6 +288,9 @@ def _build_public_report_from_loaded(
     trace = parse_public_native_vector(loaded["public_native_vector"].value)
     negatives = parse_negative_proofs(loaded["negative_proofs"].value)
     limits = parse_replay_policy(loaded["replay_policy"].value)
+    exact_classical_limits = parse_classical_replay_policy(
+        loaded["exact_classical_replay_policy"].value
+    )
     ledger = load_source_ledger_bytes(loaded["source_ledger"].raw)
 
     native_resources = ResourceCounter(limits)
@@ -284,6 +321,16 @@ def _build_public_report_from_loaded(
         loaded["public_inputs"].value,
         loaded["public_proof"].value,
         limits=loaded["replay_policy"].value["limits"],
+    )
+    # This is the public verification path for the exact classical packet.
+    # It receives the frozen JSON terms directly and does not call the
+    # producer-side carrier constructors or verifiers.
+    exact_classical_independent = (
+        _load_classical_independent().verify_public_classical_fri(
+            loaded["exact_classical_public_inputs"].value,
+            loaded["exact_classical_public_proof"].value,
+            limits=exact_classical_limits.to_term(),
+        )
     )
     negative_cases = []
     for name, negative in negatives.items():
@@ -341,6 +388,15 @@ def _build_public_report_from_loaded(
             "independent_replay": independent,
             "reconciliation": reconciliation,
         },
+        "exact_classical_execution": {
+            "scope": "one-frozen-three-fold-scalar-terminal-strong-fs-public-replay",
+            "independent_replay": exact_classical_independent,
+            "verification_authority": (
+                "separately-coded-public-verifier-over-frozen-public-terms"
+            ),
+            "uses_owner_generation_input": False,
+            "establishes_source_theorem_correspondence": False,
+        },
         "negative_executions": negative_cases,
         "analysis_question_formation": analysis_results,
         "nonclaims": list(NONCLAIMS),
@@ -377,6 +433,9 @@ def expected_projection(report: dict[str, Any]) -> dict[str, Any]:
             "reconciliation_equal": body["positive_execution"]["reconciliation"][
                 "equal"
             ],
+            "exact_classical_independent_replay": body[
+                "exact_classical_execution"
+            ]["independent_replay"]["code"],
         },
         "negative_outcomes": {
             item["name"]: item["result"]["code"] for item in body["negative_executions"]
@@ -406,6 +465,7 @@ def _report_policy_valid(report: object) -> bool:
     committed_case = positive.get("committed")
     independent_case = positive.get("independent_replay")
     reconciliation = positive.get("reconciliation")
+    exact_classical = body.get("exact_classical_execution")
     if not all(
         type(value) is dict
         for value in (
@@ -415,6 +475,11 @@ def _report_policy_valid(report: object) -> bool:
             reconciliation,
         )
     ):
+        return False
+    if type(exact_classical) is not dict:
+        return False
+    exact_classical_replay = exact_classical.get("independent_replay")
+    if type(exact_classical_replay) is not dict:
         return False
     native_result = native_case.get("result")
     committed_result = committed_case.get("result")
@@ -466,6 +531,13 @@ def _report_policy_valid(report: object) -> bool:
         and analysis_names == EXPECTED_ANALYSIS_QUESTION_NAMES
         and analysis_formed
         and reconciliation.get("equal") is True
+        and exact_classical_replay.get("outcome")
+        == OutcomeClass.AFFIRMATIVE.value
+        and exact_classical_replay.get("code") == EXPECTED_EXACT_CLASSICAL_CODE
+        and exact_classical.get("verification_authority")
+        == "separately-coded-public-verifier-over-frozen-public-terms"
+        and exact_classical.get("uses_owner_generation_input") is False
+        and exact_classical.get("establishes_source_theorem_correspondence") is False
     )
     return policy_valid
 

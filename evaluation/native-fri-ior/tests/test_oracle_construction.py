@@ -336,7 +336,7 @@ class ExactConcreteRunConstructionTest(unittest.TestCase):
             },
             set(range(len(receipt.public_opening_ids))),
         )
-        self.assertEqual(len(receipt.public_opening_ids), 11)
+        self.assertEqual(len(receipt.public_opening_ids), 8)
         self.assertEqual(
             receipt.occurrence_opening_map[2].opening_table_index,
             receipt.occurrence_opening_map[5].opening_table_index,

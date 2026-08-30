@@ -6,19 +6,14 @@
 > **Authority:** None. This page records an agreed method only; it changes no
 > target specification, decision, implementation claim, or Stage 4B state.
 > **Activated:** 2026-08-23
-> **Current gate:** Integrated semantic-kernel closure K0, bounded K1
-> executable foundations, and the narrowly reclosed bounded K2
-> Protocol/Fiat--Shamir kernel are complete at their stated scopes; the final
-> K2 gates and focused follow-up are green in its validation record. K3-A
-> consumer-boundary reconstruction, bounded K3-B dependent-surface,
-> Relations, and carrier co-design, bounded K3-C minimum Analysis closure, and
-> bounded K3-D endpoint-projection closure completed on 2026-08-28. Bounded
-> K3-E integrated closure is also complete at its finite scope. K4/P02
-> protocol-portfolio pressure is next; K5 independent freeze remains pending.
-> R2 remains an evidence track after the repaired
-> `FRI-Grind-1` witness
-> and retained T3 `P01` Schnorr/Sigma result. `P02` is the next witness anchor
-> and now proceeds as the first K4 portfolio case. Stage 4B remains inactive.
+> **Current gate:** Executable foundations, the Protocol/Fiat--Shamir kernel,
+> the minimum Relations, Analysis, and endpoint-projection seams, and one
+> joined Schnorr path are complete at their declared bounded scopes. The native
+> FRI/IOR deep case is also retained as a two-lane
+> `ConservativeExtension`: an early-terminated control and a frozen exact
+> three-fold/scalar-terminal control remain distinct. The remaining protocol
+> and variant portfolio and independent semantic freeze are pending. Stage 4B
+> remains inactive.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -87,8 +82,8 @@ below are reader cross-references rather than inventory edges.
   source-relative projection relation for FS verifier and Plan-specialized
   prover endpoints. Fresh, Oracle, module, and generic-prover cases remain
   typed unsupported boundaries. K3-E subsequently reclosed the joined finite
-  profile, view, read, and authority boundary; K4 portfolio pressure is next
-  and K5 still owns independent freeze.
+  profile, view, read, and authority boundary. The remaining differentiated
+  protocol portfolio is active, and independent semantic freeze remains later.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,
@@ -104,6 +99,10 @@ below are reader cross-references rather than inventory edges.
   selects canonical families, recent variants, holdout cases, differentiated
   T1--T3 evidence strength, work order, promotion rules, and the bounded R2
   convergence gate.
+- [Native FRI/IOR Final Classification and Retention](r2-protocol-witnesses/native-fri-ior-final-classification-and-retention.md)
+  retains the two finite FRI/IOR lanes, classifies the case as a conservative
+  extension, fixes the deterministic source-correspondence boundary, and
+  routes remaining Analysis and portfolio obligations.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

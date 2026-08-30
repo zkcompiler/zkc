@@ -719,7 +719,7 @@ def parse_expected_projection(value: object) -> dict[str, Any]:
         code="FRI-IOR-FIXTURE-033",
     )
     if (
-        obj["schema"] != "zkc.native-fri-ior.expected-report-projection.v2"
+        obj["schema"] != "zkc.native-fri-ior.expected-report-projection.v3"
         or obj["authority"] != "regression-golden-not-semantic-or-provenance-authority"
     ):
         raise _malformed(
@@ -747,6 +747,9 @@ def parse_expected_projection(value: object) -> dict[str, Any]:
             "public_native_vector",
             "public_proof",
             "replay_policy",
+            "exact_classical_public_inputs",
+            "exact_classical_public_proof",
+            "exact_classical_replay_policy",
             "source_ledger",
         ),
         code="FRI-IOR-FIXTURE-033",
@@ -760,6 +763,7 @@ def parse_expected_projection(value: object) -> dict[str, Any]:
             "committed",
             "analysis-formation",
             "independent-replay",
+            "exact-classical-independent-replay",
             "report",
         ),
         code="FRI-IOR-FIXTURE-033",
@@ -773,6 +777,7 @@ def parse_expected_projection(value: object) -> dict[str, Any]:
             "committed",
             "independent_replay",
             "reconciliation_equal",
+            "exact_classical_independent_replay",
         ),
         code="FRI-IOR-FIXTURE-033",
     )
@@ -782,6 +787,7 @@ def parse_expected_projection(value: object) -> dict[str, Any]:
             "native",
             "committed",
             "independent_replay",
+            "exact_classical_independent_replay",
         )
     ):
         raise _malformed(

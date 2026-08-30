@@ -1,7 +1,7 @@
 # Protocol correspondence for relations
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K3-B target
+> **Document state:** Active non-normative target
 > **Provisional owner:** `relations`
 > **Authority:** This page specifies the selected `docs-next/` correspondence
 > model. It is non-normative until consolidation and cutover; the current
@@ -19,8 +19,8 @@ It consumes, without redefining:
 - K1 identity, values, portable algorithms, exact dependency closure,
   qualified completion, and authority from
   [Executable Semantic Foundations](../foundation/executable-foundations.md);
-- Protocol structure, execution, replay, and the public-only
-  `RelationRunView` from
+- Protocol structure, execution, replay, the public-only `RelationRunView`,
+  and the separate causal, purpose-bound confidential initial-Oracle view from
   [Interactive Core and Causal Execution](../pir/interactive-core.md);
 - external Interface and source-ID-free `PlanWitnessSurface` meaning from
   [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md); and
@@ -30,10 +30,23 @@ It consumes, without redefining:
 
 This page does not own relation satisfaction, Protocol execution, Plan
 realization, property Analysis, OIR projection, or realization. A raw carrier
-path, label, digest, record, external container, or caller-created tuple is
-never a correspondence source.
+path, label, digest, record, trace, external container, caller-created tuple,
+or secret-derived portable identifier is never a correspondence source.
 
-The K3-B Relations language selects the companion page's standalone
+For confidential initial-Oracle grounding this page imports, without
+redefining, the PIR names `ConfidentialInitialOracleFamily`,
+`ConfidentialInitialOracleCoordinate`,
+`ConfidentialInitialOracleDisclosurePolicy`,
+`ConfidentialInitialOracleDisclosurePolicyId`,
+`ConfidentialInitialOracleView`,
+`CheckedConfidentialInitialOracleViewAuthority`,
+`ConfidentialInitialOracleViewCapability`, and
+`IssueConfidentialInitialOracleView`, together with
+`PIRSourceConsumerRoleId`, `PIRSourcePurposeRoleId`, and the exact
+`CausallyGeneratedOnly` and `WholeCanonicalCarrier` laws. The public
+`RelationRunView` remains a different carrier with a different issuance law.
+
+The Relations language selects the companion page's standalone
 `RelationsProfileId`. It imports exactly
 `{PIRInterfacePlanProfileId}` and therefore reaches the two K2 PIR profiles
 only through that transitive edge. Its supported subject-kind namespace is
@@ -244,6 +257,7 @@ RunPresenceExpectation =
 
 RunFactCheck =
     RelationBoundValue(RelationBoundRunValueSelector)
+  | OracleMaterialAgreement(OracleEdgeRef)
   | ExpectedValue(
       RunValueSelector,
       CanonicalValue<RunValueSelectorType(selector)>)
@@ -267,16 +281,32 @@ visibility. Thus no fact can be requested through both a generic occurrence
 output and a role-specific alias; aliasing selectors make the question
 malformed.
 
+Before applying the written selector, `PublicOracleQuery` has base type
+`o.index_type` and `PublicOracleAnswer` has base type
+`OracleAnswerOutputType(o)`. Thus a logical-access answer selector ranges over
+`o.element_type`, not the optional `OracleLookupResultType(o)` used by the
+other publication modes.
+
 `RelationBoundValue` obtains its expectation only from the exact relation
-instance endpoint and admitted edge `ValueRelation`. `ExpectedValue` carries
-one canonical value of the selector-derived type and uses exact K1 equality;
-it has no relation-derived expectation. The two expected-meta constructors are
-closed because K2 already owns their finite result types. There is deliberately
-no generic expected-meta arm for `RelationClaimHistory` or
-`RelationReductionHistory`: K3-B can ask only whether such a history coordinate
-is `Available`, `Inactive`, or `NotReached`. Exact history predicates require a
-separately admitted grammar and are unsupported here rather than being guessed
-from a binding.
+instance endpoint and admitted edge `ValueRelation`. Its
+`OraclePublicBinding` selector forms only for a `PublicBoundOracleTarget`.
+`OracleMaterialAgreement` forms only for a `LogicalOracleTarget` whose PIR
+Oracle is `InitialOracle + LogicalAccess`; it selects no public run coordinate
+and carries no material, digest, selector, bridge, or occurrence ID. Its exact
+relation and PIR material types must both be the same whole
+`OracleCarrierType(o)`, and the enclosing question must require
+`ExactCausallyGenerated`. A structurally valid public-bound, prover-origin, or
+replay-qualified material request is `Unsupported`; an invalid reference or
+ill-formed target is `Malformed`.
+
+`ExpectedValue` carries one canonical value of the selector-derived type and
+uses exact Foundation equality; it has no relation-derived expectation. The
+two expected-meta constructors are closed because PIR already owns their
+finite result types. There is deliberately no generic expected-meta arm for
+`RelationClaimHistory` or `RelationReductionHistory`: the current grammar can
+ask only whether such a history coordinate is `Available`, `Inactive`, or
+`NotReached`. Exact history predicates require a separately admitted grammar
+and are unsupported here rather than being guessed from a binding.
 
 `Presence` compares only the outer PIR observation alternative and never
 claims equality of an available payload. `RequireInactive` forms only for a
@@ -284,6 +314,12 @@ coordinate that PIR classifies as occurrence-produced; other impossible
 status/coordinate combinations are malformed. Across all arms, two checks
 that derive the same PIR coordinate are malformed, even if their surface
 selectors differ.
+
+`PublicOraclePublication` forms only when PIR derives an actual canonical
+publication value. A `LogicalAccess` fixation marker has no canonical value
+payload and therefore has no `PublicOraclePublication` selector on this page.
+The marker's activity remains part of PIR's confidential-view adequacy basis;
+it is not a substitute value or an expected-meta arm.
 
 Each `CorrespondenceHistoryBoundary` maps constructor-for-constructor to the
 identically spelled PIR `RunBoundary`; it is durable question syntax, not a run
@@ -382,13 +418,21 @@ and enforces exact same-Protocol and same-Interface dependencies. It does not
 evaluate mapping, coverage, equality, shape, equation, or run facts. Those
 remain constructibly negative propositions.
 
-Every `RunGrounding` contains at least one `RelationBoundValue` check. This
-makes its `instance_id` and `binding_id` semantically necessary rather than
-identity-bearing context for an unrelated run assertion. Each such check's
-edge belongs to that binding and its relation endpoint belongs to the exact
-instance Interface. Other checks may provide explicit public expectations or
-presence facts in the same binding's Protocol. A standalone run-monitoring
-question with no relation-bound value is outside this page's algebra.
+Every `RunGrounding` contains at least one `RelationBoundValue` or
+`OracleMaterialAgreement` check. This makes its `instance_id` and `binding_id`
+semantically necessary rather than identity-bearing context for an unrelated
+run assertion. Each such check's edge belongs to that binding and its relation
+endpoint belongs to the exact instance Interface. Other checks may provide
+explicit public expectations or presence facts in the same binding's
+Protocol. A standalone run-monitoring question with no relation-bound public
+value or initial logical-Oracle material agreement is outside this page's
+algebra.
+
+If any `OracleMaterialAgreement` occurs, `q.required_qualification` is exactly
+`ExactCausallyGenerated`. Every such edge is a `LogicalOracleTarget`, names an
+`InitialOracle + LogicalAccess` PIR Oracle, and has the exact whole-carrier type
+agreement specified above. Repeating an edge in two material-agreement checks
+is malformed. No public `RelationRunCoordinate` is derived for this arm.
 
 For an admitted `RunGrounding` question `q`, Relations derives:
 
@@ -519,12 +563,41 @@ CorrespondenceRunRead =
       required_qualification: RequiredRunQualification
     }
 
+ConfidentialInitialOracleCoordinateFor(binding,edge) = {
+  protocol_id: binding.protocol_id,
+  oracle: edge.protocol.oracle,
+  publication: edge.protocol.publication_occurrence
+}
+
+ConfidentialInitialOraclePolicyFor(question,binding,edge) = {
+  family: ConfidentialInitialOracleFamily,
+  coordinate: ConfidentialInitialOracleCoordinateFor(binding,edge),
+  extent: WholeCanonicalCarrier,
+  qualification: CausallyGeneratedOnly,
+  consumer_id: PIRSourceConsumerRoleId(
+    ConfidentialInitialOracleFamily, CorrespondenceQuestionId(question)),
+  purpose_id: PIRSourcePurposeRoleId(
+    ConfidentialInitialOracleFamily, CorrespondenceQuestionId(question))
+}
+
+ConfidentialInitialOracleAgreementRead = {
+  edge: OracleEdgeRef,
+  relation_oracle: RelationOracleRef,
+  pir_coordinate:
+    exact ConfidentialInitialOracleCoordinateFor(binding,edge),
+  material_type: OracleCarrierType(pir_coordinate.oracle),
+  policy_qualification: CausallyGeneratedOnly,
+  disclosure: WholeCanonicalCarrier
+}
+
 CorrespondenceReadManifest = {
   protocol: CanonicalSortedUniqueSeq<ProtocolStaticRead>,
   protocol_interface: CanonicalSortedUniqueSeq<ProtocolInterfaceRead>,
   plan_surface: CanonicalSortedUniqueSeq<PlanSurfaceRead>,
   relations: CanonicalSortedUniqueSeq<RelationsRead>,
-  run: FiniteSeq<CorrespondenceRunRead>
+  run: FiniteSeq<CorrespondenceRunRead>,
+  confidential_initial_oracle:
+    CanonicalSortedUniqueSeq<ConfidentialInitialOracleAgreementRead>
 }
 ```
 
@@ -555,7 +628,12 @@ The caller never supplies or widens it. Derivation is exhaustive:
 | `ArtifactComparison` | the exact admitted artifact question, issued observation fields, selected relation Interface facts, selectors, and bridges named by each clause |
 | `EquationGrounding` | the exact admitted equation; every source, step, equality, exactly `RequiredGroundingOperandSlots(equation)`, and one exact run read per run slot |
 | `CommitmentGroundingCheck` | every typed construction input and publication slot plus the exact source, step, and equality in each selected closed grounding |
-| `RunGrounding` | the binding edge for every `RelationBoundRunValueSelector` appearing in any check; the instance field selected only by each `RelationBoundValue` check; when the owner-derived `RunGroundedPotentialLossyCoordinates(q)` is nonempty, the premise and consumer-source join for every coordinate in that sequence; plus the unique public `RelationRunCoordinate` derived from every check. Expected values are authenticated question literals, not owner reads. |
+| `RunGrounding` | the binding edge for every `RelationBoundRunValueSelector` or `OracleMaterialAgreement` appearing in any check; the instance field selected only by each `RelationBoundValue` check; when the owner-derived `RunGroundedPotentialLossyCoordinates(q)` is nonempty, the premise and consumer-source join for every coordinate in that sequence; the unique public `RelationRunCoordinate` derived from each public check; and one exact confidential initial-Oracle agreement read for each material-agreement arm. Expected values are authenticated question literals, not owner reads. |
+
+The `confidential_initial_oracle` field is empty for every question except
+`RunGrounding`; for that family its key set is exactly the distinct
+`OracleMaterialAgreement` edge sequence derived from `q.checks`. An empty field
+creates no confidential owner request or ambient authority.
 
 Every phrase in the table is expanded to the closed read arms above before
 canonical sorting. No arm silently carries an unlisted owner subtree. The
@@ -587,16 +665,35 @@ For `RunGrounding`, each coordinate in its exact owner-derived potential lossy
 sequence additionally reads the affirmative occurrence-local source premise and
 affirmative consumer-source join bound to that use coordinate. Other structural, coverage,
 Plan, and artifact questions do not acquire such a read merely because an edge
-names a lossy bridge; K3-B defines no live source-consumer join for them.
+names a lossy bridge; the current target defines no live source-consumer join
+for them.
 Concretely, coordinate `c` adds both `BridgeUsePremise(c)` and
 `BridgeUseConsumerSourceJoin(c)` to the Relations submanifest.
 The exact full `BridgeUseSet` and `LossyUseSelection` are separately
 authenticated Section 9 operation operands; they are not manifest read arms.
 Reading one Oracle edge additionally includes the relation access declaration,
-K2 Oracle index/answer types, `PublicBinding` publication mode, binding
-construction, and publication occurrence. Reading a reduction meaning includes
-the exact side-input, challenge, and `(publication,next_challenge)` ordinal
-maps; it does not read a refinement theorem or output-agreement proof.
+PIR Oracle origin, publication mode, index/answer/carrier types, domain or
+binding construction, and publication occurrence. A public-bound target reads
+the `PublicBinding` construction and output coordinate; a logical target reads
+`InitialOracle + LogicalAccess` and has no publication-value read. Reading a
+reduction meaning includes the exact side-input, challenge, and
+`(publication,next_challenge)` ordinal maps; it does not read a refinement
+theorem or output-agreement proof.
+
+For a material-agreement arm, the derived
+`ConfidentialInitialOracleAgreementRead` contains only the static edge,
+relation endpoint, imported PIR coordinate, exact common material type, and the
+fixed causal whole-carrier policy. It contains neither carrier, assignment
+occurrence, supply occurrence, capability, trace, digest, nor result. The
+matching live sources are operation operands. This field is not part of the
+public run submanifest and does not widen `RelationRunView`.
+
+Its coordinate is formed field-for-field with the imported PIR grammar:
+`protocol_id` is the exact binding Protocol, `oracle` is the logical target's
+Oracle reference, and `publication` is that target's unique publication
+occurrence. Its required policy is exactly
+`ConfidentialInitialOraclePolicyFor(q,binding,edge)` above; no Relations alias,
+label, or alternate policy family participates.
 
 ### 4.2 Exact owner-issued view carriers
 
@@ -1052,6 +1149,45 @@ Run reads remain execution-issued `RelationRunView` operands with their exact
 fresh authority. They are not folded into a static owner view and cannot be
 replaced by a completed-record lookup.
 
+Confidential material agreement uses a fifth, deliberately non-view-set input
+class:
+
+```text
+ConfidentialInitialOracleGroundingInput = {
+  edge: OracleEdgeRef,
+  relation_assignment:
+    exact OracleMaterialAssignment for the question's RelationInstance,
+  relation_secret_capability:
+    identical live SecretValueCapability for the edge's RelationOracleRef,
+  pir_view: exact ConfidentialInitialOracleView for the derived coordinate,
+  pir_authority: exact CheckedConfidentialInitialOracleViewAuthority,
+  pir_capability: identical live ConfidentialInitialOracleViewCapability,
+  disclosure_policy_id:
+    exact ConfidentialInitialOracleDisclosurePolicyId of
+      ConfidentialInitialOraclePolicyFor(question,binding,edge)
+}
+
+ConfidentialInitialOracleGroundingInputs(q) =
+  ExactMap<
+    every and only OracleEdgeRef selected by OracleMaterialAgreement in q,
+    ConfidentialInitialOracleGroundingInput>
+```
+
+The policy named by each map value must resolve to the exact imported policy
+body derived by `ConfidentialInitialOraclePolicyFor(q,binding,edge)`. The same
+`CorrespondenceQuestionId` of `q` is supplied to the consumer and purpose role
+constructors, but the resulting IDs remain nominally distinct. The PIR
+coordinate, view, authority, capability, Protocol, invocation, completed run,
+initial-supply occurrence, and causal generation must all be the identical
+issuance basis.
+Only an affirmative `IssueConfidentialInitialOracleView` outcome for that
+exact basis may populate the PIR fields; a raw carrier or declassified trace
+cannot.
+The relation assignment must be the exact same-instance owner occurrence and
+the secret capability must be its identical bearer for the selected relation
+Oracle. This input map is live operation state. It has no body compiler,
+semantic ID, portable encoding, copy constructor, or cold-replay form.
+
 ## 5. Completed result payloads and authority
 
 This page imports the common qualified-outcome partition from K1 and the
@@ -1079,6 +1215,7 @@ CorrespondenceAgreement =
   | ValueAgrees(QuestionCoordinate)
   | EqualityTrue(QuestionCoordinate)
   | RelationBoundValueAgrees(QuestionCoordinate)
+  | OracleMaterialAgrees(QuestionCoordinate)
   | ExpectedValueAgrees(QuestionCoordinate)
   | ExpectedMetaAgrees(QuestionCoordinate)
   | PresenceAgrees(QuestionCoordinate)
@@ -1091,6 +1228,7 @@ CorrespondenceDisagreement =
   | ValueDisagreement(QuestionCoordinate)
   | MetaDisagreement(QuestionCoordinate)
   | EqualityFalse(QuestionCoordinate)
+  | OracleMaterialDisagreement(QuestionCoordinate)
   | PresenceOrOccurrenceDisagreement(QuestionCoordinate)
 
 CheckedCorrespondence = {
@@ -1112,6 +1250,12 @@ Endpoint type, selector type, and expected-value type mismatches make question
 formation malformed; they cannot produce an admitted proposition and therefore
 have no disagreement constructor.
 
+`OracleMaterialAgrees` and `OracleMaterialDisagreement` name only the exact
+`RunCheck(OracleMaterialAgreement(edge))` coordinate. They serialize neither
+carrier, either local occurrence, a trace or record reference, a capability,
+nor a material-derived digest. The operation-local capability may retain the
+live inputs for its own lifetime, but the checked-result body does not.
+
 Only completed affirmative or negative results receive the exact
 question-, operand-, and manifest-bound fresh operation-local capability.
 IDs, serialized records, manifests, and source bindings are inert and grant no
@@ -1130,6 +1274,7 @@ CheckCorrespondence(
   every exact admitted operand named by the question,
   exact CorrespondenceOwnerViewSet for ManifestFor(question),
   exact RelationRunView sequence for its run submanifest,
+  exact ConfidentialInitialOracleGroundingInputs(question),
   every matching live owner-view and run-view capability,
   exact evaluator support and limits)
   -> Qualified<CheckedCorrespondence>
@@ -1197,12 +1342,15 @@ Verifier-private invocation inputs remain covered by the Interface assignment
 lens but can never be Statement members.
 
 External instance correspondence compares canonical typed values through the
-selected public, Oracle-binding, or phase path. An Oracle path additionally
-requires the exact K2 `PublicBinding` publication mode, compatible relation/K2
-index and answer types, admitted binding construction, public publication
-occurrence, and matching public transport entry. A phase path names its exact
-challenge or public occurrence and transport entry. Repeated equal values are
-checked at distinct coordinates.
+selected public, Oracle-binding, or phase path. An Oracle-public-binding path
+forms only through a `PublicBoundOracleTarget` and additionally requires the
+exact PIR `PublicBinding` publication mode, compatible relation/PIR index and
+answer types, admitted binding construction, public publication occurrence,
+and matching public transport entry. A `LogicalOracleTarget` has no public
+publication value and cannot be smuggled through this external selector; its
+material agreement belongs only to the causal run-grounded operation. A phase
+path names its exact challenge or public occurrence and transport entry.
+Repeated equal values are checked at distinct coordinates.
 
 For a transport selector, `Inactive` is a well-formed
 `PresenceOrOccurrenceDisagreement`; `Active(v)` compares only its typed payload
@@ -1273,15 +1421,16 @@ construction equality at those occurrences; it establishes no binding,
 hiding, extraction, opening knowledge, or verifier soundness. A commitment is
 not a lossy value bridge.
 
-## 9. Public run-grounded operation
+## 9. Public and confidential run-grounded operation
 
 ```text
 CheckRunGroundedCorrespondence(
   admitted RunGrounding q,
   exact admitted RelationInstance,
   exact admitted ProtocolRelationBinding,
-  PIR-issued public-only RelationRunView,
-  matching fresh run-view authority,
+  when q's public run submanifest is nonempty:
+    PIR-issued public-only RelationRunView and matching fresh authority,
+  exact ConfidentialInitialOracleGroundingInputs(q),
   when RunGroundedPotentialLossyCoordinates(q) is nonempty:
     exact BridgeUseSet set for RunGroundedBridgeUseScope(q) and fresh
       affirmative authority,
@@ -1293,11 +1442,14 @@ CheckRunGroundedCorrespondence(
   -> Qualified<CheckedCorrespondence>
 ```
 
-The run view's Protocol and qualification must match the question. Its
-issuance authority must retain the exact invocation and source binding required
-by the operation. Its payload contains every and only the public coordinates
-in `ManifestFor(question)`; the full `CompletedProtocolRecord` remains in
-PIR's private source binding and is not a correspondence read.
+When present, the public run view's Protocol and qualification must match the
+question. Its issuance authority must retain the exact invocation and source
+binding required by the operation. Its payload contains every and only the
+public coordinates in `ManifestFor(question)`; the full
+`CompletedProtocolRecord` remains in PIR's private source binding and is not a
+correspondence read. A material-only question has an empty public run
+submanifest and therefore supplies no `RelationRunView`; this does not convert
+the confidential view into a public run view.
 
 For every lossy-source authority used by this operation, both downstream
 coordinates supplied to the two nominal role constructors are the exact
@@ -1329,8 +1481,30 @@ is `CannotAnswer`, never inequality.
 `Inactive` or `NotReached` yields a presence disagreement rather than a value
 disagreement.
 
+For every `OracleMaterialAgreement(edge)`, Relations requires the exact map
+entry derived in Section 4.2. It independently authenticates the relation
+assignment, selected relation Oracle, PIR coordinate, whole-carrier type,
+disclosure policy, exact question-bound consumer and purpose, causal
+qualification, view authority, and both live capabilities. It then reads the
+whole relation carrier and the whole PIR carrier through their respective
+identical bearers and compares them by Foundation same-type equality. It does
+not pass either value to a caller-supplied predicate or bridge.
+
+Equal carriers add `OracleMaterialAgrees` for that edge. Unequal well-formed
+carriers add `OracleMaterialDisagreement` for that edge, including when the
+only difference is at an unqueried Oracle entry. The result names only the
+edge. It retains no carrier, occurrence, trace, record, capability, or digest.
+A missing or expired otherwise matching live source is `CannotAnswer`; a wrong
+assignment occurrence, initial-supply occurrence, invocation, run, policy,
+consumer, purpose, or reconstructed bearer is `Refused`; a wrong kind, regime,
+or type is `KindMismatch`; an unsupported origin, publication mode, or replay
+qualification is `Unsupported`; a structural defect is `Malformed`; exact
+bound exhaustion is `DeterministicLimitExceeded`; and an evaluator or
+postcondition inconsistency is `CheckerFailure`. None of those outcomes is a
+material disagreement.
+
 For `ExpectedValue`, an `Available` payload is compared with the question's
-exact typed canonical value using K1 equality. `ExpectedCheckResult` and
+exact typed canonical value using Foundation equality. `ExpectedCheckResult` and
 `ExpectedTerminalVerdict` compare only their respective closed meta types.
 A different well-formed value or meta value is Negative; a different outer
 observation alternative is a presence disagreement. `Presence` compares the
@@ -1342,21 +1516,27 @@ In particular, a `Presence(ClaimState(...),RequireAvailable)` or
 that public history coordinate at the requested boundary. It does not compare
 the history, prove claim creation, prove a reduction application, or establish
 relation meaning. Exact claim/reduction-state comparison is `Unsupported` in
-K3-B. A different repeated occurrence, inactive guarded occurrence, or
-unreached boundary is Negative only when an admitted check selected a different
-status or expectation. A missing manifest entry or caller-created value is
-respectively `CannotAnswer` or `Refused`.
+the current grammar. A different repeated occurrence, inactive guarded
+occurrence, or unreached boundary is Negative only when an admitted check
+selected a different status or expectation. A missing manifest entry or
+caller-created value is respectively `CannotAnswer` or `Refused`.
 
-`ExactReplayQualified` requires a `ReplayQualified` view and answers what exact
-K2 replay consumed. `ExactCausallyGenerated` requires a `CausallyGenerated`
-view and the still-live K2 causal capability; replay cannot mint it. Neither
+`ExactReplayQualified` requires a `ReplayQualified` public view and answers
+what exact PIR replay consumed. `ExactCausallyGenerated` requires a
+`CausallyGenerated` public view and the still-live PIR causal capability;
+replay cannot mint it. Any `OracleMaterialAgreement` requires the latter and
+also requires a PIR `CausallyGeneratedOnly` confidential-view policy. Neither
 qualification proves relation satisfaction, honest strategy, coin
 distribution, or implementation isolation.
 
-No private witness, Oracle material, verifier-private query or answer, Plan
-state, advice, randomness, or strategy-local value is readable here. A later
-private supply-occurrence question requires a distinct PIR owner view and new
-question variant; until then it is `Unsupported`.
+No private witness, verifier-private query or answer, prover Oracle, Plan
+state, advice, randomness, or strategy-local value is readable here. Initial
+logical-Oracle material is readable only inside the exact agreement operation,
+only as the whole same-typed carrier, and only under the two purpose-bound live
+authorities above. It is not returned to the caller or made available through
+the public selector vocabulary. Any broader private supply-occurrence question
+requires a distinct owner view and question variant; until then it is
+`Unsupported`.
 
 ## 10. Combined results, persistence, and nonclaims
 
@@ -1376,7 +1556,10 @@ equality before fresh authority is created.
 A run-grounded result cold-replays only in the `ReplayQualified` lane. Causal
 generation, private occurrences, and source-local capabilities never cold
 replay. A fresh authorized execution creates fresh occurrence coordinates and
-results.
+results. Consequently a question containing `OracleMaterialAgreement` has no
+cold-replay lane: replay may validate observed answers, but it cannot establish
+that a newly supplied carrier is the whole initial carrier used by the earlier
+causal generation.
 
 No correspondence result establishes:
 

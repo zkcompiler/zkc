@@ -2,7 +2,7 @@
 
 > **Document kind:** Target semantic specification
 > **Document state:** Active non-normative target
-> **Normative surface maturity:** Provisional K1/K2 carrier contract
+> **Normative surface maturity:** Provisional Foundation/PIR carrier contract
 > **Provisional owner:** `pir`
 > **Authority:** This page specifies the selected carrier target for
 > `docs-next/`. It remains non-normative until explicit consolidation and
@@ -15,13 +15,13 @@
 > [Fiat--Shamir interpretation](fiat-shamir.md)
 >
 > **Implementation status:** the current `pir`/`oir` TableGen dialects are
-> pre-K2 regression evidence. They do not implement this carrier.
+> legacy-model regression evidence. They do not implement this carrier.
 
-This page fixes how the K2 `InteractiveCore` and `Protocol` subjects inhabit
+This page fixes how the target `InteractiveCore` and `Protocol` subjects inhabit
 one canonical MLIR PIR graph. It supersedes the earlier carrier candidate based
 on roles, ports, objects, randomness declarations, endpoint obligations, and a
-universal dependency row. Those were fields of the pre-K2 model and are not a
-second spelling of the K2 subjects.
+universal dependency row. Those were fields of the legacy model and are not a
+second spelling of the target subjects.
 
 The language-independent algebra owns meaning. MLIR is its one structural PIR
 carrier:
@@ -33,7 +33,7 @@ carrier:
 raw transport
   -> transport decoding
   -> canonical graph and dependency authentication
-  -> K2 Core and Protocol admission
+  -> Core and Protocol admission
   -> opaque process-local AdmittedProtocol
 ```
 
@@ -131,7 +131,7 @@ this page does not create parallel encodings for them.
 | 5 | `scopes` | Exact optional parent and `Initially`/`BeforeOccurrence` opening | No derived scope path cache |
 | 6 | `bindings` | Scope, exact `Statement`/`SessionContext`/`PublicParameter` tag, and value reference | Bound invocation values remain runtime data |
 | 7 | `challenges` | Scope, value type, domain declaration, fresh-law declaration, correlation, reduction-use policy, and ordered public conditions | No resolved challenge value or FS frame |
-| 8 | `oracles` | Scope, index and element types, maximum entries, and exact publication mode including its references | Oracle carrier and confidential witness are runtime data |
+| 8 | `oracles` | Scope, exact `InitialOracle`/`ProverOracle` origin, index and element types, maximum entries, and exact publication mode including a logical-access domain-law reference | Oracle carrier, initial-input capability, and confidential witness are runtime data |
 | 9 | `checks` | Algorithm reference, evaluation-contract reference, and ordered inputs | Evaluator implementation and result are not identity fields |
 | 10 | `claims` | Contract, scope, usage, and exact initial-binding or reduction-output source | Claim liveness is derived execution state |
 | 11 | `reductions` | Contract, scope, ordered input claims, side inputs, challenges, publication requirements, and output contracts | Reduction result and theorem evidence are external |
@@ -143,12 +143,14 @@ typed ordinal, `ValueType`, canonical datum, `ContentRefV0`, and declaration
 reference is graph-carried. Empty sequences and absent optionals use their exact
 explicit K1/K2 form; omission is not a default.
 
-The following K2 objects are deliberately not part of `InteractiveCoreBody` or
+The following runtime and derived objects are deliberately not part of `InteractiveCoreBody` or
 the graph:
 
 - `CoreInvocationBody` and concrete public or verifier-private values;
 - prover strategies, witness, advice, private randomness, private state, and
   supplier material;
+- prepared initial-Oracle input capabilities, logical query handles,
+  confidential initial-Oracle views, and their live authority;
 - `RunRecord`, failure and challenge receipts, Oracle receipts, and partial
   execution records;
 - `PublicCoinView`, dependency graphs, transcript prefixes, scope paths, and
@@ -502,16 +504,24 @@ one of those two K1 variants, as specified by the
 [cross-domain completeness rule](../project/analysis-and-compiler-architecture.md#23-capability-neutral-source-bindings);
 it is not a third record type.
 
-Each PIR family owns the exact profiled preimages named by its K1 carrier: its
+Each PIR family owns the exact profiled preimages named by its Foundation carrier: its
 family-indexed `PirCapabilityContractId`, ABI, typed consumer and purpose,
 source/result coordinate and complete binding payload, no-policy declaration,
 and transitive operation-policy closure. A family-specific
 `ExactPIR...AuthorityBinding` name is likewise a refinement requiring those
-preimages and equations over the exact K1 binding, never a separately encoded
-envelope. Where PIR owns no separate operation policy, the K1 disposition is
+preimages and equations over the exact Foundation binding, never a separately encoded
+envelope. Where PIR owns no separate operation policy, the Foundation disposition is
 `OwnerDefinesNoPolicy(exact PIR no-policy declaration ID)`. The older prose
 spelling `OwnerDefinesNoOperationPolicy(contract, ABI)` denotes the contents of
 that PIR-owned declaration and is not another Foundation constructor.
+
+The confidential initial-Oracle family is the deliberate policy-bearing
+exception: it uses
+`BoundTo(ConfidentialInitialOracleDisclosurePolicyId)` and an
+`OwnerLocalSourceAuthorityBinding`. Its static coordinate, consumer, purpose,
+whole-carrier extent, and causal-only qualification are portable policy facts;
+the carrier, any carrier-derived digest, and every live source operand are
+absent from all canonical graph and binding-payload bodies.
 
 The portable binding is inert. It is neither an admission receipt nor a
 capability. A consumer reauthenticates the exact subject, contract, ABI, and
@@ -522,7 +532,7 @@ serialization or process crossing destroys live authority.
 This page adds no portable carrier-specific capability channel. The process-
 local graph handle remains inside authentication and admission and cannot cross
 an owner boundary. The detailed binding, portable/owner-local result-coordinate,
-reset, and replay laws remain those of K1 plus the exact K2 owner lifecycles;
+reset, and replay laws remain those of Foundation plus the exact PIR owner lifecycles;
 the project architecture may summarize their completeness conditions but may
 not redefine their carrier fields.
 
@@ -690,7 +700,8 @@ The minimum positively admitted carrier witness contains:
 
 - a multi-scope Core with public and verifier-private inputs;
 - all public-binding classes, an exact guard, prover and deterministic-verifier
-  messages, challenges, the Oracle publish/query/answer lifecycle, a check,
+  messages, challenges, both Oracle origins, a zero-output logical-access
+  fixation, a value-publishing Oracle, the publish/query/answer lifecycle, a check,
   initial and reduction-output claims, a reduction publication requirement, and
   terminals;
 - Fresh and FS Protocols over the same Core;
@@ -702,7 +713,7 @@ same-kind `ModuleEffectRef` and payload, checks both structural inverse laws and
 every identity-field mutation, then requires typed `Unsupported` and no admitted
 Core while no exact supported `pir.core-effect` contract exists. Because no
 admitted Protocol results, no OIR projection request or partial OIR can exist.
-K3-D separately tests an admitted synthetic module-effect coordinate with no
+Endpoint pressure separately tests an admitted synthetic module-effect coordinate with no
 OIR discharge rule as projection-level `Unsupported`; that synthetic case does
 not standardize imported-proof verification.
 
@@ -712,7 +723,7 @@ syntax, unsupported module semantics, and deterministic-limit cases. It also
 checks that Interface/Plan/Relations changes leave Core and Protocol IDs stable,
 that injection of those satellites is malformed, and that imported verification
 stops at PIR admission while a separately admitted unsupported module profile
-stops at K3-D projection without a partial OIR artifact.
+stops at endpoint projection without a partial OIR artifact.
 
 The following remain later realization work and are not silently selected here:
 
@@ -722,8 +733,8 @@ The following remain later realization work and are not silently selected here:
   Relations rather than their exact K1 algebraic transports;
 - full OIR grammar, execution semantics, and projection correspondence;
 - a standardized imported-verification module and endpoint support;
-- K4 composition or protocol-family changes to the Core; and
-- migration from the current pre-K2 `pir`/`oir` dialects.
+- later composition or protocol-family changes to the Core; and
+- migration from the current legacy `pir`/`oir` dialects.
 
 Carrier formation, authentication, admission, or successful round trip does
 not establish source-language correctness, relation satisfaction, protocol

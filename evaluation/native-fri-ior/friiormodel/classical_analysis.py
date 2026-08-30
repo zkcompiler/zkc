@@ -538,7 +538,8 @@ def form_round_by_round_soundness_question(
     if (
         type(relation_instance) is not ExactRsProximityRelationInstance
         or type(relation_binding) is not ClassicalProtocolRelationBinding
-        or relation_binding.relation_instance_id != relation_instance.identity
+        or relation_binding.relation_interface_id
+        != relation_instance.interface_id
         or relation_binding.native_core_id != native_core_id
     ):
         raise ModelFailure(

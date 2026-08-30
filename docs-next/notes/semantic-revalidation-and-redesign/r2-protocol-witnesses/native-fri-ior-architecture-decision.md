@@ -1,19 +1,22 @@
-# Native FRI/IOR Provisional Architecture Decision
+# Native FRI/IOR Architecture Decision
 
 > **Kind:** Temporary candidate comparison and constructive decision
-> **State:** Provisional; the finite factorization survived executable
-> falsification, while cross-family expansion remains open
-> **Authority:** None. The decision may be reopened by the witness, independent
-> reconstruction, cross-domain reconciliation, or external review.
+> **State:** Retained for the bounded two-lane case; cross-family expansion and
+> property Analysis remain open
+> **Authority:** None. The decision records one selected research-case
+> architecture and may be reopened under the final retention conditions.
 > **Basis:** [Native FRI/IOR Source Dossier](native-fri-ior-source-dossier.md)
 > and [Native FRI/IOR End-to-End Validation
-> Plan](native-fri-ior-validation-plan.md)
+> Plan](native-fri-ior-validation-plan.md). The final case boundary is owned by
+> [Native FRI/IOR Final Classification and
+> Retention](native-fri-ior-final-classification-and-retention.md).
 
 ## 1. Decision in one view
 
-Use five semantic subjects, two Core-to-Core construction declarations with
-validation-bound one-run receipts, and one generally admitted same-Core
-Fiat--Shamir construction:
+Retain distinct native and committed Cores, Core-changing work augmentation
+where the selected profile contains work, and same-Core Fresh/Fiat--Shamir
+challenge interpretations. The exact classical lane now admits the Oracle-
+commitment arrow structurally for its fixed profile:
 
 ```text
 Native logical FRI IOR Core
@@ -22,8 +25,8 @@ Native logical FRI IOR Core
   - direct logical queries and answers
   - fold and terminal decision semantics
                  |
-                 | OracleCommitmentCompilationDeclaration
-                 | + CheckedNativeToCommittedFreshRun receipt
+                 | CheckedOracleCommitmentConstruction
+                 | + inert one-run validation receipt
                  v
 Committed FRI Core
   - ordered caps
@@ -51,11 +54,12 @@ Work-augmented committed FRI Fiat--Shamir Protocol
   - coins derived by one exact transcript profile
 ```
 
-The first two arrows are declared Core-to-Core transforms whose present
-positive evidence consists of validation-bound receipts for one concrete
-execution. They are not generally admitted checked constructions. The final
-arrow is different: its total structural admission produces a reusable
-`CheckedFSConstruction` over the shared augmented Core.
+The exact classical lane admits the first arrow for one bounded
+source/target/profile triple. Its one-run receipt is inert and cannot authorize
+another run. The earlier control retains its historical validation-bound
+commitment receipt, and the grinding arrow remains a validation-bound transform
+for one concrete execution. The final arrow is different: its total structural
+admission produces a reusable `CheckedFSConstruction` over the shared Core.
 
 The source and committed Cores have different identities because commitment
 compilation changes verifier-observable messages and capabilities. Adding the
@@ -64,9 +68,10 @@ construction because original FRI has no such rejection path. The Fresh and
 Fiat--Shamir forms of the final work-augmented Core share one Core identity
 because only challenge interpretation changes.
 
-Relations grounds the initial oracle statement, construction inputs, caps,
-and selected run occurrences. Analysis alone owns security transport across
-the three arrows.
+PIR issues a causal, purpose-bound confidential view of the exact initial
+logical Oracle; Relations compares it with the relation-side material under
+separate live authority and also grounds the public construction and run
+coordinates. Analysis alone owns security transport across the arrows.
 
 ## 2. Alternatives compared
 
@@ -103,12 +108,12 @@ semantically irrelevant.
 ### 2.3 Distinct source and target Cores with a declared compilation
 
 The native Core owns logical access. The target Core owns exactly what the
-committed verifier sees. The selected factorization requires a future typed
-declaration to fix the reusable maps and laws. The present finite instrument
-authenticates only the endpoint IDs and named requirements; its per-run
-candidate carries maps that a validation-bound checker recomputes while
-relating schedules, values, and decisions for one concrete execution. Neither
-layer asserts a security theorem.
+committed verifier sees. The selected factorization uses a typed construction
+to fix reusable maps and laws. The exact classical lane authenticates both
+endpoints, rederives the committed target and total static maps, and issues
+process-local structural authority for one fixed profile. A separate checker
+recomputes schedules, values, and decisions for one concrete execution and
+emits an inert receipt. Neither layer asserts a security theorem.
 
 This introduces a real construction object and more correspondence work, but
 it preserves both verifier models and permits public-only target replay. It
@@ -127,7 +132,7 @@ its validator and less general than another universal transition algebra.
 
 The new abstraction would also postpone the concrete question: which values,
 views, and failures belong to each verifier. An explicit source-to-target
-declaration plus validation-bound receipts is sufficient and reversible at the
+checked construction plus bounded receipts is sufficient and reversible at the
 current finite scope.
 
 **Classification:** capability expansion without present justification;
@@ -148,8 +153,9 @@ rejected.
 
 ### 3.1 Logical oracle access mode
 
-Add an oracle publication meaning whose result is fixation and restricted
-query access, not a public canonical carrier or cryptographic binding:
+The PIR target owns an Oracle publication meaning whose result is fixation and
+restricted query access, not a public canonical carrier or cryptographic
+binding:
 
 ```text
 OraclePublicationMode += LogicalAccess {
@@ -177,7 +183,7 @@ selected answers only.
 
 ### 3.2 Oracle origin and supply
 
-Distinguish invocation-supplied and strategy-supplied oracle material:
+PIR distinguishes invocation-supplied and strategy-supplied Oracle material:
 
 ```text
 OracleOrigin = InitialOracle | ProverOracle
@@ -229,43 +235,18 @@ an accepted `Absent` variant.
 This is not a general “totality evidence” Boolean. It is an exact algorithmic
 law with a bounded evaluator contract.
 
-### 3.5 Oracle-commitment compilation declaration and run validation
+### 3.5 Checked Oracle-commitment construction and run validation
 
-The durable target is a PIR-owned structural construction declaration of the
-following general shape. This is a future proposal, not the declaration
-implemented by the finite instrument:
+PIR now owns the exact structural construction shape. It binds admitted source
+and target Cores, the construction profile and dependencies, total publication,
+coin, query, answer/opening, check, outcome, and public-environment maps,
+construction advice ownership, public replay closure, and intrinsic bounds.
+Admission rederives the committed target and those maps rather than accepting
+an authored correspondence flag. Only affirmation mints nonserializable,
+process-local construction authority for that exact source/target/profile
+triple.
 
-```text
-OracleCommitmentCompilationDeclaration {
-  source_core_id,
-  target_core_id,
-  profile,
-  oracle_publication_map,
-  coin_map,
-  query_occurrence_map,
-  answer_opening_map,
-  decision_map,
-  required_commutation_law
-}
-```
-
-The current finite declaration authenticates only:
-
-```text
-FiniteCommitmentCompilationDeclaration {
-  source_core_id,
-  target_core_id,
-  required_capabilities,
-  admission_requirements,
-  nonclaims
-}
-```
-
-Its complete maps and selected profile live in one run candidate and are
-recomputed by the validator. They are therefore validation inputs, not a
-reusable construction preimage.
-
-The profile fixes:
+The selected profile fixes:
 
 - logical value codec and leaf/fibre layout;
 - commitment advice type and ownership;
@@ -276,19 +257,14 @@ The profile fixes:
 - terminal treatment; and
 - intrinsic syntax and algorithm bounds.
 
-The present finite validator checks complete source and target coverage, type
-equality or an explicit value relation, causality, target public replay
-sufficiency, and exact commutation of the selected algorithms for one concrete
-source/target execution. It never accepts an authored `corresponds` flag. On
-affirmation it issues a validation-bound `CheckedNativeToCommittedFreshRun`
-receipt; it does not admit a generally reusable checked compilation subject.
-
-The receipt establishes only structural and deterministic correspondence for
-its named execution and profile. Commitment binding, hiding, extractability,
-IOP soundness, universal construction correctness, and property transport
-remain Analysis propositions or open admission work. Request-local evaluation
-limits and measured work belong to the validation basis, not the declaration
-or Core identity.
+A separate one-run validator rebuilds both executions and every selected map.
+It emits an inert receipt that cannot authorize construction use, another run,
+or another profile. The checked construction and receipt establish only
+structural and deterministic correspondence at their respective scopes.
+Commitment binding, hiding, extractability, IOP soundness, universal FRI-family
+construction correctness, and property transport remain Analysis propositions
+or unsupported questions. Request-local evaluation limits and measured work
+belong to the validation basis, not construction or Core identity.
 
 ### 3.6 Grinding augmentation declaration and run validation
 
@@ -349,7 +325,14 @@ has no portable semantic identity and is absent from the logical oracle.
 
 ### 3.8 Typed opening correspondence
 
-Extend Relations with an additive opening clause that binds exact occurrences:
+The exact initial-Oracle material seam is now closed differently from public
+opening correspondence: PIR issues one causal, purpose-bound confidential
+whole-carrier view, and Relations compares it with the relation-side Oracle
+material under separate identical live capabilities. The result retains no
+carrier, trace, secret-derived digest, or portable authority.
+
+A future general opening-security contract may add a clause that binds exact
+public occurrences:
 
 ```text
 OpeningCorrespondenceClause {
@@ -372,14 +355,12 @@ Logical query multiplicity and physical opening identity remain separate.
 Several occurrence clauses may select one authenticated opening only when they
 derive the same oracle, position, and value under the exact profile.
 
-## 4. Exact finite structural object graph
+## 4. Retained finite structural object graphs
 
-“Exact” in this section means the one object graph admitted by the finite
-evaluator. It does not mean exact correspondence to a cited FRI algorithm. The
-selected Core stops after two folds and checks a degree-less-than-two terminal
-polynomial. It is an implementation-style early-termination witness, not the
-three-fold scalar-terminal protocol specified by Section 5.7 Algorithm 1 of
-ePrint 2023/1071 for `d0 = 8`.
+The earlier object graph remains an implementation-style early-termination
+witness. Its Core stops after two folds and checks a degree-less-than-two
+terminal polynomial; it is not the three-fold scalar-terminal protocol in
+Section 5.7 Algorithm 1 for `d0 = 8`.
 
 The witness instantiates:
 
@@ -445,13 +426,27 @@ FiatShamirWorkAugmentedProtocol
   same WorkAugmentedCommittedFriCore
 ```
 
-Exact-source validation remains additive. A later profile must separately
-construct the three-fold scalar-terminal Algorithm 1 instance and its protocol
-correspondence. Batched FRI, DEEP-ALI derived quotient views, and STIR virtual
-oracles and dynamic query routing are further validation obligations rather
-than properties attributed to this object graph. None requires merging native
-oracle semantics, commitment compilation, protocol augmentation, or
-Fiat--Shamir interpretation.
+The second retained graph is the separate exact classical control:
+
+```text
+Goldilocks Native Core
+  InitialOracle G0 -> x0 -> ProverOracle G1 -> x1
+  -> ProverOracle G2 -> x2 -> scalar C
+  -> four labelled query draws -> twelve ordered layer checks
+        |
+        | checked Oracle-commitment construction
+        v
+Goldilocks Committed Core
+  three roots, proof-supplied openings, authentication, and the same checks
+        +--> Fresh Protocol
+        `--> strong Fiat--Shamir Protocol over that same committed Core
+```
+
+This graph closes fixed-coin deterministic verifier-shape correspondence to
+the selected Algorithm 1 locator. Batched FRI, DEEP-ALI derived quotient views,
+and STIR virtual Oracles and query routing remain further validation
+obligations. None requires merging native Oracle semantics, commitment
+compilation, protocol augmentation, or Fiat--Shamir interpretation.
 
 The target verifier runs from public input and proof only. It never receives
 `O0`, `O1`, all salts, polynomial coefficients used to generate the oracles,
@@ -607,7 +602,10 @@ of the following:
 - no owner-generation, owner-relation, or expected-result input read by report
   construction.
 
-The finite package now passes these acceptance criteria for its exact bounded
-profile. The result retains this factorization as a candidate architecture; it
-does not complete the redesign, establish exact-source correspondence, or
-close the cross-family and durable-absorption obligations above.
+The finite package satisfies these criteria through its combined two-lane
+packet. The result retains this factorization with primary classification
+`ConservativeExtension`; it closes exact-source correspondence only for the
+fixed-coin deterministic Algorithm 1 verifier shape and closes neither the
+randomized source Protocol, the cross-family portfolio, nor a property result.
+The [final retention record](native-fri-ior-final-classification-and-retention.md)
+owns the exact gate states and reopening conditions.

@@ -184,7 +184,11 @@ SourcePublicCoordinate =
   {binding: BindingRef, class: Statement | SessionContext | PublicParameter}
 TargetPublicCoordinate =
   {binding: BindingRef, class: Statement | SessionContext | PublicParameter}
-SourceOraclePublicationRef = {oracle: OracleRef, publication: OccurrenceRef}
+SourceOraclePublicationRef = {
+  oracle: OracleRef,
+  publication: OccurrenceRef,
+  origin: OracleOrigin // owner-derived from the exact source OracleDecl
+}
 SourceFreshRandomnessRef = {challenge: ChallengeRef}
 SourceQueryOccurrenceRef = {oracle: OracleRef, query: OccurrenceRef}
 SourceAnswerOccurrenceRef =
@@ -278,6 +282,7 @@ OracleCommitmentStaticMapSchema = {
 OracleCommitmentClass = {
   class_ordinal: Natural,
   source_oracle: OracleRef,
+  source_origin: OracleOrigin,
   source_index_type: ValueType, source_element_type: ValueType,
   complete_material_type: ValueType, private_advice_type: ValueType,
   private_commitment_state_type: ValueType, public_commitment_type: ValueType,
@@ -296,8 +301,10 @@ Foundation lifts of the two dependent records above. The class ordinal selects
 the value types; a mismatched ordinal or value type is `KindMismatch`.
 
 All references above resolve in the exact admitted source or target Core. A
-source coordinate is derived from the complete source body, never selected by
-the author. Every primitive target coordinate is classified exactly once as a
+source coordinate, including its Oracle origin, is derived from the complete
+source body, never selected by the author. Each commitment class's
+`source_origin` must equal that derived origin. Every primitive target
+coordinate is classified exactly once as a
 direct image or an `inserted_target_effect`. Publication and logical-opening
 map values may reference the corresponding inserted effects; that linkage is
 not a second classification. Repeated logical answers remain distinct
@@ -370,8 +377,9 @@ closed. It does not evaluate a value-dependent equivalence class or choose a
 physical slot.
 
 For one run, the algorithm consumes every logical coordinate in canonical
-order with the independently replayed Oracle, index, value, and commitment,
-plus the exact physical material decoded from the target record. It forms the
+order with the causal source Oracle, independently replay-checked index and
+value, and public commitment, plus the exact physical material decoded from
+the target record. It forms the
 distinct logical equivalence keys in first-occurrence order and requires that
 sequence to equal the physical-material key sequence in target-record order.
 Every logical coordinate is then bound to the unique slot for its key. It
@@ -435,9 +443,9 @@ OracleCommitmentProfileId =
   OracleCommitmentId<"pir.oracle-commitment-profile">(profile)
 ```
 
-Changing an algorithm, contract, type, advice role, map schema, binding law,
-failure coordinate, or bound law rotates the profile ID. Runtime material and
-limits do not.
+Changing an algorithm, contract, source-Oracle origin, type, advice role, map
+schema, binding law, failure coordinate, or bound law rotates the profile ID.
+Runtime material and limits do not.
 
 The two dependent portable types are not opaque aliases:
 
@@ -634,15 +642,20 @@ The checker proceeds in this order:
    catalog, and exact Core handles;
 2. require construction, profile, advice schema, source, and target IDs to
    agree exactly;
-3. require a native source with logical Oracle publication, query, and answer
-   effects and an independently admitted concrete target;
+3. require every source Oracle named by a commitment class to have exact mode
+   `LogicalAccess`, zero publication outputs, one typed fixation marker, an
+   admitted exact-domain law, and an origin equal to the class's
+   `source_origin`; both `InitialOracle` and `ProverOracle` are supported, and
+   require an independently admitted concrete target;
 4. derive exact elaboration and bounds and require canonical completion;
 5. evaluate `CheckStaticElaborationV0` over the exact derived shape and
    elaboration, independently of any caller report;
 6. check totality, target classification, types, order, labels, multiplicity,
    and complete logical-opening coverage for every static map;
-7. require each source Oracle fixation to map to a target commitment
-   publication before every dependent mapped Fresh coin;
+7. require each derived source publication coordinate--including its exact
+   origin--to map to a target commitment publication before every dependent
+   mapped Fresh coin, without treating the logical fixation marker as a
+   commitment or publication value;
 8. require all mapped query randomness to remain Fresh randomness owned by
    the Core rather than a transcript byte seed;
 9. require each logical opening to name an exact target check wired to its
@@ -657,8 +670,9 @@ The checker proceeds in this order:
     admitted target Core body byte for byte;
 12. require every target accepting sink to close over target public inputs,
     public history, Fresh coins, and proof-supplied public openings;
-13. require no complete source Oracle, private advice, private commitment
-    state, or owner-only generation carrier to reach target public replay;
+13. require no complete source Oracle, source-carrier digest, private advice,
+    private commitment state, or owner-only generation carrier to reach target
+    public replay, a static map, or a portable construction identity;
 14. require the static check report to be affirmative with all counts equal to
     independently recomputed counts; and
 15. require all sums, step counts, and bodies to fit Foundation, Core, profile,
@@ -681,6 +695,8 @@ extractor.
 OracleCommitmentConstructionDefect =
     SourceCoreIdentityMismatch | TargetCoreIdentityMismatch
   | CommitmentProfileMismatch | AdviceSchemaMismatch | ElaborationContractMismatch
+  | SourceLogicalModeMismatch | SourceOracleOriginMismatch
+  | LogicalSourcePublicationOutputMismatch
   | PublicEnvironmentMapIncomplete | OraclePublicationMapIncomplete
   | FreshRandomnessMapMismatch | QueryVectorMapIncomplete | AnswerOpeningMapIncomplete
   | PreservedCoordinateMapIncomplete | TargetCoordinateUnclassified | CoordinateTypeMismatch
@@ -834,6 +850,7 @@ ValidateOracleCommitmentRun(
   exact checked result and authority binding,
   matching fresh CheckedOracleCommitmentConstructionCapability,
   exact source CoreInvocation and CompletedProtocolRecord,
+  identical live source CausalGenerationCapability,
   exact target CoreInvocation and CompletedProtocolRecord,
   exact owner-local ConstructionAdvice values,
   exact source replay capabilities,
@@ -845,11 +862,20 @@ ValidateOracleCommitmentRun(
                  | Negative(OracleCommitmentRunDefectSet)>
 ```
 
+The source causal capability must be the one minted with the identical source
+Protocol, invocation, completed record, and immutable Oracle handles. For an
+`InitialOracle` it retains the exact prepared input handle; for a
+`ProverOracle` it retains the exact handle admitted from that run's strategy
+move. A source replay capability is still required to check every recorded
+query and answer, but its candidate carrier cannot select or replace this
+causal carrier.
+
 Source replay, target replay, and construction-law evaluation proceed under
-three separate evaluators, limits, and resource accounts. Validation
-reconstructs the complete runtime logical
-opening material from source replay, decodes the exact target physical material,
-and independently invokes and rechecks the profile-owned canonical binding law.
+three separate evaluators, limits, and resource accounts. Validation obtains
+the complete runtime logical opening material from the exact causal source
+handles, verifies the source record against those handles, decodes the exact
+target physical material, and independently invokes and rechecks the
+profile-owned canonical binding law.
 Only then does it check every map coordinate, concrete binding, opening,
 advice projection, preserved computation, terminal, and exact record
 exhaustion. A target-provided selector table or producer-authored binding is
@@ -928,7 +954,8 @@ Visibility follows the projections; private advice and state are excluded.
 
 ```text
 OracleCommitmentRunDefect =
-    ConstructionAuthorityMismatch | SourceReplayMismatch
+    ConstructionAuthorityMismatch | SourceCausalAuthorityMismatch
+  | SourceReplayMismatch
   | TargetReplayMismatch | RuntimeAdviceMismatch
   | LogicalOpeningRunMismatch | PhysicalOpeningBindingMismatch
   | PhysicalOpeningCoverageMismatch | AuthenticationRunMismatch
@@ -942,7 +969,10 @@ OracleCommitmentRunDefectSet =
 
 A receipt validates one run only. It cannot replace live authority, authorize
 another run, replace construction admission, reverse-extract, or strengthen
-security. Cold verification obtains new authority and replays both records.
+security. Cold verification can reauthenticate the receipt and replay its
+public record projections, but cannot reconstruct the original causal source
+carrier or mint this one-run conclusion. A new affirmative run receipt requires
+a new matching live causal source execution.
 
 ## 10. Public replay closure
 
@@ -953,15 +983,18 @@ reconstruction, public queries and proof openings, the concrete binding table
 independently rederived from those public values under the profile law, and
 exact target checker capabilities.
 
-Replay excludes complete source Oracles, source replay witnesses, private
-advice and state, unselected salts, owner inputs, goldens, and prior receipts.
+Public target replay excludes complete source Oracles, source replay witnesses,
+source causal capabilities, confidential initial-Oracle views, private advice
+and state, unselected salts, owner inputs, goldens, and prior receipts.
 
 This structural result proves no concrete conformance, binding, hiding,
 collision resistance, or proof-system soundness.
 
 ## 11. Worked-profile witness
 
-One exercised Goldilocks-field, order-64 FRI profile has one initial and two
+The bounded
+[`evaluation/native-fri-ior/`](../../evaluation/native-fri-ior/README.md)
+instrument exercises a Goldilocks-field, order-64 FRI profile with one initial and two
 later logical Oracles, three publications mapped to three single Merkle roots,
 three Fresh fold challenges, a scalar terminal before query randomness, four
 labelled draws, twelve logical layer-answer/opening coordinates, and
@@ -975,6 +1008,10 @@ logical multiplicity, and physical sharing. They are not PIR grammar constants.
 A cap, forest, vector commitment, unsalted tree, different leaf grouping,
 different query count, or different finite Core requires another exact profile
 and construction identity.
+
+That instrument is finite inhabitance and falsification evidence. It does not
+implement this durable checker or capability lifecycle and cannot substitute
+for an admitted construction or one-run causal validation.
 
 ## 12. Nonclaims
 

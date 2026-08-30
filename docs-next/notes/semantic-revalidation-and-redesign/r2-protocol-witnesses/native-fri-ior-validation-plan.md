@@ -1,7 +1,7 @@
 # Native FRI/IOR End-to-End Validation Plan
 
 > **Kind:** Temporary protocol-validation work contract
-> **State:** Executed for one finite early-terminated profile; broader
+> **State:** Completed for one retained two-lane finite case; broader
 > protocol-family closure remains open
 > **Authority:** None. This page fixes the scope and method of one research
 > package. It does not define target semantics, establish protocol support,
@@ -279,11 +279,12 @@ Do not repair one page locally while leaving the contradiction elsewhere.
 The intended result is executable falsification for one finite profile. Its
 strongest permitted positive claim is:
 
-> One source-grounded finite native FRI/IOR profile, including its commitment
-> declaration and one-run validation receipt plus its admitted Fiat--Shamir
-> construction, inhabited the candidate model and reproduced its named
-> positive and negative boundaries under the frozen evaluator and resource
-> contracts.
+> One source-grounded finite native FRI/IOR case, retaining an early-terminated
+> control and a separate exact classical control, inhabited the candidate
+> model and reproduced its named positive and negative boundaries under frozen
+> evaluator and resource contracts. The exact control additionally admits one
+> checked structural Oracle-commitment construction for its fixed
+> source/target/profile triple.
 
 It does not establish general FRI support, protocol soundness, theorem truth,
 ROM or QROM security, implementation conformance, performance, or support for
@@ -314,9 +315,9 @@ decisively explains why they cannot pass.
 | Design-space coverage | Current model and serious completion, redesign, and capability alternatives compared at equal resolution |
 | Semantic closure | Complete typed subjects, identities, authority, lifecycle, failures, bounds, and non-claims |
 | Protocol closure | Logical-oracle, query, opening, authentication, fold, terminal, and residual boundaries are all explicit |
-| Construction closure | Native execution and generally admitted Fiat--Shamir construction are checked at their respective scopes; commitment and grinding declarations have separate validation-bound one-run receipts |
-| Relations closure | Statement, residual, and outer-relation grounding are exact; loss and non-implications are visible |
-| Analysis closure | Exact questions and premises are representable without claiming theorem truth |
+| Construction closure | Native execution and generally admitted Fiat--Shamir construction are checked at their respective scopes; the exact classical lane admits one checked structural Oracle-commitment construction; the earlier commitment and grinding controls retain validation-bound one-run receipts |
+| Relations closure | Statement and exact initial logical-Oracle material agreement use distinct public and causal confidential owner views; residual and outer-relation non-implications remain visible |
+| Analysis closure | Exact questions and premises are representable, but the classical FRI questions remain candidate or unsupported pending an explicit owner profile and cannot claim theorem truth |
 | Executable pressure | Frozen positive case and named negative mutations replay under bounded resources |
 | Independent reconstruction | A separate path reproduces the public classification without importing producer conclusions |
 | Regression | Existing semantic witnesses and applicable repository checks remain green or have explicit reopening records |
@@ -325,33 +326,33 @@ decisively explains why they cannot pass.
 
 ### 12.1 Observed disposition
 
-The executed finite case is a **conservative semantic extension**. One
-early-terminated logical-oracle FRI profile inhabits separate native,
-commitment-compiled, work-augmented, Fresh, and Fiat--Shamir subjects. The
-producer and separately coded replay agree on selected exact positive
-public-execution facts. Two named late negatives reach their expected producer
-boundaries. Owner-local construction-validation and Relations operations pass
-under their own validation-bound live receipts. The commitment and grinding
-receipts concern one concrete execution and do not generally admit either
-construction; these are distinct evidence lanes rather than one shared
-correspondence result. The package forms Analysis questions but does not answer
-them.
+The executed finite case is a **conservative semantic extension**. Its earlier
+lane inhabits separate native, commitment-compiled, work-augmented, Fresh, and
+Fiat--Shamir subjects and retains validation-bound commitment and grinding
+receipts. Its exact classical lane separately inhabits the three-fold/scalar-
+terminal schedule, admits one checked structural Oracle-commitment
+construction for the fixed profile, and replays Fresh and strong-Fiat--Shamir
+forms over the committed Core. The producer and separately coded public
+verifiers agree at their declared finite boundaries. Analysis questions remain
+unanswered.
 
-This result preserves the central factorization. It does not close exact
-classical FRI correspondence or protocol-family support. Cross-family source
-pressure identifies verifier-derived oracle access as a real missing
-capability, but `DerivedOracle`/`QueryPlan` remains a candidate rather than an
-accepted design. Static pre-authentication elaboration is the leading next
-test; runtime query expansion would reopen Core execution, receipts,
+This result preserves the central factorization and closes correspondence to
+Algorithm 1 only for the fixed-coin deterministic verifier shape. It does not
+close the randomized source Protocol, protocol-family support, or a property
+claim. Cross-family source pressure still identifies verifier-derived Oracle
+access as a real candidate capability, but `DerivedOracle`/`QueryPlan` is not
+an accepted design. Static pre-authentication elaboration remains the leading
+next test; runtime query expansion would reopen Core execution, receipts,
 composition, and authentication.
 
 The remaining absorption work is therefore intentionally split:
 
-- retain the finite executable package as bounded falsification evidence;
-- carry the logical-access, origin, construction, identity, Relations, and
-  Analysis requirements into their eventual durable owners only after review;
-- construct the exact three-fold scalar-terminal control before claiming
-  classical FRI correspondence; and
+- retain both executable lanes as one bounded, explicitly differentiated
+  falsification packet;
+- retain logical access, initial origin, checked structural construction, and
+  causal confidential Relations grounding in their exact durable owners;
+- route classical FRI Analysis questions as candidate or unsupported until an
+  explicit owner profile and its complete authority basis exist; and
 - resolve static derived-query elaboration, face-map capability transport,
   DEEP-ALI total quotient semantics, and STIR collision semantics before
   promoting the cross-family seam.
@@ -402,18 +403,20 @@ wrong.
 
 ## 15. Exact classical follow-up disposition
 
-The requested exact follow-up is now executable without replacing the earlier
-order-16 early-stop case. It adds the Goldilocks order-64 three-fold control,
-one exact structural logical-Oracle-to-committed-Core construction, Fresh and
-strong-Fiat--Shamir execution over one committed Core, and a separately coded
-public verifier. The construction checker owns stable static maps and live
-process-local authority; its portable receipt validates one concrete
-source/target pair only.
+The exact follow-up is retained without replacing the earlier order-16 early-
+stop case. It adds the Goldilocks order-64 three-fold control, one exact
+structural logical-Oracle-to-committed-Core construction, Fresh and strong-
+Fiat--Shamir execution over one committed Core, frozen public replay, and a
+separately coded public verifier. The construction checker owns stable static
+maps and live process-local authority; its inert portable receipt validates one
+concrete source/target pair only.
 
-Relations and Analysis pressure found two deliberate promotion boundaries.
-The current Relations instrument grounds initial G0 from a declassified full
-trace, so a durable result first needs a PIR-owned purpose-specific
-confidential Oracle view and live capability. The Analysis instrument forms
-questions and checks non-vacuous arithmetic but establishes no theorem truth,
-applicability, or property. General FRI/IOR, BCS, derived-oracle, commitment
-security, and outer-relation claims remain outside this follow-up.
+The durable Relations path now requires the PIR-owned, causally generated,
+purpose-specific confidential initial-Oracle view and its identical live
+capability; a declassified trace cannot substitute. Analysis still forms only
+candidate or unsupported questions until an explicit owner profile exists and
+establishes no theorem truth, applicability, or property. General FRI/IOR,
+BCS, derived-oracle, commitment security, and outer-relation claims remain
+outside this case. The
+[final classification and retention record](native-fri-ior-final-classification-and-retention.md)
+owns the completed gate matrix and reopening conditions.

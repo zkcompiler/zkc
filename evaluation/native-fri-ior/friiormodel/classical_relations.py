@@ -1,34 +1,48 @@
 """Bounded Relations pressure instruments for the exact classical FRI control.
 
 The module grounds the selected public statement and initial logical oracle,
-then consumes a reusable PIR-owned oracle-commitment construction view.  An
-accepting finite execution leaves Reed--Solomon proximity unevaluated and can
-never establish an outer computation relation.  Its raw native-trace grounding
-is not a durable interface; it exposes the future need for a PIR-owned,
-purpose-specific confidential Oracle view.
+then consumes a reusable PIR-owned oracle-commitment construction view.  The
+initial material comparison requires independent live Relations assignment
+authority and a purpose-bound PIR confidential view issued only from causal
+generation.  An accepting finite execution leaves Reed--Solomon proximity
+unevaluated and can never establish an outer computation relation.  Neither a
+raw trace nor a portable material-derived identity is an authority surface.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Mapping
 
 from .classical import (
     DEGREE_BOUNDS,
     DOMAIN_ORDERS,
     EXACT_CLASSICAL_COMMITTED_CORE,
     EXACT_CLASSICAL_FRI_PROFILE,
+    EXACT_CLASSICAL_NATIVE_FRESH_PROTOCOL_ID,
     EXACT_CLASSICAL_NATIVE_CORE,
+    EXACT_INITIAL_ORACLE_FIXATION_COORDINATE_ID,
+    EXACT_NATIVE_TERMINAL_COORDINATE_ID,
     FOLD_ROUNDS,
     GOLDILOCKS_MODULUS,
     LAYER_QUERY_OCCURRENCES,
+    PUBLIC_ENVIRONMENT_SCHEMA,
     QUERY_REPETITIONS,
-    ClassicalLogicalOracle,
-    ClassicalNativeTrace,
     ClassicalPublicEnvironment,
     GoldilocksElement,
-    verify_native_trace,
+)
+from .confidential_oracle import (
+    CausalNativeRunFact,
+    CausalNativeExecutionAuthority,
+    ConfidentialInitialOracleDisclosurePolicy,
+    ConfidentialInitialOracleViewCapability,
+    EXACT_INITIAL_ORACLE_COORDINATE_ID,
+    InitialOracleSupplyRef,
+    NativeInvocationRef,
+    _has_live_causal_execution_authority,
+    _read_causal_execution_binding,
+    _read_confidential_initial_oracle_view,
 )
 from .oracle_construction import (
     OracleCommitmentCapability,
@@ -65,6 +79,61 @@ class DistanceMetric(str, Enum):
 
 class ProximityEvaluationStatus(str, Enum):
     NOT_EVALUATED = "NotEvaluated"
+
+
+class OracleMaterialAgreementOutcome(str, Enum):
+    """Semantic result of the confidential whole-carrier operation."""
+
+    AFFIRMATIVE = "Affirmative"
+    NEGATIVE = "Negative"
+    CANNOT_ANSWER = "CannotAnswer"
+    KIND_MISMATCH = "KindMismatch"
+    MALFORMED = "Malformed"
+    REFUSED = "Refused"
+
+
+@dataclass(frozen=True, slots=True)
+class OracleMaterialAgreementResult:
+    """Local qualified result; it never transports either compared carrier."""
+
+    outcome: OracleMaterialAgreementOutcome
+    boundary: str
+    code: str
+    detail: str
+    subject: SemanticId | None = None
+    evidence: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_term(self) -> dict[str, Any]:
+        return {
+            "outcome": self.outcome.value,
+            "boundary": self.boundary,
+            "code": self.code,
+            "detail": self.detail,
+            "subject": None if self.subject is None else self.subject.to_term(),
+            "evidence": {
+                key: value.to_term() if isinstance(value, SemanticId) else value
+                for key, value in self.evidence.items()
+            },
+        }
+
+
+class _OwnerLocalResult:
+    __slots__ = ()
+
+    def __copy__(self) -> None:
+        raise TypeError("owner-local Relations authority cannot be copied")
+
+    def __deepcopy__(self, memo: object) -> None:
+        raise TypeError("owner-local Relations authority cannot be copied")
+
+    def __reduce__(self) -> None:
+        raise TypeError("owner-local Relations authority cannot be serialized")
+
+    def __reduce_ex__(self, protocol: int) -> None:
+        raise TypeError("owner-local Relations authority cannot be serialized")
+
+    def __getstate__(self) -> None:
+        raise TypeError("owner-local Relations authority has no portable state")
 
 
 class OuterRelationPremise(str, Enum):
@@ -142,6 +211,63 @@ EXACT_RS_PROXIMITY_RELATION = ExactReedSolomonProximityRelation(
 )
 
 
+EXACT_RS_PROXIMITY_INTERFACE_ID = semantic_id(
+    "relations-interface",
+    "fri-ior.classical-relations.rs-interface.v1",
+    {
+        "relation_id": EXACT_RS_PROXIMITY_RELATION.identity.to_term(),
+        "public_values": [
+            {
+                "ref": "statement",
+                "value_type": "CanonicalTermBytes",
+            }
+        ],
+        "oracle_material": [
+            {
+                "ref": "initial-oracle",
+                "value_type": "GoldilocksElement[64]",
+            }
+        ],
+        "phase_values": [],
+    },
+)
+
+EXACT_RELATION_STATEMENT_ROLE_ID = semantic_id(
+    "relations-public-role",
+    "fri-ior.classical-relations.statement-role.v1",
+    {
+        "interface_id": EXACT_RS_PROXIMITY_INTERFACE_ID.to_term(),
+        "ref": "statement",
+        "value_type": "CanonicalTermBytes",
+    },
+)
+
+EXACT_RELATION_INITIAL_ORACLE_ROLE_ID = semantic_id(
+    "relations-oracle-role",
+    "fri-ior.classical-relations.initial-oracle-role.v1",
+    {
+        "interface_id": EXACT_RS_PROXIMITY_INTERFACE_ID.to_term(),
+        "ref": "initial-oracle",
+        "value_type": "GoldilocksElement[64]",
+    },
+)
+
+EXACT_NATIVE_STATEMENT_TARGET_ID = semantic_id(
+    "classical-fri-protocol-statement-target",
+    "fri-ior.classical-relations.protocol-statement-target.v1",
+    {
+        "protocol_id": EXACT_CLASSICAL_NATIVE_FRESH_PROTOCOL_ID.to_term(),
+        "native_core_id": EXACT_CLASSICAL_NATIVE_CORE.identity.to_term(),
+        "public_environment_schema": PUBLIC_ENVIRONMENT_SCHEMA,
+        "coordinate_ordinal": 0,
+        "name": "statement",
+        "semantic_purpose": "Statement",
+        "visibility": "Public",
+        "value_type": "CanonicalTermBytes",
+    },
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ClassicalRelationStatementOccurrence:
     """The Statement coordinate projected from one native public environment."""
@@ -200,126 +326,147 @@ class ClassicalRelationStatementOccurrence:
 
 @dataclass(frozen=True, slots=True)
 class ExactRsProximityRelationInstance:
-    relation_id: SemanticId
-    statement_id: SemanticId
-    public_environment_id: SemanticId
-    statement_coordinate_id: SemanticId
-    initial_oracle_material_id: SemanticId
+    interface_id: SemanticId
+    public_statement: bytes
 
     def __post_init__(self) -> None:
-        if self.relation_id != EXACT_RS_PROXIMITY_RELATION.identity:
+        if self.interface_id != EXACT_RS_PROXIMITY_INTERFACE_ID:
             raise malformed(
                 "classical-relations:instance-formation",
                 "FRI-IOR-CLASSICAL-RELATION-006",
-                "the instance requires the exact RS proximity definition",
+                "the instance requires the exact RS proximity Interface",
             )
-        for value in (
-            self.statement_id,
-            self.public_environment_id,
-            self.statement_coordinate_id,
-            self.initial_oracle_material_id,
-        ):
-            _semantic_ref(value)
         if (
-            self.public_environment_id.subject_kind
-            != "classical-fri-public-environment"
-            or self.statement_coordinate_id.subject_kind
-            != "classical-fri-public-environment-coordinate"
+            type(self.public_statement) is not bytes
+            or not self.public_statement
+            or len(self.public_statement) > 1 << 14
         ):
-            raise ModelFailure(
-                OutcomeClass.KIND_MISMATCH,
+            raise malformed(
                 "classical-relations:instance-formation",
                 "FRI-IOR-CLASSICAL-RELATION-028",
-                "the instance requires exact public-environment Statement coordinates",
-            )
-        if self.initial_oracle_material_id.subject_kind != "classical-fri-logical-oracle":
-            raise ModelFailure(
-                OutcomeClass.KIND_MISMATCH,
-                "classical-relations:instance-formation",
-                "FRI-IOR-CLASSICAL-RELATION-007",
-                "the instance requires an initial logical-oracle identity",
+                "the public Statement must be non-empty bounded canonical bytes",
             )
         encode_term(self.to_term())
 
     def to_term(self) -> dict[str, Any]:
         return {
-            "relation_id": _semantic_ref(self.relation_id),
-            "statement_id": _semantic_ref(self.statement_id),
-            "public_environment_id": _semantic_ref(self.public_environment_id),
-            "statement_coordinate_id": _semantic_ref(
-                self.statement_coordinate_id
-            ),
-            "initial_oracle_material_id": _semantic_ref(
-                self.initial_oracle_material_id
-            ),
-            "satisfaction_status": ProximityEvaluationStatus.NOT_EVALUATED.value,
+            "interface_id": _semantic_ref(self.interface_id),
+            "public_values": {
+                "statement": self.public_statement.hex(),
+            },
+            "oracle_public_bindings": {},
+            "phase_values": {},
         }
 
     @property
     def identity(self) -> SemanticId:
         return semantic_id(
             "relations-instance",
-            "fri-ior.classical-relations.rs-instance.v1",
+            "fri-ior.classical-relations.rs-instance.v2",
             self.to_term(),
         )
 
 
 @dataclass(frozen=True, slots=True)
 class ClassicalProtocolRelationBinding:
-    relation_instance_id: SemanticId
-    statement_occurrence_id: SemanticId
-    public_environment_id: SemanticId
-    statement_coordinate_id: SemanticId
+    relation_interface_id: SemanticId
+    relation_statement_role_id: SemanticId
+    protocol_statement_target_id: SemanticId
+    relation_initial_oracle_role_id: SemanticId
+    protocol_id: SemanticId
     native_core_id: SemanticId
-    initial_oracle_occurrence_id: SemanticId
+    initial_oracle_coordinate_id: SemanticId
+    initial_oracle_fixation_coordinate_id: SemanticId
 
     def __post_init__(self) -> None:
         for value in (
-            self.relation_instance_id,
-            self.statement_occurrence_id,
-            self.public_environment_id,
-            self.statement_coordinate_id,
+            self.relation_interface_id,
+            self.relation_statement_role_id,
+            self.protocol_statement_target_id,
+            self.relation_initial_oracle_role_id,
+            self.protocol_id,
             self.native_core_id,
-            self.initial_oracle_occurrence_id,
+            self.initial_oracle_coordinate_id,
+            self.initial_oracle_fixation_coordinate_id,
         ):
             _semantic_ref(value)
-        if self.native_core_id != EXACT_CLASSICAL_NATIVE_CORE.identity:
+        if (
+            self.relation_interface_id != EXACT_RS_PROXIMITY_INTERFACE_ID
+            or self.relation_statement_role_id
+            != EXACT_RELATION_STATEMENT_ROLE_ID
+            or self.protocol_statement_target_id
+            != EXACT_NATIVE_STATEMENT_TARGET_ID
+            or self.relation_initial_oracle_role_id
+            != EXACT_RELATION_INITIAL_ORACLE_ROLE_ID
+        ):
+            raise malformed(
+                "classical-relations:binding-formation",
+                "FRI-IOR-CLASSICAL-RELATION-007",
+                "the relation binding requires the exact static Interface roles and Statement target",
+            )
+        if (
+            self.protocol_id != EXACT_CLASSICAL_NATIVE_FRESH_PROTOCOL_ID
+            or self.native_core_id != EXACT_CLASSICAL_NATIVE_CORE.identity
+        ):
             raise malformed(
                 "classical-relations:binding-formation",
                 "FRI-IOR-CLASSICAL-RELATION-008",
-                "the relation binding requires the exact native Core",
+                "the relation binding requires the exact native Fresh Protocol and Core",
+            )
+        if self.initial_oracle_coordinate_id != EXACT_INITIAL_ORACLE_COORDINATE_ID:
+            raise malformed(
+                "classical-relations:binding-formation",
+                "FRI-IOR-CLASSICAL-RELATION-030",
+                "the relation binding requires the static G0 Oracle coordinate",
+            )
+        if (
+            self.initial_oracle_fixation_coordinate_id
+            != EXACT_INITIAL_ORACLE_FIXATION_COORDINATE_ID
+        ):
+            raise malformed(
+                "classical-relations:binding-formation",
+                "FRI-IOR-CLASSICAL-RELATION-040",
+                "the relation binding requires the static G0 fixation coordinate",
             )
         encode_term(self.to_term())
 
     def to_term(self) -> dict[str, Any]:
         return {
-            "relation_instance_id": _semantic_ref(self.relation_instance_id),
-            "statement_occurrence_id": _semantic_ref(self.statement_occurrence_id),
-            "public_environment_id": _semantic_ref(self.public_environment_id),
-            "statement_coordinate_id": _semantic_ref(
-                self.statement_coordinate_id
+            "relation_interface_id": _semantic_ref(self.relation_interface_id),
+            "relation_statement_role_id": _semantic_ref(
+                self.relation_statement_role_id
             ),
+            "protocol_statement_target_id": _semantic_ref(
+                self.protocol_statement_target_id
+            ),
+            "relation_initial_oracle_role_id": _semantic_ref(
+                self.relation_initial_oracle_role_id
+            ),
+            "protocol_id": _semantic_ref(self.protocol_id),
             "native_core_id": _semantic_ref(self.native_core_id),
-            "initial_oracle_occurrence_id": _semantic_ref(
-                self.initial_oracle_occurrence_id
+            "initial_oracle_coordinate_id": _semantic_ref(
+                self.initial_oracle_coordinate_id
             ),
-            "oracle_role": "OracleStatement:G0",
-            "statement_role": "PublicEnvironment:Statement",
+            "initial_oracle_fixation_coordinate_id": _semantic_ref(
+                self.initial_oracle_fixation_coordinate_id
+            ),
+            "oracle_target": "LogicalOracleTarget:G0",
             "value_relation": "SameExactValue",
+            "instance_specific": False,
+            "run_specific": False,
         }
 
     @property
     def identity(self) -> SemanticId:
         return semantic_id(
             "relations-protocol-binding",
-            "fri-ior.classical-relations.protocol-binding.v1",
+            "fri-ior.classical-relations.protocol-binding.v2",
             self.to_term(),
         )
 
 
 def form_exact_rs_relation_instance_and_binding(
     statement: object,
-    initial_oracle: object,
 ) -> tuple[ExactRsProximityRelationInstance, ClassicalProtocolRelationBinding]:
     if type(statement) is not ClassicalRelationStatementOccurrence:
         raise malformed(
@@ -327,54 +474,307 @@ def form_exact_rs_relation_instance_and_binding(
             "FRI-IOR-CLASSICAL-RELATION-009",
             "instance formation requires a classical Statement occurrence",
         )
-    if (
-        type(initial_oracle) is not ClassicalLogicalOracle
-        or initial_oracle.layer != 0
-        or initial_oracle.origin != "InitialOracle"
-    ):
-        raise malformed(
-            "classical-relations:instance-binding-formation",
-            "FRI-IOR-CLASSICAL-RELATION-010",
-            "instance formation requires the exact initial logical oracle",
-        )
     instance = ExactRsProximityRelationInstance(
-        EXACT_RS_PROXIMITY_RELATION.identity,
-        statement.identity,
-        statement.public_environment_id,
-        statement.statement_coordinate_id,
-        initial_oracle.identity,
+        EXACT_RS_PROXIMITY_INTERFACE_ID,
+        statement.canonical_statement,
     )
     binding = ClassicalProtocolRelationBinding(
-        instance.identity,
-        statement.identity,
-        statement.public_environment_id,
-        statement.statement_coordinate_id,
+        EXACT_RS_PROXIMITY_INTERFACE_ID,
+        EXACT_RELATION_STATEMENT_ROLE_ID,
+        EXACT_NATIVE_STATEMENT_TARGET_ID,
+        EXACT_RELATION_INITIAL_ORACLE_ROLE_ID,
+        EXACT_CLASSICAL_NATIVE_FRESH_PROTOCOL_ID,
         EXACT_CLASSICAL_NATIVE_CORE.identity,
-        initial_oracle.identity,
+        EXACT_INITIAL_ORACLE_COORDINATE_ID,
+        EXACT_INITIAL_ORACLE_FIXATION_COORDINATE_ID,
     )
     return instance, binding
 
 
-_INITIAL_GROUNDING_TOKEN = object()
+def oracle_material_question_id(
+    instance: ExactRsProximityRelationInstance,
+    binding: ClassicalProtocolRelationBinding,
+    statement: ClassicalRelationStatementOccurrence,
+) -> SemanticId:
+    """Return the public, occurrence-specific material-question coordinate."""
+
+    if (
+        type(instance) is not ExactRsProximityRelationInstance
+        or type(binding) is not ClassicalProtocolRelationBinding
+        or type(statement) is not ClassicalRelationStatementOccurrence
+        or binding.relation_interface_id != instance.interface_id
+        or instance.public_statement != statement.canonical_statement
+    ):
+        raise malformed(
+            "classical-relations:oracle-material-question-formation",
+            "FRI-IOR-CLASSICAL-RELATION-010",
+            "the Oracle-material question requires one exact instance, static binding, and matching Statement occurrence",
+        )
+    return semantic_id(
+        "relations-oracle-material-question",
+        "fri-ior.classical-relations.oracle-material-question.v2",
+        {
+            "instance_id": instance.identity.to_term(),
+            "binding_id": binding.identity.to_term(),
+            "statement_occurrence_id": statement.identity.to_term(),
+            "public_environment_id": statement.public_environment_id.to_term(),
+            "statement_coordinate_id": statement.statement_coordinate_id.to_term(),
+            "protocol_id": binding.protocol_id.to_term(),
+            "oracle_coordinate_id": (
+                binding.initial_oracle_coordinate_id.to_term()
+            ),
+            "fixation_coordinate_id": (
+                binding.initial_oracle_fixation_coordinate_id.to_term()
+            ),
+            "comparison_scope": "WholeCarrier",
+        },
+    )
 
 
-@dataclass(frozen=True, slots=True, init=False)
-class CheckedInitialOracleGrounding:
-    instance_id: SemanticId
-    binding_id: SemanticId
-    native_trace_id: SemanticId
-    public_environment_id: SemanticId
-    statement_coordinate_id: SemanticId
-    initial_oracle_material_id: SemanticId
+def form_exact_initial_oracle_disclosure_policy(
+    instance: ExactRsProximityRelationInstance,
+    binding: ClassicalProtocolRelationBinding,
+    statement: ClassicalRelationStatementOccurrence,
+) -> ConfidentialInitialOracleDisclosurePolicy:
+    question_id = oracle_material_question_id(instance, binding, statement)
+    consumer_id = semantic_id(
+        "relations-confidential-view-consumer",
+        "fri-ior.classical-relations.confidential-view-consumer.v1",
+        {"question_id": question_id.to_term()},
+    )
+    purpose_id = semantic_id(
+        "relations-confidential-view-purpose",
+        "fri-ior.classical-relations.confidential-view-purpose.v1",
+        {"question_id": question_id.to_term()},
+    )
+    return ConfidentialInitialOracleDisclosurePolicy(
+        protocol_id=binding.protocol_id,
+        native_core_id=binding.native_core_id,
+        oracle_coordinate_id=binding.initial_oracle_coordinate_id,
+        fixation_coordinate_id=(
+            binding.initial_oracle_fixation_coordinate_id
+        ),
+        downstream_consumer_id=consumer_id,
+        purpose_id=purpose_id,
+    )
+
+
+_RELATION_SECRET_TOKEN = object()
+_RELATION_SECRET_CAPABILITY_TOKEN = object()
+
+
+class RelationInitialOracleSecretAssignment(_OwnerLocalResult):
+    """Independent Relations-side material bound to one causal occurrence."""
+
+    __slots__ = (
+        "_authority",
+        "_instance_id",
+        "_binding_id",
+        "_statement_occurrence_id",
+        "_statement_coordinate_id",
+        "_consumer_id",
+        "_purpose_id",
+        "_protocol_id",
+        "_native_core_id",
+        "_public_environment_id",
+        "_oracle_coordinate_id",
+        "_fixation_coordinate_id",
+        "_invocation_ref",
+        "_supply_ref",
+        "_values",
+    )
 
     def __init__(
         self,
-        instance_id: SemanticId,
-        binding_id: SemanticId,
-        native_trace_id: SemanticId,
-        public_environment_id: SemanticId,
-        statement_coordinate_id: SemanticId,
-        initial_oracle_material_id: SemanticId,
+        instance: ExactRsProximityRelationInstance,
+        binding: ClassicalProtocolRelationBinding,
+        statement: ClassicalRelationStatementOccurrence,
+        execution_authority: CausalNativeExecutionAuthority,
+        values: tuple[GoldilocksElement, ...],
+        *,
+        _token: object,
+    ) -> None:
+        if _token is not _RELATION_SECRET_TOKEN:
+            raise ModelFailure(
+                OutcomeClass.MISSING_DEPENDENCY,
+                "classical-relations:secret-assignment-formation",
+                "FRI-IOR-CLASSICAL-RELATION-031",
+                "a relation secret assignment requires the owner issuance path",
+            )
+        (
+            protocol_id,
+            native_core_id,
+            public_environment_id,
+            oracle_coordinate_id,
+            fixation_coordinate_id,
+            invocation_ref,
+            supply_ref,
+        ) = _read_causal_execution_binding(execution_authority)
+        if (
+            binding.relation_interface_id != instance.interface_id
+            or instance.public_statement != statement.canonical_statement
+            or statement.public_environment_id != public_environment_id
+            or binding.protocol_id != protocol_id
+            or binding.native_core_id != native_core_id
+            or binding.initial_oracle_coordinate_id != oracle_coordinate_id
+            or binding.initial_oracle_fixation_coordinate_id
+            != fixation_coordinate_id
+        ):
+            raise ModelFailure(
+                OutcomeClass.REFUSED,
+                "classical-relations:secret-assignment-formation",
+                "FRI-IOR-CLASSICAL-RELATION-032",
+                "the assignment coordinates differ from the causal invocation",
+            )
+        if (
+            type(values) is not tuple
+            or len(values) != DOMAIN_ORDERS[0]
+            or any(not isinstance(value, GoldilocksElement) for value in values)
+        ):
+            raise malformed(
+                "classical-relations:secret-assignment-formation",
+                "FRI-IOR-CLASSICAL-RELATION-033",
+                "the relation assignment must contain the exact whole G0 carrier",
+            )
+        self._authority = _RELATION_SECRET_TOKEN
+        self._instance_id = instance.identity
+        self._binding_id = binding.identity
+        self._statement_occurrence_id = statement.identity
+        self._statement_coordinate_id = statement.statement_coordinate_id
+        policy = form_exact_initial_oracle_disclosure_policy(
+            instance,
+            binding,
+            statement,
+        )
+        self._consumer_id = policy.downstream_consumer_id
+        self._purpose_id = policy.purpose_id
+        self._protocol_id = protocol_id
+        self._native_core_id = native_core_id
+        self._public_environment_id = public_environment_id
+        self._oracle_coordinate_id = oracle_coordinate_id
+        self._fixation_coordinate_id = fixation_coordinate_id
+        self._invocation_ref = invocation_ref
+        self._supply_ref = supply_ref
+        self._values = values
+
+    def __repr__(self) -> str:
+        return "RelationInitialOracleSecretAssignment(owner_local=True)"
+
+
+class RelationInitialOracleSecretAssignmentCapability(_OwnerLocalResult):
+    __slots__ = ("_authority", "_assignment")
+
+    def __init__(
+        self,
+        assignment: RelationInitialOracleSecretAssignment,
+        *,
+        _token: object,
+    ) -> None:
+        if (
+            _token is not _RELATION_SECRET_CAPABILITY_TOKEN
+            or type(assignment) is not RelationInitialOracleSecretAssignment
+            or assignment._authority is not _RELATION_SECRET_TOKEN
+        ):
+            raise ModelFailure(
+                OutcomeClass.MISSING_DEPENDENCY,
+                "classical-relations:secret-capability-formation",
+                "FRI-IOR-CLASSICAL-RELATION-034",
+                "a secret capability requires the exact live assignment",
+            )
+        self._authority = _RELATION_SECRET_CAPABILITY_TOKEN
+        self._assignment = assignment
+
+    def __repr__(self) -> str:
+        return "RelationInitialOracleSecretAssignmentCapability(owner_local=True)"
+
+
+def issue_relation_initial_oracle_secret_assignment(
+    instance: object,
+    binding: object,
+    statement: object,
+    execution_authority: object,
+    values: object,
+) -> RelationInitialOracleSecretAssignmentCapability:
+    if (
+        type(instance) is not ExactRsProximityRelationInstance
+        or type(binding) is not ClassicalProtocolRelationBinding
+        or type(statement) is not ClassicalRelationStatementOccurrence
+        or not _has_live_causal_execution_authority(execution_authority)
+        or type(values) is not tuple
+    ):
+        raise ModelFailure(
+            OutcomeClass.MISSING_DEPENDENCY,
+            "classical-relations:secret-assignment-issuance",
+            "FRI-IOR-CLASSICAL-RELATION-035",
+            "secret issuance requires exact live instance, binding, Statement occurrence, and causal authority",
+        )
+    assignment = RelationInitialOracleSecretAssignment(
+        instance,
+        binding,
+        statement,
+        execution_authority,
+        values,
+        _token=_RELATION_SECRET_TOKEN,
+    )
+    return RelationInitialOracleSecretAssignmentCapability(
+        assignment,
+        _token=_RELATION_SECRET_CAPABILITY_TOKEN,
+    )
+
+
+_INITIAL_GROUNDING_TOKEN = object()
+_INITIAL_GROUNDING_RESULT_REF_TOKEN = object()
+
+
+class InitialOracleGroundingResultRef(_OwnerLocalResult):
+    __slots__ = ("_authority",)
+
+    def __init__(self, *, _token: object) -> None:
+        if _token is not _INITIAL_GROUNDING_RESULT_REF_TOKEN:
+            raise ModelFailure(
+                OutcomeClass.MISSING_DEPENDENCY,
+                "classical-relations:initial-grounding-ref-formation",
+                "FRI-IOR-CLASSICAL-RELATION-036",
+                "a grounding result reference is checker-issued",
+            )
+        self._authority = _INITIAL_GROUNDING_RESULT_REF_TOKEN
+
+    def __repr__(self) -> str:
+        return "InitialOracleGroundingResultRef(process_local=True)"
+
+
+class CheckedInitialOracleGrounding(_OwnerLocalResult):
+    """Completed whole-carrier comparison plus hidden live operation state."""
+
+    __slots__ = (
+        "instance_id",
+        "binding_id",
+        "statement_occurrence_id",
+        "public_environment_id",
+        "statement_coordinate_id",
+        "protocol_id",
+        "native_core_id",
+        "initial_oracle_coordinate_id",
+        "initial_oracle_fixation_coordinate_id",
+        "policy_id",
+        "outcome",
+        "result_ref",
+        "_authority",
+        "_run_fact",
+        "_invocation_ref",
+        "_supply_ref",
+    )
+
+    def __init__(
+        self,
+        instance: ExactRsProximityRelationInstance,
+        binding: ClassicalProtocolRelationBinding,
+        statement: ClassicalRelationStatementOccurrence,
+        policy_id: SemanticId,
+        outcome: OracleMaterialAgreementOutcome,
+        run_fact: CausalNativeRunFact,
+        invocation_ref: NativeInvocationRef,
+        supply_ref: InitialOracleSupplyRef,
         *,
         _token: object,
     ) -> None:
@@ -384,39 +784,55 @@ class CheckedInitialOracleGrounding:
                 "FRI-IOR-CLASSICAL-RELATION-011",
                 "an initial-oracle grounding is checker-issued",
             )
-        object.__setattr__(self, "instance_id", instance_id)
-        object.__setattr__(self, "binding_id", binding_id)
-        object.__setattr__(self, "native_trace_id", native_trace_id)
-        object.__setattr__(self, "public_environment_id", public_environment_id)
-        object.__setattr__(self, "statement_coordinate_id", statement_coordinate_id)
-        object.__setattr__(
-            self,
-            "initial_oracle_material_id",
-            initial_oracle_material_id,
+        self.instance_id = instance.identity
+        self.binding_id = binding.identity
+        self.statement_occurrence_id = statement.identity
+        self.public_environment_id = statement.public_environment_id
+        self.statement_coordinate_id = statement.statement_coordinate_id
+        self.protocol_id = binding.protocol_id
+        self.native_core_id = binding.native_core_id
+        self.initial_oracle_coordinate_id = binding.initial_oracle_coordinate_id
+        self.initial_oracle_fixation_coordinate_id = (
+            binding.initial_oracle_fixation_coordinate_id
         )
+        self.policy_id = policy_id
+        self.outcome = outcome
+        self.result_ref = InitialOracleGroundingResultRef(
+            _token=_INITIAL_GROUNDING_RESULT_REF_TOKEN
+        )
+        self._authority = _INITIAL_GROUNDING_TOKEN
+        self._run_fact = run_fact
+        self._invocation_ref = invocation_ref
+        self._supply_ref = supply_ref
         encode_term(self.to_term())
 
     def to_term(self) -> dict[str, Any]:
         return {
             "instance_id": _semantic_ref(self.instance_id),
             "binding_id": _semantic_ref(self.binding_id),
-            "native_trace_id": _semantic_ref(self.native_trace_id),
+            "statement_occurrence_id": _semantic_ref(
+                self.statement_occurrence_id
+            ),
             "public_environment_id": _semantic_ref(self.public_environment_id),
             "statement_coordinate_id": _semantic_ref(
                 self.statement_coordinate_id
             ),
-            "initial_oracle_material_id": _semantic_ref(
-                self.initial_oracle_material_id
+            "protocol_id": _semantic_ref(self.protocol_id),
+            "native_core_id": _semantic_ref(self.native_core_id),
+            "initial_oracle_coordinate_id": _semantic_ref(
+                self.initial_oracle_coordinate_id
             ),
-            "grounding_law": (
-                "same-exact-native-public-environment-statement-and-"
-                "initial-logical-oracle-material"
+            "initial_oracle_fixation_coordinate_id": _semantic_ref(
+                self.initial_oracle_fixation_coordinate_id
             ),
-            "evaluation_surface": "RawNativeTraceInitialOracle",
-            "durable_required_view": (
-                "PirOwnedPurposeSpecificConfidentialOracleView"
-            ),
-            "durable_promotion_ready": False,
+            "policy_id": _semantic_ref(self.policy_id),
+            "native_run_fact_id": _semantic_ref(self._run_fact.identity),
+            "outcome": self.outcome.value,
+            "grounding_law": "same-type-whole-carrier-equality",
+            "evaluation_surface": "PurposeBoundCausalConfidentialOracleView",
+            "material_serialized": False,
+            "material_digest_serialized": False,
+            "local_occurrence_serialized": False,
             "establishes_proximity": False,
         }
 
@@ -424,91 +840,203 @@ class CheckedInitialOracleGrounding:
     def identity(self) -> SemanticId:
         return semantic_id(
             "checked-initial-oracle-grounding",
-            "fri-ior.classical-relations.initial-oracle-grounding.v1",
+            "fri-ior.classical-relations.initial-oracle-grounding.v3",
             self.to_term(),
+        )
+
+    def __repr__(self) -> str:
+        return (
+            "CheckedInitialOracleGrounding("
+            f"outcome={self.outcome.value}, owner_local=True)"
         )
 
 
 @dataclass(frozen=True, slots=True)
 class InitialOracleGroundingAdmission:
-    result: CheckResult
+    result: OracleMaterialAgreementResult
     checked: CheckedInitialOracleGrounding | None
+
+
+def _material_result(
+    outcome: OracleMaterialAgreementOutcome,
+    code: str,
+    detail: str,
+    *,
+    subject: SemanticId | None = None,
+    **evidence: Any,
+) -> OracleMaterialAgreementResult:
+    return OracleMaterialAgreementResult(
+        outcome,
+        "classical-relations:initial-oracle-grounding",
+        code,
+        detail,
+        subject,
+        evidence,
+    )
 
 
 def check_initial_oracle_grounding(
     instance: object,
     binding: object,
-    trace: object,
+    statement: object,
+    relation_secret_capability: object,
+    pir_view_capability: object,
 ) -> InitialOracleGroundingAdmission:
-    boundary = "classical-relations:initial-oracle-grounding"
     if (
         type(instance) is not ExactRsProximityRelationInstance
         or type(binding) is not ClassicalProtocolRelationBinding
-        or type(trace) is not ClassicalNativeTrace
+        or type(statement) is not ClassicalRelationStatementOccurrence
     ):
         return InitialOracleGroundingAdmission(
-            CheckResult(
-                OutcomeClass.MALFORMED,
-                boundary,
+            _material_result(
+                OracleMaterialAgreementOutcome.MALFORMED,
                 "FRI-IOR-CLASSICAL-RELATION-012",
-                "grounding requires exact instance, binding, and trace carriers",
+                "grounding requires exact instance, binding, and Statement carriers",
             ),
             None,
         )
-    initial_oracle = trace.oracles[0]
-    expected_statement = ClassicalRelationStatementOccurrence(
-        trace.public_environment
+    if relation_secret_capability is None or pir_view_capability is None:
+        return InitialOracleGroundingAdmission(
+            _material_result(
+                OracleMaterialAgreementOutcome.CANNOT_ANSWER,
+                "FRI-IOR-CLASSICAL-RELATION-037",
+                "a required live whole-carrier authority is unavailable",
+            ),
+            None,
+        )
+    if (
+        type(relation_secret_capability)
+        is not RelationInitialOracleSecretAssignmentCapability
+        or relation_secret_capability._authority
+        is not _RELATION_SECRET_CAPABILITY_TOKEN
+        or relation_secret_capability._assignment._authority
+        is not _RELATION_SECRET_TOKEN
+        or type(pir_view_capability)
+        is not ConfidentialInitialOracleViewCapability
+    ):
+        return InitialOracleGroundingAdmission(
+            _material_result(
+                OracleMaterialAgreementOutcome.REFUSED,
+                "FRI-IOR-CLASSICAL-RELATION-038",
+                "caller-authored or wrong-kind values are not live comparison authority",
+            ),
+            None,
+        )
+    try:
+        view = _read_confidential_initial_oracle_view(pir_view_capability)
+    except ModelFailure:
+        return InitialOracleGroundingAdmission(
+            _material_result(
+                OracleMaterialAgreementOutcome.REFUSED,
+                "FRI-IOR-CLASSICAL-RELATION-038",
+                "caller-authored or wrong-kind values are not live comparison authority",
+            ),
+            None,
+        )
+    assignment = relation_secret_capability._assignment
+    if (
+        binding.relation_interface_id != instance.interface_id
+        or instance.public_statement != statement.canonical_statement
+    ):
+        return InitialOracleGroundingAdmission(
+            _material_result(
+                OracleMaterialAgreementOutcome.REFUSED,
+                "FRI-IOR-CLASSICAL-RELATION-013",
+                "the instance public values do not match the selected Statement occurrence",
+            ),
+            None,
+        )
+    expected_policy = form_exact_initial_oracle_disclosure_policy(
+        instance,
+        binding,
+        statement,
     )
     if (
-        binding.relation_instance_id != instance.identity
-        or binding.statement_occurrence_id != instance.statement_id
-        or instance.statement_id != expected_statement.identity
-        or binding.public_environment_id != trace.public_environment.identity
-        or instance.public_environment_id != trace.public_environment.identity
-        or binding.statement_coordinate_id
-        != trace.public_environment.statement_coordinate_id
-        or instance.statement_coordinate_id
-        != trace.public_environment.statement_coordinate_id
-        or binding.native_core_id != trace.native_core_id
-        or binding.initial_oracle_occurrence_id != initial_oracle.identity
-        or instance.initial_oracle_material_id != initial_oracle.identity
+        binding.relation_interface_id != instance.interface_id
+        or instance.public_statement != statement.canonical_statement
+        or assignment._instance_id != instance.identity
+        or assignment._binding_id != binding.identity
+        or assignment._statement_occurrence_id != statement.identity
+        or assignment._statement_coordinate_id
+        != statement.statement_coordinate_id
+        or assignment._consumer_id != expected_policy.downstream_consumer_id
+        or assignment._purpose_id != expected_policy.purpose_id
+        or assignment._protocol_id != binding.protocol_id
+        or assignment._native_core_id != binding.native_core_id
+        or assignment._public_environment_id != statement.public_environment_id
+        or assignment._oracle_coordinate_id
+        != binding.initial_oracle_coordinate_id
+        or assignment._fixation_coordinate_id
+        != binding.initial_oracle_fixation_coordinate_id
+        or view._protocol_id != binding.protocol_id
+        or view._native_core_id != binding.native_core_id
+        or view._public_environment_id != statement.public_environment_id
+        or view._oracle_coordinate_id != binding.initial_oracle_coordinate_id
+        or view._fixation_coordinate_id
+        != binding.initial_oracle_fixation_coordinate_id
+        or view._policy.identity != expected_policy.identity
+        or view._policy.downstream_consumer_id
+        != expected_policy.downstream_consumer_id
+        or view._policy.purpose_id != expected_policy.purpose_id
+        or assignment._invocation_ref is not view._invocation_ref
+        or assignment._supply_ref is not view._supply_ref
+        or view._run_fact.protocol_id != binding.protocol_id
+        or view._run_fact.native_core_id != binding.native_core_id
+        or view._run_fact.public_environment_id != statement.public_environment_id
+        or view._run_fact.initial_oracle_coordinate_id
+        != binding.initial_oracle_coordinate_id
+        or view._run_fact.initial_oracle_fixation_coordinate_id
+        != binding.initial_oracle_fixation_coordinate_id
     ):
         return InitialOracleGroundingAdmission(
-            refused(
-                boundary,
+            _material_result(
+                OracleMaterialAgreementOutcome.REFUSED,
                 "FRI-IOR-CLASSICAL-RELATION-013",
-                "the relation instance, binding, and trace name different public-environment or initial-oracle coordinates",
+                "the authorities belong to different coordinates, policy, invocation, or supply",
             ),
             None,
         )
+    outcome = (
+        OracleMaterialAgreementOutcome.AFFIRMATIVE
+        if assignment._values == view._values
+        else OracleMaterialAgreementOutcome.NEGATIVE
+    )
     checked = CheckedInitialOracleGrounding(
-        instance.identity,
-        binding.identity,
-        trace.identity,
-        trace.public_environment.identity,
-        trace.public_environment.statement_coordinate_id,
-        initial_oracle.identity,
+        instance,
+        binding,
+        statement,
+        expected_policy.identity,
+        outcome,
+        view._run_fact,
+        view._invocation_ref,
+        view._supply_ref,
         _token=_INITIAL_GROUNDING_TOKEN,
     )
-    return InitialOracleGroundingAdmission(
-        affirmative(
-            boundary,
+    if outcome is OracleMaterialAgreementOutcome.AFFIRMATIVE:
+        result = _material_result(
+            OracleMaterialAgreementOutcome.AFFIRMATIVE,
             "FRI-IOR-CLASSICAL-RELATION-100",
-            "the relation OracleStatement is grounded to exact native G0 material",
+            "the two authorized whole G0 carriers agree",
             subject=checked.identity,
-            public_environment_id=trace.public_environment.identity,
-            statement_coordinate_id=(
-                trace.public_environment.statement_coordinate_id
-            ),
-            evaluation_surface="RawNativeTraceInitialOracle",
-            durable_required_view=(
-                "PirOwnedPurposeSpecificConfidentialOracleView"
-            ),
-            durable_promotion_ready=False,
+            policy_id=expected_policy.identity,
+            initial_oracle_coordinate_id=binding.initial_oracle_coordinate_id,
+            material_serialized=False,
+            material_digest_serialized=False,
             establishes_proximity=False,
-        ),
-        checked,
-    )
+        )
+    else:
+        result = _material_result(
+            OracleMaterialAgreementOutcome.NEGATIVE,
+            "FRI-IOR-CLASSICAL-RELATION-103",
+            "the two authorized whole G0 carriers disagree",
+            subject=checked.identity,
+            policy_id=expected_policy.identity,
+            initial_oracle_coordinate_id=binding.initial_oracle_coordinate_id,
+            material_serialized=False,
+            material_digest_serialized=False,
+            establishes_proximity=False,
+        )
+    return InitialOracleGroundingAdmission(result, checked)
 
 
 @dataclass(frozen=True, slots=True)
@@ -715,9 +1243,14 @@ def check_construction_relation_view(
 class ClassicalTerminalResidual:
     relation_instance_id: SemanticId
     binding_id: SemanticId
-    native_trace_id: SemanticId
+    initial_grounding_id: SemanticId
+    protocol_id: SemanticId
+    native_core_id: SemanticId
+    public_environment_id: SemanticId
+    initial_oracle_coordinate_id: SemanticId
+    initial_oracle_fixation_coordinate_id: SemanticId
+    terminal_occurrence_coordinate_id: SemanticId
     construction_view_id: SemanticId
-    terminal_scalar: GoldilocksElement
     execution_terminal: str
     proximity_status: ProximityEvaluationStatus = field(
         default=ProximityEvaluationStatus.NOT_EVALUATED,
@@ -728,15 +1261,30 @@ class ClassicalTerminalResidual:
         for value in (
             self.relation_instance_id,
             self.binding_id,
-            self.native_trace_id,
+            self.initial_grounding_id,
+            self.protocol_id,
+            self.native_core_id,
+            self.public_environment_id,
+            self.initial_oracle_coordinate_id,
+            self.initial_oracle_fixation_coordinate_id,
+            self.terminal_occurrence_coordinate_id,
             self.construction_view_id,
         ):
             _semantic_ref(value)
-        if not isinstance(self.terminal_scalar, GoldilocksElement):
+        if (
+            self.protocol_id != EXACT_CLASSICAL_NATIVE_FRESH_PROTOCOL_ID
+            or self.native_core_id != EXACT_CLASSICAL_NATIVE_CORE.identity
+            or self.initial_oracle_coordinate_id
+            != EXACT_INITIAL_ORACLE_COORDINATE_ID
+            or self.initial_oracle_fixation_coordinate_id
+            != EXACT_INITIAL_ORACLE_FIXATION_COORDINATE_ID
+            or self.terminal_occurrence_coordinate_id
+            != EXACT_NATIVE_TERMINAL_COORDINATE_ID
+        ):
             raise malformed(
                 "classical-relations:residual-formation",
                 "FRI-IOR-CLASSICAL-RELATION-015",
-                "the exact residual requires one scalar terminal",
+                "the residual requires exact value-free Protocol occurrence coordinates",
             )
         if self.execution_terminal != "Accept":
             raise malformed(
@@ -750,11 +1298,24 @@ class ClassicalTerminalResidual:
         return {
             "relation_instance_id": _semantic_ref(self.relation_instance_id),
             "binding_id": _semantic_ref(self.binding_id),
-            "native_trace_id": _semantic_ref(self.native_trace_id),
+            "initial_grounding_id": _semantic_ref(self.initial_grounding_id),
+            "protocol_id": _semantic_ref(self.protocol_id),
+            "native_core_id": _semantic_ref(self.native_core_id),
+            "public_environment_id": _semantic_ref(self.public_environment_id),
+            "initial_oracle_coordinate_id": _semantic_ref(
+                self.initial_oracle_coordinate_id
+            ),
+            "initial_oracle_fixation_coordinate_id": _semantic_ref(
+                self.initial_oracle_fixation_coordinate_id
+            ),
+            "terminal_occurrence_coordinate_id": _semantic_ref(
+                self.terminal_occurrence_coordinate_id
+            ),
             "construction_view_id": _semantic_ref(self.construction_view_id),
-            "terminal_scalar": self.terminal_scalar.to_term(),
             "execution_terminal": self.execution_terminal,
             "proximity_status": self.proximity_status.value,
+            "terminal_value_serialized": False,
+            "trace_identity_serialized": False,
             "establishes_proximity": False,
             "establishes_outer_computation_relation": False,
         }
@@ -763,7 +1324,7 @@ class ClassicalTerminalResidual:
     def identity(self) -> SemanticId:
         return semantic_id(
             "relations-proximity-residual",
-            "fri-ior.classical-relations.scalar-terminal-residual.v1",
+            "fri-ior.classical-relations.scalar-terminal-residual.v2",
             self.to_term(),
         )
 
@@ -836,7 +1397,6 @@ class ClassicalRelationGroundingAdmission:
 def check_classical_relation_grounding(
     instance: object,
     binding: object,
-    trace: object,
     initial_grounding: object,
     construction_capability: object,
 ) -> ClassicalRelationGroundingAdmission:
@@ -844,7 +1404,6 @@ def check_classical_relation_grounding(
     if (
         type(instance) is not ExactRsProximityRelationInstance
         or type(binding) is not ClassicalProtocolRelationBinding
-        or type(trace) is not ClassicalNativeTrace
         or type(initial_grounding) is not CheckedInitialOracleGrounding
     ):
         return ClassicalRelationGroundingAdmission(
@@ -852,20 +1411,24 @@ def check_classical_relation_grounding(
                 OutcomeClass.MALFORMED,
                 boundary,
                 "FRI-IOR-CLASSICAL-RELATION-026",
-                "complete grounding requires exact relation and native-run carriers",
+                "complete grounding requires exact relation and checked-result carriers",
             ),
             None,
         )
     if (
         initial_grounding.instance_id != instance.identity
         or initial_grounding.binding_id != binding.identity
-        or initial_grounding.native_trace_id != trace.identity
+        or initial_grounding._authority is not _INITIAL_GROUNDING_TOKEN
+        or initial_grounding.result_ref._authority
+        is not _INITIAL_GROUNDING_RESULT_REF_TOKEN
+        or initial_grounding.outcome
+        is not OracleMaterialAgreementOutcome.AFFIRMATIVE
     ):
         return ClassicalRelationGroundingAdmission(
             refused(
                 boundary,
                 "FRI-IOR-CLASSICAL-RELATION-027",
-                "the supplied initial grounding belongs to different coordinates",
+                "the supplied initial grounding is not the matching live Affirmative result",
             ),
             None,
         )
@@ -874,15 +1437,41 @@ def check_classical_relation_grounding(
         return ClassicalRelationGroundingAdmission(view_admission.result, None)
     if view_admission.view is None:
         raise RuntimeError("affirmative construction view omitted its subject")
-    native_acceptance = verify_native_trace(trace)
-    if native_acceptance.outcome is not OutcomeClass.AFFIRMATIVE:
-        return ClassicalRelationGroundingAdmission(native_acceptance, None)
+    run_fact = initial_grounding._run_fact
+    if (
+        type(run_fact) is not CausalNativeRunFact
+        or binding.relation_interface_id != instance.interface_id
+        or run_fact.protocol_id != binding.protocol_id
+        or run_fact.native_core_id != binding.native_core_id
+        or run_fact.public_environment_id
+        != initial_grounding.public_environment_id
+        or run_fact.initial_oracle_coordinate_id
+        != binding.initial_oracle_coordinate_id
+        or run_fact.initial_oracle_fixation_coordinate_id
+        != binding.initial_oracle_fixation_coordinate_id
+        or run_fact.terminal_occurrence_coordinate_id
+        != EXACT_NATIVE_TERMINAL_COORDINATE_ID
+        or run_fact.execution_terminal != "Accept"
+    ):
+        return ClassicalRelationGroundingAdmission(
+            refused(
+                boundary,
+                "FRI-IOR-CLASSICAL-RELATION-041",
+                "the live checked result lacks the matching public Accept run fact",
+            ),
+            None,
+        )
     residual = ClassicalTerminalResidual(
         instance.identity,
         binding.identity,
-        trace.identity,
+        initial_grounding.identity,
+        binding.protocol_id,
+        binding.native_core_id,
+        initial_grounding.public_environment_id,
+        binding.initial_oracle_coordinate_id,
+        binding.initial_oracle_fixation_coordinate_id,
+        EXACT_NATIVE_TERMINAL_COORDINATE_ID,
         view_admission.view.identity,
-        trace.terminal_scalar,
         "Accept",
     )
     checked = CheckedClassicalRelationGrounding(
@@ -962,16 +1551,28 @@ __all__ = [
     "ClassicalTerminalResidual",
     "ConstructionRelationViewAdmission",
     "DistanceMetric",
+    "EXACT_NATIVE_STATEMENT_TARGET_ID",
+    "EXACT_RELATION_INITIAL_ORACLE_ROLE_ID",
+    "EXACT_RELATION_STATEMENT_ROLE_ID",
+    "EXACT_RS_PROXIMITY_INTERFACE_ID",
     "EXACT_RS_PROXIMITY_RELATION",
     "ExactReedSolomonProximityRelation",
     "ExactRsProximityRelationInstance",
     "InitialOracleGroundingAdmission",
+    "InitialOracleGroundingResultRef",
+    "OracleMaterialAgreementOutcome",
+    "OracleMaterialAgreementResult",
     "OuterRelationInferenceRequest",
     "OuterRelationPremise",
     "ProximityEvaluationStatus",
+    "RelationInitialOracleSecretAssignment",
+    "RelationInitialOracleSecretAssignmentCapability",
     "check_classical_relation_grounding",
     "check_construction_relation_view",
     "check_initial_oracle_grounding",
+    "form_exact_initial_oracle_disclosure_policy",
     "form_exact_rs_relation_instance_and_binding",
     "infer_outer_computation_relation",
+    "issue_relation_initial_oracle_secret_assignment",
+    "oracle_material_question_id",
 ]

@@ -9,6 +9,16 @@ from pathlib import Path
 import sys
 from typing import Any, TypeVar
 
+from friiormodel.classical import (
+    build_honest_classical_case,
+    verify_committed_fiat_shamir as verify_classical_fiat_shamir,
+    verify_committed_fresh as verify_classical_fresh,
+    verify_native_trace as verify_classical_native,
+)
+from friiormodel.classical_fixtures import (
+    parse_classical_owner_generation,
+    parse_classical_replay_policy,
+)
 from friiormodel.commitment import CommitmentTree, build_commitment
 from friiormodel.committed import verify_committed_fri
 from friiormodel.fixtures import (
@@ -56,6 +66,7 @@ from friiormodel.report import (
     PUBLIC_CASES,
     _build_public_report_from_loaded,
     _verify_public_report_from_loaded,
+    _source_basis,
     build_public_report,
     canonical_pretty_json,
     expected_projection,
@@ -125,6 +136,11 @@ _OWNER_RESULT_CONTRACTS = {
 _NEGATIVE_RESULT_CONTRACTS = {
     "authenticated-fold-inconsistency": "FRI-IOR-COMMITTED-020",
     "fold-consistent-terminal-degree-excess": "FRI-IOR-COMMITTED-022",
+}
+_EXACT_CLASSICAL_OWNER_RESULT_CODES = {
+    "native": "FRI-IOR-CLASSICAL-NATIVE-100",
+    "fresh": "FRI-IOR-CLASSICAL-COMMITTED-100",
+    "fiat_shamir": "FRI-IOR-CLASSICAL-COMMITTED-100",
 }
 
 
@@ -448,7 +464,7 @@ def build_frozen_fixture_candidates(root: Path) -> dict[str, dict[str, Any]]:
     )
     proof = concrete_execution.public_artifacts.proof
     trace = concrete_execution.candidate.source_trace
-    return {
+    earlier = {
         "public-inputs.json": public_inputs.to_term(),
         "public-proof.json": proof.to_term(),
         "public-native-vector.json": _native_vector_term(trace),
@@ -459,6 +475,35 @@ def build_frozen_fixture_candidates(root: Path) -> dict[str, dict[str, Any]]:
             proof,
         ),
     }
+    return {**earlier, **build_exact_classical_frozen_fixture_candidates(root)}
+
+
+def build_exact_classical_frozen_fixture_candidates(
+    root: Path,
+) -> dict[str, dict[str, Any]]:
+    """Generate the exact public packet solely from its owner-authored input."""
+
+    root = bind_repository_root(root)
+    owner = parse_classical_owner_generation(
+        load_fixture(
+            root,
+            (
+                "evaluation/native-fri-ior/cases/"
+                "exact-classical-owner-generation-input.json"
+            ),
+            "exact_classical_owner_generation_input",
+        ).value
+    )
+    case = build_honest_classical_case(
+        source_coefficients=owner.source_coefficients,
+        salt_seed=owner.salt_seed,
+    )
+    return {
+        "exact-classical-public-inputs.json": (
+            case.fiat_shamir_run.public_inputs.to_term()
+        ),
+        "exact-classical-public-proof.json": case.fiat_shamir_run.proof.to_term(),
+    }
 
 
 _DERIVED_PUBLIC_CASES = {
@@ -466,6 +511,8 @@ _DERIVED_PUBLIC_CASES = {
     "public_proof": "public-proof.json",
     "public_native_vector": "public-native-vector.json",
     "negative_proofs": "public-negative-proofs.json",
+    "exact_classical_public_inputs": "exact-classical-public-inputs.json",
+    "exact_classical_public_proof": "exact-classical-public-proof.json",
 }
 
 
@@ -547,9 +594,11 @@ def refreeze_frozen_fixtures(root: Path) -> dict[str, object]:
         first["public-inputs.json"],
         first["public-proof.json"],
         first["public-native-vector.json"],
+        first["exact-classical-public-inputs.json"],
+        first["exact-classical-public-proof.json"],
     )
     expected = {
-        "schema": "zkc.native-fri-ior.expected-report-projection.v2",
+        "schema": "zkc.native-fri-ior.expected-report-projection.v3",
         "authority": "regression-golden-not-semantic-or-provenance-authority",
         "projection": expected_projection(report),
     }
@@ -598,11 +647,99 @@ def check_frozen_fixtures(root: Path) -> dict[str, object]:
     return build_owner_local_report(root)
 
 
+def _build_exact_classical_owner_summary(
+    root: Path,
+    public_inputs_value: object,
+    public_proof_value: object,
+) -> dict[str, object]:
+    """Reconstruct the exact packet without exporting owner generation values."""
+
+    owner_fixture = load_fixture(
+        root,
+        (
+            "evaluation/native-fri-ior/cases/"
+            "exact-classical-owner-generation-input.json"
+        ),
+        "exact_classical_owner_generation_input",
+    )
+    policy_fixture = load_fixture(
+        root,
+        "evaluation/native-fri-ior/cases/exact-classical-replay-policy.json",
+        "exact_classical_replay_policy",
+    )
+    owner = parse_classical_owner_generation(owner_fixture.value)
+    limits = parse_classical_replay_policy(policy_fixture.value)
+    case = build_honest_classical_case(
+        source_coefficients=owner.source_coefficients,
+        salt_seed=owner.salt_seed,
+    )
+    if case.fiat_shamir_run.public_inputs.to_term() != public_inputs_value:
+        raise RuntimeError(
+            "exact classical owner generation differs from frozen public inputs"
+        )
+    if case.fiat_shamir_run.proof.to_term() != public_proof_value:
+        raise RuntimeError(
+            "exact classical owner generation differs from frozen public proof"
+        )
+    checked = {
+        "native": verify_classical_native(case.native_trace, limits),
+        "fresh": verify_classical_fresh(
+            case.fresh_run.public_inputs,
+            case.fresh_run.proof,
+            case.fresh_run.fold_challenges,
+            case.fresh_run.query_indices,
+            limits,
+        ),
+        "fiat_shamir": verify_classical_fiat_shamir(
+            case.fiat_shamir_run.public_inputs,
+            case.fiat_shamir_run.proof,
+            limits,
+        ),
+    }
+    for name, result in checked.items():
+        if (
+            result.outcome is not OutcomeClass.AFFIRMATIVE
+            or result.code != _EXACT_CLASSICAL_OWNER_RESULT_CODES[name]
+        ):
+            raise RuntimeError(
+                f"exact classical {name} owner check refused: {result.code}"
+            )
+    return {
+        "outcome": "Affirmative",
+        "public_inputs_id": case.fiat_shamir_run.public_inputs.identity.to_term(),
+        "public_proof_id": case.fiat_shamir_run.proof.identity.to_term(),
+        "checked_results": {
+            name: result.code for name, result in checked.items()
+        },
+        "generation_input_binding": {
+            "path": owner_fixture.relative_path,
+            "artifact_content_id": str(owner_fixture.artifact_id),
+            "canonical_content_id": str(owner_fixture.canonical_id),
+            "authority": "owner-generation-input-not-public-report-input",
+        },
+        "validation_source_basis_id": _source_basis(
+            root,
+            "exact-classical-owner-generation",
+            ("classical.py", "classical_fixtures.py", "../generate.py"),
+        ),
+        "scope": "one-deterministically-regenerated-exact-classical-control",
+        "nonclaims": [
+            "source-theorem-correspondence",
+            "fri-proximity-or-security-theorem",
+            "commitment-binding",
+            "fiat-shamir-security",
+            "secure-or-confidential-owner-randomness",
+        ],
+    }
+
+
 def _build_owner_local_report_from_terms(
     root: Path,
     public_inputs_value: object,
     public_proof_value: object,
     public_native_vector_value: object,
+    exact_classical_public_inputs_value: object,
+    exact_classical_public_proof_value: object,
 ) -> dict[str, object]:
     """Check owner-local capabilities against one explicit public candidate set."""
 
@@ -740,8 +877,14 @@ def _build_owner_local_report_from_terms(
         *_OWNER_RESULT_CONTRACTS["relation_grounding"],
     )
 
+    exact_classical = _build_exact_classical_owner_summary(
+        root,
+        exact_classical_public_inputs_value,
+        exact_classical_public_proof_value,
+    )
+
     return {
-        "schema": "zkc.native-fri-ior.owner-local-construction-check.v1",
+        "schema": "zkc.native-fri-ior.owner-local-construction-check.v2",
         "outcome": "Affirmative",
         "public_inputs_id": generated.public_inputs.identity.to_term(),
         "public_proof_id": generated.proof.identity.to_term(),
@@ -772,6 +915,7 @@ def _build_owner_local_report_from_terms(
                 "separately-loaded-owner-input; does-not-establish-independent-provenance"
             ),
         },
+        "exact_classical_control": exact_classical,
         "scope": "one-owner-local-finite-execution-and-live-capability-chain",
         "nonclaims": [
             "general-commitment-compiler-correctness",
@@ -794,6 +938,8 @@ def build_owner_local_report(root: Path) -> dict[str, object]:
             "public_inputs",
             "public_proof",
             "public_native_vector",
+            "exact_classical_public_inputs",
+            "exact_classical_public_proof",
         )
     }
     return _build_owner_local_report_from_terms(
@@ -801,6 +947,8 @@ def build_owner_local_report(root: Path) -> dict[str, object]:
         public["public_inputs"],
         public["public_proof"],
         public["public_native_vector"],
+        public["exact_classical_public_inputs"],
+        public["exact_classical_public_proof"],
     )
 
 

@@ -167,6 +167,24 @@ identity.
   assessments; and
 - guides link to reproducible procedures rather than restating results.
 
+## Bounded executable evidence routes
+
+The [Native FRI/IOR Semantic
+Validation](../../evaluation/native-fri-ior/README.md) package is the current
+reproduction route for one retained two-lane research case. It records an
+early-terminated structural control and a separate frozen exact classical
+control with public replay, owner regeneration, named negatives, and explicit
+nonclaims. The package remains beside its executable assets; this index does
+not convert its reports, fixtures, tests, or construction receipts into an
+Evidence record, assessment, property judgment, or implementation-conformance
+claim.
+
+Any later `RecordEvidence` operation over that package must bind the exact
+case inputs, source ledger, code basis, procedure, environment, result scope,
+and final checkpoint. Its admissible claim must distinguish deterministic
+source-schedule correspondence, structural construction authority, one-run
+receipts, implementation-diversity replay, and unattempted property questions.
+
 ## Bridge ownership
 
 `evidence/` owns two separate bridges:

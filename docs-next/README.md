@@ -20,11 +20,12 @@ In this tree, a `completed` Stage 1--4A label records historical completion of
 one bounded research package at its selection gate. It does not mean the
 promoted candidate is mutually closed or semantically frozen. The
 [v0 Semantic Design Program](project/v0-design-program.md#14-progress-and-change-control)
-owns that live integrated-design gate. Bounded K3-D endpoint projection is
-complete at its stated scope, and bounded K3-E integrated closure is complete
-at its stated finite scope. K4 bounded protocol-portfolio pressure is next;
-K5 independent freeze remains later. The semantic kernel is not frozen and
-full Stage 4B remains inactive.
+owns that live integrated-design gate. The minimum consumer seams and one
+joined Schnorr path are complete at their bounded scopes. Native FRI/IOR is
+also retained as a two-lane conservative extension with only deterministic
+source-schedule correspondence. The remaining protocol portfolio and
+independent freeze are pending; the semantic kernel is not frozen and full
+Stage 4B remains inactive.
 
 ## Where current truth lives
 
@@ -78,6 +79,14 @@ flowchart LR
   AP --> FS[Checked Fresh-to-FS construction]
   AP --> CP[Checked Core composition]
 
+  NS[Admitted logical-Oracle source Core]
+  NS --> OC[Checked Oracle-commitment construction]
+  OC --> CC[Admitted committed Core]
+  CC --> FP[Fresh Protocol]
+  CC --> NF[Fiat-Shamir Protocol]
+  FP --> AQ
+  NF --> AQ
+
   AP --> AQ[Analysis question and exact basis]
   AQ --> AJ[Qualified Analysis judgment]
 
@@ -111,7 +120,10 @@ flowchart LR
   CA --> RD[Deferred use-specific reliance]
 ```
 
-The unactivated/deferred nodes show only the one-way ownership boundary needed
+The Oracle-construction lane is structural: its checked maps and authority do
+not establish commitment security, randomized-experiment correspondence, or a
+property. Those questions enter only through the Analysis question and exact
+basis node. The unactivated/deferred nodes show only the one-way ownership boundary needed
 to keep Stage 4A independent. They define no OIR, realization, endpoint,
 Evidence-policy, or reliance semantics and confer no corresponding authority.
 
@@ -166,13 +178,15 @@ Protocol, canonical PIR, Interface, Plan, Relations, Fiat--Shamir, and
 semantic-composition candidate at package resolution, promoted it into
 candidate target owners, and produced separate Stage 4A and Stage 4B entry
 contracts. Stage 4A selected the federated Analysis and validated-decision
-Compiler architecture and promoted candidate target owners. K3-D subsequently
-selected whole-source-provenance-free PIR endpoint views, a minimum target-
-semantic OIR body, and an independent projection relation while leaving full
-Stage 4B unactivated. K3-E then reclosed the joined bounded K1--K3-D profile,
-owner-view, read, and authority boundary over one finite P01/Schnorr witness.
-That result routes protocol-family pressure to K4 and independent freeze to
-K5; it is not a semantic freeze or Stage 4B activation.
+Compiler architecture and promoted candidate target owners. Later bounded
+consumer work selected whole-source-provenance-free PIR endpoint views, a
+minimum target-semantic OIR body, and an independent projection relation while
+leaving full Stage 4B unactivated, then reclosed one finite joined Schnorr path.
+The retained native FRI/IOR case subsequently added typed logical-Oracle
+origin/access, one checked structural Oracle-commitment construction, and a
+causal confidential Relations connection without changing the central
+factorization. The remaining portfolio and independent freeze are still
+pending; none of these results is semantic freeze or Stage 4B activation.
 
 The first semantic reconstruction result is the
 [Candidate v0 Semantic Architecture](project/v0-semantic-architecture.md). It

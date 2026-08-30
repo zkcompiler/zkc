@@ -2,9 +2,9 @@
 
 > **Kind:** Temporary primary-source reconstruction and implementation-profile
 > comparison
-> **State:** Constructive validation and independently coded reconstruction
-> pass for one finite early-terminated profile; exact-source correspondence,
-> theorem applicability, and cross-family conclusions remain provisional
+> **State:** Two-lane finite validation retained; the exact classical lane
+> closes fixed-coin deterministic Algorithm 1 verifier-shape correspondence,
+> while theorem applicability and cross-family conclusions remain open
 > **Authority:** None. This page records source facts, deductions, profile
 > choices, and unresolved theorem obligations. It does not define target
 > semantics or establish FRI, commitment, Fiat--Shamir, or implementation
@@ -227,21 +227,23 @@ full private oracle is not a faithful committed verifier. Likewise, a native
 oracle represented by publishing its full carrier gives the verifier more
 information and work than the IOP specifies.
 
-The honest factorization is therefore:
+The retained factorization is therefore:
 
 ```text
 native logical-oracle Core
-    -> commitment/opening declaration + checked one-execution receipt
+    -> checked profile-bound commitment/opening construction
 committed interactive Core
     -> admitted checked same-Core Fiat--Shamir construction
 committed noninteractive Protocol
 ```
 
 The first arrow changes the verifier-observable interaction and has distinct
-source and target Core identities. Its present positive evidence is limited to
-one validation-bound source/target execution; general compilation admission
-remains open. The second arrow changes challenge interpretation while sharing
-the committed Core and is generally admitted at its structural scope.
+source and target Core identities. The exact classical lane admits one checked
+structural construction for its fixed source/target/profile triple and retains
+an inert receipt for one concrete execution. That does not establish a
+universal FRI compiler or a cryptographic commitment property. The second
+arrow changes challenge interpretation while sharing the committed Core and
+is admitted at its structural scope.
 
 ### 3.3 Initial-oracle fork
 
@@ -402,20 +404,19 @@ arity schedule, cap/root representation, hashing, transcript transition,
 sampling, work placement, deduplication, opening proof, terminal encoding, and
 initial-oracle ownership.
 
-## 6. Candidate-model pressure
+## 6. Candidate-model disposition
 
-The candidate architecture already has useful pieces: immutable logical
-oracles, causal prover views, public-coin analysis, strong transcript
-influence, typed relation oracle statements, commitment grounding, and
-Analysis-owned theorem propositions. Native FRI exposes five remaining
-requirements.
+The candidate architecture already had immutable oracles, causal prover views,
+public-coin analysis, strong transcript influence, typed relation-oracle
+statements, commitment grounding, and Analysis-owned theorem propositions.
+Native FRI required the following completions and retained boundaries.
 
 ### 6.1 Logical access without disclosure or commitment
 
-The current oracle publication modes either disclose the full finite carrier
-or compute a public binding. Native IOP access needs a third meaning: the
-oracle is fixed and queryable under an exact domain law, but neither its full
-carrier nor a cryptographic binding is published.
+Native IOP access needs a third meaning beyond full publication and public
+binding: the Oracle is fixed and queryable under an exact domain law, but
+neither its full carrier nor a cryptographic binding is published. The PIR
+target now owns this as `LogicalAccess`.
 
 Such a Core is Fresh-valid. It is not directly eligible for same-Core
 Fiat--Shamir when the oracle affects acceptance, because no public value binds
@@ -437,18 +438,19 @@ An owner-local domain law must reject missing, duplicate, or extra points and
 derive a total element answer. This is a profile law over the standard oracle
 lifecycle, not permission for callers to assert totality.
 
-### 6.3 Initial versus prover-authored oracle material
+### 6.3 Initial versus prover-authored Oracle material
 
-The initial oracle may be invocation- or relation-supplied, whereas later
-oracles are causal strategy decisions. Treating all three as strategy-authored
-changes the proximity statement. Oracle origin and supply capability therefore
-need explicit ownership.
+The initial Oracle may be invocation- or relation-supplied, whereas later
+Oracles are causal strategy decisions. Treating all three as strategy-authored
+changes the proximity statement. PIR therefore distinguishes `InitialOracle`
+from `ProverOracle` and gives the former an owner-local pre-execution supply
+capability.
 
-### 6.4 Requirements for eventual checked commitment compilation
+### 6.4 Checked commitment compilation
 
-The existing same-Core Fiat--Shamir construction is intentionally insufficient
-for an IOP compiler. Any eventual generally admitted source-to-target
-construction must relate:
+The same-Core Fiat--Shamir construction is intentionally insufficient for an
+IOP compiler. The admitted exact structural source-to-target construction
+relates:
 
 - source logical oracle publications to target caps;
 - source query occurrences to target derived positions;
@@ -459,14 +461,18 @@ construction must relate:
 - construction advice to its owner without adding it to logical-oracle
   identity.
 
-Its structural success proves no binding, hiding, extraction, or soundness.
+Its structural success proves no binding, hiding, extraction, soundness, or
+general FRI-family compilation.
 
 ### 6.5 Opening correspondence
 
-Relations can already ground a public commitment to exact relation material,
-but deliberately has no typed opening correspondence. FRI needs an additive
-contract connecting one source logical answer occurrence, one target opening
-selector, one public cap, one query occurrence, and one authentication check.
+Public commitment grounding remains distinct from opening and initial-material
+agreement. For the exact logical initial Oracle, PIR now owns a causal,
+purpose-bound confidential view and Relations owns the matching whole-carrier
+agreement question. No public run view, declassified trace, or secret-derived
+identity can substitute for those live owner authorities. The checked
+construction separately connects source answer occurrences, target opening
+selectors, public roots, query occurrences, and authentication checks.
 Cryptographic binding remains an Analysis premise.
 
 ## 7. Source ambiguities and non-silent choices
@@ -533,16 +539,45 @@ Salted leaves, pair grouping, cap height, typed SHA-256 framing, work, and the
 terminal carrier bound are local compilation choices. They are not attributed
 to native FRI.
 
-The following are additive future validation obligations, not current
-features or claims:
+### 8.1 Exact classical control
 
-1. an exact smooth-multiplicative Algorithm 1 profile with three folds and a
-   scalar terminal, followed by a checked protocol-correspondence question;
-2. the batched FRI schedule of ePrint 2023/1071 Section 5.2, including several
+The retained additive control removes the early-stop source-shape ambiguity
+without rewriting the earlier lane:
+
+| Coordinate | Selected value |
+|---|---|
+| source locator | ePrint 2023/1071 revision 7, Section 5.7, Algorithm 1 |
+| base field | Goldilocks prime field |
+| initial domain | multiplicative subgroup of order `64` |
+| initial degree bound | less than `8 = 2^3` |
+| rounds | three binary folds |
+| terminal | one scalar `C` after the third fold |
+| query occurrences | four labelled draws with replacement |
+| logical layer checks | twelve, one at each of three layers per draw |
+| committed target | three salted SHA-256 pair-leaf roots plus proof-supplied openings |
+| challenge forms | Fresh and strong Fiat--Shamir over one committed Core |
+
+For fixed verifier coins, the control maps the source's Oracle fixation,
+challenge, folded-Oracle, scalar-terminal, query, complete-fibre, and check
+order. Frozen public input and proof are reconstructed by a separately coded
+verifier. The Goldilocks choice, four repetitions, Statement and application
+context, Merkle profile, physical-opening deduplication, framing, samplers, and
+resource policy are local zkc choices rather than Algorithm 1 claims.
+
+This is deterministic schedule/control correspondence only. The executable
+Fresh resolver receives concrete coins; it does not establish the source coin
+law, strategy quantification, non-anticipation, a probability experiment,
+theorem applicability, BCS, commitment security, ROM, QROM, proximity, or an
+outer relation.
+
+The following remain additive validation obligations, not current features or
+claims:
+
+1. the batched FRI schedule of ePrint 2023/1071 Section 5.2, including several
    initial oracles, the coefficient challenge vector, and the combined oracle;
-3. verifier-derived quotient-oracle views and nested proximity tests from
+2. verifier-derived quotient-oracle views and nested proximity tests from
    DEEP-ALI Protocol 6.4; and
-4. the virtual quotient, degree-corrected oracle, partial `Fill` oracle, and
+3. the virtual quotient, degree-corrected oracle, partial `Fill` oracle, and
    dynamic query routing of STIR Construction 5.2.
 
 These obligations extend profiles and the oracle/composition seam. They do not
@@ -568,3 +603,7 @@ The finite package must answer, with independent public reconstruction:
 A successful finite result establishes only one source-informed structural
 inhabitant and its named refusals. Failure at any one of these boundaries is an
 architecture finding, not a reason to weaken the witness.
+
+The case-level result, gate disposition, retained two-lane evidence boundary,
+and reopening conditions are consolidated in the
+[final classification and retention record](native-fri-ior-final-classification-and-retention.md).

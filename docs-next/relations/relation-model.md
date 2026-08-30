@@ -1,7 +1,7 @@
 # Relation model
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K3-B target
+> **Document state:** Active non-normative target
 > **Provisional owner:** `relations`
 > **Authority:** This page specifies the selected `docs-next/` Relations
 > model. It is not normative until explicit consolidation and cutover. The
@@ -118,7 +118,8 @@ together with its independently reconstructible full typed
 `RelationsProfileId`. The bounded executable fixture's deterministic
 profile object tests the selected topology, authentication, and rotation laws;
 it is evidence and does not own Relations meaning. Publication is required
-before any dependent K4 ID is treated as persistent and before K5 freeze.
+before any dependent profile ID is treated as persistent and before semantic
+freeze.
 
 The imported profile edge is exact and no-extra. It authenticates the
 Interface/Plan vocabulary that Relations coordinates may cite; it does not
@@ -158,8 +159,8 @@ semantic-regime alias.
 All value equality in this page is K1 equality at the same exact `ValueType`.
 Equal carrier bytes, equal digests, or equal mathematical values under
 different types are not equality. Cross-regime preservation is a separate
-future checked translation and never transfers source authority; K3-B returns
-`Unsupported` for it as fixed in Section 2.4.
+future checked translation and never transfers source authority; this target
+returns `Unsupported` for it as fixed in Section 2.4.
 
 ### 2.2 References and occurrences
 
@@ -513,11 +514,11 @@ No consumer may derive `PayloadType`, `ModelProgramType`, `CertificateType`,
 assumption evidence type, selector result type, or construction ABI without
 this admitted result.
 
-K3-B supports only same-regime declarations, values, and portable algorithms.
-Any `CrossRegimeTranslation` request is `Unsupported`; it cannot appear in an
-admitted Relations body, equation, recipe, or bridge. Cross-regime meaning, if
-added later, requires a separately versioned owner contract and does not
-inherit any K3-B law result.
+This target supports only same-regime declarations, values, and portable
+algorithms. Any `CrossRegimeTranslation` request is `Unsupported`; it cannot
+appear in an admitted Relations body, equation, recipe, or bridge. Cross-regime
+meaning, if added later, requires a separately versioned owner contract and
+does not inherit any current Relations law result.
 
 ## 3. Relation definitions, Interfaces, and instances
 
@@ -629,7 +630,7 @@ payload with the exact typed leaves
 `generator^scalar_modulus mod group_modulus = 1`. Those checks establish only
 formation of this selected fixed-setup payload; they do not establish
 primality, exact generator order, relation satisfaction, or a Schnorr security
-theorem. K3-C may read these leaves only through the issued owner view.
+theorem. Analysis may read these leaves only through the issued owner view.
 
 ### 3.2 Four non-collapsible Interface roles
 
@@ -864,7 +865,7 @@ supplied checker has authority. The law assumption sequence equals the model's
 assumption sequence exactly; each evidence value has the admitted assumption's
 derived type and its contract predicate must complete with true. A completed
 verifier `true` is Affirmative and `false` is Negative; all other qualified
-outcomes retain their class. K3-B has no exhaustive definition/model lane:
+outcomes retain their class. This target has no exhaustive definition/model lane:
 adding one requires an exact definition interpreter, a complete finite-
 assignment derivation, quantifier semantics, and deterministic bounds.
 The portable checked result binds the exact question body and ID, law
@@ -1119,10 +1120,10 @@ named input satisfaction proposition. Full equivalence is the pair of two
 separately checked directional results, never a subtype or inferred inverse.
 The question body contains only the stable proposition. Its certificate and
 assumption evidence are an external validation basis bound into the checked
-result, not semantic identity. K3-B invokes only the admitted refinement-law
-contract's exact verifier over the exact encoded proposition and checked
-assumption evidence. It has no exhaustive refinement lane: such a lane also
-requires exact quantifier order, transform-consistency semantics, complete
+result, not semantic identity. The current operation invokes only the admitted
+refinement-law contract's exact verifier over the exact encoded proposition and
+checked assumption evidence. It has no exhaustive refinement lane: such a lane
+also requires exact quantifier order, transform-consistency semantics, complete
 owner-derived assignment domains, and deterministic bounds.
 `CertificateVerified` is Affirmative and `CertificateVerifierFalse` is
 Negative. The portable result binds the complete question and exact external
@@ -1473,11 +1474,13 @@ admitted surface; `ArtifactValue` uses `ArtifactSelectorType`; and
 `DefinitionPayloadValue` selects from `DefinitionPayloadType`. Every selector
 is checked by Section 3.2. No caller supplies an endpoint type.
 
-`BridgeUseDescriptor(c)` is likewise closed. For a Protocol edge it resolves
-the named admitted binding and edge ordinal, puts the relation endpoint on the
-left, converts the written `StatementTarget`, `PhaseTarget`, or `OracleTarget`
-to its one exact `ProtocolValueCoordinate` on the right, and copies the edge's
-selectors and `value_relation`. For a Plan edge it puts the relation witness
+`BridgeUseDescriptor(c)` is likewise closed. For a Statement, phase, or
+public-bound Oracle edge whose relation is `ApplyBridge`, it resolves the named
+admitted binding and edge ordinal, puts the relation endpoint on the left,
+converts the written target to its one exact `ProtocolValueCoordinate` on the
+right, and copies the edge's selectors and `value_relation`. A logical Oracle
+edge is fixed to `SameExactType`, has no public value coordinate, and therefore
+has no bridge-use descriptor. For a Plan edge it puts the relation witness
 endpoint on the left and the named surface entry on the right. For an artifact
 semantic clause it puts the artifact selector on the left and the
 `DefinitionPayload` selector on the right. A structural artifact clause or a
@@ -1512,8 +1515,8 @@ cardinality, however, every coordinate in that consumer's owner-derived exact
 complete `LossyUseSelection` additionally requires the occurrence-local
 grounding, premise, export, and consumer-source join defined in Section 10.2.
 An inert checked-use record, bridge coordinate, equal source value at another
-occurrence, or authored count cannot substitute for that path. K3-B closes
-this consumer join only for run-grounded relation instance values;
+occurrence, or authored count cannot substitute for that path. The current
+target closes this consumer join only for run-grounded relation instance values;
 structural/coverage, Plan, and artifact questions neither consume a count nor
 imply a checked source premise. Their future live-value operations must define
 their own exact selection and source binding before quantitative use.
@@ -1574,13 +1577,19 @@ OracleAccessTarget = {
   answer_occurrence: OccurrenceRef
 }
 
-OracleTarget = {
-  oracle: OracleRef,
-  publication_occurrence: OccurrenceRef,
-  public_binding_output: (publication_occurrence, output_ordinal = 0),
-  public_binding_selector: TypedValueSelector,
-  public_accesses: CanonicalSeq<OracleAccessTarget>
-}
+OracleTarget =
+    PublicBoundOracleTarget {
+      oracle: OracleRef,
+      publication_occurrence: OccurrenceRef,
+      public_binding_output: (publication_occurrence, output_ordinal = 0),
+      public_binding_selector: TypedValueSelector,
+      public_accesses: CanonicalSeq<OracleAccessTarget>
+    }
+  | LogicalOracleTarget {
+      oracle: OracleRef,
+      publication_occurrence: OccurrenceRef,
+      public_accesses: CanonicalSeq<OracleAccessTarget>
+    }
 
 StatementEdge = OccurrenceEdge<
   { ref: RelationPublicRef, selector: TypedValueSelector },
@@ -1590,7 +1599,7 @@ PhaseEdge = OccurrenceEdge<
   { ref: RelationPhaseRef, selector: TypedValueSelector },
   PhaseTarget>
 
-OraclePublicBindingEdge = OccurrenceEdge<
+OracleEdge = OccurrenceEdge<
   { ref: RelationOracleRef, selector: TypedValueSelector },
   OracleTarget>
 
@@ -1601,7 +1610,7 @@ ProtocolRelationBinding = {
     NonEmptyCanonicalSortedUniqueSeq<RelationInterfaceId>,
   statement_edges: CanonicalSeq<StatementEdge>,
   phase_edges: CanonicalSeq<PhaseEdge>,
-  oracle_edges: CanonicalSeq<OraclePublicBindingEdge>,
+  oracle_edges: CanonicalSeq<OracleEdge>,
   claim_meanings: CanonicalSeq<ClaimMeaningBinding>,
   reduction_meanings: CanonicalSeq<ReductionMeaningBinding>,
   commitment_groundings:
@@ -1629,20 +1638,44 @@ names the binding's exact `ProtocolId`. Missing, unused, extra, wrong-Protocol,
 or wrong-Interface entries refuse admission; these closure checks do not
 precompute mapped or whole-surface correspondence.
 
-For each `OraclePublicBindingEdge` to K2 Oracle `o`, structural admission
-requires exactly one `PublishOracle(o)` at the named occurrence; equal Oracle
-and occurrence scope; publication-before-query; and every entry of
-`public_accesses` to name one later `QueryOracle(o)` plus its unique later
-`AnswerOracle(query)`, both with K2 visibility `Public`, equal scope, compatible
-guards, and no duplicate query or answer occurrence. The relation Oracle's material,
-index, and answer types must equal `OracleCarrierType(o)`, `o.index_type`, and
-`OracleLookupResultType(o)` exactly. Its public-binding edge compares against
-`OraclePublicationOutputType(o)` through the written `ValueRelation`. Both the
-Relations access contract and K2 publication/binding algorithms must be
-admitted at their exact ABIs. These are structural type, scope, occurrence, and
-access-shape requirements only; equality of the two binding meanings, BCS
-correspondence, salting, openings, and cryptographic binding remain the
-post-K3-B K4 P02 obligation.
+For every `OracleEdge` to PIR Oracle `o`, structural admission requires exactly
+one `PublishOracle(o)` at the named occurrence; equal Oracle and occurrence
+scope; publication-before-query; and every entry of `public_accesses` to name
+one later `QueryOracle(o)` plus its unique later `AnswerOracle(query)`, both
+with PIR visibility `Public`, equal scope, compatible guards, and no duplicate
+query or answer occurrence. The relation Oracle's material, index, and answer
+types must equal `OracleCarrierType(o)`, `o.index_type`, and
+`OracleAnswerOutputType(o)` exactly. The Relations access contract and every
+PIR domain, publication, or binding algorithm reached by the selected target
+must be admitted at its exact ABI.
+
+In particular, output `0` of every selected public `AnswerOracle` occurrence
+has base type `OracleAnswerOutputType(o)` before any downstream typed selector
+is applied. For `LogicalAccess` this is `o.element_type`, not
+`OracleLookupResultType(o)`; the admitted domain law has already made absence
+unrepresentable at the answer occurrence. Other publication modes retain the
+PIR lookup-result carrier.
+
+The two target arms then impose different laws:
+
+- `PublicBoundOracleTarget` forms only for a PIR `PublicBinding` Oracle. Its
+  publication has output `0`, and the relation Oracle's selected public
+  binding is compared with that output through the written `ValueRelation`.
+  This is the existing public-binding correspondence path.
+- `LogicalOracleTarget` forms only for a PIR Oracle whose origin is
+  `InitialOracle` and whose publication mode is `LogicalAccess`. Its
+  publication has no value output. The relation public binding may still be a
+  public domain or access descriptor governed by the Relations access law,
+  but it is not equated with a nonexistent PIR publication value. Exact
+  material agreement is a separate causal run-grounded question over the
+  whole carrier. For this arm, the edge's relation selector is exactly `Whole`
+  over `ResolvedOracleDecl(ref).material_type`, and its `value_relation` is
+  exactly `SameExactType`; it cannot name a `ValueBridge` or enter a
+  `BridgeUseSet`.
+
+These are structural type, scope, occurrence, mode, and access-shape
+requirements only. Neither arm establishes BCS correspondence, salting,
+opening validity, binding security, proximity, or an outer relation theorem.
 
 ### 7.3 Claim and reduction meaning
 
@@ -1922,7 +1955,7 @@ Plan inputs. A private nonwitness cannot become a relation witness merely
 because it is confidential, and an exported derived witness cannot disappear
 because it is not a Protocol input.
 
-### 8.3 REL-Q3: execution-issued run view
+### 8.3 Execution-issued public and confidential run views
 
 Relations imports the exact `RunBoundary`, `RelationRunCoordinate`,
 `RelationRunReadManifest`, `RelationRunFact`, `RelationRunObservation`,
@@ -1956,7 +1989,35 @@ correspondence similarly reads `ReductionHistory(reduction,boundary)`. A check
 at completion cannot silently substitute for the history at the reduction
 boundary.
 
-### 8.4 REL-Q4: closed read vocabulary
+The public `RelationRunView` remains the only source for Statement, phase,
+public Oracle publication/query/answer, claim, reduction, check, terminal, and
+public module-effect facts. It never contains Oracle material and is not
+widened by a confidential agreement question.
+
+For the distinct initial logical-Oracle material seam, Relations imports the
+PIR-owned `ConfidentialInitialOracleFamily`,
+`ConfidentialInitialOracleCoordinate`,
+`ConfidentialInitialOracleDisclosurePolicy`,
+`ConfidentialInitialOracleDisclosurePolicyId`,
+`ConfidentialInitialOracleView`,
+`CheckedConfidentialInitialOracleViewAuthority`,
+`ConfidentialInitialOracleViewCapability`, and
+`IssueConfidentialInitialOracleView`, together with
+`PIRSourceConsumerRoleId` and `PIRSourcePurposeRoleId`, from
+[Interactive Core and Causal Execution](../pir/interactive-core.md). It also
+imports that operation's exact `CausallyGeneratedOnly` qualification and
+`WholeCanonicalCarrier` disclosure extent. Relations does not redefine those
+types, issue the view, select a narrower disclosure, or obtain it from replay.
+
+The confidential view is purpose-bound to one exact correspondence question.
+Its PIR disclosure policy must name the exact downstream consumer and purpose
+roles for that question, and its live authority and capability must still be
+valid for the identical causal generation and initial-supply occurrence.
+Neither the policy nor any durable Relations subject contains the carrier, a
+digest of it, an Oracle-material occurrence, or another secret-derived
+identifier.
+
+### 8.4 Closed public read vocabulary
 
 Relations defines selectors over that one owner view; it does not redefine the
 view coordinates. Value-producing selectors are:
@@ -1976,7 +2037,13 @@ ProtocolValueCoordinate =
 Each arm resolves through the identically named PIR
 `RelationRunCoordinate`, except `TerminalPublicOutput(t,o,k)`, which resolves
 only through `TerminalResult(t,o)` and projects public output `k`. There is no
-second way to address that output. Structural/meta selectors are:
+second way to address that output.
+
+`OraclePublication(o,p)` forms only when PIR derives a canonical publication
+value at `p`. A `LogicalAccess` fixation marker has no value output and is not
+addressable through this arm.
+
+Structural/meta selectors are:
 
 ~~~text
 ProtocolStructuralSource =
@@ -1996,6 +2063,11 @@ retaining the exact single PIR source coordinate.
 Every source is resolved through the exact PIR owner view. A raw carrier path,
 event label, integer ordinal without its typed family, ambient lookup, or
 invented `ObjectRef` is malformed or refused.
+
+The confidential initial-Oracle carrier has no constructor in
+`ProtocolValueCoordinate` or `ProtocolStructuralSource`. It is requested only
+by the dedicated whole-carrier agreement arm in the companion correspondence
+grammar and is read only through the imported PIR confidential-view authority.
 
 ## 9. Artifact facts and comparison
 
@@ -2306,7 +2378,7 @@ sequence type above. Clause admission requires equal selector classes. A
 `ArtifactSelectorType(artifact) = RelationFactSelectorType(relation)` and uses
 K1 equality at that exact carrier. A `SemanticValueComparison` requires the
 artifact and relation selector types to be the exact endpoints of its written
-`ValueRelation` direction. `DefinitionPayload` is the one K3-B relation-side
+`ValueRelation` direction. `DefinitionPayload` is the one current relation-side
 semantic-value source; every other arm returns the structural carrier over its
 exact canonical owner reference or value-type body. An `Unread` selected field
 yields `CannotAnswer`; `CaseAbsent`, an observed absence, or a completed
@@ -2825,9 +2897,9 @@ exact disagreement, but its capability authorizes no quantitative aggregation.
 `SelectedBridgeUseCardinality(selection,b)` is only a candidate derived count:
 a value-consuming owner must first establish that the selection is exactly its
 complete relevant-use set and obtain a fresh consumer-source join for every
-coordinate. At K3-B only the fresh overall-Affirmative run-grounded
-checked-result capability retaining those exact joins licenses Analysis to
-consume that selected count.
+coordinate. In the current target only the fresh overall-Affirmative
+run-grounded checked-result capability retaining those exact joins licenses
+Analysis to consume that selected count.
 The wider `BridgeUseCardinality` remains a structural inventory number and has
 no quantitative authority. Exported canonical values alone are inert.
 
@@ -2914,15 +2986,15 @@ commitment binding, hiding, extractability, opening knowledge, or the
 soundness of a Protocol check. Those require separate Analysis judgments.
 
 Opening messages and checks are deliberately absent from
-`CommitmentGrounding`: K3-B has not selected a general opening-security
-contract. An exact three-fold classical FRI control now exercises commitment
-roots, twelve logical opening coordinates, construction maps, and scalar
-residual formation as bounded executable pressure. It establishes neither a
-general opening-security contract nor a durable correspondence result: the
-instrument currently reads a declassified complete native trace, while the
-durable algebra accepts only owner-issued purpose-specific views and live
-authority. A PIR-owned initial-Oracle view is therefore a prerequisite to
-promoting this path.
+`CommitmentGrounding`: the current target has not selected a general
+opening-security contract. An exact three-fold classical FRI control exercises
+commitment roots, twelve logical opening coordinates, construction maps, and
+scalar residual formation as bounded executable pressure. The durable material
+agreement path is instead the purpose-bound causal path specified below: it
+accepts no declassified trace and no portable secret identity. Neither the
+control nor that agreement establishes a general opening-security theorem.
+The bounded executable scope and explicit nonclaims are recorded in the
+[native FRI/IOR validation package](../../evaluation/native-fri-ior/README.md).
 
 A commitment is deliberately not modeled as a lossy projection: material and
 commitment have different semantic roles, and cryptographic binding is not a
@@ -2942,11 +3014,11 @@ generic object carrier.
 | `MappedPlanWitnessCorrespondence` | Requested witness edges resolve to exact PIR surface entries | Secret possession or satisfaction |
 | `WholeRelationWitnessCoverage` | Every relation witness occurrence has the requested Plan source coverage | Every private Plan input is a witness |
 | `WholePlanWitnessSurfaceCoverage` | Every exported witness-surface entry has the requested relation coverage | Full private Plan coverage |
-| `ClaimReductionShape` | Claims, order, contracts, recipes, transform ABI, challenges, and publications match K2 | Reduction theorem or witness evolution |
+| `ClaimReductionShape` | Claims, order, contracts, recipes, transform ABI, challenges, and publications match PIR | Reduction theorem or witness evolution |
 | `ArtifactInterfaceComparison` | Requested observed fields agree or disagree with requested relation facts | Artifact provenance or relation truth |
 | `GroundingEquationHolds` | Exact typed runtime/artifact/relation operands satisfy the equation | Cryptographic faithfulness beyond the equation |
 | `CommitmentGroundingHolds` | Exact relation material and exact publication occurrence satisfy the construction equation | Binding, hiding, or extraction |
-| `RunGroundedCorrespondence` | One qualified run's selected values and occurrences agree with one exact instance/binding | Universal protocol behavior or satisfaction |
+| `RunGroundedCorrespondence` | One qualified run's selected public facts and, when requested, one causally supplied whole initial logical-Oracle carrier agree with one exact instance/binding | Universal protocol behavior, satisfaction, or Oracle security |
 | `RelationSatisfaction` | One confidential occurrence evaluates true or false under one exact model | Protocol acceptance or security |
 | `RelationRefinement` | One exact directional relation proposition holds under its basis | Probabilistic protocol reduction |
 
@@ -2970,10 +3042,58 @@ ApplyValueRelation(e.value_relation, relation_value, protocol_value)
   = true
 ~~~
 
-The same law applies to phase edges and oracle public-binding edges with their
+The same law applies to phase edges and public-bound Oracle edges with their
 exact source families. Claim recipes derive exact input/output instance
 occurrences from the selected run values before claim agreement is checked.
 Commitment groundings evaluate their separate equation DAGs.
+
+For every `OracleMaterialAgreement(e)` selected by the same question, where
+`e` is a `LogicalOracleTarget`, Relations applies this distinct law:
+
+~~~text
+relation_material =
+  ReadWholeCarrier(
+    matching OracleMaterialAssignment for instance and e.relation.ref,
+    identical live secret-value capability)
+
+pir_material =
+  ReadWholeCarrier(
+    matching ConfidentialInitialOracleView whose coordinate is {
+      protocol_id: binding.protocol_id,
+      oracle: e.protocol.oracle,
+      publication: e.protocol.publication_occurrence
+    },
+    identical CheckedConfidentialInitialOracleViewAuthority,
+    identical ConfidentialInitialOracleViewCapability)
+
+Type(relation_material)
+  = Type(pir_material)
+  = ResolvedOracleDecl(e.relation.ref).material_type
+  = OracleCarrierType(e.protocol.oracle)
+
+FoundationSameTypeEquality(relation_material,pir_material) = true
+~~~
+
+The relation assignment belongs to the question's exact `RelationInstance`;
+the PIR view belongs to the binding's exact Protocol, invocation, completed
+run, initial-supply occurrence, and causal generation. Its disclosure policy
+is the exact imported `ConfidentialInitialOracleDisclosurePolicy` with that
+coordinate, extent `WholeCanonicalCarrier`, qualification
+`CausallyGeneratedOnly`, and the exact correspondence-question ID passed
+separately through `PIRSourceConsumerRoleId` and
+`PIRSourcePurposeRoleId`. The two roles remain nominally distinct. The
+comparison is whole-carrier equality. It does not inspect only queried
+entries, accept a commitment or digest as material equality, or apply a
+`ValueBridge`.
+
+Equal carriers contribute an agreement and unequal well-formed carriers
+contribute a semantic disagreement. Neither payload, either local occurrence,
+nor a digest appears in the portable checked result. Missing or expired live
+authority is `CannotAnswer`; wrong occurrence, run, policy, consumer, purpose,
+or reconstructed bearer is `Refused`; wrong type, kind, or regime is
+`KindMismatch`; an unsupported origin, publication mode, or replay-qualified
+request is `Unsupported`; and structural, limit, or checker failures retain
+their exact qualified outcome. None is converted into material inequality.
 
 When a selected edge uses a lossy bridge, the run-grounded operation derives
 the exact full `BridgeUseSet` and the owner-derived selection containing every
@@ -2989,8 +3109,8 @@ authority lifetime. A different instance, generation, capability, or equal
 field value is refused; an unavailable fresh binding is `CannotAnswer`. Only
 the fresh overall-Affirmative run-grounded checked-result capability retaining
 the exact complete selection and all join capabilities licenses its selected
-use count. K3-B defines no analogous Plan or artifact consumer join; adding
-one requires that operation's exact live source binding and cannot reuse this
+use count. This target defines no analogous Plan or artifact consumer join;
+adding one requires that operation's exact live source binding and cannot reuse this
 result ambiently.
 
 The checked result retains both occurrence coordinates even if values are
@@ -3025,8 +3145,8 @@ behavioral theorem from structural shape.
 | Schnorr/Sigma | public statement `Y`, local witness `x`, separate nonce randomness, message occurrence `A`, initial claim, terminal | Relation witness cannot mean all private prover input; message occurrence needs no object wrapper |
 | R1CS | structured public vector, witness assignment, constraint/artifact facts | Typed K1 values and selectors preserve order and multiplicity without scalar-port explosion |
 | randomized AIR | public instance, trace/oracle material, post-commitment verifier challenges | `PhaseInput` is a first-class fourth role |
-| FRI/IOR | public statement, logical oracle statement, publication/query/answer occurrences, opening messages/checks | `OracleStatement` and typed Oracle/occurrence coordinates are required. One exact classical control exercises the shape, but its declassified raw-trace grounding cannot enter the durable correspondence algebra without a PIR-owned purpose-specific initial-Oracle view. |
-| Nova/folding | ordered input claim-instance occurrences, cross-term publication, challenge, output accumulator instance, evolved witness | Claim/reduction correspondence is an occurrence graph plus relation transform; K4 P09 retains executable end-to-end validation |
+| FRI/IOR | public statement, logical oracle statement, publication/query/answer occurrences, opening messages/checks | `OracleStatement`, mode-specific Oracle targets, typed public occurrences, and a distinct causal whole-carrier material agreement are required. The public run view remains separate from the purpose-bound confidential initial-Oracle view. |
+| Nova/folding | ordered input claim-instance occurrences, cross-term publication, challenge, output accumulator instance, evolved witness | Claim/reduction correspondence is an occurrence graph plus relation transform; native end-to-end validation remains required |
 | `sha256-216` | exact 256-to-216 directional uses and grounded source-preimage premise | A separate lossy lane and derived occurrence count are mandatory |
 
 No reviewed case requires generic `ObjectRef` in K2 or Relations. Existing
@@ -3117,7 +3237,7 @@ PIR-issued view. The live `RelationRunCoordinate`, read manifest,
 `RB` case and never enter a durable identity preimage.
 
 For a same-regime `PortableAlgorithmRef`, `RB` uses
-`O(ContentRefV0(algorithm_id))`. There is no K3-B `RB` arm for a cross-regime
+`O(ContentRefV0(algorithm_id))`. There is no current `RB` arm for a cross-regime
 translation: such a request is `Unsupported` before Relations body formation.
 Owner-local occurrences, capabilities, source
 bindings, evaluator processes, observations without a declared durable ID,
@@ -3189,7 +3309,7 @@ keys(RelationsDeclarationContractCatalogV0) =
 The `version` field is field `0` in every declaration schema and must encode
 `N(0)`. Remaining fields follow the exact written order in Section 2.4;
 variants use their written alternative order. A kind absent from this dispatch
-has no declaration body grammar in K3-B. This encoding is the body stored at
+has no declaration body grammar in this target. This encoding is the body stored at
 the declaration's module-catalog ordinal and therefore is already committed by
 its `SemanticModuleId`; Relations does not create a second declaration ID.
 
@@ -3230,7 +3350,7 @@ reference, and type, then applies the compiler. Strict decode must consume the
 whole body and re-encoding must reproduce identical bytes before identity is
 authenticated.
 
-## 14. Rejected alternatives and post-K3-B gates
+## 14. Rejected alternatives and remaining gates
 
 The selected model rejects:
 
@@ -3244,6 +3364,11 @@ The selected model rejects:
 - representing relation transforms or commitments as value bridges;
 - combining the three bridge lanes under authored flags;
 - accepting a caller-built tuple or raw run record as execution grounding;
+- placing an Oracle-material occurrence, carrier digest, raw trace ID, or other
+  secret-derived coordinate in a durable relation instance, binding, question,
+  result, or residual;
+- widening the public `RelationRunView` with confidential Oracle material or
+  allowing replay qualification to issue a causal whole-carrier view;
 - treating result-reference shape as behavioral equivalence;
 - authoring a lossy-projection use count;
 - hardcoding one universal artifact-fact list; and
@@ -3270,11 +3395,14 @@ dependent-owner freeze work:
    cold-replay, stale-generation, cross-field, cross-consumer, or
    cross-purpose evidence across all three lossy source arms. Such evidence
    may falsify these laws; it cannot redefine them silently.
-3. One exact native classical FRI control now validates the three-publication,
-   twelve-logical-opening, construction-map, and scalar-residual shape. It does
-   not validate the durable source-authority path because it uses a
-   declassified complete trace where the selected algebra requires a purpose-
-   specific owner view and live capability. General FRI/IOR correspondence,
+3. One exact native classical FRI control validates the three-publication,
+   twelve-logical-opening, construction-map, and scalar-residual shape. The
+   target algebra now owns the distinct causal, purpose-bound whole-carrier
+   agreement needed to connect its initial logical Oracle to a Relations
+   assignment without a raw trace or secret-derived portable identity.
+   Executable evidence for that exact authority path must show stale,
+   reconstructed, cross-purpose, replay-qualified, and unequal-unqueried-entry
+   refusal or disagreement cases. General FRI/IOR correspondence,
    commitment/opening security, proximity, and outer-relation inference remain
    open; native Nova/folding validation remains required for the ordered
    claim-instance and transform occurrence graph.
@@ -3293,6 +3421,6 @@ dependent-owner freeze work:
    reduction and quantitative price are also open.
 
 These gates may falsify an implementation or expose a specification defect,
-but their pending execution does not make the bounded K3-B selection
+but their pending execution does not make the bounded Relations selection
 incomplete and does not license a fallback to the superseded placeholder
 algebra.

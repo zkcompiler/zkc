@@ -17,6 +17,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import generate as generator  # noqa: E402
+from friiormodel.classical_fixtures import (  # noqa: E402
+    parse_classical_owner_generation,
+)
 from friiormodel.commitment import PairOpening  # noqa: E402
 from friiormodel.committed import verify_committed_fri  # noqa: E402
 from friiormodel.field import Fp, Fp2  # noqa: E402
@@ -125,6 +128,16 @@ class PrivateAndPublicLaneTest(unittest.TestCase):
         rendered = repr(private)
         self.assertNotIn("3", rendered)
         self.assertNotIn("salt", rendered.lower())
+
+    def test_exact_classical_owner_input_has_an_explicit_nonpublic_role(self) -> None:
+        value = deepcopy(_loaded("exact-classical-owner-generation-input.json").value)
+        parsed = parse_classical_owner_generation(value)
+        self.assertEqual(len(parsed.source_coefficients), 8)
+        self.assertGreater(len(parsed.salt_seed), 0)
+        value["authority"] = "public-report-input"
+        with self.assertRaises(ModelFailure) as caught:
+            parse_classical_owner_generation(value)
+        self.assertEqual(caught.exception.code, "FRI-IOR-CLASSICAL-FIXTURE-001")
 
     def test_public_projection_has_only_public_inputs_and_proof(self) -> None:
         projection = self.checked.public_artifacts
@@ -340,6 +353,7 @@ class OwnerLocalReportIntegrationTest(unittest.TestCase):
                 "checked_capability_ids",
                 "semantic_result_ids",
                 "relation_input_binding",
+                "exact_classical_control",
                 "scope",
                 "nonclaims",
             },
@@ -375,6 +389,37 @@ class OwnerLocalReportIntegrationTest(unittest.TestCase):
                 separators=(",", ":"),
             ),
             rendered,
+        )
+        exact_owner = parse_classical_owner_generation(
+            _loaded("exact-classical-owner-generation-input.json").value
+        )
+        self.assertNotIn(exact_owner.salt_seed.hex(), rendered)
+        self.assertNotIn(
+            json.dumps(
+                [coefficient.to_term() for coefficient in exact_owner.source_coefficients],
+                separators=(",", ":"),
+            ),
+            rendered,
+        )
+
+    def test_exact_classical_owner_lane_regenerates_frozen_public_terms(self) -> None:
+        candidates = generator.build_exact_classical_frozen_fixture_candidates(ROOT)
+        self.assertEqual(
+            candidates["exact-classical-public-inputs.json"],
+            _loaded("exact-classical-public-inputs.json").value,
+        )
+        self.assertEqual(
+            candidates["exact-classical-public-proof.json"],
+            _loaded("exact-classical-public-proof.json").value,
+        )
+        exact = self.report["exact_classical_control"]
+        self.assertEqual(
+            exact["checked_results"],
+            {
+                "native": "FRI-IOR-CLASSICAL-NATIVE-100",
+                "fresh": "FRI-IOR-CLASSICAL-COMMITTED-100",
+                "fiat_shamir": "FRI-IOR-CLASSICAL-COMMITTED-100",
+            },
         )
 
     def test_receipt_result_splicing_is_not_accepted_by_owner_boundary(self) -> None:

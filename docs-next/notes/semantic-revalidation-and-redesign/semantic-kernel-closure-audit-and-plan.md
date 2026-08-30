@@ -17,12 +17,12 @@ spine**. Open-ended architecture discovery should stop. Work should now move to
 bounded semantic closure, real-protocol pressure, and implementation-facing
 falsification.
 
-The exact integrated semantic kernel is **not yet frozen**. K1 and K2 give an
-independently specified Foundation and Protocol/Fiat--Shamir candidate;
-bounded K3-B, K3-C, and K3-D closed the minimum Relations, Analysis, and
-endpoint-projection seams, and bounded K3-E has now reclosed their joined
-consumer boundary over one finite P01/Schnorr witness. K4 protocol-portfolio
-pressure and K5 independent freeze remain. The central factorization has not
+The exact integrated semantic kernel is **not yet frozen**. Executable
+Foundation and Protocol/Fiat--Shamir candidates, minimum Relations, Analysis,
+and endpoint-projection seams, and one joined Schnorr path are closed at their
+declared bounded scopes. The native FRI/IOR deep case is now also retained as a
+two-lane conservative extension. The remaining differentiated protocol
+portfolio and independent freeze remain. The central factorization has not
 been contradicted.
 “Stage 1--4A complete” records historical research-package selection at the
 then-current resolution; it does not mean that the integrated kernel is closed.
@@ -31,20 +31,15 @@ The execution model should be a small global skeleton followed by
 dependency-ordered vertical slices. The current `docs/` and implementation
 remain authoritative until an explicit cutover.
 
-**Current execution position:** K0 completed on 2026-08-25; bounded K1
-executable foundations and bounded K2 Protocol/FS closure completed on
-2026-08-26. K2 was then narrowly reopened for two exact canonical-body defects
-and evidence-claim reconciliation without reopening its architecture, and is
-reclosed at that bounded scope with the final green gates and focused follow-up
-recorded by its validation owner. K3-A consumer-boundary reconstruction and
-bounded K3-B dependent-surface, Relations, and carrier co-design completed on
-2026-08-27, followed by bounded K3-C minimum Analysis closure on the same date,
-bounded K3-D endpoint-projection closure on 2026-08-28, and bounded K3-E
-integrated closure at its finite P01/Schnorr scope.
-K4/P02 protocol-portfolio pressure is current and K5 independent freeze
-remains pending; the kernel is not frozen. The R2 protocol-witness track
-remains an evidence source, and P02 now proceeds through its K4 portfolio gate.
-Stage 4B remains inactive.
+**Current execution position:** The freeze contract, executable foundations,
+Protocol/Fiat--Shamir closure, minimum consumer co-design, and finite joined
+Schnorr path are complete at their recorded bounded scopes. Native FRI/IOR is
+retained as the second deep anchor through an early-terminated control plus a
+separate exact three-fold/scalar-terminal control. Its primary classification
+is `ConservativeExtension`; only the fixed-coin deterministic Algorithm 1
+verifier shape is source-corresponding. The remaining protocol portfolio and
+independent freeze are pending; the kernel is not frozen and Stage 4B remains
+inactive.
 
 ## 2. Stable architecture spine
 
@@ -88,28 +83,29 @@ A pure reopening condition is not itself a closure test.
 | Regime, value, portable-function ABI, typed-failure, totality, and bounded-evaluation foundations | K1 standalone closed; bounded Relations, Analysis, and OIR extractions plus their finite K3-E join closed | Foundation owns the selected substrate; PIR, Relations, Analysis, and OIR own their exact semantic bodies and use-site admission | The independent identity/value oracle must agree with the K1 reference model, while the term evaluator exercises function steps, typed failures, totality, and bounds. Reopen K1 if exact law/vector parity breaks or a consumer requires an owner-specific escape or general virtual machine. K3-B through K3-D supplied three aligned bounded consumer extractions without making Foundation own their predicates; K3-E exercised their shared profile and inert-envelope boundary. This is not a general owner-authority implementation. A second term evaluator remains independent-freeze evidence rather than credited K1 evidence. |
 | Core execution | K2 standalone closed; one bounded K3-C Analysis strategy profile closed | PIR execution structure; Analysis strategy classes | The bounded K2 instrument makes honest online execution and replay agree, while a trace whose early prover move depends on a future challenge replays but cannot obtain causal-generation provenance. K3-C binds one exact strategy/experiment profile and Definition 10 quantifier order; broader strategy classes remain later Analysis work. |
 | Strong Fiat--Shamir structure | K2 structural regression narrowly reclosed; one K3-C applicability profile closed | PIR structural admission; Analysis theorem applicability | [J1](invariant-ledger.md#71-semantic-guarantees) rejects omitted or late Statement binding, Wire-only or missing required influence, wrong prefixes, reused challenge coordinates, and direct or transitive verifier-private influence. K3-C separately binds one exact AFK applicability profile and signed quantitative transform. K2 still absorbs every active prior prover publication; a theorem-priced omission requires a separately identified checked construction and reopens this cone. |
-| Fresh/FS relation | K2 Schnorr control and one bounded K3-C AFK schema/applicability profile closed; family-source authority absent | PIR construction; Analysis theorem applicability and transport | K2 preserves one literal Core and identity occurrence map across Fresh and FS on its Schnorr control and rejects mismatched constructions. K3-C binds the exact logical-query carrier, `q = 1` theorem instance, Definition 10 quantifier order, and source/target experiment correspondence. The finite native Schnorr judgment is not the AFK all-`n` family source. K3-C mints no such family capability, so transport is `CannotAnswer` absent independent proof authority; Fresh uniformity/correspondence, the ROM, and theorem truth also remain premises. K4 must pressure the relation with native FRI/IOR and the differentiated portfolio. |
-| Core algebra and extension model | K2 bounded selections closed | PIR | K2 fixes the finite base algebra, exact supported-module ownership, fail-closed unknown extensions, scope order, Oracle lifecycle, and identity effects. A later protocol that needs a semantically distinct effect or cannot inhabit the registered module boundary reopens only this cone. |
-| Relations boundary | Bounded K3-B surface and K3-C loss-import contract closed; concrete lossy reduction open | PIR surfaces and Relations semantics; Analysis owns theorem loss | K3-B distinguishes Statement, Witness, private nonwitness, grounding, equivalence, embedding, and directional lossy projection. K3-C consumes authenticated loss occurrences through a typed contract, but does not prove or price the concrete `sha256-216` reduction. Full R1CS/AIR proving, native FRI, folding execution, and protocol-family coverage remain outside this closure. |
-| Analysis boundary | Bounded K3-C three-seam contract and refusal profile closed; broader Analysis deferred | Analysis, reading exact PIR/Relations-owned native views and independent family proof authority where available | K3-C separates a finite native Schnorr judgment, abstract-family AFK transport requiring an independently established uniform all-`n` source capability and theorem truth, and pointwise family/member specialization from an already established family result. Its finite instrument exercises formation and refusal. Because K3-C defines no native family-source minting authority, AFK transport currently returns `CannotAnswer` without external proof authority; the finite judgment cannot fill that slot and pointwise specialization cannot generalize it. This is constructibility and falsification evidence only, not theorem or security proof. |
+| Fresh/FS relation | Schnorr and exact classical FRI structural controls closed at finite scope; family-source authority absent | PIR construction; Analysis theorem applicability and transport | Both controls preserve one literal committed Core across Fresh and Fiat--Shamir and reject mismatched constructions. The FRI control additionally follows a checked source-Core-to-committed-Core construction before the same-Core split. Neither finite control establishes Fresh coin laws, randomized experiment correspondence, ROM/QROM, theorem truth, or an all-parameter family source. |
+| Core algebra and extension model | Bounded base closed; native FRI adds a conservative Oracle completion | PIR | The finite base algebra, exact supported-module ownership, fail-closed unknown extensions, scope order, and identity effects remain. Native FRI adds typed initial versus prover Oracle origin, logical-access fixation, exact-domain law, and a checked Core-changing commitment construction without changing existing effect meanings. A later protocol that needs a semantically distinct effect or cannot inhabit the registered extension boundary reopens only this cone. |
+| Relations boundary | Minimum surface, loss-import contract, and exact initial logical-Oracle material agreement closed; concrete lossy reduction open | PIR source views and Relations semantics; Analysis owns theorem loss | Public run facts remain separate from one causal, purpose-bound confidential PIR view. Relations compares the whole initial Oracle only under exact live owner authorities and retains no trace, carrier, or secret-derived ID. This establishes neither proximity, outer-relation truth, opening security, nor protocol-family coverage. |
+| Analysis boundary | Minimum refusal profile closed; exact classical FRI remains candidate or unsupported | Analysis, reading exact PIR/Relations-owned native views and independent proof authority where available | The existing finite and family distinctions remain. The FRI instruments can form exact structural questions and a non-vacuous arithmetic substitution, but no active owner profile supplies the strategy class, coin law, experiment, theorem truth, construction assumptions, or source-property authority needed for a property result. This is constructibility and falsification evidence only, not theorem or security proof. |
 | OIR boundary | Bounded K3-D projection seam closed and reclosed after K3-E; full OIR remains inactive | PIR source view and static contract; OIR target semantics, local admission, and exact source-relative projection | The current 94-case K3-D instrument independently derives the 11-field source graph, candidate OIR, static contract, exact field-mismatch partition, support frontier, exact profile closures, and qualified host-fault boundary. Local validity remains distinct from source-relative correctness. Exact target-only pair normalization/duality, dynamic traces, final grammar, general execution/refinement, protocol-family support, and Stage 4B remain open. |
 | Compiler, Realization, and Evidence | Deferrable | Their later domain owners | They remain outside kernel closure unless a concrete feasibility/cost counterexample shows that a frozen source fact is insufficient; no downstream result may add Protocol meaning by backflow. |
 | Documentation and protocol evidence | Open | Project governance and exact evidence producer | Keep temporary notes explicitly non-authoritative while research is active; before cutover absorb or delete them, then run manifest/link/symbol-owner reconstruction and cold-implement the candidate kernel. Separately complete the differentiated protocol portfolio at its assigned strengths. Any missing definition, hidden dependency, or self-authored success fact fails. |
 
 No contradiction found in this audit invalidates the central factorization.
-K1 and K2 repaired the previously missing Foundation and PIR definitions at
-bounded standalone resolution. K3-B through K3-D closed bounded Relations,
-Analysis, and endpoint-projection contract/refusal slices. K3-E then joined
-those slices after locally rotating the shared K1 profile/regime and exact
-K2/K3-B profile/export identities; it did not change verifier-observable Core
-or Fresh/Fiat--Shamir meaning. The remaining immediate pressure is the K4
-protocol portfolio, followed by K5 independent freeze. The current target is
-therefore a detailed, executable candidate kernel, not yet a complete or
-frozen v0 specification.
+The bounded Foundation, Protocol, Relations, Analysis, and endpoint work plus
+the joined Schnorr path produced a detailed executable candidate. Native
+FRI/IOR then added the smallest typed Oracle and construction completion needed
+by the source while preserving Core and Fresh/Fiat--Shamir meanings. The
+remaining pressure is the differentiated protocol portfolio followed by
+independent freeze. The target is not yet a complete or frozen v0
+specification.
 
-The audited evidence instruments remain reproducible: P01 passes 69 tests and
-its source-bound replay, while the repaired FRI-grinding witness passes 39 tests
-and its expected semantic replay. The live coverage instrument nevertheless
+The prior audited evidence instruments remain reproducible: P01 passed 69
+tests and its source-bound replay, while the repaired FRI-grinding witness
+passed 39 tests and its expected semantic replay. The retained native FRI/IOR
+case adds a frozen two-lane packet whose current test and replay counts belong
+to its executable package and final checkpoint rather than this historical
+audit. The live coverage instrument nevertheless
 classifies only 3 of 21 tracked invariants as boundary-covered, with 13 partial
 and 5 uncovered. That authored coverage map is a review aid rather than a
 semantic verdict, but it independently supports the freeze decision above.
@@ -290,8 +286,8 @@ live Analysis capability crosses into K3-D or is exercised by K3-E. K3-D's
 richer future-owner supplement remains explicit: absence is
 `MissingDependency`, a reconstructed or portable-only bearer is refused, and
 its purpose-bound adapter is bounded evidence rather than a universal owner-
-view solution. K4 is now the next gate and K5 remains the independent freeze
-gate.
+view solution. The native FRI/IOR deep case is now retained; the rest of the
+protocol portfolio and independent freeze remain.
 
 The post-repair K3-D gate contains 94 cases. The historical 70-case result in
 the K3-D validation record remains the pre-K3-E checkpoint; the K3-E record
@@ -306,12 +302,11 @@ owner views.
 
 ### K4 — Bounded protocol portfolio
 
-- run P02 native FRI/IOR at T3 first because it decides oracle,
-  commitment/opening, extension, BCS/IOR-to-Core correspondence, and
-  residual/terminal questions;
-- close structural Core composition and descent against P02 plus the selected
-  folding/recursion cases before K5; K3's deferred property composition does
-  not discharge this gate;
+- retain the completed native FRI/IOR deep anchor at its exact two-lane
+  conservative-extension scope; do not infer BCS, theorem, or family closure;
+- close structural Core composition and descent against that result plus the
+  selected folding/recursion cases before independent freeze; deferred
+  property composition does not discharge this gate;
 - complete the selected P03--P10, V01--V05, and H01--H05 cases at their assigned
   T1--T3 strengths, promoting only when a shared decision remains ambiguous;
 - require decisive abstractions to have a positive inhabitant and a well-formed
@@ -375,14 +370,13 @@ current implementation wholesale.
 
 Most unfinished downstream choices should not materially alter PIR. Full
 property catalogs, compiler policies, realization providers, and evidence
-appraisal are genuinely downstream. Bounded K3-B through K3-D closed the
-minimum Relations, FS-facing Analysis, and source-relative endpoint-projection
-pressure. Bounded K3-E has reclosed their joined finite boundary after local
-profile/export repairs while preserving Core and Fresh/Fiat--Shamir meaning.
-K3-C has not supplied
-the missing AFK family proof authority, and K3-D has not selected the complete
-OIR language. K4 must pressure the differentiated protocol portfolio before
-K5 can independently decide whether the kernel may freeze.
+appraisal are genuinely downstream. The minimum Relations, FS-facing Analysis,
+source-relative endpoint-projection, and joined finite boundaries are closed
+at their stated scopes. Native FRI/IOR required a conservative Oracle and
+construction completion but preserved Core and Fresh/Fiat--Shamir meaning. No
+AFK family proof authority or complete OIR language has been supplied. The
+remaining differentiated protocol portfolio must be pressured before an
+independent review can decide whether the kernel may freeze.
 
 This audit establishes no protocol security, theorem applicability,
 implementation conformance, protocol-family support, migration schedule, or

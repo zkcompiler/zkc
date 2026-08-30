@@ -34,6 +34,7 @@ from friiormodel.classical import (  # noqa: E402
     ClassicalPublicEnvironment,
     GoldilocksElement,
     build_honest_classical_case,
+    derive_first_active_terminal_influence_cone,
     derive_fiat_shamir_values,
     derive_honest_native_trace,
     encode_classical_proof,
@@ -85,6 +86,38 @@ class ExactClassicalProfileTest(unittest.TestCase):
                 domain.generator ** (domain.order // 2),
                 GoldilocksElement(1),
             )
+
+    def test_early_reject_guard_is_acceptance_control_for_fallback_accept(self) -> None:
+        activities = (
+            "answer.activity",
+            "early-reject.activity",
+            "fallback-accept.activity",
+        )
+        direct_edges = (
+            ("logical-oracle.publication", "answer.activity"),
+            ("answer.activity", "answer.output"),
+            ("answer.output", "early-reject.guard"),
+            ("early-reject.guard", "early-reject.activity"),
+            ("early-reject.activity", "early-reject.decision"),
+            ("fallback-accept.activity", "fallback-accept.decision"),
+        )
+        direct_only = derive_first_active_terminal_influence_cone(
+            "logical-oracle.publication",
+            direct_edges,
+            activities,
+            (),
+        )
+        control_aware = derive_first_active_terminal_influence_cone(
+            "logical-oracle.publication",
+            direct_edges,
+            activities,
+            (
+                (1, "early-reject.decision"),
+                (2, "fallback-accept.decision"),
+            ),
+        )
+        self.assertNotIn("fallback-accept.decision", direct_only)
+        self.assertIn("fallback-accept.decision", control_aware)
 
     def test_native_and_committed_cores_have_distinct_exact_schedules(self) -> None:
         self.assertNotEqual(
@@ -220,18 +253,18 @@ class ExactCommittedExecutionTest(unittest.TestCase):
         case = self.case
         self.assertEqual(
             tuple(value.value for value in case.fresh_run.fold_challenges),
-            (18302912802533455500, 10089388910461611512, 10652350149053350211),
+            (13677869336380079227, 5765842000110664681, 14999050709397143556),
         )
-        self.assertEqual(case.fresh_run.query_indices, (49, 9, 4, 24))
+        self.assertEqual(case.fresh_run.query_indices, (53, 37, 34, 18))
         self.assertEqual(
-            case.fresh_run.proof.terminal_scalar.value, 7961261751171662295
+            case.fresh_run.proof.terminal_scalar.value, 12040805539352101303
         )
         self.assertEqual(
             tuple(root.digest.hex() for root in case.fresh_run.proof.roots),
             (
                 "75ffbae2cb65813aefe8e8a32cc637c7f4990c6d4351cc6300c123061e7b74db",
-                "e2c41895d03cac10794d271eb294221d0da4c6b2a9b9a3a402a314fa074faae4",
-                "e6b9d22b66f00c808038efd4295448992a5d0df8135a48190bb7172efeb4e294",
+                "039a370673ace8985dd568976a29ed381710234abb7e4d12565d50fea995cafa",
+                "fe23ceec3f20e9cfc2c2c2feb3074e7907aff9a9c203cfa3406b95ab97993d15",
             ),
         )
         fresh = verify_committed_run(case.fresh_run)

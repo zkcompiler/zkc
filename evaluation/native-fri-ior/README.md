@@ -53,21 +53,24 @@ python3 evaluation/native-fri-ior/generate.py
 python3 evaluation/native-fri-ior/generate.py --check-fixtures
 ```
 
-The first command currently runs 445 tests. The public runner rebuilds and
+The first command currently runs 456 tests. The public runner rebuilds and
 verifies a report from public fixtures before comparing its projection with a
-separately frozen regression golden. The owner command reconstructs five live
-capability results across concrete generation, both one-execution construction
-validations, receipt composition, and Relations grounding. The final command
-re-derives every derived vector twice and compares it byte-for-byte without
-changing the checkout.
+separately frozen regression golden. Its exact-classical result is produced by
+the separately coded verifier directly from the frozen public input and proof;
+the producer model is not an alternate public acceptance path. The owner
+command reconstructs the earlier five-result capability chain and separately
+regenerates and checks the exact native, Fresh, and strong-Fiat--Shamir control.
+The final command re-derives every derived vector twice and compares it
+byte-for-byte without changing the checkout.
 
-The current public replay has three affirmative implementations or views:
+The current public replay has four affirmative implementations or views:
 
 | Lane | Result |
 |---|---|
 | Native logical-oracle execution | `FRI-IOR-NATIVE-100` |
 | Committed public verification | `FRI-IOR-COMMITTED-100` |
 | Separately coded public replay | `FRI-IOR-INDEPENDENT-100` |
+| Separately coded exact classical public replay | `FRI-IOR-CLASSICAL-INDEPENDENT-100` |
 
 The producer and separately coded replay agree on selected exact positive
 public-execution facts: outcome, both fold challenges, ordered initial-domain
@@ -128,15 +131,18 @@ The separate public verifier independently reimplements term framing,
 sampling, Merkle authentication, occurrence coverage, Goldilocks arithmetic,
 and all twelve fold equations.
 
-The Relations/Analysis additions remain bounded pressure instruments. They
-ground the exact statement and initial Oracle only through a declassified
-evaluation seam, derive a scalar residual with proximity `NotEvaluated`, form
-distinct round-by-round and restricted-restoration questions, and classify one
-direct-FRI parameter substitution as non-vacuous. They establish no theorem
-truth, applicability, proximity, soundness, outer relation, or property
-transport. Durable Relations promotion first requires a PIR-owned, purpose-
-specific confidential initial-Oracle view; durable Analysis promotion requires
-an explicit profile and catalog revision.
+The Relations/Analysis additions remain bounded pressure instruments. PIR now
+issues a causal, purpose-bound confidential view of the exact initial Oracle;
+Relations compares that view with its separately authorized secret assignment
+without putting either material, a digest of it, or the generating trace into
+portable identity. The comparison can establish exact whole-carrier material
+agreement for this run, while the public relation-run view remains public-only.
+Analysis derives a scalar residual with proximity `NotEvaluated`, forms
+distinct round-by-round and restricted-restoration questions, and classifies
+one direct-FRI parameter substitution as non-vacuous. These paths establish no
+theorem truth, applicability, proximity, soundness, outer relation, or property
+transport. Durable Analysis promotion still requires an explicit profile and
+catalog revision.
 
 ## Fixture and authority boundaries
 
@@ -147,16 +153,20 @@ an explicit profile and catalog revision.
 | `cases/public-native-vector.json` | Explicitly declassified complete native trace for validation; forbidden as committed-verifier input. |
 | `cases/public-negative-proofs.json` | Two reviewed negative proof vectors; not a complete refusal taxonomy. |
 | `cases/replay-policy.json` | Report-local operational limits with no semantic authority. |
+| `cases/exact-classical-public-inputs.json` | Frozen exact-classical public Statement, application context, profile identity, and committed-Core identity. |
+| `cases/exact-classical-public-proof.json` | Frozen three-root, scalar-terminal exact-classical public proof. |
+| `cases/exact-classical-replay-policy.json` | Exact-classical report-local limits with no semantic authority. |
 | `cases/source-ledger.json` | Consulted-source identities and metadata; not source authentication or correspondence evidence. |
 | `cases/expected-results.json` | Regression golden loaded only after report construction and verification. |
 | `cases/owner-generation-input.json` | Declassified toy values that populate private semantic roles; excluded from public replay and containing no real secret. |
 | `cases/owner-relation-input.json` | Separately loaded declassified Relations operand; excluded from public replay and not evidence of independent provenance. |
+| `cases/exact-classical-owner-generation-input.json` | Declassified toy coefficients and deterministic salt seed occupying owner-only generation roles; excluded from public replay and containing no real secret. |
 
-The public report never reads either owner input or the expected-results
-golden. Its source bases are derived from the static transitive local-import
-closure of each public entry point. The owner report exports identities and
-result codes, not coefficients, salts, the source trace, or a complete logical
-oracle.
+The public report never reads any owner input or the expected-results golden.
+Its source bases are derived from the static transitive local-import closure of
+each public entry point, including both separately coded replay modules. The
+owner report exports identities, source-basis identities, and result codes, not
+coefficients, salts, the source trace, or a complete logical oracle.
 
 Replay assumes a fresh process over a stable checkout. Concurrent mutation of
 imported source files during one run is outside the evidence boundary; the
@@ -190,10 +200,12 @@ The combined cases are best classified as a conservative semantic extension:
 they need explicit logical-oracle access and origin, Core-changing commitment
 construction, work augmentation, ordered query occurrences, and typed
 Relations and Analysis surfaces while preserving the central Interactive Core
-factorization. The exact classical lane closes a reusable structural
-Oracle-commitment construction for one bounded source/target/profile triple;
-it does not generalize that result to other FRI or commitment profiles. The
-earlier work-augmentation construction remains validation-bound to one run.
+factorization. The exact classical lane now has a frozen, owner-regenerable,
+publicly replayable packet for one bounded three-fold scalar-terminal profile
+and closes a reusable structural Oracle-commitment construction for one
+bounded source/target/profile triple. It does not generalize either result to
+other FRI or commitment profiles. The earlier work-augmentation construction
+remains validation-bound to one run.
 
 Primary-source pressure from exact and batched FRI, DEEP-FRI and DEEP-ALI,
 STIR, Circle FRI, WHIR, and the BCS compiler supports one further localized

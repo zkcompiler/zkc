@@ -2,9 +2,8 @@
 
 > **Kind:** Temporary cross-family primary-source synthesis and architecture
 > pressure record
-> **State:** Research snapshot complete enough to bound the next constructive
-> tests; the proposed virtual-oracle seam is a candidate, not a durable
-> decision
+> **State:** Exact classical control completed; the proposed virtual-Oracle
+> seam and the remaining cross-family constructive tests stay open
 > **Authority:** None. Source claims below report what the cited papers specify.
 > Model observations and design inferences are separate and establish neither
 > source correspondence nor a cryptographic theorem.
@@ -58,8 +57,8 @@ compilation, Fiat--Shamir, or Analysis.
 
 Other pressures are profile or composition work:
 
-- the selected `d0 = 8` Algorithm 1 instance needs a distinct three-fold,
-  scalar-terminal profile;
+- the selected `d0 = 8` Algorithm 1 instance now has a distinct three-fold,
+  scalar-terminal finite control; its theorem and family claims remain open;
 - batched FRI needs multiple first-layer prover oracles, a batching challenge, a
   prover-fixed combined oracle, and query-level consistency;
 - DEEP-FRI needs out-of-domain challenges, an intervening degree-one message,
@@ -171,20 +170,21 @@ terminal polynomial, and four ordered query occurrences. It exercises native
 logical queries, a concrete commitment/opening compilation, public-only target
 verification, optional grinding, and one Fiat--Shamir transcript profile.
 
-**Current-model observation.** For initial degree bound `d0 = 8`, Section 5.7
-Algorithm 1 of ePrint 2023/1071 performs three folds and sends a scalar after
-the third fold. The executable two-fold profile is intentionally an
-implementation-style early-terminated structural profile.
+**Current-model observation.** The earlier executable profile remains an
+implementation-style two-fold early-terminated control. A separate exact
+classical control now performs the source's three folds, sends a scalar after
+the third fold, and executes four labelled draws with twelve layer checks.
 
-**Inference.** The executable result is a useful inhabitant of the selected
-factorization, but no exact classical, batched, DEEP, STIR, Circle, WHIR, or
-BCS theorem correspondence follows from it.
+**Inference.** The combined result retains the selected factorization and
+closes exact classical correspondence only for the fixed-coin deterministic
+verifier shape. No batched, DEEP, STIR, Circle, WHIR, BCS, or theorem
+correspondence follows from it.
 
 ## 5. Cross-family disposition matrix
 
 | Family | Source-required pressure | Current narrow support | Required disposition |
 |---|---|---|---|
-| Exact classical FRI | Initial logical oracle, round-indexed fold challenges and oracles, terminal polynomial/scalar, late labelled query repetitions, complete fibres | A two-fold binary multiplicative inhabitant exists; the selected `d0 = 8` three-fold theorem profile does not | `Additive extension` for the exact source profile; durable logical-access/origin completion remains a `Targeted redesign` already identified |
+| Exact classical FRI | Initial logical Oracle, round-indexed fold challenges and Oracles, scalar terminal, late labelled query repetitions, complete fibres | Separate three-fold/scalar-terminal control with fixed-coin deterministic schedule correspondence, checked structural commitment construction, and public Fresh/Fiat--Shamir replay | Retained `ConservativeExtension`; randomized Protocol, theorem, BCS, and property correspondence remain open |
 | Batched FRI | Several first-layer prover oracles, independent coefficient vector, prover-fixed combined oracle, query consistency, theorem-distinct powers variant | Generic messages/challenges/checks and composition can carry the shape; no constructive encoding exists | `Additive extension` |
 | DEEP-FRI | `z -> B_z(X) -> x -> quotient oracle`, out-of-domain/collision law, quotient check | Generic messages, challenges, prover oracles, and checks can carry the shape | `Additive extension` |
 | DEEP-ALI | Two verifier-defined quotient views consumed by two proximity tests, with a still-unreconstructed multipoint value/failure law | No non-materialized derived Oracle exists; a fixed exact-used module does not provide a reusable child capability | Candidate `Targeted redesign` at the Oracle/composition boundary, plus additive composition; exact disposition depends on static elaboration |
@@ -229,17 +229,18 @@ algorithm and their stated field, rate, distance, strategy, query, and
 random-oracle premises. They do not state a theorem for an arbitrary
 early-terminated FRI profile.
 
-**Current-model observation.** The selected profile preserves oracle fixation,
-fold-challenge order, immutable prior layers, terminal-before-query order,
+**Current-model observation.** The new control preserves Oracle fixation,
+fold-challenge order, immutable prior layers, scalar-before-query order,
 complete binary fibres, ordered query multiplicity, and separate native versus
-committed verifier views. It stops one round earlier than the source algorithm
-at `d0 = 8`.
+committed verifier views for the complete three-fold schedule. The earlier
+two-fold subject remains separately identified.
 
 **Inference.** Exact Algorithm 1 is an additive profile, not a reason to alter
-the factorization. It should be a new three-fold scalar-terminal subject with
-its own Core identity and an explicit protocol-correspondence judgment. The
-existing early-stop subject should remain available as a noncorresponding
-implementation-style profile rather than being silently renamed.
+the factorization. The new three-fold/scalar-terminal subject has its own Core
+identity and checked deterministic schedule correspondence. The existing
+early-stop subject remains a noncorresponding implementation-style profile
+rather than being silently renamed. Randomized experiment and theorem
+correspondence still require Analysis-owned premises.
 
 ### 6.2 Batched FRI
 
@@ -779,37 +780,35 @@ invariants:
 
 ## 14. Constructive validation and reversal conditions
 
-The next validation order should maximize information before expanding the
-durable vocabulary:
+The exact classical control is complete at its deterministic structural scope.
+The remaining validation order should maximize information before expanding
+the durable vocabulary:
 
-1. **Exact classical control:** construct the `d0 = 8` three-fold
-   scalar-terminal Algorithm 1 profile and check labelled occurrence and
-   causal-order correspondence.
-2. **Batched control:** add two initial oracles, independent coefficient
+1. **Batched control:** add two initial Oracles, independent coefficient
    vector, actual `G_0` publication, and query consistency. Mutate `G_0`
    independently to prove that it remains a prover choice.
-3. **DEEP-FRI control:** encode one round with `z`, degree-one `B_z`, later
+2. **DEEP-FRI control:** encode one round with `z`, degree-one `B_z`, later
    fold challenge, quotient oracle, and each candidate collision disposition.
-4. **DEEP-ALI seam test:** reconstruct a total multipoint quotient/failure law,
+3. **DEEP-ALI seam test:** reconstruct a total multipoint quotient/failure law,
    define `h_1` and `h_2`, statically elaborate one query of each to its
    underlying oracle, and invoke two finite proximity-test children.
-5. **STIR seam test:** exercise both query-plan branches, including an index
+4. **STIR seam test:** exercise both query-plan branches, including an index
    that requires `Fill`, test an OOD/shift collision, then statically elaborate
    a later fibre query through the derived oracle.
-6. **Circle profile test:** represent the first `J/y` fold and one later
+5. **Circle profile test:** represent the first `J/y` fold and one later
    `pi/x` fold, their different pairing maps, and the full clear terminal check
    in the same Core without a special-case Core constructor.
-7. **WHIR composition test:** carry one constrained-code claim through a
+6. **WHIR composition test:** carry one constrained-code claim through a
    sumcheck block, folded-oracle publication, OOD reply, shifted query block,
    and updated `(weight,target)` claim.
-8. **BCS bridge test:** map the exact classical source to one literal BCS
+7. **BCS bridge test:** map the exact classical source to one literal BCS
    target first; compare the local optimized commitment profile only through a
    second checked construction/correspondence.
-9. **Related-SNARK pressure:** encode the Section 5.5 Toy Problem only as a
+8. **Related-SNARK pressure:** encode the Section 5.5 Toy Problem only as a
    structural/conjectural profile, then encode Definition 6.2's
    verifier-constructed word list passed to a proximity child. Do not promote
    either to a theorem claim through structural success.
-10. **BaseFold holdout:** first add and validate the exact primary-source
+9. **BaseFold holdout:** first add and validate the exact primary-source
     snapshot, then test shared-challenge composition across claim, sumcheck,
     and fold state.
 
@@ -886,6 +885,8 @@ This synthesis does not claim:
 
 - implementation or durable-PIR support for any complete reviewed variant;
 - correspondence between the finite early-stop witness and a paper theorem;
+- randomized-Protocol or theorem correspondence for the exact classical
+  deterministic control;
 - that DEEP-FRI's sampling tension has been resolved;
 - that DEEP-ALI's multipoint quotient or STIR's sample-collision semantics are
   total or source-corresponding;
