@@ -66,6 +66,19 @@
 > and exact typed exhaustion. This replaces the pre-K2 snapshots as the active
 > target definition without making the target normative or implemented.
 
+> **Transcript-family extension update — 2026-08-31:** Fiat--Shamir is now a
+> family of closed sibling profiles over one unchanged `InteractiveCore`.
+> [Canonical-framed](../pir/fiat-shamir.md) and
+> [duplex-sponge](../pir/duplex-sponge-fiat-shamir.md) constructions retain
+> distinct initialization, construction-public material, transition,
+> challenge, receipt, failure, source-view, and Protocol identities. Adding a
+> future unreferenced sibling does not rotate either existing family. The
+> duplex operational state machine is specified, but its cited security
+> theorems remain inactive because exact Analysis premises are absent and the
+> reviewed source proof has unresolved call-count, decoder-fiber, and alphabet-
+> encoding defects. This extension changes no Core occurrence or Fresh
+> semantics and adds no endpoint or implementation support claim.
+
 > **K3-B integrated-closure update — 2026-08-27:** The bounded dependent
 > consumer lane is now reconciled in the active
 > [canonical carrier](../pir/canonical-pir.md),
@@ -102,7 +115,7 @@
 > derives exact whole-source-provenance-free purpose views; OIR separately
 > authenticates and admits target semantics and validates exact graph/static-
 > contract correspondence. K3-D
-> supports FS verifier and Plan-specialized prover endpoints over base
+> supports canonical-framed FS verifier and Plan-specialized prover endpoints over base
 > non-Oracle, non-module K2 effects, with closed typed unsupported rows and no
 > partial target. It did not reopen K1 or K2, activate full Stage 4B, select a
 > concrete OIR carrier, or establish any cryptographic property. At that
@@ -651,7 +664,9 @@ remain provisional:
    `ProtocolInterface`, `ProverPlan`, typed semantic regimes, semantic
    authority graph, decoded carrier, and admitted capability in their exact
    normative owners. The abstract semantics is not a second runtime schema;
-   canonical PIR remains the full v0 carrier.
+   canonical PIR remains the full v0 carrier. Transcript constructions use
+   closed sibling family profiles; construction-public runtime material is a
+   typed satellite and never a synthetic Core event.
 
 2. **Relation roles.** Separate protocol-facing relation identity and
    interface facts from post-seal correspondence evidence. A useful ontology
@@ -855,7 +870,7 @@ The following primary sources informed the skeleton:
 | [ZKProof Community Reference](https://docs.zkproof.org/pages/reference/reference.pdf) | Use an explicit relation, public-instance, private-witness, and claim ontology; separate relation bridges | The reference does not define zkc's concrete binding or correspondence rules |
 | [Interactive Oracle Proofs](https://eprint.iacr.org/2016/116) | Derive asymmetric prover and verifier endpoints from one protocol subject | The paper does not prove current PIR-to-OIR projection correctness |
 | [Algebraic Reductions of Knowledge](https://eprint.iacr.org/2022/009) | Reduction composition needs explicit instance/statement and witness transformations | Its theorems do not cover arbitrary shared or interleaved transcript state |
-| [CFRG Fiat–Shamir draft](https://datatracker.ietf.org/doc/draft-irtf-cfrg-fiat-shamir/) and [duplex Fiat–Shamir](https://eprint.iacr.org/2025/536) | Transcript context, codecs, challenge decoding, proof ABI, and sponge behavior are semantic configuration | The draft is evolving, and neither source validates zkc's exact transcript profiles |
+| [CFRG Fiat–Shamir draft](https://datatracker.ietf.org/doc/draft-irtf-cfrg-fiat-shamir/) and [duplex Fiat–Shamir](https://eprint.iacr.org/2025/536) | Transcript context, codecs, challenge decoding, proof ABI, and sponge behavior are construction-specific semantic choices | The draft is evolving; zkc's profiles require independent correspondence; and the reviewed duplex proof has unresolved source-level defects even though its operational state machine is usable |
 | [RFC 9334](https://www.rfc-editor.org/rfc/rfc9334.html) and [in-toto](https://www.usenix.org/system/files/sec19-torres-arias.pdf) | Separate evidence appraisal from a relying party's use-specific decision | Attestation and supply-chain models guide authority separation but do not define proof-system evidence |
 
 No source above proves zkc's current specifications or implementation correct.

@@ -26,10 +26,13 @@ This page is the sole target definition owner for:
   grounding; and
 - the causally generated, purpose-bound confidential initial-Oracle view.
 
-The companion [Fiat--Shamir Construction](fiat-shamir.md) owns transcript
-state, derived required influence, challenge sampling, and the checked Fresh/FS
-relation. Foundation owns the identities, values, algorithms, typed failures,
-evaluation contracts, and operational outcome distinctions reused here.
+The authenticated construction-family pages own transcript state, derived
+required influence, challenge interpretation, and the checked Fresh/FS
+relation. The active siblings are the
+[canonical-framed](fiat-shamir.md) and
+[duplex-sponge](duplex-sponge-fiat-shamir.md) families. Foundation owns the
+identities, values, algorithms, typed failures, evaluation contracts, and
+operational outcome distinctions reused here.
 
 PIR does not own witness satisfaction, adversary classes, soundness, knowledge,
 zero knowledge, theorem applicability, concrete suppliers, proof serialization,
@@ -125,9 +128,30 @@ meaning.
 ### 3.1 Exact PIR language-profile split
 
 The target does not place one catch-all PIR language above every subject. It
-selects three standalone Foundation `SemanticLanguageProfile` owners and the following exact
+selects one Interaction profile, two sibling Fiat--Shamir family profiles, and
+one currently canonical-only public-setup profile with the following exact
 import topology. This display is a symbolic owner schema, not publication of
 the complete six-field profile preimages or their full typed IDs:
+
+The Interaction owner also defines one shared structural algorithm-use record
+for PIR operations:
+
+```text
+PIRAlgorithmUse = {
+  algorithm: PortableAlgorithmRef,
+  evaluation_contract: EvaluationContractId
+}
+
+PIRAlgorithmUseBody(x) = R {
+  0: Y(ContentRefV0(x.algorithm)),
+  1: Y(ContentRefV0(x.evaluation_contract))
+}
+```
+
+This record pairs an exact admitted portable algorithm with the exact contract
+under which PIR invokes it. It does not add an ambient provider or make an
+algorithm claim a cryptographic property. Construction families importing the
+Interaction profile may use this record without importing one another.
 
 ```text
 PIRInteractionProfile = {
@@ -145,15 +169,21 @@ PIRInteractionProfile = {
      ConfidentialInitialOracleDisclosurePolicyBody,
      ConfidentialInitialOracleBindingPayloadBody,
      ConfidentialInitialOracleCapabilityRequirementBody,
-     ConfidentialInitialOraclePolicyClosureBody}
+     ConfidentialInitialOraclePolicyClosureBody,
+     PIRAlgorithmUseBody}
 }
 
-PIRTranscriptFSProfile =
-  the companion page's profile importing exactly PIRInteractionProfile
+PIRCanonicalFramedFSProfile =
+  the canonical-framed companion page's profile importing exactly
+  PIRInteractionProfile
+
+PIRDuplexSpongeFSProfile =
+  the duplex-sponge companion page's profile importing exactly
+  PIRInteractionProfile
 
 PIRPublicSetupProfile = {
   profile_imports:
-    {PIRInteractionProfileId, PIRTranscriptFSProfileId},
+    {PIRInteractionProfileId, PIRCanonicalFramedFSProfileId},
   supported_subject_kinds:
     {"pir.public-setup-invocation-view",
      "pir.source-binding-payload", "pir.source-capability-requirement",
@@ -164,25 +194,35 @@ PIRPublicSetupProfile = {
 }
 ```
 
+Every FS family profile importing Interaction must commit to one exact closed
+runtime schema under its reserved profile-local
+`"pir.fs-challenge-receipt"` tag. It may commit to either zero or one exact
+closed schema under `"pir.fs-interpretation-failure-receipt"`. Those tags are
+catalog entries, not new semantic subject kinds. Interaction dispatches them
+only after authenticating the selected profile; a schema cannot be supplied by
+the caller or inherited from a sibling.
+
 The required authenticated import closure is selected-root-specific once each
 owner has published its complete profile preimage:
 
 ```text
 ExactProfilePreimages(PIRInteractionProfileId) =
   {PIRInteractionProfileId}
-ExactProfilePreimages(PIRTranscriptFSProfileId) =
-  {PIRInteractionProfileId, PIRTranscriptFSProfileId}
+ExactProfilePreimages(PIRCanonicalFramedFSProfileId) =
+  {PIRInteractionProfileId, PIRCanonicalFramedFSProfileId}
+ExactProfilePreimages(PIRDuplexSpongeFSProfileId) =
+  {PIRInteractionProfileId, PIRDuplexSpongeFSProfileId}
 ExactProfilePreimages(PIRPublicSetupProfileId) =
-  {PIRInteractionProfileId, PIRTranscriptFSProfileId,
+  {PIRInteractionProfileId, PIRCanonicalFramedFSProfileId,
    PIRPublicSetupProfileId}
 ```
 
-These are exact no-extra closures. The three-entry convenience bundle is not a
-valid Interaction or Transcript/FS intake. Profile imports are ordinary
-profile edges, not module roots. The combined public-view profile imports both
-Protocol languages because one public-setup view family may name either a
-Fresh or an FS `ProtocolId`; changing an unrelated profile outside this
-three-node cone does not rotate these subjects.
+These are exact no-extra closures. A bundle containing both FS siblings is not
+a valid intake for either. Profile imports are ordinary profile edges, not
+module roots. The current public-setup profile can name Fresh and canonical-
+framed FS Protocols only; duplex public-setup projection remains
+`Unsupported` until a downstream sibling profile is defined. Adding another
+unreferenced FS family does not rotate either existing sibling.
 
 The bounded executable witnesses instantiate deterministic finite profile
 bodies to test this topology, authentication, and rotation behavior. Those
@@ -206,9 +246,10 @@ public-setup semantics, while those downstream operations remain
 
 Every identified subject below uses K1 `ProfiledSemanticId`, so the directly
 selected profile ID is in the subject preimage. The `"pir.protocol"` subject
-kind is deliberately supported by two profiles: Fresh selects
-`PIRInteractionProfileId`, while Fiat--Shamir selects
-`PIRTranscriptFSProfileId`. The profile ID makes those meanings unambiguous.
+kind is deliberately supported by three profiles: Fresh selects
+`PIRInteractionProfileId`, while each Fiat--Shamir Protocol selects the exact
+profile of its admitted transcript construction. The profile ID makes those
+meanings unambiguous.
 
 ### 3.2 Core and Protocol
 
@@ -242,7 +283,7 @@ Display names, source locations, MLIR syntax, authoring labels, diagnostics,
 plans, suppliers, compiler routes, research notes, and evidence are absent from
 the body.
 
-One admitted Core may have two challenge interpretations:
+One admitted Core may have several closed challenge interpretations:
 
 ```text
 ChallengeInterpretation =
@@ -254,17 +295,31 @@ Protocol = {
   challenge_interpretation: ChallengeInterpretation
 }
 
-ProtocolLanguageProfile(Fresh) = PIRInteractionProfileId
-ProtocolLanguageProfile(FiatShamir(_)) = PIRTranscriptFSProfileId
+ProtocolLanguageProfile(Fresh, NoConstructionHandle) =
+  PIRInteractionProfileId
+ProtocolLanguageProfile(
+  FiatShamir(T), exact authenticated admitted construction handle A
+    satisfying A.id = T) = TranscriptConstructionProfile(A.id)
 
 ProtocolId = ProfiledSemanticId<"pir.protocol">(
-  B, ProtocolLanguageProfile(protocol.challenge_interpretation),
+  B, ProtocolLanguageProfile(
+       protocol.challenge_interpretation,
+       exact formation construction handle or NoConstructionHandle),
   ProtocolBody(protocol))
+
+AuthenticatedProtocolProfile(P) =
+  the exact profile ID retained by P's successful formation and checked
+  against the corresponding construction handle when P is FiatShamir
 ```
 
-`TranscriptConstructionId` is defined by the companion page. `Fresh` is one
-closed tag; its challenge laws are already in the Core. The two Protocol IDs
-are distinct while retaining one literal `CoreId`.
+`TranscriptConstructionId` and `TranscriptConstructionProfile` are defined by
+the construction-family companion pages. The profile is never inferred from
+bare ID bytes. Protocol formation receives the exact authenticated admitted
+construction handle, recomputes its ID/profile preimage, and requires equality
+with the asserted Protocol profile before a Fiat--Shamir Protocol can form.
+`Fresh` is one closed tag; its challenge laws are already in the Core. Fresh,
+canonical-framed FS, and duplex-sponge FS Protocol IDs are pairwise distinct
+while retaining one literal `CoreId`.
 
 ### 3.3 Lifecycle
 
@@ -481,10 +536,14 @@ the conditional law in group order. A group may not mix scopes unless its
 declaration explicitly uses their least common active ancestor.
 
 Challenge domains are semantic-purpose coordinates and may repeat. Distinct
-draws remain distinct because the Fiat--Shamir namespace contains the exact
-scope path and `ChallengeRef`. A shared value is represented by one Challenge
-occurrence referenced at multiple legal consumers, not by two declarations
-with the same domain. Joint members represent correlated but distinct draws.
+draws remain distinct because each declaration has one exact `ChallengeRef`
+and one occurrence in the Core. A construction family must then preserve that
+distinction by its own authenticated law: the canonical-framed family uses the
+exact scope path and `ChallengeRef` in its namespace, while the duplex-sponge
+family uses the exact alternating schedule position and prior state. A shared
+value is represented by one Challenge occurrence referenced at multiple legal
+consumers, not by two declarations with the same domain. Joint members
+represent correlated but distinct draws.
 
 Section 6.3 derives the sorted-unique `ReductionConsumers(c)` from exact
 reduction declarations; a value dependency or equal challenge value does not
@@ -1175,9 +1234,10 @@ logic.
    finite-Oracle carrier/lookup/output laws, origin-dependent decision class,
    zero-output logical fixation, and standard effect lifetime and scope rules;
 7. derive party visibility and reject a use that is unavailable to its actor;
-8. validate challenge laws, joint-group closure, derived namespace
-   distinguishability, the exact `ReductionConsumers` sequence, and its
-   `Exclusive`/`Shared` law;
+8. validate challenge declarations and reference distinguishability,
+   joint-group closure, the exact `ReductionConsumers` sequence, and its
+   `Exclusive`/`Shared` law; construction-family-specific namespace, schedule,
+   and state distinguishability are checked only when admitting that family;
 9. simulate structural claim liveness on every schedule path induced by the
    finite guards, using the Core's bounded explicit state, and check linearity,
    required-publication kind/uniqueness/least-next-challenge order,
@@ -1372,8 +1432,9 @@ exact domain. A concrete source, supplier, device, or observation coordinate
 is not part of the K2 semantic receipt; Analysis or Evidence may bind such
 provenance separately without changing the Protocol or pretending that source
 identity proves a distribution. One sample cannot establish that the
-capability followed the distribution. `FiatShamirResolver` is defined by the
-companion page. No other resolver may inhabit an admitted Protocol.
+capability followed the distribution. Each `FiatShamirResolver` is defined by
+its authenticated construction-family page. No other resolver may inhabit an
+admitted Protocol.
 
 ### 12.2 Invocation and state
 
@@ -1453,6 +1514,13 @@ ExactOracleReplayCapabilities =
            CanonicalFiniteOracle<declared Oracle>>
 ```
 
+Resolver preparation is owned by the selected Protocol profile. Fresh and the
+canonical-framed family require their exact existing inputs; the duplex-sponge
+family additionally requires its exact construction-material capability before
+it can issue a resolver capability. `GenerateRun` therefore retains one common
+typed resolver argument without adding an untyped material map or changing the
+Core invocation.
+
 Each binding is checked against the ID or declaration already committed by the
 admitted subjects. Missing support is qualified noncompletion; a disagreeing
 provider is `CheckerFailure`. `ExecutionEvaluationControl` is an immutable
@@ -1469,16 +1537,16 @@ construction when present, and Protocol before execution.
 
 ```text
 GenerateRun(
-  AdmittedProtocol,
+  AdmittedProtocol P,
   CoreInvocation,
   ExactInitialOracleInvocationCapabilities,
   ProverStrategyCapability,
   ChallengeResolverCapability,
   ExactCheckAndExtensionCapabilities,
   ExecutionEvaluationControl)
-  -> CompletedRun(RunRecord, CausalGenerationCapability)
-   | InterpretationFailed(ProtocolFailureRecord)
-   | StrategyStopped(PartialRunRecord)
+  -> CompletedRun(RunRecord(P), CausalGenerationCapability)
+   | InterpretationFailed(ProtocolFailureRecord(P))
+   | StrategyStopped(PartialRunRecord(P))
    | qualified operational noncompletion
 ```
 
@@ -1532,9 +1600,19 @@ FreshChallengeReceipt = {
   value: CanonicalValue<declared challenge type>
 }
 
-ChallengeResolverReceipt =
+ProfileFSChallengeReceipt(P) =
+  one value of the exact challenge-receipt schema declared by
+  AuthenticatedProtocolProfile(P)
+
+ProfileFSInterpretationFailureReceipt(P) =
+  one value of the exact interpretation-failure schema declared by
+  AuthenticatedProtocolProfile(P)
+
+ChallengeResolverReceipt(P) =
     Fresh(FreshChallengeReceipt)
-  | FiatShamir(FSChallengeReceipt)
+      when P.challenge_interpretation = Fresh
+  | FiatShamir(ProfileFSChallengeReceipt(P))
+      when P.challenge_interpretation = FiatShamir(_)
 
 OracleReceipt =
     Published(occurrence, oracle,
@@ -1545,40 +1623,45 @@ OracleReceipt =
   | Answered(occurrence, oracle,
              CanonicalValue<OracleAnswerOutputType(oracle)>, visibility)
 
-RunRecord = {
-  protocol_id: ProtocolId,
+RunRecord(P) = {
+  protocol_id: exactly P.id,
   invocation_id: CoreInvocationId,
   occurrence_receipts: CanonicalSeq<OccurrenceReceipt>,
-  challenge_receipts: CanonicalSeq<ChallengeResolverReceipt>,
+  challenge_receipts: CanonicalSeq<ChallengeResolverReceipt(P)>,
   oracle_receipts: CanonicalSeq<OracleReceipt>,
   terminal: TerminalRef,
   terminal_public_outputs: CanonicalSeq<CanonicalValue>
 }
 
-PartialRunRecord = the exact prefix of RunRecord before a terminal
+PartialRunRecord(P) = the exact prefix of RunRecord(P) before a terminal
 
-InterpretationFailureReceipt =
-  FiatShamirSamplingFailure {
-    construction: TranscriptConstructionId,
-    receipt: FSSamplingFailureReceipt
-  }
+InterpretationFailureReceipt(P) =
+  FiatShamir(ProfileFSInterpretationFailureReceipt(P))
 
-ProtocolFailureRecord = {
-  protocol_id: ProtocolId,
+ProtocolFailureRecord(P) = {
+  protocol_id: exactly P.id,
   invocation_id: CoreInvocationId,
   occurrence_prefix: CanonicalSeq<OccurrenceReceipt>,
-  challenge_receipts: CanonicalSeq<ChallengeResolverReceipt>,
+  challenge_receipts: CanonicalSeq<ChallengeResolverReceipt(P)>,
   failure: exact typed interpretation DomainFailure,
-  interpretation_receipt: InterpretationFailureReceipt
+  interpretation_receipt: InterpretationFailureReceipt(P)
 }
 
-CompletedProtocolRecord =
-    TerminalCompletion(RunRecord)
-  | InterpretationFailure(ProtocolFailureRecord)
+CompletedProtocolRecord(P) =
+    TerminalCompletion(RunRecord(P))
+  | InterpretationFailure(ProtocolFailureRecord(P))
 ```
 
-`FSChallengeReceipt` is closed by the companion page. Receipt output arity,
-type, visibility, and effect-specific payload are derived from the exact Core;
+The two `ProfileFS*Receipt` type functions are profile-dispatched runtime
+payloads, not open callbacks. An FS language profile must commit to exactly one
+closed challenge-receipt schema and either zero or one closed interpretation-
+failure schema in its authenticated inline catalog. The canonical-framed
+profile selects its framed draw/retry challenge receipt and sampling-failure
+receipt. The duplex-sponge profile selects its initialization/atomic-transition
+challenge receipt and declares no interpretation-failure schema. A missing,
+extra, or cross-family schema is a profile mismatch before a record forms.
+Receipt output arity, type, visibility, and effect-specific payload are
+derived from the exact Core;
 a receipt cannot add an output or hide an expected one. The records are typed
 execution data rather than independently authoritative subjects. Private
 strategy state, witness, advice, randomness, and an opaque oracle body under
@@ -1587,28 +1670,29 @@ required confidential oracle witness through a separate capability and checks
 every exposed answer.
 A Plan-specific confidential generation record may bind private material
 separately.
-`PartialRunRecord` is diagnostic execution data for `StrategyStopped`, not a
+`PartialRunRecord(P)` is diagnostic execution data for `StrategyStopped`, not a
 completed Protocol record. K2 defines no affirmative prefix-replay result for
 it; a later audit consumer needing one must define a distinct nonsemantic audit
 relation and cannot call it `CheckedReplayMatch`.
 
-K2 Fresh resolution has no completed semantic-failure row: unavailable or
-failed fresh-coin supply is operational noncompletion. The sole
-`InterpretationFailureReceipt` case is therefore the companion page's exact
-sampling-failure receipt. Its `construction` must equal the construction named
-by the admitted FS Protocol whose ID is `protocol_id`; the receipt's challenge,
-prefix count, draw sequence, and states must recompute exactly under that
-construction; the draw-sequence length must equal that challenge rule's
-`maximum_draws`; and `failure` must be the construction's exact
-sampling-exhausted coordinate and payload. These are closed typed runtime
-fields, not a new identity-bearing or canonical transport schema. OIR or
-Evidence must define any later serialization separately.
+Fresh and duplex-sponge resolution have no completed semantic-failure row:
+unavailable fresh coins, missing duplex material, unsupported algorithms, and
+evaluation exhaustion are qualified operational noncompletion. The current
+canonical-framed family alone defines a profile interpretation-failure schema,
+its exact sampling-failure receipt. Its `construction` must equal the construction
+named by the admitted FS Protocol whose ID is `protocol_id`; the receipt's
+challenge, prefix count, draw sequence, and states must recompute exactly under
+that construction; the draw-sequence length must equal that challenge rule's
+`maximum_draws`; and `failure` must be the construction's exact sampling-
+exhausted coordinate and payload. These are closed typed runtime fields, not a
+new identity-bearing or canonical transport schema. OIR or Evidence must
+define any later serialization separately.
 
 ```text
 ReplayRun(
-  AdmittedProtocol,
+  AdmittedProtocol P,
   exact CoreInvocation,
-  CompletedProtocolRecord,
+  CompletedProtocolRecord(P),
   ExactOracleReplayCapabilities,
   ExactCheckAndExtensionCapabilities,
   ExecutionEvaluationControl)
@@ -1625,11 +1709,13 @@ recorded `FreshChallengeReceipt.value` as the historical nondeterministic
 choice, then validates its declared-law reference, canonical/domain membership,
 schedule, conditions, and downstream effects; it makes no source, distribution,
 or provenance claim and needs no replay source capability. FS replay instead
-recomputes every challenge and sampling-failure receipt from the admitted
-construction and never accepts a recorded challenge as a shortcut. A Fresh
-Protocol cannot replay an interpretation-failure variant. Wrong variants,
-coordinates, values, payloads, or unconsumed fields produce the named replay
-refusal.
+recomputes every family-specific challenge receipt from the admitted
+construction and never accepts a recorded challenge as a shortcut. It
+recomputes an interpretation-failure receipt only for a family that defines
+one; the current canonical-framed family does, while the duplex-sponge family
+does not. A Fresh Protocol cannot replay an interpretation-failure variant.
+Wrong variants, coordinates, values, payloads, or unconsumed fields produce
+the named replay refusal.
 
 Replay does not invoke a strategy and therefore does not mint
 `CausalGenerationCapability`. A trace can replay even when its producer had
@@ -1687,28 +1773,56 @@ CoreStaticViewKind =
 
 `ExecutionView` is deliberately not in that sum. Execution and replay depend
 on the selected Challenge interpretation, so its owner coordinate is one exact
-`ProtocolId`, even when two Protocols share a `CoreId`. The construction and
-checked-result view kinds are defined in
-[Fiat--Shamir](fiat-shamir.md#13-exact-source-view-contracts).
+`ProtocolId`, even when two Protocols share a `CoreId`. Construction and
+checked-result view kinds are profile-local and defined by the
+[canonical-framed](fiat-shamir.md#13-exact-source-view-contracts) and
+[duplex-sponge](duplex-sponge-fiat-shamir.md#11-exact-pir-source-views)
+family pages. A profile-local kind reference is the exact pair
+`(semantic_language_profile_id, local_kind_tag)` whose selected profile catalog
+maps that tag to one closed payload schema. It is not a display name or an open
+extension callback.
 
 ```text
+ProfileLocalConstructionViewKind = {
+  semantic_language_profile_id: exact supported FS profile,
+  local_kind_tag: exact tag in that profile's closed construction-view catalog
+}
+
+ProfileLocalFSResultViewKind = {
+  semantic_language_profile_id: exact supported FS profile,
+  local_kind_tag: exact tag in that profile's closed result-view catalog
+}
+
+OwnerLocalFSConstructionResultRef =
+  the nonserializable owner-local reference issued by the exact selected
+  profile's affirmative Fresh/FS construction checker
+
 PIRStaticViewOwnerCoordinate =
     CoreView(CoreId, CoreStaticViewKind)
   | ProtocolView(ProtocolId, ExecutionView)
-  | ConstructionView(TranscriptConstructionId, ConstructionStaticViewKind)
-  | FSResultView(CheckedFSConstructionResultRef, FSConstructionView)
+  | ConstructionView(
+      TranscriptConstructionId, ProfileLocalConstructionViewKind)
+  | FSResultView(
+      OwnerLocalFSConstructionResultRef, ProfileLocalFSResultViewKind)
 
 PIRStaticViewCoordinate = {
   owner: PIRStaticViewOwnerCoordinate,
-  semantic_language_profile_id:
-    PIRInteractionProfileId | PIRTranscriptFSProfileId
+  semantic_language_profile_id: SemanticLanguageProfileId
 }
 
-StaticViewProfile(CoreView(_,_)) = PIRInteractionProfileId
-StaticViewProfile(ProtocolView(FreshProtocolId,_)) = PIRInteractionProfileId
-StaticViewProfile(ProtocolView(FSProtocolId,_)) = PIRTranscriptFSProfileId
-StaticViewProfile(ConstructionView(_,_)) = PIRTranscriptFSProfileId
-StaticViewProfile(FSResultView(_,_)) = PIRTranscriptFSProfileId
+AuthenticatedOwnerProfile(CoreView(C.id,_), AdmittedCore C) =
+  PIRInteractionProfileId
+AuthenticatedOwnerProfile(ProtocolView(P.id,_), AdmittedFreshProtocol P) =
+  PIRInteractionProfileId
+AuthenticatedOwnerProfile(
+  ProtocolView(P.id,_), exact admitted FS Protocol handle P) =
+  AuthenticatedProtocolProfile(P)
+AuthenticatedOwnerProfile(
+  ConstructionView(T.id,_), exact admitted construction handle T) =
+  TranscriptConstructionProfile(T.id)
+AuthenticatedOwnerProfile(
+  FSResultView(R.ref,_), exact live owner-local result/binding R) =
+  CheckedFSConstructionProfile(R.ref)
 
 PIRViewPathStep =
     Field(field_ordinal)
@@ -1727,11 +1841,16 @@ PIRStaticViewFieldCoordinate = {
 }
 ```
 
-Formation requires
-`coordinate.semantic_language_profile_id = StaticViewProfile(coordinate.owner)`.
-This field is part of the owner binding source body. In particular, an FS
-`ExecutionView` cannot be wrapped under the Interaction profile merely because
-its Protocol shares a Core with a Fresh Protocol.
+Formation receives the exact admitted owner handle or exact live owner-local
+result/binding; it never derives a profile from bare ID bytes. It requires the
+coordinate profile, authenticated owner profile, and profile component of the
+local view-kind reference to be identical. The selected profile catalog must
+contain that local tag with the exact expected schema. A mismatched family is
+`KindMismatch`; an absent supported local tag is `Refused`; an unsupported
+exact profile is `Unsupported`. This profile field is part of the owner binding
+source body. In particular, an FS `ExecutionView` cannot be wrapped under the
+Interaction profile merely because its Protocol shares a Core with a Fresh
+Protocol.
 
 A field coordinate forms only when its path reaches exactly one atomic leaf of
 the closed body schema selected by `view_coordinate`; an absent field, interior
@@ -1901,9 +2020,10 @@ PIRStaticViewIssueOutcome =
   | DeterministicLimitExceeded | CheckerFailure
 
 IssuePIRStaticView(
-  exact admitted Core or Protocol selected by the coordinate,
-  exact inert admitted-subject authority binding,
-  matching fresh admission capability,
+  exact admitted owner aggregate selected by the coordinate:
+    admitted Core, admitted Protocol, or admitted construction plus its Core,
+  exact inert admitted-subject authority binding(s) for that aggregate,
+  matching fresh admission capability or capabilities,
   exact PIRStaticViewReadManifest,
   exact PIR evaluator and deterministic limits)
     -> PIRStaticViewIssueOutcome

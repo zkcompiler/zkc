@@ -1,0 +1,179 @@
+{
+  "schema": "zkc.duplex-sponge-transcript.construction.v1",
+  "core": {
+    "schema": "zkc.duplex-sponge-transcript.core-view.v1",
+    "initial_bindings": [
+      {
+        "kind": "Statement",
+        "name": "statement",
+        "value_type": "StatementPair"
+      }
+    ],
+    "schedule": [
+      {
+        "kind": "ProverMessage",
+        "name": "message-1",
+        "value_type": "SigmaPair"
+      },
+      {
+        "kind": "Challenge",
+        "name": "challenge-1",
+        "value_type": "SigmaPair"
+      },
+      {
+        "kind": "ProverMessage",
+        "name": "message-2",
+        "value_type": "Unit"
+      },
+      {
+        "kind": "Challenge",
+        "name": "challenge-2",
+        "value_type": "SigmaScalar"
+      },
+      {
+        "kind": "ProverMessage",
+        "name": "message-3",
+        "value_type": "SigmaTriple"
+      },
+      {
+        "kind": "Challenge",
+        "name": "challenge-3",
+        "value_type": "SigmaQuad"
+      }
+    ]
+  },
+  "construction": {
+    "kind": "DuplexSpongeTranscriptConstruction",
+    "core_id": "sha256:17ff7dabd605d44e493fa12b6807ac7d2a0489a8ec7b8af7b1fd9241a92c5fb5",
+    "alphabet_size": 5,
+    "rate": 3,
+    "capacity": 2,
+    "salt_length": 2,
+    "instance_bit_bound": 16,
+    "instance_codec": {
+      "kind": "OrderedStatementOctets",
+      "source_type": "StatementPair",
+      "binding": "statement",
+      "fields": [
+        "first",
+        "second"
+      ],
+      "output_length_octets": 2
+    },
+    "provider_interface": [
+      "StartHash",
+      "ForwardPermutation"
+    ],
+    "provider_semantics": {
+      "kind": "AffineModuloAlphabet",
+      "start_hash": {
+        "input_width_octets": 2,
+        "matrix": [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "permutation": {
+        "state_width": 5,
+        "matrix": [
+          [
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            1,
+            0,
+            0,
+            0,
+            1
+          ]
+        ],
+        "offset": [
+          1,
+          2,
+          3,
+          4,
+          0
+        ]
+      }
+    },
+    "absorption_mode": "Overwrite",
+    "start_law": "Start_h(x)=((zero^rate,h(x)),0,rate)",
+    "absorb_law": "Absorb resets iS to rate, permutes only before a symbol at full iA, then overwrites",
+    "squeeze_law": "Squeeze(0) is identity; positive Squeeze resets iA and continues one output stream",
+    "message_codecs": [
+      {
+        "occurrence": "message-1",
+        "codec": "PairIdentity",
+        "algorithm": "TupleSymbolsInOrder",
+        "encoded_length": 2
+      },
+      {
+        "occurrence": "message-2",
+        "codec": "UnitEmpty",
+        "algorithm": "UnitToEmptySymbols",
+        "encoded_length": 0
+      },
+      {
+        "occurrence": "message-3",
+        "codec": "TripleIdentity",
+        "algorithm": "TupleSymbolsInOrder",
+        "encoded_length": 3
+      }
+    ],
+    "challenge_decoders": [
+      {
+        "occurrence": "challenge-1",
+        "decoder": "PairIdentity",
+        "algorithm": "SymbolsToTupleInOrder",
+        "squeeze_length": 2
+      },
+      {
+        "occurrence": "challenge-2",
+        "decoder": "ScalarIdentity",
+        "algorithm": "OnlySymbol",
+        "squeeze_length": 1
+      },
+      {
+        "occurrence": "challenge-3",
+        "decoder": "QuadIdentity",
+        "algorithm": "SymbolsToTupleInOrder",
+        "squeeze_length": 4
+      }
+    ]
+  }
+}

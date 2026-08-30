@@ -3,7 +3,8 @@
 > **Kind:** Temporary R2 protocol-selection and validation-depth contract
 > **State:** Selected portfolio; repaired/refrozen `P01` is retained at T3
 > after exact-snapshot independent re-review; `P02` native FRI/IOR is retained
-> at T3 as a two-lane `ConservativeExtension` result
+> at T3 as a two-lane `ConservativeExtension` result; `V01` is retained at T3
+> as a source-shaped operational sibling with no activated security theorem
 > **Authority:** None. This page selects research pressure and evidence depth;
 > it does not define target semantics, supported protocols, theorem
 > applicability, implementation conformance, or the final v0 boundary.
@@ -153,7 +154,7 @@ These variants may influence redesign before freeze.
 
 | ID | Variant | Level | Why it is not redundant |
 |---|---|---:|---|
-| `V01` | [A Fiat--Shamir Transformation From Duplex Sponges](https://eprint.iacr.org/2025/536) | T2 | Replaces a simple prefix-hash view with a stateful absorb/squeeze construction, explicit codecs, salt, and permutation-call discipline |
+| `V01` | [A Fiat--Shamir Transformation From Duplex Sponges](https://eprint.iacr.org/2025/536) | T3 | Replaces a simple prefix-hash view with a stateful absorb/squeeze construction, explicit codecs, salt, and permutation-call discipline |
 | `V02` | [Zero-Knowledge Polynomial Commitment in Binary Fields](https://eprint.iacr.org/2025/1015) | T2 | Interleaves Sumcheck and FRI folding, shares challenges, uses virtual combination oracles, and adds hiding in characteristic two |
 | `V03` | [GKR for Boolean Circuits with Sub-linear RAM Operations](https://eprint.iacr.org/2025/717) | T2 | Packs Boolean words into univariate polynomials and couples GKR to a binary-polynomial PCS and word-RAM cost model |
 | `V04` | [LatticeFold+](https://eprint.iacr.org/2025/247) | T2 | Uses lattice commitments, an algebraic range proof, double commitments, small fields, and a Sumcheck-based folding transformation |
@@ -176,9 +177,11 @@ The provisional classifications are respectively `Native`, `Native`,
 The Sumcheck classification is bounded to an explicit finite polynomial;
 generic polynomial-oracle semantics remain open. The GKR classification uses
 one flat finite Core; reusable checked elaboration remains deferred. The
-duplex construction is not yet an active profile, and the packed result makes
-no RAM-consistency or PCS-support claim. The assigned constructive depth and
-one bounded closure review are complete for these four entries.
+duplex construction is now an active non-normative sibling target and retained
+finite executable falsifier, but no source security theorem or downstream
+endpoint support is active. The packed result makes no RAM-consistency or PCS-
+support claim. The assigned algebraic constructive depth and duplex executable
+depth are complete for these four entries.
 
 ### 4.4 Holdout and frontier cases
 
@@ -242,6 +245,12 @@ Cases proceed by semantic dependency rather than publication date:
 7. **Cold holdout validation:** H01--H05 at their assigned depths.
 8. **R2 convergence:** classify all cases, retain obstructions and extension
    boundaries, and derive only the bounded R3 research questions they require.
+
+The current cursor is step 3. The retained `P02` result is a fixed baseline,
+not work to repeat. The next large package studies `V02` first and then `P05`
+single/batched KZG at equal architectural resolution before deciding whether
+their Oracle, setup, commitment, claim, challenge, opening, and verification
+boundaries justify one shared checked construction.
 
 A cluster may stop early when a fundamental obstruction invalidates the model.
 Repair and refreeze precede later dependent cases. Independent families should

@@ -89,10 +89,13 @@ The active minimum reads:
 - [Interactive Core](../pir/interactive-core.md) for admitted Protocols,
   `PublicBindingView`, `StrategyDecisionView`, `PublicCoinView`, `EffectView`,
   `ClaimReductionView`, `ExecutionView`, generated execution, and replay;
-- [Fiat--Shamir](../pir/fiat-shamir.md) for
+- [Canonical-Framed Fiat--Shamir](../pir/fiat-shamir.md) for
   `TranscriptDeclarationView`, `RequiredInfluenceView`,
   `ChallengeTransitionView`, `FSConstructionView`, and the checked same-Core
-  Fresh/FS construction;
+  Fresh/FS construction used by the active AFK profile;
+- [Duplex-Sponge Fiat--Shamir](../pir/duplex-sponge-fiat-shamir.md) for the
+  sibling construction's distinct source-view schemas and explicit inactive
+  theorem boundary;
 - [Interfaces and Plans](../pir/interfaces-and-plans.md) for exact external
   Statement and prover Witness roles; and
 - [Relation Model](../relations/relation-model.md) plus
@@ -227,15 +230,24 @@ revision rather than treating the control as an active judgment.
 
 Source-grounded constructive encodings of classical Sumcheck, modern layered
 GKR, a packed Boolean GKR variant, and duplex-sponge Fiat--Shamir now
-add further pressure outside the active profile set. They establish that the
-first three interactions can be represented structurally and that the literal
-duplex-sponge transform needs a distinct PIR construction alternative. They do
-not add a
+add further pressure around the active profile set. The first three remain
+structural research cases outside active Analysis families. The duplex work
+adds a distinct operational PIR construction sibling, but no duplex Analysis
+family, without transferring any canonical-framed property. They do not add a
 Sumcheck or GKR soundness family, a GKR property-composition rule, a word-RAM
 cost judgment, a state-restoration premise, a duplex theorem schema, or a
 Fresh-to-duplex transport result. Every such conclusion remains
 `Unsupported` or `CannotAnswer` according to the missing exact family and
 premises rather than being inferred from the constructive encodings.
+
+The reviewed duplex source also has unresolved theorem-proof defects: its lazy
+operational permutation schedule disagrees with later exact backtracking
+offsets, its decoder-fiber hybrid is false for unequal fiber sizes, and its
+fixed-bit salt bridge is ill-typed for general non-power-of-two alphabets.
+These are source-validation blockers rather than construction fields. Until an
+exact repair, restriction, erratum, or independent proof is authenticated,
+Analysis must not activate the cited soundness, knowledge-soundness, or
+zero-knowledge transports.
 
 ## Qualified outcomes
 

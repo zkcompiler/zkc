@@ -1,0 +1,18 @@
+{
+  "schema": "zkc.duplex-sponge-transcript.public-inputs.v1",
+  "statement": {
+    "first": 4,
+    "second": 9
+  },
+  "public_resource_limits": {
+    "max_trace_events": 16,
+    "max_permutation_calls": 8
+  },
+  "non_claims": [
+    "cryptographic security",
+    "ideal-oracle realization",
+    "uniform salt generation",
+    "Fiat-Shamir theorem applicability",
+    "production support"
+  ]
+}

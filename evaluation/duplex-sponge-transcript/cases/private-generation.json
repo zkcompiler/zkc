@@ -1,0 +1,26 @@
+{
+  "schema": "zkc.duplex-sponge-transcript.private-generation.v1",
+  "classification": "DeclassifiedToyGenerationSupportPoint",
+  "salt_symbols": [
+    2,
+    4
+  ],
+  "prover_messages": [
+    [
+      3,
+      1
+    ],
+    null,
+    [
+      1,
+      2,
+      3
+    ]
+  ],
+  "policy": {
+    "portable_identity": false,
+    "public_report_digest": false,
+    "uniformity_evidence": false,
+    "allowed_use": "fixture consistency and prefix-simulation comparison"
+  }
+}

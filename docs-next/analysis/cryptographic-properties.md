@@ -368,7 +368,8 @@ K3CFixedSetupStaticSourcesWellFormed(S) iff
     and is exactly one owner-schema leaf used by the selected group law, and
   transcript_application_domain_field is exactly the application_domain leaf
     below ConstructionView(S.transcript_construction_id,
-                           TranscriptDeclarationView)
+                           CanonicalFramedConstructionViewKindRef(
+                             TranscriptDeclarationView))
 
 K3CRelationAxisIngressInput = {
   subject: K3CSubjectTuple,
@@ -572,9 +573,13 @@ K3COwnerViewCoordinate(S, FiatShamirExecutionView) =
   ProtocolView(S.fiat_shamir_protocol_id,ExecutionView)
 K3COwnerViewCoordinate(S, TranscriptDeclarationView | RequiredInfluenceView |
                            ChallengeTransitionView) =
-  ConstructionView(S.transcript_construction_id,the selected construction-view kind)
+  ConstructionView(
+    S.transcript_construction_id,
+    CanonicalFramedConstructionViewKindRef(the selected construction-view kind))
 K3COwnerViewCoordinate(S, FSConstructionView) =
-  FSResultView(S.checked_fs_construction_result_ref,FSConstructionView)
+  FSResultView(
+    S.checked_fs_construction_result_ref,
+    CanonicalFramedFSResultViewKindRef)
 
 K3CPublicSetupInvocationCoordinate(S,Fresh) =
   PublicSetupInvocationViewCoordinate(
@@ -780,7 +785,7 @@ SchnorrSourceSlotCatalog = CanonicalConcat(
   K3BSharedRelationSourceSlotFragment,
   K3BProtocolAxisRelationSourceSlotFragment(Fresh))
 
-AFKAdditionalSourceSlotCatalog = CanonicalConcat(CanonicalSeq [
+AFKCanonicalFramedAdditionalSourceSlotCatalog = CanonicalConcat(CanonicalSeq [
   ConcreteOwnerReadSlotSchema(
     PIR,PublicSetupInvocationView,
     DependentForAll([subject : K3CSubjectTuple],
@@ -837,6 +842,14 @@ AFKAdditionalSourceSlotCatalog = CanonicalConcat(CanonicalSeq [
 ],K3BProtocolAxisRelationSourceSlotFragment(FiatShamir))
 ```
 
+This catalog is deliberately bound to
+`PIRCanonicalFramedFSProfileId`. Its transcript declaration, frame schedule,
+namespace, retry, and sampling-failure fields do not form against
+`PIRDuplexSpongeFSProfileId`. Equal Core identity cannot substitute the duplex
+family or manufacture absent canonical fields. A duplex theorem transport
+requires a separate Analysis profile and the family-specific views defined by
+the duplex PIR owner.
+
 The closed source/profile bodies are:
 
 ```text
@@ -866,7 +879,7 @@ SchnorrRelationSemanticReadManifestBody(S) = {
 AFKFreshFsSourceProfileBody = {
   family_tag: AFKAdaptiveFreshFsSource,
   slot_schemas:
-    CanonicalAppend(SchnorrSourceSlotCatalog,AFKAdditionalSourceSlotCatalog),
+    CanonicalAppend(SchnorrSourceSlotCatalog,AFKCanonicalFramedAdditionalSourceSlotCatalog),
   closed_field_read_set: exact derived union of those owner schema fields,
   adequacy_evaluator_id: AFKFreshFsSourceProfileAdequacy
 }
@@ -2797,7 +2810,7 @@ AFKAdaptiveFreshFsSourceDeclarationBody =
   AnalysisSourceFamilyDeclarationBody {
     allowed_slot_variant: ConcreteOwnerSource,
     exact_slot_and_field_schema:
-      CanonicalConcat(SchnorrSourceSlotCatalog,AFKAdditionalSourceSlotCatalog),
+      CanonicalConcat(SchnorrSourceSlotCatalog,AFKCanonicalFramedAdditionalSourceSlotCatalog),
     exact_adequacy_evaluator_schema:
       SchemaOf(AFKFreshFsSourceProfileAdequacy),
     failure_classification: common K3-C source-ingress failure partition

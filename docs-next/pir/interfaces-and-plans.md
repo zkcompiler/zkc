@@ -44,8 +44,8 @@ This page consumes, without redefining:
   `ProverDecisionPoint`, exact `ProverView`, legal `ProverMove`, completed
   records, and owner-derived source views from
   [Interactive Core and Causal Execution](interactive-core.md); and
-- K2 interpretation-failure coordinates from
-  [Fiat--Shamir Construction](fiat-shamir.md).
+- canonical-framed interpretation-failure coordinates from
+  [Canonical-Framed Fiat--Shamir](fiat-shamir.md).
 
 Every sequence is finite and ordered. Sets and maps use sorted-unique K1
 canonical key bodies. Local references are dense ordinals unless a keyed form
@@ -63,7 +63,7 @@ generic capability machinery.
 
 All three identified subjects on this page select one standalone
 `PIRInterfacePlanProfileId`. Its required exact profile imports are
-`{PIRInteractionProfileId, PIRTranscriptFSProfileId}`. Its supported subject kinds are
+`{PIRInteractionProfileId, PIRCanonicalFramedFSProfileId}`. Its supported subject kinds are
 `{"pir.protocol-interface", "pir.prover-plan",
 "pir.plan-witness-surface", "pir.source-binding-payload",
 "pir.source-capability-requirement", "pir.source-consumer",
@@ -71,11 +71,13 @@ All three identified subjects on this page select one standalone
 "pir.source-purpose"}`. Its inline declaration catalog contains the
 three exact bodies below, the Interface and Plan owner-view schemas, their
 field-expansion and closure laws, and `PlanRealizes` intake semantics. The
-two K2 imports are exact: Interface and Plan interpret Fresh and Fiat--Shamir
-Protocol identities, but no subject on this page names or interprets the
-invocation-issued public-setup quotient. A public-setup-law change therefore
-cannot rotate Interface, Plan, or Relations meaning. The K1 profile-import
-DAG, rather than an authored module root list, is the complete generic language
+two imports are exact: Interface and Plan interpret Fresh and canonical-framed
+Fiat--Shamir Protocol identities, but no subject on this page names the duplex
+sibling or the invocation-issued public-setup quotient. Duplex formation is
+`Unsupported` until a downstream sibling profile owns construction-material
+assignment and pre-execution generation. An unrelated profile change
+therefore cannot rotate this Interface/Plan meaning. The Foundation profile-import DAG,
+rather than an authored module root list, is the complete generic language
 closure.
 
 The required Interface/Plan root closure has three entries once their owners
@@ -491,12 +493,13 @@ record family admitted by the Protocol:
 - one `CoreTerminal(t)` entry exists for every and only `TerminalRef`; its
   map domain is every and only
   `TerminalPublicOutput(t, output_ordinal)` from that terminal declaration; and
-- an FS Protocol has exactly one interpretation-failure entry whose map domain
-  is exactly the six `FSFailure*` coordinates above; a Fresh Protocol has none.
+- a canonical-framed FS Protocol has exactly one interpretation-failure entry
+  whose map domain is exactly the six `FSFailure*` coordinates above; a Fresh
+  Protocol has none. A duplex Protocol is not formable under this profile.
 
 `TerminalPublicOutput(t,o)` selects the exact canonical value and K2
-`ValueType` of the `o`th public output of `t`. For an FS Protocol the failure
-coordinates select, without omission or reordering:
+`ValueType` of the `o`th public output of `t`. For a canonical-framed FS
+Protocol the failure coordinates select, without omission or reordering:
 
 1. the payload of the construction's exact
    `sampling_exhausted_failure` `DomainFailure`, represented at
@@ -701,6 +704,13 @@ ProverPlan = {
   derived_witness_exports: CanonicalSeq<DerivedWitnessExport>
 }
 ```
+
+Every `PrivateRandomnessRequirement` becomes available at a Core
+`ProverDecisionPointRef`. It therefore cannot generate duplex-sponge salt,
+which exists before the first Core decision and is construction-public rather
+than private strategy state. Supporting that sibling requires a separate
+construction-material Plan satellite and checked realization judgment; adding
+a fake decision or Core message would change the source interaction.
 
 `WitnessIngress` is a generic private-material class, not an assertion that a
 value satisfies or corresponds to any relation. `Advice` is private

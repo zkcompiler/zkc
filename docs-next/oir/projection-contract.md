@@ -10,6 +10,14 @@
 
 ## 1. Selected factorization
 
+The bounded profile accepts only the canonical-framed Fiat--Shamir family.
+`PIRDuplexSpongeFSProfileId` is a recognized source family but support
+classification returns `Unsupported` before source extraction or OIR
+construction. Duplex support needs a sibling endpoint profile that owns salt
+placement, abstract proof-tuple parsing, prover-message wire codecs, and their
+checked correspondence to distinct transcript encoders. None is inferred from
+the canonical graph's namespaces, retry, or sampling-failure rows.
+
 K3-D separates source support, source completeness, target validity, and
 source-relative correctness:
 
@@ -111,7 +119,7 @@ contains:
 - canonical constants and pure-node value graph;
 - the slot-centric role ABI codec/slot/edge graph;
 - exact total endpoint spine and K2 semantic frame coordinates;
-- static Fiat--Shamir construction, prefix, namespace-recipe, retry, state,
+- static canonical-framed Fiat--Shamir construction, prefix, namespace-recipe, retry, state,
   and failure laws;
 - complete claim, reduction, publication, terminal, and closure graph;
 - optional six-table reachable Plan graph.
@@ -497,8 +505,9 @@ cryptographic property even after that later contract exists.
 
 | Source/purpose | `K3DProjectionV0` result |
 |---|---|
-| FS Verifier over base K2 non-Oracle, non-module effects | Supported |
-| FS Plan-specialized Prover over base Plan recipes | Supported |
+| Canonical-framed FS Verifier over base non-Oracle, non-module effects | Supported |
+| Canonical-framed FS Plan-specialized Prover over base Plan recipes | Supported |
+| Duplex-sponge FS Verifier or Prover | `Unsupported(DuplexSpongeEndpoint)` |
 | Fresh Verifier or Prover | `Unsupported(FreshEndpoint)` |
 | Generic Plan-free Prover | `Unsupported(GenericProverEndpoint)` |
 | Core with a native Oracle declaration or occurrence | `Unsupported(StandardOracleEndpoint)` |
@@ -506,8 +515,8 @@ cryptographic property even after that later contract exists.
 | Future Interface/Plan grammar with module recipe | Fails the pinned regime/schema join; not classifiable under `K3DProjectionV0` |
 | Legacy carrier lacking a supported K2 effect law | Stops at PIR admission |
 
-The table is exhaustive for the closed purpose grammar and selected K2/K3-B
-regime. A new source case or purpose rotates the profile and adds an explicit
+The table is exhaustive for the closed purpose grammar and selected PIR/Plan
+profile. A new source case or purpose rotates the profile and adds an explicit
 disposition before extraction can run.
 
 ## 11. Execution and Realization boundary

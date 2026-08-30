@@ -106,13 +106,14 @@ wire packaging, and reached outcomes remain explicit Stage 4B non-claims.
 
 ## Bounded support
 
-K3-D supports FS verifier and FS Plan-specialized prover endpoints over the
-base K2 non-Oracle, non-module effect language and base Plan recipes. Fresh,
+The current endpoint profile supports canonical-framed FS verifier and
+canonical-framed FS Plan-specialized prover endpoints over the base non-Oracle,
+non-module effect language and base Plan recipes. Duplex-sponge FS, Fresh,
 generic prover, native Oracle, and every module-effect path are recognized
 typed `Unsupported` cases before view extraction, with no partial target. Once
-a proposition forms, validation cannot return feature `Unsupported`. A legacy imported-verifier
-carrier lacking a supported K2 module-effect contract stops earlier at PIR
-admission; it cannot be described as an OIR refusal.
+a proposition forms, validation cannot return feature `Unsupported`. A legacy
+imported-verifier carrier lacking a supported module-effect contract stops
+earlier at PIR admission; it cannot be described as an OIR refusal.
 
 This conservative table is a bounded closure, not a rejection of later
 profiles. Any extension must define its source view, target effect law,
@@ -168,7 +169,9 @@ proposition and qualified result and still cannot serialize live authority.
 - [PIR Endpoint Projection Views](../pir/endpoint-projection-views.md)
 - [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md)
 - [Interactive Core and Causal Execution](../pir/interactive-core.md)
-- [Fiat--Shamir Construction](../pir/fiat-shamir.md)
+- [Canonical-Framed Fiat--Shamir Construction](../pir/fiat-shamir.md)
+- [Duplex-Sponge Fiat--Shamir Construction](../pir/duplex-sponge-fiat-shamir.md)
+  for the recognized but currently unsupported sibling source family
 
 ## Deferred questions
 

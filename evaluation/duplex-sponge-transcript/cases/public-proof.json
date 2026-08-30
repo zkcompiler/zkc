@@ -1,0 +1,19 @@
+{
+  "schema": "zkc.duplex-sponge-transcript.public-proof.v1",
+  "salt": [
+    2,
+    4
+  ],
+  "prover_messages": [
+    [
+      3,
+      1
+    ],
+    null,
+    [
+      1,
+      2,
+      3
+    ]
+  ]
+}

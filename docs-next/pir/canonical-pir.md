@@ -78,7 +78,9 @@ CanonicalPirSubjectPair_B = {
   core_profile_id: PIRInteractionProfileId,
   core: InteractiveCore,
   protocol_profile_id:
-    PIRInteractionProfileId | PIRTranscriptFSProfileId,
+    PIRInteractionProfileId
+  | PIRCanonicalFramedFSProfileId
+  | PIRDuplexSpongeFSProfileId,
   protocol: Protocol
 }
 
@@ -92,11 +94,15 @@ where
       B, protocol_profile_id, ProtocolBody(protocol))
 
   protocol_profile_id =
-    PIRInteractionProfileId       when protocol is Fresh
-    PIRTranscriptFSProfileId      when protocol is FiatShamir
+    PIRInteractionProfileId when protocol is Fresh
+    TranscriptConstructionProfile(A.id)
+      when protocol is FiatShamir(T) and the authenticated admitted
+      construction handle A satisfies A.id = T
 ```
 
-The physical root carries the complete typed `core_id`, one claimed complete
+The FS profile is selected from that authenticated handle and its exact
+profile preimage, never decoded from bare construction-ID bytes. The physical
+root carries the complete typed `core_id`, one claimed complete
 typed `ProtocolId`, and both exact language-profile IDs. A
 `SemanticContentId` contains the foundation epoch, identity-profile ID,
 hash-suite ID, semantic-regime ID, subject kind, and digest fixed by K1; it does
@@ -183,7 +189,8 @@ Fresh and FS Protocols over one literal Core therefore have different
 ### 2.4 External `TranscriptConstructionBody`
 
 For FS, the graph carries only the exact typed `TranscriptConstructionId`.
-Authentication separately receives the complete K2 construction body:
+Authentication separately receives the complete profile-specific construction
+body. For the canonical-framed profile it is:
 
 ```text
 TranscriptConstruction = {
@@ -201,15 +208,24 @@ TranscriptConstruction = {
 }
 ```
 
-Its strict K1 `MetaValueV0` decode/re-encode and ID law are independent of the
-Protocol graph. The body contains no self-ID; the K2
-`BindConstructionSelfId` instruction uses the resolved authenticated ID.
+For the duplex profile it is exactly
+`DuplexSpongeTranscriptConstructionBody` from
+[Duplex-Sponge Fiat--Shamir](duplex-sponge-fiat-shamir.md#appendix-a-canonical-bodies).
+Its rate, capacity, algorithms, salt length, message rules, and challenge rules
+replace rather than supplement the canonical-framed fields above.
+
+Strict Foundation `MetaValueV0` decode/re-encode and ID law are independent of the
+Protocol graph and dispatch only after authenticating the exact selected
+construction profile. Both bodies contain no self-ID. The canonical-framed
+profile's `BindConstructionSelfId` instruction uses the resolved authenticated
+ID; the duplex profile never absorbs that ID and has no corresponding step.
 
 Fresh accepts neither a construction reference nor construction preimage. FS
-requires exactly one construction whose recomputed ID equals the root reference
-and whose `core_id` equals the embedded Core. A missing construction is a
-missing dependency; an extra construction for Fresh is refused by exact input
-closure.
+requires exactly one construction whose recomputed ID equals the root
+reference, whose selected profile equals the root Protocol profile, and whose
+`core_id` equals the embedded Core. A missing construction is a missing
+dependency; a mixed-family body is a kind/profile mismatch; an extra
+construction for Fresh is refused by exact input closure.
 
 ### 2.5 K1 dependencies and module closure
 

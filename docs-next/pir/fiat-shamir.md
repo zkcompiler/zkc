@@ -1,12 +1,13 @@
-# Fiat--Shamir Construction
+# Canonical-Framed Fiat--Shamir Construction
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative redesign target
+> **Document state:** Active redesign target; canonical-framed sibling
 > **Target status:** The bounded canonical-framed construction, influence, and
 > same-Core eligibility model is complete at its stated construction boundary.
-> Source-exact constructions with different initialization, proof material,
-> or framing remain separate extension work; theorem applicability and
-> property transport remain open Analysis work.
+> The separately identified duplex-sponge sibling owns runtime-instance
+> initialization, proof-carried construction material, and raw overwrite
+> transitions; theorem applicability and property transport remain open
+> Analysis work.
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Fiat--Shamir
 > semantics remain under [`docs/`](../../docs/README.md).
@@ -28,6 +29,10 @@ The [Interactive Core](interactive-core.md) owns parties, values, scopes,
 effects, public-coin eligibility, causal execution, and replay. Foundation owns
 the value, identity, portable-algorithm, ABI, typed-failure, and deterministic-
 evaluation mechanisms used here.
+
+The [duplex-sponge family](duplex-sponge-fiat-shamir.md) is a sibling profile
+over the same Core language. Neither family is a mode, parameter value,
+fallback, or implementation of the other.
 
 This page does not prove soundness, knowledge, zero knowledge, random-oracle or
 quantum-random-oracle applicability, distribution preservation, hash or sponge
@@ -65,23 +70,23 @@ The exact-used PIR owner-module closure additionally recognizes
 declaration body defined by the companion page. It is an authenticated static
 application-purpose coordinate, not a display string or a freshness claim.
 
-This page selects one standalone `PIRTranscriptFSProfile`. Its required exact
+This page selects one standalone `PIRCanonicalFramedFSProfile`. Its required exact
 profile imports are `{PIRInteractionProfileId}`; its supported subject kinds are
 `{"pir.transcript-construction", "pir.protocol",
 "pir.source-binding-payload", "pir.source-capability-requirement",
 "pir.source-consumer", "pir.source-no-policy",
 "pir.source-policy-closure", "pir.source-purpose"}`; and its inline declaration
 catalog contains `TranscriptConstructionBody`, `FSProtocolBody`, the three
-construction-view schemas, `FSConstructionViewBody`, and their closure and
-issuance laws. There is intentionally no second FS-only profile:
-`PIRFSProfileId = PIRTranscriptFSProfileId`. A construction and an FS Protocol
-therefore rotate together when transcript/FS meaning changes, while a Fresh
-Protocol remains under `PIRInteractionProfileId`. The profile import is the
-only generic upstream closure; it is not a declaration-module root.
+construction-view schemas, `FSConstructionViewBody`, the profile-local
+`FSChallengeReceipt` and `FSInterpretationFailureReceipt` runtime schemas,
+and their closure and issuance laws. A construction and its canonical-framed FS Protocol rotate
+together when this family meaning changes, while Fresh and an unreferenced FS
+sibling remain under their own profiles. The profile import is the only
+generic upstream closure; it is not a declaration-module root.
 Construction formation, FS Protocol/view issuance, and checked-construction
 authority authenticate exactly the two-entry
-`{PIRInteractionProfileId,PIRTranscriptFSProfileId}` closure and require only
-`PIRTranscriptFSProfileId` in evaluator support. Public-setup-profile support is
+`{PIRInteractionProfileId,PIRCanonicalFramedFSProfileId}` closure and require only
+`PIRCanonicalFramedFSProfileId` in evaluator support. Public-setup-profile support is
 irrelevant to those operations. An unrecognized exact root is `Unsupported`,
 while a supported root omitting any emitted Protocol, construction, or
 owner-authority subject kind is `Refused`.
@@ -117,12 +122,8 @@ refuses admission rather than becoming evaluator-dependent behavior.
 
 ### 3.1 Exact algorithm uses
 
-```text
-AlgorithmUse = {
-  algorithm: PortableAlgorithmRef,
-  evaluation_contract: EvaluationContractId
-}
-```
+Every algorithm coordinate uses the shared `PIRAlgorithmUse` record from the
+Interaction profile.
 
 The construction names four common K1 value types:
 
@@ -208,8 +209,8 @@ ChallengeRule = {
   challenge: ChallengeRef,
   draw_bytes: positive Natural,
   maximum_draws: positive Natural,
-  accept: AlgorithmUse,
-  decode: AlgorithmUse
+  accept: PIRAlgorithmUse,
+  decode: PIRAlgorithmUse
 }
 ```
 
@@ -294,9 +295,9 @@ TranscriptConstruction = {
   transcript_bytes_type: TranscriptBytesType,
   natural_type: NaturalType,
   initial_state: CanonicalValue<TranscriptStateType>,
-  absorb: AlgorithmUse,
-  squeeze_bytes: AlgorithmUse,
-  advance_state: AlgorithmUse,
+  absorb: PIRAlgorithmUse,
+  squeeze_bytes: PIRAlgorithmUse,
+  advance_state: PIRAlgorithmUse,
   application_domain:
     ProtocolDeclarationRef<"pir.fs-application-domain">,
   sampling_exhausted_failure: SamplingExhaustedFailure,
@@ -310,8 +311,11 @@ Core challenge. The canonical body is in Appendix A:
 ```text
 TranscriptConstructionId =
   ProfiledSemanticId<"pir.transcript-construction">(
-    B, PIRTranscriptFSProfileId,
+    B, PIRCanonicalFramedFSProfileId,
     TranscriptConstructionBody(construction))
+
+TranscriptConstructionProfile(construction.id) =
+  PIRCanonicalFramedFSProfileId
 ```
 
 The construction body contains no literal copy of its own ID. Initialization
@@ -548,6 +552,12 @@ FSSamplingFailureReceipt = {
   draws: NonEmptyCanonicalSeq<DrawReceipt>,
   final_state: CanonicalValue<TranscriptStateType>
 }
+
+FSInterpretationFailureReceipt =
+  FiatShamirSamplingFailure {
+    construction: TranscriptConstructionId,
+    receipt: FSSamplingFailureReceipt
+  }
 ```
 
 Every field is derived and replayed; none is supplied as a shortcut. The last
@@ -1108,6 +1118,13 @@ capability, different family or purpose, or different result schema grants no
 authority. Cold use must reauthenticate and readmit all three subjects and
 rerun `CheckFSConstruction`.
 
+For every affirmative result formed by this operation:
+
+```text
+CheckedFSConstructionProfile(result.ref) =
+  PIRCanonicalFramedFSProfileId
+```
+
 ### 10.2 Exact meaning
 
 The affirmative result proves only:
@@ -1196,10 +1213,17 @@ are those of
 page supplies the three construction schemas and one checked-result schema:
 
 ```text
-ConstructionStaticViewKind =
+CanonicalFramedConstructionViewKind =
     TranscriptDeclarationView
   | RequiredInfluenceView
   | ChallengeTransitionView
+
+CanonicalFramedConstructionViewKindRef(kind) =
+  (PIRCanonicalFramedFSProfileId, written tag of kind)
+
+CanonicalFramedFSResultViewKind = FSConstructionView
+CanonicalFramedFSResultViewKindRef =
+  (PIRCanonicalFramedFSProfileId, written tag of FSConstructionView)
 
 TranscriptDeclarationViewBody = {
   transcript_construction_id: TranscriptConstructionId,
@@ -1256,11 +1280,13 @@ FSConstructionViewBody = {
 ```
 
 The first three coordinates are
-`ConstructionView(TranscriptConstructionId,kind)` and are issued by the common
+`ConstructionView(TranscriptConstructionId,
+CanonicalFramedConstructionViewKindRef(kind))` and are issued by the common
 `IssuePIRStaticView` operation from the exact admitted construction, its Core,
 their inert authority bindings, and matching fresh capabilities.
 `FSConstructionView` is not exported by construction admission. Its coordinate
-is `FSResultView(CheckedFSConstructionResultRef,FSConstructionView)`, and it is
+is `FSResultView(CheckedFSConstructionResultRef,
+CanonicalFramedFSResultViewKindRef)`, and it is
 issued only by:
 
 ```text
@@ -1344,20 +1370,18 @@ Chiesa and Orrù's
 That construction initializes from the runtime instance, absorbs one
 proof-carried salt owned by the transform, absorbs raw fixed-codec prover
 messages without zkc headers or namespaces, and uses one-shot total decoding.
-Its explicit mutable duplex state-transition shape fits the Foundation
-algorithm/module substrate; no exact admitted duplex module is activated here.
-The unsupported part is the present construction envelope.
+Its explicit mutable state machine and construction-public material are owned
+by the separate
+[Duplex-Sponge Fiat--Shamir Construction](duplex-sponge-fiat-shamir.md).
 
 Treating the salt as Core SessionContext or as an extra Core prover message
 would change the Fresh source interaction. Treating typed zkc frames as the
 paper's raw codec would claim correspondence to a different transcript. Neither
-is an admissible workaround. A source-exact `DuplexSponge` construction
-requires a distinct construction alternative and Fiat--Shamir-specific public
-invocation material while leaving this canonical-framed construction
-unchanged. Until that alternative is specified and admitted, the literal
-duplex-sponge construction is outside the selected construction family and none
-of its security theorems applies to this page's construction without a
-separate Analysis correspondence and applicability result.
+is an admissible workaround. The sibling profile leaves this construction
+unchanged and gives the duplex family a distinct construction and Protocol
+identity. None of its security theorems applies to this page's construction,
+and the sibling itself activates no theorem without a separate Analysis
+correspondence, source-validation result, and applicability judgment.
 
 ## 15. Bounded executable evidence
 
@@ -1370,7 +1394,7 @@ carrier for guard Booleans and present/absent Oracle-answer result values.
 
 The remaining fixture is intentionally smaller than the durable carrier. It
 does not execute raw Core canonical bodies, nonserializable causal or replay
-capabilities, the complete K1 `AlgorithmUse` request ABI, the complete PC graph
+capabilities, the complete Foundation algorithm request ABI, the complete PC graph
 and module-sink algebra, first-class reduction effects, generic typed Oracle
 indices, or OIR serialization. Fixture success is therefore structural and
 behavioral evidence for the named finite cases, not implementation conformance,
@@ -1399,14 +1423,14 @@ Reopen this construction if a later protocol inhabitant requires:
 - a dynamic Statement introduced after its active scope's first challenge;
 - theorem-qualified pre-challenge prover material that must deliberately remain
   unabsorbed without weakening the default strong-FS rule;
-- runtime-instance initialization, transform-owned public proof material, or
-  a source-exact fixed-codec transcript whose semantics differ from this
-  profile's canonical frames and namespaces; or
 - a same-Core transformation whose verifier-observable interaction actually
   changes.
 
-The response is a new exact model or checked prior construction, not an opaque
-callback, manual prefix, skip flag, or theorem name stored in the Core.
+Runtime-instance initialization, transform-owned public proof material, and
+raw fixed-codec overwrite semantics route to the duplex sibling and do not
+reopen this family. Any further materially different construction routes to a
+new exact sibling or checked prior construction, not an opaque callback,
+manual prefix, skip flag, or theorem name stored in the Core.
 K2 intentionally chooses the stricter baseline in which every active prior
 prover publication is absorbed. A future theorem-backed relaxation must define
 a distinct checked source/target construction and Analysis obligation; it may
@@ -1420,17 +1444,12 @@ Use the K1 notation from the companion page: `R{...}`, `S[...]`, `V(tag,x)`,
 ordered, and closed.
 
 ```text
-AlgorithmUseBody(x) = R {
-  0: Y(ContentRefV0(x.algorithm)),
-  1: Y(ContentRefV0(x.evaluation_contract))
-}
-
 ChallengeRuleBody(x) = R {
   0: N(x.challenge),
   1: N(x.draw_bytes),
   2: N(x.maximum_draws),
-  3: AlgorithmUseBody(x.accept),
-  4: AlgorithmUseBody(x.decode)
+  3: PIRAlgorithmUseBody(x.accept),
+  4: PIRAlgorithmUseBody(x.decode)
 }
 
 TranscriptConstructionBody(T) = R {
@@ -1439,9 +1458,9 @@ TranscriptConstructionBody(T) = R {
   2: CanonicalValueTypeBody(T.transcript_bytes_type),
   3: CanonicalValueTypeBody(T.natural_type),
   4: T.initial_state.datum,
-  5: AlgorithmUseBody(T.absorb),
-  6: AlgorithmUseBody(T.squeeze_bytes),
-  7: AlgorithmUseBody(T.advance_state),
+  5: PIRAlgorithmUseBody(T.absorb),
+  6: PIRAlgorithmUseBody(T.squeeze_bytes),
+  7: PIRAlgorithmUseBody(T.advance_state),
   8: DeclarationRefBody(Module(T.application_domain)),
   9: CanonicalSemanticFailureTypeBody(T.sampling_exhausted_failure),
  10: S[ ChallengeRuleBody(rule) ... ]
@@ -1597,8 +1616,9 @@ an untyped diagnostic record. The declaration body and declaration-local type
 are exactly those in Section 3.2.
 
 Changing any tag, field, order, derived action, namespace law, transition, or
-admission predicate rotates `PIRTranscriptFSProfile` and every downstream
-profile that imports it. A module-owned declaration change instead rotates
+admission predicate rotates `PIRCanonicalFramedFSProfile` and every downstream
+profile that imports it. It does not rotate an unreferenced duplex-sponge or
+future sibling. A module-owned declaration change instead rotates
 that module and its exact users. The shared Foundation semantic regime rotates
 only when a Foundation-owned mechanism or its interpretation changes. Old
 bytes are never reinterpreted.

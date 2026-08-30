@@ -906,7 +906,8 @@ exact K2 transcript construction. `FSConstructionView` is derived only from the
 exact affirmative `CheckedFSConstruction` and carries the paired Fresh/FS
 Protocol IDs, shared Core, maps, and structural conclusion. The manifest checks
 the owner-issued `FSResultView(CheckedFSConstructionResultRef,
-FSConstructionView)` plus the exact transcript-construction/Fresh/FS/Core
+CanonicalFramedFSResultViewKindRef)` plus the exact transcript-construction/
+Fresh/FS/Core
 subject coordinates. Its support binds the
 `ExactPIRStaticViewAuthorityBinding<FSConstructionView>`, and the Analysis
 checking invocation supplies the matching `PIRStaticViewCapability`. The

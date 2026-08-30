@@ -86,8 +86,8 @@ review remain pending.
   boundary: all child references must be resolved into one newly authenticated
   and admitted flat `InteractiveCore`, with no child execution handle retained;
   a reusable checked elaboration/composition satellite is not active yet;
-- separately admitted `TranscriptConstruction`, deterministic Fresh-to-Fiat--
-  Shamir construction under the current canonical-framed construction,
+- separately admitted `TranscriptConstruction` siblings, deterministic
+  Fresh-to-Fiat--Shamir construction under each exact closed family profile,
   independently admitted target Protocol, and exact `CheckedFSConstruction`
   structural result, while Analysis retains ownership of exact theorem
   applicability and property-specific transport;
@@ -113,8 +113,8 @@ review remain pending.
 - backend emission, deployment, invocation, or concrete runtime suppliers;
 - evidence grades or current implementation support;
 - a currently active generic Core-composition construction, runtime child-Core
-  invocation, or source-exact transcript construction beyond the
-  canonical-framed construction; or
+  invocation, unlisted or open-ended transcript family, or generic transcript-
+  program language; or
 - MLIR classes and pass structure as architectural boundaries.
 
 Structural predicates such as formation, `WF`, linearity, binding, closure,
@@ -187,8 +187,13 @@ first being found by the optimizer or successfully projected to every target.
   definition owner for Core, Protocol, causal execution, public coin, and the
   standard Oracle lifecycle, including initial/prover origins, logical access,
   and the confidential initial-Oracle view
-- [Fiat--Shamir Construction](fiat-shamir.md) — active target owner for
-  transcript semantics and the same-Core Fresh/FS construction
+- [Canonical-Framed Fiat--Shamir Construction](fiat-shamir.md) — active target
+  owner for typed framing, namespaces, retry, sampling failure, and its
+  same-Core Fresh/FS construction
+- [Duplex-Sponge Fiat--Shamir Construction](duplex-sponge-fiat-shamir.md) —
+  active sibling owner for runtime-instance initialization, construction-
+  public salt, overwrite transitions, fixed codecs, family receipts, and its
+  same-Core Fresh/FS construction
 - [Oracle-Commitment Construction](oracle-commitment-construction.md) — exact
   logical-Oracle-to-committed-Core elaboration, admission, authority, and run
   validation boundary
@@ -202,7 +207,7 @@ first being found by the optimizer or successfully projected to every target.
 
 The two project architecture pages are selected non-normative research
 decisions. Later revalidation replaced the Core/Protocol and Fiat--Shamir
-definition surfaces with the first two active target pages above. A
+definition surfaces with the three active target pages above. A
 narrow reclosure preserved that architecture while repairing exact transcript
 bodies and evidence boundaries; its validation record owns the details.
 The carrier and Interface/Plan pages are the current non-normative target

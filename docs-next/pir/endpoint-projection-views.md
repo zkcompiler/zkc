@@ -51,14 +51,15 @@ EndpointProjectionPurpose =
 
 `K3DProjectionV0` supports exactly:
 
-- `VerifierEndpoint(FiatShamir)`; and
-- `PlanSpecializedProverEndpoint(FiatShamir)` over the base K2 effects and
-  base K3-B Plan grammar.
+- `VerifierEndpoint(FiatShamir)` for the exact
+  `PIRCanonicalFramedFSProfileId`; and
+- `PlanSpecializedProverEndpoint(FiatShamir)` for that same family over the
+  base PIR effects and current Plan grammar.
 
 It recognizes but returns early typed `Unsupported`, with no partial view,
-OIR, or proposition, for Fresh endpoints, generic Plan-free Provers, a Core
-with any native Oracle declaration or occurrence, an admitted module effect
-of any kind. A legacy module carrier without a supported K2
+OIR, or proposition, for Fresh endpoints, generic Plan-free Provers, a duplex-
+sponge FS Protocol, a Core with any native Oracle declaration or occurrence,
+or an admitted module effect of any kind. A legacy module carrier without a supported PIR
 effect contract stops earlier at PIR admission and never reaches this
 classifier. A future Interface or Plan grammar containing module recipes has a
 different semantic regime and fails the selected regime/profile join before
@@ -73,9 +74,9 @@ The semantic payloads are closed:
 
 ```text
 EndpointUnsupportedReasonBody =
-    V(0,U) | V(1,U) | V(2,U) | V(3,U)
+    V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U)
 // FreshEndpoint | GenericProverEndpoint
-// StandardOracleEndpoint | ModuleEffectEndpoint
+// StandardOracleEndpoint | ModuleEffectEndpoint | DuplexSpongeEndpoint
 
 EndpointUnsupportedBody =
   S[EndpointUnsupportedReasonBody... in increasing tag order, nonempty]
@@ -460,7 +461,8 @@ reordering needs a new relation profile with a checked commutation catalog.
 
 ## 6. Static Fiat--Shamir semantics
 
-The source view retains the exact construction state/bytes/natural types,
+This section is the canonical-framed sibling only. The source view retains the
+exact construction state/bytes/natural types,
 initial state, absorb/squeeze/advance algorithms and contracts, application
 domain, sampling-failure type, challenge rules, K2 frame law, exact derived
 prefix law, and exact retry/state-advance law. The per-draw namespace recipe is
@@ -1557,9 +1559,9 @@ InertReasonBody =
 // SourceProvenanceOnly | VerifierPrivateForProver | DeadInterfaceElement
 // PrivateMaterialKey | DeadPlanElement | DerivedWitnessExport
 UnsupportedReasonBody =
-    V(0,U) | V(1,U) | V(2,U) | V(3,U)
+    V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U)
 // FreshEndpoint | GenericProverEndpoint | StandardOracleEndpoint
-// ModuleEffectEndpoint
+// ModuleEffectEndpoint | DuplexSpongeEndpoint
 DispositionBody =
     V(0,S[ViewSinkBody... in body-byte order]) | V(1,JoinAxisBody)
   | V(2,InertReasonBody) | V(3,UnsupportedReasonBody)
