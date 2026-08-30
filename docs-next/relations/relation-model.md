@@ -747,6 +747,14 @@ The public identity commits only to public instance values, public oracle
 bindings, phase values, and the exact Interface. It never commits to witness
 or oracle material.
 
+`RelationInstanceId` is content identity, not use-occurrence identity. The
+same admitted instance content may occupy two role-distinct grounding slots or
+participate in two distinct private-assignment and Plan-run occurrences. A
+runtime judgment that needs source/target provenance therefore retains the
+exact `GroundingInvocation` slot association, owner source authority, private
+assignment object where applicable, and live capability. Equal instance IDs
+alone neither merge those occurrences nor prove a causal edge between them.
+
 ### 3.4 Admission claims
 
 Definition admission establishes K1 formation and the definition-language
@@ -1903,8 +1911,12 @@ PlanWitnessBindingId =
 Every target must resolve to a `WitnessIngress` or `DerivedWitnessExport`
 entry through the exact owner `PlanWitnessOccurrenceRef =
 (plan_witness_surface_id,WitnessSurfaceKey)`, with the exact selected type and
-owner-declared `SuppliedForGeneration | ProducedWhenSourceDecisionActive`
-occurrence class. Advice, confidential context,
+owner-declared
+`SuppliedForGeneration | ProducedWhenSourceDecisionActive |
+ProducedWhenAcceptedTerminalReached` occurrence class. Decision-produced
+exports are owned only when their source decision is active; accepted-terminal
+exports additionally require the exact atomically completed continuation arm.
+Advice, confidential context,
 nonce/randomness, search state, and mutable state are absent from this surface
 and cannot be silently forced into the relation witness image. An explicitly
 exported derived witness is nameable by `WitnessSurfaceKey`. Oracle material
@@ -2018,6 +2030,26 @@ PIR-owned `ConfidentialInitialOracleFamily`,
 imports that operation's exact `CausallyGeneratedOnly` qualification and
 `WholeCanonicalCarrier` disclosure extent. Relations does not redefine those
 types, issue the view, select a narrower disclosure, or obtain it from replay.
+
+For the distinct private Plan-witness seam, Relations imports the PIR-owned
+`ConfidentialPlanWitnessFamily`, read manifest, source requirement,
+disclosure policy and ID, binding payload, capability requirement, policy
+closure, `ConfidentialPlanWitnessView`, checked authority, live capability,
+and `IssueConfidentialPlanWitnessView` from
+[Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md). The
+source input is the tagged `Generated | Finalized` owner sum. A selection that
+contains any accepted-terminal occurrence requires `Finalized`; generation-
+only selections may use either arm without creating a second occurrence.
+Relations cannot issue this view, widen its canonical sorted-unique manifest,
+accept replay qualification, or recover a private value from a public record.
+
+For the narrower direct-handoff seam, Relations also imports the PIR-owned
+`IssueAcceptedPlanWitnessIngressSupply`, `ReadyPlanWitnessIngressSupply`, its
+live capability, and `CausalPlanWitnessHandoffCapability`. Only PIR consumes
+the ready supply and creates the fresh target `WitnessIngress` occurrence.
+Relations can join that exact live capability to its own already-affirmative
+source and target occurrence groundings; it cannot construct a supply,
+transport bytes, copy a value, or mint causal authority.
 
 The confidential view is purpose-bound to one exact correspondence question.
 Its PIR disclosure policy must name the exact downstream consumer and purpose
@@ -3029,16 +3061,33 @@ generic object carrier.
 | `GroundingEquationHolds` | Exact typed runtime/artifact/relation operands satisfy the equation | Cryptographic faithfulness beyond the equation |
 | `CommitmentGroundingHolds` | Exact relation material and exact publication occurrence satisfy the construction equation | Binding, hiding, or extraction |
 | `RunGroundedCorrespondence` | One qualified run's selected public facts and, when requested, one causally supplied whole initial logical-Oracle carrier agree with one exact instance/binding | Universal protocol behavior, satisfaction, or Oracle security |
+| `PlanWitnessRunGrounding` | Selected relation-secret occurrences and selected causally generated Plan-witness occurrences satisfy their exact binding-edge value relations | Witness satisfaction, fold preservation, or next-run handoff |
+| `CheckedSameRunPlanWitnessCorrespondence` | Affirmative public and private correspondence results retain the identical instance, Protocol, invocation object, completed-record object, and causal-generation capability | A prescribed public/private coordinate pairing, next-run recurrence, or IVC induction |
+| `CheckedPlanWitnessHandoffCorrespondence` | Two same-run results and one live PIR handoff capability retain the exact source relation assignment and Plan export occurrence and the exact fresh target ingress and relation assignment occurrence | Public recurrence, fold preservation, or serialized/physical transport |
+| `CheckedCausalPlanStepRecurrence` | One exact direct private handoff is conjoined with one exhaustive three-leg public equation chain from produced source output through source/target instance occurrences to the target Statement input, over exactly two causal runs | Relation satisfaction, fold correctness, recurrence induction, or security |
 | `RelationSatisfaction` | One confidential occurrence evaluates true or false under one exact model | Protocol acceptance or security |
 | `RelationRefinement` | One exact directional relation proposition holds under its basis | Probabilistic protocol reduction |
 
-Admission checks only K1 formation, resolvable typed coordinates, finite
+The two added conjunction rows are operation-local checked results, not new
+question families or semantic subjects. They have no canonical body, ID, or
+catalog entry. Adding them does not further extend the durable
+`CorrespondenceQuestion` tagged sum: they consume the already-defined
+`PlanWitnessRunGrounding`, `RunGrounding`, and `EquationGrounding` results.
+The Relations semantic-subject count is unchanged. Their laws still belong to
+the exact Relations semantic-law source, and the imported Interface/Plan law
+has changed, so the Relations profile and dependent identified subjects rotate
+normally without inventing an identity for either live result.
+
+Admission checks only Foundation formation, resolvable typed coordinates, finite
 bounds, exact dependencies, and question grammar. It does not precompute the
 question's substantive equality, coverage, or refinement predicate. Thus each
 completed result family retains a constructible Negative as required by R-08.
 A reference to the wrong owner/kind or an ill-typed selector is malformed; a
 well-formed edge to an allowed but non-covering occurrence remains available
-for a negative coverage result.
+for a negative coverage result. This `Malformed` branch is question-formation
+failure. Once a proposition is formed, supplying a formed typed reference on
+the wrong required subject axis is `KindMismatch`; unequal values or
+non-covering allowed occurrences remain substantive `Negative` results.
 
 ### 11.2 Exact run-grounding law
 
@@ -3119,9 +3168,84 @@ authority lifetime. A different instance, generation, capability, or equal
 field value is refused; an unavailable fresh binding is `CannotAnswer`. Only
 the fresh overall-Affirmative run-grounded checked-result capability retaining
 the exact complete selection and all join capabilities licenses its selected
-use count. This target defines no analogous Plan or artifact consumer join;
-adding one requires that operation's exact live source binding and cannot reuse this
-result ambiently.
+use count. Artifact comparison still has no analogous live consumer join.
+
+For every edge selected by a `PlanWitnessRunGrounding` question, Relations
+reads the exact relation-witness occurrence through a fresh
+`PrivateWitnessAssignment` source and the exact Plan occurrence through the
+question-bound confidential Plan-witness view. It then applies the edge's
+admitted `ValueRelation` at the two selected typed occurrences. Lossy edges
+reuse `IssuePrivateWitnessFieldSource`, the exact question-bound premise, and
+`CheckLossyUseAtConsumerSource`; they do not infer source identity from equal
+values. True edges record `ValueAgrees(Edge(e))`; false well-formed relations
+record `ValueDisagreement(Edge(e))`. Missing, inactive, unfinalized, expired,
+replay-qualified, cross-run, wrong-policy, wrong-type, and malformed sources
+retain the qualified non-semantic-false outcomes fixed by Protocol
+Correspondence.
+
+The separate same-run join consumes affirmative public `RunGrounding` and
+private `PlanWitnessRunGrounding` results and their live capabilities. It
+requires exact equality of the retained `RelationInstance`, `ProtocolId`, live
+`CoreInvocation` object, live `CompletedProtocolRecord` object, and identical
+`CausalGenerationCapability`. It is a process-local conjunction, not a new
+semantic subject. It does not choose an "intended" fold output and does not
+assert that any selected output becomes a later run's input occurrence.
+
+`JoinCausalPlanWitnessHandoff` then selects one agreeing
+`DerivedWitnessExport` edge from a source same-run result and one agreeing
+`WitnessIngress` edge from a target same-run result. It consumes no value and
+performs no equality shortcut. Instead, it requires the identical live
+`CausalPlanWitnessHandoffCapability` created when PIR consumed the exact
+`ReadyPlanWitnessIngressSupply` during target preparation. The source and
+target checked-result capabilities must retain the exact source and target
+`CompletedPlanRun` objects, relation instance operands, private-assignment
+occurrences, selected binding edges, checked surface extractions, export and
+ingress occurrences, and Plan/Protocol causal capabilities named by that
+handoff.
+The source private result must have used the identical `Finalized`
+confidential source and continuation retained by the handoff capability, even
+when its decision-derived export was independently readable from a
+`Generated` source. For such an export, the continuation capability retains
+the exact owner mapping from the sealed decision occurrence to that export's
+active continuation-output occurrence; equality of their private values is
+not the bridge.
+Equal instance IDs, assignment values, surface keys, record bodies, or fresh
+byte-equal runs cannot join. The nonidentified result records only this direct
+same-process causal occurrence chain under the two already-checked edge
+relations; it does not infer a relation refinement or a public recurrence.
+
+`JoinCausalPlanStepRecurrence` finally requires an affirmative
+`EquationGrounding` whose required run-slot set is exactly two distinct slots,
+both fixed by the question to `ExactCausallyGenerated`. Its exact invocation
+must bind those slots to the identical source and target invocation, completed-
+record, run-view, and Protocol causal-capability objects retained by the private
+handoff. Two distinct required instance slots must likewise bind the exact
+source and target relation instance operands and owner authorities retained by
+that handoff. The source and target slot occurrences remain distinct even if
+their `RelationInstanceId` values are equal.
+
+The operation-local `CausalPublicRecurrenceSelection` additionally requires
+an exhaustive three-leg equality/dependency chain: one output admitted by the
+closed `CausalRecurrencePublicOutputCoordinate` predicate for the source run
+grounds the selected source public-
+instance field, that source instance field connects to the selected target
+instance field, and that target field grounds an exact target-run
+`Statement` binding. Each side may use an explicit typed transformation whose
+only dynamic leaf is its named public occurrence; exact constants are allowed,
+but confidential, artifact, unrelated public, self, unused, and extra
+equality sources are rejected. Thus an arbitrary true two-run equation cannot
+enter merely because it is named or happens to compare equal values.
+
+The resulting nonidentified conjunction is one finite causal step: it combines
+this exact affirmative public occurrence chain with the exact direct private
+handoff. It proves neither the transformations' cryptographic adequacy nor
+relation satisfaction, fold preservation, an unbounded recurrence, IVC/NIVC
+induction, or security.
+
+This direct lane is deliberately process-local. A serialized proof or witness,
+persistent storage, network or buffer transfer, decoding, and physical
+supplier provenance remain Realization obligations. Equal bytes or an
+affirmative codec check cannot recreate `CausalPlanWitnessHandoffCapability`.
 
 The checked result retains both occurrence coordinates even if values are
 equal. A wrong value or wrong well-formed occurrence is Negative. A caller-
@@ -3156,7 +3280,7 @@ behavioral theorem from structural shape.
 | R1CS | structured public vector, witness assignment, constraint/artifact facts | Typed K1 values and selectors preserve order and multiplicity without scalar-port explosion |
 | randomized AIR | public instance, trace/oracle material, post-commitment verifier challenges | `PhaseInput` is a first-class fourth role |
 | FRI/IOR | public statement, logical oracle statement, publication/query/answer occurrences, opening messages/checks | `OracleStatement`, mode-specific Oracle targets, typed public occurrences, and a distinct causal whole-carrier material agreement are required. The public run view remains separate from the purpose-bound confidential initial-Oracle view. |
-| Nova/folding | ordered input claim-instance occurrences, cross-term publication, challenge, output accumulator instance, evolved witness | Claim/reduction correspondence is an occurrence graph plus relation transform; native end-to-end validation remains required |
+| Nova/HyperNova/CycleFold/ProtoStar/LatticeFold+ | ordered input claim-instance occurrences, challenge/publication schedule, output accumulator instance, decision- or accepted-terminal-produced evolved witness | Claim/reduction correspondence remains an occurrence graph plus relation transform; causal private grounding reuses `CorrespondenceQuestion`; one direct same-process output-to-ingress handoff and one two-run recurrence conjunction are nonidentified joins, while fold preservation, serialized transport, and IVC induction remain separate |
 | `sha256-216` | exact 256-to-216 directional uses and grounded source-preimage premise | A separate lossy lane and derived occurrence count are mandatory |
 
 No reviewed case requires generic `ObjectRef` in K2 or Relations. Existing
@@ -3414,16 +3538,28 @@ dependent-owner freeze work:
    reconstructed, cross-purpose, replay-qualified, and unequal-unqueried-entry
    refusal or disagreement cases. General FRI/IOR correspondence,
    commitment/opening security, proximity, and outer-relation inference remain
-   open; native Nova/folding validation remains required for the ordered
-   claim-instance and transform occurrence graph.
+   open. The accumulation/folding package has selected the ordered claim-
+   instance, transform, confidential Plan-output, and same-run occurrence
+   architecture. The selected semantic model now closes one direct same-
+   process Plan-witness handoff and one finite two-run recurrence conjunction;
+   the bounded continuation witness executes a one-use handoff, fresh target
+   ingress, causal join, and finite public/private recurrence join. It does not
+   yet execute the complete two-slot grounding intake written here, establish
+   fold correctness or serialized transport, or establish IVC induction.
+   Corrected-cycle Nova, HyperNova, CycleFold, ProtoStar, LatticeFold+, and
+   imported recursive verification still require fully fixed finite target
+   elaborations before stronger constructive-depth claims.
 4. The bounded integrated Schnorr witness exercises only one finite
    relation/Plan grounding path. It does not close live `PlanWitnessSurface`
    extraction and substituted-Plan controls, causal `RelationRunView` issuance
    and grounding, or exemplar derived-exhaustive and certificate-backed
    bridge-law bases without an ambient checker registry. Their named PIR and
-   Relations owners retain the semantic contracts; native IOP/IOR and folding
-   pressure, owner-carrier implementation correspondence, and independent
-   freeze evidence remain obligations.
+   Relations owners retain the semantic contracts. The bounded continuation
+   witness now exercises continuation-view issuance, Plan-witness run
+   grounding, same-run joining, one-use direct handoff, and a finite recurrence
+   join; complete owner-carrier implementation correspondence, the exact
+   two-slot recurrence intake, and independent freeze evidence remain
+   obligations.
 5. The current Analysis target selects the initial relation-bound and
    Fresh-to-Fiat--Shamir profiles and their exact source/support bindings
    without restating relation facts. Broader refinement, commitment, and

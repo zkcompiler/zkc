@@ -1,0 +1,11 @@
+{
+  "instrument": "plan-continuation-semantics",
+  "families": [
+    {"name": "Nova", "depth": "T2", "arm": ["folded"], "source_requirement": "FinalizedRequired"},
+    {"name": "HyperNova", "depth": "T1", "arm": ["folded_lcccs"], "source_requirement": "FinalizedRequired"},
+    {"name": "CycleFold", "depth": "T1", "arm": ["companion_out", "primary_out"], "source_requirement": "FinalizedRequired"},
+    {"name": "ProtoStar", "depth": "T1", "arm": ["accumulator_witness"], "source_requirement": "GeneratedSufficient"},
+    {"name": "LatticeFold+", "depth": "T1", "arm": ["decomposition_0", "decomposition_1"], "source_requirement": "GeneratedSufficient"}
+  ],
+  "claim_boundary": "finite semantic pressure shapes only; these labels do not upgrade source correspondence"
+}

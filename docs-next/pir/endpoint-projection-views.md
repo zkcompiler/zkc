@@ -47,14 +47,30 @@ EndpointProjectionPurpose =
     VerifierEndpoint(ChallengeMode)
   | GenericProverEndpoint(ChallengeMode)
   | PlanSpecializedProverEndpoint(ChallengeMode)
+  | PlanContinuationProverEndpoint(ChallengeMode)
 ```
 
-`K3DProjectionV0` supports exactly:
+`EndpointProjectionSemanticsV0` supports exactly:
 
 - `VerifierEndpoint(FiatShamir)` for the exact
   `PIRCanonicalFramedFSProfileId`; and
 - `PlanSpecializedProverEndpoint(FiatShamir)` for that same family over the
-  base PIR effects and current Plan grammar.
+  base PIR effects and current Plan grammar; and
+- `PlanContinuationProverEndpoint(FiatShamir)` for that same family and
+  grammar when owner-derived source reachability produces at least one
+  nonempty accepted-terminal continuation arm.
+
+The two Prover purposes are intentionally distinct. The specialized purpose
+projects public proof-message decisions and the state needed to produce them.
+The continuation purpose projects that same graph plus every derived export
+promised by a nonempty accepted-terminal continuation arm. Such an arm may
+contain decision-derived exports guaranteed on the path to that terminal,
+same-terminal-derived exports, or both. An endpoint cannot claim the second
+purpose by projecting those facts away, and the first purpose does not inherit
+private continuation requirements merely because its source Plan declares
+them. A continuation request whose exact Plan yields no nonempty arm returns
+`Unsupported(NoPlanContinuationArm)` before extraction and produces no partial
+view.
 
 It recognizes but returns early typed `Unsupported`, with no partial view,
 OIR, or proposition, for Fresh endpoints, generic Plan-free Provers, a duplex-
@@ -62,9 +78,10 @@ sponge FS Protocol, a Core with any native Oracle declaration or occurrence,
 or an admitted module effect of any kind. A legacy module carrier without a supported PIR
 effect contract stops earlier at PIR admission and never reaches this
 classifier. A future Interface or Plan grammar containing module recipes has a
-different semantic regime and fails the selected regime/profile join before
-this classifier; current K3-D does not authenticate a foreign grammar merely
-to return a feature label.
+different exact owner profile/law closure and fails that join before this
+classifier; the Foundation semantic regime need not change. The selected
+endpoint-projection profile does not authenticate a foreign grammar merely to
+return a feature label.
 
 The support result is affirmative authority. A support-marked case cannot
 later escape through `Unsupported`; disagreement by the selected evaluator is
@@ -74,9 +91,10 @@ The semantic payloads are closed:
 
 ```text
 EndpointUnsupportedReasonBody =
-    V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U)
+    V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U)
 // FreshEndpoint | GenericProverEndpoint
 // StandardOracleEndpoint | ModuleEffectEndpoint | DuplexSpongeEndpoint
+// NoPlanContinuationArm
 
 EndpointUnsupportedBody =
   S[EndpointUnsupportedReasonBody... in increasing tag order, nonempty]
@@ -117,7 +135,7 @@ EndpointReadDisposition =
     ProjectionRelevant(nonempty sorted-unique view_sinks)
   | SourceJoinOnly(join_axis)
   | InertForPurpose(reason)
-  | UnsupportedByK3D(reason)
+  | UnsupportedByEndpointProjection(reason)
 ```
 
 The manifest is profile-owned, never producer-authored:
@@ -164,7 +182,7 @@ grammar/rule DAGs and cannot be producer-edited. Appendix B closes their tags,
 atomic coordinates, root optionality, policy, receipts, and selector
 subroutines.
 
-`K3DProjectionV0` accepts only the selected v0 `SemanticRegimeId`
+`EndpointProjectionSemanticsV0` accepts only the selected v0 `SemanticRegimeId`
 `0c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef`
 and its exact K1 `SemanticLanguageProfileId` import chain:
 
@@ -178,16 +196,21 @@ PIRInterfacePlanProfileId
 
 The target requires each arrow to be one exact-used `profile_imports` edge to
 the immediate semantic dependency, not an ambient bundle hash or a textual
-version label. The bounded executable baseline exercises that topology with
-the following profile-ID digests under the selected regime, in the same order:
+version label. The older bounded executable baseline exercised that topology
+with the following profile-ID digests under the selected regime, in the same
+order:
 `3249d35408bd507c6613eb2d7496b95c6d3313a85bac41f28751d1957d6e4f8c`,
 `6138f0ffe95880b2cfe0a4ccd3da71610974193a2fcf6aaa60ae3cf7bfacdfa4`,
 `ccb080314d48881cf89d8b59bc3d14364311797b49f2048b31fd59e684fbaaa7`,
 `cf79a520db90374e7c1bbed17cda79c20130e479a538de9c8a41826b62a60330`,
 and `b183c8af6fad580b0c4d003f4b4e3c26e08fca63dff0b6cf36f6b210091a89fd`.
-The identity equations below consume full typed profile IDs, never bare digest
-strings. These values are an executable-only post-K3-E-repair snapshot, not
-durable selected constants. They do not supply the complete canonical
+The accepted-terminal Plan extension rotates that complete profile chain, so
+these digests no longer authenticate the selected Plan, endpoint, or OIR
+grammar and are retained only as pre-rotation bounded evidence. This is a
+profile/law mismatch, not a Foundation `SemanticRegimeId` rotation: the
+Foundation semantic regime above remains unchanged. The identity equations
+below consume full typed profile IDs, never bare digest strings. These values
+are not durable selected constants. They do not supply the complete canonical
 `SemanticLanguageProfileBody` preimages or establish durable owner-profile byte
 parity. Until those complete owner profile preimages are published, this page
 fixes the ideal target equations and import topology, not independently
@@ -209,9 +232,17 @@ The four closed sequence selectors are owner algorithms:
 ```text
 AllElements
 K2RoleSemanticClosure
-K3BInterfaceEndpointClosure
-K3BPlanReachableClosure
+InterfaceEndpointReachableClosure
+PurposeSelectedPlanReachableClosure
 ```
+
+`PurposeSelectedPlanReachableClosure` is purpose-parameterized. For the ordinary Plan-
+specialized purpose it closes only public Prover decisions and their selected
+state. For the continuation purpose it additionally seeds every export in
+every owner-derived nonempty accepted-terminal arm, then closes through each
+export's exact decision or terminal site, local recipe nodes, private ingress,
+randomness, and state dependencies. The common algorithm name does not permit
+a caller to choose its seeds.
 
 Each returns a total selected/complement partition, canonical traversal,
 realized read receipts, and private rebase maps. Relevant receipts must equal
@@ -332,11 +363,12 @@ EndpointSemanticGraph = {
 }
 ```
 
-Static obligations, requirements, and the completion interface are not three
-more authored tables. The fixed `DeriveEndpointContractV0` law in Section 7
-derives them uniquely from this graph. This avoids two semantic copies of the
-same action while retaining an exact static conformance and requirement
-boundary for OIR and Realization.
+Static obligations, requirements, the external completion interface, and the
+optional private Plan-continuation contract are not four more authored tables.
+The fixed `DeriveEndpointContractV0` law in Section 7 derives them uniquely
+from this graph. This avoids two semantic copies of the same action while
+retaining an exact static conformance and requirement boundary for OIR and
+Realization.
 
 The Protocol component consumes and rechecks the same exact fact families
 exported by K2
@@ -538,7 +570,8 @@ output is one closed, non-identity result:
 DerivedEndpointContract = {
   static_obligations,
   requirements,
-  completion_interface
+  completion_interface,
+  private_plan_continuation
 }
 ```
 
@@ -559,58 +592,46 @@ execution model exists. It does not weaken Fiat–Shamir preservation: the
 complete K2 framing, prefix, transition, retry, decode, and global-failure laws
 remain in the identity-bearing graph and in exact projection equality.
 
+`completion_interface` describes only externally presented Protocol
+completion. `private_plan_continuation` is a separate static contract for
+internal Plan continuation values and never changes, extends, or satisfies
+that external completion interface. Both supported Prover purposes therefore
+keep `NoSourceSemanticCompletion`; the ordinary purpose has no continuation
+contract, while the continuation purpose derives one from exact graph-local
+accepted-terminal arms.
+
 ### 7.1 Closed static-obligation index
 
 The static-obligation index is generated by one fixed law. It is neither an
-authored action table nor an execution order:
-
-```text
-EndpointFrameRecipeBody =
-    V(0,U) | V(1,U) | V(2,U)
-  | V(3,N(scope_spine_ref))
-  | V(4,N(binding_spine_ref))
-  | V(5,N(guarded_spine_ref))
-  | V(6,N(message_spine_ref))
-  | V(7,N(message_spine_ref))
-  | V(8,R{0:N(challenge_spine_ref),1:N(input_ordinal)})
-// CoreHeader | ConstructionHeader | ApplicationDomain | ScopeOpening
-// PublicBinding | GuardOutcome | ProverMessage | VerifierMessage
-// ChallengeCondition
-
-EndpointPresentationCoordinateBody =
-    V(0,N(slot_ref))
-  | V(1,N(statement_alias_ref))
-  | V(2,N(transport_edge_ref))
-  | V(3,N(completion_ref))
-  | V(4,R{0:N(completion_ref),1:N(coordinate_ordinal)})
-// ExternalSupply | Statement | Transport | CompletionTag
-// CompletionPayload
-
-CodecDirectionBody = V(0,U) | V(1,U)
-// Encode | Decode
-
-EndpointStaticObligationBody =
-    V(0,N(slot_ref))
-  | V(1,N(decision_spine_ref))
-  | V(2,EndpointFrameRecipeBody)
-  | V(3,N(spine_ref))
-  | V(4,R{0:N(challenge_spine_ref),1:N(challenge_law_ref)})
-  | V(5,R{0:CodecDirectionBody,
-          1:EndpointPresentationCoordinateBody})
-// SlotIngress | PlanDecision | K2Frame | LocalOccurrence
-// ChallengeInterpret | Presentation
-```
+authored action table nor an execution order. OIR physically owns
+`EndpointFrameRecipeBody`, `EndpointPresentationCoordinateBody`,
+`CodecDirectionBody`, and `EndpointStaticObligationBody` in
+[its exact contract appendix](../oir/projection-contract.md#appendix-a-exact-oir-and-projection-bodies).
+This PIR source-view specification imports those bodies without copying or
+reinterpreting their tags. In particular, the imported tag 6 is exactly
+`PlanContinuation(accepted_terminal_ref)`.
 
 `SlotIngress` occurs once for every selected external-supply slot. Invocation
 fibres and `SuppliesInvocation` Statement aliases share that one ingress; they
 never create duplicate decoding authority.
 
-`PlanDecision` occurs once for each retained Prover-message move entry in a
-Plan-specialized Prover graph. It imports the exact reachable Plan decision:
+`PlanDecision` occurs once for each retained Prover-message move entry in
+either Prover graph. It imports the exact reachable Plan decision:
 view reads, private material, randomness availability, state row, recipe DAG,
 move, and total selected-state update row. The obligation does not prescribe
 a concrete supplier, entropy source, storage device, or guarded runtime state
 merge.
+
+`PlanContinuation(terminal_ref)` occurs exactly once for each retained
+nonempty accepted-terminal arm in a continuation-purpose graph and never for
+the ordinary Plan-specialized purpose. It imports the exact `Accept` terminal,
+the sealed final Plan-state source, every arm export and its source site, the
+export-rooted site-local recipe closure, and the all-or-nothing arm law. For a
+decision-derived export it also imports the owner-derived guarantee that the
+source decision is active and ordered before that terminal on every path that
+reaches it. For a terminal-derived export it requires the export site to be
+that identical terminal. This is a static obligation; it neither reaches a
+runtime terminal nor issues a private value.
 
 `K2Frame` occurs for Core, Construction, and application-domain initialization
 when FS semantics is present; for every selected scope opening, public
@@ -668,30 +689,10 @@ copy.
 ### 7.2 Exact static requirements
 
 Requirement discovery uses one exact graph-only least fixed point. Its
-transient access rows are canonical derivation state, not a fourth contract
-field or OIR identity input:
-
-```text
-EndpointValueAccessRouteBody =
-    V(0,R{0:N(invocation_target_ref),1:N(slot_ref)})
-  | V(1,N(constant_ref))
-  | V(2,N(pure_node_ref))
-  | V(3,N(decision_spine_ref))
-  | V(4,N(verifier_message_spine_ref))
-  | V(5,N(check_spine_ref))
-  | V(6,R{0:N(challenge_spine_ref),1:N(challenge_law_ref)})
-  | V(7,N(transport_edge_ref))
-  | V(8,N(verifier_message_spine_ref))
-  | V(9,N(check_spine_ref))
-// InvocationDecode | Constant | PureEval | PlanMove
-// LocalVerifierMessage | LocalCheck | ChallengeInterpret
-// InboundTransport | ReconstructVerifierMessage | ReconstructCheck
-
-EndpointValueAccessBody = R{
-  0:EndpointValueRefBody(value),
-  1:EndpointValueAccessRouteBody(route)
-}
-```
+transient `EndpointValueAccessBody` rows are canonical derivation state, not a
+fourth contract field or OIR identity input. OIR physically owns that body and
+`EndpointValueAccessRouteBody`; PIR imports both exact bodies from the same
+contract appendix.
 
 `EndpointValueAccessV0` seeds every endpoint value used by a selected K2
 frame: every PublicBinding value, every guard input, every framed Prover- or
@@ -736,66 +737,29 @@ selected state cell. The first two are explicit ingress/authority obligations;
 the last is an internal typed storage/lifetime obligation. None recovers an
 excluded Plan key or chooses a realization.
 
-The exact finite carrier is:
+OIR physically owns the exact finite requirement carrier and aggregate
+contract bodies: `CodecPathStepBody`, `AlgorithmUseSiteBody`,
+`CounterpartyUseSiteBody`, `OirRequirementBody`,
+`EndpointCompletionInterfaceBody`, `PrivatePlanContinuationAccessBody`,
+`PlanContinuationOutputDeclBody`,
+`AcceptedPlanContinuationArmDeclBody`,
+`PrivatePlanContinuationContractBody`, `DerivedEndpointContractBody`, and
+`EndpointContractDerivationOutcomeBody`. PIR imports and names those exact
+bodies from the OIR contract appendix. It does not define a second body or
+choose different field names. The private semantic carrier named by the
+imported bodies is exactly
+`PrivatePlanContinuationAccess =
+PlanContinuationOutput(PlanContinuationOutputRef)`.
 
-```text
-CodecPathStepBody =
-    V(0,N(field_ordinal)) | V(1,N(case_ordinal)) | V(2,U)
-// RecordField | VariantCase | symbolic SequenceElement
-
-AlgorithmUseSiteBody =
-    V(0,N(pure_node_ref))
-  | V(1,N(guard_spine_ref))
-  | V(2,N(verifier_message_spine_ref))
-  | V(3,N(check_spine_ref))
-  | V(4,EndpointFrameRecipeBody)
-  | V(5,N(challenge_law_ref))
-  | V(6,N(challenge_law_ref))
-  | V(7,N(challenge_law_ref))
-  | V(8,N(challenge_law_ref))
-  | V(9,N(plan_recipe_node_ref))
-  | V(10,N(public_reconstruction_check_spine_ref))
-  | V(11,R{0:EndpointPresentationCoordinateBody,
-           1:CodecDirectionBody,
-           2:S[CodecPathStepBody...],
-           3:N(general_codec_ref)})
-// PureNode | Guard | DeterministicVerifierMessage | Check | FsAbsorb
-// FsSqueeze | FsAdvance | ChallengeAccept | ChallengeDecode | PlanRecipe
-// PublicReconstruction | CodecPresentation
-
-CounterpartyUseSiteBody =
-    V(0,N(transport_edge_ref)) | V(1,N(counterparty_action_spine_ref))
-
-OirRequirementBody =
-    V(0,R{0:AlgorithmUseSiteBody,
-          1:N(algorithm_dependency),2:N(evaluation_dependency)})
-  | V(1,CounterpartyUseSiteBody)
-  | V(2,R{0:N(private_material_ref),
-          1:PrivateMaterialKindBody(kind),2:N(type_ref)})
-  | V(3,R{0:N(randomness_ref),1:N(type_ref),
-          2:N(first_available_decision_spine_ref)})
-  | V(4,R{0:N(state_ref),1:N(type_ref),
-          2:PlanInitializerBody(initializer),
-          3:S[PlanUpdateBody(update)... in decision-spine order]})
-// LocalEvaluator | Counterparty | PrivateMaterialIngress
-// PrivateRandomnessIngress | StateStorage
-
-EndpointCompletionInterfaceBody =
-    V(0,S[N(completion_variant_ref)... in ref order]) | V(1,U)
-// VerifierCompletions | NoSourceSemanticCompletion
-
-DerivedEndpointContractBody(x) = R{
-  0:S[EndpointStaticObligationBody... in full-body byte order],
-  1:S[OirRequirementBody... in full-body byte order],
-  2:EndpointCompletionInterfaceBody(x.completion_interface)
-}
-
-EndpointContractDerivationOutcomeBody =
-    V(0,DerivedEndpointContractBody)
-  | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U) | V(6,U)
-// Affirmative | MissingDependency | KindMismatch | Malformed | Refused
-// DeterministicLimitExceeded | CheckerFailure
-```
+Contract derivation applies one exact-use law to the private namespace. For an
+ordinary Plan-specialized purpose the option is `None` and no
+`PrivatePlanContinuationAccessBody` may occur. For a continuation purpose the
+option is `Some`, every access resolves to one in-range
+`PlanGraphDerivedExportBody`, every retained graph export is selected by at
+least one arm, every arm output occurs exactly once in that arm, and no access
+appears outside this contract. Missing, extra, dangling, duplicate, wrong-site,
+wrong-type, or generic-value substitution is formation failure, not a partial
+contract.
 
 Derivation has no semantic Negative or Unsupported arm: after support and
 graph formation it is one deterministic function. A contradiction in an
@@ -830,7 +794,8 @@ Every statically retained potential local portable operation gets its exact
 use-site row:
 locally evaluated guards, deterministic Verifier messages and Checks; every
 FS absorb recipe and the selected squeeze, advance, acceptance, and decode
-laws; every reachable Plan recipe node; and every required General-codec leaf.
+laws; every reachable Plan recipe node at its exact decision or accepted-
+terminal site; and every required General-codec leaf.
 Fixed framing and namespace construction are selected semantic laws, not
 portable dependency calls, so they do not invent evaluator requirements.
 
@@ -888,10 +853,22 @@ attempts, state versions, and dynamic sequence elements instantiate later
 execution laws and do not multiply this static requirement set.
 
 The completion interface is not a runtime outcome. The Verifier arm names
-every Interface completion ref exactly once in ABI order; the
-Plan-specialized Prover arm is `NoSourceSemanticCompletion` and requires an
-empty completion table. Stage 4B owns which runtime completion, operational
-noncompletion, interpretation failure, or verifier rejection occurs.
+every Interface completion ref exactly once in ABI order; both Prover purposes
+are `NoSourceSemanticCompletion` and require an empty external completion
+table. The ordinary Plan-specialized purpose has
+`private_plan_continuation = None`. The continuation purpose has
+`private_plan_continuation = Some(contract)`, where the contract lists every
+and only nonempty accepted-terminal arm in terminal order and each arm lists
+its complete output set in graph-local ref order. Each ref resolves through
+the dedicated `PrivatePlanContinuationAccessBody`, never through
+`EndpointValueRefBody`; each source site and type must equal the selected
+export. Every arm is atomic: no proper prefix or subset is a result, and an
+inactive terminal has no value rather than an empty tuple. The contract carries
+no runtime value, live capability, or evidence that a continuation was issued.
+PIR Plan execution owns any later runtime issuance; OIR projection here remains
+static. Runtime OIR and Realization own reached completion, continuation
+success or operational noncompletion, interpretation failure, and verifier
+rejection.
 
 ### 7.3 Claims, reductions, and role closure
 
@@ -1025,63 +1002,143 @@ ambiently.
 
 ## 9. Reachable Plan graph
 
-After affirmative `PlanRealizes`, the Plan-specialized Prover quotient is:
+After affirmative `PlanRealizes`, either Prover quotient uses the same closed
+graph carrier:
 
 ```text
 ReachablePlanGraph = {
   private_material,
   randomness,
   state,
-  recipe_nodes,
-  moves,
-  updates
+  site_qualified_recipe_nodes,
+  decision_moves,
+  decision_updates,
+  site_qualified_derived_exports
 }
+
+PlanContinuationOutputRef =
+  dense ordinal into site_qualified_derived_exports
 ```
 
-Reachability starts at every K2 prover-decision move payload and every
-`ReplaceState` payload, then closes over recipe operands, selected-state
-initializers, and recipe nodes. A `KeepState` entry alone does not select a
-state slot. Once a state slot is selected, however, the quotient retains its
-total update row at every decision, including `KeepState`. Each class has its
-own dense ref universe. The view retains private-material kind/type but not its
-external key; randomness type and first-availability boundary; state type and
-initializer; recipe algorithm/evaluation/ordered operands/result and owning
-decision; move; and state update.
+Ordinary reachability starts at every InteractiveCore prover-decision move
+payload and every `ReplaceState` payload, then closes over site-local recipe
+operands, selected-state initializers, and decision recipe nodes. It retains no derived export
+merely because the Plan declares one. Continuation reachability has all those
+seeds and additionally seeds every export in at least one exact nonempty
+accepted-terminal arm. It then closes through each export's decision or
+accepted-terminal site, site-local nodes, public reads, private material,
+randomness, and state dependencies. A `KeepState` entry alone does not select
+a state slot. Once a state slot is selected, the quotient retains its total
+update row at every decision, including `KeepState`.
+
+The arm set is owner-derived before rebasing. For each exact admitted `Accept`
+terminal `t`, its arm contains every and only:
+
+1. decision-derived export whose exact source decision is guaranteed active
+   and ordered before `t` by InteractiveCore's scope-opening,
+   guard-implication, and causal-order laws; and
+2. accepted-terminal-derived export whose source site is exactly `t`.
+
+The fixed source law takes both the admitted Protocol and the exact admitted
+Plan. `AcceptedPlanContinuationArm(P,plan,t)` is imported unchanged from the
+Plan owner's checked lifecycle law; this endpoint document only derives its
+complete map:
+
+```text
+GuaranteedDecisionBeforeAcceptedTerminal(P,plan,d,t) :=
+  plan is the exact admitted Plan for P
+  and CheckedPlanRealizes(P,plan) is affirmative
+  and t is an exact Accept terminal of P
+  and d is an exact Prover decision of P
+  and Occurrence(d) strictly precedes TerminalOccurrence(t)
+  and every scope needed by d is guaranteed open on the t-active path
+  and GuardImplies(guard(t),guard(Occurrence(d)))
+
+AcceptedPlanContinuationArmMap(P,plan) :=
+  every and only (t,AcceptedPlanContinuationArm(P,plan,t))
+  whose derived sequence is nonempty, in TerminalRef order
+```
+
+`GuardImplies`, scope opening, and
+`GuaranteedDecisionBeforeAcceptedTerminal(P,plan,d,t)` are the exact owner
+laws consumed by the Plan's checked lifecycle-read basis; neither a sample run
+nor a producer-supplied Boolean can establish them. Every caller supplies the
+same exact admitted `(P,plan)` from the affirmative extraction basis; no
+ambient Plan lookup or protocol-only overload exists. Each source export is
+considered once per exact terminal. Each arm rejects duplicates before
+rebasing; the same source export may still appear once in every distinct arm
+whose path guarantee holds.
+
+An arm with no such export is absent. A decision export guaranteed before
+several accepted terminals appears in each applicable arm through the same
+graph-local output ref. A terminal export appears only in its own arm. A
+conditionally active decision export that is not guaranteed on `t`'s path is
+not promised by that arm. The continuation purpose is supported only when the
+complete derived arm map contains at least one nonempty arm.
+
+Each class has its own dense ref universe. The view retains private-material
+kind/type but not its external key; randomness type and first-availability
+boundary; state type and initializer; recipe algorithm/evaluation/ordered
+operands/result and exact source site; move and state update; and every
+selected export's exact source site, local value, and type. Witness-surface
+keys are source provenance and are not graph fields. Every selected export is
+assigned one `PlanContinuationOutputRef`; same-valued or same-typed exports
+remain distinct.
 
 K3-B observation coordinates remain semantic. A Plan view read therefore
 retains both a rebased coordinate class and the value reached through that
 coordinate. `OpenPublicInput(p)` and `OpenedBinding(b)`, or
 `ObservedMessage(o)` and `PriorOwnMove(d)`, do not merge merely because their
 runtime values can be equal. Every recipe-node output reference is owned by
-one decision spine event, points backward inside that decision's node group,
-and cannot be captured by a node, move, or update of another decision. In the
-bounded base profile every decision is exactly one Prover-message spine event;
-the Plan graph keys directly by that event rather than storing a duplicate
-decision-obligation table.
+one exact decision or accepted-terminal site, points backward inside that
+site's node group, and cannot be captured by another site. Moves and state
+updates may reference only decision-site values. An accepted-terminal node may
+read only the coordinates affirmed by the Plan owner's exact terminal-read
+law and the sealed final-state source; it has no move, randomness ingress, or
+state-update arm. In the bounded base profile every decision is exactly one
+Prover-message spine event, so decision sites key directly by that event.
 
 Filtering follows source canonical order and then rewrites every edge through
-the private source-to-view map. Dead declarations/nodes and
-`derived_witness_exports` are absent. Plans differing only in those excluded
-facts can share a quotient and OIR while retaining different exact-source
-validation capabilities. Reachable recipe semantics is already above OIR;
-concrete suppliers belong to Realization. The selected base Plan has no
-below-OIR field branch.
+the private source-to-view map. Dead declarations, nodes, and unselected
+exports are absent. The ordinary purpose may therefore share one quotient with
+a Plan that differs only in continuation-inert facts; the continuation purpose
+may not erase any selected arm, export, or dependency. Reachable recipe
+semantics is already above OIR; concrete suppliers and runtime continuation
+issuance are not. The selected base Plan has no below-OIR field branch.
 
 ## 10. Completion interface and role-closure laws
 
 The exact `EndpointCompletionInterfaceBody` in Section 7 is the complete
 static completion interface: the Verifier arm enumerates every Interface
-completion ref exactly once in ABI order, while the Plan-specialized Prover
-arm is `NoSourceSemanticCompletion` and has no completion ref. It is not a
-claim about which runtime outcome occurs.
+completion ref exactly once in ABI order, while both Prover purposes use
+`NoSourceSemanticCompletion` and have no completion ref. The private
+continuation contract is a separate terminal-indexed field and is not a
+Protocol completion claim.
 
-Source formation and local OIR admission each enforce four named graph laws:
+The direct Plan-owned next-ingress handoff is outside the endpoint value and
+OIR runtime domains: it has no `EndpointValueRef`, no OIR runtime operation or
+runtime value, and no serialized capability. The static continuation contract
+only says which private outputs a later consumer may request after the exact
+accepted terminal. PIR Plan execution separately owns reaching that terminal,
+atomically producing the arm, and issuing any live access right; none of those
+runtime facts is present in this source view or its projected OIR graph.
+
+Source formation and local OIR admission each enforce five named graph laws:
 no ambient FS challenge input, no Prover read of verifier-private inputs, no
 Prover external completion, and no Plan read outside the classified reachable
-Plan graph. They are not stored as a second absence table. Every predicate is
+Plan graph, plus exact accepted-terminal arm closure. The last law checks every
+and only nonempty `Accept` arm, decision-path guarantees, same-terminal
+ownership, graph-local ref and type agreement, site-local node reachability,
+and atomic all-or-nothing membership. `PrivatePlanContinuationAccessBody` is
+legal only in that contract; its presence in an `EndpointValueRefBody`,
+InteractiveCore value, ABI edge, public-closure root, Plan move, or state update
+is malformed.
+These laws are not stored as a second absence table. Every predicate is
 decidable from the complete semantic graph, so exact graph equality transfers
 it automatically; a duplicate source-side echo would create no additional
-coverage. A hidden host read is instead a later Realization nonconformance.
+coverage. A hidden host read or an attempted runtime issuance without the
+PIR-owned continuation operation is instead a later Realization
+nonconformance.
 
 ## 11. Identity, extraction, and authority
 
@@ -1116,6 +1173,13 @@ reauthenticates and readmits the sources and dependency preimages,
 reclassifies support, and reruns extraction. A body, ID, source map,
 structurally equal reconstructed carrier, or sample execution never
 reconstructs authority.
+
+Neither `SupportedExtractionBasis`, `CheckedEndpointSourceView`, nor a later
+affirmative projection capability contains a completed Plan continuation or a
+live PIR continuation right. They authorize only the static source quotient
+and its comparison with a static OIR graph. Runtime access to an active arm
+requires the independently issued PIR Plan continuation result and capability;
+adding that dynamic input to an OIR executor remains a later Realization law.
 
 The bounded executable evidence also exposes an independent target constructor
 that consumes this same exact `SupportedExtractionBasis` and its retained
@@ -1160,6 +1224,7 @@ and regime, never copies with local reinterpretation:
 | `ModuleDeclarationRefBody`, `PublicBindingClassBody`, `CoinCorrelationBody`, `ReductionUsePolicyBody`, `TerminalVerdictBody`, `ClaimUsageBody`, `ClaimDispositionBody` | K2 [`interactive-core.md`](interactive-core.md#appendix-a-canonical-bodies) |
 | construction algorithm and transition ABIs, `InfluenceAtomBody` | K2 [`fiat-shamir.md`](fiat-shamir.md#appendix-a-canonical-bodies) |
 | transport actor/destination, completion-coordinate cases, and `PrivateMaterialKindBody` | K3-B [`interfaces-and-plans.md`](interfaces-and-plans.md#6-exact-canonical-bodies) |
+| endpoint static-obligation, access-route, requirement, completion-interface, private-continuation, aggregate-contract, and derivation-outcome bodies | OIR [`projection-contract.md`](../oir/projection-contract.md#appendix-a-exact-oir-and-projection-bodies) |
 
 Use under another `PriorMetaAuthenticationBasis`, `SemanticRegimeId`, or
 incompatible exact-used language-profile closure is a kind/regime mismatch,
@@ -1170,8 +1235,9 @@ ChallengeModeBody = V(0,U) | V(1,U)
 // Fresh | FiatShamir
 EndpointPurposeBody =
     V(0,ChallengeModeBody) | V(1,ChallengeModeBody)
-  | V(2,ChallengeModeBody)
+  | V(2,ChallengeModeBody) | V(3,ChallengeModeBody)
 // VerifierEndpoint | GenericProverEndpoint | PlanSpecializedProverEndpoint
+// PlanContinuationProverEndpoint
 // EndpointContractLawV0Body and EndpointSemanticGraphBody are imported
 // exactly from OIR's Appendix A.  Their owning profile is named by the
 // outer PirEndpointSourceViewProfileId wrapper.
@@ -1408,6 +1474,7 @@ PlanViewCoordinateBodyRebased =
   | V(3,N(message_spine_ref))
   | V(4,N(challenge_spine_ref))
   | V(5,N(prior_decision_spine_ref))
+  | V(6,N(accepted_terminal_public_output_ordinal))
 PlanViewReadBody(x) = R{
   0:PlanViewCoordinateBodyRebased(x.coordinate),
   1:EndpointValueRefBody(x.value)
@@ -1417,8 +1484,11 @@ PlanInitializerBody = V(0,N(private_material_ref))
 PlanPrivateMaterialBody = R{0:PrivateMaterialKindBody(kind),1:N(type_ref)}
 PlanRandomnessBody = R{0:N(type_ref),1:N(first_available_decision_spine_ref)}
 PlanStateBody = R{0:N(type_ref),1:PlanInitializerBody(initializer)}
-PlanRecipeNodeBody = R{
-  0:N(owner_decision_spine_ref),
+PlanRecipeNodeSiteBody =
+    V(0,N(decision_spine_ref))
+  | V(1,N(accepted_terminal_ref))
+PlanGraphRecipeNodeBody = R{
+  0:PlanRecipeNodeSiteBody(site),
   1:N(algorithm_dependency),2:N(evaluation_dependency),
   3:S[PlanValueRefBody(input)...],4:N(result_type_ref)
 }
@@ -1429,31 +1499,47 @@ PlanUpdateBody = R{
   0:N(decision_spine_ref),1:N(state_ref),
   2:OptionBody(value,PlanValueRefBody)
 }
+PlanGraphDerivedExportBody = R{
+  0:PlanRecipeNodeSiteBody(source_site),
+  1:PlanValueRefBody(value),
+  2:N(result_type_ref)
+}
 PlanGraphBody(x) = R{
   0:S[PlanPrivateMaterialBody...],1:S[PlanRandomnessBody...],
-  2:S[PlanStateBody...],3:S[PlanRecipeNodeBody...],
-  4:S[PlanMoveEntryBody...],5:S[PlanUpdateBody...]
+  2:S[PlanStateBody...],
+  3:S[PlanGraphRecipeNodeBody... in site/within-site order],
+  4:S[PlanMoveEntryBody...],5:S[PlanUpdateBody...],
+  6:S[PlanGraphDerivedExportBody... in output-ref order]
 }
 ```
 
 The closed `EndpointValueRefBody` has no Plan arm, which prevents recursive
 self-wrapping and keeps K2-owned positions Plan-free. Every decision spine ref
-must name a Prover-message action. Recipe nodes are grouped first by that ref
-and then by their K3-B within-recipe order after reachable filtering.
+must name a Prover-message action, and every accepted-terminal ref must name an
+exact `Accept` anchor. Recipe nodes are grouped first by the complete site body
+and then by their owner-relative within-recipe order after reachable filtering.
 Private-material, randomness, and state tables preserve filtered K3-B source
 order. Move entries are strictly ascending by decision spine ref. Update
 entries are strictly lexicographic by `(decision_spine_ref, state_ref)`.
 Recipe-node order is strictly lexicographic by
-`(owner_decision_spine_ref, within_recipe_ordinal)`. Every table rejects
+`(site_body, within_recipe_ordinal)`. Derived exports are ordered by their
+dense `PlanContinuationOutputRef`. Every table rejects
 duplicate keys.
-A recipe-node operand points backward to a node with the same owner decision;
+A recipe-node operand points backward to a node with the same exact site;
 a move or update may reference only a node owned by its own decision. There is
 exactly one move per decision spine and, for each selected state, exactly one
 update per decision spine; `None` is K3-B `KeepState` and `Some` is
 `ReplaceState`. Every
 Plan edge is in range and the combined graph is acyclic under the admitted
-decision schedule. A `PlanViewReadBody` must be the exact rebased K3-B
-coordinate/value pair in that decision's admitted `StrategyDecisionView`.
+decision/terminal schedule. A decision-site `PlanViewReadBody` must be the
+exact rebased Plan-owner coordinate/value pair in that decision's admitted
+`StrategyDecisionView`; a terminal-site read must satisfy the Plan owner's
+exact guaranteed accepted-terminal read predicate. A terminal site has no move
+or update, direct randomness is unavailable there, and every terminal node is
+in the transitive closure of at least one selected same-site export.
+`AcceptedTerminalPublicOutput` is legal only at a terminal site, its ordinal
+must select an exact public output of that identical terminal anchor, and the
+paired `EndpointValueRefBody` must be that output's exact value ref.
 
 The one PIR-owned source-view domain body is exactly:
 
@@ -1504,14 +1590,14 @@ OwnerCoordinateBody(x) = R{
   2:AtomicBoundaryBody(x.boundary)
 }
 RootGrammarLawV0Body = V(0,U)
-K3DReadLawV0Body = V(0,U)
+EndpointReadLawV0Body = V(0,U)
 EndpointOwnerSchemaSetDomainBody = R{
   0:RootGrammarLawV0Body
 }
 EndpointReadManifestDomainBody(purpose) = R{
   0:EndpointPurposeBody(purpose),
   1:CR(EndpointOwnerSchemaSetId),
-  2:K3DReadLawV0Body
+  2:EndpointReadLawV0Body
 }
 ```
 
@@ -1523,9 +1609,11 @@ import closure and law source bind the selected owner grammar and read law.
 `RootGrammarLawV0` has exactly five roots in tag order: admitted Protocol,
 its exact admitted Core, the Protocol's exact admitted Construction, its exact
 admitted Interface, and optional exact admitted Plan. A Verifier request
-requires the Plan root absent; a Plan-specialized Prover request requires it
-present and an affirmative exact `PlanRealizes`. Protocol Fresh is traversable
-only far enough to return the ordered unsupported result. Any unknown root,
+requires the Plan root absent; either Plan-specialized Prover request requires
+it present and an affirmative exact `PlanRealizes`. A continuation request
+also requires the owner-derived accepted-terminal arm map to contain at least
+one nonempty arm. Protocol Fresh is traversable only far enough to return the
+ordered unsupported result. Any unknown root,
 field, variant, trailing field, sequence element grammar, atomic boundary, or
 same-shaped body from another regime is a kind/regime failure, not an inert
 coordinate.
@@ -1535,9 +1623,11 @@ owner bodies, including every option arm and every actual sequence element.
 Traversal is depth-first in root-tag, record-field, variant-tag, and
 sequence-index order. It emits one `OwnerCoordinateBody` for every typed atomic
 boundary; the receipt retains the complete exact admitted subbody at that
-boundary. There is no default or unknown arm. A source grammar change rotates
-the semantic regime and therefore `EndpointOwnerSchemaSetId`; a policy or
-derivation-law change rotates the K3-D profile/read-law tag. Implementations
+boundary. There is no default or unknown arm. The selected Plan grammar change
+rotates `PIRInterfacePlanProfileId`, the endpoint owner-schema/read-law
+profiles, and their downstream exact-use chain while retaining the same
+Foundation `SemanticRegimeId`. A policy or derivation-law change likewise
+rotates its owning profile and downstream imports. Implementations
 must carry independent reflection or conformance vectors proving that the
 visited coordinates equal the complete five-root grammar before this law may
 mint source authority.
@@ -1559,9 +1649,9 @@ InertReasonBody =
 // SourceProvenanceOnly | VerifierPrivateForProver | DeadInterfaceElement
 // PrivateMaterialKey | DeadPlanElement | DerivedWitnessExport
 UnsupportedReasonBody =
-    V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U)
+    V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U)
 // FreshEndpoint | GenericProverEndpoint | StandardOracleEndpoint
-// ModuleEffectEndpoint | DuplexSpongeEndpoint
+// ModuleEffectEndpoint | DuplexSpongeEndpoint | NoPlanContinuationArm
 DispositionBody =
     V(0,S[ViewSinkBody... in body-byte order]) | V(1,JoinAxisBody)
   | V(2,InertReasonBody) | V(3,UnsupportedReasonBody)
@@ -1590,45 +1680,47 @@ error.
 
 The selected root policy is exactly:
 
-| Owner path | Verifier FS | Plan-specialized Prover FS |
-|---|---|---|
-| Protocol `.0 core_id` | Relevant Dependency/StaticFs | same |
-| Protocol `.1 Fresh` | Unsupported Fresh | same |
-| Protocol `.1 FS construction_id` | Relevant Dependency/StaticFs | same |
-| Core `.0 semantic_modules` | role closure -> Dependency | same |
-| Core `.1 public_inputs` | Relevant ABI/Type | same |
-| Core `.2 verifier_private_inputs` | Relevant ABI/Type | Inert verifier-private |
-| Core `.3 constants` | role closure -> Constant/Type | same |
-| Core `.4 derived_values` | role closure -> PureNode/Dependency/Type | same |
-| Core `.5 scopes` | role closure -> Spine | same |
-| Core `.6 bindings` | Relevant Spine/StaticFs | same |
-| Core `.7 challenges` | Relevant Spine/StaticFs | same |
-| Core `.8 oracles` | Unsupported Oracle | same |
-| Core `.9 checks` | role closure -> Spine/Dependency/Type/PureNode | same |
-| Core `.10 claims` | Relevant Claim/Anchor | same |
-| Core `.11 reductions` | Relevant Spine/Anchor | same |
-| Core `.12 terminals` | Relevant Spine/Anchor | same |
-| Core `.13 occurrences` base cases `0..5` | role closure -> Spine plus dependency/value closure | same |
-| Core `.13` Oracle/module cases `6..7` | Unsupported exact case | same |
-| Construction fields `0..10` | Relevant StaticFs/Dependency/Type | same |
-| Interface `.0 protocol_id` | Join-only Interface | same |
-| Interface `.1..6` | exact Interface endpoint closure -> ABI; complement inert | same, with all completion entries in complement |
-| Plan root absent | required by request formation | illegal for this purpose |
-| Plan `.0 protocol_id` | n/a | Join-only Plan |
-| Plan selected private-material key | n/a | Inert private key |
-| Plan selected private kind/type | n/a | Relevant Plan/Type |
-| Plan complement private entry | n/a | Inert dead Plan material |
-| Plan `.2 randomness`, `.3 state` | n/a | reachable closure -> Plan/Type |
-| Plan `.4 recipes[*].1.nodes[*]` | n/a | selected node Relevant Plan; complement dead |
-| Plan selected moves/updates | n/a | Relevant Plan |
-| Plan `.5 derived_witness_exports` | n/a | Inert derived export |
+| Owner path | Verifier FS | Plan-specialized Prover FS | Plan-continuation Prover FS |
+|---|---|---|---|
+| Protocol `.0 core_id` | Relevant Dependency/StaticFs | same | same |
+| Protocol `.1 Fresh` | Unsupported Fresh | same | same |
+| Protocol `.1 FS construction_id` | Relevant Dependency/StaticFs | same | same |
+| Core `.0 semantic_modules` | role closure -> Dependency | same | same |
+| Core `.1 public_inputs` | Relevant ABI/Type | same | same |
+| Core `.2 verifier_private_inputs` | Relevant ABI/Type | Inert verifier-private | Inert verifier-private |
+| Core `.3 constants` | role closure -> Constant/Type | same | same |
+| Core `.4 derived_values` | role closure -> PureNode/Dependency/Type | same | same |
+| Core `.5 scopes` | role closure -> Spine | same | role closure -> Spine; exact arm-path reads also Plan |
+| Core `.6 bindings` | Relevant Spine/StaticFs | same | same |
+| Core `.7 challenges` | Relevant Spine/StaticFs | same | same |
+| Core `.8 oracles` | Unsupported Oracle | same | same |
+| Core `.9 checks` | role closure -> Spine/Dependency/Type/PureNode | same | same |
+| Core `.10 claims` | Relevant Claim/Anchor | same | same |
+| Core `.11 reductions` | Relevant Spine/Anchor | same | same |
+| Core `.12 terminals` | Relevant Spine/Anchor | same | Relevant Spine/Anchor/Plan for accepted-arm keys |
+| Core `.13 occurrences` base cases `0..5` | role closure -> Spine plus dependency/value closure | same | same plus Plan for exact decision/terminal arm paths |
+| Core `.13` Oracle/module cases `6..7` | Unsupported exact case | same | same |
+| Construction fields `0..10` | Relevant StaticFs/Dependency/Type | same | same |
+| Interface `.0 protocol_id` | Join-only Interface | same | same |
+| Interface `.1..6` | exact Interface endpoint closure -> ABI; complement inert | same, with all completion entries in complement | same, with all completion entries in complement |
+| Plan root absent | required by request formation | illegal for this purpose | illegal for this purpose |
+| Plan `.0 protocol_id` | n/a | Join-only Plan | Join-only Plan |
+| Plan `.1 private_material[*].key` | n/a | Inert private key | Inert private key |
+| Plan `.1 private_material[*].kind/value_type` | n/a | reachable closure -> Plan/Type; complement dead | arm-extended reachable closure -> Plan/Type; complement dead |
+| Plan `.2 randomness`, `.3 persistent_state` | n/a | reachable closure -> Plan/Type | arm-extended reachable closure -> Plan/Type |
+| Plan `.4 decision_recipes` nodes/moves/updates | n/a | reachable decision closure -> Plan/Type; complement dead | reachable decision closure -> Plan/Type; complement dead |
+| Plan `.5 derived_witness_exports[*].key` | n/a | Inert derived export | Inert derived export |
+| Plan `.5 derived_witness_exports[*].source_site/value/value_type` | n/a | Inert derived export | selected exact arm export -> Plan/Type; complement inert derived export |
+| Plan `.6 accepted_terminal_recipes[*].terminal_ref` | n/a | Inert dead Plan element | selected nonempty arm key -> Plan; complement dead |
+| Plan `.6 accepted_terminal_recipes[*].nodes` | n/a | Inert dead Plan element | selected export-rooted site-local closure -> Plan/Type; complement dead |
 
 The rows cover every current root field. Nested fields inherit the row's fixed
 closure selector or its exact selected/complement result; there is no
 most-specific-wins precedence. Current admitted Interface Oracle/module
 targets are necessarily backed by the already-unsupported Core Oracle/module
 case. A future Plan module constructor is a different owner grammar and fails
-the pinned regime/schema join rather than inhabiting an unreachable current
+the pinned Plan-profile and endpoint-law join, while retaining the same
+Foundation `SemanticRegimeId`, rather than inhabiting an unreachable current
 `Unsupported` tag.
 
 For every supported K2 owner row governed by `K2RoleSemanticClosure`, each
@@ -1663,7 +1755,7 @@ Selector algorithms are exact:
    inputs. Worklist order is increasing
    owner coordinate body; every edge is visited once. For the Prover it also
    requires `ProverEndpointValueClosure` before any ref is rebased.
-3. `K3BInterfaceEndpointClosure` seeds public plus Verifier-private local
+3. `InterfaceEndpointReachableClosure` seeds public plus Verifier-private local
    invocation entries for the Verifier and public local invocation entries for
    the Prover; every Statement entry whose exact binding occurs in the spine;
    every transport entry whose exact target occurs in the spine and whose
@@ -1672,14 +1764,26 @@ Selector algorithms are exact:
    to its slot and each slot through the complete acyclic structural-codec
    child graph. It derives the exact selected/complement partition before
    rebasing.
-4. `K3BPlanReachableClosure` seeds each admitted decision move payload and
-   each `ReplaceState` payload. It follows recipe operands, selected-state
-   initializers, and node dependencies to private, randomness, state, and
-   nested recipe-node declarations. `KeepState` alone is not a seed; after a
-   state is selected, its complete per-decision update row, including every
-   `KeepState`, is retained. Node traversal is decision-local and follows
-   exact K3-B view coordinates as well as their resolved values. Derived
-   exports are never seeds.
+4. `PurposeSelectedPlanReachableClosure` always seeds each admitted decision move payload
+   and each `ReplaceState` payload. For
+   `PlanContinuationProverEndpoint`, it first derives
+   `AcceptedPlanContinuationArmMap(P,plan)` from the exact admitted Protocol
+   and the exact admitted Plan supplied by the affirmative extraction basis;
+   its calls to `AcceptedPlanContinuationArm(P,plan,t)` supply that same pair.
+   Absence of every nonempty arm is the typed support result
+   `Unsupported(NoPlanContinuationArm)`. It then also
+   seeds every export named by a retained arm. The common worklist follows
+   recipe operands, selected-state initializers, and node dependencies to
+   private material, randomness, state, public view reads, and site-local
+   recipe nodes. `KeepState` alone is not a seed; after a state is selected,
+   its complete per-decision update row, including every `KeepState`, is
+   retained. Node traversal is exact-site-local. A decision-derived export may
+   enter an arm only when its decision is guaranteed active and ordered before
+   that terminal; a terminal-derived export may enter only the arm keyed by
+   its identical terminal. Every selected export receives one dense graph-
+   local `PlanContinuationOutputRef`, and every retained arm refers only to
+   those refs. For `PlanSpecializedProverEndpoint`, derived exports and
+   accepted-terminal recipes are never seeds.
 
 Each selector is bounded by the source body's already admitted K1 limits plus
 the extraction visit limit. Duplicate visits do not duplicate receipts.

@@ -71,11 +71,15 @@ The candidate v0 architecture began as the first semantic reconstruction
 result in this tree and now integrates the selected subject, transition,
 Protocol-and-Relations, Analysis-and-Compiler, bounded endpoint-projection,
 and joined profile/view/read/authority backbones. Later protocol pressure has
-retained native FRI/IOR, explicit commitment-opening semantics, and flat
-complete-argument organization without claiming portfolio closure. It remains a
-non-normative decision surface: it records the reconstructed current model,
-the selected target spine, later-stage redesign questions, and the work
-sequence required before specification migration.
+retained native FRI/IOR, explicit commitment-opening semantics, flat complete-
+argument organization, and the accumulation/folding/recursive-verification
+result without claiming portfolio closure. The latter selects Plan-
+owned accepted-terminal continuation, confidential site-qualified outputs, a
+one-use same-process handoff with finite recurrence, and a distinct
+continuation-prover purpose. It remains a non-normative decision surface: it
+records the reconstructed current model, the selected target spine, later
+redesign questions, and the work sequence required before specification
+migration.
 
 The first deep domain package was the
 [Candidate Protocol Subject and Lifecycle](../pir/protocol-lifecycle.md).
@@ -139,16 +143,22 @@ implementation.
 The bounded endpoint result is owned by PIR's
 [Endpoint Projection Views](../pir/endpoint-projection-views.md) and OIR's
 [Endpoint and Projection Contract](../oir/projection-contract.md). It selects
-the minimum FS verifier and Plan-specialized prover read/relation seam without
-selecting a complete OIR language or activating Stage 4B. One finite joined
-Schnorr witness reclosed that seam with the preceding owners. Native FRI/IOR is
-now retained as a separate two-lane conservative extension: a checked
-logical-Oracle-to-committed-Core construction precedes the same-Core
-Fresh/Fiat--Shamir split, while Analysis properties remain separate. The
-commitment and complete-argument packages further select exact verifier-side
-opening profiles, flat finite Cores, and Interface/OIR proof packaging while
-rejecting universal batching and Argument roots. Accumulation/recursion,
-holdouts, and independent freeze remain later, and Stage 4B remains inactive.
+canonical-framed Fiat--Shamir verifier and Plan-specialized prover seams plus a
+distinct continuation-prover purpose with a static terminal-indexed private-
+output contract, without selecting a complete OIR language or runtime
+Realization. One finite joined Schnorr witness reclosed the original seam with
+the preceding owners. Native FRI/IOR is retained as a separate two-lane
+conservative extension, while the commitment and complete-argument packages
+select exact verifier-side opening profiles, flat finite Cores, and
+Interface/OIR proof packaging without universal batching or Argument roots.
+Accumulation, folding, and recursive-verification pressure now selects the
+Plan-owned continuation, confidential grounding, one-use same-process handoff,
+and finite recurrence boundary. The fixed Nova fold reaches T2
+constructive-encoding depth; the remaining named cases retain their stated T1
+finite-target gaps. Holdouts, complete
+owner-profile preimages, independently reconstructible identities, independent
+identity/profile freeze, properties, full OIR/Realization, implementation, and
+normative cutover remain open.
 
 Future durable documents may include a charter, current status, roadmap, and
 decision index. They will be created only when content is migrated and their

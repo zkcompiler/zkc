@@ -1,0 +1,23 @@
+{
+  "authority": "one named executable probe per bounded evaluator outcome",
+  "mutations": [
+    {"probe": "cross_site_node_capture", "boundary": "site-local recipe closure", "expected": "Malformed"},
+    {"probe": "missing_decision_recipe", "boundary": "total prover-decision coverage", "expected": "Malformed"},
+    {"probe": "terminal_randomness_read", "boundary": "randomness demand site", "expected": "Malformed"},
+    {"probe": "ready_capability_reuse", "boundary": "Plan execution linearity", "expected": "Refused"},
+    {"probe": "adapter_failure", "boundary": "adapter noncompletion", "expected": "CannotAnswer"},
+    {"probe": "generated_terminal_disclosure", "boundary": "confidential source phase", "expected": "Refused"},
+    {"probe": "malformed_confidential_manifest", "boundary": "confidential manifest", "expected": "Malformed"},
+    {"probe": "reconstructed_continuation_capability", "boundary": "continuation capability identity", "expected": "Refused"},
+    {"probe": "wrong_handoff_material_kind", "boundary": "target private-material kind", "expected": "KindMismatch"},
+    {"probe": "wrong_handoff_value_type", "boundary": "source-target ValueType equality", "expected": "KindMismatch"},
+    {"probe": "exact_target_core_binding", "boundary": "target Protocol Core and Plan identity", "expected": "Refused"},
+    {"probe": "wrong_grounding_consumer", "boundary": "question-derived confidential role", "expected": "Refused"},
+    {"probe": "incomplete_public_recurrence", "boundary": "exhaustive public recurrence path", "expected": "Malformed"},
+    {"probe": "challenge_as_public_recurrence_output", "boundary": "owner-classified public recurrence output", "expected": "Unsupported"},
+    {"probe": "unequal_public_recurrence_leg", "boundary": "owner-derived public recurrence equality", "expected": "Negative"},
+    {"probe": "empty_continuation_graph", "boundary": "nonempty continuation purpose", "expected": "Malformed"},
+    {"probe": "ordinary_graph_with_continuation", "boundary": "endpoint purpose separation", "expected": "Malformed"},
+    {"probe": "no_plan_continuation_arm", "boundary": "source projection support", "expected": "Unsupported"}
+  ]
+}

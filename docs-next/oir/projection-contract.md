@@ -57,6 +57,17 @@ lane receives no `CheckedEndpointSourceView` and performs no source/target
 comparison. This makes the authority chain inspectable without putting a PIR
 source ID, basis, adapter, or manifest into OIR semantic identity.
 
+For the Prover, the supported family has two distinct purposes. The ordinary
+`PlanSpecializedProverEndpoint(FiatShamir)` retains only public proof-message
+decisions and their selected state. The
+`PlanContinuationProverEndpoint(FiatShamir)` retains the same behavior plus
+the complete site-qualified private-export closure promised by at least one
+accepted-terminal continuation arm. A continuation request whose exact source
+Plan yields no nonempty arm returns the typed source-support result
+`Unsupported(NoPlanContinuationArm)` before source extraction or independent
+target construction. It cannot fall through to an ordinary Prover target or
+produce a partial OIR.
+
 `LocalOirValid(O)` asks whether OIR is a coherent endpoint semantic object.
 `ProjectionCorrect(S,O)` asks whether it is exactly the selected endpoint
 meaning of the complete PIR-owned source view. Neither implies the other. A
@@ -122,15 +133,51 @@ contains:
 - static canonical-framed Fiat--Shamir construction, prefix, namespace-recipe, retry, state,
   and failure laws;
 - complete claim, reduction, publication, terminal, and closure graph;
-- optional six-table reachable Plan graph.
+- optional seven-table reachable Plan graph with site-qualified recipe nodes
+  and derived exports.
+
+For a Prover graph, the imported PIR-owned Plan component is exactly:
+
+```text
+ReachablePlanGraph = {
+  private_material,
+  randomness,
+  state,
+  site_qualified_recipe_nodes,
+  decision_moves,
+  decision_updates,
+  site_qualified_derived_exports
+}
+```
+
+The ordinary Plan-specialized purpose has an empty derived-export table. The
+continuation purpose retains every and only export named by a nonempty
+accepted-terminal arm and the complete export-rooted closure needed to derive
+it. Recipe-node and export sites distinguish a decision spine ref from an
+accepted-terminal ref; ordinal coincidence between those namespaces cannot
+capture a node or value. The exact `PlanGraphBody` and all of its component
+bodies are physically owned by PIR and imported here without reinterpretation.
+
+Private continuation outputs have their own OIR access namespace:
+
+```text
+PrivatePlanContinuationAccess =
+  PlanContinuationOutput(PlanContinuationOutputRef)
+```
+
+It is legal only while deriving or validating the private continuation
+contract. It is not an `EndpointValueRef`, InteractiveCore value ref, role-ABI
+value ref, public-closure ref, or ordinary Plan-move ref. In particular, the closed
+`EndpointValueRefBody` gains no private-output arm.
 
 The exact profile-owned `DeriveEndpointContractV0` evaluator derives one
 closed `DerivedEndpointContractBody`: the complete static-obligation index,
 the exact local-evaluator, counterparty, Plan-ingress, and storage
-requirements, and the static completion interface. These are exact semantic
+requirements, the static external completion interface, and the optional
+terminal-indexed private Plan-continuation contract. These are exact semantic
 consequences, not second authored graph tables. Local admission reruns the
 evaluator and validates the complete body; a producer cannot add, omit, or
-override one row.
+override one row or continuation-arm member.
 
 The derived contract is not an execution trace. Runtime guard/activity,
 draws, receipts, path-sensitive state versions, decoded values, transport
@@ -181,11 +228,24 @@ external slot key, and external Statement coordinate remain semantic graph
 operands; rebasing may not erase or synthesize any of them.
 
 Consequently, two exact sources with the same complete endpoint quotient share
-one semantic OIR. Dead Plan nodes, witness exports, and private source maps do
-not rotate it. A reachable recipe, ABI edge, K2 framed coordinate, static FS
-law, Check, Reduction, Terminal, or any graph operand from which a requirement
-or completion-interface row is derived must rotate the OIR body or make reuse
-projection-negative.
+one semantic OIR. For the ordinary Prover purpose, dead Plan nodes,
+private-export-only declarations, and private source maps do not rotate it.
+For the continuation purpose, every retained site-qualified node, derived
+export, output ref, source site, type, path guarantee, and terminal-arm
+membership is semantic: changing any of them rotates the graph/OIR or makes
+reuse projection-negative. A reachable recipe, ABI edge, canonical-framed
+Protocol coordinate, static FS law, Check, Reduction, Terminal, or any graph
+operand
+from which a requirement, external-completion, or private-continuation row is
+derived has the same consequence. Equal private values or equal types never
+identify distinct graph-local output refs.
+
+`DerivedEndpointContractBody` is not copied into `OirEndpointDomainBody`, but
+this does not make the law identity-inert. `OirEndpointGraphProfileId`
+authenticates the exact `EndpointContractLawV0` declaration catalog. A change
+to continuation-arm derivation, path guarantee, exact-use, atomicity, access
+namespace, or contract body rotates that profile and therefore rotates
+`OirId` even when the eleven graph fields happen to encode identically.
 
 ## 5. Independent local OIR admission
 
@@ -221,8 +281,9 @@ manifest, source map, or projection claim. It checks:
    presentations, and treats counterparty-only values as descriptive until an
    exact transport or public reconstruction makes them locally available.
    These roots include base/FS/anchor demands and the endpoint-value side of a
-   Plan view read, but exclude private material, randomness, state, and Plan
-   recipe intermediates;
+   Plan view read, but exclude private material, randomness, state, Plan
+   recipe intermediates, and every private continuation-output ref. The latter
+   is legal only in the disjoint `PrivatePlanContinuationAccess` namespace;
 4. codec dependency order, slots, invocation fibres, Statement aliases,
    transports, completions, origin uniqueness, and role legality; for every
    local General codec ref, exact K3-B `DerivedExhaustive` or
@@ -241,25 +302,58 @@ manifest, source map, or projection claim. It checks:
    full terminal verdict, public outputs, required checks, and
    claim dispositions; then the finite K2 liveness, Last-Challenge,
    saturation, stopping, and linear-closure laws;
-8. role shape and optional six-table Plan closure: FS is present for both
+8. role shape and optional seven-table Plan closure: FS is present for both
    supported roles; Verifier requires Plan absent; Prover requires Plan
-   present; every Prover-message action has exactly one Plan move, every Plan
-   decision key resolves to such an action, and decision-owned recipe nodes,
-   exact
-   coordinate/value decision reads, same-decision node references, randomness
-   availability, total selected-state updates, recipe ABI, state, and
-   action-spine cross-references;
+   present; every Prover-message action has exactly one Plan move and every
+   Plan decision key resolves to such an action. Recipe nodes and derived
+   exports carry an exact decision or accepted-terminal site; local node refs
+   remain within that site; decision reads, moves, state updates, randomness
+   availability, and action-spine refs are exact; accepted-terminal reads are
+   derived constructor by constructor from the endpoint spine, scope, order,
+   guard implication, and matching terminal output; terminal nodes are
+   export-rooted; and every retained export has one exact site, value, and
+   type. The ordinary Prover shape requires the derived-export table empty.
+   The continuation shape requires at least one derived nonempty terminal arm
+   and rejects any public-Plan-parameter declaration, operand, graph table, or
+   requirement arm under this selected profile;
 9. one total rerun of `DeriveEndpointContractV0`, including the complete
    `DerivedEndpointContractBody`: every exact static obligation; local-only
    evaluator ownership and the exact graph-only `EndpointValueAccessV0`
-   least-fixed-point route/operand check; locally demanded pure-node closure; General-codec
-   presentation paths; counterparty contracts; private-material/randomness
-   ingress; state storage; exact Verifier completion interface; no semantic
-   Prover completion; and the four role/dataflow formation laws; and
+   least-fixed-point route/operand check; locally demanded pure-node closure;
+   General-codec presentation paths; counterparty contracts;
+   private-material/randomness ingress; state storage; exact Verifier
+   completion interface; no semantic Prover completion; and, when present,
+   the complete terminal-indexed private continuation contract. For every
+   retained arm `t`, derivation emits exactly one
+   `PlanContinuation(t)` obligation, resolves each dedicated private output
+   access to one graph export, validates the same-terminal rule or the exact
+   all-path decision-before-`t` guarantee, requires every and only qualifying
+   export in output-ref order, and checks all-or-nothing arm issuance. Missing,
+   extra, duplicate, dangling, cross-site, cross-graph, wrong-type, or unused
+   exports fail; the four role/dataflow formation laws remain mandatory; and
 10. cumulative K1 constitutional bounds for both the identity-bearing graph
     and the independently derived contract, plus explicit request-local work
     bounds; path-expansion oversize or exhaustion returns atomically with no
     partial contract.
+
+Plan exact-use is purpose-specific and total. Ordinary Prover roots are moves
+and state replacements. Continuation roots add every private output selected
+by the derived nonempty terminal arms; closure then follows the output's exact
+site-local value, recipe nodes, Plan reads, private ingress, randomness, and
+state predecessors. Every retained Plan entry must be reached by the
+applicable root set and every reached entry must be retained exactly once.
+Local OIR admission derives this without a source handle. The projection
+request separately requires the checked PIR source view whose owner-read
+receipts and exact-use closure established the identical seven-table graph;
+exact graph equality then prevents either side from omitting a source read or
+inventing an ungrounded target entry.
+
+The `PlanContinuation(t)` row is a static realization obligation only. It
+states the exact `Accept` gate, sealed final-state input, export-rooted
+terminal computation, path-guaranteed earlier decision exports, and atomic
+membership that a later runtime must honor. Local OIR admission neither
+reaches `t`, evaluates the arm, nor mints a private value or continuation
+capability.
 
 The one static FS failure is construction-wide. Every FS-failure completion
 refers to it through the admitted construction and ABI; a challenge/action
@@ -341,6 +435,16 @@ process-local capability, not proposition identity. View-equivalent distinct
 sources may therefore share one proposition while receiving distinct live
 capabilities.
 
+The proposition purpose must equal the purpose inside the checked source-view
+body, not merely have the same role. `PlanSpecializedProverEndpoint` requires
+an empty site-qualified derived-export table and a derived private
+continuation field of `None`. `PlanContinuationProverEndpoint` requires a
+nonempty seven-table Plan closure, a derived `Some` contract containing at
+least one nonempty terminal arm, and exactly one `PlanContinuation(t)` static
+obligation per arm. This shape agreement is rederived from the admitted graph;
+an authored contract, a same-role fallback, or an empty continuation target
+cannot form the request.
+
 There is no producer witness in this exact-equality profile. Removing it also
 removes the earlier ambiguity between rejection of one witness and refutation
 of an existential proposition.
@@ -351,6 +455,22 @@ Let `(source_profile,S)` be the authenticated profiled source subject retained
 by the checked source capability, where `S` is its
 `EndpointSourceViewDomainBody`. Let `(oir_profile,O)` be the independently
 admitted profiled OIR subject, where `O` is its `OirEndpointDomainBody`.
+For an admitted graph `G`, `ContractOf(G)` denotes the unique Affirmative
+`DerivedEndpointContractBody` that local admission has already rederived;
+qualified noncompletion cannot form an admitted OIR.
+On the supported domain, `PurposeContractShape` is the closed predicate:
+
+```text
+VerifierEndpoint(FiatShamir) :=
+  VerifierCompletions and private_plan_continuation = None
+PlanSpecializedProverEndpoint(FiatShamir) :=
+  NoSourceSemanticCompletion and private_plan_continuation = None
+PlanContinuationProverEndpoint(FiatShamir) :=
+  NoSourceSemanticCompletion and
+  private_plan_continuation = Some(nonempty contract of nonempty arms)
+```
+
+It is false for every unsupported purpose/mode in this relation profile.
 Bounded v0 defines:
 
 ```text
@@ -360,6 +480,9 @@ ProjectionCorrectV0((source_profile,S),(oir_profile,O)) :=
   and ContractLaw(source_profile) = EndpointContractLawV0
   and ContractLaw(oir_profile) = EndpointContractLawV0
   and PurposeRole(S.purpose) = O.semantic_graph.role
+  and PurposeContractShape(
+        S.purpose,
+        ContractOf(O.semantic_graph))
   and M(S.semantic_graph) = M(O.semantic_graph)
 ```
 
@@ -367,7 +490,8 @@ The canonical encoder is injective, so byte equality here is exact typed graph
 equality, not serialization coincidence. It covers every non-derived OIR
 field at once: role, dependencies, types, constants, pure nodes, codec/slot
 ABI, action spine/control order, static FS laws, claims, reduction/terminal
-anchors, and optional Plan.
+anchors, and the complete optional seven-table Plan, including every
+site-qualified derived-export body.
 
 The equality compares original K2 transcript coordinates literally. It
 compares local graph refs only after each side independently satisfies the one
@@ -377,10 +501,15 @@ equality supplies exact no-omission and no-phantom coverage for every table.
 Both profile formations also rerun the same exact
 `DeriveEndpointContractV0`, so equality of the base graph entails equality of
 the complete `DerivedEndpointContractBody`: static obligations, exact
-requirements, and completion interface. No target universe can be silently
-omitted from a correspondence witness because no such witness or partial
-plane exists. The four role/dataflow laws in Section 3 are mandatory on both
-formed graphs and need no second projection conjunct.
+requirements, external completion interface, and the exact terminal-indexed
+private continuation contract. This includes output refs, decision-or-terminal
+source sites, result types, arm membership, the all-path guarantee for earlier
+decision exports, and atomic membership. The dedicated private access is
+resolved during derivation but never enters a generic endpoint-value plane.
+No target universe can be silently omitted from a correspondence witness
+because no such witness or partial plane exists. The four role/dataflow laws
+in Section 3 are mandatory on both formed graphs and need no second projection
+conjunct.
 
 ## 8. Outcomes and authority
 
@@ -452,9 +581,13 @@ internal.
 The Verifier owns Checks, Reduction application, Terminal semantics, the
 Protocol verdict, and every applicable completion presentation. The Prover
 owns proof-message production and its reachable Plan but has
-`NoSourceSemanticCompletion`. K2 `Stop`, unavailable authority, private search
-exhaustion, and runtime FS exhaustion remain execution outcomes rather than
-static completion claims.
+`NoSourceSemanticCompletion` under both supported Prover purposes. The
+continuation purpose adds a disjoint static private Plan-continuation contract;
+it does not add an Interface completion, a public transport, or a Prover
+Protocol verdict. InteractiveCore strategy `Stop`, unavailable authority,
+private search exhaustion, accepted-terminal finalization failure, and runtime
+FS exhaustion remain
+execution outcomes rather than static completion claims.
 
 K3-D deliberately does **not** define an authoritative source-independent
 pair judgment over two admitted OIRs. A first candidate attempted to compare
@@ -503,16 +636,18 @@ cryptographic property even after that later contract exists.
 
 ## 10. Support boundary
 
-| Source/purpose | `K3DProjectionV0` result |
+| Source/purpose | `EndpointProjectionSemanticsV0` result |
 |---|---|
 | Canonical-framed FS Verifier over base non-Oracle, non-module effects | Supported |
 | Canonical-framed FS Plan-specialized Prover over base Plan recipes | Supported |
+| Canonical-framed FS Plan-continuation Prover with one or more owner-derived nonempty accepted-terminal arms | Supported |
+| Plan-continuation Prover whose exact Plan yields no nonempty accepted-terminal arm | `Unsupported(NoPlanContinuationArm)` |
 | Duplex-sponge FS Verifier or Prover | `Unsupported(DuplexSpongeEndpoint)` |
 | Fresh Verifier or Prover | `Unsupported(FreshEndpoint)` |
 | Generic Plan-free Prover | `Unsupported(GenericProverEndpoint)` |
 | Core with a native Oracle declaration or occurrence | `Unsupported(StandardOracleEndpoint)` |
 | Any admitted module effect | `Unsupported(ModuleEffectEndpoint)` |
-| Future Interface/Plan grammar with module recipe | Fails the pinned regime/schema join; not classifiable under `K3DProjectionV0` |
+| Interface/Plan grammar containing a public Plan-parameter lane or module recipe | Fails the selected profile/schema join; not classifiable under the selected endpoint-projection profile |
 | Legacy carrier lacking a supported K2 effect law | Stops at PIR admission |
 
 The table is exhaustive for the closed purpose grammar and selected PIR/Plan
@@ -534,6 +669,16 @@ deployment, and invocation authority belong to Realization. Reachable base
 Plan semantics has already entered the Prover graph; concrete suppliers never
 did. There is no implicit `BelowOirPlanBasis` branch.
 
+Runtime private continuation remains unactivated. PIR Plan owns generation,
+the sealed post-generation state, the one-use accepted-terminal continuation
+right, export evaluation, and atomic issuance of the reached arm. The static
+OIR contract neither consumes that live right nor projects its private values.
+A later Realization design must define the exact runtime binding from an
+admitted continuation OIR and its `PlanContinuation(t)` obligation to the
+identical PIR Plan session/capability chain before any runtime continuation
+projection can be claimed. An inactive terminal arm is absence, not an empty
+tuple, and a failed issuance returns no prefix or subset.
+
 Projection performs no arithmetization, polynomial-commitment selection,
 batching, recursion, IOP compilation, or Fiat--Shamir conversion. Such a
 transformation first needs its own admitted semantic target and checked
@@ -541,13 +686,25 @@ source/target relation.
 
 ## 12. Reopen rules and non-claims
 
-No bounded K3-D pressure requires reopening K1, K2 Core/Fiat--Shamir, or K3-B
-Interface/Plan identity. K3-D was reopened locally to retain K2 frame
-coordinates, replace a static namespace datum with the per-draw recipe,
-preserve the complete slot graph and claim/reduction/terminal structure, and
-replace incomplete correspondence planes with total canonical equality.
+The accepted-terminal continuation extension rotates the selected
+`PIRInterfacePlanProfileId`, `OirEndpointGraphProfileId`,
+`PirEndpointSourceViewProfileId`, `OirProjectionRelationProfileId`, and
+`OirProjectionValidationProfileId`, plus every identity formed under those
+profiles. It does not rotate Foundation `SemanticRegimeId`, Foundation
+semantic-language meaning, InteractiveCore or Fiat--Shamir construction
+profiles, `CoreId`, or `ProtocolId`. Old profile bodies may
+be retained as historical evidence but cannot authenticate this grammar.
 
-Reopen this exact-equality profile only when a concrete supported endpoint
+The endpoint-projection contract had already been reopened locally to retain
+Protocol framing coordinates, replace a static namespace datum with the
+per-draw recipe, preserve the
+complete slot graph and claim/reduction/terminal structure, and replace
+incomplete correspondence planes with total canonical equality. This
+continuation addition reopens only the dependent Interface/Plan and endpoint
+profiles needed to represent the selected Plan meaning; it does not reinterpret
+old bytes under a new semantic regime.
+
+Reopen this exact-equality profile again only when a concrete supported endpoint
 needs semantic reordering, optimization, split/fusion, ABI adaptation, or
 another meaning-preserving nonidentity relation. Reopen K2 or K3-B only when a
 positive endpoint inhabitant needs a source-owned fact their current exact
@@ -562,11 +719,22 @@ family-wide projectability result, or security claim.
 All bodies use the exact K1 notation and the same
 `PriorMetaAuthenticationBasis`, selected `SemanticRegimeId`, and exact-used
 language-profile closure as the source graph.
-`CR(x)=Y(ContentRefV0(x))`. `EndpointPurposeBody` and the component graph-body
-constructors are imported exactly from the PIR source-view specification
-linked in Section 3. OIR owns the aggregate graph schema, endpoint-contract
-law, OIR profile, and projection relation below. PIR cannot reinterpret their
-tags, fields, local-reference rules, or bounds.
+`CR(x)=Y(ContentRefV0(x))` and
+`VT(T)=CanonicalValueTypeBody(T)`. `OptionBody` is imported exactly from the
+PIR source-view appendix, where
+`OptionBody(None,F)=V(0,U)` and `OptionBody(Some(x),F)=V(1,F(x))`; OIR does not
+define a same-shaped local option encoding. `EndpointPurposeBody`, `EndpointRoleBody`,
+`EndpointDependencyBody`, `SourceConstantBody`, `SourcePureNodeBody`,
+`RoleEndpointAbiGraphBody`, `SourceSpineEventBody`,
+`StaticFsEndpointSemanticsBody`, `SourceClaimAtomBody`,
+`SourceAnchoredObligationBody`, `PlanGraphBody`,
+`PlanRecipeNodeSiteBody`, `EndpointValueRefBody`, `PrivateMaterialKindBody`,
+`PlanInitializerBody`, and `PlanUpdateBody` are imported exactly from the PIR
+source-view specification linked in Section 3. In particular the imported
+`PlanGraphBody` is the seven-table site-qualified body; OIR does not define a
+shadow Plan carrier. OIR owns the aggregate graph schema, endpoint-contract
+law and bodies, OIR profile, and projection relation below. PIR cannot
+reinterpret their tags, fields, local-reference rules, or bounds.
 
 ```text
 EndpointContractLawV0Body = V(0,U)
@@ -584,6 +752,142 @@ EndpointSemanticGraphBody(x) = R{
  10:OptionBody(x.plan,PlanGraphBody)
 }
 
+EndpointFrameRecipeBody =
+    V(0,U) | V(1,U) | V(2,U)
+  | V(3,N(scope_spine_ref))
+  | V(4,N(binding_spine_ref))
+  | V(5,N(guarded_spine_ref))
+  | V(6,N(message_spine_ref))
+  | V(7,N(message_spine_ref))
+  | V(8,R{0:N(challenge_spine_ref),1:N(input_ordinal)})
+// CoreHeader | ConstructionHeader | ApplicationDomain | ScopeOpening
+// PublicBinding | GuardOutcome | ProverMessage | VerifierMessage
+// ChallengeCondition
+
+EndpointPresentationCoordinateBody =
+    V(0,N(slot_ref))
+  | V(1,N(statement_alias_ref))
+  | V(2,N(transport_edge_ref))
+  | V(3,N(completion_ref))
+  | V(4,R{0:N(completion_ref),1:N(coordinate_ordinal)})
+// ExternalSupply | Statement | Transport | CompletionTag
+// CompletionPayload
+
+CodecDirectionBody = V(0,U) | V(1,U)
+// Encode | Decode
+
+EndpointStaticObligationBody =
+    V(0,N(slot_ref))
+  | V(1,N(decision_spine_ref))
+  | V(2,EndpointFrameRecipeBody)
+  | V(3,N(spine_ref))
+  | V(4,R{0:N(challenge_spine_ref),1:N(challenge_law_ref)})
+  | V(5,R{0:CodecDirectionBody,
+          1:EndpointPresentationCoordinateBody})
+  | V(6,N(accepted_terminal_ref))
+// SlotIngress | PlanDecision | K2Frame | LocalOccurrence
+// ChallengeInterpret | Presentation | PlanContinuation
+
+EndpointValueAccessRouteBody =
+    V(0,R{0:N(invocation_target_ref),1:N(slot_ref)})
+  | V(1,N(constant_ref))
+  | V(2,N(pure_node_ref))
+  | V(3,N(decision_spine_ref))
+  | V(4,N(verifier_message_spine_ref))
+  | V(5,N(check_spine_ref))
+  | V(6,R{0:N(challenge_spine_ref),1:N(challenge_law_ref)})
+  | V(7,N(transport_edge_ref))
+  | V(8,N(verifier_message_spine_ref))
+  | V(9,N(check_spine_ref))
+// InvocationDecode | Constant | PureEval | PlanMove
+// LocalVerifierMessage | LocalCheck | ChallengeInterpret
+// InboundTransport | ReconstructVerifierMessage | ReconstructCheck
+
+EndpointValueAccessBody = R{
+  0:EndpointValueRefBody(value),
+  1:EndpointValueAccessRouteBody(route)
+}
+
+CodecPathStepBody =
+    V(0,N(field_ordinal)) | V(1,N(case_ordinal)) | V(2,U)
+// RecordField | VariantCase | symbolic SequenceElement
+
+AlgorithmUseSiteBody =
+    V(0,N(pure_node_ref))
+  | V(1,N(guard_spine_ref))
+  | V(2,N(verifier_message_spine_ref))
+  | V(3,N(check_spine_ref))
+  | V(4,EndpointFrameRecipeBody)
+  | V(5,N(challenge_law_ref))
+  | V(6,N(challenge_law_ref))
+  | V(7,N(challenge_law_ref))
+  | V(8,N(challenge_law_ref))
+  | V(9,R{0:PlanRecipeNodeSiteBody,
+          1:N(plan_recipe_node_ref)})
+  | V(10,N(public_reconstruction_check_spine_ref))
+  | V(11,R{0:EndpointPresentationCoordinateBody,
+           1:CodecDirectionBody,
+           2:S[CodecPathStepBody...],
+           3:N(general_codec_ref)})
+// PureNode | Guard | DeterministicVerifierMessage | Check | FsAbsorb
+// FsSqueeze | FsAdvance | ChallengeAccept | ChallengeDecode | PlanRecipe
+// PublicReconstruction | CodecPresentation
+
+CounterpartyUseSiteBody =
+    V(0,N(transport_edge_ref)) | V(1,N(counterparty_action_spine_ref))
+
+OirRequirementBody =
+    V(0,R{0:AlgorithmUseSiteBody,
+          1:N(algorithm_dependency),2:N(evaluation_dependency)})
+  | V(1,CounterpartyUseSiteBody)
+  | V(2,R{0:N(private_material_ref),
+          1:PrivateMaterialKindBody(kind),2:N(type_ref)})
+  | V(3,R{0:N(randomness_ref),1:N(type_ref),
+          2:N(first_available_decision_spine_ref)})
+  | V(4,R{0:N(state_ref),1:N(type_ref),
+          2:PlanInitializerBody(initializer),
+          3:S[PlanUpdateBody(update)... in decision-spine order]})
+// LocalEvaluator | Counterparty | PrivateMaterialIngress
+// PrivateRandomnessIngress | StateStorage
+
+EndpointCompletionInterfaceBody =
+    V(0,S[N(completion_variant_ref)... in ref order]) | V(1,U)
+// VerifierCompletions | NoSourceSemanticCompletion
+
+PrivatePlanContinuationAccessBody =
+  V(0,N(plan_continuation_output_ref))
+// PlanContinuationOutput; legal only inside the private continuation contract
+
+PlanContinuationOutputDeclBody(x) = R{
+  0:PrivatePlanContinuationAccessBody(
+      PlanContinuationOutput(x.output_ref)),
+  1:PlanRecipeNodeSiteBody(x.source_site),
+  2:N(x.type_ref)
+}
+
+AcceptedPlanContinuationArmDeclBody(x) = R{
+  0:N(x.accepted_terminal_ref),
+  1:S[PlanContinuationOutputDeclBody(output)... in output-ref order]
+}
+
+PrivatePlanContinuationContractBody(x) =
+  S[AcceptedPlanContinuationArmDeclBody(arm)... in terminal-ref order]
+
+DerivedEndpointContractBody(x) = R{
+  0:S[EndpointStaticObligationBody... in full-body byte order],
+  1:S[OirRequirementBody... in full-body byte order],
+  2:EndpointCompletionInterfaceBody(x.completion_interface),
+  3:OptionBody(
+      x.private_plan_continuation,
+      PrivatePlanContinuationContractBody)
+}
+
+EndpointContractDerivationOutcomeBody =
+    V(0,DerivedEndpointContractBody)
+  | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U) | V(6,U)
+// Affirmative | MissingDependency | KindMismatch | Malformed | Refused
+// DeterministicLimitExceeded | CheckerFailure
+
 OirEndpointDomainBody(x) = EndpointSemanticGraphBody(x.semantic_graph)
 
 ProjectionPropositionDomainBody(x) = R{
@@ -592,6 +896,55 @@ ProjectionPropositionDomainBody(x) = R{
   2:CR(x.target_oir_id)
 }
 ```
+
+`DeriveEndpointContractV0` applies the following exact continuation law. The
+ordinary Plan-specialized graph has no retained derived export and yields
+`private_plan_continuation = None`. A continuation graph yields `Some` with a
+nonempty terminal-ordered sequence of nonempty arms. For each admitted
+`Accept` terminal `t`, the arm contains every and only retained decision-site
+export whose source decision is guaranteed active and ordered before `t` on
+every `t`-reaching path, plus every and only retained accepted-terminal export
+whose site is exactly `t`. An arm with no such export is absent. One
+decision-site output ref may occur in several arms when each path guarantee
+holds; a terminal-site output ref may occur only in its own arm. Within one
+arm, output refs are strictly ordered and unique.
+
+PIR source support and extraction obtain that selection only by calling the
+Plan-owned `AcceptedPlanContinuationArm(P,plan,t)` law and the PIR source-
+view-owned `AcceptedPlanContinuationArmMap(P,plan)` law with the exact admitted
+Protocol and exact admitted Plan in the extraction basis. There is no
+protocol-only or ambient-Plan overload. Source-blind OIR admission does not
+call those PIR functions or receive `P` or `plan`; it independently derives
+the corresponding graph-local arm law from the complete candidate graph and
+rejects any mismatch. Projection compares the two canonical graphs exactly;
+the one shared `DeriveEndpointContractV0` law then entails equality of their
+derived contracts without adding a second contract-comparison field.
+
+Every output access resolves by its dedicated ref to exactly one entry in the
+imported `site_qualified_derived_exports` table. The declaration's site and
+type must equal that entry exactly. Every retained export occurs in at least
+one derived arm, every arm member resolves to a retained export, every retained
+terminal recipe node is reached from one of its terminal exports, and every
+resulting Plan entry is exact-used by the applicable ordinary or continuation
+root closure. Lookup by terminal/type pair, value equality, source witness key,
+or an `EndpointValueRefBody` is forbidden.
+
+The obligation sequence contains exactly one `V(6,N(t))` row per retained
+arm. That row binds the `Accept` gate, sealed final-state source, exact
+export-rooted terminal evaluation, all decision-path guarantees, and atomic
+all-or-nothing membership for `t`. The external completion body remains
+`V(1,U)` (`NoSourceSemanticCompletion`) for either Prover purpose. The
+selected `OirRequirementBody` has exactly the five arms shown above: it has no
+public Plan-parameter ingress. `EndpointContractDerivationOutcomeBody` has no
+`Unsupported` arm; `Unsupported(NoPlanContinuationArm)` is decided by source
+support classification before an OIR candidate exists.
+
+The direct Plan-owned next-ingress handoff has no `EndpointValueRef`, no OIR
+runtime operation or runtime value, and no serialized capability. This OIR
+contract is static only. Reaching an accepted terminal, atomically producing
+its private continuation arm, and issuing a live right remain PIR Plan-runtime
+authority; an eventual runtime OIR design must introduce a distinct checked
+boundary rather than reinterpret this contract as an executable handoff.
 
 The semantic proposition domain has exactly three fields. Its exact relation
 profile is field 0 of the outer K1 `ProfiledSemanticBody`, not a fourth domain

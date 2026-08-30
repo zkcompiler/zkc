@@ -2,15 +2,19 @@
 
 > **Document kind:** Design-research execution plan
 > **Document state:** Active
-> **Program status:** Active. Stages 0--4A are historically package-complete at
-> their recorded selection gates. The freeze contract, executable foundations,
-> Protocol/Fiat--Shamir kernel, minimum consumer seams, and one joined Schnorr
-> path are complete at their declared bounded scopes. Native FRI/IOR is now
-> retained as a two-lane conservative extension with deterministic source-
-> schedule correspondence. Commitment-opening and complete-argument research
-> are also closed at their assigned constructive depths. Accumulation,
-> recursion, holdouts, and independent freeze remain later. The kernel is not
-> frozen, and Stage 4B remains unactivated.
+> **Program status:** Active. The earlier bounded research packages are
+> historically complete at their recorded selection gates. The freeze
+> contract, executable foundations, Protocol/Fiat--Shamir kernel, minimum
+> consumer seams, and one joined Schnorr path are complete at their declared
+> scopes. Native FRI/IOR is retained as a two-lane conservative extension with
+> deterministic source-schedule correspondence. Commitment-opening, complete-
+> argument, and accumulation/folding/recursive-verification research are closed
+> at their documented evidence levels. The fixed Nova fold reaches T2
+> constructive-encoding depth; the remaining named cases retain their stated
+> T1 finite-target gaps. Holdouts, complete
+> owner-profile publication, and independent identity/profile freeze remain
+> later. The
+> kernel is not frozen, and full OIR/Realization remains unactivated.
 > **Provisional owner:** `project`
 > **Authority:** This is the single execution plan for semantic redesign inside
 > `docs-next/`. It does not replace current product planning or roadmap
@@ -639,7 +643,7 @@ the promoted candidate is mutually closed and ready to freeze.
 | Stage 2 | Historical package complete | Selected [Transition and Bridge Architecture](transition-and-bridge-architecture.md), supported by the Stage 2 package routed through the [temporary workspace inventory](../notes/README.md#working-note-inventory) |
 | Stage 3 | Historical package complete | Selected [Protocol and Relations Architecture](protocol-and-relations-architecture.md), candidate PIR/Relations target owners at package resolution, research evidence, and separate Stage 4A/4B entry contracts |
 | Stage 4A | Historical package complete | Selected [Analysis and Compiler Architecture](analysis-and-compiler-architecture.md), candidate Analysis/Compiler target owners at package resolution, Relations/PIR reconciliation, research evidence, and an unactivated Stage 4B peer boundary |
-| Integrated semantic-kernel closure | Bounded foundation, Protocol, consumer, joined-Schnorr, native FRI/IOR, commitment-opening, and complete-argument work complete; accumulation/recursion, holdouts, and freeze pending | The joined Schnorr path preserved the `InteractiveCore + ChallengeInterpretation` factorization and kept owner views, checked FS construction, Interface correspondence, and Prover-only Plan realization distinct. Native FRI/IOR then added initial logical-Oracle origin/access, one checked structural Oracle-commitment construction, and one causal confidential Relations connection. Source-grounded polynomial-commitment pressure adds an explicit verifier-side setup/claim/evidence profile, repairs Oracle evidence coverage, and keeps four KZG opening/aggregation shapes distinct. Complete-argument pressure retains one flat finite Core, treats proof packages as Interface/OIR projections, rejects a universal Argument root, and requires a canonical Fiat--Shamir construction to transform at least one challenge. A public prover-parameter Plan lane remains a candidate for joint resolution with accumulation-specific Plan pressure. Analysis property questions remain candidate or unsupported. The result is not complete protocol-family coverage, a theorem or security proof, general implementation correspondence, a final OIR language, semantic freeze, or Stage 4B activation. |
+| Integrated semantic-kernel closure | Semantic-target convergence reached; integrated closure is not yet met. Foundation, Protocol, consumer, joined-Schnorr, native FRI/IOR, commitment-opening, complete-argument, and accumulation/folding/recursive-verification pressure are complete at their documented evidence levels; holdouts, owner-profile publication, and independent freeze remain pending. | The accumulated target preserves the `InteractiveCore + ChallengeInterpretation` factorization, exact owner views, checked constructions, and separate Interface, Plan, Relations, Analysis, and OIR authority. The accumulation, folding, and recursive-verification study selects Plan-owned accepted-terminal continuation, site-qualified private exports, confidential grounding, a one-use same-process witness handoff with a finite public/private one-step recurrence join, and a distinct continuation-prover purpose. It rejects universal accumulator, folding-scheme, recursive-proof, and runtime child-Protocol roots and defers typed public Plan parameters. The fixed Nova fold reaches T2 constructive-encoding depth; the remaining named cases retain their stated T1 finite-target gaps. Complete owner-profile preimages and independently reconstructible identities, holdout validation, property judgments, full OIR/Realization, implementation correspondence/support, normative cutover, and independent identity/profile freeze remain open. |
 | Stage 4B | Historical entry contract ready; activation blocked | OIR then Realization may activate only after integrated semantic-kernel freeze and a separate explicit decision. |
 | Stages 5--8 | Not started as decision packages | Later stages may be surveyed for design forces but cannot finalize contracts that depend on unresolved earlier-stage results |
 

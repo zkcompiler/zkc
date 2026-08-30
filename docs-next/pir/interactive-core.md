@@ -2073,13 +2073,20 @@ reinterpret downstream subject kinds. It nominalizes them before using them in
 an authority identity:
 
 ```text
-PIRSourceConsumerRoleId(family,c) =
-  ProfiledSemanticId<"pir.source-consumer">(
-    B, StaticViewProfile(coordinate.owner), {family, ContentRef(c)})
+PIRSourceConsumerRoleBody(x) = R {
+  0:Q(x.family),1:ContentRef(x.coordinate)}
+PIRSourcePurposeRoleBody(x) = R {
+  0:Q(x.family),1:ContentRef(x.coordinate)}
 
-PIRSourcePurposeRoleId(family,p) =
+PIRSourceConsumerRoleId(owner_profile,family,c) =
+  ProfiledSemanticId<"pir.source-consumer">(
+    B, owner_profile,
+    PIRSourceConsumerRoleBody({family,coordinate:c}))
+
+PIRSourcePurposeRoleId(owner_profile,family,p) =
   ProfiledSemanticId<"pir.source-purpose">(
-    B, StaticViewProfile(coordinate.owner), {family, ContentRef(p)})
+    B, owner_profile,
+    PIRSourcePurposeRoleBody({family,coordinate:p}))
 ```
 
 The payload and `OwnerCapabilityRequirement` contain these owner-profiled role
@@ -2088,6 +2095,11 @@ validation compares them exactly. This permits a typed OIR or Analysis
 coordinate without teaching PIR that downstream language, yet prevents an
 unrelated identifier, swapped role, different family, or different purpose
 from substituting for the requested authority.
+
+The role-body functions are common PIR owner vocabulary and have this single
+physical definition. A dependent PIR profile may support either subject kind
+and pass its own exact profile ID to the constructors; it does not redeclare
+the body or infer a profile from the downstream coordinate.
 
 There is no semantic Negative: a static projection of an admitted owner either
 is issued exactly or fails by one qualified noncompletion branch. An
@@ -2516,8 +2528,10 @@ ConfidentialInitialOracleDisclosurePolicy = {
   coordinate: ConfidentialInitialOracleCoordinate,
   extent: WholeCanonicalCarrier,
   qualification: CausallyGeneratedOnly,
-  consumer_id: PIRSourceConsumerRoleId(family,consumer),
-  purpose_id: PIRSourcePurposeRoleId(family,purpose)
+  consumer_id:
+    PIRSourceConsumerRoleId(PIRInteractionProfileId,family,consumer),
+  purpose_id:
+    PIRSourcePurposeRoleId(PIRInteractionProfileId,family,purpose)
 }
 
 ConfidentialInitialOracleDisclosurePolicyId =

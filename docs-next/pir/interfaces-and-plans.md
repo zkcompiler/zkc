@@ -25,6 +25,9 @@ AdmittedProtocol
   + independently admitted ProverPlan
       -> private-material, randomness, and persistent-state interfaces
       -> one recipe for every potential K2 prover decision
+      -> optional bounded private recipes at exact Accept terminals
+      -> exact Plan-owned adapter for InteractiveCore strategy execution
+      -> atomic accepted-terminal continuation output
       -> separate PlanRealizes judgment
 ```
 
@@ -70,16 +73,20 @@ This page adds the owner predicates for Interface, Plan,
 `PlanWitnessSurface` extraction, and `PlanRealizes`; it does not restate the
 generic capability machinery.
 
-All three identified subjects on this page select one standalone
+All identified subjects on this page select one standalone
 `PIRInterfacePlanProfileId`. Its required exact profile imports are
 `{PIRInteractionProfileId, PIRCanonicalFramedFSProfileId}`. Its supported subject kinds are
 `{"pir.protocol-interface", "pir.prover-plan",
 "pir.plan-witness-surface", "pir.source-binding-payload",
 "pir.source-capability-requirement", "pir.source-consumer",
+"pir.confidential-plan-witness-disclosure-policy",
 "pir.source-no-policy", "pir.source-policy-closure",
-"pir.source-purpose"}`. Its inline declaration catalog contains the
-three exact bodies below, the Interface and Plan owner-view schemas, their
-field-expansion and closure laws, and `PlanRealizes` intake semantics. The
+"pir.source-purpose"}`. Its inline declaration catalog contains every exact
+owner body below, the Interface and Plan owner-view schemas, their
+field-expansion and closure laws, the Plan execution adapter and continuation
+schemas, the process-local input and accepted-continuation witness-handoff
+laws, the confidential Plan-witness source envelope, and `PlanRealizes` intake
+semantics. The
 two imports are exact: Interface and Plan interpret Fresh and canonical-framed
 Fiat--Shamir Protocol identities, but no subject on this page names the duplex
 sibling or the invocation-issued public-setup quotient. Duplex formation is
@@ -88,6 +95,12 @@ assignment and pre-execution generation. An unrelated profile change
 therefore cannot rotate this Interface/Plan meaning. The Foundation profile-import DAG,
 rather than an authored module root list, is the complete generic language
 closure.
+
+This revision changes the Interface/Plan declaration catalog and therefore
+requires a newly formed `PIRInterfacePlanProfileId`. It does not change
+`SemanticRegimeId`, `PIRInteractionProfileId`, `CoreId`, `ProtocolId`, or
+InteractiveCore execution meaning. Old Interface/Plan-profiled bytes are never
+interpreted under the rotated profile.
 
 The required Interface/Plan root closure has three entries once their owners
 publish complete profile preimages: the two K2 profiles plus
@@ -672,10 +685,12 @@ union is imported into PIR, and swapping the two roles changes authority.
 ### 4.1 Boundary and complete subject
 
 A Plan describes the semantic dataflow needed to propose legal K2 prover
-moves. It contains no relation definition, relation interface, relation-owned
-reference, witness value, random value, supplier handle, executable callback,
-credential, buffer, thread schedule, search queue, cache, cost target, resource
-choice, or mutable host object.
+moves and, when declared, to derive bounded private outputs after one exact
+`Accept` terminal. It contains no relation definition, relation interface,
+relation-owned reference, runtime parameter value, witness value, random
+value, supplier handle, executable callback, credential, buffer, thread
+schedule, search queue, cache, cost target, resource choice, or mutable host
+object.
 
 ```text
 PrivateMaterialKind =
@@ -703,6 +718,10 @@ StrategyStateSlot = {
   initial: StateInitialValue
 }
 
+PlanRecipeSiteRef =
+    DecisionSite(ProverDecisionPointRef)
+  | AcceptedTerminalSite(TerminalRef)
+
 ProverPlan = {
   protocol_id: ProtocolId,
   private_material: CanonicalSeq<PrivateMaterialDecl>,
@@ -710,7 +729,9 @@ ProverPlan = {
   persistent_state: CanonicalSeq<StrategyStateSlot>,
   decision_recipes:
     CanonicalMap<ProverDecisionPointRef, DecisionRecipe>,
-  derived_witness_exports: CanonicalSeq<DerivedWitnessExport>
+  derived_witness_exports: CanonicalSeq<DerivedWitnessExport>,
+  accepted_terminal_recipes:
+    CanonicalMap<TerminalRef, AcceptedTerminalRecipe>
 }
 ```
 
@@ -723,18 +744,28 @@ a fake decision or Core message would change the source interaction.
 
 `WitnessIngress` is a generic private-material class, not an assertion that a
 value satisfies or corresponds to any relation. `Advice` is private
-nonwitness material. `ConfidentialContext` is private static context. Keys are
-unique across private material and derived witness exports. Relations may
-later attach one of these generic coordinates to a relation-owned witness
-occurrence through a separate checked subject; there is no Relations-to-Plan
-authority edge in Plan formation or admission.
+nonwitness material. `ConfidentialContext` is private static context. Surface
+keys are unique across `WitnessIngress` material and derived witness exports.
+Relations may later attach one of these generic coordinates to a relation-
+owned witness occurrence through a separate checked subject; there is no
+Relations-to-Plan authority edge in Plan formation or admission.
 
-### 4.2 Decision recipes
+There is no public Plan-parameter lane. A value read by verifier behavior or
+strong Fiat--Shamir belongs in Core as an exact `PublicParameter`. A public
+prover-only value fixed for one Plan is an exact typed `Constant` and therefore
+specializes `ProverPlanId`. Advice, confidential context, or ambient registry
+lookup cannot be used to evade this distinction. Parametric substitution is a
+separate deferred design and contributes no field, operand, runtime assignment,
+or endpoint ingress to this profile.
 
-Plan owns this closed coordinate grammar over one exact K2 `ProverView`:
+### 4.2 Site-qualified recipes
+
+Plan owns this closed read grammar. Decision-site reads map to one exact
+InteractiveCore `ProverView`; accepted-terminal reads use a separate
+constructor-wise owner predicate:
 
 ```text
-ProverViewCoordinate =
+PlanReadCoordinate =
     StaticConstant(ConstantRef)
   | OpenPublicInput(PublicInputRef)
   | OpenedBinding(BindingRef)
@@ -745,6 +776,7 @@ ProverViewCoordinate =
   | ObservedOracleAnswer(OccurrenceRef)
   | ObservedModuleValue(OccurrenceRef, observation_ordinal)
   | PriorOwnMove(ProverDecisionPointRef)
+  | AcceptedTerminalPublicOutput(output_ordinal)
 ```
 
 The mapping to K2 is total and constructor-preserving except for the one local
@@ -762,20 +794,62 @@ K2ReadOf(ObservedOracleAnswer(x))      = K2.ObservedOracleAnswer(x)
 K2ReadOf(ObservedModuleValue(x,n))     = K2.ObservedModuleValue(x,n)
 K2ReadOf(PriorOwnMove(d))              = K2.PriorOwnMove(d)
 
-AvailableProverCoordinate(P,d,c) iff
+AvailableDecisionRead(P,d,c) iff
   d is an exact decision of admitted Protocol P and
   K2.GuaranteedProverRead(d, K2ReadOf(c)) = true
     in P's exact StrategyDecisionView
 ```
 
-This is an alias of the K2 owner table, not a second path analysis. It inherits
-K2's exact type, source, visibility, order, scope-opening, and guard-implication
-rules. Membership in one runtime view, a replay sample, or a Plan assertion
-cannot widen it.
+`K2ReadOf` is undefined for `AcceptedTerminalPublicOutput`; that constructor
+is legal only at the identical accepted-terminal site described below.
+
+This is an alias of the InteractiveCore owner table, not a second path
+analysis. It inherits InteractiveCore's exact type, source, visibility, order,
+scope-opening, and guard-implication rules. Membership in one runtime view, a
+replay sample, or a Plan assertion cannot widen it.
+
+For one admitted `Accept` terminal, availability is derived constructor by
+constructor from the exact InteractiveCore owner views rather than from generic
+history membership:
+
+```text
+TerminalOccurrence(P.core,t) =
+  the unique admitted OccurrenceRef whose effect is ReachTerminal(t)
+
+AvailableAcceptedTerminalRead(P,t,StaticConstant(c)) = true
+  exactly when c is an exact admitted Core constant
+
+AvailableAcceptedTerminalRead(P,t,OpenPublicInput(i)) = true
+  exactly when ProverInputOpening(i) is no later than
+  BeforeOccurrence(TerminalOccurrence(P.core,t)) and its complete opening
+  path is guaranteed on the t-active path
+
+AvailableAcceptedTerminalRead(P,t,OpenedBinding(b)) = true
+  under the analogous exact binding-opening and t-path law
+
+AvailableAcceptedTerminalRead(P,t,Observed*(o,...)) = true
+  exactly when o precedes TerminalOccurrence(P.core,t), has the requested
+  source kind/type and Prover visibility, every source scope is guaranteed
+  open on the t-active path, and
+  GuardImplies(guard(t),guard(o))
+
+AvailableAcceptedTerminalRead(P,t,PriorOwnMove(d)) = true
+  under that same law and only when d is an exact earlier Prover decision
+
+AvailableAcceptedTerminalRead(
+  P,t,AcceptedTerminalPublicOutput(n)) = true
+  exactly when n is an in-range public-output ordinal of t
+```
+
+`Observed*` expands exactly to the six Message, Challenge, Oracle
+publication/query/answer, and module-observation constructors. Every arm also
+requires `t` to be an admitted `Accept` terminal. `guard(t)` is the guard of
+its terminal occurrence. Failure to derive the constructive scope, order, and
+guard implication is unavailability even when no sample run reaches `t`.
 
 ```text
 RecipeOperand =
-    ViewValue(ProverViewCoordinate)
+    PlanRead(PlanReadCoordinate)
   | PrivateMaterial(PrivateMaterialRef)
   | PrivateRandomness(PrivateRandomnessRequirementRef)
   | StateBefore(StrategyStateSlotRef)
@@ -802,6 +876,10 @@ DecisionRecipe = {
     TotalMap<StrategyStateSlotRef, StateAfterBinding>
 }
 
+AcceptedTerminalRecipe = {
+  nodes: CanonicalSeq<RecipeNode>
+}
+
 ProverMoveBinding =
     MessageValue(RecipeValueRef)
   | OracleValue(RecipeValueRef)
@@ -809,19 +887,53 @@ ProverMoveBinding =
 
 DerivedWitnessExport = {
   key: WitnessSurfaceKey,
-  source_decision: ProverDecisionPointRef,
+  source_site: PlanRecipeSiteRef,
   value: RecipeValueRef,
   value_type: ValueType
 }
 ```
 
-Each recipe is a local acyclic graph evaluated only if its decision point is
-active. A `ViewValue` names one exact coordinate present in the K2
-`ProverView` at that decision; it cannot name the whole view or a future
-history. A randomness requirement is readable only at or after its declared
-first boundary and may flow later only through an explicit state or node
-output. `StateBefore` reads the value installed by initialization or the most
-recent active decision recipe. An inactive decision performs no state update.
+Each recipe is a local acyclic graph evaluated only at its exact site. At a
+decision, `PlanRead(c)` requires `AvailableDecisionRead`; at an accepted
+terminal it requires `AvailableAcceptedTerminalRead`. It cannot name a whole
+view, future history, another site's local node, or another inactive terminal.
+`NodeOutput` is local to the selected site.
+
+A randomness requirement is readable only at or after its declared first
+decision boundary and may flow later only through explicit state or a local
+node output. Direct `PrivateRandomness` is forbidden at an accepted terminal;
+a value needed there must have been retained in a typed state slot during the
+generated run. At a decision site, `StateBefore` reads the exact immutable
+pre-step state owned by the Plan adapter. At an accepted-terminal site, it
+reads the sealed state after the last active decision, or the exact initialized
+state when no decision was active. It never reads a caller-mutable buffer, an
+initial-state shortcut after an active decision, or a reconstruction from
+`RunRecord`. An inactive decision performs no state update.
+
+For a randomness requirement `r`, let `DirectUseSites(P,r)` be the sorted-
+unique decision sites containing at least one direct
+`PrivateRandomness(r)` operand occurrence. Operand occurrences include recipe
+node inputs, move payloads, state replacements, and a
+`DerivedWitnessExport.value` root at that exact source site; an export-only
+read is therefore a real demand rather than an unaudited annotation.
+`PathwiseOneShotRandomness(P,r)` holds exactly when every such site is no
+earlier than `r.first_available_at` under InteractiveCore's owner order, and no
+admitted Core path can activate two distinct sites in `DirectUseSites(P,r)`. Multiple
+operands in one active site share the single value returned by that site's one
+bearer consumption. A path with no active direct-use site does not consume the
+bearer. If the declared boundary is inactive, the first later active
+direct-use site may consume it; after that site, only an explicit state
+replacement can carry the value. Plan admission rejects direct terminal use,
+including an export root; `PlanRealizes` requires
+`PathwiseOneShotRandomness` for every declared requirement.
+
+An accepted-terminal recipe runs only after the exact terminal occurrence has
+completed with static verdict `Accept`, after the ordinary `RunRecord` and
+`CausalGenerationCapability` are fixed. It has no move or `state_after` arm. It
+cannot publish a Message or Oracle, invoke a module effect, change a Core value,
+modify a terminal payload, create a claim, alter a Challenge prefix, or write
+hidden post-terminal state. It never runs on `Reject`, `Abort`, interpretation
+failure, `StrategyStopped`, or another inactive `Accept` terminal.
 
 Every node algorithm has the exact derived K1 ABI and one `output_type`, with
 an empty semantic-failure row. Multiple results use one exact K1 record value.
@@ -834,11 +946,20 @@ Plan.
 `DerivedWitnessExport` names a typed Plan output that Relations may later
 consider as a witness occurrence. It does not classify its derivation as
 correct or its value as satisfying. Advice and confidential context never
-silently become witness exports. Its `value` is interpreted in the
-recipe-local namespace selected by `source_decision`: `NodeOutput(n)` can name
-only node `n` of that decision's recipe, and `ViewValue(c)` requires
-`AvailableProverCoordinate(protocol, source_decision, c)`. No local node or
-view coordinate of another decision can be captured by ordinal coincidence.
+silently become witness exports. Its `value` is interpreted only in the local
+namespace named by `source_site`: `NodeOutput(n)` can name only node `n` of
+that site's recipe, and `PlanRead(c)` must satisfy the corresponding decision-
+or terminal-availability predicate. No local node or read of another site can
+be captured by ordinal coincidence.
+
+The terminal-recipe map may omit an `Accept` terminal when no private
+completion output is declared there. Every present terminal recipe must own
+at least one export; every terminal-scoped export must have exactly one
+matching recipe; and every terminal recipe node must lie in the transitive
+operand closure of at least one export at that site. Thus terminal evaluation
+is export-rooted. An output-free recipe, dangling export, or dead terminal
+node is malformed Plan structure. Equal-valued exports from two terminals
+remain distinct site-owned occurrences.
 
 ### 4.3 Identity, admission, and `PlanRealizes`
 
@@ -860,20 +981,46 @@ AdmitProverPlan(
 ```
 
 Plan admission checks exact Protocol identity, retained-basis/evaluator
-equality, reference formation, unique keys, private-material separation,
-randomness boundaries, state typing and
-initialization, local DAG order, algorithm ABIs, result types, move-binding
-shape, total state-after maps, witness-export typing, exact-used dependency
-closure, and absence of ambient or realization-only fields. It does not
-establish decision coverage against K2; that remains an independent relation.
+equality, reference formation, private witness-key uniqueness and material separation, randomness
+boundaries, state typing and initialization, site-local DAG order, algorithm
+ABIs, result types, decision move-binding shape, total decision state-after
+maps, accepted-terminal verdict and no-move/no-update shape, terminal
+recipe/export bijection, export-rooted terminal-node closure, witness-export
+typing, exact-used dependency closure, and absence of ambient or realization-
+only fields. Every used algorithm, evaluation, module, and type preimage
+belongs to that closure. It does not establish decision coverage or read
+availability against InteractiveCore; those remain an independent relation.
+
+The cross-owner intake for that relation is one nonidentified operation
+aggregate:
+
+```text
+PlanLifecycleReadBasis = {
+  strategy_decisions: exact owner-issued StrategyDecisionView projection,
+  public_bindings: exact owner-issued PublicBindingView projection,
+  public_coins: exact owner-issued PublicCoinView projection,
+  effects: exact owner-issued EffectView projection,
+  authority_bindings:
+    the four matching ExactPIRStaticViewAuthorityBinding objects,
+  capabilities:
+    four distinct matching fresh PIRStaticViewCapability objects,
+    one for each view and authority binding
+}
+```
+
+Each capability retains its own exact view, family, and matching authority
+binding. All four view/binding/capability triples name the identical admitted
+Core, retained admission basis, and evaluator and carry every and only the
+closed fields required by the Plan reads. They are not mutually substitutable
+or “identical capabilities.” `PlanLifecycleReadBasis` has no canonical body,
+ID, serialization, or authority of its own; copied projections, reused
+capabilities, or an incomplete set cannot form it.
 
 ```text
 PlanRealizes(
   exact AdmittedProtocol P,
   exact AdmittedProverPlan,
-  exact owner-issued complete StrategyDecisionView projection,
-  exact ExactPIRStaticViewAuthorityBinding<StrategyDecisionView>,
-  matching fresh PIRStaticViewCapability,
+  exact PlanLifecycleReadBasis,
   exact DependentAdmissionBasis(P))
   -> Qualified<Affirmative(CheckedPlanRealizes)
              | Negative(PlanRealizesReason)>
@@ -885,9 +1032,10 @@ algebra are the complete negative payload:
 
 ```text
 RecipeUseRef =
-    NodeInput(ProverDecisionPointRef, RecipeNodeRef, input_ordinal)
+    NodeInput(PlanRecipeSiteRef, RecipeNodeRef, input_ordinal)
   | MovePayload(ProverDecisionPointRef)
   | StateReplacement(ProverDecisionPointRef, StrategyStateSlotRef)
+  | WitnessExportValue(DerivedWitnessExportRef)
 
 DerivedWitnessExportRef =
   dense ordinal into the exact Plan's derived_witness_exports
@@ -897,23 +1045,24 @@ PlanMoveShape =
   | Oracle(OracleRef, ValueType)
   | Module(ModuleEffectRef, ValueType)
 
-PlanViewReadDisagreement =
-    NotGuaranteedAtDecision
+PlanReadDisagreement =
+    NotGuaranteedAtSite
   | TypeDisagreement {
       owner_type: ValueType,
       use_type: ValueType
     }
   | OriginDisagreement {
-      requested: K2ProverReadCoordinate,
-      owner_derived: K2ProverReadCoordinate
+      requested: PlanReadCoordinate,
+      owner_derived: PlanReadCoordinate
     }
 
 PlanRealizesDisagreement =
     MissingDecisionRecipe(ProverDecisionPointRef)
-  | ViewReadDisagreement {
+  | SiteReadDisagreement {
       use: RecipeUseRef,
-      coordinate: ProverViewCoordinate,
-      cause: PlanViewReadDisagreement
+      site: PlanRecipeSiteRef,
+      coordinate: PlanReadCoordinate,
+      cause: PlanReadDisagreement
     }
   | OperandAvailabilityDisagreement {
       use: RecipeUseRef,
@@ -933,15 +1082,22 @@ PlanRealizesReason = {
 ```
 
 `RecipeUseRef` is interpreted only in the exact Plan named by the invocation.
-`use_type` is the exact type required by that node input, move, or replacement
-site. `PlanMoveShape` is derived twice rather than supplied: `expected` comes
-from the K2 decision kind and exact module occurrence, while `observed` comes
+`use_type` is the exact type required by that node input, move, replacement,
+or export declaration. `WitnessExportValue(e)` is interpreted at the exact
+`source_site` of export `e` and names its root operand even when no recipe node
+uses that operand. `PlanMoveShape` is derived twice rather than supplied:
+`expected` comes from the InteractiveCore decision kind and exact module
+occurrence, while `observed` comes
 from the recipe constructor and the statically resolved payload type. Thus
 one shape comparison covers the constructor, module coordinate, and payload
 type without a caller-authored summary. The `Oracle` shape's type is exactly
 the selected `OracleRef`'s owner-derived `OracleCarrierType`. A witness-export
-coordinate is interpreted relative to its declared `source_decision`, as in
-Section 4.2.
+coordinate is interpreted relative to its declared `source_site`, as in
+Section 4.2. At a decision site, an owner-issued InteractiveCore coordinate is
+mapped back through the exact constructor-preserving Plan/InteractiveCore map
+before an origin disagreement is formed. At a terminal site, the owner
+coordinate is derived independently by
+`AvailableAcceptedTerminalRead`.
 
 The checker emits every applicable atomic disagreement once, in written
 variant-tag order and then canonical field-body order. Missing decision
@@ -952,8 +1108,18 @@ Plan admission already reject it under their ordinary distinct outcome. A
 dependent check is evaluated only after its coordinate
 and required predecessor form. In particular, a missing source recipe is not
 also reported as arbitrary downstream operand, move, or export disagreement.
+Terminal recipe/export membership is already closed by Plan admission; only a
+missing required decision recipe can suppress dependent reasons here.
 This dependency order makes the negative payload deterministic rather than an
 implementation-selected first error.
+
+For `PrivateRandomness(r)`, deterministic availability additionally means
+`PathwiseOneShotRandomness(P,r)`. Multiple operands at the same active site
+share one consumption and do not disagree. At every later direct-use site for
+which some admitted reaching path also activates an earlier distinct direct-
+use site, the checker emits `OperandAvailabilityDisagreement` for each exact
+operand use there in canonical use order. A later site reached only on paths
+mutually exclusive with all earlier direct-use sites remains available.
 
 The result is Affirmative exactly when this complete traversal emits no
 disagreement, and Negative exactly when the resulting sequence is nonempty.
@@ -964,7 +1130,7 @@ The nine checks below split across the qualified outcome boundary as follows:
 |---|---|---|
 | 1 | none | A wrong typed axis is `KindMismatch`; a well-formed handle for another Protocol, source authority, retained basis, or evaluator is `Refused`. An internally inconsistent admitted handle is `CheckerFailure`. |
 | 2 | `MissingDecisionRecipe` | Duplicate or noncanonical map structure is `Malformed`; a formed key on a wrong owner/kind axis is `KindMismatch`, and a formed same-axis key that fails the dependent decision-point predicate is `Refused`. |
-| 3 | `ViewReadDisagreement` for a formed owner coordinate | An ill-formed coordinate is `Malformed`; absent supported owner interpretation is `Unsupported`. |
+| 3 | `SiteReadDisagreement` for a formed owner coordinate | An ill-formed coordinate is `Malformed`; absent supported owner interpretation is `Unsupported`. |
 | 4 | `OperandAvailabilityDisagreement` for a formed operand that is not available on every reaching path | Local node order, reference formation, and node ABI are Plan-admission postconditions; contradiction in an exact admitted handle is `CheckerFailure`. |
 | 5 | `MoveShapeDisagreement` | An ill-formed move carrier is `Malformed`; an unsupported same-kind module decision is `Unsupported`. |
 | 6 | availability failure is the check-4 reason above | Constructor-separated declared ingress is a Plan-admission postcondition; contradiction is `CheckerFailure`. |
@@ -987,20 +1153,22 @@ The completed relation checks:
    match;
 2. the recipe map covers every and only potential K2
    `ProverDecisionPoint` exactly once, including guarded points;
-3. every `ViewValue(c)` satisfies owner-derived
-   `AvailableProverCoordinate(protocol, decision, c)` with exact type and
-   origin on every path reaching that active decision;
+3. every `PlanRead(c)` satisfies owner-derived `AvailableDecisionRead` or
+   `AvailableAcceptedTerminalRead`, according to its exact site, with exact
+   type and origin on every path reaching that site;
 4. every other operand is deterministically available before its use on every
-   such path, every `NodeOutput` is earlier in the same recipe, and every node
-   ABI is exact;
+   such path, every `NodeOutput` is earlier in the same site-local recipe,
+   every randomness requirement satisfies `PathwiseOneShotRandomness`, direct
+   terminal randomness is absent, and every node ABI is exact;
 5. the move constructor, module coordinate, and payload type equal the K2
    legal move at that decision;
 6. private material, randomness, and current state use only their distinct
    declared ingress;
 7. state initialization and every active state transition are total and
    type-preserving;
-8. each witness export, interpreted relative to `source_decision`, names an
-   all-path available same-type value or an earlier node in that exact recipe;
+8. each witness export, interpreted relative to `source_site`, names an
+   all-path available same-type value or an earlier node in that exact local
+   recipe;
    and
 9. every Plan read is in the authenticated body and exact-used closure.
 
@@ -1011,13 +1179,432 @@ read. A negative result is meaningful and distinct from unsupported semantics,
 missing authority, malformed input, refusal, limit exhaustion, and checker
 failure.
 
-Affirmative `CheckedPlanRealizes` proves structural decision coverage, typing,
-causal read confinement, and state closure only. It proves no algorithmic
+Affirmative `CheckedPlanRealizes` proves structural decision coverage, typed
+site-local dataflow, causal read confinement, and state closure only. It
+proves no algorithmic
 correctness beyond the exact K1 denotations, witness correspondence or
 satisfaction, random distribution, supplier fidelity, successful generation,
 termination, completeness, cost, or cryptographic property.
 
+### 4.4 Exact Plan adapter and accepted-terminal continuation
+
+Plan execution is an owner-local wrapper around unchanged InteractiveCore
+generation. The caller supplies the admitted Plan and its private authorities, never an
+arbitrary strategy implementation:
+
+```text
+PlanPrivateMaterialInput =
+    OrdinaryPrivateSupply(
+      value: CanonicalValue<target declaration's exact ValueType>)
+  | AcceptedContinuationHandoff(
+      exact ReadyPlanWitnessIngressSupply,
+      identical live ReadyPlanWitnessIngressSupplyCapability)
+
+PlanPrivateMaterialInputMap =
+  TotalMap<PrivateMaterialRef,PlanPrivateMaterialInput>
+
+PlanPrivateRandomnessInput = {
+  value: CanonicalValue<target requirement's exact ValueType>,
+  reveal: fresh one-shot PlanRandomnessRevealRight
+}
+
+PlanPrivateRandomnessInputMap =
+  TotalMap<PrivateRandomnessRequirementRef,PlanPrivateRandomnessInput>
+
+FormPlanPrivateMaterialInputs(
+  exact admitted ProverPlan plan,
+  exact every-and-only private-material input entries)
+    -> Affirmative({
+         inputs: PlanPrivateMaterialInputMap,
+         capability: PlanPrivateMaterialInputMapCapability
+       })
+     | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+     | Malformed | Refused | DeterministicLimitExceeded | CheckerFailure
+
+FormPlanPrivateRandomnessInputs(
+  exact admitted ProverPlan plan,
+  exact every-and-only typed private randomness values)
+    -> Affirmative({
+         inputs: PlanPrivateRandomnessInputMap,
+         capability: PlanPrivateRandomnessInputMapCapability
+       })
+     | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+     | DeterministicLimitExceeded | CheckerFailure
+```
+
+Both maps are immutable, process-local snapshots. Their domains are exactly
+the dense declaration coordinates of the admitted Plan: a missing, extra,
+duplicate, reordered, aliased, or wrong-Plan entry is not a partial map.
+Every value is fixed before execution and has the identical declared
+`ValueType`. Formation copies no caller-mutable buffer and accepts no delayed
+callback, file, registry, sampler, conversion, or value-producing closure.
+
+The private-material map may use an ordinary fixed value for any declared
+private-material kind. Its handoff arm forms only for an exact
+`WitnessIngress` target and is defined in Section 4.5; `Advice` and
+`ConfidentialContext` have no handoff arm. The randomness map creates one
+fresh reveal right per exact requirement. The fixed randomness value remains
+unavailable to the Plan adapter until its first actual operand demand at an
+active site allowed by `PathwiseOneShotRandomness`; that demand consumes the
+right once and caches the value only for that site-local DAG. A requirement
+with no active demand is never revealed, and every unused right expires when
+the session closes. These rules establish fixed input and one-shot access, not
+randomness origin or distribution.
+
+Each map capability is fresh, noncopyable, nonserializable, and bound to the
+identical admitted Plan, complete map object, formation occurrence, lifetime,
+and process generation. Formation of a map containing a handoff retains each
+ready supply and its identical live capability without spending the supply.
+Affirmative formation moves their exclusive custody into the map capability;
+no caller-visible alias remains. A stale, spent, wrong-target, or cross-Plan
+supply is `Refused`; a missing or expired otherwise matching live supply is
+`CannotAnswer`; a wrong kind, regime, or `ValueType` is `KindMismatch`; and
+malformed map structure is `Malformed`. No nonaffirmative formation result
+moves, consumes, reveals, or returns a partial input or capability.
+
+```text
+PreparePlanExecution(
+  exact admitted Protocol P,
+  exact admitted ProverPlan plan,
+  exact affirmative CheckedPlanRealizes(P,plan),
+  exact CoreInvocation I,
+  exact PlanPrivateMaterialInputMap private_inputs,
+  identical live PlanPrivateMaterialInputMapCapability,
+  exact PlanPrivateRandomnessInputMap randomness_inputs,
+  identical live PlanPrivateRandomnessInputMapCapability,
+  exact evaluator and deterministic limits)
+    -> Affirmative({
+         session: PreparedPlanExecution,
+         capability: ReadyPlanExecutionCapability
+       })
+     | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+     | Malformed | Refused | DeterministicLimitExceeded | CheckerFailure
+
+PlanStrategyStep(
+  exact running PreparedPlanExecution S,
+  identical internal PlanStrategyExecutionCapability,
+  exact active ProverDecisionPoint d,
+  identical ProverView V,
+  exact adapter-private PlanExecutionState before_d)
+    -> Produce(exact ProverMove for d,
+               exact PlanExecutionState after_d)
+     | Stop(qualified Plan strategy cause)
+```
+
+Preparation authenticates the identical Protocol, Plan, affirmative
+`CheckedPlanRealizes`, invocation, both exact total maps and their identical
+live capabilities, evaluator, and limits. It first validates the complete
+request without consuming an input authority. Only when every check and every
+state initializer can complete does one atomic commit consume both map
+capabilities, every retained ready handoff supply and its capability, and
+ownership of every randomness reveal right. A nonaffirmative result consumes
+none of them and creates no private occurrence, handoff capability, session,
+adapter, or partial initializer state.
+
+On that commit both map objects transition from Ready to Consumed. The new
+session retains their immutable value snapshots for execution and audit, not a
+reusable map authority; neither map can prepare a second session.
+
+That affirmative commit creates one fresh target private-material occurrence
+for every declaration, even when two values are canonically equal. An ordinary
+supply copies its fixed typed value. A handoff copies the identical source
+export value without conversion and mints one fresh
+`CausalPlanWitnessHandoffCapability` bound to its role-distinct exact source
+and target endpoints. The commit also installs the unrevealed randomness
+rights, evaluates every admitted state initializer against the fresh target
+occurrences, and creates one process-local `PlanStrategyAdapter` plus one fresh
+internal `PlanStrategyExecutionCapability`.
+
+The adapter retains that capability and encloses the only InteractiveCore
+`ProverStrategyCapability` that may represent this prepared Plan; neither
+capability is a caller-supplied operation input or substitutable by the caller.
+The internal capability authorizes callbacks only while that identical adapter
+is Running and becomes unusable when the adapter closes. The prepared session
+retains the exact input maps, fresh private-material occurrences, causal
+handoff capabilities in target-reference order, adapter, initialized state,
+remaining randomness rights, session occurrence, and process generation.
+
+The two input maps, their map capabilities, all private-material occurrences,
+randomness reveal rights, `PreparedPlanExecution`, both adapter capabilities,
+`CausalPlanWitnessHandoffCapability`, and `ReadyPlanExecutionCapability` are
+noncopyable, nonserializable, process-local objects with no canonical body or
+semantic ID.
+The ready capability is the only authority that may start generation and is
+consumed atomically before the InteractiveCore executor is invoked. A stale,
+copied, cross-Plan, cross-Protocol, cross-invocation, cross-evaluator, or
+cross-session aggregate is
+`Refused`; malformed authority collections are `Malformed`; wrong types or
+regimes are `KindMismatch`; missing evaluator or dependency preimages are
+`MissingDependency`; and a missing or expired otherwise matching input bearer
+is `CannotAnswer`. No failure exposes a partial session or adapter.
+
+The adapter implements InteractiveCore's existing
+`StrategyStep(private_state,ProverView,private_randomness)` interface. Its
+private state contains the exact Plan state vector, remaining randomness
+rights, next-step occurrence, and decision-local trace. For each active
+decision, `PlanStrategyStep` performs one indivisible transition:
+
+1. authenticate `d`, `V`, and `before_d` against the same running session and
+   select the unique admitted recipe through `CheckedPlanRealizes`;
+2. materialize every and only its owner-derived public reads, exact private-
+   material occurrences, typed constants, and pre-step state values;
+3. consume each randomness reveal right exactly once at its first actual
+   `PrivateRandomness` operand demand, including an export root, which must
+   occur at or after its declared `first_available_at` decision; mere activity
+   at that boundary does not consume it, the returned value is available
+   throughout that site's local DAG, and any later-site use is possible only
+   through an explicit state replacement made at the consuming site;
+4. evaluate every recipe node in canonical order under the exact algorithm
+   ABI, evaluation contract, tagged partial-operation law, evaluator, and
+   deterministic limits;
+5. construct the unique legal `ProverMove` selected by `ProverMoveBinding`,
+   evaluate the total type-preserving `state_after` map, and resolve every
+   decision-derived export root in canonical export order; and
+6. atomically return `Produce(move,after_d)` while sealing every local node and
+   resolved decision-derived export under the exact decision occurrence.
+
+No move, state replacement, randomness consumption, or export becomes
+authoritative before all six steps succeed. An unavailable operand, exhausted
+right, wrong view, wrong move shape, evaluation noncompletion, or limit failure
+returns `Stop` with its qualified Plan cause, closes the running adapter, and
+exposes no partial step trace. There is no fallback to another strategy.
+
+At a decision, `StateBefore(slot)` is exactly `before_d[slot]`. When
+InteractiveCore execution reaches a terminal, the adapter accepts no further
+strategy step and seals the exact state after the last active decision, or the exact initialized state if no
+decision was active, as `final_plan_state`. At an accepted-terminal recipe,
+`StateBefore(slot)` is exactly `final_plan_state[slot]`.
+
+For one admitted Plan, affirmative `CheckedPlanRealizes`, and admitted `Accept`
+terminal `t`, derive:
+
+```text
+AcceptedPlanContinuationArm(P,plan,t) =
+  CanonicalSortedUniqueSeq<DerivedWitnessExportRef>
+```
+
+The arm contains every and only export whose source is either a decision site
+that the exact InteractiveCore scope/order/guard laws guarantee active before
+`t`, or the accepted-terminal site `t` itself. A decision export may belong to several
+terminal arms when it is guaranteed on each path. An export owned by another
+terminal and a conditionally active decision export not guaranteed on `t`'s
+path are absent. An empty derived sequence means that terminal has no Plan
+continuation arm; it is not an active empty runtime value.
+
+```text
+AcceptedPlanContinuationDisposition =
+    NoAcceptedPlanContinuation
+  | PendingAcceptedPlanContinuation(
+      terminal: TerminalRef,
+      right: AcceptedPlanContinuationRight)
+
+GeneratePlanRun(
+  exact PreparedPlanExecution S,
+  identical live ReadyPlanExecutionCapability for S,
+  exact initial-Oracle, challenge-resolver, check, and extension capabilities
+    required by S.protocol,
+  exact S.execution_evaluation_control)
+    -> CompletedPlanRun(
+         RunRecord(S.protocol),
+         CausalGenerationCapability,
+         CausalPlanGenerationCapability,
+         AcceptedPlanContinuationDisposition)
+     | InterpretationFailed(ProtocolFailureRecord(S.protocol))
+     | StrategyStopped(PartialRunRecord(S.protocol), qualified Plan cause)
+     | qualified operational noncompletion
+
+CompleteAcceptedPlanContinuation(
+  exact CompletedPlanRun G whose RunRecord reaches Accept terminal t,
+  identical live CausalPlanGenerationCapability,
+  identical live AcceptedPlanContinuationRight from G,
+  exact continuation evaluation control using G's identical evaluator)
+    -> Affirmative(CompletedPlanContinuation(t,active_arm_outputs),
+                   CausalPlanContinuationCapability)
+     | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+     | DeterministicLimitExceeded | CheckerFailure
+```
+
+`GeneratePlanRun` consumes the ready capability once and passes only the
+enclosed Plan adapter capability to unchanged `GenerateRun`. Only
+`GenerateRun`'s `CompletedRun` branch mints
+`CausalPlanGenerationCapability`. That Plan-owned capability retains the exact
+prepared session, adapter, returned record object,
+`CausalGenerationCapability`, evaluator, all active decision-local values and
+exports,
+sealed `final_plan_state`, and every target-side
+`CausalPlanWitnessHandoffCapability` created at preparation. The handoff
+capabilities remain distinct entries and cannot collapse merely because source
+or target IDs or values compare equal. It contains no second ready, input-map,
+supply, or randomness right. Interpretation failure, strategy stop, and every
+operational noncompletion close the adapter and mint no Plan-generation
+capability; their closed session cannot export its retained handoff
+capabilities.
+
+The pending continuation arm is formed exactly when the reached terminal is
+`Accept` and `AcceptedPlanContinuationArm` is nonempty. Its right is linear and
+consumed when continuation completion begins. The operation reads decision-
+derived values only from the sealed adapter trace, evaluates only the missing
+export-rooted accepted-terminal node closure against `final_plan_state`, and
+issues every and only output in the selected arm atomically. Success and every
+noncompletion close the right. No failure issues a partial arm or permits retry
+against the same generated run. Other terminal arms are inactive and provide
+neither values nor access authority.
+
+`CompletedPlanContinuation` contains the private process-local output values.
+Its fresh noncopyable `CausalPlanContinuationCapability` retains the identical
+Plan-generation capability, prepared session, invocation, Plan,
+`CheckedPlanRealizes`, record, `CausalGenerationCapability`, reached terminal,
+selected arm, evaluator, limits, and consumed-right occurrence. Neither has a canonical
+semantic ID. Equal records, output tuples, values, digests, or reconstructed
+aggregates grant no authority.
+
+Core and Plan completion remain two planes. Continuation noncompletion after
+Core `Accept` leaves the accepted `RunRecord` and `CausalGenerationCapability`
+intact but issues no continuation arm. It cannot rewrite Accept to Reject,
+erase the
+record, or expose a partial arm. Reject, Abort, interpretation failure, and
+strategy stop select no accepted continuation.
+
+The complete Plan-owned lifecycle is
+`Prepared/Ready -> Running -> Completed/Closed`, followed, when present, by
+`PendingContinuation -> Continued/Closed`. No state is both reusable for
+generation and authoritative for completion. Generic `ReplayRun` remains
+Protocol replay: it never executes Plan recipes or mints Plan-generation or
+continuation authority. There is no cold Plan-recomputation operation. A fresh
+prepare/generate/complete sequence creates fresh occurrences and capabilities
+even when its record bytes and output values equal an earlier run.
+
+### 4.5 Accepted-continuation witness handoff
+
+One accepted continuation export may directly supply one later Plan's exact
+`WitnessIngress` declaration without becoming public, serialized, or
+reclassified as ambient advice. The source and target coordinates are separate
+role-tagged process-local endpoints:
+
+```text
+AcceptedPlanWitnessHandoffSourceEndpoint = {
+  source_protocol: exact admitted Protocol,
+  source_plan: exact admitted ProverPlan,
+  source_invocation: exact completed invocation occurrence,
+  source_continuation: exact CompletedPlanContinuation occurrence,
+  accepted_terminal: TerminalRef,
+  source_export: DerivedWitnessExportRef,
+  source_output: exact active continuation output occurrence
+}
+
+AcceptedPlanWitnessHandoffTargetEndpoint = {
+  target_protocol: exact admitted Protocol,
+  target_plan: exact admitted ProverPlan,
+  target_private_material: PrivateMaterialRef,
+  target_key: WitnessSurfaceKey
+}
+
+ReadyPlanWitnessIngressSupply = {
+  source: AcceptedPlanWitnessHandoffSourceEndpoint,
+  target: AcceptedPlanWitnessHandoffTargetEndpoint,
+  value_type: ValueType,
+  private_value: exact source export value,
+  issuance_occurrence: fresh process-local occurrence
+}
+
+IssueAcceptedPlanWitnessIngressSupply(
+  exact CompletedPlanContinuation C,
+  identical live CausalPlanContinuationCapability for C,
+  exact DerivedWitnessExportRef source_export in C's active arm,
+  exact admitted target Protocol P_target,
+  exact admitted target ProverPlan plan_target,
+  exact PrivateMaterialRef target in plan_target)
+    -> Affirmative({
+         supply: ReadyPlanWitnessIngressSupply,
+         capability: ReadyPlanWitnessIngressSupplyCapability
+       })
+     | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+     | Malformed | Refused | DeterministicLimitExceeded | CheckerFailure
+```
+
+Issuance authenticates the identical completed continuation and live causal
+capability, derives the source endpoint from its retained Plan, invocation,
+reached terminal, active arm, export coordinate, and exact issued output
+occurrence, and requires that the export was actually issued in that arm. It
+independently authenticates the target Protocol and Plan, requires the target
+reference to name exactly one
+`WitnessIngress` declaration, and derives the target key from that
+declaration. Source and target `ValueType` must be identical. No codec,
+truncation, extension, field conversion, decoding, reinterpretation, or
+caller-supplied equality witness exists in this operation.
+
+The ready supply and its capability are fresh, target-bound, one-use,
+noncopyable, nonserializable process-local objects. Each retains both complete
+endpoints, the exact private value and type, the source continuation and causal
+capability, target admission handles, issuance occurrence, lifetime, and
+process generation. The endpoints are distinct role-bearing objects; they may
+name the same Plan ID in a recursive use, but source occurrence/export and
+target declaration are never one interchangeable coordinate.
+
+Issuance does not consume the source continuation capability. Explicit fan-out
+is therefore possible only by calling the operation separately for each
+desired target, producing distinct issuance occurrences, ready supplies, and
+capabilities. One ready supply cannot be duplicated, retargeted, split, or
+used for two preparations. Canonically equal target values do not merge those
+authorities.
+
+When an affirmative `PreparePlanExecution` consumes a ready supply, it creates
+the fresh target private-material occurrence described in Section 4.4 and
+mints:
+
+```text
+CausalPlanWitnessHandoffCapability = {
+  source: exact AcceptedPlanWitnessHandoffSourceEndpoint,
+  target: exact AcceptedPlanWitnessHandoffTargetEndpoint plus
+          the target CoreInvocation and
+          the fresh target private-material occurrence,
+  consumed_ready_supply: exact ReadyPlanWitnessIngressSupply,
+  consumed_ready_supply_capability:
+    exact ReadyPlanWitnessIngressSupplyCapability,
+  source_causal_continuation_capability:
+    exact CausalPlanContinuationCapability,
+  source_causal_plan_generation_capability:
+    exact CausalPlanGenerationCapability retained by that continuation,
+  consumed_supply_occurrence,
+  target_preparation_occurrence,
+  identical_value_type,
+  identical_private_value
+}
+```
+
+The capability is fresh, noncopyable, nonserializable, process-local, and
+minted only by that atomic successful preparation. It attests that the exact
+active continuation export supplied the exact fresh target occurrence with no
+conversion. The prepared target session retains it, and only successful target
+generation propagates it inside the target
+`CausalPlanGenerationCapability`. A later target continuation retains it only
+transitively through that generation capability. There is no standalone
+handoff receipt, semantic ID, digest, replay constructor, or cold-import path.
+
+An absent or inactive source export, or a continuation that did not atomically
+issue it, is `CannotAnswer`. A malformed source or target coordinate is
+`Malformed`; a wrong kind, regime, or unequal `ValueType` is `KindMismatch`;
+a stale, spent, retargeted, cross-continuation, cross-Plan, cross-process, or
+nonidentical capability is `Refused`; and a missing named admission or
+dependency preimage is `MissingDependency`. Limit exhaustion or checker defect
+uses the ordinary qualified outcomes. No nonaffirmative result issues a
+partial supply, exposes the private value, consumes the source capability, or
+changes either endpoint. Preparation failure likewise leaves every ready
+supply unconsumed; preparation success consumes all selected supplies
+atomically and permanently.
+
+`ReplayRun`, equal records, equal continuation tuples, equal export values,
+serialization, process restart, or possession of a confidential witness view
+cannot recreate a ready supply or causal handoff capability. The handoff makes
+no claim that the value satisfies a relation, is a valid recursive witness,
+preserves folding or accumulation, was sampled honestly, remains secret under
+the host, or causes the target run to complete. Relations owns any later
+correspondence, recurrence, or satisfaction judgment over the two retained
+endpoints.
+
 ## 5. `PlanWitnessSurface`
+
+### 5.1 Static surface and private extraction
 
 Relations needs a narrower acyclic attachment seam. PIR derives:
 
@@ -1027,6 +1614,7 @@ PlanWitnessRole = WitnessIngress | DerivedWitnessExport
 PlanWitnessOccurrenceClass =
     SuppliedForGeneration
   | ProducedWhenSourceDecisionActive
+  | ProducedWhenAcceptedTerminalReached
 
 PlanWitnessSurfaceEntry = {
   role: PlanWitnessRole,
@@ -1058,13 +1646,14 @@ keyed by `WitnessSurfaceKey`; the pair above is the complete exported
 occurrence coordinate. A private `WitnessIngress` Plan declaration derives
 role `WitnessIngress` and class `SuppliedForGeneration`. A
 `DerivedWitnessExport` derives role `DerivedWitnessExport` and class
-`ProducedWhenSourceDecisionActive`. The value type is copied exactly. No other
-Plan field can derive an entry.
+`ProducedWhenSourceDecisionActive` or
+`ProducedWhenAcceptedTerminalReached` according to its exact `source_site`.
+The value type is copied exactly. No other Plan field can derive an entry.
 
 Exact derivation from an admitted Plan yields a
 `CheckedPlanWitnessSurfaceExtraction` capability that retains the full Plan
 ID, source authority, and private mapping from each key to its exact private
-material declaration or derived export plus source decision and recipe-local
+material declaration or derived export plus source site and recipe-local
 value. That mapping is authority-bearing extraction state and is absent from
 the surface identity. Consequently neither an entry nor any transitive entry
 field leaks a Plan ID or Plan-local reference.
@@ -1074,15 +1663,210 @@ surface entry. Neither the surface nor its extraction claims correspondence,
 satisfaction, confidentiality, availability of a concrete value, or validity
 of a derived witness.
 
+### 5.2 Confidential occurrence view
+
+Static extraction proves shape, not possession of one runtime private
+occurrence. PIR exposes a purpose-bound, process-local attenuation operation:
+
+```text
+ConfidentialPlanWitnessFamily = "confidential-plan-witness-view"
+ConfidentialPlanWitnessQualification = CausallyGeneratedPlanOnly
+
+ConfidentialPlanWitnessReadManifest =
+  NonEmptyCanonicalSortedUniqueSeq<WitnessSurfaceKey>
+
+ConfidentialPlanWitnessSource =
+    Generated(
+      exact CompletedPlanRun,
+      identical live CausalPlanGenerationCapability)
+  | Finalized(
+      exact CompletedPlanContinuation,
+      identical live CausalPlanContinuationCapability)
+
+ConfidentialPlanWitnessSourceRequirement =
+    GeneratedSufficient
+  | FinalizedRequired
+
+ConfidentialPlanWitnessEntry = {
+  key: WitnessSurfaceKey,
+  role: PlanWitnessRole,
+  occurrence_class: PlanWitnessOccurrenceClass,
+  value_type: ValueType,
+  value: CanonicalValue<value_type>
+}
+
+ConfidentialPlanWitnessView = {
+  protocol_id: ProtocolId,
+  plan_witness_surface_id: PlanWitnessSurfaceId,
+  source_tag: Generated | Finalized,
+  qualification: CausallyGeneratedPlanOnly,
+  entries: CanonicalSeq<ConfidentialPlanWitnessEntry>
+}
+
+ConfidentialPlanWitnessDisclosurePolicy = {
+  family: ConfidentialPlanWitnessFamily,
+  plan_witness_surface_id: PlanWitnessSurfaceId,
+  manifest: ConfidentialPlanWitnessReadManifest,
+  qualification: CausallyGeneratedPlanOnly,
+  source_requirement: ConfidentialPlanWitnessSourceRequirement,
+  consumer_id:
+    PIRSourceConsumerRoleId(PIRInterfacePlanProfileId,family,consumer),
+  purpose_id:
+    PIRSourcePurposeRoleId(PIRInterfacePlanProfileId,family,purpose)
+}
+
+ConfidentialPlanWitnessBindingPayload = {
+  family,
+  plan_witness_surface_id,
+  manifest,
+  qualification,
+  source_requirement,
+  disclosure_policy_id,
+  consumer_id,
+  purpose_id,
+  result_schema: "whole-confidential-plan-witness-selection-v1"
+}
+
+ConfidentialPlanWitnessCapabilityRequirement = {
+  family,
+  binding_payload_id,
+  disclosure_policy_id,
+  consumer_id,
+  purpose_id,
+  source_requirement,
+  bearer_law:
+    "fresh-identical-generated-or-finalized-plan-source"
+}
+
+ConfidentialPlanWitnessPolicyClosure = {
+  family,
+  binding_payload_id,
+  disclosure_policy_id,
+  capability_requirement_id
+}
+```
+
+The nominal consumer and purpose IDs are independently formed even when their
+underlying coordinates are byte-equal. The generic owner-profiled
+`PIRSourceConsumerRoleId` and `PIRSourcePurposeRoleId` constructors and their
+exact role bodies are imported from the Interactive Core owner. This profile
+supplies `PIRInterfacePlanProfileId` explicitly; it does not redeclare an
+unqualified constructor or a second physical body.
+
+The four policy-artifact IDs are:
+
+```text
+ConfidentialPlanWitnessDisclosurePolicyId =
+  ProfiledSemanticId<"pir.confidential-plan-witness-disclosure-policy">(
+    B, PIRInterfacePlanProfileId,
+    ConfidentialPlanWitnessDisclosurePolicyBody(policy))
+
+ConfidentialPlanWitnessBindingPayloadId =
+  ProfiledSemanticId<"pir.source-binding-payload">(
+    B, PIRInterfacePlanProfileId,
+    ConfidentialPlanWitnessBindingPayloadBody(payload))
+
+ConfidentialPlanWitnessCapabilityRequirementId =
+  ProfiledSemanticId<"pir.source-capability-requirement">(
+    B, PIRInterfacePlanProfileId,
+    ConfidentialPlanWitnessCapabilityRequirementBody(requirement))
+
+ConfidentialPlanWitnessPolicyClosureId =
+  ProfiledSemanticId<"pir.source-policy-closure">(
+    B, PIRInterfacePlanProfileId,
+    ConfidentialPlanWitnessPolicyClosureBody(closure))
+```
+
+Policy admission resolves every manifest key against the exact admitted
+surface and derives, rather than accepts, `source_requirement`.
+`FinalizedRequired` is mandatory when any selected entry is
+`ProducedWhenAcceptedTerminalReached`; otherwise the requirement is
+`GeneratedSufficient`. A `Generated` source satisfies only the latter. A
+`Finalized` source may satisfy either because its continuation capability
+retains the identical Plan-generation capability; the issued view still records
+the actual `Finalized` source tag. The manifest order is ascending canonical
+`WitnessSurfaceKey` body order. Empty, duplicate, reordered, or unknown-key
+manifests are not alternate selections.
+
+```text
+IssueConfidentialPlanWitnessView(
+  exact ConfidentialPlanWitnessSource source,
+  exact admitted PlanWitnessSurface surface,
+  identical live CheckedPlanWitnessSurfaceExtraction,
+  exact ConfidentialPlanWitnessReadManifest manifest,
+  exact consumer and purpose,
+  exact admitted ConfidentialPlanWitnessDisclosurePolicyId,
+  exact admitted binding payload, capability requirement, and policy closure,
+  exact Foundation operation-policy disposition and capability-requirement
+    wrapper derived from those artifacts)
+    -> Affirmative({
+         view: ConfidentialPlanWitnessView,
+         authority: CheckedConfidentialPlanWitnessViewAuthority,
+         capability: ConfidentialPlanWitnessViewCapability
+       })
+     | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+     | Malformed | Refused | DeterministicLimitExceeded | CheckerFailure
+```
+
+For `SuppliedForGeneration`, issuance reads the exact private-material
+occurrence retained by the source's prepared session. For
+`ProducedWhenSourceDecisionActive`, it requires that exact decision to be
+active in the source record and reads the value sealed by the Plan adapter. For
+`ProducedWhenAcceptedTerminalReached`, it requires a `Finalized` source whose
+active continuation arm contains that exact terminal export and reads the
+atomically issued value. An inactive decision or terminal occurrence is
+`CannotAnswer`; byte equality cannot make it active.
+
+The returned entry sequence is every and only manifest key in manifest order,
+with role, class, type, and value derived from the exact extraction and live
+source. `CheckedConfidentialPlanWitnessViewAuthority` is a Foundation
+`OwnerLocalSourceAuthorityBinding` with owner `"pir"`, family
+`ConfidentialPlanWitnessFamily`, the identical issued view as local coordinate,
+the exact payload and policy-closure IDs, operation policy bound to the exact
+disclosure-policy ID, and capability requirement wrapping the exact requirement
+ID. It has no canonical body or content ID.
+
+`ConfidentialPlanWitnessViewCapability` is fresh, noncopyable,
+nonserializable, and process-local. It retains the complete view, authority,
+manifest, admitted surface and extraction, exact tagged source, consumer,
+purpose, policy artifacts, issuance occurrence, lifetime, and process
+generation. A missing or expired otherwise matching live source is
+`CannotAnswer`; wrong source tag for a required terminal value, surface, Plan,
+session, consumer, purpose, policy, or source occurrence is `Refused`; wrong
+kind or regime is `KindMismatch`; malformed manifest or envelope shape is
+`Malformed`; and missing named preimages are `MissingDependency`. No
+nonaffirmative result exposes a partial view or authority.
+
+`ReplayRun`, an equal record, an equal continuation tuple, copied private
+values, a serialized digest, or a fresh byte-equal generation cannot recreate
+either source tag or issue a view for the historical occurrence. Only the
+identical live generation or continuation capability can cross this seam.
+
+### 5.3 Distinct downstream quotients
+
 The OIR-specific quotients are now defined by
 [Endpoint Projection Views](endpoint-projection-views.md). They are distinct
 from this Relations-specific surface. The Interface quotient retains exactly
 the role ABI and transitive codec laws required by its endpoint purpose. The
-Plan-specialized prover quotient is the transitive closure reachable from
-every decision move and state-after root; it excludes derived witness exports,
-dead declarations and nodes, and full source IDs. Checked extraction retains
-the exact source authority privately. Neither quotient is a generic
-`projected_facts` constructor or an invitation for a consumer-selected read.
+ordinary Plan-specialized prover quotient is the transitive closure reachable
+from every decision move and state-after root; it excludes derived witness
+exports, dead declarations and nodes, and full source IDs. The distinct
+`PlanContinuationProverEndpoint` purpose additionally retains the exact
+accepted-terminal-indexed continuation contract, every site-qualified export
+reachable from an active arm, and the recipe closure needed to construct it.
+Inactive arms are absent rather than empty runtime tuples. Checked extraction
+retains the exact source authority privately. Endpoint Projection owns both
+purpose identities and their static quotients; PIR owns runtime generation and
+atomic continuation issuance; OIR cannot mint a live private output. Neither
+quotient is a generic `projected_facts` constructor or an invitation for a
+consumer-selected read.
+
+Imported-verifier placement follows verifier observability rather than
+implementation reuse. A pure verifier-observable Boolean verification is an
+exact Core `Check`; richer verifier-observable transition, observation, or
+output behavior is a `ModuleEffect`; and verification embedded in the
+predicate being proved is Relations-owned. None of those routes grants Plan
+authority or substitutes for an accepted-terminal continuation.
 
 ## 6. Exact canonical bodies
 
@@ -1159,7 +1943,9 @@ StateInitialValueBody = V(0,N(private_material_ref))
   | V(1,R{0:VT(value_type),1:value.datum})
 StrategyStateSlotBody(x) = R {0:VT(x.value_type),
   1:StateInitialValueBody(x.initial)}
-ProverViewCoordinateBody = V(0,N(constant_ref))
+PlanRecipeSiteRefBody = V(0,N(decision_ref))
+  | V(1,N(accepted_terminal_ref))
+PlanReadCoordinateBody = V(0,N(constant_ref))
   | V(1,N(public_input_ref))
   | V(2,N(binding_ref))
   | V(3,N(message_occurrence))
@@ -1169,7 +1955,8 @@ ProverViewCoordinateBody = V(0,N(constant_ref))
   | V(7,N(oracle_answer_occurrence))
   | V(8,R{0:N(module_occurrence),1:N(observation_ordinal)})
   | V(9,N(prior_decision_ref))
-RecipeOperandBody = V(0,ProverViewCoordinateBody)
+  | V(10,N(accepted_terminal_public_output_ordinal))
+RecipeOperandBody = V(0,PlanReadCoordinateBody)
   | V(1,N(private_material_ref))
   | V(2,N(randomness_requirement_ref))
   | V(3,N(state_slot_ref))
@@ -1186,43 +1973,111 @@ StateAfterBindingBody = V(0,Unit)
 DecisionRecipeBody(x) = R {0:S[RecipeNodeBody(node)...],
   1:ProverMoveBindingBody(x.move),
   2:S[R{0:N(state_slot_ref),1:StateAfterBindingBody(binding)}...
-      in StateSlotRef order]}
-DerivedWitnessExportBody(x) = R {0:Q(x.key),1:N(x.source_decision),
+      in StrategyStateSlotRef order]}
+AcceptedTerminalRecipeBody(x) = R {
+  0:S[RecipeNodeBody(node)...]}
+DerivedWitnessExportBody(x) = R {0:Q(x.key),
+  1:PlanRecipeSiteRefBody(x.source_site),
   2:RecipeOperandBody(x.value),3:VT(x.value_type)}
 ProverPlanBody(P) = R {0:ContentRef(P.protocol_id),
   1:S[PrivateMaterialBody(x)...],2:S[RandomnessRequirementBody(x)...],
   3:S[StrategyStateSlotBody(x)...],
   4:S[R{0:N(decision_ref),1:DecisionRecipeBody(recipe)}...
       in ProverDecisionPointRef order],
-  5:S[DerivedWitnessExportBody(x)...]}
+  5:S[DerivedWitnessExportBody(x)...],
+  6:S[R{0:N(terminal_ref),1:AcceptedTerminalRecipeBody(recipe)}...
+      in TerminalRef order]}
 PlanWitnessRoleBody = V(0,Unit) | V(1,Unit)
-PlanWitnessOccurrenceClassBody = V(0,Unit) | V(1,Unit)
+PlanWitnessOccurrenceClassBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
 PlanWitnessSurfaceEntryBody(x) = R {0:PlanWitnessRoleBody(x.role),
   1:VT(x.value_type),
   2:PlanWitnessOccurrenceClassBody(x.occurrence_class)}
 PlanWitnessSurfaceBody(S) = R {0:ContentRef(S.protocol_id),
   1:S[R{0:Q(key),1:PlanWitnessSurfaceEntryBody(entry)}... in key order]}
 PlanWitnessOccurrenceRefBody(x) = R {0:ContentRef(x.surface_id),1:Q(x.key)}
+
+ConfidentialPlanWitnessReadManifestBody(x) =
+  S[Q(key)... in canonical sorted-unique WitnessSurfaceKey body order]
+ConfidentialPlanWitnessQualificationBody = V(0,Unit)
+ConfidentialPlanWitnessSourceRequirementBody = V(0,Unit) | V(1,Unit)
+ConfidentialPlanWitnessDisclosurePolicyBody(x) = R {
+  0:Q("confidential-plan-witness-view"),
+  1:ContentRef(x.plan_witness_surface_id),
+  2:ConfidentialPlanWitnessReadManifestBody(x.manifest),
+  3:ConfidentialPlanWitnessQualificationBody,
+  4:ConfidentialPlanWitnessSourceRequirementBody(x.source_requirement),
+  5:ContentRef(x.consumer_id),
+  6:ContentRef(x.purpose_id)}
+ConfidentialPlanWitnessBindingPayloadBody(x) = R {
+  0:Q("confidential-plan-witness-view"),
+  1:ContentRef(x.plan_witness_surface_id),
+  2:ConfidentialPlanWitnessReadManifestBody(x.manifest),
+  3:ConfidentialPlanWitnessQualificationBody,
+  4:ConfidentialPlanWitnessSourceRequirementBody(x.source_requirement),
+  5:ContentRef(x.disclosure_policy_id),
+  6:ContentRef(x.consumer_id),
+  7:ContentRef(x.purpose_id),
+  8:Q("whole-confidential-plan-witness-selection-v1")}
+ConfidentialPlanWitnessCapabilityRequirementBody(x) = R {
+  0:Q("confidential-plan-witness-view"),
+  1:ContentRef(x.binding_payload_id),
+  2:ContentRef(x.disclosure_policy_id),
+  3:ContentRef(x.consumer_id),
+  4:ContentRef(x.purpose_id),
+  5:ConfidentialPlanWitnessSourceRequirementBody(x.source_requirement),
+  6:Q("fresh-identical-generated-or-finalized-plan-source")}
+ConfidentialPlanWitnessPolicyClosureBody(x) = R {
+  0:Q("confidential-plan-witness-view"),
+  1:ContentRef(x.binding_payload_id),
+  2:ContentRef(x.disclosure_policy_id),
+  3:ContentRef(x.capability_requirement_id)}
 ```
 
-`ProverViewCoordinateBody` is always interpreted relative to the exact
-decision key containing the recipe. In
-`DerivedWitnessExportBody`, `RecipeOperandBody(x.value)` is instead interpreted
-relative to `x.source_decision` and its exact local recipe; that decision is not
-an ambient argument. The witness-surface map contains only its keyed entry
-bodies; the checked extraction, source Plan ID, and source mapping are not
-serialized fields.
+`PlanReadCoordinateBody` and every local node reference are interpreted
+relative to the exact `PlanRecipeSiteRefBody` that owns their recipe. The
+terminal-public-output tag forms only at an accepted-terminal site; direct
+randomness forms only at a decision site. In `DerivedWitnessExportBody`,
+`RecipeOperandBody(x.value)` is interpreted relative to `x.source_site` and
+its exact local recipe; the site is not an ambient argument. The witness-
+surface map contains only its keyed entry bodies; the checked extraction,
+source Plan ID, and source mapping are not serialized fields.
 
-Changing a body field, order, tag, admission law, witness-surface derivation, or
+The manifest body is nonempty, sorted by the complete canonical
+`WitnessSurfaceKey` body, and duplicate-free. Qualification tag 0 is
+`CausallyGeneratedPlanOnly`. Source-requirement tags 0 and 1 are respectively
+`GeneratedSufficient` and `FinalizedRequired`; admission derives the tag from
+the selected occurrence classes. The policy, payload, capability requirement,
+and closure bodies above are complete: no consumer, purpose, manifest,
+qualification, source requirement, result schema, bearer law, or policy edge
+is ambient or prose-only. `PIRSourceConsumerRoleBody` and
+`PIRSourcePurposeRoleBody` use the same exact family and are nominally
+distinct identified subjects even when their coordinates are byte-equal.
+
+`PlanPrivateMaterialInputMap`, `PlanPrivateRandomnessInputMap`, their values and
+capabilities, private-material occurrences, randomness reveal rights,
+`AcceptedPlanWitnessHandoffSourceEndpoint`,
+`AcceptedPlanWitnessHandoffTargetEndpoint`,
+`ReadyPlanWitnessIngressSupply`, `ReadyPlanWitnessIngressSupplyCapability`,
+`CausalPlanWitnessHandoffCapability`, `ConfidentialPlanWitnessSource`,
+`ConfidentialPlanWitnessView`, completed Plan runs and continuations, causal
+capabilities, owner authority bindings, and issued view capabilities are
+process-local runtime objects. They deliberately have no canonical body or
+semantic ID; equal canonical values, endpoint fields, or record bytes cannot
+reconstruct them.
+
+Changing a body field, order, tag, admission law, input-map formation law,
+atomic preparation or handoff law, witness-surface derivation, or
 `PlanRealizes` proposition rotates the owner-local Interface/Plan profile ID
-and every downstream profile that imports it. A module-owned declaration
-change instead rotates that module and its exact users. The shared Foundation
-semantic regime rotates only when a Foundation-owned mechanism or its
-interpretation changes. Old bytes are never reinterpreted.
+and every downstream profile that imports it. It does not add any of the live
+objects above to a semantic preimage. A module-owned declaration change instead
+rotates that module and its exact users. The shared Foundation semantic regime
+rotates only when a Foundation-owned mechanism or its interpretation changes.
+Old bytes are never reinterpreted.
 
 ## 7. Nonclaims and reopening conditions
 
-Interface admission, Plan admission, `PlanWitnessSurface` extraction, and
+Interface admission, Plan admission, input-map formation, Plan preparation,
+accepted-continuation handoff, `PlanWitnessSurface` extraction, and
 `PlanRealizes` do not establish:
 
 - relation-instance correspondence, witness attachment, witness satisfaction,

@@ -22,7 +22,8 @@ It consumes, without redefining:
 - Protocol structure, execution, replay, the public-only `RelationRunView`,
   and the separate causal, purpose-bound confidential initial-Oracle view from
   [Interactive Core and Causal Execution](../pir/interactive-core.md);
-- external Interface and source-ID-free `PlanWitnessSurface` meaning from
+- external Interface, source-ID-free `PlanWitnessSurface` meaning, and the
+  purpose-bound confidential Plan-witness view from
   [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md); and
 - relation Interfaces, instances, split Protocol/Plan bindings, value bridges,
   artifact observations, grounding equations, and commitment slots from
@@ -45,6 +46,26 @@ redefining, the PIR names `ConfidentialInitialOracleFamily`,
 `PIRSourceConsumerRoleId`, `PIRSourcePurposeRoleId`, and the exact
 `CausallyGeneratedOnly` and `WholeCanonicalCarrier` laws. The public
 `RelationRunView` remains a different carrier with a different issuance law.
+
+For causal private Plan-witness grounding this page imports, without
+redefining, `ConfidentialPlanWitnessFamily`, its canonical read manifest and
+source requirement, the disclosure policy and ID, binding payload, capability
+requirement, policy closure, `ConfidentialPlanWitnessView`,
+`CheckedConfidentialPlanWitnessViewAuthority`,
+`ConfidentialPlanWitnessViewCapability`, and
+`IssueConfidentialPlanWitnessView`. The imported source is the exact tagged
+`Generated | Finalized` Plan source. It is not the public `RelationRunView`, a
+portable secret identity, or a Relations-issued authority.
+
+For direct cross-run Plan-witness handoff this page also imports, without
+redefining, the PIR-owned `IssueAcceptedPlanWitnessIngressSupply`,
+`ReadyPlanWitnessIngressSupply`,
+`ReadyPlanWitnessIngressSupplyCapability`, and
+`CausalPlanWitnessHandoffCapability` minted only when that ready supply and
+its identical live capability are consumed to form the fresh target
+`WitnessIngress` occurrence. Relations may inspect those owner-retained
+coordinates only in the joins below. It cannot form a supply, consume one,
+copy a private value, or mint the handoff capability.
 
 The Relations language selects the companion page's standalone
 `RelationsProfileId`. It imports exactly
@@ -396,6 +417,11 @@ CorrespondenceQuestion =
       checks: NonEmptyCanonicalSortedUniqueSeq<RunFactCheck>,
       required_qualification: RequiredRunQualification
     }
+  | PlanWitnessRunGrounding {
+      plan_binding_id: PlanWitnessBindingId,
+      instance_id: RelationInstanceId,
+      edges: NonEmptyCanonicalSortedUniqueSeq<PlanWitnessEdgeRef>
+    }
 
 CorrespondenceQuestionBody(question) =
   RelationsBodyV0<CorrespondenceQuestion>(question)
@@ -434,6 +460,24 @@ If any `OracleMaterialAgreement` occurs, `q.required_qualification` is exactly
 agreement specified above. Repeating an edge in two material-agreement checks
 is malformed. No public `RelationRunCoordinate` is derived for this arm.
 
+Every `PlanWitnessRunGrounding` edge belongs to `q.plan_binding_id`, and its
+relation endpoint belongs to the exact Interface of `q.instance_id`. The
+sequence is nonempty, canonical sorted-unique, and contains no caller-selected
+qualification. Causal Plan generation is a fixed law of this arm. In the
+written tagged-sum order its exact body tag is `V(13,...)`:
+
+```text
+CorrespondenceQuestionBody[PlanWitnessRunGrounding](q) =
+  V(13,R{
+    0:ContentRef(q.plan_binding_id),
+    1:ContentRef(q.instance_id),
+    2:S[N(edge)... in canonical increasing order]
+  })
+```
+
+It contains no Plan ID, private value, run, occurrence, source capability,
+qualification selector, or consumer predicate.
+
 For an admitted `RunGrounding` question `q`, Relations derives:
 
 ```text
@@ -460,6 +504,22 @@ RunGroundedLossySelection(q,set) = {
   bridge_use_set: set,
   coordinates: RunGroundedPotentialLossyCoordinates(q)
 }
+
+PlanWitnessGroundedBridgeUseScope(q) = {
+  protocol_bindings: [],
+  plan_witness_bindings: [q.plan_binding_id],
+  artifact_questions: []
+}
+
+PlanWitnessGroundedPotentialLossyCoordinates(q) =
+  the canonical sorted-unique sequence of
+  PlanWitnessEdge(q.plan_binding_id,edge.ordinal) for every edge in q.edges
+  whose exact admitted binding edge names an admitted lossy bridge
+
+PlanWitnessGroundedLossySelection(q,set) = {
+  bridge_use_set: set,
+  coordinates: PlanWitnessGroundedPotentialLossyCoordinates(q)
+}
 ```
 
 `RunGroundedPotentialLossyCoordinates(q)` is derived from the admitted
@@ -473,6 +533,13 @@ equal the potential sequence exactly. The selection is therefore a total
 owner-derived function, not a caller-authored subset. The sequence may be
 empty; the lossy set, premise, and join intake is required exactly when it is
 nonempty.
+
+The same total owner-derived law applies to
+`PlanWitnessGroundedPotentialLossyCoordinates`: when nonempty, the exact
+`BridgeUseSet` scope and selection above are required; when empty, no lossy
+premise or source join is admitted. The relation-side live source for each
+lossy coordinate is issued only by `IssuePrivateWitnessFieldSource` for the
+exact assignment occurrence and exact question-bound consumer and purpose.
 
 `ClaimReductionShape` requires at least one selected claim or reduction; a
 selected reduction also derives reads for every claim meaning it cites.
@@ -575,8 +642,10 @@ ConfidentialInitialOraclePolicyFor(question,binding,edge) = {
   extent: WholeCanonicalCarrier,
   qualification: CausallyGeneratedOnly,
   consumer_id: PIRSourceConsumerRoleId(
+    PIRInteractionProfileId,
     ConfidentialInitialOracleFamily, CorrespondenceQuestionId(question)),
   purpose_id: PIRSourcePurposeRoleId(
+    PIRInteractionProfileId,
     ConfidentialInitialOracleFamily, CorrespondenceQuestionId(question))
 }
 
@@ -590,6 +659,42 @@ ConfidentialInitialOracleAgreementRead = {
   disclosure: WholeCanonicalCarrier
 }
 
+ConfidentialPlanWitnessSelection = {
+  plan_binding_id: PlanWitnessBindingId,
+  plan_witness_surface_id: PlanWitnessSurfaceId,
+  keys: NonEmptyCanonicalSortedUniqueSeq<WitnessSurfaceKey>,
+  source_requirement: ConfidentialPlanWitnessSourceRequirement
+}
+
+ConfidentialPlanWitnessSelectionFor(
+  exact admitted PlanWitnessRunGrounding question,
+  exact admitted PlanWitnessBinding binding) = {
+  require PlanWitnessBindingId(binding) = question.plan_binding_id,
+  plan_binding_id: question.plan_binding_id,
+  plan_witness_surface_id: binding.plan_witness_surface_id,
+  keys: canonical sorted-unique sequence of
+    binding.witness_edges[edge].protocol.ref for every edge in question.edges,
+  source_requirement:
+    FinalizedRequired iff at least one selected key resolves in the exact
+      admitted PlanWitnessSurface to
+      ProducedWhenAcceptedTerminalReached,
+    GeneratedSufficient otherwise
+}
+
+ConfidentialPlanWitnessPolicyFor(question,selection) = {
+  family: ConfidentialPlanWitnessFamily,
+  plan_witness_surface_id: selection.plan_witness_surface_id,
+  manifest: selection.keys,
+  qualification: CausallyGeneratedPlanOnly,
+  source_requirement: selection.source_requirement,
+  consumer_id: PIRSourceConsumerRoleId(
+    PIRInterfacePlanProfileId,
+    ConfidentialPlanWitnessFamily, CorrespondenceQuestionId(question)),
+  purpose_id: PIRSourcePurposeRoleId(
+    PIRInterfacePlanProfileId,
+    ConfidentialPlanWitnessFamily, CorrespondenceQuestionId(question))
+}
+
 CorrespondenceReadManifest = {
   protocol: CanonicalSortedUniqueSeq<ProtocolStaticRead>,
   protocol_interface: CanonicalSortedUniqueSeq<ProtocolInterfaceRead>,
@@ -597,7 +702,8 @@ CorrespondenceReadManifest = {
   relations: CanonicalSortedUniqueSeq<RelationsRead>,
   run: FiniteSeq<CorrespondenceRunRead>,
   confidential_initial_oracle:
-    CanonicalSortedUniqueSeq<ConfidentialInitialOracleAgreementRead>
+    CanonicalSortedUniqueSeq<ConfidentialInitialOracleAgreementRead>,
+  confidential_plan_witness: Option<ConfidentialPlanWitnessSelection>
 }
 ```
 
@@ -629,11 +735,19 @@ The caller never supplies or widens it. Derivation is exhaustive:
 | `EquationGrounding` | the exact admitted equation; every source, step, equality, exactly `RequiredGroundingOperandSlots(equation)`, and one exact run read per run slot |
 | `CommitmentGroundingCheck` | every typed construction input and publication slot plus the exact source, step, and equality in each selected closed grounding |
 | `RunGrounding` | the binding edge for every `RelationBoundRunValueSelector` or `OracleMaterialAgreement` appearing in any check; the instance field selected only by each `RelationBoundValue` check; when the owner-derived `RunGroundedPotentialLossyCoordinates(q)` is nonempty, the premise and consumer-source join for every coordinate in that sequence; the unique public `RelationRunCoordinate` derived from each public check; and one exact confidential initial-Oracle agreement read for each material-agreement arm. Expected values are authenticated question literals, not owner reads. |
+| `PlanWitnessRunGrounding` | every selected Plan-witness binding edge, its exact relation-witness endpoint and surface entry, both selectors and the admitted value relation; the exact selected instance; when `PlanWitnessGroundedPotentialLossyCoordinates(q)` is nonempty, every required premise and private-witness consumer-source join; and one confidential Plan-witness selection whose keys are the canonical sorted-unique surface keys of those edges and whose source requirement is derived from their occurrence classes |
 
 The `confidential_initial_oracle` field is empty for every question except
 `RunGrounding`; for that family its key set is exactly the distinct
 `OracleMaterialAgreement` edge sequence derived from `q.checks`. An empty field
 creates no confidential owner request or ambient authority.
+
+The `confidential_plan_witness` field is `Some` exactly for
+`PlanWitnessRunGrounding` and `None` for every other arm. Its nonempty key set
+is derived, never caller-supplied. It selects `FinalizedRequired` exactly when
+any selected surface entry is `ProducedWhenAcceptedTerminalReached`;
+otherwise it selects `GeneratedSufficient`. The option cannot be present with
+an empty key set.
 
 Every phrase in the table is expanded to the closed read arms above before
 canonical sorting. No arm silently carries an unlisted owner subtree. The
@@ -661,12 +775,12 @@ meaning is not a transform read.
 Reading one edge includes, through explicit canonical manifest arms, its
 complete typed endpoints and the exact admitted bridge plus affirmative
 bridge-law result when the edge is not same-type.
-For `RunGrounding`, each coordinate in its exact owner-derived potential lossy
-sequence additionally reads the affirmative occurrence-local source premise and
-affirmative consumer-source join bound to that use coordinate. Other structural, coverage,
-Plan, and artifact questions do not acquire such a read merely because an edge
-names a lossy bridge; the current target defines no live source-consumer join
-for them.
+For `RunGrounding` and `PlanWitnessRunGrounding`, each coordinate in its exact
+owner-derived potential lossy sequence additionally reads the affirmative
+occurrence-local source premise and affirmative consumer-source join bound to
+that use coordinate. Other structural, coverage, Plan-shape, and artifact
+questions do not acquire such a read merely because an edge names a lossy
+bridge; the current target defines no live source-consumer join for them.
 Concretely, coordinate `c` adds both `BridgeUsePremise(c)` and
 `BridgeUseConsumerSourceJoin(c)` to the Relations submanifest.
 The exact full `BridgeUseSet` and `LossyUseSelection` are separately
@@ -694,6 +808,15 @@ Oracle reference, and `publication` is that target's unique publication
 occurrence. Its required policy is exactly
 `ConfidentialInitialOraclePolicyFor(q,binding,edge)` above; no Relations alias,
 label, or alternate policy family participates.
+
+For a Plan-witness grounding arm, the confidential selection contains only
+the static binding, source-ID-free surface, canonical key set, and derived
+source requirement. It contains no Plan ID, private value, run, occurrence,
+capability, or digest. Its required policy is exactly
+`ConfidentialPlanWitnessPolicyFor(
+q,ConfidentialPlanWitnessSelectionFor(q,binding))` above; the matching
+live owner view remains a separate operation operand and never widens the
+static `PlanSurfaceCorrespondenceView`.
 
 ### 4.2 Exact owner-issued view carriers
 
@@ -1171,6 +1294,28 @@ ConfidentialInitialOracleGroundingInputs(q) =
   ExactMap<
     every and only OracleEdgeRef selected by OracleMaterialAgreement in q,
     ConfidentialInitialOracleGroundingInput>
+
+ConfidentialPlanWitnessGroundingInput(q,binding) = {
+  selection:
+    exact ConfidentialPlanWitnessSelectionFor(q,binding),
+  relation_assignment:
+    exact fresh PrivateWitnessAssignment for q.instance_id,
+  relation_secret_capabilities:
+    ExactMap<q.edges,
+      identical live SecretValueCapability for the edge's RelationWitnessRef>,
+  pir_view:
+    exact ConfidentialPlanWitnessView for
+      ManifestFor(q).confidential_plan_witness,
+  pir_authority: exact CheckedConfidentialPlanWitnessViewAuthority,
+  pir_capability: identical live ConfidentialPlanWitnessViewCapability,
+  disclosure_policy_id:
+    exact ConfidentialPlanWitnessDisclosurePolicyId of
+      ConfidentialPlanWitnessPolicyFor(q,selection),
+  binding_payload_id: exact ConfidentialPlanWitnessBindingPayloadId,
+  capability_requirement_id:
+    exact ConfidentialPlanWitnessCapabilityRequirementId,
+  policy_closure_id: exact ConfidentialPlanWitnessPolicyClosureId
+}
 ```
 
 The policy named by each map value must resolve to the exact imported policy
@@ -1187,6 +1332,16 @@ The relation assignment must be the exact same-instance owner occurrence and
 the secret capability must be its identical bearer for the selected relation
 Oracle. This input map is live operation state. It has no body compiler,
 semantic ID, portable encoding, copy constructor, or cold-replay form.
+
+For `PlanWitnessRunGrounding`, the four PIR policy artifacts must be the exact
+closed tuple derived from the question ID, binding surface, canonical key set,
+and source requirement. The view, authority, and capability must be the
+identical affirmative `IssueConfidentialPlanWitnessView` products for either a
+valid `Generated` source or the required `Finalized` source. The relation
+assignment belongs to the exact question instance and each secret capability
+is its identical bearer for the selected witness endpoint. The input is live
+operation state, has no semantic ID or portable form, and exposes neither the
+view nor any secret value through the checked-result body.
 
 ## 5. Completed result payloads and authority
 
@@ -1244,7 +1399,9 @@ CheckedCorrespondence = {
 retains every independently established agreement. Two well-typed endpoint
 values may disagree and yield Negative; an ill-typed selector, wrong reference
 kind, wrong owner, or unresolvable coordinate is malformed before the
-proposition exists and never yields Negative.
+proposition exists and never yields Negative. After formation, a formed typed
+reference supplied on the wrong required subject axis is `KindMismatch`; this
+does not turn a formation defect into a substantive disagreement.
 
 Endpoint type, selector type, and expected-value type mismatches make question
 formation malformed; they cannot produce an admitted proposition and therefore
@@ -1275,6 +1432,8 @@ CheckCorrespondence(
   exact CorrespondenceOwnerViewSet for ManifestFor(question),
   exact RelationRunView sequence for its run submanifest,
   exact ConfidentialInitialOracleGroundingInputs(question),
+  exact optional ConfidentialPlanWitnessGroundingInput(question,binding)
+    for the uniquely resolved PlanWitnessBinding,
   every matching live owner-view and run-view capability,
   exact evaluator support and limits)
   -> Qualified<CheckedCorrespondence>
@@ -1421,7 +1580,9 @@ construction equality at those occurrences; it establishes no binding,
 hiding, extraction, opening knowledge, or verifier soundness. A commitment is
 not a lossy value bridge.
 
-## 9. Public and confidential run-grounded operation
+## 9. Run-grounded operations
+
+### 9.1 Public and initial-Oracle grounding
 
 ```text
 CheckRunGroundedCorrespondence(
@@ -1530,13 +1691,394 @@ qualification proves relation satisfaction, honest strategy, coin
 distribution, or implementation isolation.
 
 No private witness, verifier-private query or answer, prover Oracle, Plan
-state, advice, randomness, or strategy-local value is readable here. Initial
-logical-Oracle material is readable only inside the exact agreement operation,
-only as the whole same-typed carrier, and only under the two purpose-bound live
-authorities above. It is not returned to the caller or made available through
-the public selector vocabulary. Any broader private supply-occurrence question
-requires a distinct owner view and question variant; until then it is
-`Unsupported`.
+state, advice, randomness, or strategy-local value is readable by this public
+operation. Initial logical-Oracle material is readable only inside the exact
+agreement operation, only as the whole same-typed carrier, and only under the
+two purpose-bound live authorities above. It is not returned to the caller or
+made available through the public selector vocabulary.
+
+### 9.2 Causal Plan-witness grounding
+
+```text
+CheckPlanWitnessRunGrounding(
+  admitted PlanWitnessRunGrounding q,
+  exact admitted RelationInstance,
+  exact admitted PlanWitnessBinding binding,
+  exact ConfidentialPlanWitnessGroundingInput(q,binding),
+  when PlanWitnessGroundedPotentialLossyCoordinates(q) is nonempty:
+    exact BridgeUseSet set for PlanWitnessGroundedBridgeUseScope(q) and fresh
+      affirmative authority,
+    exact LossyUseSelection equal to
+      PlanWitnessGroundedLossySelection(q,set),
+    exact overall-Affirmative CheckedLossyUsePremiseSet for that selection and
+      fresh capability,
+    fresh affirmative CheckLossyUseAtConsumerSource result and capability for
+      every coordinate in that exact selection,
+  exact evaluator support and deterministic limits)
+    -> Qualified<CheckedCorrespondence>
+```
+
+For every selected edge, the operation resolves the exact surface entry,
+relation witness endpoint, both selectors, selected types, and admitted value
+relation. The relation value is read from the exact fresh assignment bearer.
+The Plan value is read only from the exact purpose-bound confidential view.
+`SuppliedForGeneration` names the prepared-session private occurrence;
+`ProducedWhenSourceDecisionActive` requires its source decision to be active
+in the retained generated run; and
+`ProducedWhenAcceptedTerminalReached` requires the exact `Finalized` source
+and atomically issued active continuation arm.
+
+The policy, payload, requirement, and closure are derived from the exact
+`CorrespondenceQuestionId(q)` through nominally distinct PIR consumer and
+purpose role IDs. A caller cannot substitute a label, another question, an
+equal surface, or a wider manifest. Each lossy edge additionally consumes its
+question-bound premise and the `IssuePrivateWitnessFieldSource` bearer for the
+same assignment occurrence through `CheckLossyUseAtConsumerSource`.
+
+An edge whose value relation completes true adds
+`ValueAgrees(Edge(edge))`; one that completes false adds
+`ValueDisagreement(Edge(edge))`. The latter is semantic Negative. A missing,
+inactive, unfinalized, or expired required source is `CannotAnswer`; a cross-
+run, cross-Plan, cross-surface, wrong-policy, wrong-consumer, or wrong-purpose
+source is `Refused`; wrong kind or type is `KindMismatch`; a duplicate,
+partial, noncanonical, or extra manifest is `Malformed`; replay qualification
+is `Unsupported`; and bounded evaluator failures retain their ordinary
+qualified lanes. None becomes a value disagreement.
+
+The fresh checked-result capability retains the exact question, binding,
+instance, assignment and secret bearers, confidential view/authority/bearer,
+lossy inputs, completed Plan run, and Plan/Protocol causal authorities. The portable
+`CheckedCorrespondence` body retains only its question ID, manifest, and
+agreement/disagreement coordinates.
+
+```text
+JoinPlanWitnessAndPublicRunGrounding(
+  exact affirmative CheckedCorrespondence private_result for
+    PlanWitnessRunGrounding,
+  identical live private checked-result capability,
+  exact affirmative CheckedCorrespondence public_result for a causal
+    RunGrounding question,
+  identical live public checked-result and RelationRunView capabilities)
+    -> Qualified<Affirmative({
+         result: CheckedSameRunPlanWitnessCorrespondence,
+         capability: CheckedSameRunPlanWitnessCorrespondenceCapability
+       })>
+     | CannotAnswer | KindMismatch | Malformed | Refused | CheckerFailure
+```
+
+The join requires the identical admitted `RelationInstance`, `ProtocolId`,
+live `CoreInvocation` object, live `CompletedProtocolRecord` object, and
+identical live `CausalGenerationCapability` on both sides. Equal bytes,
+values, records, or separately generated occurrences do not join. It imposes
+no generic "intended fold output" beyond the coordinates already selected by
+the two questions. The result and capability are process-local and
+nonidentified. The capability retains the two identical input results and
+their checked-result, run-view, Plan-generation, and Protocol causal
+capabilities;
+it therefore retains the private question, binding, surface extraction,
+assignment occurrence, and completed Plan run rather than reconstructing them
+from either result body. The join establishes only that the selected public
+and private correspondence results belong to one causal run—not witness
+satisfaction, fold preservation, output-to-next-input handoff, or IVC
+induction.
+
+### 9.3 Direct causal Plan-witness handoff
+
+The next operation selects one already-agreeing private edge from each of two
+same-run results. The source edge must resolve to a
+`DerivedWitnessExport`; the target edge must resolve to a fresh
+`WitnessIngress`. Selection is operation-local and has no question body or
+semantic ID:
+
+```text
+JoinCausalPlanWitnessHandoff(
+  exact affirmative CheckedSameRunPlanWitnessCorrespondence source_run,
+  identical live CheckedSameRunPlanWitnessCorrespondenceCapability
+    source_run_capability,
+  exact PlanWitnessEdgeRef source_edge selected by source_run's private
+    PlanWitnessRunGrounding question,
+  exact source RelationInstance operand and exact source
+    PrivateWitnessAssignment occurrence retained by source_run_capability,
+  exact source CompletedPlanRun object retained by source_run_capability,
+  exact Finalized ConfidentialPlanWitnessSource retained by
+    source_run_capability whose CompletedPlanContinuation is the handoff
+    source continuation,
+  exact affirmative CheckedSameRunPlanWitnessCorrespondence target_run,
+  identical live CheckedSameRunPlanWitnessCorrespondenceCapability
+    target_run_capability,
+  exact PlanWitnessEdgeRef target_edge selected by target_run's private
+    PlanWitnessRunGrounding question,
+  exact target RelationInstance operand and exact target
+    PrivateWitnessAssignment occurrence retained by target_run_capability,
+  exact target CompletedPlanRun object retained by target_run_capability,
+  identical live CausalPlanWitnessHandoffCapability handoff_capability)
+    -> Qualified<Affirmative({
+         result: CheckedPlanWitnessHandoffCorrespondence,
+         capability: CheckedPlanWitnessHandoffCorrespondenceCapability
+       })>
+     | Unsupported | CannotAnswer | KindMismatch | Malformed | Refused
+     | CheckerFailure
+```
+
+The operation performs the following complete match before issuing its
+result:
+
+1. each same-run capability opens exactly one affirmative public/private pair
+   and retains the identical question, binding, admitted relation instance,
+   private assignment occurrence, Plan surface and checked extraction,
+   `CoreInvocation`, `CompletedProtocolRecord`, `CompletedPlanRun`, and Plan
+   and Protocol causal capabilities used by that pair;
+2. `source_edge` and `target_edge` occur exactly once in their respective
+   private questions and both already have `ValueAgrees(Edge(edge))` in the
+   checked result;
+3. the source private grounding used a `Finalized` confidential source whose
+   `CompletedPlanContinuation` and `CausalPlanContinuationCapability` are the
+   identical source objects retained by `handoff_capability`; a merely
+   `Generated` source is insufficient for this join even when the selected
+   decision-derived export ordinarily has `GeneratedSufficient` disclosure;
+4. the source binding edge's Plan key resolves through the retained checked
+   extraction to the exact `DerivedWitnessExportRef`. For a decision-derived
+   export, the identical continuation capability links its already sealed
+   decision occurrence to that exact export's active continuation-output
+   occurrence; for a terminal-derived export it links the exact terminal
+   occurrence directly. This owner-retained export-ref/occurrence relation,
+   not value equality, must name the source output occurrence retained by
+   `handoff_capability`. The target edge's Plan key likewise resolves to the
+   exact `PrivateMaterialRef` of kind `WitnessIngress` and fresh private-
+   material occurrence retained by that capability;
+5. the source and target selected Plan types equal the exact source and target
+   types of the handoff capability, and the capability records the direct
+   same-type copy from that source occurrence to that target occurrence; and
+6. the capability is the identical bearer created when the exact
+   `ReadyPlanWitnessIngressSupply` was consumed during preparation of the
+   target Plan session, is retained by the target
+   `CausalPlanGenerationCapability`, and in turn retains the source
+   continuation, source Plan-generation, and target preparation occurrences.
+
+The two relation instance operands are role-distinct even when their
+`RelationInstanceId` values are equal. The two private assignments, selected
+edges, Plan runs, export and ingress occurrences, and causal capabilities
+remain distinct exact operands. Equality of instance IDs, values, surface
+keys, result bodies, record encodings, or separately reconstructed
+capabilities cannot satisfy any item above.
+
+`CheckedPlanWitnessHandoffCorrespondence` and its capability are
+noncopyable, nonserializable, process-local, and nonidentified. They retain
+the complete source and target operands, selected edges, same-run results and
+capabilities, and the identical handoff capability. They establish the exact
+direct causal chain
+
+```text
+source relation-secret occurrence
+  -> selected source Plan export occurrence
+  -> fresh target WitnessIngress occurrence
+  -> target relation-secret occurrence
+```
+
+under the two already-checked edge relations. They do not infer equality
+between the two relation selectors when those edge relations or selectors
+differ, relation satisfaction, fold preservation, or a public recurrence.
+A selected edge outside its question, an extra or duplicate selector, or an
+ill-shaped pair is `Malformed`; a well-formed non-export/non-ingress pair is
+`Unsupported`; a `Generated` rather than identical `Finalized` source, or a
+wrong live run, continuation, occurrence, assignment, surface, Plan, or bearer
+is `Refused`; an expired otherwise matching bearer is `CannotAnswer`;
+and a type or regime mismatch is `KindMismatch`. There is no Negative arm:
+the underlying value disagreements are already Negative inputs and therefore
+cannot enter this affirmative-only join.
+
+### 9.4 One-step causal recurrence conjunction
+
+An arbitrary true equation over two runs is not a recurrence proposition. The
+final join therefore takes one operation-local public selection that fixes the
+complete source-output-to-target-input chain. These references are dense
+ordinals in the exact admitted grounding equation and have no body or ID:
+
+```text
+GroundingSourceRef = ordinal in GroundingEquation.sources
+GroundingEqualityRef = ordinal in GroundingEquation.equalities
+
+PublicRecurrenceEquationLeg = {
+  left_tip: GroundingValueRef,
+  right_tip: GroundingValueRef,
+  equality: GroundingEqualityRef
+}
+
+CausalPublicRecurrenceSelection = {
+  source_run_slot: GroundingRunSlotRef,
+  target_run_slot: GroundingRunSlotRef,
+  source_instance_slot: GroundingInstanceSlotRef,
+  target_instance_slot: GroundingInstanceSlotRef,
+  source_output_source: GroundingSourceRef,
+  source_instance_source: GroundingSourceRef,
+  target_instance_source: GroundingSourceRef,
+  target_statement_source: GroundingSourceRef,
+  source_output_grounding: PublicRecurrenceEquationLeg,
+  instance_transition: PublicRecurrenceEquationLeg,
+  target_input_grounding: PublicRecurrenceEquationLeg
+}
+```
+
+Let `P_source` be the exact admitted Protocol authenticated for
+`e.run_slots[s.source_run_slot]`, and let `C_source` be the exact admitted
+`InteractiveCore` whose ID is `P_source.core_id`. The operation-local closed
+predicate `CausalRecurrencePublicOutputCoordinate(P_source,C_source,c)` is true
+exactly for:
+
+```text
+OccurrenceOutput(o,0)
+  when C_source.occurrences[o].effect is ProverMessage or
+       DeterministicVerifierMessage
+OraclePublication(oracle,o)
+  when the effect at o is PublishOracle(oracle) and its publication mode is
+       FullCanonicalOracle or PublicBinding
+TerminalPublicOutput(t,o,k)
+  when the effect at o is ReachTerminal(t) and k is an exact public-output
+       ordinal of t
+PublicModuleObservation(o,k)
+  when the effect at o is a supported ModuleEffect and k is an exact
+       declaration-owned public module-observation output ordinal
+```
+
+It is false for every other coordinate, including `BindingValue`,
+`ChallengeValue`, public or private Oracle Query/Answer, a logical-access
+fixation marker, Check/Reduction output, a raw Oracle/Terminal/Module
+`OccurrenceOutput`, a private or structural output, and an unsupported module
+effect. Thus the source is an exact owner-classified publication or public
+output, not merely any value that happens to have an occurrence ordinal.
+
+`SingleDynamicGroundingPath(e,root,tip)` is the following closed structural
+predicate. `tip` is either `Source(root)` or a step reachable from it. In the
+transitive input closure of `tip`, the only nonconstant source is `root`; each
+dynamic predecessor traces transitively to that root, and any other leaves are
+exact `Constant` sources. Every cited step is in range, topologically earlier
+than its consumer, and has the exact admitted ABI already checked for `e`.
+Thus identity, branching/merging transformations of one dynamic value, and
+fixed parameters are supported, while a second dynamic value cannot be hidden
+inside a purported one-occurrence path.
+
+`CausalPublicRecurrenceSelectionMatches(q,e,s,checked)` holds exactly when
+`q` is the exact admitted `EquationGrounding` question for `e` and:
+
+1. the source and target run slots are distinct and exhaust `e.run_slots`, the
+   source and target instance slots are distinct and exhaust
+   `e.instance_slots`, `e.artifact_slots` is empty, and the four source
+   references are pairwise distinct;
+2. `e.sources[s.source_output_source]` is
+   `ProtocolValue(s.source_run_slot,c,p)` and
+   `CausalRecurrencePublicOutputCoordinate(P_source,C_source,c)` holds;
+3. `e.sources[s.target_statement_source]` is
+   `ProtocolValue(s.target_run_slot,BindingValue(b),p)` for an exact binding
+   `b` whose class is `Statement`;
+4. `e.sources[s.source_instance_source]` and
+   `e.sources[s.target_instance_source]` are respectively
+   `InstancePublic(s.source_instance_slot,r_source,p_source)` and
+   `InstancePublic(s.target_instance_slot,r_target,p_target)`;
+5. `source_output_grounding` has a left path rooted at
+   `source_output_source`, a right path rooted at
+   `source_instance_source`, and names the equality whose exact left and right
+   values are those two tips;
+6. `instance_transition` similarly connects `source_instance_source` to
+   `target_instance_source`, and `target_input_grounding` connects
+   `target_instance_source` to `target_statement_source`;
+7. the three equality references are distinct and exhaust every equality in
+   `e`; every step lies in at least one of the six selected single-dynamic
+   paths; and every source is one of the four selected dynamic roots or a
+   constant used by at least one selected path; and
+8. the selected tips have the exact types written by their equalities,
+   `checked.question_id` is the exact `CorrespondenceQuestionId(q)`, and for
+   each selected leg `leg`, `checked.agreements` contains the exact coordinate
+   `EqualityTrue(GroundingEquality(
+   StandaloneEquation(q.equation_id),leg.equality))`. Because the three
+   references exhaust `e.equalities` and `checked` is affirmative, these are
+   every equality outcome for this equation rather than three caller-selected
+   true facts from a larger result.
+
+This exact-exhaustion rule rejects a self-equality, constant-only equality,
+unrelated true clause, unused extra clause, confidential witness or Oracle-
+material source, artifact source, extra public source, or hidden dynamic
+dependency. It remains general over typed public representations because each
+of the six sides may use its own explicit fixed-parameter transformation path.
+The operation proves those exact written transformations; it does not infer
+their cryptographic adequacy or information preservation.
+
+The final Relations operation conjoins the matched public chain with the
+private handoff. It adds no recurrence question or identified result:
+
+```text
+JoinCausalPlanStepRecurrence(
+  exact affirmative CheckedPlanWitnessHandoffCorrespondence private_handoff,
+  identical live CheckedPlanWitnessHandoffCorrespondenceCapability
+    private_handoff_capability,
+  exact affirmative CheckedCorrespondence public_recurrence for an admitted
+    EquationGrounding question q,
+  identical live public_recurrence checked-result capability,
+  exact admitted GroundingEquation equation and exact GroundingInvocation
+    invocation retained by that capability,
+  exact CausalPublicRecurrenceSelection selection satisfying
+    CausalPublicRecurrenceSelectionMatches(
+      q,equation,selection,public_recurrence))
+    -> Qualified<Affirmative({
+         result: CheckedCausalPlanStepRecurrence,
+         capability: CheckedCausalPlanStepRecurrenceCapability
+       })>
+     | Unsupported | CannotAnswer | KindMismatch | Malformed | Refused
+     | CheckerFailure
+```
+
+Formation requires all of the following, without an ambient slot convention:
+
+1. `q.equation_id` is the exact ID of `equation`; the checked result is
+   overall-Affirmative and its fresh capability retains the identical
+   `invocation`, complete computed table, source-authority bindings, and
+   capabilities;
+2. the equation's required run-slot set is exactly
+   `{selection.source_run_slot,selection.target_run_slot}`, and
+   `q.run_requirements` maps both and only both slots to
+   `ExactCausallyGenerated`; the two live run occurrences are distinct even
+   when their Protocol IDs or record bodies are equal;
+3. the two `QualifiedRun` operands and their live view capabilities retain,
+   respectively, the exact source and target `CoreInvocation`,
+   `CompletedProtocolRecord`, and `CausalGenerationCapability` objects
+   retained by `private_handoff_capability`;
+4. `InstanceSlot(selection.source_instance_slot)` and
+   `InstanceSlot(selection.target_instance_slot)` are distinct required
+   operand slots,
+   and their exact `RelationInstance` operands are respectively the source and
+   target instances retained by `private_handoff_capability`; the matching
+   source-authority bindings and capabilities are the identical ones consumed
+   by the affirmative equation evaluation; and
+5. `CausalPublicRecurrenceSelectionMatches(
+   q,equation,selection,public_recurrence)` holds for the exact affirmative
+   result, so its three selected equalities establish the exhaustive source-
+   output, cross-instance, and target-input chain rather than an unrelated true
+   equation; and
+6. the source and target private-assignment occurrences, selected witness
+   edges, source export, target ingress, source and target Plan runs, and
+   `CausalPlanWitnessHandoffCapability` are exactly those retained by
+   `private_handoff_capability`.
+
+The instance slot occurrences remain source- and target-qualified even when
+their content IDs are equal. A repeated ID does not merge two slots, and an
+equal value, equation result body, run record, or fresh causal execution does
+not substitute for an identical retained operand or capability.
+
+`CheckedCausalPlanStepRecurrence` and its capability are noncopyable,
+nonserializable, process-local, and nonidentified. They establish only the
+conjunction of (a) the exact affirmative public equation over these two
+causally generated runs and exact instance-slot occurrences and (b) the exact
+direct private handoff above. They do not establish relation satisfaction,
+relation refinement, fold or accumulation correctness, an unbounded
+recurrence, IVC/NIVC induction, a decider theorem, or any security property.
+An out-of-range, duplicate, or ill-shaped selection is `Malformed`; a formed
+affirmative equation that violates the closed public-recurrence shape is
+`Unsupported`; a wrong exact run, instance-slot occurrence, invocation,
+assignment, selected edge, handoff, or source capability is `Refused`; an
+expired otherwise matching live capability is `CannotAnswer`; a type, owner,
+or regime mismatch is `KindMismatch`; and an inconsistent affirmative input is
+`CheckerFailure`. This join has no Negative arm because either a false public
+equality or a private edge disagreement is already a Negative prerequisite
+rather than a completed recurrence conjunction.
 
 ## 10. Combined results, persistence, and nonclaims
 
@@ -1561,6 +2103,19 @@ cold-replay lane: replay may validate observed answers, but it cannot establish
 that a newly supplied carrier is the whole initial carrier used by the earlier
 causal generation.
 
+`PlanWitnessRunGrounding`, the same-run join, the direct handoff join, and the
+one-step recurrence join have no cold-replay lane. Reauthentication may
+recover the durable `PlanWitnessRunGrounding` question and its portable
+checked-result body. The three nonidentified joins have no standalone question
+or result body to recover; only their durable input questions and portable
+input-result bodies can be reauthenticated. In every case only fresh generated
+Plan runs and their live private authorities can recreate the live
+proposition. The direct handoff operation supports the one same-process path
+in which consuming an exact `ReadyPlanWitnessIngressSupply` creates the fresh
+target `WitnessIngress` and its causal capability. Persistence, serialization,
+network or storage transport, decoding, and physical supplier provenance stay
+with Realization and cannot be inferred from equal bytes or semantic values.
+
 No correspondence result establishes:
 
 - truth, satisfiability, or adequate modeling of a relation definition;
@@ -1568,6 +2123,8 @@ No correspondence result establishes:
 - correctness, completeness, termination, or fidelity of a Prover Plan;
 - equivalence between relation satisfaction and Protocol acceptance;
 - relation refinement, witness evolution, reduction soundness, completeness,
+  fold preservation, any handoff other than the exact direct same-process
+  operation above, recurrence beyond one selected pair, IVC induction,
   security, knowledge, zero knowledge, or Fiat--Shamir theorem applicability;
 - artifact provenance beyond the exact issued interpretation source;
 - OIR validity, endpoint support, realization, or implementation

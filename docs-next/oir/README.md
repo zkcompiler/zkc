@@ -1,10 +1,11 @@
 # OIR and Endpoint Semantics
 
 > **Document kind:** Domain index
-> **Document state:** Active bounded K3-D target, reclosed by bounded K3-E
+> **Document state:** Active bounded target
 > **Target alignment:** Minimum PIR-to-OIR semantic and projection boundary
-> selected and joined on the finite P01/Schnorr path; full Stage 4B remains
-> unactivated
+> selected for canonical-framed Fiat--Shamir verifier, Plan-specialized prover,
+> and distinct continuation-prover purposes. Full OIR execution and Realization
+> remain unactivated.
 > **Provisional owner:** `oir`
 > **Authority:** None during transition. Current endpoint semantics remain
 > governed by the [Endpoints](../../docs/spec/endpoints.md),
@@ -21,7 +22,7 @@
   judgment; and
 - the abstract behavior a concrete realization must preserve.
 
-The bounded K3-D target is specified by the
+The bounded target is specified by the
 [OIR Endpoint and Projection Contract](projection-contract.md). PIR owns the
 purpose-specific source views in
 [Endpoint Projection Views](../pir/endpoint-projection-views.md). Full OIR
@@ -33,11 +34,13 @@ not selected here.
 - sole ownership of the canonical bridge graph schema: role,
   dependencies/types, constants/pure nodes, slot-centric ABI, action spine,
   static FS semantics, complete claims/reductions/terminals, and reachable Plan
-  graph; PIR owns exact traversal and extraction into this OIR-owned value,
-  while OIR owns the schema, target formation, and admission;
+  graph, including the continuation purpose's site-qualified decision/terminal
+  export closure; PIR owns exact traversal and extraction into this OIR-owned
+  value, while OIR owns the schema, target formation, and admission;
 - the exact `EndpointContractLawV0` evaluator deriving one closed
   `DerivedEndpointContractBody`—static obligations, exact requirements, and
-  completion interface—from that graph;
+  completion interface—from that graph, plus the continuation purpose's static
+  terminal-indexed private-output contract;
 - canonical semantic `OirId` and exact semantic dependency closure;
 - standalone OIR authentication and admission under `LocalOirValid`;
 - the unauthoritative `ProjectEndpoint` operation;
@@ -104,16 +107,25 @@ complete static obligations, requirements, and completion interface cannot
 drift outside the equality check. Runtime presence, state versions, draws,
 wire packaging, and reached outcomes remain explicit Stage 4B non-claims.
 
+For the continuation purpose, the semantic graph and derived contract retain
+every and only site-qualified private export promised by the exact admitted
+Plan. They contain no live private value, continuation result, or Plan
+capability. PIR owns runtime issuance and one-use handoff; any concrete runtime
+binding remains later Realization work.
+
 ## Bounded support
 
-The current endpoint profile supports canonical-framed FS verifier and
-canonical-framed FS Plan-specialized prover endpoints over the base non-Oracle,
-non-module effect language and base Plan recipes. Duplex-sponge FS, Fresh,
-generic prover, native Oracle, and every module-effect path are recognized
-typed `Unsupported` cases before view extraction, with no partial target. Once
-a proposition forms, validation cannot return feature `Unsupported`. A legacy
-imported-verifier carrier lacking a supported module-effect contract stops
-earlier at PIR admission; it cannot be described as an OIR refusal.
+The current endpoint profile supports canonical-framed Fiat--Shamir verifier,
+Plan-specialized prover, and distinct Plan-continuation prover endpoints over
+the base non-Oracle, non-module-effect language. The continuation purpose
+requires an exact admitted Plan with at least one nonempty accepted-terminal
+arm and adds only its static private-output contract. Duplex-sponge Fiat--
+Shamir, Fresh, generic prover, native Oracle, and every module-effect path are
+recognized typed `Unsupported` cases before view extraction, with no partial
+target. Once a proposition forms, validation cannot return feature
+`Unsupported`. A legacy imported-verifier carrier lacking a supported module-
+effect contract stops earlier at PIR admission; it cannot be described as an
+OIR refusal.
 
 This conservative table is a bounded closure, not a rejection of later
 profiles. Any extension must define its source view, target effect law,

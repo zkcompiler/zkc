@@ -29,8 +29,16 @@ Oracle evidence coverage, and keeps four KZG opening/aggregation shapes
 distinct. Complete-argument pressure then retains one flat verifier Core,
 routes proof packaging through Interface/OIR, and repairs canonical
 Fiat--Shamir exact use for zero-challenge Cores without adding an Argument
-root. Accumulation/recursion, holdouts, and independent freeze remain pending;
-the semantic kernel is not frozen and full Stage 4B remains inactive.
+root. Research across accumulation, folding, and recursive-verification cases now
+selects Plan-owned accepted-terminal continuation, site-qualified private
+outputs, confidential grounding, a one-use same-process witness handoff with a
+finite one-step recurrence join, and a distinct continuation-prover endpoint.
+The selected target adds no universal accumulator, folding-scheme, recursive-
+proof, or runtime child-Protocol root, and typed public Plan parameters are
+deferred. Holdout validation, complete owner-profile preimages, independently
+reconstructible profile identities, independent identity/profile freeze,
+property judgments, full OIR/Realization, implementation correspondence, and
+normative cutover remain open.
 
 ## Where current truth lives
 
@@ -195,9 +203,14 @@ commitment-opening profile, explicit public setup assignment, and
 claim/evidence separation while rejecting a universal batching abstraction.
 Complete-argument pressure subsequently rejected a universal Argument root,
 retained flat finite execution, and made canonical FS require at least one
-declared Challenge occurrence.
-Accumulation/recursion, holdouts, and independent freeze are still pending;
-none of these results is semantic freeze or Stage 4B activation.
+declared Challenge occurrence. Accumulation, folding, and recursive-
+verification pressure then selected the Plan-owned continuation and finite
+same-process recurrence boundaries described above. The fixed Nova fold
+reaches T2 constructive-encoding depth; the remaining named cases retain their
+stated T1 finite-target gaps. Holdouts, exact owner-profile publication,
+independent identity/profile
+freeze, property discharge, full OIR/Realization, implementation support, and
+normative cutover remain pending.
 
 The first semantic reconstruction result is the
 [Candidate v0 Semantic Architecture](project/v0-semantic-architecture.md). It
@@ -250,8 +263,10 @@ non-normative until explicit consolidation and cutover.
 The bounded endpoint result is split between PIR-owned
 [Endpoint Projection Views](pir/endpoint-projection-views.md) and the
 [OIR Endpoint and Projection Contract](oir/projection-contract.md). It supports
-FS verifier and Plan-specialized prover pressure cases only; it is not a full
-OIR language, realization design, or implementation claim.
+canonical-framed Fiat--Shamir verifier, Plan-specialized prover, and distinct
+Plan-continuation prover pressure cases. The continuation purpose adds a static
+terminal-indexed private-output contract; it does not activate runtime
+continuation, a full OIR language, Realization, or implementation support.
 
 The [temporary design workspace](notes/README.md) preserves the larger catalog
 behind those decisions while the design program is incomplete. It is not part

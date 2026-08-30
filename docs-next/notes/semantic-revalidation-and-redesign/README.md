@@ -13,8 +13,15 @@
 > `ConservativeExtension`: an early-terminated control and a frozen exact
 > three-fold/scalar-terminal control remain distinct. The Oracle/polynomial-
 > commitment and complete-argument clusters are complete at their assigned
-> constructive depths. Accumulation/recursion, holdouts, and independent
-> semantic freeze remain pending. Stage 4B remains inactive.
+> constructive depths. Accumulation, folding, and recursive-verification
+> research has now converged at documented evidence levels: the fixed Nova fold
+> reaches T2 constructive-encoding depth, while corrected-cycle Nova,
+> HyperNova, CycleFold, ProtoStar, LatticeFold+, and imported recursive
+> verification retain their stated T1 finite-target gaps. Holdout validation,
+> complete owner-profile publication, and
+> independent identity/profile freeze remain pending. Property judgments, full
+> OIR/Realization, implementation, and normative cutover remain inactive or
+> open.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -82,9 +89,12 @@ below are reader cross-references rather than inventory edges.
   target-semantic OIR identity and local admission, and a separate exact
   source-relative projection relation for FS verifier and Plan-specialized
   prover endpoints. Fresh, Oracle, module, and generic-prover cases remain
-  typed unsupported boundaries. K3-E subsequently reclosed the joined finite
-  profile, view, read, and authority boundary. The remaining differentiated
-  protocol portfolio is active, and independent semantic freeze remains later.
+  typed unsupported boundaries. The joined finite profile, view, read, and
+  authority boundary was subsequently reclosed. Accumulation/folding/recursive-
+  verification pressure now adds the distinct continuation-prover purpose and
+  its static site-qualified private-output contract. Complete profile
+  publication, holdout validation, and independent identity/profile freeze
+  remain later.
 - [R1 Independent Validation Request](validation-request.md) is the retired,
   hash-frozen brief used for the first cold pass.
 - [R1 Cold Validation Outcome](validation-outcome.md) records the failed gate,
@@ -113,6 +123,11 @@ below are reader cross-references rather than inventory edges.
   retains a flat verifier Core and Interface/OIR proof projection, repairs the
   zero-challenge Fiat--Shamir exact-use boundary, and routes one Plan lifecycle
   candidate into accumulation research.
+- [Accumulation, Folding, and Recursive Verification](r2-protocol-witnesses/accumulation-folding-and-recursion/README.md)
+  records the mixed-depth family results, selected Plan-owned continuation and
+  one-use handoff lifecycle, finite recurrence boundary, imported-verifier
+  owner split, durable absorption, bounded falsification evidence, and explicit
+  profile-freeze and implementation nonclaims.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

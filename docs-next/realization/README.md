@@ -2,8 +2,8 @@
 
 > **Document kind:** Domain index
 > **Document state:** Scaffold
-> **Target alignment:** Stage 3 package boundary selected; Stage 4B and full
-> Realization design remain unactivated
+> **Target alignment:** The semantic boundary is selected; full runtime OIR
+> and Realization design remain unactivated
 > **Provisional owner:** `realization`
 > **Authority:** None during the transition. Current realization material is
 > split among the reserved [boundary contract](../../docs/spec/boundaries.md),
@@ -96,13 +96,17 @@ entry, superfluous entries are rejected, and unrelated catalog growth cannot
 change the result. The binding key domain is every and only `OirRequirement`
 in the exact admitted endpoint.
 
-The selected base `ProverPlan` has no below-OIR branch. Its reachable semantic
-facts have already entered the Plan-specialized prover OIR; dead recipe
-material and derived witness exports are inert for this purpose; concrete
-supplier choices were never Plan meaning. Realization cannot recover or reread
-a source Plan from an ID, source map, or projection capability. A future Plan
-extension may add an explicit checked placement relation, but that requires a
-new complete field disposition and is not part of this scaffold.
+The selected base `ProverPlan` has no below-OIR branch. For the ordinary
+Plan-specialized prover purpose, its reachable semantic facts have already
+entered OIR, while dead recipe material and derived witness exports are inert.
+For the continuation-prover purpose, OIR instead retains the selected static
+terminal arms and derived-export declarations. A later Realization operation
+must bind that static contract to the identical live PIR Plan session and
+continuation capability chain; this scaffold does not activate that operation.
+Concrete supplier choices were never Plan meaning. Realization cannot recover
+or reread a source Plan from an ID, source map, or projection capability. A
+future Plan extension may add an explicit checked placement relation, but that
+requires a new complete field disposition and is not part of this scaffold.
 
 The portable `SupplierBinding` identifies configuration and provider
 designations. It does not grant access to libraries, devices, services, keys,
@@ -224,8 +228,8 @@ generic handle supplies those semantics.
 - `foundation/` for identity, authentication, admission, encoding, capability,
   and lifecycle mechanisms;
 - `oir/` for admitted endpoint semantics, ABI, derived static contract, exact
-  abstract requirements, and preservation obligations; Stage 4B separately
-  owns dynamic execution semantics;
+  abstract requirements, and preservation obligations; later runtime OIR and
+  Realization work separately owns dynamic execution semantics;
 - no direct `ProverPlan` dependency in the selected base path; reachable Plan
   semantics is already present in a Plan-specialized prover OIR;
 - `relations/` only for an explicitly declared relation-facing realization or

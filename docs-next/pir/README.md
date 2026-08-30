@@ -59,8 +59,16 @@ been reconciled without changing the verifier-observable Core or the
 Fresh/Fiat--Shamir factorization. This bounded closure does not freeze the
 integrated kernel. Complete-argument pressure retains the same flat Core,
 routes physical proof packages through Interface/OIR, and makes canonical FS
-inapplicable to zero-challenge Cores. Accumulation/recursion, holdouts, and
-independent freeze review remain pending.
+inapplicable to zero-challenge Cores. Accumulation, folding, and recursive-
+verification pressure now selects Plan-owned accepted-terminal continuation,
+site-qualified private exports, confidential grounding, a one-use same-process
+output-to-fresh-ingress handoff, finite one-step recurrence, and a distinct
+continuation-prover purpose. The fixed Nova fold reaches T2
+constructive-encoding depth; the remaining named cases retain their stated T1
+finite-target gaps. Holdouts,
+complete owner-profile preimages and independently reconstructible profile
+identities, independent identity/profile freeze, properties, Realization,
+implementation, and normative cutover remain open.
 
 ## Owns
 
@@ -86,6 +94,12 @@ independent freeze review remain pending.
 - separately identified `ProtocolInterface` and `ProverPlan` subjects,
   including their Protocol-dependent identities, authentication, admission,
   codecs or construction descriptors, and the separate `PlanRealizes` bridge;
+- Plan-owned decision-site and accepted-terminal private-export recipes, the
+  exact strategy-adapter/session lifecycle, atomic accepted continuation, and
+  live nonserializable generation and continuation authority;
+- one-use same-process supply of an accepted continuation output into one fresh
+  target Plan witness-ingress occurrence, without placing live capabilities or
+  private values in semantic identity;
 - Protocol authentication, whole-Protocol admission, official admitted-only
   persistence, decoding, re-authentication, and re-admission;
 - question-scoped authenticated Protocol views whose definitions remain owned
@@ -158,6 +172,9 @@ admitted Plan, owner-derived `StrategyDecisionView`, and matching
 behavior. PIR may derive a source-ID-free `PlanWitnessSurface` for the narrow
 Relations attachment seam; its checked extraction retains source authority
 without placing the Plan ID or Plan-local references in the surface identity.
+PIR also owns confidential generated/finalized Plan-witness views and the exact
+one-use output-to-fresh-ingress capability chain. Relations may check their
+grounding and recurrence but cannot recreate the underlying Plan authority.
 
 PIR must remain meaningful without depending on the compiler or endpoint
 realization. A Protocol may be authored, authenticated, and admitted without
@@ -183,16 +200,21 @@ first being found by the optimizer or successfully projected to every target.
   construction view and matching live authority—remain question-specific. A
   confidential initial logical Oracle is available only through the PIR-owned
   `ConfidentialInitialOracleView` and its matching causal, purpose-bound live
-  capability; raw observations and replay candidates cannot substitute for
-  either checked result;
+  capability. Private Plan-witness grounding analogously consumes an exact
+  confidential generated/finalized Plan view, and direct recurrence additionally
+  consumes PIR's one-use same-process handoff capability. Raw observations,
+  equal values, and replay candidates cannot substitute for those authorities;
 - `compiler/` may propose successors, but PIR alone authenticates and admits
   each target; a separate relation-specific checker must then relate exact
   predecessor and successor subjects;
 - `oir/` consumes affirmative checked purpose-specific
   [endpoint views](endpoint-projection-views.md) over an exact admitted
   Protocol and Interface and, for a plan-specialized prover, an exact admitted
-  Plan plus affirmative `CheckedPlanRealizes`. Neither a whole source ID nor
-  the Relations-specific `PlanWitnessSurface` enters OIR semantics;
+  Plan plus affirmative `CheckedPlanRealizes`. The distinct continuation-
+  prover purpose adds only the exact site-qualified export closure and static
+  terminal-indexed private-output contract. Neither a whole source ID, the
+  Relations-specific `PlanWitnessSurface`, nor a live Plan capability enters
+  OIR semantics;
 - `evidence/` binds conformance observations to exact PIR subjects.
 
 ## Target documents
@@ -277,12 +299,20 @@ Interface/Plan and Relations seams, minimum Analysis contracts, bounded OIR
 projection, and the joined owner-view/read/authority paths at their stated
 resolutions. It includes exact static views, an affirmative checked FS
 construction and issued FS view, an Interface correspondence view, and an
-affirmative `CheckedPlanRealizes` path. It is not yet a protocol-portfolio
-freeze. Complete-argument research has retained the flat Core and proof-
-package projection boundary; later work includes:
+affirmative `CheckedPlanRealizes` path. Complete-argument research retained the
+flat Core and proof-package projection boundary. Accumulation, folding, and
+recursive-verification research then selected the Plan-owned
+continuation, confidential grounding, direct same-process handoff, finite one-
+step recurrence, and continuation-prover boundaries. The fixed Nova fold
+reaches T2 constructive-encoding depth; the remaining named cases retain their
+stated T1 finite-target gaps. This is not protocol-portfolio or
+identity/profile freeze;
+later work includes:
 
 - broader Analysis theorem profiles, independent proof authority, checkers,
   and producers beyond the selected finite applicability profile;
+- holdout validation, complete owner-profile preimages, independently
+  reconstructible profile identities, and independent identity/profile freeze;
 - OIR syntax and execution beyond the bounded semantic skeleton, followed by
   concrete supplier, deployment, and runtime meaning in Realization;
 - exact normative wording, stable semantic encodings, hash primitives,

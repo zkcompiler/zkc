@@ -45,8 +45,10 @@ later questions automatically.
 - relation artifact profiles, expectation-free observations, typed comparison,
   grounding equations, and commitment grounding; and
 - the closed correspondence-question algebra, including separate public run
-  facts and causal confidential initial logical-Oracle material agreement, and
-  its checked results.
+  facts, causal confidential initial logical-Oracle material agreement, and
+  causal confidential Plan-witness occurrence grounding, plus its checked
+  results, nonidentified same-run public/private join, direct same-process
+  witness handoff, and finite public/private one-step recurrence conjunction.
 
 The exact namespace is one 23-entry semantic-subject catalog. It is disjoint
 from the 14-entry module declaration-contract catalog; neither prose nor an
@@ -103,9 +105,10 @@ result establishes no Protocol acceptance or cryptographic property.
 
 A value bridge relates representations only. Relation refinement, commitment
 construction, and a PIR reduction are different subjects with different laws.
-Lossy projection carries an exact collision relation and exact use coordinates;
-the current target closes occurrence-premise and count consumption only for
-the run-grounded relation-instance seam. Structural Plan and artifact mappings
+Lossy projection carries an exact collision relation and exact use coordinates.
+The current target closes occurrence-premise and count consumption for the
+public run-grounded relation-instance seam and the private relation-witness
+side of `PlanWitnessRunGrounding`. Structural Plan-shape and artifact mappings
 acquire no implicit live-source or quantitative claim. Analysis, not Relations,
 owns any quantitative security price.
 
@@ -133,6 +136,17 @@ only affirmative law. A raw trace, equal reconstructed value, caller-built
 tuple, stored result ID, carrier digest, or replay-qualified source cannot mint
 that authority. Neither secret body nor a secret-derived identifier enters a
 durable Relations subject or result.
+
+Private Plan-witness grounding is a separate arm of the same closed
+`CorrespondenceQuestion` algebra, not a new semantic kind. PIR issues one
+purpose-bound confidential view from an exact generated or finalized Plan
+run; Relations compares its selected occurrences with a fresh exact relation-
+witness assignment. A nonidentified live join may additionally require that
+affirmative public and private results retain the identical relation instance,
+Protocol, invocation object, completed-record object, and causal-generation
+capability. That same-run join alone establishes neither witness satisfaction
+nor fold preservation, cross-run handoff, or IVC induction; separate direct-
+handoff and recurrence operations own only their exact one-step propositions.
 
 Lossy-source authority now has one closed Relations specialization of the Foundation
 envelope. Public `RelationInstance` fields and durable
@@ -191,7 +205,9 @@ result.
   artifacts, and grounding
 - [Protocol Correspondence](protocol-correspondence.md) — closed question
   grammar, one derived read manifest, checked operations, outcomes, public run
-  grounding, and causal confidential initial-Oracle agreement
+  grounding, causal confidential initial-Oracle agreement, private Plan-
+  witness grounding, the same-run join, direct same-process witness handoff,
+  and finite one-step recurrence conjunction
 - [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md) — PIR-
   owned external presentation, strategy recipes, `PlanRealizes`, and
   `PlanWitnessSurface`
@@ -211,9 +227,12 @@ remains normative until explicit consolidation and cutover.
   `RelationsProfileId` remain unpublished. No persistent-ID or semantic-freeze
   claim follows from the catalog closure alone.
 - The instance/artifact portable and private-witness owner-local source laws
-  are now specified. Executable correspondence for those constructors, native
-  protocol pressure, cold replay, and negative authority tests remain evidence
-  obligations.
+  are now specified. The bounded research instrument exercises continuation-
+  view issuance, Plan-witness grounding, same-run joining, one-use handoff,
+  public-recurrence separation, finite recurrence joining, and negative
+  authority cases. It is structural falsification evidence only; executable
+  correspondence for the general constructors, native protocol support, cold
+  replay, and implementation remain open.
 
 - The bounded Analysis target selects games, theorem-applicability rules, and
   quantitative contracts that consume these exact sources without restating
@@ -231,8 +250,12 @@ remains normative until explicit consolidation and cutover.
   are tracked by the
   [native FRI/IOR validation package](../../evaluation/native-fri-ior/README.md).
   General FRI/IOR correspondence, opening security, proximity, and outer-
-  relation inference remain open, as does native Nova/folding pressure for
-  relation-changing reductions.
+  relation inference remain open. Accumulation/folding pressure has selected
+  the continuation, private-occurrence, direct same-process handoff, and finite
+  one-step recurrence architecture. Fold preservation, relation satisfaction,
+  completion of the source-mapped cases whose finite target elaborations remain
+  open, serialized or cross-process transport, recurrence
+  beyond one selected pair, and IVC induction remain open.
 - The integrated Schnorr witness exercises bounded deduplication and joined
   read closure for one relation/Plan grounding path. It does not exercise the
   full bridge-law portfolio or general relation execution. Broader portfolio

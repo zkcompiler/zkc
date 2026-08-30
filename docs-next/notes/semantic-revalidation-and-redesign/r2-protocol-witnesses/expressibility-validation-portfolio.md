@@ -6,15 +6,20 @@
 > at T3 as a two-lane `ConservativeExtension`; `V01` is retained at T3 as a
 > source-shaped operational sibling; the `V02`/`P05` commitment cluster is
 > closed at T2; and the `P06`--`P08`/`V05` complete-argument cluster is closed
-> at its assigned T1/T2 depths with no activated security theorem
+> at its assigned T1/T2 depths. The accumulation/folding/recursive-verification
+> design set is closed at documented mixed achieved depths: the Nova committed
+> fold reaches T2; corrected-cycle Nova, HyperNova, CycleFold, ProtoStar,
+> LatticeFold+, and imported recursive verification retain T1 shortfalls. No
+> security theorem is activated
 > **Authority:** None. This page selects research pressure and evidence depth;
 > it does not define target semantics, supported protocols, theorem
 > applicability, implementation conformance, or the final v0 boundary.
 > **Current baseline:** The repaired `FRI-Grind-1` finite witness is closed. It
 > is prior evidence, not a native FRI/IOR inhabitant and not a general
 > expressibility result.
-> **Downstream boundary:** R3 model redesign and R4 selection consume these
-> results. Stage 4B remains inactive.
+> **Downstream boundary:** Design-set synthesis, complete owner-profile
+> publication, independent identity/profile freeze, and cold holdout validation
+> consume these results. Full OIR/Realization remains inactive.
 > **Disposition:** Absorb the final support boundary, selected abstractions,
 > rationale, and retained evidence into durable owners, then delete this page.
 
@@ -202,6 +207,31 @@ candidate, not a second `P07` classification and not a source-expressibility
 repair. It is routed into the accumulation package because that package has
 independently exposed a post-challenge Plan-finalization question.
 
+### 4.3.3 Current accumulation, folding, and recursive-verification disposition
+
+The source-grounded cluster retains these achieved results without upgrading
+the lower-depth records from the finite continuation evaluator:
+
+| Case | Classification | Achieved depth |
+|---|---|---:|
+| Nova committed relaxed-R1CS fold | `ConservativeExtension` | T2 |
+| corrected two-cycle Nova | `Native` | T1 |
+| HyperNova multi-fold | `ConservativeExtension` | T1 |
+| CycleFold | `ConservativeExtension` | T1 |
+| ProtoStar public accumulation | `Native` | T1 |
+| LatticeFold+ three-to-two fold | `Native` | T1 |
+| imported recursive verification | `ProfileOrModule` | T1 |
+
+Across those mixed achieved depths, the semantic target selects Plan-owned
+accepted-terminal continuation, site-qualified private exports, confidential
+grounding, a one-use same-process output-to-fresh-ingress handoff, a finite
+public/private one-step recurrence join, and a distinct continuation-prover
+purpose. Typed public Plan parameters are deferred. Universal accumulator,
+folding-scheme, recursive-proof, and runtime child-Protocol roots remain
+rejected. Complete owner-profile preimages, independently reconstructible
+profile identities, holdouts, independent identity/profile freeze, properties,
+Realization, and implementation remain separate open gates.
+
 ### 4.4 Holdout and frontier cases
 
 Only the named selection rationale is visible before freeze; detailed encoding
@@ -259,21 +289,30 @@ Cases proceed by semantic dependency rather than publication date:
 3. **Oracle and commitment layer:** P02, V02, then P05.
 4. **Complete argument organizations:** P06, P07, P08, then V05.
 5. **Accumulation and recursion:** P09, V04, then P10.
-6. **Provisional semantic freeze:** synthesize design-set results without
-   consulting holdout details beyond their frozen selection rationale.
+6. **Design-set synthesis and profile publication:** synthesize the selected
+   target, publish complete owner-profile preimages and independently
+   reconstructible profile identities, and conduct an independent
+   identity/profile freeze without consulting holdout details beyond their
+   frozen selection rationale.
 7. **Cold holdout validation:** H01--H05 at their assigned depths.
 8. **R2 convergence:** classify all cases, retain obstructions and extension
    boundaries, and derive only the bounded R3 research questions they require.
 
-The current cursor is step 5. The retained `P02` result is a fixed baseline,
+The current cursor is design-set synthesis and profile publication. The
+retained `P02` result is a fixed baseline,
 not work to repeat. The completed `V02`/`P05` package selected one narrow
 verifier-side setup/claim/evidence profile, repaired Oracle authentication to
 consume it, and kept the materially different KZG operations separate. The
 [complete-argument package](complete-argument-organizations/README.md) then
 retained a flat Core and Interface/OIR proof projection, rejected a universal
 Argument root, made the canonical FS use boundary nonempty, and routed one
-public prover-parameter candidate into the next Plan co-design. The next package
-studies accumulation and recursion (`P09`, `V04`, then `P10`).
+public prover-parameter candidate into Plan co-design. The
+[accumulation, folding, and recursive-verification package](accumulation-folding-and-recursion/README.md)
+has now selected and durably promoted the narrow continuation, handoff,
+recurrence, and endpoint boundaries at the exact achieved depths above. Its
+finite evaluator is structural falsification evidence only. Complete owner-
+profile publication, independent identity/profile freeze, and cold holdout
+validation remain ahead.
 
 A cluster may stop early when a fundamental obstruction invalidates the model.
 Repair and refreeze precede later dependent cases. Independent families should
@@ -309,8 +348,9 @@ than repeating them.
    pages.
 2. Every change request states whether it is owner-local, conservative, or
    fundamental and which completed cases must be replayed.
-3. A provisional model freeze binds the exact semantic pages or finite model
-   used for holdout validation.
+3. A provisional holdout snapshot binds the exact semantic pages or finite
+   model used for holdout validation. It is not the independent owner-profile
+   and identity freeze required for persistent semantic IDs.
 4. Holdout readers may record an obstruction but do not repair the model in
    place.
 5. If a holdout reopens the model, retain the failed result, adjudicate the
@@ -320,8 +360,8 @@ than repeating them.
    shape.
 
 External validation is most valuable at two gates: after the provisional
-design-set freeze and after any holdout-driven repair. The reviewer should
-receive the frozen model, one assigned source, the output contract, known
+design-set holdout snapshot and after any holdout-driven repair. The reviewer
+should receive the frozen model, one assigned source, the output contract, known
 non-claims, and no expected correspondence map.
 
 ## 9. R2 exit condition
@@ -340,9 +380,12 @@ R2 can converge when:
 - no protocol-security, theorem-applicability, general expressiveness, or
   implementation-support claim is inferred from the portfolio.
 
-The first exit row is now satisfied by the two retained deep anchors. Every
-other row remains active: the remaining protocol, variant, and holdout cases
-have not been waived or implied by the FRI/IOR result.
+The first exit row is satisfied by the two retained deep anchors. The design-
+set cases through accumulation, folding, and recursive verification now retain
+an explicit classification and achieved depth; their T1 shortfalls are not
+waived or upgraded. Holdout validation, complete owner-profile publication,
+independent identity/profile freeze, bounded convergence, and every theorem or
+implementation claim remain active or open as separately stated above.
 
 ## 10. Known risks and non-claims
 

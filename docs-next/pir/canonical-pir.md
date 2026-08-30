@@ -618,8 +618,9 @@ unimplemented same-kind meaning can produce `Unsupported` without guessing.
 
 ## 6. Imported-verification pressure
 
-Recursive or imported proof verification must use the K2 extension mechanism,
-not a dedicated pre-K2 carrier constructor:
+Richer recursive or imported proof verification with stateful or multiple
+typed verifier-observable outputs must use the Protocol extension mechanism,
+not a dedicated pre-Protocol carrier constructor:
 
 ```text
 Occurrence.effect = ModuleEffectRef {
@@ -671,15 +672,16 @@ coordinates. A legacy `unabsorbed` Boolean is not retained: the effect
 declaration's required-influence and framing law decides what must reach the
 transcript.
 
-K3-B validates only that the exact imported-verification reference and payload
-survive both authority-free carrier inverse laws and every identity-field
-mutation, and that a known same-kind declaration without an exact supported
-`pir.core-effect` contract reaches typed `Unsupported`. It does not claim that
+The bounded carrier validation checks only that the exact imported-verification
+reference and payload survive both authority-free carrier inverse laws and
+every identity-field mutation, and that a known same-kind declaration without
+an exact supported `pir.core-effect` contract reaches typed `Unsupported`. It
+does not claim that
 such a Core is admitted or standardize one universal imported-proof semantics.
 The unsupported payload is preserved as exact carrier material but is not
 decoded, classified, or granted the future contract's citation guarantees.
 Only a separately specified exact supported effect contract can enable positive
-Core admission. Until that contract exists, the carrier reaches typed
+Core admission. Until that contract exists, this richer carrier reaches typed
 `Unsupported` at Core admission and no endpoint-projection question can be
 formed. If a future exact module contract does admit the Core but the selected
 OIR profile has no discharge rule for it, that distinct well-formed question
@@ -732,6 +734,16 @@ admitted Protocol results, no OIR projection request or partial OIR can exist.
 Endpoint pressure separately tests an admitted synthetic module-effect coordinate with no
 OIR discharge rule as projection-level `Unsupported`; that synthetic case does
 not standardize imported-proof verification.
+
+Imported verification has no single mandatory carrier. A finite imported
+verifier whose only verifier-observable result is one exact Boolean belongs in
+an ordinary Core `CheckDecl`. Richer verifier-observable behavior with
+stateful or multiple typed outputs may use `ModuleEffect` only under one exact
+admitted effect contract. Verification performed inside an arithmetic or
+constraint predicate belongs to Relations rather than Core effect syntax.
+Proof construction remains Plan-owned. This placement rule selects ownership;
+it does not standardize a recursive-proof profile or activate dynamic child-
+Protocol execution.
 
 The negative matrix mutates every identity-bearing field and covers missing,
 extra, reordered, duplicate, wrong-kind, cross-regime, wrong-ID, unknown carrier

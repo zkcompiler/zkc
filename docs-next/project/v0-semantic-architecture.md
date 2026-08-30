@@ -2,11 +2,13 @@
 
 > **Document kind:** Architecture proposal
 > **Document state:** Active
-> **Design maturity:** Reconstruction with selected Stage 1--4A semantic,
-> transition, Protocol, canonical PIR, Relations, Analysis, and Compiler
-> backbone, bounded consumer integration, and one retained native FRI/IOR
-> conservative extension, with commitment-opening and complete-argument
-> pressure absorbed; accumulation/recursion, holdouts, and freeze pending
+> **Design maturity:** Reconstruction with selected semantic, transition,
+> Protocol, canonical PIR, Relations, Analysis, and Compiler backbone; bounded
+> consumer integration; one retained native FRI/IOR conservative extension;
+> and commitment-opening, complete-argument, accumulation, folding, and
+> recursive-verification pressure absorbed at documented evidence levels.
+> Holdouts, complete owner-profile publication, independent identity/profile
+> freeze, and normative cutover remain pending.
 > **Provisional owner:** `project`
 > **Authority:** Non-normative. This page is a reconstruction and design
 > surface for `docs-next/`. The current specifications, status, architecture,
@@ -174,6 +176,23 @@
 > because no challenge would be transformed. Public prover-only setup material
 > exposes a Plan lifecycle question that is intentionally co-designed with the
 > next accumulation package before any dependent identity is rotated.
+
+> **Accumulation, folding, and recursive-verification update —
+> 2026-08-31:** The fixed committed relaxed-R1CS Nova fold reaches T2
+> constructive-encoding depth.
+> Corrected-cycle Nova, HyperNova, CycleFold, ProtoStar, LatticeFold+, and
+> imported recursive verification retain explicit finite-target elaboration
+> gaps. Across those results, the selected target adds Plan-owned accepted-terminal recipes, an
+> exact strategy-adapter/session boundary, site-qualified private exports,
+> confidential grounding, a one-use same-process output-to-fresh-ingress
+> handoff, a finite public/private one-step recurrence join, and a distinct
+> continuation-prover endpoint purpose. Typed public Plan parameters are
+> deferred, and no universal accumulator, folding-scheme, recursive-proof, or
+> runtime child-Protocol root is added. Complete owner-profile preimages,
+> independently reconstructible profile identities, holdout validation,
+> independent identity/profile freeze, property judgments, full
+> OIR/Realization, implementation correspondence, and normative cutover remain
+> open.
 
 > **Live closure status:** The
 > [v0 Semantic Design Program](v0-design-program.md#14-progress-and-change-control)
@@ -515,8 +534,11 @@ change it. Projection consumes affirmative PIR-owned purpose views over the
 admitted Protocol, exact dependent `ProtocolInterfaceId`, and endpoint role.
 A plan-specialized prover additionally requires the exact admitted Plan and
 affirmative `CheckedPlanRealizes`; only its reachable whole-source-provenance-free semantic
-quotient enters OIR. K3-B's `PlanWitnessSurface` is Relations-specific and
-cannot substitute for that contract. Concrete supplier choices are OIR
+quotient enters OIR. The distinct continuation-prover purpose retains the same
+public graph plus the exact site-qualified export closure and static terminal-
+indexed private-output contract. OIR receives no live private value or Plan
+capability. `PlanWitnessSurface` remains Relations-specific and cannot
+substitute for either endpoint contract. Concrete supplier choices are OIR
 requirements consumed explicitly by Realization rather than ambient Plan
 state.
 Bare possession of bytes, a source identifier, or a carrier label never
@@ -562,7 +584,7 @@ not proposed wire identifiers.
 | Semantic regime | Typed, identified interpretation of intrinsic operations, canonical semantics, and admission rules for one subject family | Selected Stage 1 identity qualifier; implicit today |
 | Admitted Protocol capability | Process-local immutable capability rechecked against an exact admission basis and semantic regime | Current normative role and implementation correspondence, target qualification |
 | Protocol interface | Protocol-dependent mapping from exact K2 invocation inputs, scoped Statement bindings, and role-qualified transport and completion effects to one external ABI | Active bounded K3-B target with a separate `ProtocolInterfaceId`; it changes no Protocol meaning |
-| Prover plan | Protocol-dependent finite recipe system for the K2 prover-decision boundary, with witness ingress distinct from advice, confidential context, randomness, and persistent state | Active bounded K3-B target with a separate `ProverPlanId`, independent `PlanRealizes`, Relations-specific `PlanWitnessSurface`, and K3-D reachable whole-source-provenance-free endpoint quotient |
+| Prover plan | Protocol-dependent finite recipe system for prover-decision and accepted-terminal private derivation, with witness ingress distinct from advice, confidential context, randomness, and persistent state | Active bounded target with a separate `ProverPlanId`, independent `PlanRealizes`, Plan-owned strategy/session and continuation authority, Relations-specific `PlanWitnessSurface`, and a one-use same-process output-to-fresh-ingress handoff |
 | Consumer view | Ephemeral facts mechanically derived for one consumer from admitted authority | Stage 1 provisional role; normally no independent identity |
 | Durable derived artifact or judgment | Independently meaningful OIR, relation result, derivation, or judgment produced by its owner | Current family of roles; not a mere Protocol view |
 | Analysis question and proposition | Exact family experiment separated from one truth-apt conclusion and residual hypotheses | Selected Stage 4A family-indexed identity boundary |
@@ -573,7 +595,7 @@ not proposed wire identifiers.
 | Candidate and comparison domains | Exact admitted relation-qualified semantic candidates plus a separate policy-qualified comparison carrier | Selected Stage 4A target with independent closure |
 | Qualified Compiler decision | Bounded best, complete Pareto, or no-eligible result over exact closed domains and complete ledgers | Selected Stage 4A target; persistence is purpose-bound replay material, never authority |
 | Qualified Compiler open report | Strictly weaker checked statement over an exact qualified subset and audit-record-relative accounting scope; never a closed-domain decision | Selected Stage 4A non-decision branch with separate capability, policy, and replay contract |
-| OIR endpoint artifact | Canonical target-semantic verifier or Plan-specialized prover endpoint, locally admitted independently and related to exact PIR-owned purpose views by a separate projection check | Active bounded K3-D target; full syntax, general execution, Fresh/Oracle/module profiles, and Stage 4B remain inactive |
+| OIR endpoint artifact | Canonical target-semantic verifier, Plan-specialized prover, or distinct Plan-continuation prover endpoint, locally admitted independently and related to exact PIR-owned purpose views by a separate projection check | Active bounded target with a static terminal-indexed private-continuation contract; full syntax, general execution, Fresh/Oracle/module profiles, and runtime Realization remain inactive |
 | Supplier binding | Exact immutable provider designation for OIR requirements, distinct from live provider authority | Selected Stage 2 boundary; exact schema remains Stage 4 work |
 | Realization candidate and admitted realization | Produced target artifact followed by a separate target-specific `RealizesOir` result or explicit trusted boundary | Selected Stage 2 categories; exact target contracts remain Stage 4 work |
 | Deployment binding and live capability | Immutable deployment configuration followed by effectful activation and scoped live authority | Selected Stage 2 categories; exact resource and revocation schemas remain Stage 4 work |
@@ -760,29 +782,28 @@ remain provisional:
    policy-derived `ComparisonAlternativeDomain`; every closed decision binds
    both and complete resolution/assessment ledgers.
 
-### 7.5 Research remaining after bounded K3-E
+### 7.5 Research remaining after protocol-family convergence
 
-1. **Pre-freeze consumer closure.** K3-B reconciled Interface/Plan, Relations,
-   value bridges, execution grounding, and the canonical carrier against the
-   K2 source. K3-C then closed the bounded contracts separating the finite
-   native judgment, abstract-family transport, and pointwise member
-   specialization without reopening K2. It did not mint the all-`n` family
+1. **Pre-freeze consumer closure.** Earlier bounded work reconciled
+   Interface/Plan, Relations, value bridges, execution grounding, the canonical
+   carrier, minimum Analysis contracts, OIR source reads, and the joined
+   profile/view/read/authority boundary. It did not mint the all-`n` family
    source capability: AFK transport remains `CannotAnswer` without independent
-   proof authority. K3-D closed the bounded minimum OIR source read, semantic
-   skeleton, and projection relation. K3-E then reclosed the joined finite
-   profile, view, read, and authority boundary. K4 must now pressure that
-   selection with the differentiated protocol portfolio; K5 remains the
-   independent freeze gate.
+   proof authority. Accumulation, folding, and recursive-verification pressure
+   has now extended that target with exact continuation and finite recurrence
+   semantics. Holdout validation, complete owner-profile preimages,
+   independently reconstructible profile identities, and independent
+   identity/profile freeze remain open.
 
 2. **Full OIR behavior and realization correspondence.** After a separate
-   Stage 4B activation, extend the bounded semantic skeleton into a complete
+   activation decision, extend the bounded semantic skeleton into a complete
    grammar and execution model, add Fresh/Oracle/module/generic-prover support
    deliberately, and state which target-specific refinement a realization
    must establish.
 
 3. **Cross-system capability synthesis.** Pressure-test the joined Protocol,
    Relations, Analysis, Compiler, OIR, and Realization capability surface after
-   Stage 4B closes, without inventing a universal admission token.
+   full OIR/Realization closure, without inventing a universal admission token.
 
 4. **Evidence appraisal.** Define evidence records and scoped claim
    assessments before designing any global admission policy. The consumer,
@@ -940,10 +961,14 @@ owns that gate. Subsequent integration reconciled dependent Interface/Plan,
 carrier, Relations, bounded Analysis, and endpoint-projection contracts while
 leaving AFK family transport unanswered unless independent proof authority
 supplies its uniform all-`n` source capability. Joined Schnorr, native FRI/IOR,
-commitment-opening, and complete-argument pressure have now reclosed their
-declared bounded scopes. Accumulation/recursion and holdout pressure come next;
-independent freeze remains pending, and this architecture is not yet frozen or
-normative.
+commitment-opening, complete-argument, and accumulation/folding/recursive-
+verification pressure have now reclosed their declared bounded scopes. The
+latest selection is semantic-target convergence with the fixed Nova fold at
+T2 constructive-encoding depth and the stated T1 finite-target gaps for the
+other named cases, not
+owner-profile publication or independent identity/profile
+freeze. Holdout validation, property discharge, full OIR/Realization,
+implementation correspondence, and normative cutover remain pending.
 
 ## 12. Deliberate non-decisions
 
