@@ -70,7 +70,30 @@ class ExecutionTest(unittest.TestCase):
         independent = independent_replay(self.construction, self.inputs, self.proof)
         self.assertEqual(primary.to_term(), independent.to_term())
 
-    def test_verifier_executes_final_squeeze_while_support_simulates_prefix(self) -> None:
+    def test_zero_length_challenge_squeeze_executes_and_replays_exactly(self) -> None:
+        value = copy.deepcopy(self.construction_value)
+        decoder = value["construction"]["challenge_decoders"][1]
+        decoder["decoder"] = "EmptyToConstantScalar"
+        decoder["algorithm"] = "EmptySymbolsToConstantZero"
+        decoder["squeeze_length"] = 0
+        construction = parse_construction(value)
+        proof = parse_public_proof(self.proof_value, construction, self.inputs)
+        primary = replay(construction, self.inputs, proof)
+        secondary = independent_replay(construction, self.inputs, proof)
+        self.assertEqual(primary.to_term(), secondary.to_term())
+        self.assertEqual(primary.challenges[1], 0)
+        squeeze = tuple(
+            event for event in primary.trace if event.occurrence == "challenge-2"
+        )
+        self.assertEqual(len(squeeze), 1)
+        self.assertEqual(squeeze[0].symbols, ())
+        squeeze_index = primary.trace.index(squeeze[0])
+        self.assertEqual(squeeze[0].state, primary.trace[squeeze_index - 1].state)
+        self.assertEqual(squeeze[0].permutation_calls, 0)
+
+    def test_verifier_executes_final_squeeze_while_support_simulates_prefix(
+        self,
+    ) -> None:
         prefix = derive_generation_prefix_challenges(
             self.construction, self.inputs, self.proof
         )

@@ -63,9 +63,9 @@ inapplicable to zero-challenge Cores. Accumulation, folding, and recursive-
 verification pressure now selects Plan-owned accepted-terminal continuation,
 site-qualified private exports, confidential grounding, a one-use same-process
 output-to-fresh-ingress handoff, finite one-step recurrence, and a distinct
-continuation-prover purpose. The fixed Nova fold reaches T2
-constructive-encoding depth; the remaining named cases retain their stated T1
-finite-target gaps. Holdouts,
+continuation-prover purpose. The fixed Nova fold has a complete source-grounded
+finite target encoding; the remaining named cases retain explicit finite-
+target elaboration gaps. Holdouts,
 complete owner-profile preimages and independently reconstructible profile
 identities, independent identity/profile freeze, properties, Realization,
 implementation, and normative cutover remain open.
@@ -303,9 +303,9 @@ affirmative `CheckedPlanRealizes` path. Complete-argument research retained the
 flat Core and proof-package projection boundary. Accumulation, folding, and
 recursive-verification research then selected the Plan-owned
 continuation, confidential grounding, direct same-process handoff, finite one-
-step recurrence, and continuation-prover boundaries. The fixed Nova fold
-reaches T2 constructive-encoding depth; the remaining named cases retain their
-stated T1 finite-target gaps. This is not protocol-portfolio or
+step recurrence, and continuation-prover boundaries. The fixed Nova fold has a
+complete source-grounded finite target encoding; the remaining named cases
+retain explicit finite-target elaboration gaps. This is not protocol-portfolio or
 identity/profile freeze;
 later work includes:
 

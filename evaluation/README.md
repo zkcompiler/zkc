@@ -6,6 +6,24 @@ fixtures and revisions named here.
 
 ## Semantic revalidation witnesses and probes
 
+Run the bounded semantic checks from the repository root. The fast tier covers
+the actively edited cross-owner seam; the full tier runs every selected
+redesign gate without a timeout and is required once at a checkpoint rather
+than after every local edit:
+
+```sh
+python3 -B evaluation/semantic_checks.py --tier fast
+python3 -B evaluation/semantic_checks.py --tier full
+```
+
+The full runner executes the expensive Analysis test classes in four isolated
+processes. This preserves the exact discovered test set while preventing
+repeated canonical reconstruction in one class from serializing unrelated
+classes. The focused Analysis runner retains a one-process mode by default and
+accepts `--jobs N` when isolated parallel validation is desired.
+
+Neither tier combines the scopes below into one proof or conformance claim.
+
 These packages are temporary semantic-revalidation research instruments. They
 are not compiler components, protocol implementations, security evaluators, or
 evidence that a listed portfolio case is supported. Their results have

@@ -57,8 +57,8 @@ target implementation.
 For one exact Foundation `PriorMetaAuthenticationBasis B`, this owner consumes:
 
 - exact `AdmittedCore` handles for source and target;
-- `PIRInteractionProfileId`, `PIRCommitmentOpeningProfileId`, and their
-  authenticated import closure;
+- `PIRInteractionProfileId`, `PIRPublicSetupProfileId`,
+  `PIRCommitmentOpeningProfileId`, and their authenticated import closure;
 - exact admitted `CommitmentOpeningVerifierProfile` and
   `CommitmentOpeningUse` handles;
 - authenticated `PortableAlgorithmRef` and `EvaluationContractId` pairs;
@@ -66,15 +66,19 @@ For one exact Foundation `PriorMetaAuthenticationBasis B`, this owner consumes:
 - Foundation outcome and deterministic-evaluation mechanisms.
 
 All objects use the same semantic regime and authenticated basis. The profile
-imports exactly `PIRInteractionProfileId` and
-`PIRCommitmentOpeningProfileId` and redefines no PIR meaning.
+directly imports exactly `PIRInteractionProfileId`,
+`PIRPublicSetupProfileId`, and `PIRCommitmentOpeningProfileId` and redefines no
+PIR meaning. The public-setup edge is direct even though the commitment-opening
+profile also imports it, because this owner itself validates source and target
+public-setup views.
 
 ```text
 PIROracleCommitmentProfile = SemanticLanguageProfile {
   profile_family: "pir.oracle-commitment",
-  revision: 1,
+  revision: 0,
   profile_imports: {
     PIRInteractionProfileId,
+    PIRPublicSetupProfileId,
     PIRCommitmentOpeningProfileId
   },
   supported_subject_kinds: {
@@ -137,10 +141,10 @@ uses `ExactCorePairAndProfileShapeType -> IntrinsicConstructionBoundsType`;
 static elaboration uses
 `ExactCorePairAndProfileShapeType -> OracleCommitmentStaticElaborationType`;
 and each receipt projection uses the exact Core completed-record public-view
-type selected by that field. Every referenced evaluation contract's typed-
-failure row must equal the applicable coordinates in
-`profile.exact_failure_catalog`; a host exception or unlisted failure cannot be
-treated as a declared semantic result.
+type selected by that field. Every referenced evaluation contract's exact
+typed-failure row is authenticated with its algorithm use. A host exception or
+a failure outside the invoked contract's row cannot be treated as a declared
+semantic result.
 
 The exact owner body compiler has one arm for every advertised kind and no
 default arm:
@@ -496,21 +500,29 @@ smaller profile-local coverage result obtained for one run.
 
 ```text
 OracleCommitmentProfile = {
-  profile_name: BoundedSymbol,
-  profile_version: PositiveNatural,
   commitment_classes: CanonicalNonEmptySeq<OracleCommitmentClass>,
   advice_schema_id: ConstructionAdviceSchemaId,
   static_map_schema: OracleCommitmentStaticMapSchema,
   opening_evidence_coverage_law: OpeningEvidenceCoverageLaw,
   source_receipt_projection_type: ValueType, source_receipt_projection: AlgorithmUse,
   target_receipt_projection_type: ValueType, target_receipt_projection: AlgorithmUse,
-  intrinsic_bound_law: IntrinsicBoundLaw,
-  exact_failure_catalog: CanonicalSortedUniqueSet<TypedFailureCoordinate>
+  intrinsic_bound_law: IntrinsicBoundLaw
 }
 
 OracleCommitmentProfileId =
   OracleCommitmentId<"pir.oracle-commitment-profile">(profile)
 ```
+
+The profile has no semantic display name or authored version. The selected
+language profile, subject kind, and complete body already determine its
+identity; external release metadata cannot distinguish otherwise identical
+construction semantics. The profile carries no authored aggregate failure
+catalog. For one exact profile or construction subject,
+`ApplicableFailureCatalog(subject)` is the Foundation-canonical union of the
+typed-failure rows of exactly the `AlgorithmUse` contracts reachable from that
+subject's authenticated body and dependency closure. It is derived, not a
+second identity-bearing field, and cannot contain an unused failure type.
+Evaluation may return only a failure from the contract actually invoked.
 
 Changing an algorithm, contract, source-Oracle origin, verifier-profile or
 target-use reference, setup-role map, type, advice role, map schema, evidence-

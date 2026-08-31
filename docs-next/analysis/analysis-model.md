@@ -1,7 +1,7 @@
 # Analysis semantic model
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K3-C target
+> **Document state:** Active non-normative Analysis target
 > **Target status:** Bounded minimum kernel; broader Analysis remains deferred
 > **Provisional owner:** `analysis`
 > **Authority:** This page defines a redesign target for `docs-next/`. The
@@ -51,7 +51,7 @@ checker. A record, digest, receipt, or replay bundle is not live authority.
 
 ### 2.0 Analysis language profiles and exact evaluators
 
-Analysis uses the K1 semantic-language-profile mechanism rather than an
+Analysis uses the Foundation semantic-language-profile mechanism rather than an
 ambient Analysis catalog inside `B`. Every portable Analysis body is governed
 by one direct standalone `SemanticLanguageProfileId`. The selected profile is
 an ordinary same-regime semantic subject, not a module declaration and not a
@@ -113,6 +113,23 @@ AnalysisLawTerm<P,S> = {
   canonical_arguments: CanonicalMetaValueTuple admitted by S
 }
 
+TotalAnalysisLawSignature<P,Inputs,Output> = {
+  input_schemas:
+    exact nonempty ordered tuple of closed schemas resolved under P equal to
+      Inputs,
+  output_schema: exact closed schema resolved under P equal to Output,
+  totality_law:
+    for every admitted input tuple there is exactly one admitted output,
+  evaluation_law:
+    deterministic, terminating within the declaration's exact static bound,
+    and reading no ambient registry, future subject, live capability, caller
+    expectation, or undeclared source
+}
+
+TotalAnalysisProfileLaw<P,Inputs,Output> =
+  AnalysisProfileLawRef<
+    P,TotalAnalysisLawSignature<P,Inputs,Output>>
+
 AnalysisAdequacyEvaluatorBody<P,I> = {
   input_schema: AnalysisProfileLawRef<P,ClosedInputSchema<I>>,
   supported_input_profile_ids:
@@ -152,7 +169,7 @@ omit `P` only inside a constructor whose direct profile has already been fixed;
 the omission is notation, not a body-to-profile inference. In particular, a
 local ordinal under two unequal profiles never denotes one reusable reference.
 
-The profile body has exactly the K1 fields `profile_family`, `revision`,
+The profile body has exactly the Foundation fields `profile_family`, `revision`,
 `profile_imports`, `supported_subject_kinds`, `declaration_catalogs`, and
 `semantic_law_source`. The law-source record is strictly decoded from its exact
 bytes, must consume those bytes completely, and must re-encode identically.
@@ -164,7 +181,7 @@ Every declaration, schema, law, and evaluator reference is resolved and
 typechecked before any domain body is interpreted.
 
 A law term is an exact typed syntax value, not prose and not a runtime callback.
-An adequacy evaluator is a bounded K1 portable algorithm whose complete ABI,
+An adequacy evaluator is a bounded Foundation portable algorithm whose complete ABI,
 evaluation contract, exact supported input-profile IDs, and subject-specific
 direct module roots are committed by its ID. Matching a profile family or
 revision is insufficient, and an owner subject under an unlisted exact profile
@@ -173,7 +190,7 @@ is `Unsupported`. `Success(true)` is the only affirmative adequacy result;
 resource exhaustion, and checker disagreement retain their distinct declared
 dispositions.
 
-The bounded K3-C executable is a correspondence surrogate for this target, not
+The bounded Analysis executable is a correspondence surrogate for this target, not
 an implementation of the complete typed law calculus. Its authenticated law-
 source bytes contain finite declaration rows, symbolic law rows, evaluator-
 schema rows, and a kind-to-body-schema table. They pressure byte stability,
@@ -194,7 +211,7 @@ profile-import DAG. It does not sweep ordinary semantic modules. Modules needed
 by a portable algorithm, evaluation contract, or owner subject are authenticated
 separately by that subject's exact domain dependency closure.
 
-The bounded K3-C executable currently constructs the four selected direct-
+The bounded Analysis executable currently constructs the four selected direct-
 import tuples explicitly and checks them for exact equality. That check
 pressures the selected finite DAG and rejects tuple substitution or padding,
 but it does not derive imports by traversing typed declaration and law
@@ -214,34 +231,37 @@ live/local capability. This keeps the dependency direction
 `prior-meta basis -> profile DAG -> profiled subjects -> subject module DAG`
 acyclic.
 
-K3-C selects four independently evolvable profile layers rather than one
+Analysis selects four independently evolvable profile layers rather than one
 Analysis universe:
 
 ```text
-K3CAnalysisKernelLanguageProfileId =
+AnalysisKernelLanguageProfileId =
   identity of the standalone profile whose inline catalogs and law source own
   only the common Analysis body compiler, attempt partition, source-slot and
   manifest grammar, question/goal/proposition calculus, basis/support/
   validation separation, judgment grammar, and exact use/authority envelope
 
-K3CCryptographicPropertyLanguageProfileId =
+AnalysisCryptographicPropertyLanguageProfileId =
   identity of the standalone profile that imports exactly
-    K3CAnalysisKernelLanguageProfileId,
-    the exact-used K3-B Relations/correspondence profile,
+    AnalysisKernelLanguageProfileId,
+    the exact-used Relations Relations/correspondence profile,
+    PIRInteractionProfileId,
+    PIRCanonicalFramedFSProfileId,
+    PIRPublicSetupProfileId,
   and whose own catalogs contain only the bounded Schnorr/property-family,
   concrete-source, experiment, quantitative, rule, use, and adequacy contracts
 
-K3CAFKTransportLanguageProfileId =
+AnalysisAFKTransportLanguageProfileId =
   identity of the standalone profile that imports exactly
-    K3CCryptographicPropertyLanguageProfileId
+    AnalysisCryptographicPropertyLanguageProfileId
   and whose own catalogs contain only the AFK asymptotic-family language,
   abstract family-source, F-dependent experiment and quantitative,
   theorem-template, applicability, transport, specialization, and replay
   contracts
 
-K3CAFKTheoremSourceValidationLanguageProfileId =
+AnalysisAFKTheoremSourceValidationLanguageProfileId =
   identity of the standalone profile that imports exactly
-    K3CAFKTransportLanguageProfileId
+    AnalysisAFKTransportLanguageProfileId
   and whose own catalogs contain only the theorem-source-kind declarations,
   theorem-source-validation body schema, source/proof validation laws, and the
   exact support/validation/operation-policy/judgment schemas that consume or
@@ -251,22 +271,22 @@ K3CAFKTheoremSourceValidationLanguageProfileId =
 ```
 
 The names are typed selectors for exact profile IDs, not family/revision
-matching. The exact
-K3-B Relations/correspondence profile imports the Interface/Plan profile,
-whose own closure reaches the K2 Interaction and Transcript/Fiat--Shamir
-profiles. The K2 PublicSetup profile is not in that profile DAG. Analysis
-consumes `PublicSetupInvocationView` values as separately authenticated owner
-inputs; it does not obtain them through a Relations-profile import and does not
-add redundant direct K2 edges to the property profile.
+matching. The exact Relations Relations/correspondence profile imports the
+Interface/Plan profile, whose own closure reaches PIR profiles. That transitive
+path does not discharge Analysis's own direct uses: the property owner opens
+Interaction static views, canonical-framed construction views, and
+`PublicSetupInvocationView` values. It therefore imports those three exact PIR
+profiles directly as well as Relations. These are required direct-use diamonds,
+not redundant convenience edges.
 These names denote the owner-local exact profile IDs once the four Analysis
-owners publish complete preimages; K3-E does not fix those semantic IDs. Its
+owners publish complete preimages; joined-path validation does not fix those semantic IDs. Its
 finite integration bundle instantiates deterministic executable profile
 objects only to test the selected topology, exact authentication, and rotation
 behavior. Those pins are evidence, not Analysis semantic authority, and the
 current symbolic-law/host-dispatch bodies must not be promoted into the ideal
 typed target identities.
 
-Before any dependent K4 ID is treated as persistent and before K5 freeze, each
+Before any dependent profile ID is treated as persistent and before independent freeze, each
 Analysis profile owner must publish its complete six-field
 `SemanticLanguageProfileBody`: exact family and revision, exact import IDs,
 exact supported kinds, complete declaration catalogs, exact typed
@@ -288,14 +308,16 @@ The version-`0` supported-kind sets are exact and are derived from the active
 dispatch below, not from host classes or call sites:
 
 ```text
-K3CAnalysisProfileBundle = {
-  kernel: K3CAnalysisKernelLanguageProfileId,
-  property: K3CCryptographicPropertyLanguageProfileId,
-  transport: K3CAFKTransportLanguageProfileId,
+AnalysisProfileBundle = {
+  kernel: AnalysisKernelLanguageProfileId,
+  property: AnalysisCryptographicPropertyLanguageProfileId,
+  transport: AnalysisAFKTransportLanguageProfileId,
   theorem_source_validation:
-    K3CAFKTheoremSourceValidationLanguageProfileId,
+    AnalysisAFKTheoremSourceValidationLanguageProfileId,
   required_import_edges: exactly
-    property -> [kernel,exact-used K3-B Relations profile],
+    property -> [kernel,exact-used Relations Relations profile,
+                 PIR Interaction, PIR canonical-framed FS,
+                 PIR public-setup projection],
     transport -> [property],
     theorem_source_validation -> [transport]
 }
@@ -304,11 +326,11 @@ ActiveAnalysisBodyKinds =
   the exact canonical key set of the active `AnalysisBodyV0` dispatch in
   Section 4.1
 
-K3CAnalysisKernelSupportedKinds = {
+AnalysisKernelSupportedKinds = {
   "analysis.hypothesis-context"
 }
 
-K3CCryptographicPropertySupportedKinds =
+AnalysisCryptographicPropertySupportedKinds =
   ActiveAnalysisBodyKinds minus {
     "analysis.family-instance-role-map",
     "analysis.logical-nat-literal",
@@ -317,7 +339,7 @@ K3CCryptographicPropertySupportedKinds =
     "analysis.theorem-source-validation"
   }
 
-K3CAFKTransportSupportedKinds = {
+AnalysisAFKTransportSupportedKinds = {
   "analysis.adequacy-evaluator",
   "analysis.asymptotic-protocol-family",
   "analysis.checked-result-coordinate",
@@ -350,7 +372,7 @@ K3CAFKTransportSupportedKinds = {
   "analysis.validation-basis"
 }
 
-K3CAFKTheoremSourceValidationSupportedKinds = {
+AnalysisAFKTheoremSourceValidationSupportedKinds = {
   "analysis.capability-requirement-payload",
   "analysis.checked-result-coordinate",
   "analysis.consumer",
@@ -409,7 +431,7 @@ subject.
 
 ### 2.1 Source read slots
 
-Analysis imports the K1/project source-binding variants; it does not redefine
+Analysis imports the Foundation/project source-binding variants; it does not redefine
 their fields:
 
 ```text
@@ -543,22 +565,22 @@ family coordinate is an authenticated declaration, not a caller-authored tag:
 AnalysisSourceFamilyCoordinate =
   AnalysisProfileDeclarationRef<"analysis.source-family">
 
-AnalysisSourceFamilyDeclarationBody = {
+AnalysisSourceFamilyDeclarationBody<P> = {
   allowed_slot_variant: ConcreteOwnerSource | AbstractFamilyRole,
   exact_slot_and_field_schema,
   exact_adequacy_evaluator_schema:
     AnalysisProfileLawRef<SourceFamilyAdequacyEvaluatorSchema>,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
-AnalysisSourceFamilySemanticsContract = {
+AnalysisSourceFamilySemanticsContract<P> = {
   allowed_slot_variant: ConcreteOwnerSource | AbstractFamilyRole,
   exact_slot_and_field_schema,
   exact_adequacy_evaluator_schema:
     AnalysisProfileLawRef<SourceFamilyAdequacyEvaluatorSchema>,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
 ResolvedAnalysisSourceFamilyContract(P,coordinate) =
@@ -720,7 +742,7 @@ undefined; no caller may hash the local handle or copied binding body.
 
 ### 2.3 Asymptotic family ingress
 
-K1 authenticates finite semantic descriptions and K2 Protocols use finitely
+Foundation authenticates finite semantic descriptions and PIR Protocols use finitely
 bounded `ValueType`s. Neither therefore becomes an asymptotic protocol family
 by quantifying over the lengths admitted by one fixed type. Analysis uses a
 separate, explicit mathematical family subject:
@@ -781,8 +803,8 @@ AnalysisAsymptoticProtocolFamilyDefinitionId(B,language_ref,payload) =
 
 FamilyMember(F,n:LogicalNat) =
   the abstract mathematical member related to `(F,n)` by the one resolved
-  language contract; it is not a K1 `CanonicalValue`, K2 Protocol, K3
-  relation object, or portable algorithm
+  language contract; it is not a Foundation `CanonicalValue`, PIR Protocol,
+  Relations object, or portable algorithm
 
 AnalysisFamilyReadManifestSchemaBody = {
   family_definition_id: AnalysisAsymptoticProtocolFamilyDefinitionId,
@@ -838,7 +860,7 @@ empty role symbols are malformed. At `(payload,n)` the regime law
 denotes nominal dependent carriers and relations keyed by the complete family
 ID, `n`, and those role symbols. It supplies no algebraic equation,
 implementation, totality, efficiency, distribution, or theorem; all such laws
-are propositions. This exact nominal-signature entry is sufficient for K3-C; a
+are propositions. This exact nominal-signature entry is sufficient for Analysis; a
 computational or proof-assistant family language requires a new exact language
 profile (or a new revision of the profile deliberately governing that family).
 
@@ -846,8 +868,8 @@ The declaration kind above has exactly the three-field body grammar shown; a
 different record, payload type, or revision is malformed or unsupported. The
 profile contract fixes the input and result signatures, while the selected
 declaration and payload fix the language-specific mathematical relation. That relation is
-not a K1 portable executable and is not evaluated by bounded K1 iteration.
-K1 authenticates only the finite declaration reference and payload.
+not a Foundation portable executable and is not evaluated by bounded Foundation iteration.
+Foundation authenticates only the finite declaration reference and payload.
 
 The family-read-manifest schema likewise has exactly the two fields shown.
 Its member projection and coherence obligation are derived from the closed
@@ -869,14 +891,15 @@ Formation of `F` proves none of those propositions. A family question retains
 them in its hypothesis context. `FamilyMember(F,n)` is a dependent logical
 subject inside that context. It is never required to be natively admitted at
 every `n`; such a requirement would make an unbounded family uninhabitable
-under K1's finite value and body limits. For one representable concrete `n0`,
-an admitted K1/K2/K3 subject `S` is related to the abstract member only through
-a separately checked `FamilyInstanceCorrespondence(F,n0,S)` proposition. `F`
+under Foundation's finite value and body limits. For one representable concrete `n0`,
+an admitted Foundation/PIR/Relations subject `S` is related to the abstract
+member only through a separately checked
+`FamilyInstanceCorrespondence(F,n0,S)` proposition. `F`
 contains neither derived projections nor concrete members, theorem IDs,
 proposition IDs, or correspondence results, so the dependency direction is
 acyclic and callers cannot author parallel family fields that disagree.
 
-A fixed K2 subject can support finite tests and a specialized pointwise
+A fixed PIR subject can support finite tests and a specialized pointwise
 judgment. It cannot fill an asymptotic family slot, establish uniformity, or
 turn a finite length range into `LogicalNat`.
 
@@ -898,11 +921,11 @@ ChallengeTransitionView
 FSConstructionView
 ```
 
-The first six are derived from one K2 Core. A Fresh-only property need not and
+The first six are derived from one PIR Core. A Fresh-only property need not and
 must not select transcript-construction or FS fields merely because a later
 transport may use them. `TranscriptDeclarationView`,
 `RequiredInfluenceView`, and `ChallengeTransitionView` are derived from one
-exact K2 transcript construction. `FSConstructionView` is derived only from the
+exact PIR transcript construction. `FSConstructionView` is derived only from the
 exact affirmative `CheckedFSConstruction` and carries the paired Fresh/FS
 Protocol IDs, shared Core, maps, and structural conclusion. The manifest checks
 the owner-issued `FSResultView(CheckedFSConstructionResultRef,
@@ -932,10 +955,10 @@ PIR-owned coordinates for:
 admitted relation definition and RelationSemanticModel
 admitted relation Interface and RelationInstance
 admitted ProtocolRelationBinding and PlanWitnessBinding
-exact K3-B CorrespondenceQuestion IDs and owner refs for Statement,
+exact Relations CorrespondenceQuestion IDs and owner refs for Statement,
   claim, and Witness coordinates
-exact K2 CheckRef and CheckDecl algorithm/evaluation-contract/input fields
-exact K2 TerminalRef and TerminalDecl verdict/required-check/disposition fields
+exact PIR CheckRef and CheckDecl algorithm/evaluation-contract/input fields
+exact PIR TerminalRef and TerminalDecl verdict/required-check/disposition fields
 exact Relations GroundingEquationId and EquationGrounding question coordinate
 bridge-use scope and selection schema
 occurrence-local loss-source and export schemas, when consumed
@@ -984,7 +1007,7 @@ AnalysisStrategyClassProfileId =
   AnalysisId<"analysis.strategy-class">(B, StrategyClassProfileBody)
 ```
 
-For a K2 prover, each interactive step must inhabit the exact K2 boundary:
+For a PIR prover, each interactive step must inhabit the exact PIR boundary:
 
 ```text
 StrategyStep(ProverView, private_state, private_randomness)
@@ -1068,7 +1091,7 @@ only by its exact ordinal and checks the constructor and dependent sort at that
 ordinal. Alpha-renaming therefore cannot rotate an experiment, while changing
 order, constructor, type, profile, or a dependent reference necessarily does.
 
-`ForAllValue` ranges only over one admitted finite K1 `ValueType`.
+`ForAllValue` ranges only over one admitted finite Foundation `ValueType`.
 `ForAllFamilyValue` ranges over an abstract dependent mathematical carrier
 denoted by one family at the already bound `LogicalNat`; its denotation and
 domain predicate remain family hypotheses. The two constructors are not
@@ -1100,7 +1123,7 @@ AnalysisExtractorProfile = {
   allowed_source_and_oracle_capabilities:
     CanonicalSortedUniqueSeq<AnalysisProfileLawRef<CapabilityABI>>,
   counterfactual_rights:
-    CanonicalSortedUniqueSeq<Rerun | Fork | Rewind | Program>,
+    CanonicalSortedUniqueSeq<ProgramSibling | Rerun>,
   state_preservation_relation: AnalysisLawTerm<StatePreservationRelation>,
   output_distribution_preservation_relation:
     AnalysisLawTerm<OutputDistributionPreservationRelation>,
@@ -1147,13 +1170,26 @@ AnalysisPositivePolynomialId =
     B, AnalysisPositivePolynomialBody)
 ```
 
+`ProgramSibling` and `Rerun` are the complete common counterfactual-right
+vocabulary. They are operational authority classes, not informal names for a
+proof technique. Every selected right must have one complete denotation in the
+profile's final
+`counterfactual_capability_contract_and_property_family_scope` field and one
+compatible capability ABI in `allowed_source_and_oracle_capabilities`.
+`Program`, `Fork`, and `Rewind` are not aliases: programming is only the exact
+sibling-programming transition, a fork is a checked relation between completed
+siblings rather than execution authority, and root rerun is the only admitted
+reset operation. An absent denotation or any other tag refuses profile
+formation.
+
 The initial uniform Fresh-coin and classical random-oracle profiles define
 their exact finite-output laws with these bodies. The initial AFK extractor
-profile alone grants its lazy-sampling, rerun, and programming rights. Naming
+profile alone supplies its exact lazy-random-oracle denotation and grants the
+`ProgramSibling` and `Rerun` rights. Naming
 an extractor algorithm or a distribution label without these laws does not
 form either profile. Extractor profiles are theorem-neutral; a theorem schema
 selects one exact profile, never the reverse, so their identities cannot cycle.
-The positive-polynomial profile is the bounded K3-C representation over which
+The positive-polynomial profile is the bounded Analysis representation over which
 the existential ranges; each admitted polynomial value has its own ID. It is
 not a caller-supplied numerical bound or an ambient complexity claim. The
 selected `q_KS(n) = 1` witness is
@@ -1206,7 +1242,7 @@ prover domain is total-output with no runtime bound, while future profiles may
 admit genuine missing mass. Expected-time resources are separate from worst-
 case resources.
 
-For an ordinary K2 run, `generated_execution_relation` invokes the K2
+For an ordinary PIR run, `generated_execution_relation` invokes the PIR
 generated-execution semantics. `StrategyStopped`, invalid moves, future reads,
 verifier failure, sampling exhaustion, and accepted/rejected terminals retain
 their exact source dispositions; a family profile states which contribute to
@@ -1215,9 +1251,10 @@ its win event. It cannot silently drop an outcome that benefits its bound.
 ### 3.4 Oracle and resource discipline
 
 Oracle access is capability-typed. An adversary receives query operations, not
-the hidden table. Lazy sampling, programming, rewind, or fork rights exist only
-inside an exact theorem experiment that grants them; they are not K2 replay
-capabilities.
+the hidden table. Lazy sampling is an oracle denotation, not a counterfactual
+right. The only common counterfactual rights are `ProgramSibling` and `Rerun`,
+and they exist only inside an exact theorem experiment whose capability
+contract grants them; neither is a PIR replay capability.
 
 ```text
 ResourceDimension = {
@@ -1244,12 +1281,12 @@ name, natural-number carrier, or predicate is insufficient. In particular, a
 query count owned by a verifier, another oracle ABI, another subject, or
 another experiment cannot fill an adversary random-oracle-query parameter.
 
-## 4. K1-aligned semantic identities
+## 4. Foundation-aligned semantic identities
 
 ### 4.1 One identity algebra
 
-Every portable Analysis semantic object uses the exact authenticated K1 prior-
-meta basis `B`, the existing semantic-regime axis, and one directly selected K1
+Every portable Analysis semantic object uses the exact authenticated Foundation prior-
+meta basis `B`, the existing semantic-regime axis, and one directly selected Foundation
 semantic-language profile:
 
 ```text
@@ -1276,7 +1313,7 @@ AnalysisConstructorCaseRef =
 
 RequiredAnalysisLanguageProfile(
     constructor_case_ref,K,body,authenticated_predecessors) =
-  authenticate the exact K3-C profile bundle and every predecessor; resolve
+  authenticate the exact Analysis profile bundle and every predecessor; resolve
   `constructor_case_ref` in exactly one bundle profile; require its
   `subject_kind` to equal K, its body schema to admit exactly body, its
   predecessor schema to admit exactly authenticated_predecessors, and its
@@ -1298,7 +1335,7 @@ where P must equal
 
 There is no separate `AnalysisSemanticRegimeId`, no free `H(...)`, and no
 identity derived from display text, a citation label, or a live capability.
-`P` is a static constructor parameter and an identity-bearing field of the K1
+`P` is a static constructor parameter and an identity-bearing field of the Foundation
 profiled wrapper; it is not recovered from the unprofiled domain body.
 `AnalysisId<K>(B,body)` in later compact displays means the unique well-typed
 `AnalysisId<K,P>(B,body)` after the surrounding constructor has fixed `P`.
@@ -1314,7 +1351,7 @@ kind in `supported_subject_kinds` never authorizes minting it.
 the named owner constructor that produced `body`; it is not inferred from a
 host class, searched by kind, or accepted from an untrusted caller. The
 formation operation recompiles the body and binds its exact digest, case ref,
-predecessor set, and selected profile before calling K1 `profiled_content_id`.
+predecessor set, and selected profile before calling Foundation `profiled_content_id`.
 For a family-owned question it is the profile fixed by the complete family
 declaration; a goal inherits the authenticated question profile; a proposition
 inherits the authenticated goal profile; bases, support, validation, policy,
@@ -1325,7 +1362,7 @@ their exact owning profile in the owner specification. Zero or multiple
 profiles is malformed. Each resulting body is a closed `MetaValueV0` tagged
 record with canonical finite sequences and exact typed references.
 
-The bounded K3-C executable does not yet carry the authenticated
+The bounded Analysis executable does not yet carry the authenticated
 `analysis.constructor-case` catalog or execute the total resolver above. It
 uses a finite host-side constructor dispatcher to select and cross-check the
 profile for the covered body classes. That surrogate pressures the selected
@@ -1344,7 +1381,7 @@ selected by the body:
 AnalysisFamilyCoordinate =
   AnalysisProfileDeclarationRef<"analysis.property-family">
 
-AnalysisFamilySemanticsContract = {
+AnalysisFamilySemanticsContract<P> = {
   exact_subject_schema: AnalysisProfileLawRef<ClosedFamilySubjectSchema>,
   exact_question_payload_meta_schema:
     AnalysisProfileLawRef<ClosedFamilyQuestionPayloadSchema>,
@@ -1361,7 +1398,7 @@ AnalysisFamilySemanticsContract = {
   finite_cover_discharge_contract:
     None | AnalysisFiniteCoverFamilyContract,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
 AnalysisFiniteCoverFamilyContract = {
@@ -1382,6 +1419,7 @@ AnalysisFiniteCoverFamilyContract = {
   exact_success_transfer_certificate_schema:
     AnalysisProfileLawRef<ClosedFiniteSuccessTransferCertificateSchema>
 }
+```
 
 The law and schema sorts in that contract have closed signatures:
 
@@ -1417,6 +1455,7 @@ Their law-source bytes are fixed by the selected family profile, and
 `ExactFiniteCoverTargetOf` executes or applies every one of them. None is a
 display label or an unconstrained extension point.
 
+```text
 ResolvedAnalysisFamilyContract(P,family) =
   the one property-family contract in P's authenticated
   `AnalysisLanguageProfileLawSourceV0` whose complete declaration coordinate
@@ -1489,8 +1528,8 @@ profiles happens to have a finite carrier.
 
 #### Exact Analysis body compiler
 
-`AnalysisBodyV0<T>` is total on every admitted active K3-C body and undefined
-on every other host value. It uses K1 `U`, `MF`, `MT`, `N`, `I`, `O`, `Q`, `S`,
+`AnalysisBodyV0<T>` is total on every admitted active Analysis body and undefined
+on every other host value. It uses Foundation `U`, `MF`, `MT`, `N`, `I`, `O`, `Q`, `S`,
 `R`, and `V`; it does not serialize a printer, field name, host class, or prose
 clause. Record fields and variant alternatives are numbered `0..n-1` in their
 written order in the closed body schema selected by the direct language
@@ -1569,7 +1608,7 @@ The active dispatch is exactly:
 "analysis.asymptotic-protocol-family" ->
   AnalysisAsymptoticProtocolFamilyDefinitionBody
 "analysis.family-read-manifest-schema" -> AnalysisFamilyReadManifestSchemaBody
-"analysis.challenge-domain"         -> K3CChallengeDomainBody
+"analysis.challenge-domain"         -> AnalysisChallengeDomainBody
 "analysis.fixed-public-setup"       -> AFKFixedPublicSetupBody
 "analysis.quantitative-formula"     -> AnalysisQuantitativeFormulaBody
 "analysis.logical-nat-literal"      -> AnalysisLogicalNatLiteralBody
@@ -1607,7 +1646,7 @@ stable owner body unless another owner specification independently gives it a
 portable semantic identity. An owner-produced object retains that owner's
 kind and exact reference; Analysis does not mint an `analysis.*` alias for it.
 Finite falsifier and fixture values that intentionally have no durable meaning
-use a disjoint `probe.k3c.*` namespace and are forbidden from every Analysis
+use a disjoint `probe.analysis.*` namespace and are forbidden from every Analysis
 ID, proposition, judgment, authority binding, support assertion, or claimed
 parity witness. Adding a host class, helper function, or printable label never
 extends this dispatch. A genuinely new durable subject requires an explicit
@@ -1645,7 +1684,7 @@ owner schema and all dependent formation laws; compile `AnalysisBodyV0`;
 strictly decode the result, consume all bytes, and require byte-identical
 re-encoding; derive `ExactAnalysisDependencyClosure`; reject any missing or
 extra supplied dependency; and only then authenticate or form the typed ID.
-All K1 `MetaValueV0`, depth, node, edge, axis, sequence, module, schema, term,
+All Foundation `MetaValueV0`, depth, node, edge, axis, sequence, module, schema, term,
 and canonical-byte limits apply. Aggregate lengths are checked before member
 inspection, so admitted compilation is total and bounded; exhaustion before a
 semantic body exists is `DeterministicLimitExceeded`, not a partial ID.
@@ -1664,7 +1703,7 @@ payload schema, conclusion schema, subject kind, quantitative sort, or
 expression constructor is `Unsupported`; a malformed or ill-typed instance is
 `Malformed`. Provider code cannot add meaning to these profile contracts at runtime.
 
-The active K3-C property-family declaration set is exactly:
+The active Analysis property-family declaration set is exactly:
 
 ```text
 KOutOfNSpecialSoundness
@@ -1705,7 +1744,7 @@ The family owner page fixes its dependent payload and conclusion schemas. A
 new family or a changed schema requires a new declaration and a semantic-
 selected-profile contract.
 
-Each active declaration above belongs to one exact K3-C semantic-language
+Each active declaration above belongs to one exact Analysis semantic-language
 profile. A family-owned question directly selects the profile that contains
 its family contract; theorem, source, and quantitative profiles import only
 the exact upstream profiles whose declarations they use. Within one selected
@@ -1873,7 +1912,7 @@ analysis.judgment-record = {
 ```
 
 The list above is a compact index of the domain-semantic carriers used most
-often by K3-C; it is not a second exhaustive kind table and is not permission
+often by Analysis; it is not a second exhaustive kind table and is not permission
 to invent a different preimage. The exhaustive set is the `AnalysisBodyV0`
 dispatch in Section 4.1. In particular, that dispatch additionally owns the
 adequacy-evaluator, checked-result-coordinate, capability-requirement-payload,
@@ -1959,7 +1998,7 @@ AnalysisQuantitativeFormulaBody<S> = {
 AnalysisNativeRuleCoordinate =
   AnalysisProfileDeclarationRef<"analysis.native-rule">
 
-AnalysisNativeRuleSemanticsContract = {
+AnalysisNativeRuleSemanticsContract<P> = {
   exact_payload_meta_schema: AnalysisProfileLawRef<ClosedPayloadSchema>,
   allowed_conclusion_families:
     CanonicalNonEmptySeq<AnalysisFamilyCoordinate>,
@@ -1970,7 +2009,7 @@ AnalysisNativeRuleSemanticsContract = {
   conclusion_reconstruction_law:
     AnalysisProfileLawRef<ConclusionReconstructionLaw>,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
 ResolvedAnalysisNativeRuleContract(P,rule_coordinate) =
@@ -2017,21 +2056,21 @@ AnalysisUsePurposeIntakeId(p) =
   AnalysisId<"analysis.use-purpose",ProfileOf(p)>(
     B,AnalysisUsePurposeIntakeBody {purpose: p})
 
-AnalysisQualificationSemanticsContract = {
+AnalysisQualificationSemanticsContract<P> = {
   subject_parametric_acceptance_law:
     AnalysisProfileLawRef<SubjectParametricQualificationAcceptanceLaw>,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
-AnalysisQualificationRequirementSemanticsContract = {
+AnalysisQualificationRequirementSemanticsContract<P> = {
   requirement_to_law_resolver:
     AnalysisProfileLawRef<QualificationRequirementToAcceptanceLawResolver>,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
-AnalysisUseSemanticsContract = {
+AnalysisUseSemanticsContract<P> = {
   accepted_subject_and_result_kinds:
     CanonicalNonEmptySortedUniqueSeq<MetaSymbol>,
   required_qualification: AnalysisQualificationRequirementCoordinate,
@@ -2040,7 +2079,7 @@ AnalysisUseSemanticsContract = {
   operation_policy_compatibility_law:
     AnalysisProfileLawRef<OperationPolicyCompatibilityLaw>,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
 ResolvedAnalysisUseContract(P,use_coordinate) =
@@ -2601,6 +2640,43 @@ QualificationSubjectContext = {
     CanonicalSortedUniqueSeq<TypedSemanticSubjectRef>,
   candidate_qualification: AnalysisQualificationCoordinate
 }
+
+QualificationAcceptance = Accepts | Rejects
+
+// The following two total-law signatures resolve under the exact selected
+// Analysis profile P.
+
+SubjectParametricQualificationAcceptanceLaw =
+  TotalAnalysisProfileLaw<
+    P,
+    inputs: [
+      AnalysisJudgmentRecordBody,
+      exact authenticated AnalysisPropositionBody named by that record,
+      QualificationSubjectContext derived from that same record
+    ],
+    output: QualificationAcceptance>
+
+QualificationRequirementToAcceptanceLawResolver =
+  TotalAnalysisProfileLaw<
+    P,
+    inputs: [
+      AnalysisQualificationRequirementCoordinate,
+      exact authenticated declaration body of that coordinate
+    ],
+    output:
+      Resolved(
+        AnalysisProfileLawRef<
+          SubjectParametricQualificationAcceptanceLaw>)
+      | NoMatch>
+```
+
+An acceptance law must reject unless all three inputs describe the same
+candidate and authenticated proposition. A resolver has no default: `NoMatch`
+is refusal of that requirement, while two matching rows are malformed profile
+law source. Neither law can read a future judgment ID, live capability, caller-
+supplied expected identity, or ambient registry.
+
+```text
 
 DeriveQualificationSubjectContext(P,candidate) =
   require candidate.exact_direct_profile_id to equal P; validate every field
@@ -3221,7 +3297,7 @@ Policy never changes proposition meaning. It governs whether an otherwise
 well-formed result may be minted, disclosed, persisted, replayed, or consumed
 for one named purpose.
 
-Concrete K3-C result constructors use the following total elaborators. They
+Concrete Analysis result constructors use the following total elaborators. They
 remove no fields from the bodies above and accept no prose placeholders:
 
 ```text
@@ -3301,7 +3377,7 @@ unsupported, unanswered, refused, malformed, over-limit, or checker-failed
 attempts mint no partial capability.
 
 Analysis does not define a second common authority envelope. For a completed
-Analysis result it owns only the payloads needed to instantiate K1's envelope:
+Analysis result it owns only the payloads needed to instantiate Foundation's envelope:
 
 ```text
 AnalysisCheckedResultCoordinateBody(result) = {
@@ -3369,7 +3445,7 @@ Analysis rule. Thus neither sequence is an independent policy assertion.
 The unique portable embedding is then:
 
 ```text
-K1EnvelopeForAnalysisContract(c) = PortableSourceAuthorityBinding {
+PortableAnalysisSourceAuthorityEnvelope(c) = PortableSourceAuthorityBinding {
   owner_domain: "analysis",
   capability_family: "checked-result-use",
   owner_source_coordinate: c.checked_result_coordinate_id,
@@ -3384,7 +3460,8 @@ K1EnvelopeForAnalysisContract(c) = PortableSourceAuthorityBinding {
 }
 
 PortableAnalysisSourceAuthorityBindingBody(c) =
-  K1 PortableSourceAuthorityBindingBody(K1EnvelopeForAnalysisContract(c))
+  Foundation PortableSourceAuthorityBindingBody(
+    PortableAnalysisSourceAuthorityEnvelope(c))
 
 PortableAnalysisSourceAuthorityBindingId(c) =
   AnalysisId<"analysis.portable-source-authority-binding">(
@@ -3399,7 +3476,7 @@ a property result, transport-profiled for a semantic-transport result, and
 source-validation-profiled for a result whose support or validation basis
 consumes theorem-source validation. A parent profile cannot carry a child-
 profiled dependency, and a caller cannot choose a broader profile. The outer
-record is exactly K1's canonical inert `PortableSourceAuthorityBindingBody`.
+record is exactly Foundation's canonical inert `PortableSourceAuthorityBindingBody`.
 Formation re-derives that record and requires body equality. No Analysis-
 defined `OwnerCapabilityRequirement` or second `PortableSourceAuthorityBinding`
 exists. The separately fresh Analysis capability binds this exact envelope,
@@ -3445,18 +3522,40 @@ AnalysisAttemptOutcome<F> =
     Affirmative(EstablishedAnalysisJudgment<F>)
   | Negative(EstablishedAnalysisNegative<F>)
   | Unsupported(exact coordinate)
+  | MissingDependency(absent exact authenticated dependency)
   | CannotAnswer(missing exact source, premise, or authority)
+  | KindMismatch(wrong exact owner, profile, regime, or semantic kind)
   | Refused(exact prohibited or failed applicability condition)
   | Malformed(exact structural or canonical defect)
   | DeterministicLimitExceeded(exact bounded operation)
   | CheckerFailure(exact evaluator/provider disagreement)
+
+AnalysisAttemptFailurePartition =
+    Unsupported(exact unsupported family, model, or coordinate)
+  | MissingDependency(absent exact authenticated dependency)
+  | CannotAnswer(exact missing source, premise, authority, or support)
+  | KindMismatch(wrong exact owner, profile, regime, or semantic kind)
+  | Refused(exact prohibited use or failed applicability condition)
+  | Malformed(exact structural or canonical defect)
+  | DeterministicLimitExceeded(exact bounded operation)
+  | CheckerFailure(exact evaluator/provider disagreement)
+
+CommonAnalysisAttemptFailurePartitionRef<P> =
+  the unique AnalysisProfileLawRef<P,AnalysisAttemptFailurePartition> whose
+  resolved body is exactly AnalysisAttemptFailurePartition above
 ```
 
 Only a family with a complete decision or refutation semantics may emit
 `Negative`. Failure to derive an affirmative result is not a negative.
 Theorem inapplicability is not a negative target property. A wrong model or
 map normally refuses the application; an unsupported family or oracle model
-is `Unsupported`.
+is `Unsupported`. The common failure partition excludes `Affirmative` and
+`Negative`; it classifies only qualified noncompletion after exact outcome
+formation. Every family, rule, qualification, use profile, source-ingress
+contract, and transport profile that claims the common partition must carry
+`CommonAnalysisAttemptFailurePartitionRef<P>` for its exact selected profile.
+A prose phrase, imported ref to another body, or caller-selected substitute is
+not the common partition.
 
 ## 7. Requests, replay, and lifecycle
 
@@ -3468,13 +3567,13 @@ snapshot required for that occurrence.
 
 Analysis cold replay reauthenticates the exact semantic bodies, reconstructs
 the source manifests, reruns the admitted basis/checker operations, and
-compares the inert result. It cannot recreate owner-local authority, K2 causal
+compares the inert result. It cannot recreate owner-local authority, PIR causal
 generation, strategy membership, random-oracle behavior, or cryptographic
 forking.
 
 ## 8. Closure boundary
 
-This page closes the reusable K3-C ingress and common calculus only for the
+This page closes the reusable Analysis ingress and common calculus only for the
 active profiles named by the domain index. It does not select a universal
 proof language, theorem database, persistence format, cache, solver, or
 general composition algebra. New families must define their own exact source

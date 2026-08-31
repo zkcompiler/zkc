@@ -48,17 +48,17 @@
 > research input, not an active target contract. No protocol theorem, cost
 > judgment, or implementation support follows from this update.
 
-> **K1 integrated-closure update — 2026-08-26:** Bounded executable
+> **Executable-foundation closure update — 2026-08-26:** Bounded executable
 > foundations are complete and provisionally absorbed into
 > [Executable Semantic Foundations](../foundation/executable-foundations.md).
 > This closes the bootstrap, typed identity, module, canonical-value,
 > portable-function, typed-failure, and deterministic-evaluation substrate at
-> K1 resolution. It does not ratify the historical consumer schemas or freeze
-> the integrated kernel. At that checkpoint K2 Protocol/Fiat--Shamir closure
-> and K3 consumer reconciliation remained; the K2 update below records the
-> former's bounded completion.
+> the selected Foundation scope. It does not ratify historical consumer
+> schemas or freeze the integrated kernel. Protocol/Fiat--Shamir closure and
+> dependent-consumer reconciliation remained at that checkpoint; the next
+> update records the former's bounded completion.
 
-> **K2 integrated-closure update — 2026-08-26:** Bounded Protocol and
+> **Interactive-protocol closure update — 2026-08-26:** Bounded Protocol and
 > Fiat--Shamir closure is complete in
 > [Interactive Core](../pir/interactive-core.md) and
 > [Fiat--Shamir Construction](../pir/fiat-shamir.md). One literal finite Core
@@ -66,7 +66,7 @@
 > Oracle interaction, claims/reductions, derived public-coin eligibility,
 > and replay; the paired construction owns derived transcript influence,
 > semantic namespaces, four one-result sampling algorithms, advancing retry,
-> and exact typed exhaustion. This replaces the pre-K2 snapshots as the active
+> and exact typed exhaustion. This replaces the earlier snapshots as the active
 > target definition without making the target normative or implemented.
 
 > **Transcript-family extension update — 2026-08-31:** Fiat--Shamir is now a
@@ -82,58 +82,59 @@
 > encoding defects. This extension changes no Core occurrence or Fresh
 > semantics and adds no endpoint or implementation support claim.
 
-> **K3-B integrated-closure update — 2026-08-27:** The bounded dependent
+> **Relations and consumer-seam update — 2026-08-27:** The bounded dependent
 > consumer lane is now reconciled in the active
 > [canonical carrier](../pir/canonical-pir.md),
 > [Interface and Plan](../pir/interfaces-and-plans.md),
 > [relation model](../relations/relation-model.md), and
 > [Protocol correspondence](../relations/protocol-correspondence.md) targets.
-> K3-B selected split Protocol/Plan relation bindings, the narrow source-ID-free
+> This work selected split Protocol/Plan relation bindings, the narrow source-ID-free
 > `PlanWitnessSurface`, distinct value-bridge/refinement/commitment contracts,
-> public execution-issued grounding views, and an exact factor-preserving K2
+> public execution-issued grounding views, and an exact factor-preserving PIR
 > carrier. It did not close Analysis, OIR, protocol-family coverage, or the
 > integrated kernel.
 
-> **K3-C integrated-closure update — 2026-08-27:** The bounded minimum
+> **Analysis update — 2026-08-27:** The bounded minimum
 > Analysis lane is now reconciled in the active `analysis/` targets. It keeps
 > three seams distinct: a finite native relation-bound Schnorr judgment; an
 > abstract-family AFK classical-ROM transport that requires an independently
 > established uniform all-`n` source-property capability and theorem truth; and
 > a pointwise family/member specialization from an already established family
-> target judgment. K3-C defines no native authority that mints the family source
+> target judgment. Analysis defines no native authority that mints the family source
 > capability, so the family transport returns `CannotAnswer` absent an external
 > proof authority; the finite native judgment cannot fill that slot, and the
 > pointwise seam cannot generalize it. The selected profiles retain the
 > Definition 10 quantifier order, a `q = 1` theorem instance, the raw Schnorr
-> public key with fixed public setup, the exact K2 logical-query carrier, signed
+> public key with fixed public setup, the exact PIR logical-query carrier, signed
 > lower bounds, and every premise. A finite instrument pressures formation and
-> refusal only. K2 was not reopened, no cryptographic property was proved, and
-> at that checkpoint K3-D/K3-E still owned OIR and integrated closure; the
-> following update records K3-D's bounded result.
+> refusal only. Interactive-protocol semantics were not reopened, no
+> cryptographic property was proved, and endpoint projection plus joined-system
+> closure remained at that checkpoint.
 
-> **K3-D integrated-closure update — 2026-08-28:** The bounded minimum OIR
+> **Endpoint-projection update — 2026-08-28:** The bounded minimum OIR
 > lane is now selected in
 > [Endpoint Projection Views](../pir/endpoint-projection-views.md) and the
 > [OIR Endpoint and Projection Contract](../oir/projection-contract.md). PIR
 > derives exact whole-source-provenance-free purpose views; OIR separately
 > authenticates and admits target semantics and validates exact graph/static-
-> contract correspondence. K3-D
+> contract correspondence. The selected projection
 > supports canonical-framed FS verifier and Plan-specialized prover endpoints over base
-> non-Oracle, non-module K2 effects, with closed typed unsupported rows and no
-> partial target. It did not reopen K1 or K2, activate full Stage 4B, select a
+> non-Oracle, non-module Interactive Core effects, with closed typed unsupported rows and no
+> partial target. It did not reopen Foundation or Interactive Core semantics,
+> activate full Stage 4B, select a
 > concrete OIR carrier, or establish any cryptographic property. At that
-> checkpoint K3-E still owned integrated closure; the following update records
-> its bounded result.
+> checkpoint joined-system closure remained pending.
 
-> **K3-E integrated-closure update — 2026-08-28:** The bounded joined
-> P01/Schnorr path now composes across exact shared K1/K2/K3-B implementations,
-> K3-C Analysis, and K3-D endpoint projection. The repair locally rotated the
-> K1 profile/regime and inert authority envelope, added exact K2/K3-B profiles
-> and owner exports, and reclosed the affected K3-C and K3-D boundaries while
+> **Joined Schnorr path update — 2026-08-28:** The bounded joined
+> Schnorr path now composes across exact shared Foundation, Interactive Core,
+> Interface, Relations, Analysis, and endpoint-projection implementations. The
+> repair locally rotated the Foundation profile/regime and inert authority
+> envelope, added exact PIR and Relations profiles and owner exports, and
+> reclosed the affected Analysis and endpoint-projection boundaries while
 > preserving the verifier-observable Core, Fresh/Fiat--Shamir interpretation,
 > and transcript-construction architecture. The endpoint authority join keeps
-> K2 static views, an affirmative checked FS construction and its issued view,
-> the K3-B Interface view, and Prover-only `CheckedPlanRealizes` distinct. A
+> PIR static views, an affirmative checked FS construction and its issued view,
+> the Interface view, and Prover-only `CheckedPlanRealizes` distinct. A
 > purpose-bound adapter closes only the selected finite path; its richer
 > future-owner facts remain a carrier residual. The Analysis lane
 > deterministically rederives its selected records and checks stable IDs; no
@@ -178,8 +179,8 @@
 > next accumulation package before any dependent identity is rotated.
 
 > **Accumulation, folding, and recursive-verification update —
-> 2026-08-31:** The fixed committed relaxed-R1CS Nova fold reaches T2
-> constructive-encoding depth.
+> 2026-08-31:** The fixed committed relaxed-R1CS Nova fold has a complete
+> source-grounded finite target encoding.
 > Corrected-cycle Nova, HyperNova, CycleFold, ProtoStar, LatticeFold+, and
 > imported recursive verification retain explicit finite-target elaboration
 > gaps. Across those results, the selected target adds Plan-owned accepted-terminal recipes, an
@@ -464,7 +465,7 @@ flowchart LR
   CE[Relation-specific checked change]
   J[Conditional property judgment]
   I[Admitted Protocol Interface]
-  SV[Affirmative K3-D purpose-specific source views]
+  SV[Affirmative purpose-specific source views]
   ROLE[Endpoint role]
   PI[Exact projection input]
   O[OIR endpoint artifact]
@@ -518,7 +519,7 @@ flowchart LR
 ```
 
 The relation edge into authoring and the post-admission correspondence edge
-were a Stage 3 design surface. K3-B now keeps independently admitted relation
+were a Stage 3 design surface. The selected Relations model now keeps independently admitted relation
 subjects, optional artifact observation and comparison, typed equations,
 commitment grounding, and correspondence distinct. Structural correspondence
 uses `ProtocolRelationBinding` without requiring an external Interface;
@@ -554,9 +555,9 @@ can flow backward into semantic identity or admission.
 The selected Stage 1 model factors the protocol portion more precisely. An
 ordered `InteractiveCore` plus a Fresh or Fiat--Shamir
 `ChallengeInterpretation` determines `ProtocolId`. A dependent
-`ProtocolInterfaceId` and a separate `ProverPlanId` are now active K3-B target
-subjects over exact K2 invocation, scoped-binding, effect, and prover-decision
-surfaces. Their pre-K2 port and abstract-obligation schemas remain historical.
+`ProtocolInterfaceId` and a separate `ProverPlanId` are now active target
+subjects over exact Interactive Core invocation, scoped-binding, effect, and
+prover-decision surfaces. Their earlier port and abstract-obligation schemas remain historical.
 A content-addressed semantic closure supplies exact contract preimages, while
 opaque referenced subjects do not acquire admission authority. Each subject is
 qualified by its exact typed semantic regime.
@@ -569,12 +570,12 @@ not proposed wire identifiers.
 | Role | Meaning | Architecture state |
 |---|---|---|
 | Relation definition | Externally owned predicate over public instances and private witnesses | Current external authority |
-| Relation interface | Independently identified K1-aligned occurrence boundary with `PublicInstance`, `PrivateWitness`, `OracleStatement`, and `PhaseInput` roles | Active bounded K3-B target; Protocol correspondence, Plan witness attachment, and external presentation remain separate bindings or questions |
+| Relation interface | Independently identified Foundation-aligned occurrence boundary with `PublicInstance`, `PrivateWitness`, `OracleStatement`, and `PhaseInput` roles | Active bounded Relations target; Protocol correspondence, Plan witness attachment, and external presentation remain separate bindings or questions |
 | Authoring unit | Editable proposal with no inherited Protocol authority | Selected lifecycle role |
 | Resolved authoring unit | Proposal bound to one immutable input snapshot and complete actual read closure | Selected Stage 2 lifecycle role |
-| Interactive Core | One finite verifier-observable interaction with invocation inputs, scoped bindings, guarded effects, claim/reduction flow, explicit terminals, a deterministic verifier, and a prover strategy boundary; public-coin eligibility is derived rather than intrinsic | Active bounded K2 subject |
-| Transcript construction | Exact Fiat--Shamir history interpretation, framing, oracle/sponge behavior, sampling, and domains scoped to one Core | Active bounded K2 subject |
-| Protocol | Interactive Core plus Fresh or Fiat--Shamir challenge interpretation | Active bounded K2 subject and semantic root |
+| Interactive Core | One finite verifier-observable interaction with invocation inputs, scoped bindings, guarded effects, claim/reduction flow, explicit terminals, a deterministic verifier, and a prover strategy boundary; public-coin eligibility is derived rather than intrinsic | Active bounded PIR subject |
+| Transcript construction | Exact Fiat--Shamir history interpretation, framing, oracle/sponge behavior, sampling, and domains scoped to one Core | Active bounded PIR subject |
+| Protocol | Interactive Core plus Fresh or Fiat--Shamir challenge interpretation | Active bounded PIR subject and semantic root |
 | Semantic authority graph | Least typed graph of digest-verified contract preimages interpreted by admission | Selected refinement of the previous seal-authority graph |
 | Referenced-subject graph | Opaque anchors, material references, and external subject identifiers that admission does not interpret | Selected distinction from the previous candidate |
 | Canonical PIR candidate | Closed canonical carrier claiming one Protocol identity, before authentication and admission | Selected raw boundary; no authority by syntax alone |
@@ -583,7 +584,7 @@ not proposed wire identifiers.
 | Decoded Protocol artifact | Reconstructed carrier with no inherited process-local authority | Selected Stage 2 boundary and current implementation correspondence |
 | Semantic regime | Typed, identified interpretation of intrinsic operations, canonical semantics, and admission rules for one subject family | Selected Stage 1 identity qualifier; implicit today |
 | Admitted Protocol capability | Process-local immutable capability rechecked against an exact admission basis and semantic regime | Current normative role and implementation correspondence, target qualification |
-| Protocol interface | Protocol-dependent mapping from exact K2 invocation inputs, scoped Statement bindings, and role-qualified transport and completion effects to one external ABI | Active bounded K3-B target with a separate `ProtocolInterfaceId`; it changes no Protocol meaning |
+| Protocol interface | Protocol-dependent mapping from exact Interactive Core invocation inputs, scoped Statement bindings, and role-qualified transport and completion effects to one external ABI | Active bounded Interface target with a separate `ProtocolInterfaceId`; it changes no Protocol meaning |
 | Prover plan | Protocol-dependent finite recipe system for prover-decision and accepted-terminal private derivation, with witness ingress distinct from advice, confidential context, randomness, and persistent state | Active bounded target with a separate `ProverPlanId`, independent `PlanRealizes`, Plan-owned strategy/session and continuation authority, Relations-specific `PlanWitnessSurface`, and a one-use same-process output-to-fresh-ingress handoff |
 | Consumer view | Ephemeral facts mechanically derived for one consumer from admitted authority | Stage 1 provisional role; normally no independent identity |
 | Durable derived artifact or judgment | Independently meaningful OIR, relation result, derivation, or judgment produced by its owner | Current family of roles; not a mere Protocol view |
@@ -963,9 +964,9 @@ leaving AFK family transport unanswered unless independent proof authority
 supplies its uniform all-`n` source capability. Joined Schnorr, native FRI/IOR,
 commitment-opening, complete-argument, and accumulation/folding/recursive-
 verification pressure have now reclosed their declared bounded scopes. The
-latest selection is semantic-target convergence with the fixed Nova fold at
-T2 constructive-encoding depth and the stated T1 finite-target gaps for the
-other named cases, not
+latest selection is semantic-target convergence with a complete source-
+grounded finite target encoding for the fixed Nova fold and explicit finite-
+target elaboration gaps for the other named cases, not
 owner-profile publication or independent identity/profile
 freeze. Holdout validation, property discharge, full OIR/Realization,
 implementation correspondence, and normative cutover remain pending.

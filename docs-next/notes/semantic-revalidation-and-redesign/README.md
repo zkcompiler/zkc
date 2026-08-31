@@ -128,6 +128,10 @@ below are reader cross-references rather than inventory edges.
   one-use handoff lifecycle, finite recurrence boundary, imported-verifier
   owner split, durable absorption, bounded falsification evidence, and explicit
   profile-freeze and implementation nonclaims.
+- [Semantic Closure and Freeze Program](semantic-closure-and-freeze/README.md)
+  owns the active dependency-barrier plan: semantic closure preflight,
+  bottom-up owner-profile publication, recursive-composition boundary research,
+  dependent-profile publication, holdouts, and one bounded freeze review.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

@@ -206,8 +206,9 @@ CompilerSemanticCapabilityContract {
 CompilerResultOperationPolicy {
   compiler_semantic_capability_contract_id,
   exact result-family and completed-outcome coverage,
-  exact result-family- and U/C/R/M/F-disposition-indexed attempt-audit
-    creation, stable-identity, and disclosure rules,
+  exact result-family- and qualified-disposition-indexed attempt-audit
+    creation, stable-identity, and disclosure rules over every supported
+    outcome arm,
   exact named-consumer and typed-purpose permission rules,
   exact capability-use, disclosure, persistence, replay, and attenuation rules
 }
@@ -246,6 +247,19 @@ CompilerOwnerAdmissionAttemptInput<S,C> {
     occurrence happened
 }
 
+CompilerOwnerAdmissionDisposition =
+    Unsupported(exact unsupported subject family, contract, or boundary)
+  | MissingDependency(exact named durable preimage absent after its
+                      coordinate forms)
+  | CannotAnswer(exact supported formed operation whose required live basis
+                 or capability is unavailable)
+  | KindMismatch(exact formed coordinate on the wrong kind, owner, regime,
+                 or ABI axis)
+  | Refused(exact missing authority or policy prohibition)
+  | Malformed(exact candidate, association, identity, or framing defect)
+  | DeterministicLimitExceeded(exact exhausted declared evaluator limit)
+  | CheckerFailure(exact normalized operational-failure class)
+
 PrepareCompilerOwnerAdmission<S,C>(
   exact CompilerOwnerAdmissionAttemptInput<S,C>,
   occurrence-local bootstrap or admitted-authority offers for the declared
@@ -254,8 +268,8 @@ PrepareCompilerOwnerAdmission<S,C>(
   ->
     Ready(exact typed complete operand tuple for the selected foundational
           admission signature)
-  | Rejected(exact owner-admission disposition, failed requirement, and reached
-             bootstrap/contract checks)
+  | Rejected(exact CompilerOwnerAdmissionDisposition, failed requirement, and
+             reached bootstrap/contract checks)
 
 AttemptCompilerOwnerAdmission<S,C>(
   exact CompilerOwnerAdmissionAttemptInput<S,C>,
@@ -273,8 +287,7 @@ CompilerOwnerAdmissionAttemptRecord<S,C> {
   exact successful and failed foundational audit-disclosure checks that were
     reached,
   exact missing, mismatched, prohibited, or failed requirements,
-  exact Unsupported, CannotAnswer, Refused, Malformed, or normalized
-    CheckerFailure disposition,
+  exact CompilerOwnerAdmissionDisposition,
   Reached(exact residual trust)
     | Unavailable(exact governing unavailable slot and dependency path),
   no admitted-subject binding or live capability
@@ -292,9 +305,13 @@ CompilerOwnerAdmissionAttemptOutcome<S,C> =
     Admitted(exact ExactAdmittedSubjectAuthorityBinding<Compiler,S>,
              fresh process-local C)
   | Unsupported(exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
+  | MissingDependency(exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
   | CannotAnswer(exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
+  | KindMismatch(exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
   | Refused(exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
   | Malformed(exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
+  | DeterministicLimitExceeded(
+      exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
   | CheckerFailure(exact CompilerOwnerAdmissionAttemptRecordRef<S,C>)
 
 AdmitCompilerSemanticCapabilityContract(
@@ -699,9 +716,15 @@ AttemptCompilerCheckedOperation<T,R>(
 
 CompilerAttemptDisposition =
     Unsupported(exact unsupported family, model, operation, or boundary)
-  | CannotAnswer(exact unavailable prerequisite or unresolved dependency)
+  | MissingDependency(exact named durable preimage absent after its
+                      coordinate forms)
+  | CannotAnswer(exact supported formed operation whose required live basis
+                 or capability is unavailable)
+  | KindMismatch(exact formed coordinate on the wrong kind, owner, regime,
+                 or ABI axis)
   | Refused(exact missing authority or policy prohibition)
   | Malformed(exact offered-input, identity, association, or framing defect)
+  | DeterministicLimitExceeded(exact exhausted declared evaluator limit)
   | CheckerFailure(exact normalized operational-failure class)
 
 CompilerAttemptRecord<T,R> {
@@ -751,10 +774,17 @@ CompilerValidationAttemptOutcome<T,R> =
               fresh process-local T bound to that exact checked result)
   | Unsupported(exact CompilerAttemptAudit<T,R> whose disposition is
                 Unsupported)
+  | MissingDependency(exact CompilerAttemptAudit<T,R> whose disposition is
+                      MissingDependency)
   | CannotAnswer(exact CompilerAttemptAudit<T,R> whose disposition is
                  CannotAnswer)
+  | KindMismatch(exact CompilerAttemptAudit<T,R> whose disposition is
+                 KindMismatch)
   | Refused(exact CompilerAttemptAudit<T,R> whose disposition is Refused)
   | Malformed(exact CompilerAttemptAudit<T,R> whose disposition is Malformed)
+  | DeterministicLimitExceeded(
+      exact CompilerAttemptAudit<T,R> whose disposition is
+        DeterministicLimitExceeded)
   | CheckerFailure(exact CompilerAttemptAudit<T,R> whose disposition is
                    CheckerFailure)
 
@@ -1135,9 +1165,12 @@ Every Compiler operation preserves the shared outer distinctions:
 Affirmative
 Negative(retained exact facts, only where the operation defines a negative)
 Unsupported
+MissingDependency
 CannotAnswer
+KindMismatch
 Refused
 Malformed
+DeterministicLimitExceeded
 CheckerFailure
 ~~~
 

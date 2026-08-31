@@ -141,11 +141,23 @@ RealizationCheckResult =
     Affirmative(exact RealizesOir facts)
   | Negative(nonempty typed mismatches or counterexample facts)
   | Unsupported(exact unsupported target or check)
-  | CannotAnswer(missing named semantic basis)
+  | MissingDependency(exact named durable preimage absent after its
+                      coordinate forms)
+  | CannotAnswer(supported formed check lacks a required live semantic basis
+                 or capability)
+  | KindMismatch(formed coordinate has the wrong kind, owner, regime, or ABI)
   | Refused(missing authority or prohibited invocation)
   | Malformed(exact framing or structural defect)
+  | DeterministicLimitExceeded(exact exhausted declared checker limit)
   | CheckerFailure(operational failure with no semantic conclusion)
 ```
+
+The branches follow Foundation's exact partition. A missing identified
+artifact, model, contract, or other durable dependency is
+`MissingDependency`, not `CannotAnswer`; an unavailable live provider or
+checker basis for an otherwise formed supported request is `CannotAnswer`.
+Wrong typed axes are `KindMismatch`, and bound exhaustion cannot be folded into
+`CheckerFailure`.
 
 An implementation may initially trust one emitter when no smaller checker is
 practical, but it must name that trusted boundary. Producer success, a

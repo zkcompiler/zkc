@@ -129,7 +129,7 @@ meaning.
 
 The target does not place one catch-all PIR language above every subject. It
 selects one Interaction profile, two sibling Fiat--Shamir family profiles, and
-one currently canonical-only public-setup profile with the following exact
+one family-neutral public-setup projection profile with the following exact
 import topology. This display is a symbolic owner schema, not publication of
 the complete six-field profile preimages or their full typed IDs:
 
@@ -165,6 +165,7 @@ PIRInteractionProfile = {
   declarations:
     {InteractiveCoreBody, FreshProtocolBody, CoreInvocationBody,
      CoreStaticViewSchemas, ProtocolExecutionViewSchema,
+     PIRSemanticLawCatalog,
      OracleDomainLawDeclarationBody,
      ConfidentialInitialOracleDisclosurePolicyBody,
      ConfidentialInitialOracleBindingPayloadBody,
@@ -182,8 +183,7 @@ PIRDuplexSpongeFSProfile =
   PIRInteractionProfile
 
 PIRPublicSetupProfile = {
-  profile_imports:
-    {PIRInteractionProfileId, PIRCanonicalFramedFSProfileId},
+  profile_imports: {PIRInteractionProfileId},
   supported_subject_kinds:
     {"pir.public-setup-invocation-view",
      "pir.source-binding-payload", "pir.source-capability-requirement",
@@ -194,13 +194,111 @@ PIRPublicSetupProfile = {
 }
 ```
 
-Every FS family profile importing Interaction must commit to one exact closed
-runtime schema under its reserved profile-local
+`PIRSemanticLawCatalog` is the profile declaration catalog whose exact kind is
+`"pir.semantic-law"`. It contains every law referenced by an Interaction-owned
+static-view `_law` or `_requirement` field, in one fixed ordinal order. An FS
+family or public-setup profile owns a separate catalog of the same declaration
+kind for its local view laws; imported references name the exact declaring
+profile. The catalog kind is not a semantic subject kind, and no law body is
+duplicated in `semantic_law_source`.
+
+Every FS family profile importing Interaction must commit to one exact
+dependent runtime-schema template under its reserved profile-local
 `"pir.fs-challenge-receipt"` tag. It may commit to either zero or one exact
-closed schema under `"pir.fs-interpretation-failure-receipt"`. Those tags are
-catalog entries, not new semantic subject kinds. Interaction dispatches them
-only after authenticating the selected profile; a schema cannot be supplied by
-the caller or inherited from a sibling.
+dependent template under `"pir.fs-interpretation-failure-receipt"`. Those tags
+are catalog entries, not new semantic subject kinds. Interaction dispatches
+them only after authenticating the selected profile; a template cannot be
+supplied by the caller or inherited from a sibling.
+
+The template grammar is closed and owned by Interaction:
+
+```text
+PIRReceiptSchemaParameter =
+    ConstructionTranscriptStateType
+  | ConstructionBytesType
+  | CoreChallengeValueType(challenge_ref)
+
+PIRReceiptSchemaLeaf =
+    ClosedValueType(ValueType)
+  | Parameter(PIRReceiptSchemaParameter)
+  | LocalReceiptDeclaration(ProfileDeclarationRef)
+
+PIRReceiptSchemaTemplate =
+    Leaf(PIRReceiptSchemaLeaf)
+  | Record(CanonicalSeq<field_ordinal,PIRReceiptSchemaTemplate>)
+  | Variant(CanonicalSeq<case_ordinal,PIRReceiptSchemaTemplate>)
+  | Sequence(PIRReceiptSchemaTemplate)
+  | NonemptySequence(PIRReceiptSchemaTemplate)
+```
+
+A family profile's catalog owns the exact draw/transition/receipt template
+bodies and references them by local `ProfileDeclarationRef`; its law source
+does not duplicate those bodies. For one admitted construction and Core,
+receipt admission instantiates only the three parameter forms above from the
+exact authenticated construction and challenge declaration, then requires the
+complete runtime value to match the resulting closed schema. No host type,
+caller-supplied schema, symbolic callback, or concrete Core-dependent schema
+may enter a profile preimage.
+
+Every PIR profile publishes its `semantic_law_source` as the exact K1 encoding
+of one closed owner body:
+
+```text
+PIRProfileUseCoordinate =
+    Declaration(ProfileDeclarationRef)
+  | SubjectBodyCompiler(subject_kind, ProfileDeclarationRef)
+  | EvaluatorSignature(ProfileDeclarationRef)
+  | FailureSchema(ProfileDeclarationRef)
+  | LawClause(clause_ordinal)
+
+PIRDirectImportUse = {
+  imported_profile: SemanticLanguageProfileId,
+  uses: NonemptyCanonicalSortedUniqueSeq<PIRProfileUseCoordinate>
+}
+
+PIRLanguageProfileLawSourceV0 = {
+  format_version: 0,
+  direct_import_uses: CanonicalSortedUniqueSeq<PIRDirectImportUse>,
+  subject_body_compilers:
+    NonemptyCanonicalKeySortedSeq<subject_kind,ProfileDeclarationRef>,
+  evaluator_signatures: CanonicalSeq<ProfileDeclarationRef>,
+  failure_schemas: CanonicalSeq<ProfileDeclarationRef>,
+  law_clauses: CanonicalSeq<ExactBoundedAscii>
+}
+
+semantic_law_source = M(PIRLanguageProfileLawSourceV0)
+```
+
+Catalogs are the only source of declaration bodies. Every reference in the law
+source resolves against the exact selected profile or a named direct import;
+the law source may not repeat a catalog body, name a host function, or contain
+its profile's future ID. `ExactBoundedAscii` is printable ASCII with LF line
+separators, no CR, no trailing whitespace, and a cumulative encoded bound fixed
+by the profile publication. It is used only for a clause whose owner has not
+selected a typed law calculus. The bytes are normative exactly as published;
+the text is not looked up by label. `format_version = 0` describes this
+law-source grammar, while the outer profile `revision = 0` describes the
+selected profile body. Neither integer implies compatibility with another
+value.
+
+There is no open global function from construction-ID bytes to a profile. For
+an exact authenticated admitted construction handle `A`, Foundation's
+effective semantic context already retains its one directly selected profile:
+
+```text
+AuthenticatedTranscriptConstructionProfile(A) =
+  EffectiveSemanticContext(A).selected_profile
+```
+
+This projection is defined only on that live authenticated handle; a bare
+`TranscriptConstructionId`, digest, family label, or registry lookup cannot
+select it. A consumer that accepts more than one construction family is a
+composition language in the Foundation sense: its own profile must import
+every accepted family profile and define a closed dispatch over those exact
+imports. The endpoint source-view profile currently owns such a two-family
+dispatch. Adding a third family therefore rotates that consumer profile and
+its dependents, while neither existing family nor the Interaction profile
+rotates merely because the new family exists.
 
 The required authenticated import closure is selected-root-specific once each
 owner has published its complete profile preimage:
@@ -213,16 +311,17 @@ ExactProfilePreimages(PIRCanonicalFramedFSProfileId) =
 ExactProfilePreimages(PIRDuplexSpongeFSProfileId) =
   {PIRInteractionProfileId, PIRDuplexSpongeFSProfileId}
 ExactProfilePreimages(PIRPublicSetupProfileId) =
-  {PIRInteractionProfileId, PIRCanonicalFramedFSProfileId,
-   PIRPublicSetupProfileId}
+  {PIRInteractionProfileId, PIRPublicSetupProfileId}
 ```
 
 These are exact no-extra closures. A bundle containing both FS siblings is not
 a valid intake for either. Profile imports are ordinary profile edges, not
-module roots. The current public-setup profile can name Fresh and canonical-
-framed FS Protocols only; duplex public-setup projection remains
-`Unsupported` until a downstream sibling profile is defined. Adding another
-unreferenced FS family does not rotate either existing sibling.
+module roots. The public-setup profile interprets only Interaction-owned Core
+and invocation structure. It may carry the exact typed `ProtocolId` of Fresh
+or any admitted FS family as an opaque source coordinate, but it neither opens
+that Protocol body nor interprets its construction. Therefore it does not
+import an FS family. Adding another unreferenced FS family does not rotate the
+public-setup profile or either existing sibling.
 
 The bounded executable witnesses instantiate deterministic finite profile
 bodies to test this topology, authentication, and rotation behavior. Those
@@ -299,7 +398,7 @@ ProtocolLanguageProfile(Fresh, NoConstructionHandle) =
   PIRInteractionProfileId
 ProtocolLanguageProfile(
   FiatShamir(T), exact authenticated admitted construction handle A
-    satisfying A.id = T) = TranscriptConstructionProfile(A.id)
+    satisfying A.id = T) = AuthenticatedTranscriptConstructionProfile(A)
 
 ProtocolId = ProfiledSemanticId<"pir.protocol">(
   B, ProtocolLanguageProfile(
@@ -312,11 +411,12 @@ AuthenticatedProtocolProfile(P) =
   against the corresponding construction handle when P is FiatShamir
 ```
 
-`TranscriptConstructionId` and `TranscriptConstructionProfile` are defined by
-the construction-family companion pages. The profile is never inferred from
-bare ID bytes. Protocol formation receives the exact authenticated admitted
-construction handle, recomputes its ID/profile preimage, and requires equality
-with the asserted Protocol profile before a Fiat--Shamir Protocol can form.
+`TranscriptConstructionId` is defined by each construction-family companion
+page. Its directly selected profile is obtained only from the exact
+authenticated admitted construction handle as above, never inferred from bare
+ID bytes. Protocol formation receives that handle, recomputes its ID/profile
+preimage, and requires equality with the asserted Protocol profile before a
+Fiat--Shamir Protocol can form.
 `Fresh` is one closed tag; its challenge laws are already in the Core. Fresh,
 canonical-framed FS, and duplex-sponge FS Protocol IDs are pairwise distinct
 while retaining one literal `CoreId`.
@@ -414,7 +514,7 @@ DerivedValueDecl = {
 ```
 
 The algorithm's admitted derived ABI must have the exact ordered input types,
-the exact `result_type`, and an empty semantic-failure row. A value whose
+the exact `result_type`, and an empty typed-failure row. A value whose
 mathematical operation is partial must use a total tagged result value and make
 the branch explicit; an unhandled algorithm failure cannot be hidden as value
 absence.
@@ -626,6 +726,24 @@ of `payload_type`; output 0 is that value and becomes visible to both parties.
 An active deterministic Verifier message evaluates its exact total, failure-
 free algorithm; output 0 becomes visible to both parties. A verifier message
 whose value is selected by hidden state or a supplier is not this constructor.
+
+The Core owner exposes the two exact type projections used by construction
+families:
+
+```text
+ProverMessagePayloadType(C,o) =
+  C.occurrences[o].effect.message.payload_type
+  when C is admitted and C.occurrences[o].effect is ProverMessage(_)
+
+ChallengeValueType(C,c) =
+  C.challenges[c].value_type
+  when C is admitted and c is an exact ChallengeRef of C
+```
+
+Both projections are partial before Core admission and have no fallback arm.
+Supplying a wrong Core, occurrence kind, or Challenge coordinate is a typed
+qualified failure at the consuming operation; equal `ValueType` bodies do not
+make a foreign coordinate eligible.
 
 Messages have no authored Wire/Transcript switch. Wire exposure belongs to
 Interface/OIR; transcript influence is derived by the companion page.
@@ -1155,11 +1273,11 @@ that have occurred. It contains no future runtime value or receipt, future
 coin, verifier-private value, unqueried oracle answer, mutable transcript state,
 ambient registry, clock, file, or process object.
 
-For dependent Plans, K2 exports one structural read predicate rather than a
+For dependent Plans, Interactive Core exports one structural read predicate rather than a
 caller-asserted snapshot predicate:
 
 ```text
-K2ProverReadCoordinate =
+InteractiveCoreProverReadCoordinate =
     StaticConstant(ConstantRef)
   | PublicInvocationInput(PublicInputRef)
   | OpenedBinding(BindingRef)
@@ -1172,7 +1290,7 @@ K2ProverReadCoordinate =
   | PriorOwnMove(ProverDecisionPointRef)
 
 GuaranteedProverRead(d: ProverDecisionPointRef,
-                     r: K2ProverReadCoordinate) = true
+                     r: InteractiveCoreProverReadCoordinate) = true
   exactly under the owner rules below
 ```
 
@@ -1685,7 +1803,7 @@ completed Protocol record. K2 defines no affirmative prefix-replay result for
 it; a later audit consumer needing one must define a distinct nonsemantic audit
 relation and cannot call it `CheckedReplayMatch`.
 
-Fresh and duplex-sponge resolution have no completed semantic-failure row:
+Fresh and duplex-sponge resolution have an empty statically derived failure row:
 unavailable fresh coins, missing duplex material, unsupported algorithms, and
 evaluation exhaustion are qualified operational noncompletion. The current
 canonical-framed family alone defines a profile interpretation-failure schema,
@@ -1829,7 +1947,7 @@ AuthenticatedOwnerProfile(
   AuthenticatedProtocolProfile(P)
 AuthenticatedOwnerProfile(
   ConstructionView(T.id,_), exact admitted construction handle T) =
-  TranscriptConstructionProfile(T.id)
+  AuthenticatedTranscriptConstructionProfile(T)
 AuthenticatedOwnerProfile(
   FSResultView(R.ref,_), exact live owner-local result/binding R) =
   CheckedFSConstructionProfile(R.ref)
@@ -1839,10 +1957,15 @@ PIRViewPathStep =
   | VariantCase(case_ordinal)
   | SequenceElement(element_ordinal)
 
+PIRProfileLawReference =
+  ProfileDeclarationRef<"pir.semantic-law">
+
+PIRProfileLawReferenceBody(x) = ProfileDeclarationRefBody(x)
+
 PIRViewAtomicBoundary =
     Unit | Natural | MetaBoolean | MetaSymbol | Bytes
   | ValueType | CanonicalValue(ValueType)
-  | PIRReference | K1SemanticReference
+  | PIRReference | PIRProfileLawReference
 
 PIRStaticViewFieldCoordinate = {
   view_coordinate: PIRStaticViewCoordinate,
@@ -1995,10 +2118,23 @@ For these view schemas, record field ordinals and variant tags are the written
 order. A phrase of the form `exact X declaration` means the complete existing
 Appendix-A `XBody`, not a new tuple with selected fields; each added backlink is
 the unique admitted `OccurrenceRef` or producer coordinate derived by the Core
-admission laws. `ValueType`, canonical values, Core references, K1 references,
-and option/sequence/map wrappers use their already defined exact bodies. Thus
-the catalog can enumerate every atomic leaf and the field resolver has no prose
-or implementation-defined remainder.
+admission laws. `ValueType`, canonical values, Core references, Foundation
+semantic references, and option/sequence/map wrappers use their already
+defined exact bodies. Thus the catalog can enumerate every atomic leaf and the
+field resolver has no prose or implementation-defined remainder.
+
+A static-view field whose name ends in `_law` or `_requirement` and whose
+displayed value is a proposition is never a formula-valued record leaf. Its
+body contains one `PIRProfileLawReference` naming an exact
+`"pir.semantic-law"` declaration in the selected owner profile or an exact
+directly imported profile; the displayed proposition is the declaration that
+reference must resolve to. Substitution of another law reference is `Refused`,
+and a missing or wrong-kind declaration follows the ordinary
+`MissingDependency` or `KindMismatch` partition. The selected profile must
+list the declaration kind and ordinal in its exact catalog; a standalone
+profiled subject ID cannot substitute for the declaration reference. Closed
+names such as `IdentityOnEveryOccurrenceRef` are nullary variant tags unless the declaring
+page displays parameters or a record body explicitly.
 
 `RequiredPIRViewReadClosure` is constructor-specific. In particular:
 
@@ -2594,14 +2730,15 @@ IssueConfidentialInitialOracleView(
   exact ConfidentialInitialOracleCoordinate,
   exact consumer and purpose coordinates,
   exact ConfidentialInitialOracleDisclosurePolicyId,
-  still-live matching CausalGenerationCapability,
+  exact presented CausalGenerationCapability bearer,
   exact PIR evaluator and deterministic limits)
   -> Affirmative({
        view: ConfidentialInitialOracleView,
        authority: CheckedConfidentialInitialOracleViewAuthority,
        capability: ConfidentialInitialOracleViewCapability
      })
-   | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+   | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+   | Malformed | Refused
    | DeterministicLimitExceeded | CheckerFailure
 ```
 
@@ -2618,11 +2755,15 @@ purpose, policy, issuance occurrence, lifetime, and process generation.
 No portable policy, payload, requirement, closure, record, or ID contains the
 carrier, a carrier-derived digest, `CoreInvocationId`, or a completed-record
 digest. The confidential material exists only in the owner-local view and live
-capabilities. A replay match, public relation-run view, copied view, equal
-carrier, reconstructed binding, stale bearer, different consumer or purpose,
-different policy, inactive publication, prover-origin Oracle, partial-carrier
-request, or selector request refuses and returns no partial view. The operation
-establishes only which whole initial carrier that one causal execution
+capabilities. An expired otherwise matching bearer is `CannotAnswer`: the
+formed operation is supported, but its required live authority is unavailable.
+A reconstructed or copied bearer, replay match, public relation-run view,
+copied view, equal carrier, reconstructed binding, different consumer or
+purpose, different policy, inactive publication, prover-origin Oracle,
+partial-carrier request, or selector request is `Refused` and returns no
+partial view. Wrong capability kind, owner, regime, or payload type is
+`KindMismatch`; an absent exact durable preimage is `MissingDependency`.
+The operation establishes only which whole initial carrier that one causal execution
 consumed; it establishes no proximity, relation satisfaction, actor knowledge,
 or security property.
 

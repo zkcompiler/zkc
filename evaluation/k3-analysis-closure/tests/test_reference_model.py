@@ -23,27 +23,25 @@ def activate_analysis_profiles(profiles: object) -> object:
 
     return patch.multiple(
         model,
-        K3C_ANALYSIS_SEMANTIC_PROFILES=profiles,
-        K3C_ANALYSIS_KERNEL_PROFILE=profiles.kernel,
-        K3C_ANALYSIS_KERNEL_PROFILE_ID=profiles.kernel.identity,
-        K3C_ANALYSIS_PROPERTY_PROFILE=profiles.property,
-        K3C_ANALYSIS_PROPERTY_PROFILE_ID=profiles.property.identity,
-        K3C_ANALYSIS_TRANSPORT_PROFILE=profiles.transport,
-        K3C_ANALYSIS_TRANSPORT_PROFILE_ID=profiles.transport.identity,
-        K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE=(
-            profiles.theorem_source_validation
-        ),
-        K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_ID=(
+        ANALYSIS_SEMANTIC_PROFILES=profiles,
+        ANALYSIS_KERNEL_PROFILE=profiles.kernel,
+        ANALYSIS_KERNEL_PROFILE_ID=profiles.kernel.identity,
+        ANALYSIS_PROPERTY_PROFILE=profiles.property,
+        ANALYSIS_PROPERTY_PROFILE_ID=profiles.property.identity,
+        ANALYSIS_TRANSPORT_PROFILE=profiles.transport,
+        ANALYSIS_TRANSPORT_PROFILE_ID=profiles.transport.identity,
+        ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE=(profiles.theorem_source_validation),
+        ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_ID=(
             profiles.theorem_source_validation.identity
         ),
-        K3C_ANALYSIS_KERNEL_PROFILE_BUNDLE=profiles.kernel_bundle,
-        K3C_ANALYSIS_PROPERTY_PROFILE_BUNDLE=profiles.property_bundle,
-        K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE=profiles.transport_bundle,
-        K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE=(
+        ANALYSIS_KERNEL_PROFILE_BUNDLE=profiles.kernel_bundle,
+        ANALYSIS_PROPERTY_PROFILE_BUNDLE=profiles.property_bundle,
+        ANALYSIS_TRANSPORT_PROFILE_BUNDLE=profiles.transport_bundle,
+        ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE=(
             profiles.theorem_source_validation_bundle
         ),
-        K3C_PROFILE_BUNDLE=profiles.bundle,
-        K3C_PROFILE_PREIMAGES=profiles.bundle,
+        ANALYSIS_PROFILE_BUNDLE=profiles.bundle,
+        ANALYSIS_PROFILE_PREIMAGES=profiles.bundle,
     )
 
 
@@ -144,16 +142,14 @@ def member_checked_result(judgment: object) -> model.InertCheckedResult:
         judgment.validation_basis_id,
         judgment.qualification_id,
         model.AttemptKind.AFFIRMATIVE,
-        model.K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE,
+        model.ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE,
     )
 
 
 def rechain_result_support(
     result: model.InertCheckedResult, support_id: object
 ) -> model.InertCheckedResult:
-    judgment = model._formed_analysis_body(
-        result.result_id, "analysis.judgment-record"
-    )
+    judgment = model._formed_analysis_body(result.result_id, "analysis.judgment-record")
     changed_judgment = replace(
         judgment,
         support_coordinate=model._id_datum(
@@ -193,13 +189,16 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
 
     def test_transport_profile_has_one_exact_transitive_import_closure(self) -> None:
-        profiles = model.K3C_ANALYSIS_SEMANTIC_PROFILES
+        profiles = model.ANALYSIS_SEMANTIC_PROFILES
         self.assertEqual(profiles.kernel.profile_imports, ())
         self.assertEqual(
             profiles.property.profile_imports,
             model._profile_imports(
                 profiles.kernel,
                 profiles.k3b_profiles.relations_correspondence,
+                profiles.k3b_profiles.k2_profiles.interaction,
+                profiles.k3b_profiles.k2_profiles.transcript_fs,
+                profiles.k3b_profiles.k2_profiles.public_view,
             ),
         )
         self.assertEqual(
@@ -208,17 +207,18 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
         context = model.k1.effective_semantic_context(
             profiles.transport.identity,
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
+            model.ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
             semantic_regime=model.k1.SEMANTIC_REGIME_ID,
         )
-        self.assertEqual(len(context.authenticated_profiles), 7)
+        self.assertEqual(len(context.authenticated_profiles), 8)
         relations_closure = model.k3.K3B_ROOT_PROFILE_PREIMAGES[
             profiles.k3b_profiles.relations_correspondence.identity
         ]
         self.assertEqual(
-            set(model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE),
+            set(model.ANALYSIS_TRANSPORT_PROFILE_BUNDLE),
             {
                 *relations_closure,
+                profiles.k3b_profiles.k2_profiles.public_view.identity,
                 profiles.kernel.identity,
                 profiles.property.identity,
                 profiles.transport.identity,
@@ -226,7 +226,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
 
     def test_theorem_source_validation_is_a_one_way_child_profile(self) -> None:
-        profiles = model.K3C_ANALYSIS_SEMANTIC_PROFILES
+        profiles = model.ANALYSIS_SEMANTIC_PROFILES
         self.assertEqual(
             profiles.theorem_source_validation.profile_imports,
             (profiles.transport.identity,),
@@ -237,13 +237,13 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
         context = model.k1.effective_semantic_context(
             profiles.theorem_source_validation.identity,
-            model.K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE,
+            model.ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE,
             semantic_regime=model.k1.SEMANTIC_REGIME_ID,
         )
-        self.assertEqual(len(context.authenticated_profiles), 8)
+        self.assertEqual(len(context.authenticated_profiles), 9)
         self.assertEqual(
-            set(model.K3C_PROFILE_BUNDLE),
-            set(model.K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE),
+            set(model.ANALYSIS_PROFILE_BUNDLE),
+            set(model.ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE_BUNDLE),
         )
 
     def test_property_and_transport_subjects_authenticate_exact_profiles(self) -> None:
@@ -254,17 +254,17 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
         property_context = model.k1.authenticate_profiled_semantic_content(
             property_id,
-            model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,
+            model.ANALYSIS_PROPERTY_PROFILE_ID,
             model.analysis_domain_body_v0(
                 "analysis.positive-polynomial",
                 property_body,
             ),
-            model.K3C_ANALYSIS_PROPERTY_PROFILE_BUNDLE,
-            supported_profiles=(model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,),
+            model.ANALYSIS_PROPERTY_PROFILE_BUNDLE,
+            supported_profiles=(model.ANALYSIS_PROPERTY_PROFILE_ID,),
         )
         self.assertEqual(
             property_context.selected_profile,
-            model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,
+            model.ANALYSIS_PROPERTY_PROFILE_ID,
         )
 
         transport_id = model.family_goal_id(
@@ -277,22 +277,55 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
         transport_context = model.k1.authenticate_profiled_semantic_content(
             transport_id,
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
+            model.ANALYSIS_TRANSPORT_PROFILE_ID,
             model.analysis_domain_body_v0("analysis.goal", transport_body),
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
-            supported_profiles=(model.K3C_ANALYSIS_TRANSPORT_PROFILE_ID,),
+            model.ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
+            supported_profiles=(model.ANALYSIS_TRANSPORT_PROFILE_ID,),
         )
         self.assertEqual(
             transport_context.selected_profile,
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE_ID,
+            model.ANALYSIS_TRANSPORT_PROFILE_ID,
         )
+
+    def test_extractor_profile_uses_only_denoted_counterfactual_rights(self) -> None:
+        body = model._formed_analysis_body(
+            model.AFK_UNIFORM_BLACK_BOX_EXTRACTOR,
+            "analysis.extractor-profile",
+        )
+        self.assertEqual(
+            tuple(item.value for item in body.counterfactual_rights.values),
+            ("ProgramSibling", "Rerun"),
+        )
+        model.analysis_domain_body_v0("analysis.extractor-profile", body)
+
+        retired = replace(
+            body,
+            counterfactual_rights=model.k1.DatumSeq((model.k1.Symbol("Program"),)),
+        )
+        with self.assertRaisesRegex(model.AnalysisError, "retired"):
+            model.analysis_domain_body_v0("analysis.extractor-profile", retired)
+
+        missing_denotation = replace(
+            body,
+            allowed_source_and_oracle_capabilities=model.k1.DatumSeq(
+                tuple(
+                    item
+                    for item in body.allowed_source_and_oracle_capabilities.values
+                    if item != model.k1.Symbol("program-sibling")
+                )
+            ),
+        )
+        with self.assertRaisesRegex(model.AnalysisError, "denotation"):
+            model.analysis_domain_body_v0(
+                "analysis.extractor-profile", missing_denotation
+            )
 
     def test_profile_subject_partition_refuses_cross_lane_minting(self) -> None:
         with self.assertRaisesRegex(model.AnalysisError, "raw Analysis profile"):
             model.analysis_profiled_content_id(
                 "analysis.positive-polynomial",
                 self.probe_body(),
-                model.K3C_ANALYSIS_PROPERTY_PROFILE,
+                model.ANALYSIS_PROPERTY_PROFILE,
             )
 
         property_id = model.AFK_POSITIVE_POLYNOMIAL_Q_ONE
@@ -304,7 +337,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             model._form_analysis_profiled_content_id(
                 "analysis.positive-polynomial",
                 property_body,
-                model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+                model.ANALYSIS_TRANSPORT_PROFILE,
             )
 
         transport_id = model.family_goal_id(
@@ -316,7 +349,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             model._form_analysis_profiled_content_id(
                 "analysis.goal",
                 transport_body,
-                model.K3C_ANALYSIS_PROPERTY_PROFILE,
+                model.ANALYSIS_PROPERTY_PROFILE,
             )
 
         validation_body = model._formed_analysis_body(
@@ -324,8 +357,8 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             "analysis.theorem-source-validation",
         )
         for wrong_profile in (
-            model.K3C_ANALYSIS_PROPERTY_PROFILE,
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            model.ANALYSIS_PROPERTY_PROFILE,
+            model.ANALYSIS_TRANSPORT_PROFILE,
         ):
             with self.subTest(wrong_profile=wrong_profile.profile_family.value):
                 with self.assertRaises(model.AnalysisError):
@@ -338,20 +371,20 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             {"analysis.question", "analysis.goal", "analysis.proposition"}
             <= {
                 item.value
-                for item in model.K3C_ANALYSIS_PROPERTY_PROFILE.supported_subject_kinds
+                for item in model.ANALYSIS_PROPERTY_PROFILE.supported_subject_kinds
             }
         )
         self.assertTrue(
             {"analysis.question", "analysis.goal", "analysis.proposition"}
             <= {
                 item.value
-                for item in model.K3C_ANALYSIS_TRANSPORT_PROFILE.supported_subject_kinds
+                for item in model.ANALYSIS_TRANSPORT_PROFILE.supported_subject_kinds
             }
         )
 
     def test_profile_bundle_refuses_missing_and_extra_preimages(self) -> None:
-        profiles = model.K3C_ANALYSIS_SEMANTIC_PROFILES
-        missing = dict(model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE)
+        profiles = model.ANALYSIS_SEMANTIC_PROFILES
+        missing = dict(model.ANALYSIS_TRANSPORT_PROFILE_BUNDLE)
         missing.pop(profiles.property.identity)
         with self.assertRaises(model.k1._Control) as caught:
             model.k1.effective_semantic_context(
@@ -374,7 +407,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             model.k1.effective_semantic_context(
                 profiles.transport.identity,
                 {
-                    **model.K3C_ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
+                    **model.ANALYSIS_TRANSPORT_PROFILE_BUNDLE,
                     unrelated.identity: unrelated,
                 },
                 semantic_regime=model.k1.SEMANTIC_REGIME_ID,
@@ -382,7 +415,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         self.assertIs(caught.exception.outcome, model.k1.Outcome.REFUSED)
 
     def test_profile_changes_rotate_only_their_dependency_cone(self) -> None:
-        baseline = model.K3C_ANALYSIS_SEMANTIC_PROFILES
+        baseline = model.ANALYSIS_SEMANTIC_PROFILES
         changed_transport = model.make_k3c_analysis_semantic_profiles(
             transport_law=model._profile_law_source(
                 "zkc.analysis.bounded-transport-law.v1",
@@ -528,7 +561,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
         )
         family = model.SELECTED_AFK_FAMILY
         authority = model.fixture_ref(
-            "k3c.external-proof-authority",
+            "analysis.external-proof-authority",
             "profile-locality-external-source",
         )
         baseline_hypothesis, baseline_result, _ = model._family_source_components(
@@ -558,7 +591,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
 
     def test_live_family_derivations_follow_profile_patch_and_restore(self) -> None:
         family = model.SELECTED_AFK_FAMILY
-        baseline_profile_id = model.K3C_ANALYSIS_TRANSPORT_PROFILE_ID
+        baseline_profile_id = model.ANALYSIS_TRANSPORT_PROFILE_ID
         baseline_family_id = model.family_definition_id(family)
         changed = model.make_k3c_analysis_semantic_profiles(
             transport_law=model._profile_law_source(
@@ -577,18 +610,16 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             )
         self.assertEqual(
             baseline_profile_id,
-            model._active_analysis_profile_id(
-                model.K3C_ANALYSIS_TRANSPORT_PROFILE
-            ),
+            model._active_analysis_profile_id(model.ANALYSIS_TRANSPORT_PROFILE),
         )
         self.assertEqual(baseline_family_id, model.family_definition_id(family))
 
     def test_analysis_law_sources_are_canonical_closed_data(self) -> None:
         for profile in (
-            model.K3C_ANALYSIS_KERNEL_PROFILE,
-            model.K3C_ANALYSIS_PROPERTY_PROFILE,
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
-            model.K3C_ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE,
+            model.ANALYSIS_KERNEL_PROFILE,
+            model.ANALYSIS_PROPERTY_PROFILE,
+            model.ANALYSIS_TRANSPORT_PROFILE,
+            model.ANALYSIS_THEOREM_SOURCE_VALIDATION_PROFILE,
         ):
             with self.subTest(profile=profile.profile_family.value):
                 decoded = model.k1.decode_datum(profile.semantic_law_source)
@@ -614,7 +645,7 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             fixture,
             model.k1.profiled_content_id(
                 "analysis.hypothesis",
-                model.K3C_ANALYSIS_PROPERTY_PROFILE_ID,
+                model.ANALYSIS_PROPERTY_PROFILE_ID,
                 body,
                 semantic_regime=model.k1.SEMANTIC_REGIME_ID,
             ),
@@ -695,7 +726,7 @@ class ImportAndFiniteSourceTest(unittest.TestCase):
         self.assertEqual(
             model.SCHNORR_TWO_SPECIAL_SOUNDNESS_THEOREM_ID,
             model.k1.content_id(
-                "k3c.external.theorem-assumption",
+                "analysis.external.theorem-assumption",
                 model.k1.encode_datum(
                     model._schnorr_two_special_soundness_theorem_assumption_body()
                 ),
@@ -706,7 +737,7 @@ class ImportAndFiniteSourceTest(unittest.TestCase):
             "analysis.theorem-schema",
             {
                 item.value
-                for item in model.K3C_ANALYSIS_PROPERTY_PROFILE.supported_subject_kinds
+                for item in model.ANALYSIS_PROPERTY_PROFILE.supported_subject_kinds
             },
         )
 
@@ -722,9 +753,7 @@ class ExactSchnorrAcceptanceAndDomainTest(unittest.TestCase):
             source.protocol_source.fiat_shamir_protocol_id,
             views.fresh_public_setup.view_id,
             views.fiat_shamir_public_setup.view_id,
-            model.k3.schnorr_relation_definition_id(
-                source.case.definition_sources[0]
-            ),
+            model.k3.schnorr_relation_definition_id(source.case.definition_sources[0]),
             views,
             source,
         )
@@ -864,22 +893,18 @@ class ExactSchnorrAcceptanceAndDomainTest(unittest.TestCase):
         first = model.SchnorrTranscript(8, 16, 1, 7)
         second = model.SchnorrTranscript(8, 16, 6, 0)
         self.assertTrue(
-            model.schnorr_admitted_pair_predicate(
-                source, profile, first, second
-            )
+            model.schnorr_admitted_pair_predicate(source, profile, first, second)
         )
         self.assertFalse(
-            model.schnorr_admitted_pair_predicate(
-                source, profile, second, first
-            )
+            model.schnorr_admitted_pair_predicate(source, profile, second, first)
         )
-        outcome = model.extract_schnorr_witness(
-            source, profile, first, second
-        )
+        outcome = model.extract_schnorr_witness(source, profile, first, second)
         self.assertIs(outcome.kind, model.AttemptKind.AFFIRMATIVE)
         self.assertEqual(outcome.value.witness, 3)
 
-    def test_acceptance_does_not_consult_relation_correspondence_hypothesis(self) -> None:
+    def test_acceptance_does_not_consult_relation_correspondence_hypothesis(
+        self,
+    ) -> None:
         source, profile, *_ = exact_schnorr_context()
         with patch.object(
             model,
@@ -963,7 +988,9 @@ class ExactSchnorrAcceptanceAndDomainTest(unittest.TestCase):
                 replace(body, _issuer=object()),
             )
 
-    def test_abstract_family_cardinality_is_not_a_concrete_challenge_domain(self) -> None:
+    def test_abstract_family_cardinality_is_not_a_concrete_challenge_domain(
+        self,
+    ) -> None:
         abstract = model.afk_family_challenge_cardinality_parameter_domain_id(
             model.SELECTED_AFK_FAMILY
         )
@@ -1014,7 +1041,7 @@ class ExactSchnorrAcceptanceAndDomainTest(unittest.TestCase):
             "analysis.theorem-schema",
             {
                 item.value
-                for item in model.K3C_ANALYSIS_TRANSPORT_PROFILE.supported_subject_kinds
+                for item in model.ANALYSIS_TRANSPORT_PROFILE.supported_subject_kinds
             },
         )
 
@@ -1150,7 +1177,9 @@ class AnalysisReadPurposeContractTest(unittest.TestCase):
             self.family_requirement(ordinal=99),
         ):
             with self.subTest(requirement=type(requirement).__name__):
-                with self.assertRaisesRegex(model.AnalysisError, "resolve exactly once"):
+                with self.assertRaisesRegex(
+                    model.AnalysisError, "resolve exactly once"
+                ):
                     model.normalize_read_purpose_requirements((requirement,))
 
     def test_duplicate_requirement_is_rejected(self) -> None:
@@ -1226,9 +1255,7 @@ class AnalysisReadPurposeContractTest(unittest.TestCase):
             ),
             tuple(
                 sorted(
-                    model.k1.encode_datum(
-                        model._read_purpose_requirement_body(item)
-                    )
+                    model.k1.encode_datum(model._read_purpose_requirement_body(item))
                     for item in (family, concrete)
                 )
             ),
@@ -1261,8 +1288,8 @@ class AnalysisReadPurposeContractTest(unittest.TestCase):
         fields = dict(slots[0].fields)
         fields[6] = model.analysis_profile_declaration_ref_body(
             model.analysis_profile_declaration_ref(
-                model.K3C_ANALYSIS_PROPERTY_PROFILE,
-                model.K3C_ANALYSIS_PROPERTY_PROFILE,
+                model.ANALYSIS_PROPERTY_PROFILE,
+                model.ANALYSIS_PROPERTY_PROFILE,
                 "analysis.semantic-law",
                 "finite-challenge-domain-v0",
             )
@@ -1340,13 +1367,11 @@ class QualificationLawRegistryTest(unittest.TestCase):
         operation_policy_id = model._analysis_operation_policy_id(
             proposition_id,
             (("afk-family-property-transport", ("exact-family-applicability",)),),
-            profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
         )
         changed_judgment = replace(
             judgment,
-            proposition_id=model._id_datum(
-                proposition_id, "analysis.proposition"
-            ),
+            proposition_id=model._id_datum(proposition_id, "analysis.proposition"),
             semantic_basis_id=model._id_datum(
                 semantic_basis_id, "analysis.semantic-basis"
             ),
@@ -1360,7 +1385,7 @@ class QualificationLawRegistryTest(unittest.TestCase):
         judgment_id = model._form_analysis_profiled_content_id(
             "analysis.judgment-record",
             changed_judgment,
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            model.ANALYSIS_TRANSPORT_PROFILE,
         )
         return replace(
             result,
@@ -1385,17 +1410,14 @@ class QualificationLawRegistryTest(unittest.TestCase):
         )
         self.assertNotIn(
             "finite-fixed-extractor-universal-result",
-            {
-                item.qualification_label
-                for item in model._QUALIFICATION_LAW_SPECS
-            },
+            {item.qualification_label for item in model._QUALIFICATION_LAW_SPECS},
         )
 
     def test_wrong_family_or_qualification_is_refused(self) -> None:
         result = self.applicability_result()
         wrong = model.analysis_profile_declaration_ref(
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
-            model.K3C_ANALYSIS_PROPERTY_PROFILE,
+            model.ANALYSIS_TRANSPORT_PROFILE,
+            model.ANALYSIS_PROPERTY_PROFILE,
             "analysis.qualification",
             "finite-special-soundness-result",
         )
@@ -1403,9 +1425,7 @@ class QualificationLawRegistryTest(unittest.TestCase):
             model.AuthorityError,
             "inert checked result is detached from its judgment",
         ):
-            model.checked_result_coordinate_id(
-                replace(result, qualification_id=wrong)
-            )
+            model.checked_result_coordinate_id(replace(result, qualification_id=wrong))
 
     def test_wrong_subject_sequence_is_refused(self) -> None:
         result = self.applicability_result()
@@ -1437,7 +1457,7 @@ class QualificationLawRegistryTest(unittest.TestCase):
             replace(basis, exact_question_id=changed_question_id),
         )
         changed_support_id = model._analysis_support_instantiation_id(
-            profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
             semantic_basis_id=changed_basis_id,
             proposition_id=changed_proposition_id,
             assumed_goals=model.family_applicability_premise_ids(
@@ -1536,8 +1556,7 @@ class QualificationLawRegistryTest(unittest.TestCase):
         law = next(
             item
             for item in model._QUALIFICATION_LAW_SPECS
-            if item.qualification_label
-            == "afk-family-instance-correspondence-result"
+            if item.qualification_label == "afk-family-instance-correspondence-result"
         )
         for ordinal, kind in (
             (3, "analysis.challenge-domain"),
@@ -1575,11 +1594,11 @@ class QualificationLawRegistryTest(unittest.TestCase):
         operation_policy_id = model._analysis_operation_policy_id(
             result.proposition_id,
             (("afk-family-property-transport", ("exact-family-applicability",)),),
-            profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
         )
         with self.assertRaisesRegex(model.AuthorityError, "inherited context"):
             model._analysis_judgment_record_id(
-                profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+                profile=model.ANALYSIS_TRANSPORT_PROFILE,
                 proposition_id=result.proposition_id,
                 exact_family_conclusion=body.exact_family_conclusion,
                 inherited_hypothesis_context_id=model.analysis_hypothesis_context_id(
@@ -1593,12 +1612,14 @@ class QualificationLawRegistryTest(unittest.TestCase):
                 operation_policy_id=operation_policy_id,
             )
 
-    def test_requirement_is_resolved_independently_from_actual_qualification(self) -> None:
+    def test_requirement_is_resolved_independently_from_actual_qualification(
+        self,
+    ) -> None:
         result = self.applicability_result()
         operation_policy_id = model._analysis_operation_policy_id(
             result.proposition_id,
             (("afk-family-property-transport", ("exact-family-applicability",)),),
-            profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
         )
         binding = model._make_authority_binding(
             owner_id=model._ANALYSIS_APPLICABILITY_OWNER_ID,
@@ -1621,7 +1642,7 @@ class QualificationLawRegistryTest(unittest.TestCase):
         operation_policy_id = model._analysis_operation_policy_id(
             result.proposition_id,
             (("afk-family-property-transport", ("exact-family-applicability",)),),
-            profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
         )
         binding = model._make_authority_binding(
             owner_id=model._ANALYSIS_APPLICABILITY_OWNER_ID,
@@ -1632,7 +1653,7 @@ class QualificationLawRegistryTest(unittest.TestCase):
         )
         wrong_purpose = model.analysis_profile_declaration_ref(
             result.semantic_profile,
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            model.ANALYSIS_TRANSPORT_PROFILE,
             "analysis.typed-purpose",
             "all-n-two-special-soundness-source",
         )
@@ -1679,7 +1700,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
         self.assertEqual(digest, schema.authority.statement_content_sha256)
         self.assertEqual(
             digest,
-            "e1436cc2f5e51a7f0e380465d20f19cdc6af0061e9232214d33b4ba5a778682e",
+            "49d2a707ff0e83229ce28e5480437d165e88f46b7022f98e52ecc5b92ad4a18b",
         )
         self.assertNotEqual(digest, unprofiled_digest)
         self.assertNotEqual(digest, schema.authority.artifact_sha256)
@@ -1874,8 +1895,8 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
     def test_theorem_truth_question_is_exactly_source_free(self) -> None:
         body = model.theorem_truth_question_body(model.afk_v2_theorem_schema())
         reason = model.analysis_profile_declaration_ref(
-            model.K3C_ANALYSIS_TRANSPORT_PROFILE,
-            model.K3C_ANALYSIS_PROPERTY_PROFILE,
+            model.ANALYSIS_TRANSPORT_PROFILE,
+            model.ANALYSIS_PROPERTY_PROFILE,
             "analysis.semantic-law",
             "source-free-premise-reason",
         )
@@ -2035,7 +2056,9 @@ class FamilyApplicabilityTest(unittest.TestCase):
                 "affirmative",
                 "negative",
                 "unsupported",
+                "missing-dependency",
                 "cannot-answer",
+                "kind-mismatch",
                 "refused",
                 "malformed",
                 "deterministic-limit-exceeded",
@@ -2307,7 +2330,7 @@ class FamilyTransportTest(unittest.TestCase):
         self.assertEqual(analysis_policy.subject_kind, "analysis.operation-policy")
         self.assertEqual(
             external_policy.subject_kind,
-            "k3c.external-owner-operation-policy",
+            "analysis.external-owner-operation-policy",
         )
         self.assertEqual(
             analysis_policy,
@@ -2319,7 +2342,7 @@ class FamilyTransportTest(unittest.TestCase):
                         ("exact-family-applicability",),
                     ),
                 ),
-                profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+                profile=model.ANALYSIS_TRANSPORT_PROFILE,
             ),
         )
         self.assertEqual(
@@ -2339,7 +2362,7 @@ class FamilyTransportTest(unittest.TestCase):
                         ("all-n-two-special-soundness-source",),
                     ),
                 ),
-                profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+                profile=model.ANALYSIS_TRANSPORT_PROFILE,
             ),
         )
         with self.assertRaisesRegex(
@@ -2368,7 +2391,7 @@ class FamilyTransportTest(unittest.TestCase):
                     ("all-n-two-special-soundness-source",),
                 ),
             ),
-            profile=model.K3C_ANALYSIS_TRANSPORT_PROFILE,
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
         )
         forged_binding = replace(
             source.authority_binding,
@@ -2524,7 +2547,7 @@ class FamilyTransportTest(unittest.TestCase):
             authority_binding=replace(
                 source.authority_binding,
                 owner_id=model.fixture_ref(
-                    "k3c.external-proof-authority", "detached-owner"
+                    "analysis.external-proof-authority", "detached-owner"
                 ),
             ),
         )
@@ -3014,9 +3037,7 @@ class PointwiseSpecializationTest(unittest.TestCase):
                 bindings=model.k1.DatumSeq(tuple(owner_bindings)),
             ),
         )
-        arm_fields[2] = model._id_datum(
-            counterfeit_id, "analysis.source-support"
-        )
+        arm_fields[2] = model._id_datum(counterfeit_id, "analysis.source-support")
         source_bindings[2] = model.k1.DatumVariant(
             1, model.k1.DatumRecord(tuple(sorted(arm_fields.items())))
         )
@@ -3611,12 +3632,8 @@ class PointwiseSpecializationTest(unittest.TestCase):
         second = dict(bindings[1].fields)
         first_payload = dict(first[1].fields)
         second_payload = dict(second[1].fields)
-        bindings[0] = model.k1.DatumRecord(
-            ((0, first[0]), (1, second[1]))
-        )
-        bindings[1] = model.k1.DatumRecord(
-            ((0, second[0]), (1, first[1]))
-        )
+        bindings[0] = model.k1.DatumRecord(((0, first[0]), (1, second[1])))
+        bindings[1] = model.k1.DatumRecord(((0, second[0]), (1, first[1])))
         self.assertNotEqual(first_payload, second_payload)
         changed_support = model._form_analysis_profiled_content_id(
             "analysis.support-instantiation",
@@ -3917,9 +3934,7 @@ class AdaptiveAndQuantitativeBoundaryTest(unittest.TestCase):
 class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
     @staticmethod
     def prover_call(index: bytes) -> object:
-        return model.ClassicalOracleCall(
-            model.OracleCallActor.ADAPTIVE_PROVER, index
-        )
+        return model.ClassicalOracleCall(model.OracleCallActor.ADAPTIVE_PROVER, index)
 
     @staticmethod
     def verifier_call(index: bytes) -> object:
@@ -3966,11 +3981,16 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
             correspondence=correspondence,
             transcript=transcript,
         )
-        return state, receipt, capability, (
-            source,
-            profile,
-            correspondence,
-            target,
+        return (
+            state,
+            receipt,
+            capability,
+            (
+                source,
+                profile,
+                correspondence,
+                target,
+            ),
         )
 
     def test_closed_capability_catalog_has_no_fork_or_generic_rewind(self) -> None:
@@ -3992,19 +4012,37 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
             8, 4, invocation_nonce=b"n", strategy_root=b"r", prover_tape_nonce=b"t"
         )
         variants = (
-            model.begin_extractor_experiment(8, 4, invocation_nonce=b"n2", strategy_root=b"r", prover_tape_nonce=b"t"),
-            model.begin_extractor_experiment(8, 4, invocation_nonce=b"n", strategy_root=b"r2", prover_tape_nonce=b"t"),
-            model.begin_extractor_experiment(8, 4, invocation_nonce=b"n", strategy_root=b"r", prover_tape_nonce=b"t2"),
-            model.begin_extractor_experiment(8, 3, invocation_nonce=b"n", strategy_root=b"r", prover_tape_nonce=b"t"),
-            model.begin_extractor_experiment(9, 4, invocation_nonce=b"n", strategy_root=b"r", prover_tape_nonce=b"t"),
+            model.begin_extractor_experiment(
+                8, 4, invocation_nonce=b"n2", strategy_root=b"r", prover_tape_nonce=b"t"
+            ),
+            model.begin_extractor_experiment(
+                8, 4, invocation_nonce=b"n", strategy_root=b"r2", prover_tape_nonce=b"t"
+            ),
+            model.begin_extractor_experiment(
+                8, 4, invocation_nonce=b"n", strategy_root=b"r", prover_tape_nonce=b"t2"
+            ),
+            model.begin_extractor_experiment(
+                8, 3, invocation_nonce=b"n", strategy_root=b"r", prover_tape_nonce=b"t"
+            ),
+            model.begin_extractor_experiment(
+                9, 4, invocation_nonce=b"n", strategy_root=b"r", prover_tape_nonce=b"t"
+            ),
         )
-        self.assertEqual(len({base.experiment_id, *(item.experiment_id for item in variants)}), 6)
-        self.assertTrue(all(item.contract_id != base.contract_id for item in variants[-1:]))
+        self.assertEqual(
+            len({base.experiment_id, *(item.experiment_id for item in variants)}), 6
+        )
+        self.assertTrue(
+            all(item.contract_id != base.contract_id for item in variants[-1:])
+        )
 
     def test_capabilities_do_not_cross_nonce_root_or_tape_boundaries(self) -> None:
         first, _, capability, _ = self.accepted_baseline()
         for nonce, root, tape in (
-            (b"experiment-two", b"fixed-strategy-root", b"fresh-tape-for-this-experiment"),
+            (
+                b"experiment-two",
+                b"fixed-strategy-root",
+                b"fresh-tape-for-this-experiment",
+            ),
             (b"experiment-one", b"another-root", b"fresh-tape-for-this-experiment"),
             (b"experiment-one", b"fixed-strategy-root", b"another-tape"),
         ):
@@ -4049,8 +4087,8 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
         self.assertEqual(first_table[b"shared"], 2)
         self.assertEqual(first_table[b"new-nontarget"], 4)
 
-        second_programmed_state, _, second_rerun_capability = (
-            model.program_sibling(first_rerun_state, program_capability, 5)
+        second_programmed_state, _, second_rerun_capability = model.program_sibling(
+            first_rerun_state, program_capability, 5
         )
         second_rerun_state, second_receipt = model.rerun_programmed_sibling(
             second_programmed_state,
@@ -4131,8 +4169,9 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
         with self.assertRaises(model.ExperimentError):
             model.program_sibling(state, forged, 3)
         for wrong in (1, -1, 8):
-            with self.subTest(programmed_value=wrong), self.assertRaises(
-                model.ExperimentError
+            with (
+                self.subTest(programmed_value=wrong),
+                self.assertRaises(model.ExperimentError),
             ):
                 model.program_sibling(state, program_capability, wrong)
 
@@ -4177,28 +4216,47 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
 
     def test_exact_verifier_refuses_false_detached_and_mismatched_runs(self) -> None:
         source, profile, correspondence, transcript = self.context()
-        target = model._exact_counterfactual_query_carrier(source, profile, correspondence, transcript)
+        target = model._exact_counterfactual_query_carrier(
+            source, profile, correspondence, transcript
+        )
         initial = model.begin_extractor_experiment(
-            8, 2, invocation_nonce=b"false", strategy_root=b"root", prover_tape_nonce=b"tape"
+            8,
+            2,
+            invocation_nonce=b"false",
+            strategy_root=b"root",
+            prover_tape_nonce=b"tape",
         )
         with self.assertRaisesRegex(
             model.ExperimentError, "protocol Check and Terminal"
         ):
             model.run_baseline(
-                initial, (self.prover_call(target),), (1,), source=source,
-                profile=profile, correspondence=correspondence,
+                initial,
+                (self.prover_call(target),),
+                (1,),
+                source=source,
+                profile=profile,
+                correspondence=correspondence,
                 transcript=model.SchnorrTranscript(8, 16, 1, 0),
             )
         with self.assertRaises(model.ExperimentError):
             model.run_baseline(
-                initial, (self.prover_call(target),), (1,), source=source,
-                profile=profile, correspondence=correspondence,
+                initial,
+                (self.prover_call(target),),
+                (1,),
+                source=source,
+                profile=profile,
+                correspondence=correspondence,
                 transcript=model.SchnorrTranscript(1, 1, 0, 0),
             )
         with self.assertRaisesRegex(model.ExperimentError, "disagrees"):
             model.run_baseline(
-                initial, (self.prover_call(target),), (2,), source=source,
-                profile=profile, correspondence=correspondence, transcript=transcript,
+                initial,
+                (self.prover_call(target),),
+                (2,),
+                source=source,
+                profile=profile,
+                correspondence=correspondence,
+                transcript=transcript,
             )
 
         state, _, program_capability, _ = self.accepted_baseline(
@@ -4222,11 +4280,15 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
     def test_rerun_capability_is_process_locally_single_use(self) -> None:
         state, _, program_capability, context = self.accepted_baseline()
         source, profile, correspondence, target = context
-        programmed, _, rerun_capability = model.program_sibling(state, program_capability, 3)
+        programmed, _, rerun_capability = model.program_sibling(
+            state, program_capability, 3
+        )
         with self.assertRaisesRegex(model.ExperimentError, "no longer current"):
             model.program_sibling(state, program_capability, 5)
         arguments = dict(
-            source=source, profile=profile, correspondence=correspondence,
+            source=source,
+            profile=profile,
+            correspondence=correspondence,
             transcript=model.SchnorrTranscript(8, 16, 3, 2),
         )
         rerun_state, _ = model.rerun_programmed_sibling(
@@ -4236,7 +4298,11 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
             model.program_sibling(programmed, program_capability, 5)
         with self.assertRaisesRegex(model.ExperimentError, "unauthorized or stale"):
             model.rerun_programmed_sibling(
-                rerun_state, rerun_capability, (self.prover_call(target),), (), **arguments
+                rerun_state,
+                rerun_capability,
+                (self.prover_call(target),),
+                (),
+                **arguments,
             )
 
     def test_caller_cannot_supply_an_acceptance_verdict(self) -> None:
@@ -4249,9 +4315,7 @@ class CounterfactualRandomOracleStateMachineTest(unittest.TestCase):
         source, profile, correspondence, _ = self.context()
         state, baseline, program_capability, context = self.accepted_baseline()
         target = context[-1]
-        state, _, rerun_capability = model.program_sibling(
-            state, program_capability, 6
-        )
+        state, _, rerun_capability = model.program_sibling(state, program_capability, 6)
         _, rerun = model.rerun_programmed_sibling(
             state,
             rerun_capability,

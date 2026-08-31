@@ -95,7 +95,7 @@ where
 
   protocol_profile_id =
     PIRInteractionProfileId when protocol is Fresh
-    TranscriptConstructionProfile(A.id)
+    AuthenticatedTranscriptConstructionProfile(A)
       when protocol is FiatShamir(T) and the authenticated admitted
       construction handle A satisfies A.id = T
 ```
@@ -269,6 +269,7 @@ Consumer operations receive satellites explicitly:
 |---|---|
 | Verifier OIR projection | exact Interface, verifier purpose, and one affirmative checked `EndpointSourceView` from [Endpoint Projection Views](endpoint-projection-views.md) |
 | Plan-specialized prover OIR projection | exact Interface and Plan, affirmative `CheckedPlanRealizes`, specialized-prover purpose, and one affirmative checked `EndpointSourceView` whose graph contains the reachable Plan component; neither a whole Plan nor `PlanWitnessSurface` enters target identity |
+| Plan-continuation prover OIR projection | exact Interface and Plan, affirmative `CheckedPlanRealizes`, one owner-derived nonempty accepted-terminal continuation arm set, continuation-prover purpose, and one affirmative checked `EndpointSourceView` whose graph contains every and only reachable continuation-arm components; neither a whole Plan nor live handoff capability enters target identity |
 | `ProtocolRelationBinding` formation and admission | exact relation Interfaces and K1 dependencies reached by the candidate; no `ProtocolInterfaceId` |
 | Protocol-level mapped correspondence | exact admitted `CorrespondenceQuestion`, every admitted operand it names, and owner-issued views plus matching live authority for `ManifestFor(question)`; no `ProtocolInterfaceId` unless that exact question reads one |
 | External instance correspondence | the exact admitted external-instance question and operands, owner-issued views plus matching live authority for its manifest, exact `DecodedExternalAssignment`, and matching codec-evaluation authority |

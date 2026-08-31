@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the bounded K1 reference and independent-oracle gates."""
+"""Run the bounded executable-foundation and independent-oracle gates."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def run_suite(path: Path, label: str) -> tuple[int, bool]:
     # suite cannot inherit the first suite's topology.
     suite = unittest.TestLoader().discover(str(path), top_level_dir=str(path))
     count = suite.countTestCases()
-    print(f"K1 {label}: {count} tests")
+    print(f"Executable foundations {label}: {count} tests")
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return count, result.wasSuccessful()
 
@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="run the frozen K1 gate (also the default operation)",
+        help="run the frozen executable-foundation gate (also the default operation)",
     )
     parser.parse_args(argv)
 
@@ -36,9 +36,9 @@ def main(argv: list[str] | None = None) -> int:
     oracle_count, oracle_ok = run_suite(ROOT / "oracle" / "tests", "oracle")
     total = reference_count + oracle_count
     if reference_ok and oracle_ok:
-        print(f"K1 executable foundations: {total}/{total} tests passed")
+        print(f"Executable foundations: {total}/{total} tests passed")
         return 0
-    print("K1 executable foundations: FAILED", file=sys.stderr)
+    print("Executable foundations: FAILED", file=sys.stderr)
     return 1
 
 

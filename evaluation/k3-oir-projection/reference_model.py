@@ -84,7 +84,6 @@ class K3DSemanticProfiles:
     endpoint_graph: object
     source_view: object
     projection: object
-    validation: object
     k3b_profiles: object = field(compare=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -92,7 +91,6 @@ class K3DSemanticProfiles:
             self.endpoint_graph,
             self.source_view,
             self.projection,
-            self.validation,
         )
         if any(type(item) is not k1.SemanticLanguageProfile for item in profiles):
             raise TypeError("K3-D semantic profiles have the wrong exact shape")
@@ -104,8 +102,6 @@ class K3DSemanticProfiles:
             raise ValueError("the source-view profile must import the endpoint graph")
         if self.projection.profile_imports != _profile_imports(self.source_view):
             raise ValueError("the projection profile must import the source view")
-        if self.validation.profile_imports != _profile_imports(self.projection):
-            raise ValueError("the validation profile must import projection meaning")
 
     @property
     def endpoint_graph_bundle(self) -> dict[object, object]:
@@ -123,12 +119,8 @@ class K3DSemanticProfiles:
         return {**self.source_view_bundle, self.projection.identity: self.projection}
 
     @property
-    def validation_bundle(self) -> dict[object, object]:
-        return {**self.projection_bundle, self.validation.identity: self.validation}
-
-    @property
     def bundle(self) -> dict[object, object]:
-        return self.validation_bundle
+        return self.projection_bundle
 
 
 def make_k3d_semantic_profiles(
@@ -137,7 +129,6 @@ def make_k3d_semantic_profiles(
     endpoint_graph_law: bytes = b"zkc-k3d-endpoint-graph-law-v0",
     source_view_law: bytes = b"zkc-k3d-pir-source-view-law-v0",
     projection_law: bytes = b"zkc-k3d-source-relative-projection-law-v0",
-    validation_law: bytes = b"zkc-k3d-projection-validation-law-v0",
 ) -> K3DSemanticProfiles:
     upstream = (
         k3.K3B_SEMANTIC_PROFILES if k3b_profiles is None else k3b_profiles
@@ -193,31 +184,10 @@ def make_k3d_semantic_profiles(
         ),
         projection_law,
     )
-    validation = k1.SemanticLanguageProfile(
-        k1.Symbol("zkc.oir.projection-validation"),
-        0,
-        _profile_imports(projection),
-        tuple(
-            k1.Symbol(item)
-            for item in sorted(
-                (
-                    "oir.projection-checker-basis",
-                    "oir.projection-validation-request",
-                )
-            )
-        ),
-        _profile_catalog(
-            "oir.projection-validation-declaration",
-            "exact-equality-checker-basis-v0",
-            "validation-request-body-v0",
-        ),
-        validation_law,
-    )
     return K3DSemanticProfiles(
         endpoint_graph,
         source_view,
         projection,
-        validation,
         upstream,
     )
 
@@ -227,7 +197,6 @@ K3D_PROFILE_BUNDLE = K3D_SEMANTIC_PROFILES.bundle
 SOURCE_PROFILE = K3D_SEMANTIC_PROFILES.source_view.identity
 OIR_PROFILE = K3D_SEMANTIC_PROFILES.endpoint_graph.identity
 RELATION_PROFILE = K3D_SEMANTIC_PROFILES.projection.identity
-VALIDATION_PROFILE = K3D_SEMANTIC_PROFILES.validation.identity
 CHECKER_BASIS_LABEL = "k3d.exact-equality-checker.v0"
 ENDPOINT_CONTRACT_LAW = "EndpointContractLawV0"
 MAX_GRAPH_ITEMS = 1 << 14
@@ -1258,8 +1227,6 @@ def _semantic_id(subject_kind: str, value: object) -> object:
         "pir.endpoint-source-view": K3D_SEMANTIC_PROFILES.source_view,
         "oir.endpoint": K3D_SEMANTIC_PROFILES.endpoint_graph,
         "oir.projection-proposition": K3D_SEMANTIC_PROFILES.projection,
-        "oir.projection-checker-basis": K3D_SEMANTIC_PROFILES.validation,
-        "oir.projection-validation-request": K3D_SEMANTIC_PROFILES.validation,
     }
     try:
         profile = profile_by_kind[subject_kind]
@@ -1281,9 +1248,6 @@ def _semantic_id(subject_kind: str, value: object) -> object:
         K3D_SEMANTIC_PROFILES.projection.identity: (
             K3D_SEMANTIC_PROFILES.projection_bundle
         ),
-        K3D_SEMANTIC_PROFILES.validation.identity: (
-            K3D_SEMANTIC_PROFILES.validation_bundle
-        ),
     }[profile.identity]
     k1.authenticate_profiled_semantic_content(
         identifier,
@@ -1295,10 +1259,10 @@ def _semantic_id(subject_kind: str, value: object) -> object:
     return identifier
 
 
-CHECKER_BASIS = _semantic_id(
-    "oir.projection-checker-basis",
-    CHECKER_BASIS_LABEL,
-)
+# This is an evaluator coordinate, not a profiled semantic subject or
+# transferable authority.  The selected projection relation profile owns the
+# operation law that interprets it.
+CHECKER_BASIS = CHECKER_BASIS_LABEL
 
 
 def _id_text(value: object, expected_kind: str | None = None) -> str:
@@ -8123,7 +8087,7 @@ class CheckedProjection:
     proposition: FormedProjectionProposition
     source_view_id: object
     oir_id: object
-    validation_request_id: object
+    validation_request_fingerprint: str
     validation: ProjectionValidationRequest
 
     def __post_init__(self) -> None:
@@ -8247,20 +8211,29 @@ def form_projection_proposition(
     return _answer(OutcomeKind.AFFIRMATIVE, formed)
 
 
-def projection_validation_request_id(request: ProjectionValidationRequest) -> object:
-    return _semantic_id(
-        "oir.projection-validation-request",
-        (
-            request.proposition.proposition_id,
-            request.source_handles,
-            request.schema_set_id,
-            request.manifest_id,
-            request.checker_basis,
-            request.work_limit,
-            request.provenance,
-            request.source_label,
-        ),
-    )
+def projection_validation_request_fingerprint(
+    request: ProjectionValidationRequest,
+) -> str:
+    """Return an inert diagnostic fingerprint for one live request.
+
+    This value is not a semantic ID, authority, cache key, or reconstruction
+    route.  The identical live request remains authoritative.
+    """
+
+    return hashlib.sha256(
+        canonical_bytes(
+            (
+                request.proposition.proposition_id,
+                request.source_handles,
+                request.schema_set_id,
+                request.manifest_id,
+                request.checker_basis,
+                request.work_limit,
+                request.provenance,
+                request.source_label,
+            )
+        )
+    ).hexdigest()
 
 
 def _is_live_validation_request(validation: object) -> bool:
@@ -8313,8 +8286,8 @@ def _is_live_checked_projection(checked: object) -> bool:
         return (
             checked.source_view_id == checked.validation.source.view_id
             and checked.oir_id == checked.validation.target.oir_id
-            and checked.validation_request_id
-            == projection_validation_request_id(checked.validation)
+            and checked.validation_request_fingerprint
+            == projection_validation_request_fingerprint(checked.validation)
         )
     except (AttributeError, TypeError, ValueError):
         return False
@@ -8466,13 +8439,13 @@ def check_projection(
             reason="exact endpoint semantic graphs differ",
             mismatches=mismatches,
         )
-    request_id = projection_validation_request_id(validation)
+    request_fingerprint = projection_validation_request_fingerprint(validation)
     checked = CheckedProjection(
         _PROJECTED_ISSUER,
         validation.proposition,
         validation.source.view_id,
         validation.target.oir_id,
-        request_id,
+        request_fingerprint,
         validation,
     )
     _LIVE_CHECKED_PROJECTIONS[id(checked)] = checked

@@ -147,11 +147,11 @@ class IdentitySnapshot:
     verifier_source_id: object
     verifier_oir_id: object
     verifier_proposition_id: object
-    verifier_validation_id: object
+    verifier_validation_fingerprint: str
     prover_source_id: object
     prover_oir_id: object
     prover_proposition_id: object
-    prover_validation_id: object
+    prover_validation_fingerprint: str
 
 
 def _affirmative(answer: object, stage: str) -> object:
@@ -401,11 +401,11 @@ def identity_snapshot(witness: IntegratedWitness) -> IdentitySnapshot:
         witness.verifier.source.view_id,
         witness.verifier.admitted.oir_id,
         witness.verifier.validation.proposition.proposition_id,
-        witness.verifier.checked.validation_request_id,
+        witness.verifier.checked.validation_request_fingerprint,
         witness.prover.source.view_id,
         witness.prover.admitted.oir_id,
         witness.prover.validation.proposition.proposition_id,
-        witness.prover.checked.validation_request_id,
+        witness.prover.checked.validation_request_fingerprint,
     )
 
 

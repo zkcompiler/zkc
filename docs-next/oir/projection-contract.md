@@ -1,9 +1,9 @@
 # OIR Endpoint and Projection Contract
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K3-D target
+> **Document state:** Active non-normative endpoint-projection target
 > **Provisional owner:** `oir`
-> **Authority:** This page defines the bounded K3-D OIR semantic skeleton and
+> **Authority:** This page defines the bounded OIR semantic skeleton and
 > PIR-to-OIR validation relation. It does not replace the current
 > specifications under [`docs/`](../../docs/README.md), activate full Stage
 > 4B, select final MLIR syntax, or make a cryptographic-security claim.
@@ -11,9 +11,9 @@
 ## 1. Selected factorization
 
 The bounded profile accepts only the canonical-framed Fiat--Shamir family.
-`PIRDuplexSpongeFSProfileId` is a recognized source family but support
-classification returns `Unsupported` before source extraction or OIR
-construction. Duplex support needs a sibling endpoint profile that owns salt
+Every other authenticated construction family returns
+`Unsupported(OtherTranscriptConstructionFamily)` before source extraction or
+OIR construction. Duplex support needs a sibling endpoint profile that owns salt
 placement, abstract proof-tuple parsing, prover-message wire codecs, and their
 checked correspondence to distinct transcript encoders. None is inferred from
 the canonical graph's namespaces, retry, or sampling-failure rows.
@@ -642,7 +642,7 @@ cryptographic property even after that later contract exists.
 | Canonical-framed FS Plan-specialized Prover over base Plan recipes | Supported |
 | Canonical-framed FS Plan-continuation Prover with one or more owner-derived nonempty accepted-terminal arms | Supported |
 | Plan-continuation Prover whose exact Plan yields no nonempty accepted-terminal arm | `Unsupported(NoPlanContinuationArm)` |
-| Duplex-sponge FS Verifier or Prover | `Unsupported(DuplexSpongeEndpoint)` |
+| Any noncanonical authenticated transcript-construction family, including duplex-sponge | `Unsupported(OtherTranscriptConstructionFamily)` |
 | Fresh Verifier or Prover | `Unsupported(FreshEndpoint)` |
 | Generic Plan-free Prover | `Unsupported(GenericProverEndpoint)` |
 | Core with a native Oracle declaration or occurrence | `Unsupported(StandardOracleEndpoint)` |
@@ -688,9 +688,8 @@ source/target relation.
 
 The accepted-terminal continuation extension rotates the selected
 `PIRInterfacePlanProfileId`, `OirEndpointGraphProfileId`,
-`PirEndpointSourceViewProfileId`, `OirProjectionRelationProfileId`, and
-`OirProjectionValidationProfileId`, plus every identity formed under those
-profiles. It does not rotate Foundation `SemanticRegimeId`, Foundation
+`PirEndpointSourceViewProfileId`, and `OirProjectionRelationProfileId`, plus
+every identity formed under those profiles. It does not rotate Foundation `SemanticRegimeId`, Foundation
 semantic-language meaning, InteractiveCore or Fiat--Shamir construction
 profiles, `CoreId`, or `ProtocolId`. Old profile bodies may
 be retained as historical evidence but cannot authenticate this grammar.
@@ -785,7 +784,7 @@ EndpointStaticObligationBody =
   | V(5,R{0:CodecDirectionBody,
           1:EndpointPresentationCoordinateBody})
   | V(6,N(accepted_terminal_ref))
-// SlotIngress | PlanDecision | K2Frame | LocalOccurrence
+// SlotIngress | PlanDecision | TranscriptFrame | LocalOccurrence
 // ChallengeInterpret | Presentation | PlanContinuation
 
 EndpointValueAccessRouteBody =
@@ -953,16 +952,16 @@ support/extraction/admission capabilities, checker, limits, evidence, and
 provenance are request inputs and cannot appear in this body. K3-D defines no
 pair proposition body.
 
-The bounded executable also assigns profiled probe-local identifiers to its
-checker-basis label and validation-request binding. This target page does not
-yet select portable canonical domain bodies for either validation-layer
-record: the request contains live process authority and the checker coordinate
-still needs an exact owner declaration. Those two executable identifiers are
-therefore **bounded validation identities**, not durable semantic identities or
-evidence of K1 preimage parity. A future durable definition must give each one
-an exact typed domain body under `OirProjectionValidationProfileId`; it cannot
-promote the instrument's label, provenance, source label, live handle, or JSON
-encoding by convention.
+`ProjectionValidationRequest` and its checker coordinate are live operation
+records under `OirProjectionRelationProfileId`; neither is a profiled semantic
+subject. The request contains process authority, limits, provenance, and a
+source label, is noncopyable and nonserializable, and is valid only while the
+identical bearers remain live. An implementation may compute an inert
+diagnostic fingerprint over its public fields, but that fingerprint grants no
+authority, cannot reconstruct the request, and is absent from every semantic
+preimage. A future portable projection certificate would require a new
+semantic subject and profile with its own exact body and evidence law; it
+cannot promote this live request or its diagnostic fingerprint by convention.
 
 The OIR body must fit the cumulative K1 `2^20` encoded-byte, `2^14` node,
 `2^14` aggregate-child-edge, and depth-384 limits. Local admission and

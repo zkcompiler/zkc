@@ -1,10 +1,10 @@
 # Protocol Property Analysis
 
 > **Document kind:** Domain index
-> **Document state:** Active non-normative K3-C target; its finite executable
-> join was exercised by bounded K3-E, while owner profile preimages remain open
-> **Target alignment:** Bounded minimum Analysis kernel over K1, K2, and K3-B;
-> its selected finite P01/Schnorr path has K3-E executable join evidence, while
+> **Document state:** Active non-normative Analysis target; its finite executable
+> join was exercised by bounded joined-path validation, while owner profile preimages remain open
+> **Target alignment:** Bounded minimum Analysis kernel over Foundation, PIR, and Relations;
+> its selected finite P01/Schnorr path has joined-path validation executable join evidence, while
 > broader Analysis families remain deferred
 > **Provisional owner:** `analysis`
 > **Authority:** None during transition. The current property calculus remains
@@ -20,7 +20,7 @@ It does not own those subjects, their execution, relation satisfaction, or the
 truth of an imported theorem. Its minimum active pipeline is:
 
 ```text
-finite K2/K3-B subject S
+finite PIR/Relations subject S
   -> finite relation-bound Fresh proposition and conditional judgment
 
 abstract asymptotic family F
@@ -34,11 +34,11 @@ conditional family target judgment
   -> conditional finite-member target judgment
 ```
 
-This is intentionally smaller than the earlier Stage 4A catalog. K3-C closes
+This is intentionally smaller than the earlier Stage 4A catalog. Analysis closes
 one reusable ingress and these typed seams; it does not finish every Analysis
 family. In particular, the finite judgment for `S` neither establishes the
 all-`n` source property of `F` nor enters the AFK family transport directly.
-K3-C defines no native proof basis that mints that family source-property
+Analysis defines no native proof basis that mints that family source-property
 capability, so the family transport currently returns `CannotAnswer` unless an
 independent proof authority supplies it.
 
@@ -63,7 +63,7 @@ independent proof authority supplies it.
 
 ## Does not own
 
-- K1 identity, value, algorithm, failure, evaluation, or capability mechanics;
+- Foundation identity, value, algorithm, failure, evaluation, or capability mechanics;
 - `InteractiveCore`, Protocol, generated execution, deterministic replay,
   transcript construction, or `CheckedFSConstruction`;
 - relation definitions, Interfaces, instances, satisfaction, Protocol/Plan
@@ -110,30 +110,33 @@ and consumes the owner's inert binding plus any separately fresh capability;
 it cannot reconstruct a second Core, transcript, relation, occurrence graph,
 or authored loss count.
 
-## Profile topology and K3-E evidence boundary
+## Profile topology and joined-path validation evidence boundary
 
 The target Analysis identities are profile-qualified. A standalone common
 kernel profile owns only the shared calculus; a bounded cryptographic-property
-profile directly imports that kernel and the exact-used K3-B Relations profile;
-the latter's exact closure reaches the Interface/Plan and K2 PIR/FS profiles;
+profile directly imports that kernel, the exact-used Relations profile, and
+the Interaction, canonical-framed FS, and public-setup PIR profiles whose
+owner views it directly interprets; the Relations closure independently
+reaches Interface/Plan and its own PIR dependencies;
 an AFK semantic-transport profile imports the property profile; and a narrow
 theorem-source-validation profile imports that semantic-transport profile.
-Redundant direct K2 edges are forbidden. Once their owner-local preimages are
-published, these are exact profile IDs with exact no-extra import closures, not
-family/revision labels. Dependency flows kernel -> property -> semantic
+Each direct PIR edge has an explicit owner-view use coordinate; an edge
+supported only by transitive reachability is forbidden. Once their owner-local
+preimages are published, these are exact profile IDs with exact no-extra import
+closures, not family/revision labels. Dependency flows kernel -> property -> semantic
 transport -> theorem-source validation and never backward. An unrelated future
 profile therefore does not rotate an existing body; changing an actually used
 upstream profile intentionally rotates its downstream consumers.
 
-K3-E supplies bounded executable evidence only for this finite profile
-topology, exact authentication, and expected local/downstream rotation. It does
+The joined-path executable supplies bounded evidence only for this finite
+profile topology, exact authentication, and expected local/downstream rotation. It does
 not own Analysis semantics or publish the final profile identities. In
 particular, the current symbolic-law and host-dispatch profile objects are
 correspondence surrogates and must not become the ideal typed Analysis
 preimages. Each Analysis owner must publish its complete six-field profile
 preimage, exact typed law-source bytes, and independently reconstructible full
-typed ID before any dependent K4 ID is treated as persistent and before K5
-freeze.
+typed ID before any dependent profile ID is treated as persistent and before
+independent freeze.
 
 The AFK semantic theorem schema, questions, goals, propositions, and semantic
 bases remain under the semantic-transport profile. The child profile governs
@@ -154,7 +157,7 @@ The active kind table is intentionally small. Experiment-local records,
 theorem-local binders, resource entries, role-map clauses, and quantitative
 subterms remain nested in their nearest durable owner. Foreign objects retain
 their producer-owned IDs rather than receiving `analysis.*` aliases. Probe-only
-fixtures use `probe.k3c.*` and may not enter an Analysis identity, judgment,
+fixtures use `probe.analysis.*` and may not enter an Analysis identity, judgment,
 authority binding, support record, or closure claim. A new `analysis.*` kind is
 therefore a specification change requiring an exact body, profile assignment,
 compiler arm, formation law, and locality tests; it is not a convenience for a
@@ -169,7 +172,7 @@ truth-discharge metadata live in a distinct
 support, not theorem-truth questions or goals; a semantic statement change
 rotates the theorem ID and every downstream validation/support reference.
 
-The K2/K3-B ingress is similarly exact:
+The PIR/Relations ingress is similarly exact:
 
 - invocation values come only from the Fresh and Fiat--Shamir PIR
   `PublicSetupInvocationView` values, whose public-entry sequences must agree;
@@ -189,13 +192,13 @@ The K2/K3-B ingress is similarly exact:
   bindings and owner-profiled closure preimages, never supplied as independent
   claims and never treated as authority.
 
-## Active K3-C profiles
+## Active Analysis profiles
 
 The bounded active set is:
 
 1. **Finite relation-bound Schnorr special soundness.** The Statement, claim,
    Witness role, relation instance, verifier equation, and accepting event come
-   from exact K2/K3-B sources. Its universal pair quantifier is over one finite
+   from exact PIR/Relations sources. Its universal pair quantifier is over one finite
    native profile, not an asymptotic family and not an AFK source theorem.
 2. **Abstract classical-ROM Fresh-to-FS transport.** One exact asymptotic
    family description is matched to one exact theorem profile. The initial
@@ -277,7 +280,7 @@ Failed proof search is not a semantic negative. `Unsupported`,
 
 ## Deliberate deferrals
 
-The following earlier Stage 4A surfaces are not active K3-C contracts:
+The following earlier Stage 4A surfaces are not active Analysis contracts:
 
 - general Protocol equality, trace refinement, declared change,
   distributional distance, and cost families;
@@ -297,7 +300,7 @@ named consumer. It is not achieved by adding a flag to either initial profile.
 
 - [Analysis Semantic Model](analysis-model.md) owns the common minimum ingress,
   experiment, identity, hypothesis, basis, authority, and outcome contracts.
-- [Semantic Relations](semantic-relations.md) owns the exact K3-B relation
+- [Semantic Relations](semantic-relations.md) owns the exact Relations relation
   source seam and the initial relation-bound property coordinates.
 - [Cryptographic Properties](cryptographic-properties.md) owns the two selected
   experiment/property profiles and typed quantitative language.

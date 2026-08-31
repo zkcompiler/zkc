@@ -70,18 +70,13 @@ Protocol body interpretation, three construction-view schemas, checked-result
 view schema, runtime material and receipt schemas, their projection and
 closure laws, and the common PIR source-authority envelope specializations.
 
-The exact authenticated profile closure is:
-
-```text
-ExactProfilePreimages(PIRDuplexSpongeFSProfileId) =
-  {PIRInteractionProfileId, PIRDuplexSpongeFSProfileId}
-```
-
-There is no import of the canonical-framed sibling. An evaluator can support
-one family without supporting the other. Adding an unreferenced future sibling
-does not rotate either existing family. Changing this page's body grammar,
-admission, execution, receipt, view, or replay law rotates the duplex profile
-and its dependents only.
+The exact no-extra authenticated closure is owned by the
+[PIR profile topology](interactive-core.md#31-exact-pir-language-profile-split):
+it contains this profile and `PIRInteractionProfileId`, and no canonical-framed
+sibling. An evaluator can support one family without supporting the other.
+Adding an unreferenced future sibling does not rotate either existing family.
+Changing this page's body grammar, admission, execution, receipt, view, or
+replay law rotates the duplex profile and its dependents only.
 
 This page does not yet publish the complete six-field profile preimage or its
 independently reconstructible full typed ID. The profile must publish that
@@ -209,6 +204,14 @@ same positive length.
 entries selected by those admitted exact-total maps. They are undefined before
 map admission and cannot select a default.
 
+When `DuplexChallengeRuleFor(T,c).squeeze_length = 0`, the decoder receives the
+unique empty sequence and therefore returns a construction-fixed value that is
+independent of transcript state. This degenerate rule is operationally total
+and may be admitted; it is not evidence of challenge entropy. Any Analysis
+family whose theorem requires a random or history-dependent challenge must
+state a positive-length or decoder-distribution premise and refuse applicability
+when that premise is false.
+
 ### 3.4 Complete subject and identity
 
 ```text
@@ -236,7 +239,9 @@ TranscriptConstructionId =
     PIRDuplexSpongeFSProfileId,
     DuplexSpongeTranscriptConstructionBody(T))
 
-TranscriptConstructionProfile(T.id) = PIRDuplexSpongeFSProfileId
+AuthenticatedTranscriptConstructionProfile(
+  exact authenticated admitted handle for T) =
+  PIRDuplexSpongeFSProfileId
 ```
 
 The ID commits to every field above, the exact sibling profile, and every
@@ -249,6 +254,12 @@ The body contains no self ID. Unlike the canonical-framed family, the duplex
 state never absorbs construction, Core, or application-domain identifiers, so
 there is no `BindConstructionSelfId` step in this profile.
 
+The explicit `zero_symbol` is a local operational generalization of the
+reviewed source construction, which fixes the rate prefix to its alphabet-zero
+word. An Analysis import of that source must either require this field to equal
+the source alphabet's exact zero value or supply a checked equivalence theorem;
+the generic PIR family does not infer that premise.
+
 Runtime public values, salt, messages, transcript state, receipts, proof bytes,
 provider paths, source citations, Analysis results, and Evidence do not enter
 construction identity.
@@ -258,19 +269,41 @@ construction identity.
 ### 4.1 Binary instance correspondence
 
 The source construction starts from a binary instance `x`. The Core instead
-has typed binding occurrences. This family derives:
+has typed binding occurrences. Define the owner-derived vocabulary:
 
 ```text
+RootInitialStatementBinding(C,b) =
+  b is a PublicBindingDecl of admitted C
+  and b.scope is C's unique root scope
+  and b.class = Statement
+  and C.bindings[b].value is PublicInput(_)
+
 DuplexInstanceBindings(C) =
-  every and only root-initial Statement BindingRef,
+  every and only b satisfying RootInitialStatementBinding(C,b),
   ordered by ascending BindingRef
+
+EncodeDuplexInstance(C,I) =
+  M(S[R{
+        0: N(b),
+        1: CanonicalValueTypeBody(C.public_inputs[ref].value_type),
+        2: I.public_inputs[ref].datum
+      }
+      for b in DuplexInstanceBindings(C) in that order,
+      where C.bindings[b].value = PublicInput(ref)])
 ```
 
+`I` is the exact admitted `CoreInvocation` for `C`; `M` and `S` are the
+Foundation canonical encoding and sequence constructors. The function is
+undefined before both subjects are admitted or when an invocation value is
+missing or has the wrong exact type. It is not an Interface codec.
+
 Equal values at different binding occurrences remain separate. Every selected
-binding contributes the exact triple:
+binding contributes the exact Foundation record:
 
 ```text
-(BindingRef, CanonicalValueTypeBody(value_type), value.datum)
+R{0: N(BindingRef),
+  1: CanonicalValueTypeBody(value_type),
+  2: value.datum}
 ```
 
 Let `instance_bytes` be the Foundation canonical encoding `M(...)` of the
@@ -285,9 +318,11 @@ The initial operational profile refuses:
 
 - a Statement binding introduced after execution starts or inside a child
   scope;
+- a root-initial Statement binding whose value is not a `PublicInput`;
 - verifier-private Core inputs;
 - runtime `SessionContext` or `PublicParameter` bindings; and
-- a public Core input with no exactly one root-initial Statement binding.
+- any public Core input that is not named by exactly one member of
+  `DuplexInstanceBindings(C)`.
 
 A richer instance convention requires a separately checked correspondence or
 a sibling profile. It cannot be supplied as an opaque prefix.
@@ -385,10 +420,11 @@ prior positive squeeze set `i_A = 0`.
 
 ### 5.4 Exact source schedule
 
-For runtime instance `I`, salt `tau`, and source rounds `1..k`:
+For exact admitted `C` satisfying `C.id = T.core_id`, runtime invocation `I`,
+salt `tau`, and source rounds `1..k`:
 
 ```text
-x       := EncodeDuplexInstance(I)
+x       := EncodeDuplexInstance(C,I)
 state   := Start_T(x)
 state   := Absorb_T(state,tau)
 
@@ -432,6 +468,19 @@ DuplexConstructionMaterialSchema(T) = {
   DuplexSaltRef(T): AlphabetSequenceCarrier_T(T.salt_length)
     with ExactAlphabetVector_T(T.salt_length,value)
 }
+
+DuplexConstructionMaterialCandidate =
+  CanonicalMap<DuplexConstructionMaterialRef,CanonicalValue>
+
+DuplexMaterialRefusalReason =
+    InvocationCoreMismatch
+  | MaterialKeySetMismatch
+  | SaltLengthMismatch
+  | LatePreparation
+
+DuplexMaterialRefusalReasonSet =
+  CanonicalNonEmptySortedUniqueSeq<
+    DuplexMaterialRefusalReason in written tag order>
 ```
 
 The coordinate exists when `salt_length = 0`; its only value is then the empty
@@ -445,10 +494,11 @@ challenge, witness, or construction identity field.
 PrepareDuplexConstructionMaterial(
   exact admitted duplex FS Protocol,
   exact CoreInvocation,
-  TotalMap<every and only DuplexSaltRef(T),CanonicalValue>,
+  DuplexConstructionMaterialCandidate,
   exact evaluator and deterministic limits)
     -> Affirmative(ExactDuplexConstructionMaterialCapability)
-     | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+     | Unsupported | MissingDependency | KindMismatch | Malformed
+     | Refused(DuplexMaterialRefusalReasonSet)
      | DeterministicLimitExceeded | CheckerFailure
 ```
 
@@ -458,8 +508,24 @@ noncopyable capability. The capability is bound to the exact live handles,
 salt value, evaluator, limits, issuance occurrence, and process generation. It
 has no canonical body, ID, digest surrogate, serialization, or FFI form.
 
-Missing, extra, duplicated, late, or wrong-length material fails before Core
-execution. It is not a Core terminal or semantic interpretation failure.
+The qualified partition is exact. An unsupported construction family or
+evaluator is `Unsupported`; an absent exact construction, Core, type, or
+algorithm preimage is `MissingDependency`; a wrong owner, regime, value kind,
+or alphabet type is `KindMismatch`; and a noncanonical map or value carrier is
+`Malformed`. A salt sequence declaring a larger carrier type is therefore
+`KindMismatch`, while a sequence that exceeds its declared carrier capacity is
+`Malformed`; neither reaches owner refusal. A well-formed value in the exact
+capacity carrier with fewer than `salt_length` symbols reaches
+`SaltLengthMismatch`. A formed candidate returns
+`Refused(DuplexMaterialRefusalReasonSet)` containing every and only applicable
+reason above: invocation/Core disagreement, a missing or extra schema key, a
+well-formed exact-carrier alphabet sequence with the wrong exact salt length,
+or preparation after Core execution has started. A map key naming another
+construction is an extra/missing-key pair and produces only
+`MaterialKeySetMismatch`; there is no separate construction-mismatch tag.
+Duplicate keys are structurally noncanonical and therefore `Malformed`, not a
+refusal reason. No failure creates a partial capability. It is not a Core
+terminal or semantic interpretation failure.
 
 The duplex challenge-resolver capability retains the exact material
 capability, so the common `GenerateRun` operation does not gain an untyped
@@ -619,6 +685,43 @@ Protocol execution still derive and record challenge `k` before acceptance.
 This static projection changes no Core occurrence and does not authorize a
 verifier to omit the final transition.
 
+The family-local correspondence values used below are closed derived records,
+not unexplained labels:
+
+```text
+ExactDuplexInstanceBindingProjection(source,target,T) = {
+  source_bindings: DuplexInstanceBindings(source.core),
+  target_bindings: DuplexInstanceBindings(target.core),
+  binding_map: IdentityOnEverySelectedBindingRef,
+  encoding_law: EncodeDuplexInstance(source.core,I)
+                = EncodeDuplexInstance(target.core,I)
+                for every exact shared invocation I
+}
+
+UniqueTargetOnlySalt(target,T) = {
+  source_material_coordinates: empty,
+  target_material_coordinates: {DuplexSaltRef(T)},
+  target_schema: DuplexConstructionMaterialSchema(T)
+}
+
+ExactProverRequiredPrefix(source,target,T) = {
+  source_challenges: every ChallengeRef before the final source-round
+                     Challenge,
+  target_challenges: DuplexProverRequiredChallengePrefix(T),
+  challenge_map: identity in source-round order
+}
+
+ExactVerifierCompleteSchedule(source,target,T) = {
+  source_challenges: every source-round ChallengeRef including the final one,
+  target_challenges: every target-round ChallengeRef including the final one,
+  challenge_map: identity in source-round order,
+  replay_requirement: every mapped target transition is present exactly once
+}
+```
+
+Each record forms only after both exact admitted Protocols, `T`, and the shared
+Core have passed the predicates it names. It has no default or partial form.
+
 ## 10. Checked same-Core construction
 
 ```text
@@ -636,7 +739,6 @@ DuplexFSConstructionDefect =
   | DuplexMessageCoverageMismatch
   | DuplexChallengeCoverageMismatch
   | DuplexConstructionMaterialSchemaMismatch
-  | DuplexFinalRoundMismatch
 
 DuplexFSConstructionDefectSet =
   CanonicalNonEmptySortedUniqueSeq<
@@ -666,10 +768,13 @@ CheckedDuplexFSConstruction = {
   occurrence_map: IdentityOnEveryOccurrenceRef,
   value_map: IdentityOnEveryNonChallengeValueRef,
   challenge_map: IdentityOnEveryChallengeRef,
-  instance_projection: ExactDuplexInstanceBindingProjection,
-  construction_material_map: UniqueTargetOnlySalt,
-  prover_schedule_correspondence: ExactProverRequiredPrefix,
-  verifier_schedule_correspondence: ExactVerifierCompleteSchedule,
+  instance_projection:
+    ExactDuplexInstanceBindingProjection(source,target,construction),
+  construction_material_map: UniqueTargetOnlySalt(target,construction),
+  prover_schedule_correspondence:
+    ExactProverRequiredPrefix(source,target,construction),
+  verifier_schedule_correspondence:
+    ExactVerifierCompleteSchedule(source,target,construction),
   conclusion: StructurallyConstructed
 }
 ```
@@ -679,6 +784,29 @@ Fresh and duplex interpretations, exact construction/Core equality, public-
 coin and duplex eligibility, identity maps over every Core occurrence and
 nonchallenge value, identity over every Challenge coordinate, and the unique
 target-only salt material coordinate.
+
+The negative tags are request-comparison facts over admitted operands. Their
+producing predicates are, in written order: unequal source/target Core IDs;
+construction/Core disagreement; target/construction disagreement; absent
+public-coin eligibility on the source; unequal occurrence domains; unequal
+non-Challenge value domains; unequal Challenge domains; any unequal Core body
+field; unequal root-initial Statement projections; source failure of the exact
+duplex shape; unequal message-rule coverage; unequal Challenge-rule coverage;
+and unequal derived salt schemas. The checker emits every applicable tag in
+canonical order. Cold authentication failure, missing preimages, wrong kinds,
+limit exhaustion, and checker faults remain qualified noncompletion and never
+manufacture a negative tag. Final-round omission is covered by the exact
+verifier-complete replay requirement, not by a request-comparison tag; no
+separate unproducible final-round tag exists.
+
+`OccurrenceDomainMismatch`, `NonChallengeValueDomainMismatch`,
+`ChallengeDomainMismatch`, `TargetCoreFieldMismatch`, and
+`DuplexInstanceBindingMismatch` are deliberate field-factored diagnostics
+beneath `SharedCoreMismatch`: they may co-occur when unequal admitted Core
+bodies are compared, but they cannot assert that one equal admitted Core ID
+has two bodies. The construction-shape, coverage, and salt-schema tags instead
+factor differences attributable to the authenticated construction operands.
+No implied diagnostic is an independent identity-collision claim.
 
 The result means only that the unchanged source interaction receives its
 public challenges through this exact construction. It proves no property
@@ -813,7 +941,8 @@ DuplexFSConstructionViewBody = {
   value_map: IdentityOnEveryNonChallengeValueRef,
   challenge_map: IdentityOnEveryChallengeRef,
   instance_projection,
-  construction_material_map: UniqueTargetOnlySalt,
+  construction_material_map:
+    UniqueTargetOnlySalt(exact target,exact construction),
   prover_schedule_correspondence,
   verifier_schedule_correspondence,
   structural_conclusion: StructurallyConstructed
@@ -832,7 +961,8 @@ separate at least:
 
 1. duplex-to-canonical random-function trace reduction;
 2. soundness from state-restoration soundness;
-3. straightline or rewinding state-restoration knowledge soundness; and
+3. rewinding state-restoration knowledge soundness together with its
+   straight-line specialization; and
 4. adaptive single-instance zero knowledge from honest-verifier zero
    knowledge.
 
@@ -848,6 +978,16 @@ Exact applicability would need family views plus:
 - theorem-specific salt generation and single-instance scope;
 - exact state-restoration or HVZK source judgments; and
 - authenticated source-theorem validation.
+
+No extractor theorem is imported by this operational profile. The reviewed
+source states both a rewinding route and a conditional straight-line
+specialization; a future theorem profile must select one exact theorem and
+authenticate all of its premises rather than infer either from this state
+machine. The future theorem profile must also expose the source's
+salt-length/capacity adequacy and
+capacity-security terms (including its `min{delta,c}` and
+`25 t^2 / |Sigma|^c` dependencies), plus the exact EPROM programming premise;
+generic primitive-model labels are insufficient.
 
 The recorded source-validation audit found unresolved proof-level
 inconsistencies in the reviewed revision:
@@ -927,6 +1067,11 @@ This profile establishes none of:
 - security of any concrete hash, permutation, sponge, field, or library;
 - proof-byte serialization, canonical parsing, endpoint safety, or production
   ciphersuite support;
+- equality or domain separation of transcript states produced under another
+  `CoreId` or `TranscriptConstructionId`; the operational state absorbs no such
+  identity header, so any cross-subject byte coincidence is outside this
+  family and must be handled by a future proof-byte/OIR profile;
+- challenge entropy when a challenge rule has zero squeeze length; and
 - causal generation from replay, implementation conformance, constant-time
   behavior, or side-channel resistance; or
 - transfer of a canonical-framed Analysis result to this family.

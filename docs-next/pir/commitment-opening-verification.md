@@ -38,20 +38,28 @@ attachment forms only for the exact verifier shape defined here: ordered
 commitment/query/asserted-answer claims, explicit public evidence, public
 verifier setup, and an exact bounded verification algorithm. A pairing-only
 proof equation, vector-commitment residual, or algebraic check without that
-claim/evidence split remains an ordinary Core check. Dummy query, answer, or
-evidence fields may not be introduced merely to reuse this profile.
+claim/evidence split remains an ordinary Core check. The generic checker can
+verify role, count, type, schedule, public provenance, and exact algorithm
+identity; it cannot decide from family prose whether a typed field is
+mathematically “dummy.” A concrete profile that ignores a nominal query,
+answer, or evidence coordinate is still admitted only as that exact algorithm
+shape and receives no commitment-opening property from this classification.
 
 ## 2. Semantic profile and declaration intake
 
 For one exact Foundation `PriorMetaAuthenticationBasis B`, this owner consumes
-the exact `PIRInteractionProfileId`, authenticated Foundation value types and
-portable algorithms, and one exact immutable admitted Core handle.
+the exact `PIRInteractionProfileId` and family-neutral
+`PIRPublicSetupProfileId`, authenticated Foundation value types and portable
+algorithms, and one exact immutable admitted Core handle.
 
 ```text
 PIRCommitmentOpeningProfile = SemanticLanguageProfile {
   profile_family: "pir.commitment-opening",
-  revision: 1,
-  profile_imports: {PIRInteractionProfileId},
+  revision: 0,
+  profile_imports: {
+    PIRInteractionProfileId,
+    PIRPublicSetupProfileId
+  },
   supported_subject_kinds: {
     "pir.commitment-opening-verifier-profile",
     "pir.commitment-opening-use"
@@ -64,6 +72,11 @@ PIRCommitmentOpeningProfileId =
   SemanticContentId<"foundation.semantic-language-profile">(
     B, SemanticLanguageProfileBody(PIRCommitmentOpeningProfile))
 ```
+
+The `revision` above belongs only to this PIR language-profile body. It need
+not numerically match a Relations or Analysis profile revision: cross-owner
+compatibility is established by exact imported profile IDs and checked subject
+references, never by comparing revision integers.
 
 This owner uses no profile-local `DeclarationRef`, so its Foundation declaration
 catalog sequence is exactly empty. The exact subject body compilers below and
@@ -230,8 +243,6 @@ CommitmentOpeningVerifierBoundsType =
   CommitmentOpeningVerifierBounds record
 
 CommitmentOpeningVerifierStaticShape = {
-  profile_name: BoundedSymbol,
-  profile_version: PositiveNatural,
   static_semantic_parameter_type: ValueType,
   static_semantic_parameters:
     CanonicalValue<static_semantic_parameter_type>,
@@ -249,9 +260,7 @@ CommitmentOpeningVerifierStaticShape = {
   pack_verification_context: AlgorithmUse,
   pack_opening_claim_group: AlgorithmUse,
   check_claim_group: AlgorithmUse,
-  verify_opening_group: AlgorithmUse,
-  exact_failure_catalog:
-    CanonicalSortedUniqueSet<TypedFailureCoordinate>
+  verify_opening_group: AlgorithmUse
 }
 
 CommitmentOpeningVerifierStaticShapeType =
@@ -259,9 +268,6 @@ CommitmentOpeningVerifierStaticShapeType =
   CommitmentOpeningVerifierStaticShape record
 
 CommitmentOpeningVerifierProfile = {
-  profile_name: BoundedSymbol,
-  profile_version: PositiveNatural,
-
   static_semantic_parameter_type: ValueType,
   static_semantic_parameters:
     CanonicalValue<static_semantic_parameter_type>,
@@ -287,9 +293,7 @@ CommitmentOpeningVerifierProfile = {
   intrinsic_bound_law: {
     derive: AlgorithmUse,
     declared_bounds: CommitmentOpeningVerifierBounds
-  },
-  exact_failure_catalog:
-    CanonicalSortedUniqueSet<TypedFailureCoordinate>
+  }
 }
 
 CommitmentOpeningVerifierProfileId =
@@ -310,9 +314,21 @@ authenticated profile body. That shape excludes the bound algorithm and its
 declared result, so bound derivation is finite and non-circular. Every
 `AlgorithmUse` field identifies its own portable algorithm and evaluation
 contract. Formation requires the referenced contract to have the written
-input types, output type, total deterministic bounded disposition, and exactly
-the applicable coordinates in `exact_failure_catalog`; there is no ambient
-role registry or profile ordinal.
+input types, output type, total deterministic bounded disposition, and an
+statically derived failure row exactly empty. Mathematical partiality is
+represented inside a total tagged output or Boolean result. Operational
+noncompletion remains in the qualified outer outcome and is not an
+identity-bearing algorithm failure catalog. There is no ambient role registry
+or profile ordinal.
+
+The profile has no semantic name or authored version field. Its subject kind,
+selected language profile, and complete semantic body already distinguish the
+family and revision. A display name, release label, or migration version may
+exist in external metadata but cannot rotate this content identity or make two
+otherwise identical verifier semantics distinct. The profile carries no
+redundant failure-catalog field. Formation checks all six empty rows directly
+from their authenticated evaluation contracts; adding an unconsumed catalog
+would create two possible sources of truth.
 
 `static_semantic_parameters` is an exact typed record owned by the selected
 profile. It may contain a field, group, pairing, generator, degree-bound,
@@ -329,8 +345,79 @@ derives the dependent types; reconstructs the exact
 bound law on that value; and requires the result to equal `declared_bounds`. A
 declared positive Boolean or authored test vector cannot replace any check.
 
-Changing a static parameter, role, type, algorithm, contract, claim count,
-failure coordinate, or bound rotates the profile ID. Adding an unrelated
+The formation defect partition is closed:
+
+```text
+CommitmentOpeningVerifierProfileDefect =
+    SetupRoleOrdinalMismatch
+  | ContextRoleOrdinalMismatch
+  | RoleTypeMismatch
+  | ScheduleAtomMismatch
+  | ScheduleCycle
+  | AlgorithmABIMismatch
+  | AlgorithmCompletedFailureRowNonempty
+  | IntrinsicBoundMismatch
+  | IntrinsicBoundInsufficient
+  | CanonicalBodyBoundExceeded
+
+CommitmentOpeningVerifierProfileDefectSet =
+  CanonicalNonEmptySortedUniqueSeq<
+    CommitmentOpeningVerifierProfileDefect in written tag order>
+
+AdmitCommitmentOpeningVerifierProfile(
+  exact authenticated candidate,
+  exact dependency preimages,
+  exact evaluator and deterministic limits)
+  -> Affirmative(AdmittedCommitmentOpeningVerifierProfile)
+   | Negative(CommitmentOpeningVerifierProfileDefectSet)
+   | Unsupported | MissingDependency | KindMismatch | Malformed | Refused
+   | DeterministicLimitExceeded | CheckerFailure
+```
+
+The negative set contains every and only failed semantic formation predicate
+in the order above. Unknown profile support is `Unsupported`; an absent exact
+dependency preimage is `MissingDependency`; wrong kind, regime, or value type
+is `KindMismatch`; malformed or noncanonical carriers are `Malformed`; a
+well-formed candidate presented under the wrong authenticated basis or owner
+is `Refused`; evaluator-limit exhaustion is
+`DeterministicLimitExceeded`; and evaluator/provider disagreement is
+`CheckerFailure`. No branch returns a partial admitted handle.
+
+The producing predicates are exact. `SetupRoleOrdinalMismatch` and
+`ContextRoleOrdinalMismatch` mean that the respective role ordinals are not
+the dense sequence `0..count-1`. `RoleTypeMismatch` means that a role type
+disagrees with the corresponding component of the exact packing ABI or its
+derived assignment type. `ScheduleAtomMismatch` means that a constraint names
+an absent role, claim, evidence, or check atom, or repeats an atom where the
+written schema requires uniqueness; `ScheduleCycle` means that the otherwise
+well-formed constraint graph has a directed cycle. `AlgorithmABIMismatch`
+means that at least one of the six authenticated contracts differs from its
+written input or output ABI, and
+`AlgorithmCompletedFailureRowNonempty` means that at least one such contract
+has a nonempty statically derived failure row.
+
+`IntrinsicBoundMismatch` means that evaluating the authenticated bound law on
+the exact reconstructed static shape returns a value unequal to
+`declared_bounds`. Independently, `IntrinsicBoundInsufficient` means that the
+declared result fails at least one owner-derived lower bound: setup and context
+role capacities cover their exact role counts, `exact_claim_count` equals the
+profile claim count, schedule capacity covers every constraint, byte
+capacities cover the Foundation-derived maximum canonical encodings of the
+corresponding bounded dependent values, and the two step capacities cover the
+declared deterministic bounds of their exact check contracts.
+`CanonicalBodyBoundExceeded` means that the Foundation encoding length of the
+complete verifier-profile body exceeds
+`declared_bounds.maximum_canonical_body_bytes`. All comparisons are evaluated
+and every applicable tag is emitted in the written canonical order.
+
+Static-parameter failures do not have a second negative tag: a value under a
+wrong declared type is `KindMismatch`, a malformed or noncanonical value is
+`Malformed`, and a well-formed value containing a forbidden runtime-only
+category is `Refused`. This removes the formerly unproducible notion of a
+static parameter "mismatch" with no independent expected value.
+
+Changing a static parameter, role, type, algorithm, contract, claim count, or
+bound rotates the profile ID. Adding an unrelated
 sibling profile does not.
 
 ## 4. Exact Core use
@@ -398,10 +485,16 @@ predicate over the admitted Core's Section 11 dependency graph:
 ```text
 PublicVerificationValue(C,v) :=
   every node in
-    {ValueProducerNode_C(v)} union
-    TransitivePredecessors(PCGraph(C), ValueProducerNode_C(v))
+    {ValueProducerNode(C,v)} union
+    TransitivePredecessors(PCGraph(C), ValueProducerNode(C,v))
   has Section-11 class in {StaticPublic, PublicHistory}
 ```
+
+`ValueProducerNode(C,v)` is the unique producer node defined by Interactive
+Core Section 11 for exact `ValueRef v`. `TransitivePredecessors(G,n)` is the
+canonical sorted-unique set of every node from which a nonempty directed path
+in `G` reaches `n`; it excludes `n` itself. The explicit singleton above makes
+the tested closure inclusive.
 
 Every claim commitment, query, asserted answer, context value, and opening-
 evidence value named by a use must satisfy `PublicVerificationValue` in
@@ -510,11 +603,13 @@ use.
 
 ## 5. Runtime setup, execution, and replay
 
-At execution, `IssuePublicSetupInvocationView` supplies every exact
-`PublicParameter` value selected by the use. The Core's ordinary derived-value
-engine runs the three packers, then its checks run the exact group and opening
-algorithms. The accepting terminal remains unavailable when either check is
-false.
+At execution, the exact `CoreInvocation` supplies every `PublicParameter`
+value selected by the use. `IssuePublicSetupInvocationView` exposes the checked
+public quotient of those already supplied values to the consuming verifier
+operation; the view does not supply or authorize them. The Core's ordinary
+derived-value engine runs the three packers, then its checks run the exact
+group and opening algorithms. The accepting terminal remains unavailable when
+either check is false.
 
 The runtime setup value is not ambient state. Every verifier algorithm receives
 the packed assignment as its first explicit input. A registry lookup, process

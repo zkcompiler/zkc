@@ -329,7 +329,7 @@ ProjectionPropositionBody =
   (EndpointProjectionPurpose,
    EndpointSourceViewId,
    OirId,
-   K3DProjectionRelationProfile)
+   OirProjectionRelationProfileId)
 ```
 
 An `OirId` commits to the canonical endpoint semantic body and exact used

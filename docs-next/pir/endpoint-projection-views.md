@@ -1,10 +1,10 @@
 # Endpoint Projection Views
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K3-D target
+> **Document state:** Active non-normative endpoint-projection target
 > **Provisional owner:** `pir`
 > **Authority:** This page defines the PIR-owned source side of the bounded
-> K3-D endpoint-projection contract. It has no authority over the current
+> endpoint-projection contract. It has no authority over the current
 > specifications under [`docs/`](../../docs/README.md), does not activate full
 > Stage 4B, and makes no implementation or cryptographic-security claim.
 
@@ -69,12 +69,12 @@ same-terminal-derived exports, or both. An endpoint cannot claim the second
 purpose by projecting those facts away, and the first purpose does not inherit
 private continuation requirements merely because its source Plan declares
 them. A continuation request whose exact Plan yields no nonempty arm returns
-`Unsupported(NoPlanContinuationArm)` before extraction and produces no partial
-view.
+`Unsupported(NoPlanContinuationArm)` in the Plan-dependent support phase and
+produces no partial view.
 
-It recognizes but returns early typed `Unsupported`, with no partial view,
-OIR, or proposition, for Fresh endpoints, generic Plan-free Provers, a duplex-
-sponge FS Protocol, a Core with any native Oracle declaration or occurrence,
+It returns early typed `Unsupported`, with no partial view, OIR, or proposition,
+for Fresh endpoints, generic Plan-free Provers, any noncanonical transcript-
+construction family, a Core with any native Oracle declaration or occurrence,
 or an admitted module effect of any kind. A legacy module carrier without a supported PIR
 effect contract stops earlier at PIR admission and never reaches this
 classifier. A future Interface or Plan grammar containing module recipes has a
@@ -93,8 +93,8 @@ The semantic payloads are closed:
 EndpointUnsupportedReasonBody =
     V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U)
 // FreshEndpoint | GenericProverEndpoint
-// StandardOracleEndpoint | ModuleEffectEndpoint | DuplexSpongeEndpoint
-// NoPlanContinuationArm
+// StandardOracleEndpoint | ModuleEffectEndpoint
+// OtherTranscriptConstructionFamily | NoPlanContinuationArm
 
 EndpointUnsupportedBody =
   S[EndpointUnsupportedReasonBody... in increasing tag order, nonempty]
@@ -112,15 +112,85 @@ EndpointExtractionOutcomeBody =
 // DeterministicLimitExceeded | CheckerFailure
 ```
 
-`Unsupported` carries every and only applicable supported-grammar reason and
-returns no extraction basis; a Core containing both Oracle and a
-module effect therefore has two reasons, not an unspecified first error.
+The supported construction arm is closed by this consumer without importing
+families it cannot project:
+
+```text
+DispatchEndpointTranscriptConstruction(exact authenticated admitted handle A) =
+    CanonicalFramed
+      iff AuthenticatedTranscriptConstructionProfile(A)
+            = PIRCanonicalFramedFSProfileId
+         and A is admitted by that exact profile
+  | Unsupported(OtherTranscriptConstructionFamily)
+      for any other exact authenticated admitted construction profile
+  | qualified noncompletion
+      for missing, wrong-kind/regime, malformed, refused, bounded, or
+      checker-failing authentication
+```
+
+`PirEndpointSourceViewProfileId` imports the canonical-framed family because it
+interprets that family's construction and transcript laws. The generic refusal
+arm inspects only the already authenticated selected profile ID; it does not
+open or interpret the foreign profile and therefore does not import duplex or
+another unsupported family. There is no negative test that grants support: the
+only affirmative arm is the exact positive canonical match. A future family
+remains unsupported until a sibling endpoint profile explicitly imports and
+interprets it.
+
+Support classification has two ordered phases:
+
+```text
+EndpointFeatureSupportReasons(request) =
+  CanonicalSortedUniqueSeq containing every applicable reason among
+    FreshEndpoint
+      iff request.challenge_mode = Fresh,
+    GenericProverEndpoint
+      iff request.purpose = GenericProverEndpoint(_),
+    StandardOracleEndpoint
+      iff request.core has any admitted Oracle declaration or occurrence,
+    ModuleEffectEndpoint
+      iff request.core has any admitted module-effect declaration or occurrence,
+    OtherTranscriptConstructionFamily
+      iff request.protocol.challenge_interpretation is FiatShamir(c) and
+          DispatchEndpointTranscriptConstruction(request.construction_handle)
+            returns Unsupported(OtherTranscriptConstructionFamily)
+
+ClassifyEndpointProjectionSupport(request) =
+  authenticate the request purpose and exact Protocol, Core, Construction when
+    present, and Interface owner bases needed by EndpointFeatureSupportReasons;
+  dispatch every FS construction through
+    DispatchEndpointTranscriptConstruction;
+  let feature_reasons = EndpointFeatureSupportReasons(request);
+  if feature_reasons is nonempty, return Unsupported(feature_reasons);
+  require DispatchEndpointTranscriptConstruction = CanonicalFramed;
+  if request.purpose is VerifierEndpoint and a Plan root is supplied,
+    return Malformed;
+  for either Plan-specialized Prover purpose, if the exact Plan root or exact
+    CheckedPlanRealizes preimage is absent, return MissingDependency;
+  authenticate that Plan and CheckedPlanRealizes under their exact owner
+    profile; if either is formed and structurally typed but fails its owner
+    authentication/adequacy law or the result is nonaffirmative, return Refused;
+  if request.purpose = PlanContinuationProverEndpoint(FiatShamir) and
+     AcceptedPlanContinuationArmMap(protocol,plan) has no nonempty arm,
+    return Unsupported([NoPlanContinuationArm]);
+  otherwise derive and return one SupportedExtractionBasis
+```
+
+The first phase carries every and only applicable feature-level reason and
+returns no extraction basis; a Core containing both Oracle and a module effect
+therefore has two reasons, not an unspecified first error. The
+Plan-continuation reason belongs only to the second phase. Consequently a
+duplex continuation request with no arm returns only
+`OtherTranscriptConstructionFamily`:
+the classifier never authenticates or derives Plan continuation semantics for
+an already unsupported construction family. This precedence is semantic and
+cannot be changed by diagnostic traversal order.
 Because no source-adequacy proposition is formed at this boundary, extraction
 has no semantic `Negative`. A missing source is `MissingDependency`; a formed
 owner carrier that fails the selected adequacy/profile law is `Refused`; and a
 contradiction after affirmative owner admission is `CheckerFailure`. Wrong
-edge shape remains Interface nonadmission, and a missing Plan join prevents
-request formation. Recursive diagnostics are non-authoritative. Only the
+edge shape remains Interface nonadmission. Recursive diagnostics are
+non-authoritative. Only the
 later exact source/target projection proposition has a semantic Negative arm.
 
 ## 3. Exact owner read manifest
@@ -184,33 +254,41 @@ subroutines.
 
 `EndpointProjectionSemanticsV0` accepts only the selected v0 `SemanticRegimeId`
 `0c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef`
-and its exact K1 `SemanticLanguageProfileId` import chain:
+and the following exact-used profile import DAG:
 
 ```text
+PIRInteractionProfileId
+  <- PIRCanonicalFramedFSProfileId ----+--> PirEndpointSourceViewProfileId
+
 PIRInterfacePlanProfileId
-  <- OirEndpointGraphProfileId
-  <- PirEndpointSourceViewProfileId
+  <- OirEndpointGraphProfileId --------+
+
+PirEndpointSourceViewProfileId
   <- OirProjectionRelationProfileId
-  <- OirProjectionValidationProfileId
 ```
 
-The target requires each arrow to be one exact-used `profile_imports` edge to
-the immediate semantic dependency, not an ambient bundle hash or a textual
-version label. The older bounded executable baseline exercised that topology
-with the following profile-ID digests under the selected regime, in the same
-order:
+The source-view profile directly imports the canonical-framed and OIR
+endpoint-graph profiles. The construction profile imports Interaction, while
+the graph profile imports Interface/Plan. Every other arrow
+is the exact-used `profile_imports` edge shown above, not an ambient bundle hash
+or textual version label. This is the Foundation composition-profile rule
+applied at the first consumer that compares both families; neither sibling
+imports the other. The older bounded executable baseline exercised only the
+pre-composition linear subgraph with the following profile-ID digests under the
+selected regime, in the same order:
 `3249d35408bd507c6613eb2d7496b95c6d3313a85bac41f28751d1957d6e4f8c`,
 `6138f0ffe95880b2cfe0a4ccd3da71610974193a2fcf6aaa60ae3cf7bfacdfa4`,
 `ccb080314d48881cf89d8b59bc3d14364311797b49f2048b31fd59e684fbaaa7`,
 `cf79a520db90374e7c1bbed17cda79c20130e479a538de9c8a41826b62a60330`,
 and `b183c8af6fad580b0c4d003f4b4e3c26e08fca63dff0b6cf36f6b210091a89fd`.
-The accepted-terminal Plan extension rotates that complete profile chain, so
-these digests no longer authenticate the selected Plan, endpoint, or OIR
-grammar and are retained only as pre-rotation bounded evidence. This is a
-profile/law mismatch, not a Foundation `SemanticRegimeId` rotation: the
-Foundation semantic regime above remains unchanged. The identity equations
-below consume full typed profile IDs, never bare digest strings. These values
-are not durable selected constants. They do not supply the complete canonical
+The accepted-terminal Plan extension and the now-explicit two-family
+composition both rotate that old chain, so these digests no longer
+authenticate the selected Plan, endpoint, or OIR grammar and are retained only
+as pre-rotation bounded evidence. This is a profile/law mismatch, not a
+Foundation `SemanticRegimeId` rotation: the Foundation semantic regime above
+remains unchanged. The identity equations below consume full typed profile
+IDs, never bare digest strings. These values are not durable selected
+constants. They do not supply the complete canonical
 `SemanticLanguageProfileBody` preimages or establish durable owner-profile byte
 parity. Until those complete owner profile preimages are published, this page
 fixes the ideal target equations and import topology, not independently
@@ -218,12 +296,13 @@ reconstructible profile IDs.
 
 The owner-schema-set and read-manifest IDs are formed under the exact source-
 view profile. A same-shaped future regime or profile does not inherit this
-policy. A change to Interface/Plan meaning rotates the endpoint graph and all
-four K3-D descendants; a source-view change rotates source, projection, and
-validation; a projection change rotates projection and validation; and a
-validation-only change rotates only validation. A Relations-only K3-B profile
-change remains outside this exact Interface/Plan-rooted profile closure and
-therefore does not rotate the K3-D chain. There is no wildcard, default,
+policy. A change to Interface/Plan meaning rotates the endpoint graph, source
+view, and projection relation; a source-view change rotates source and
+projection; and a projection-law change rotates the relation profile. The live
+validation operation is owned by that relation profile and has no separate
+semantic identity layer. A Relations-only K3-B profile change remains outside
+this exact Interface/Plan-rooted profile closure and therefore does not rotate
+the OIR chain. There is no wildcard, default,
 authored callback, textual reason, or precedence rule. Missing, extra, or
 unknown schema edges fail before extraction.
 
@@ -231,7 +310,7 @@ The four closed sequence selectors are owner algorithms:
 
 ```text
 AllElements
-K2RoleSemanticClosure
+ProtocolRoleSemanticClosure
 InterfaceEndpointReachableClosure
 PurposeSelectedPlanReachableClosure
 ```
@@ -452,18 +531,18 @@ its exact endpoint action rather than a kind tag plus a second effect table:
 SourceSpineEvent =
     FsInitialization
   | ScopeOpening {
-      k2_scope_path,
+      core_scope_path,
       parent_scope_event,
-      Initially | BeforeOccurrence(k2_occurrence_ordinal)
+      Initially | BeforeOccurrence(core_occurrence_ordinal)
     }
   | PublicBinding {
-      k2_binding_ordinal,
+      core_binding_ordinal,
       scope_event,
       class,
       value
     }
   | CoreOccurrence {
-      k2_occurrence_ordinal,
+      core_occurrence_ordinal,
       scope_event,
       Always | Guarded(algorithm, evaluation, inputs),
       ProverMessage(channel, payload_type)
@@ -506,7 +585,7 @@ receipts do not enter identity. Challenge laws preserve ascending original K2
 K2 framing distinguishes graph refs from semantic frame coordinates:
 
 ```text
-K2FrameCoordinate =
+ProtocolFrameCoordinate =
     ScopePath(S[N(original ScopeRef)...])
   | Binding(N(original BindingRef))
   | Occurrence(N(original OccurrenceRef))
@@ -633,7 +712,7 @@ reaches it. For a terminal-derived export it requires the export site to be
 that identical terminal. This is a static obligation; it neither reaches a
 runtime terminal nor issues a private value.
 
-`K2Frame` occurs for Core, Construction, and application-domain initialization
+`TranscriptFrame` occurs for Core, Construction, and application-domain initialization
 when FS semantics is present; for every selected scope opening, public
 binding, guarded occurrence, Prover message, Verifier message, and challenge
 condition required by the exact K2 prefix law; and in the fixed K2 order. Each
@@ -1123,10 +1202,11 @@ accepted terminal. PIR Plan execution separately owns reaching that terminal,
 atomically producing the arm, and issuing any live access right; none of those
 runtime facts is present in this source view or its projected OIR graph.
 
-Source formation and local OIR admission each enforce five named graph laws:
-no ambient FS challenge input, no Prover read of verifier-private inputs, no
-Prover external completion, and no Plan read outside the classified reachable
-Plan graph, plus exact accepted-terminal arm closure. The last law checks every
+Source formation and local OIR admission each enforce four base graph laws plus
+one exact accepted-terminal arm-closure law: no ambient FS challenge input, no
+Prover read of verifier-private inputs, no Prover external completion, no Plan
+read outside the classified reachable Plan graph, and exact accepted-terminal
+arm closure. The arm-closure law checks every
 and only nonempty `Accept` arm, decision-path guarantees, same-terminal
 ownership, graph-local ref and type agreement, site-local node reachability,
 and atomic all-or-nothing membership. `PrivatePlanContinuationAccessBody` is
@@ -1550,12 +1630,16 @@ EndpointSourceViewDomainBody(x) = R{
 }
 ```
 
-`PirEndpointSourceViewProfileId` imports the exact
-`OirEndpointGraphProfileId`, whose authenticated profile preimage owns the graph
-schema and `EndpointContractLawV0`; `DeriveEndpointContractV0` is OIR's
-evaluator. The law is not an authored graph field. The source view and OIR
-endpoint therefore reach that same exact law through their authenticated
-profile-import edge rather than by embedding a second profile-shaped body.
+`PirEndpointSourceViewProfileId` directly imports the exact
+`OirEndpointGraphProfileId` and `PIRCanonicalFramedFSProfileId`. The OIR
+profile's authenticated preimage owns the graph schema and
+`EndpointContractLawV0`; the construction import closes the one supported
+dispatch arm above; and `DeriveEndpointContractV0` is OIR's
+evaluator. None is an authored graph field. The source view and OIR endpoint
+therefore reach the same graph law through their authenticated profile-import
+edge, while family dispatch grants support only through the exact canonical
+import rather than embedding a second profile-shaped body or interpreting an
+unsupported family.
 
 The complete K1 profiled body, not merely each domain table, must fit K1's
 `2^20` encoded-byte, `2^14` node, `2^14` aggregate-child-edge, and depth-384
@@ -1608,9 +1692,13 @@ import closure and law source bind the selected owner grammar and read law.
 
 `RootGrammarLawV0` has exactly five roots in tag order: admitted Protocol,
 its exact admitted Core, the Protocol's exact admitted Construction, its exact
-admitted Interface, and optional exact admitted Plan. A Verifier request
-requires the Plan root absent; either Plan-specialized Prover request requires
-it present and an affirmative exact `PlanRealizes`. A continuation request
+admitted Interface, and optional exact admitted Plan. Feature support
+authenticates only the first four applicable roots and dispatches the
+construction through `DispatchEndpointTranscriptConstruction` before any Plan
+root is read. A Verifier request with a present Plan root is `Malformed`.
+Either Plan-specialized Prover request with an absent Plan or absent exact
+`CheckedPlanRealizes` preimage is `MissingDependency`; a present but
+nonaffirmative owner result is `Refused`. A continuation request
 also requires the owner-derived accepted-terminal arm map to contain at least
 one nonempty arm. Protocol Fresh is traversable only far enough to return the
 ordered unsupported result. Any unknown root,
@@ -1651,7 +1739,8 @@ InertReasonBody =
 UnsupportedReasonBody =
     V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U)
 // FreshEndpoint | GenericProverEndpoint | StandardOracleEndpoint
-// ModuleEffectEndpoint | DuplexSpongeEndpoint | NoPlanContinuationArm
+// ModuleEffectEndpoint | OtherTranscriptConstructionFamily
+// NoPlanContinuationArm
 DispositionBody =
     V(0,S[ViewSinkBody... in body-byte order]) | V(1,JoinAxisBody)
   | V(2,InertReasonBody) | V(3,UnsupportedReasonBody)
@@ -1685,7 +1774,7 @@ The selected root policy is exactly:
 | Protocol `.0 core_id` | Relevant Dependency/StaticFs | same | same |
 | Protocol `.1 Fresh` | Unsupported Fresh | same | same |
 | Protocol `.1 FS construction_id` | Relevant Dependency/StaticFs | same | same |
-| Core `.0 semantic_modules` | role closure -> Dependency | same | same |
+| Core `.0 used_modules` | role closure -> Dependency | same | same |
 | Core `.1 public_inputs` | Relevant ABI/Type | same | same |
 | Core `.2 verifier_private_inputs` | Relevant ABI/Type | Inert verifier-private | Inert verifier-private |
 | Core `.3 constants` | role closure -> Constant/Type | same | same |
@@ -1723,7 +1812,7 @@ the pinned Plan-profile and endpoint-law join, while retaining the same
 Foundation `SemanticRegimeId`, rather than inhabiting an unreachable current
 `Unsupported` tag.
 
-For every supported K2 owner row governed by `K2RoleSemanticClosure`, each
+For every supported protocol owner row governed by `ProtocolRoleSemanticClosure`, each
 coordinate in the selector complement that is neither Prover-private nor an
 unsupported Oracle/module case is exactly
 `InertForPurpose(SourceProvenanceOnly)`. It contributes no direct graph field
@@ -1743,7 +1832,7 @@ receipt cannot make extraction pass.
 Selector algorithms are exact:
 
 1. `AllElements` selects every element in source order.
-2. `K2RoleSemanticClosure` starts independently of the output graph. It seeds
+2. `ProtocolRoleSemanticClosure` starts independently of the output graph. It seeds
    every admitted base-effect occurrence (cases 0 through 5), its referenced
    scope and declaration, every public binding and challenge needed by the FS
    frame schedule, every claim/reduction/terminal closure fact, the role's
@@ -1764,13 +1853,14 @@ Selector algorithms are exact:
    to its slot and each slot through the complete acyclic structural-codec
    child graph. It derives the exact selected/complement partition before
    rebasing.
-4. `PurposeSelectedPlanReachableClosure` always seeds each admitted decision move payload
+4. `PurposeSelectedPlanReachableClosure` runs only after the feature-support
+   phase has returned no reason. It always seeds each admitted decision move payload
    and each `ReplaceState` payload. For
    `PlanContinuationProverEndpoint`, it first derives
    `AcceptedPlanContinuationArmMap(P,plan)` from the exact admitted Protocol
    and the exact admitted Plan supplied by the affirmative extraction basis;
    its calls to `AcceptedPlanContinuationArm(P,plan,t)` supply that same pair.
-   Absence of every nonempty arm is the typed support result
+   Absence of every nonempty arm is then the typed support result
    `Unsupported(NoPlanContinuationArm)`. It then also
    seeds every export named by a retained arm. The common worklist follows
    recipe operands, selected-state initializers, and node dependencies to

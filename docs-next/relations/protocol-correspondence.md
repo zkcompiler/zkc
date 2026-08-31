@@ -316,9 +316,11 @@ Oracle is `InitialOracle + LogicalAccess`; it selects no public run coordinate
 and carries no material, digest, selector, bridge, or occurrence ID. Its exact
 relation and PIR material types must both be the same whole
 `OracleCarrierType(o)`, and the enclosing question must require
-`ExactCausallyGenerated`. A structurally valid public-bound, prover-origin, or
-replay-qualified material request is `Unsupported`; an invalid reference or
-ill-formed target is `Malformed`.
+`ExactCausallyGenerated`. A structurally valid public-bound or prover-origin
+target is `Unsupported`. A material-arm candidate authored with any other
+qualification, including `ExactReplayQualified`, contradicts that fixed arm
+grammar and is `Malformed`; an invalid reference or ill-formed target is also
+`Malformed`.
 
 `ExpectedValue` carries one canonical value of the selector-derived type and
 uses exact Foundation equality; it has no relation-derived expectation. The
@@ -1291,9 +1293,31 @@ ConfidentialInitialOracleGroundingInput = {
 }
 
 ConfidentialInitialOracleGroundingInputs(q) =
-  ExactMap<
+  ExactMapOver<
     every and only OracleEdgeRef selected by OracleMaterialAgreement in q,
     ConfidentialInitialOracleGroundingInput>
+
+RunGroundingExecutionBasis =
+    Causal {
+      protocol: identical admitted Protocol handle,
+      invocation: identical CoreInvocation object,
+      completed_record: identical CompletedProtocolRecord object,
+      generation: identical live CausalGenerationCapability
+    }
+  | Replay {
+      protocol: identical admitted Protocol handle,
+      invocation: identical CoreInvocation object,
+      completed_record: identical CompletedProtocolRecord object,
+      replay_match: identical fresh CheckedReplayMatch
+    }
+
+RunGroundingExecutionBasisFor(q,public_view,confidential_inputs) =
+  the basis retained by the public CheckedRelationRunViewAuthority when the public
+  run submanifest is nonempty; otherwise the Causal basis retained by the
+  confidential input at the first canonical OracleEdgeRef for RunGrounding or
+  first canonical PlanWitnessEdgeRef for PlanWitnessRunGrounding; require every
+  remaining run-bearing authority and capability to retain that exact same
+  object-identical basis
 
 ConfidentialPlanWitnessGroundingInput(q,binding) = {
   selection:
@@ -1301,7 +1325,7 @@ ConfidentialPlanWitnessGroundingInput(q,binding) = {
   relation_assignment:
     exact fresh PrivateWitnessAssignment for q.instance_id,
   relation_secret_capabilities:
-    ExactMap<q.edges,
+    ExactMapOver<q.edges,
       identical live SecretValueCapability for the edge's RelationWitnessRef>,
   pir_view:
     exact ConfidentialPlanWitnessView for
@@ -1332,6 +1356,17 @@ The relation assignment must be the exact same-instance owner occurrence and
 the secret capability must be its identical bearer for the selected relation
 Oracle. This input map is live operation state. It has no body compiler,
 semantic ID, portable encoding, copy constructor, or cold-replay form.
+
+`RunGroundingExecutionBasisFor` is an operation-local derived relation, not a
+caller-supplied operand, portable body, semantic subject, or ID. A well-formed
+`RunGrounding` always has at least one run-bearing source: a relation-bound
+public check creates a public run read, while a material-only question has a
+nonempty confidential input map. A `PlanWitnessRunGrounding` has its one
+nonempty confidential Plan-witness input. If any material-agreement arm or a
+Plan-witness arm is present, the selected basis must be `Causal`, and every
+run-bearing input must retain the identical generation capability. Equality of
+Protocol IDs, invocation IDs, record bytes, carriers, or receipts cannot
+substitute for object identity.
 
 For `PlanWitnessRunGrounding`, the four PIR policy artifacts must be the exact
 closed tuple derived from the question ID, binding surface, canonical key set,
@@ -1434,7 +1469,8 @@ CheckCorrespondence(
   exact ConfidentialInitialOracleGroundingInputs(question),
   exact optional ConfidentialPlanWitnessGroundingInput(question,binding)
     for the uniquely resolved PlanWitnessBinding,
-  every matching live owner-view and run-view capability,
+  every matching live owner-view capability and
+    CheckedRelationRunViewAuthority,
   exact evaluator support and limits)
   -> Qualified<CheckedCorrespondence>
 ```
@@ -1603,7 +1639,9 @@ CheckRunGroundedCorrespondence(
   -> Qualified<CheckedCorrespondence>
 ```
 
-When present, the public run view's Protocol and qualification must match the
+Before reading a selected value or carrier, the operation derives exactly one
+`RunGroundingExecutionBasisFor` and validates every run-bearing source against
+it. When present, the public run view's Protocol and qualification must match the
 question. Its issuance authority must retain the exact invocation and source
 binding required by the operation. Its payload contains every and only the
 public coordinates in `ManifestFor(question)`; the full
@@ -1611,6 +1649,14 @@ public coordinates in `ManifestFor(question)`; the full
 correspondence read. A material-only question has an empty public run
 submanifest and therefore supplies no `RelationRunView`; this does not convert
 the confidential view into a public run view.
+
+A source from another invocation, completed-record object, causal generation,
+or replay occurrence is `Refused`, even if all selected values and canonical
+record bytes are equal. A missing live basis authority is `CannotAnswer`; an
+ill-formed authority carrier is `Malformed`; and disagreement between an
+owner-authenticated authority and its retained basis is `CheckerFailure`.
+These checks precede substantive agreement classification, so mixed-run
+operands can never produce `Negative` or an affirmative partial result.
 
 For every lossy-source authority used by this operation, both downstream
 coordinates supplied to the two nominal role constructors are the exact
@@ -1651,15 +1697,49 @@ whole relation carrier and the whole PIR carrier through their respective
 identical bearers and compares them by Foundation same-type equality. It does
 not pass either value to a caller-supplied predicate or bridge.
 
+For the selected `LogicalOracleTarget` edge `e`, the complete comparison law
+is:
+
+```text
+relation_material =
+  ReadWholeCarrier(
+    matching OracleMaterialAssignment for q.instance_id and e.relation.ref,
+    identical live SecretValueCapability for e.relation.ref)
+
+pir_material =
+  ReadWholeCarrier(
+    matching ConfidentialInitialOracleView whose coordinate is {
+      protocol_id: binding.protocol_id,
+      oracle: e.protocol.oracle,
+      publication: e.protocol.publication_occurrence
+    },
+    identical CheckedConfidentialInitialOracleViewAuthority,
+    identical live ConfidentialInitialOracleViewCapability)
+
+Type(relation_material)
+  = Type(pir_material)
+  = ResolvedOracleDecl(e.relation.ref).material_type
+  = OracleCarrierType(e.protocol.oracle)
+
+FoundationSameTypeEquality(relation_material,pir_material) = true
+```
+
+The two `ReadWholeCarrier` operations are available only through the exact
+question-bound live inputs above. The equation is therefore neither a lookup
+by carrier bytes nor an ambient equality predicate.
+
 Equal carriers add `OracleMaterialAgrees` for that edge. Unequal well-formed
 carriers add `OracleMaterialDisagreement` for that edge, including when the
 only difference is at an unqueried Oracle entry. The result names only the
 edge. It retains no carrier, occurrence, trace, record, capability, or digest.
-A missing or expired otherwise matching live source is `CannotAnswer`; a wrong
+An absent exact authenticated subject, profile, policy, or algorithm preimage
+is `MissingDependency`. A missing or expired otherwise matching live source is
+`CannotAnswer`; a wrong
 assignment occurrence, initial-supply occurrence, invocation, run, policy,
-consumer, purpose, or reconstructed bearer is `Refused`; a wrong kind, regime,
-or type is `KindMismatch`; an unsupported origin, publication mode, or replay
-qualification is `Unsupported`; a structural defect is `Malformed`; exact
+consumer, purpose, reconstructed bearer, or replay-qualified runtime source is
+`Refused`; a wrong kind, regime, or type is `KindMismatch`; an unsupported
+origin or publication mode is `Unsupported`; a structural defect is
+`Malformed`; exact
 bound exhaustion is `DeterministicLimitExceeded`; and an evaluator or
 postcondition inconsistency is `CheckerFailure`. None of those outcomes is a
 material disagreement.
@@ -1718,6 +1798,14 @@ CheckPlanWitnessRunGrounding(
     -> Qualified<CheckedCorrespondence>
 ```
 
+Before reading either selected value, the operation derives the one causal
+`RunGroundingExecutionBasisFor(q,None,{the exact confidential Plan-witness
+input})`. The input's view authority, capability, completed Plan run, Protocol
+causal authority, invocation, and `CompletedProtocolRecord` must all retain
+that object-identical basis. The affirmative operation-local capability
+retains the derived basis for the later same-run join; the portable result body
+does not serialize it.
+
 For every selected edge, the operation resolves the exact surface entry,
 relation witness endpoint, both selectors, selected types, and admitted value
 relation. The relation value is read from the exact fresh assignment bearer.
@@ -1737,12 +1825,14 @@ same assignment occurrence through `CheckLossyUseAtConsumerSource`.
 
 An edge whose value relation completes true adds
 `ValueAgrees(Edge(edge))`; one that completes false adds
-`ValueDisagreement(Edge(edge))`. The latter is semantic Negative. A missing,
-inactive, unfinalized, or expired required source is `CannotAnswer`; a cross-
+`ValueDisagreement(Edge(edge))`. The latter is semantic Negative. An absent
+exact authenticated subject, profile, policy, or algorithm preimage is
+`MissingDependency`. A missing, inactive, unfinalized, or expired required
+source is `CannotAnswer`; a cross-
 run, cross-Plan, cross-surface, wrong-policy, wrong-consumer, or wrong-purpose
 source is `Refused`; wrong kind or type is `KindMismatch`; a duplicate,
 partial, noncanonical, or extra manifest is `Malformed`; replay qualification
-is `Unsupported`; and bounded evaluator failures retain their ordinary
+is `Refused`; and bounded evaluator failures retain their ordinary
 qualified lanes. None becomes a value disagreement.
 
 The fresh checked-result capability retains the exact question, binding,
@@ -1758,19 +1848,24 @@ JoinPlanWitnessAndPublicRunGrounding(
   identical live private checked-result capability,
   exact affirmative CheckedCorrespondence public_result for a causal
     RunGrounding question,
-  identical live public checked-result and RelationRunView capabilities)
+  identical live public checked-result capability and
+    CheckedRelationRunViewAuthority)
     -> Qualified<Affirmative({
          result: CheckedSameRunPlanWitnessCorrespondence,
          capability: CheckedSameRunPlanWitnessCorrespondenceCapability
        })>
-     | CannotAnswer | KindMismatch | Malformed | Refused | CheckerFailure
+     | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+     | Refused | Malformed | DeterministicLimitExceeded | CheckerFailure
 ```
 
 The join requires the identical admitted `RelationInstance`, `ProtocolId`,
 live `CoreInvocation` object, live `CompletedProtocolRecord` object, and
 identical live `CausalGenerationCapability` on both sides. Equal bytes,
 values, records, or separately generated occurrences do not join. It imposes
-no generic "intended fold output" beyond the coordinates already selected by
+the additional exact-use condition that both affirmative inputs retain the
+same operation-derived basis returned by `RunGroundingExecutionBasisFor`; a
+caller-supplied or reconstructed tuple cannot stand in for that basis. It
+imposes no generic "intended fold output" beyond the coordinates already selected by
 the two questions. The result and capability are process-local and
 nonidentified. The capability retains the two identical input results and
 their checked-result, run-view, Plan-generation, and Protocol causal
@@ -1816,8 +1911,8 @@ JoinCausalPlanWitnessHandoff(
          result: CheckedPlanWitnessHandoffCorrespondence,
          capability: CheckedPlanWitnessHandoffCorrespondenceCapability
        })>
-     | Unsupported | CannotAnswer | KindMismatch | Malformed | Refused
-     | CheckerFailure
+     | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+     | Refused | Malformed | DeterministicLimitExceeded | CheckerFailure
 ```
 
 The operation performs the following complete match before issuing its
@@ -2022,8 +2117,8 @@ JoinCausalPlanStepRecurrence(
          result: CheckedCausalPlanStepRecurrence,
          capability: CheckedCausalPlanStepRecurrenceCapability
        })>
-     | Unsupported | CannotAnswer | KindMismatch | Malformed | Refused
-     | CheckerFailure
+     | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+     | Refused | Malformed | DeterministicLimitExceeded | CheckerFailure
 ```
 
 Formation requires all of the following, without an ambient slot convention:

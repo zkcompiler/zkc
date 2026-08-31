@@ -153,9 +153,9 @@ select exact verifier-side opening profiles, flat finite Cores, and
 Interface/OIR proof packaging without universal batching or Argument roots.
 Accumulation, folding, and recursive-verification pressure now selects the
 Plan-owned continuation, confidential grounding, one-use same-process handoff,
-and finite recurrence boundary. The fixed Nova fold reaches T2
-constructive-encoding depth; the remaining named cases retain their stated T1
-finite-target gaps. Holdouts, complete
+and finite recurrence boundary. The fixed Nova fold has a complete source-
+grounded finite target encoding; the remaining named cases retain explicit
+finite-target elaboration gaps. Holdouts, complete
 owner-profile preimages, independently reconstructible identities, independent
 identity/profile freeze, properties, full OIR/Realization, implementation, and
 normative cutover remain open.

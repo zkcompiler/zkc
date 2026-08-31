@@ -124,7 +124,7 @@ flowchart LR
   SC --> DC[Branchwise bounded Compiler decision]
   TP -->|any exact reached qualified subset + audit accounting| OR[Checked explicitly open report]
 
-  AP -->|affirmative purpose-specific source views| KO[Bounded K3-D OIR projection]
+  AP -->|affirmative purpose-specific source views| KO[Bounded OIR projection]
   KO -->|reserved later completion| O[Unactivated full Stage 4B: OIR]
   O --> X[Unactivated Stage 4B: realization and operation]
   X --> OBS[Deferred producer-owned observation / external receipt]
@@ -205,9 +205,9 @@ Complete-argument pressure subsequently rejected a universal Argument root,
 retained flat finite execution, and made canonical FS require at least one
 declared Challenge occurrence. Accumulation, folding, and recursive-
 verification pressure then selected the Plan-owned continuation and finite
-same-process recurrence boundaries described above. The fixed Nova fold
-reaches T2 constructive-encoding depth; the remaining named cases retain their
-stated T1 finite-target gaps. Holdouts, exact owner-profile publication,
+same-process recurrence boundaries described above. The fixed Nova fold has a
+complete source-grounded finite target encoding; the remaining named cases
+retain explicitly stated finite-target elaboration gaps. Holdouts, exact owner-profile publication,
 independent identity/profile
 freeze, property discharge, full OIR/Realization, implementation support, and
 normative cutover remain pending.

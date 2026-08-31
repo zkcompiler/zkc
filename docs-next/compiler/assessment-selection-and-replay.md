@@ -1636,10 +1636,13 @@ Compiler preserves:
 
 ~~~text
 Unsupported(requested family, model, domain, certificate, or comparator)
-CannotAnswer(missing named semantic input, resolution, or closure basis)
+MissingDependency(named durable input preimage absent after its coordinate forms)
+CannotAnswer(supported formed operation lacks a required live basis or capability)
+KindMismatch(formed coordinate has the wrong kind, owner, regime, or ABI)
 Refused(missing authority or prohibited policy)
 Malformed(request, alternative scope, portfolio, domain, identity, cycle,
           or framing defect)
+DeterministicLimitExceeded(declared evaluator limit exhausted)
 CheckerFailure(operational failure; no decision conclusion)
 ~~~
 

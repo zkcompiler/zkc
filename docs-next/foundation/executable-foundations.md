@@ -81,6 +81,16 @@ In equations, `MetaNatural`, `MetaBytes`, `MetaSymbol`, `MetaSeq`,
 `MetaRecord`, and `MetaVariant` denote exactly these tagged forms, not a
 second data model.
 
+The total Boolean-datum constructor is:
+
+```text
+MetaBooleanDatum(false) = MetaBooleanFalse
+MetaBooleanDatum(true)  = MetaBooleanTrue
+```
+
+It is notation for the two constitutional Boolean forms, not a new carrier or
+an extensible encoding lane.
+
 Lengths, counts, ordinals, and cases fit `u64`. Magnitudes are minimal. A
 decoder consumes exactly one value and requires byte-for-byte re-encoding
 equality. Unknown tags, trailing bytes, invalid symbols, duplicate or unsorted
@@ -104,6 +114,37 @@ There is no semantic JSON object, floating point, unordered map, host object,
 or reflective extension. A domain map or set is represented by a declared
 sorted-unique sequence. JSON, MLIR, a database record, or another carrier may
 transport canonical material but cannot determine semantic identity or order.
+
+The common finite-map notation is exact:
+
+```text
+ExactMap<K,V> =
+  a finite CanonicalSeq<{key: K, value: V}> whose entries are ordered by
+  ascending canonical encoded bytes of key, whose keys are pairwise distinct,
+  and which has no implicit, fallback, or default entry
+
+ExactMapBody(m,KeyBody,ValueBody) =
+  MetaSeq(map(m.entries, e -> MetaRecord {
+    0: KeyBody(e.key),
+    1: ValueBody(e.value)
+  }))
+
+ExactMapOver<D,V> =
+  an ExactMap<KeyType(D),V> whose key set is exactly the independently
+  derived finite canonical domain D
+
+CanonicalSortedUniqueMap<K,V> = ExactMap<K,V>
+CanonicalKeySortedMap<K,V> = ExactMap<K,V>
+```
+
+`KeyBody` and `ValueBody` are the exact owner-selected typed body compilers;
+the aliases add no second encoding. `ExactMap<K,V>` fixes representation,
+ordering, uniqueness, and absence of defaults, but does not claim that every
+possible value of `K` occurs. An owner requiring exhaustive coverage uses
+`ExactMapOver<D,V>` or states and checks an equivalent exact key-set equation
+against its independently derived `D`. A partial map, duplicate key, extra
+key, omitted key under an exhaustive-domain law, host insertion order, or
+equal-looking key from another type/regime cannot form the declared map.
 
 Encoding and decoding preflight cumulative bytes, nodes, depth, child edges,
 and declared scalar-conversion work before materializing an aggregate result.
@@ -368,10 +409,11 @@ and axes, so equality of those recorded bytes is equivalent to equality of the
 complete typed identity preimage. Re-observing equal bytes is a no-op.
 If it observes a `HashBindingConflict`, it reports a dedicated checker or
 conformance failure and admits neither preimage as the uniquely named object;
-no capability is minted from the conflicting group. The K1 reference evaluator
-names this refusal `K1-HASH-BINDING-CONFLICT` and creates a fresh ledger for
-each `evaluate` or `evaluate_encoded` transaction. A realization that retains
-an authenticated resolver or cache entry across transactions MUST either
+no capability is minted from the conflicting group. The Foundation reference
+evaluator names this refusal `FOUNDATION-HASH-BINDING-CONFLICT` and creates a
+fresh ledger for each `evaluate` or `evaluate_encoded` transaction. A
+realization that retains an authenticated resolver or cache entry across
+transactions MUST either
 extend grouping and conflict quarantine across that retained scope or
 reauthenticate it inside each transaction. This rule is unconditional. The
 stronger global statement that one identifier has only one possible preimage
@@ -551,10 +593,42 @@ source actually uses. The owning domain must therefore derive, rather than
 accept as an authored assertion, the profile dependencies required by its
 complete typed subject and selected law. Owner admission must establish both:
 
-- every semantic operation and profile declaration transitively used by the
-  subject is defined by the selected profile or its authenticated imports; and
-- every imported profile is required by that selected profile's admitted law
-  or declaration catalogs.
+- every semantic operation and profile declaration directly used by the
+  selected profile is defined by that profile or one of its direct imports;
+- every operation and declaration used only through an imported profile is
+  reachable through that profile's independently checked import closure; and
+- every direct import is required by at least one typed declaration reference,
+  body-schema reference, evaluator signature, or semantic-law clause owned by
+  the selected profile.
+
+The resulting edge rule is exact:
+
+```text
+DirectProfileUses(P) =
+  the canonical sorted-unique set of profiles whose declarations or laws
+  are referenced directly by P's catalogs, body schemas, evaluator
+  signatures, or admitted semantic-law source
+
+P.profile_imports = DirectProfileUses(P)
+```
+
+Transitive reachability does not discharge a direct use. Conversely, a
+profile used only inside a directly imported profile is not copied into the
+consumer's direct import set. A diamond is therefore required when the child
+itself uses both branches, and refused when one branch is merely reachable
+through the other. Carrying an opaque, kind-checked content reference to a
+foreign profiled subject is not by itself a semantic use of that foreign
+profile; interpreting or projecting the foreign body is.
+
+Each owner law source must publish a closed direct-import-use table. Every row
+names one direct import and a nonempty canonical sequence of owner-defined use
+coordinates; every coordinate must resolve to an actual typed catalog, body,
+signature, or law use. The owner derives the table from its admitted law and
+requires exact equality with `profile_imports`. Foundation authenticates the
+six-field profile envelope and import closure but does not parse an owner's
+opaque law bytes or infer domain use from digest-shaped data. This rule adds no
+field to `SemanticLanguageProfileBody` and therefore does not rotate the
+Foundation regime mechanism.
 
 Failure of either condition refuses owner admission. A broad domain profile
 with surplus imported laws is not an exact-used profile merely because its
@@ -938,6 +1012,20 @@ declaration establishes only its opaque nominal identity; exact
 to an admitted structural datum, strict decoding, and semantic decode failures
 for that exact declaration. Exposure policy remains owner policy, and a domain
 wire codec remains separate from this portable semantic encoding.
+
+For two already admitted values of one exact `ValueType T`, Foundation exposes
+the owner-qualified equality operation used by downstream correspondence laws:
+
+```text
+CanonicalValueEqual_T(x,y) =
+  the exact mathematical equality supplied by DomainSupport(E,T.domain)
+```
+
+The operation is defined only after support and admission for that identical
+type. For the selected root domains it is equality of the unique admitted
+datums. A type mismatch, absent domain support, or failed admission is an
+operational noncompletion before this Boolean is formed; it is never treated
+as inequality.
 
 Every type and declaration reference reachable from one portable algorithm,
 including nested sequence/record/sum members, primitive signatures, failure

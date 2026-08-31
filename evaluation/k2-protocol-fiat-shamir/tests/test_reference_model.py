@@ -1707,7 +1707,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
         expected_sizes = {
             model.PIR_INTERACTION_PROFILE_ID: 1,
             model.PIR_TRANSCRIPT_PROFILE_ID: 2,
-            model.PIR_PUBLIC_SETUP_PROFILE_ID: 3,
+            model.PIR_PUBLIC_SETUP_PROFILE_ID: 2,
         }
         for root_id, expected_size in expected_sizes.items():
             preimages = model.K2_ROOT_PROFILE_PREIMAGES[root_id]
@@ -1727,6 +1727,31 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             },
         )
         self.assertIs(model.PIR_FS_PROFILE, model.PIR_TRANSCRIPT_PROFILE)
+
+    def test_public_setup_profile_is_family_neutral_and_rejects_surplus_fs_edge(
+        self,
+    ) -> None:
+        baseline = model.K2_SEMANTIC_PROFILES
+        self.assertEqual(
+            baseline.public_view.profile_imports,
+            model._sorted_profile_imports(baseline.interaction),
+        )
+        surplus = replace(
+            baseline.public_view,
+            profile_imports=model._sorted_profile_imports(
+                baseline.interaction,
+                baseline.transcript_fs,
+            ),
+        )
+        with self.assertRaisesRegex(
+            model.ModelError,
+            "public-view profile must import only Interaction",
+        ):
+            model.K2SemanticProfiles(
+                baseline.interaction,
+                baseline.transcript_fs,
+                surplus,
+            )
 
     def test_unrecognized_profile_bundle_cannot_authorize_real_view_issuance(self) -> None:
         changed = model.make_k2_semantic_profiles(
@@ -1819,10 +1844,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
                 )
                 public_view = replace(
                     baseline.public_view,
-                    profile_imports=model._sorted_profile_imports(
-                        interaction,
-                        transcript,
-                    ),
+                    profile_imports=model._sorted_profile_imports(interaction),
                 )
                 changed = model.K2SemanticProfiles(
                     interaction,

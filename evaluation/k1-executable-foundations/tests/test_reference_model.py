@@ -656,7 +656,7 @@ class FoundationMetaProfileTest(unittest.TestCase):
                 )
         checker_failure = model.Evaluator._model_error_result(observed.exception)
         self.assertEqual(checker_failure.outcome, model.Outcome.CHECKER_FAILURE)
-        self.assertEqual(checker_failure.code, "K1-HASH-BINDING-CONFLICT")
+        self.assertEqual(checker_failure.code, "FOUNDATION-HASH-BINDING-CONFLICT")
 
         colliding_basis = replace(
             model.FOUNDATION_PRIOR_META_PREIMAGES,
@@ -682,7 +682,7 @@ class FoundationMetaProfileTest(unittest.TestCase):
                 prior_meta_preimages=colliding_basis,
             )
         self.assertEqual(end_to_end.outcome, model.Outcome.CHECKER_FAILURE)
-        self.assertEqual(end_to_end.code, "K1-HASH-BINDING-CONFLICT")
+        self.assertEqual(end_to_end.code, "FOUNDATION-HASH-BINDING-CONFLICT")
 
         capped = model.AuthenticationLedger()
         with patch.object(model, "MAX_AUTHENTICATION_LEDGER_ENTRIES", 0):
@@ -3041,7 +3041,7 @@ class AlgorithmIdentityAndAdmissionTest(unittest.TestCase):
         )
         self.assertEqual(
             collision_result.code,
-            "K1-HASH-BINDING-CONFLICT",
+            "FOUNDATION-HASH-BINDING-CONFLICT",
         )
 
     def test_primitive_sources_authenticate_or_rotate_the_full_identity_chain(

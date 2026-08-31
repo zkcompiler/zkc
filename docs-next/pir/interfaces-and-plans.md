@@ -779,28 +779,28 @@ PlanReadCoordinate =
   | AcceptedTerminalPublicOutput(output_ordinal)
 ```
 
-The mapping to K2 is total and constructor-preserving except for the one local
-name shown explicitly:
+The mapping to Interactive Core is total and constructor-preserving except for
+the one local name shown explicitly:
 
 ```text
-K2ReadOf(StaticConstant(x))            = K2.StaticConstant(x)
-K2ReadOf(OpenPublicInput(x))           = K2.PublicInvocationInput(x)
-K2ReadOf(OpenedBinding(x))             = K2.OpenedBinding(x)
-K2ReadOf(ObservedMessage(x))           = K2.ObservedMessage(x)
-K2ReadOf(ObservedChallenge(x))         = K2.ObservedChallenge(x)
-K2ReadOf(ObservedOraclePublication(x)) = K2.ObservedOraclePublication(x)
-K2ReadOf(ObservedOracleQuery(x))       = K2.ObservedOracleQuery(x)
-K2ReadOf(ObservedOracleAnswer(x))      = K2.ObservedOracleAnswer(x)
-K2ReadOf(ObservedModuleValue(x,n))     = K2.ObservedModuleValue(x,n)
-K2ReadOf(PriorOwnMove(d))              = K2.PriorOwnMove(d)
+InteractiveCoreReadOf(StaticConstant(x))            = InteractiveCore.StaticConstant(x)
+InteractiveCoreReadOf(OpenPublicInput(x))           = InteractiveCore.PublicInvocationInput(x)
+InteractiveCoreReadOf(OpenedBinding(x))             = InteractiveCore.OpenedBinding(x)
+InteractiveCoreReadOf(ObservedMessage(x))           = InteractiveCore.ObservedMessage(x)
+InteractiveCoreReadOf(ObservedChallenge(x))         = InteractiveCore.ObservedChallenge(x)
+InteractiveCoreReadOf(ObservedOraclePublication(x)) = InteractiveCore.ObservedOraclePublication(x)
+InteractiveCoreReadOf(ObservedOracleQuery(x))       = InteractiveCore.ObservedOracleQuery(x)
+InteractiveCoreReadOf(ObservedOracleAnswer(x))      = InteractiveCore.ObservedOracleAnswer(x)
+InteractiveCoreReadOf(ObservedModuleValue(x,n))     = InteractiveCore.ObservedModuleValue(x,n)
+InteractiveCoreReadOf(PriorOwnMove(d))              = InteractiveCore.PriorOwnMove(d)
 
 AvailableDecisionRead(P,d,c) iff
   d is an exact decision of admitted Protocol P and
-  K2.GuaranteedProverRead(d, K2ReadOf(c)) = true
+  InteractiveCore.GuaranteedProverRead(d, InteractiveCoreReadOf(c)) = true
     in P's exact StrategyDecisionView
 ```
 
-`K2ReadOf` is undefined for `AcceptedTerminalPublicOutput`; that constructor
+`InteractiveCoreReadOf` is undefined for `AcceptedTerminalPublicOutput`; that constructor
 is legal only at the identical accepted-terminal site described below.
 
 This is an alias of the InteractiveCore owner table, not a second path
@@ -936,7 +936,7 @@ hidden post-terminal state. It never runs on `Reject`, `Abort`, interpretation
 failure, `StrategyStopped`, or another inactive `Accept` terminal.
 
 Every node algorithm has the exact derived K1 ABI and one `output_type`, with
-an empty semantic-failure row. Multiple results use one exact K1 record value.
+an empty typed-failure row. Multiple results use one exact Foundation record value.
 A mathematical partial operation returns a tagged value and makes its branch
 explicit in the recipe. Typed holes may be added only as an
 exact supported Plan module constructor with complete input/output, read,
@@ -1657,6 +1657,12 @@ material declaration or derived export plus source site and recipe-local
 value. That mapping is authority-bearing extraction state and is absent from
 the surface identity. Consequently neither an entry nor any transitive entry
 field leaks a Plan ID or Plan-local reference.
+
+Two admitted Plans with the same witness-relevant shape may therefore have the
+same `PlanWitnessSurfaceId`. A persisted surface or equal surface ID proves
+neither which Plan was used nor that any Plan derivation occurred; only the
+live `CheckedPlanWitnessSurfaceExtraction` returned by exact derivation binds
+the surface to one admitted Plan and its private source map.
 
 A later Relations-owned attachment may bind its own witness occurrence to a
 surface entry. Neither the surface nor its extraction claims correspondence,

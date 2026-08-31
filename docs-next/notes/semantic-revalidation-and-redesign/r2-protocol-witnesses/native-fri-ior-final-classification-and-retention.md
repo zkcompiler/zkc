@@ -79,8 +79,10 @@ fixed:
 4. the third fold yields a scalar `C` before query sampling;
 5. four labelled initial-domain draws each induce one complete binary-fibre
    check at each of three layers; and
-6. the verifier evaluates all twelve fold equations and the scalar terminal
-   comparison in the source order.
+6. the verifier evaluates exactly twelve layer checks: eight fold equations
+   and four scalar-terminal comparisons. The retained fixture chooses one
+   deterministic query-then-layer evaluation order for replay; the source's
+   parallel-query presentation does not impose that execution order.
 
 The following are local zkc profile or compilation choices, not claims about
 Algorithm 1:

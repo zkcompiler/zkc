@@ -33,8 +33,7 @@ ABSORB_LAW = (
     "then overwrites"
 )
 SQUEEZE_LAW = (
-    "Squeeze(0) is identity; positive Squeeze resets iA and continues one "
-    "output stream"
+    "Squeeze(0) is identity; positive Squeeze resets iA and continues one output stream"
 )
 
 CONSTRUCTION_KEYS = {
@@ -73,6 +72,7 @@ CHALLENGE_DECODER_ALGORITHMS = {
     "QuadIdentity": "SymbolsToTupleInOrder",
     "PartialScalar": "OnlySymbolExceptLastUndefined",
     "ConstantScalar": "ConstantZero",
+    "EmptyToConstantScalar": "EmptySymbolsToConstantZero",
     "PairAsScalar": "FirstSymbolOnly",
 }
 MAX_FINITE_DECODER_INPUTS = ALPHABET_SIZE**6
@@ -228,11 +228,15 @@ def _parse_occurrence(value: Any, index: int) -> Occurrence:
     obj = exact_keys(value, {"kind", "name", "value_type"}, where=f"schedule[{index}]")
     kind = _nonempty_name(obj["kind"], where=f"schedule[{index}].kind")
     name = _nonempty_name(obj["name"], where=f"schedule[{index}].name")
-    value_type = _nonempty_name(obj["value_type"], where=f"schedule[{index}].value_type")
+    value_type = _nonempty_name(
+        obj["value_type"], where=f"schedule[{index}].value_type"
+    )
     if kind not in OCCURRENCE_KINDS:
         raise AdmissionRefusal("unsupported occurrence kind in construction Core view")
     if kind == "ProverMessage" and value_type not in MESSAGE_TYPES:
-        raise AdmissionRefusal("prover-message occurrence has an unsupported value type")
+        raise AdmissionRefusal(
+            "prover-message occurrence has an unsupported value type"
+        )
     if kind == "Challenge" and value_type not in CHALLENGE_TYPES:
         raise AdmissionRefusal("challenge occurrence has an unsupported value type")
     return Occurrence(kind, name, value_type)
@@ -260,9 +264,13 @@ def parse_core(value: Any) -> CoreView:
     }:
         raise AdmissionRefusal("finite source Core Statement binding differs")
     bindings = (InitialBinding("Statement", "statement", "StatementPair"),)
-    schedule = tuple(_parse_occurrence(item, index) for index, item in enumerate(obj["schedule"]))
+    schedule = tuple(
+        _parse_occurrence(item, index) for index, item in enumerate(obj["schedule"])
+    )
     if not schedule or len(schedule) > 16:
-        raise AdmissionRefusal("Core view schedule is empty or exceeds its finite bound")
+        raise AdmissionRefusal(
+            "Core view schedule is empty or exceeds its finite bound"
+        )
     names = [item.name for item in schedule]
     if len(names) != len(set(names)):
         raise AdmissionRefusal("Core occurrence names must be unique")
@@ -270,9 +278,13 @@ def parse_core(value: Any) -> CoreView:
         "ProverMessage" if index % 2 == 0 else "Challenge"
         for index in range(len(schedule))
     ):
-        raise AdmissionRefusal("finite source Core must alternate prover messages and challenges")
+        raise AdmissionRefusal(
+            "finite source Core must alternate prover messages and challenges"
+        )
     if schedule[-1].kind != "Challenge":
-        raise AdmissionRefusal("finite source Core must include its final verifier challenge")
+        raise AdmissionRefusal(
+            "finite source Core must include its final verifier challenge"
+        )
     return CoreView(bindings, schedule)
 
 
@@ -308,7 +320,9 @@ def _parse_challenge_decoder(value: Any, index: int) -> ChallengeDecoder:
     )
 
 
-def _matrix(value: Any, rows: int, columns: int, *, where: str) -> tuple[tuple[int, ...], ...]:
+def _matrix(
+    value: Any, rows: int, columns: int, *, where: str
+) -> tuple[tuple[int, ...], ...]:
     if type(value) is not list or len(value) != rows:
         raise MalformedInput(f"{where} has the wrong row count")
     parsed: list[tuple[int, ...]] = []
@@ -442,6 +456,8 @@ def encode_message(codec: str, value_type: str, value: object) -> tuple[int, ...
 
 def decode_challenge(decoder: str, value_type: str, data: tuple[int, ...]) -> object:
     data = symbols(data, where="challenge decoder input")
+    if decoder == "EmptyToConstantScalar" and value_type == "SigmaScalar" and not data:
+        return 0
     if decoder == "PairIdentity" and value_type == "SigmaPair" and len(data) == 2:
         return data
     if decoder == "ScalarIdentity" and value_type == "SigmaScalar" and len(data) == 1:
@@ -491,9 +507,7 @@ def decoder_bias(decl: ChallengeDecoder, occurrence: Occurrence) -> dict[str, in
         counts[decoded] += 1
     # Total variation distance is represented exactly as numerator/denominator.
     # 1/2 sum_y |count_y/|source| - 1/|target||.
-    numerator = sum(
-        abs(counts[value] * len(target) - source_size) for value in target
-    )
+    numerator = sum(abs(counts[value] * len(target) - source_size) for value in target)
     denominator = 2 * source_size * len(target)
     return {"numerator": numerator, "denominator": denominator}
 
@@ -546,7 +560,9 @@ def finite_source_applicability(
 
 
 def parse_construction(value: Any) -> TranscriptConstruction:
-    outer = exact_keys(value, {"schema", "core", "construction"}, where="construction fixture")
+    outer = exact_keys(
+        value, {"schema", "core", "construction"}, where="construction fixture"
+    )
     if outer["schema"] != CONSTRUCTION_SCHEMA:
         raise MalformedInput("construction fixture schema differs")
     core = parse_core(outer["core"])
@@ -563,9 +579,13 @@ def parse_construction(value: Any) -> TranscriptConstruction:
     }
     for key, expected in expected_scalars.items():
         if obj[key] != expected:
-            raise AdmissionRefusal(f"construction {key} differs from the selected source law")
+            raise AdmissionRefusal(
+                f"construction {key} differs from the selected source law"
+            )
     if obj["core_id"] != core_id(core):
-        raise AdmissionRefusal("construction names a Core other than its exact supplied view")
+        raise AdmissionRefusal(
+            "construction names a Core other than its exact supplied view"
+        )
     salt_length = exact_nat(obj["salt_length"], maximum=16, where="salt length")
     if salt_length == 0:
         raise AdmissionRefusal("finite source profile requires a nonempty salt")
@@ -580,7 +600,10 @@ def parse_construction(value: Any) -> TranscriptConstruction:
     if obj["provider_interface"] != ["StartHash", "ForwardPermutation"]:
         raise AdmissionRefusal("execution provider exposes the wrong exact interface")
     provider_semantics = _parse_provider_semantics(obj["provider_semantics"])
-    if type(obj["message_codecs"]) is not list or type(obj["challenge_decoders"]) is not list:
+    if (
+        type(obj["message_codecs"]) is not list
+        or type(obj["challenge_decoders"]) is not list
+    ):
         raise MalformedInput("construction mappings must be ordered lists")
     message_codecs = tuple(
         _parse_message_codec(item, index)
@@ -592,12 +615,18 @@ def parse_construction(value: Any) -> TranscriptConstruction:
     )
     messages = tuple(item for item in core.schedule if item.kind == "ProverMessage")
     challenges = tuple(item for item in core.schedule if item.kind == "Challenge")
-    if tuple(item.occurrence for item in message_codecs) != tuple(item.name for item in messages):
-        raise AdmissionRefusal("message-codec map is not exact, total, and schedule ordered")
+    if tuple(item.occurrence for item in message_codecs) != tuple(
+        item.name for item in messages
+    ):
+        raise AdmissionRefusal(
+            "message-codec map is not exact, total, and schedule ordered"
+        )
     if tuple(item.occurrence for item in challenge_decoders) != tuple(
         item.name for item in challenges
     ):
-        raise AdmissionRefusal("challenge-decoder map is not exact, total, and schedule ordered")
+        raise AdmissionRefusal(
+            "challenge-decoder map is not exact, total, and schedule ordered"
+        )
     for declaration, occurrence in zip(message_codecs, messages, strict=True):
         _admit_total_fixed_message_codec(declaration, occurrence)
     construction = TranscriptConstruction(
@@ -612,7 +641,9 @@ def parse_construction(value: Any) -> TranscriptConstruction:
     )
     # The reconstructed body must reproduce the decoded declaration exactly.
     if construction.body() != obj:
-        raise AdmissionRefusal("construction declaration is not its canonical reconstructed body")
+        raise AdmissionRefusal(
+            "construction declaration is not its canonical reconstructed body"
+        )
     return construction
 
 

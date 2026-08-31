@@ -100,7 +100,9 @@ class PositiveJoinedWitnessTest(unittest.TestCase):
             witness.anchors.relation_interface_id,
         )
 
-    def test_endpoint_lanes_are_separately_admitted_and_projection_checked(self) -> None:
+    def test_endpoint_lanes_are_separately_admitted_and_projection_checked(
+        self,
+    ) -> None:
         witness = baseline()
         verifier = witness.verifier
         prover = witness.prover
@@ -299,7 +301,7 @@ class CrossBoundaryMutationTest(unittest.TestCase):
         changed_case = model.coherent_relation_witness_rename(old.case)
         with self.assertRaisesRegex(
             model.analysis.SourceIngressError,
-            "closed K3-C slot catalog",
+            "closed Analysis slot catalog",
         ):
             model.derive_analysis_lanes(
                 changed_case,
@@ -341,7 +343,10 @@ class CrossBoundaryMutationTest(unittest.TestCase):
         self.assertEqual(old.prover_source_id, new.prover_source_id)
         self.assertEqual(old.prover_oir_id, new.prover_oir_id)
         self.assertEqual(old.prover_proposition_id, new.prover_proposition_id)
-        self.assertNotEqual(old.prover_validation_id, new.prover_validation_id)
+        self.assertNotEqual(
+            old.prover_validation_fingerprint,
+            new.prover_validation_fingerprint,
+        )
 
     def test_provenance_and_source_label_rotate_validation_only(self) -> None:
         old = baseline().verifier
@@ -358,8 +363,8 @@ class CrossBoundaryMutationTest(unittest.TestCase):
             new.validation.proposition.proposition_id,
         )
         self.assertNotEqual(
-            old.checked.validation_request_id,
-            new.checked.validation_request_id,
+            old.checked.validation_request_fingerprint,
+            new.checked.validation_request_fingerprint,
         )
 
     def test_downstream_oir_change_is_negative_and_leaves_upstream_fixed(self) -> None:
@@ -440,7 +445,6 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
             profiles.endpoint_graph,
             profiles.source_view,
             profiles.projection,
-            profiles.validation,
         )
 
     def assert_exact_rotations(self, original, changed, rotated) -> None:
@@ -451,8 +455,10 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
                 else:
                     self.assertEqual(left.identity, right.identity)
 
-    def test_imported_root_contexts_are_exact_and_have_no_cross_branch_import(self) -> None:
-        analysis_profiles = model.analysis.K3C_ANALYSIS_SEMANTIC_PROFILES
+    def test_imported_root_contexts_are_exact_and_have_no_cross_branch_import(
+        self,
+    ) -> None:
+        analysis_profiles = model.analysis.ANALYSIS_SEMANTIC_PROFILES
         oir_profiles = model.oir.K3D_SEMANTIC_PROFILES
         self.assertIs(
             analysis_profiles.k3b_profiles,
@@ -465,17 +471,16 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
         )
         roots = (
             (analysis_profiles.kernel, analysis_profiles.kernel_bundle, 1),
-            (analysis_profiles.property, analysis_profiles.property_bundle, 6),
-            (analysis_profiles.transport, analysis_profiles.transport_bundle, 7),
+            (analysis_profiles.property, analysis_profiles.property_bundle, 7),
+            (analysis_profiles.transport, analysis_profiles.transport_bundle, 8),
             (
                 analysis_profiles.theorem_source_validation,
                 analysis_profiles.theorem_source_validation_bundle,
-                8,
+                9,
             ),
             (oir_profiles.endpoint_graph, oir_profiles.endpoint_graph_bundle, 4),
             (oir_profiles.source_view, oir_profiles.source_view_bundle, 5),
             (oir_profiles.projection, oir_profiles.projection_bundle, 6),
-            (oir_profiles.validation, oir_profiles.validation_bundle, 7),
         )
         for profile, bundle, expected_count in roots:
             with self.subTest(profile=profile.profile_family.value):
@@ -491,7 +496,7 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
                 )
 
         shared = set(analysis_profiles.property_bundle) & set(
-            oir_profiles.validation_bundle
+            oir_profiles.projection_bundle
         )
         self.assertEqual(
             shared,
@@ -504,10 +509,10 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
         for profile_id in shared:
             self.assertIs(
                 analysis_profiles.property_bundle[profile_id],
-                oir_profiles.validation_bundle[profile_id],
+                oir_profiles.projection_bundle[profile_id],
             )
         for profile in self._analysis_profiles(analysis_profiles):
-            self.assertNotIn(profile.identity, oir_profiles.validation_bundle)
+            self.assertNotIn(profile.identity, oir_profiles.projection_bundle)
         for profile in self._oir_profiles(oir_profiles):
             self.assertNotIn(
                 profile.identity,
@@ -519,13 +524,13 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
                 analysis_profiles.property.identity,
                 {
                     **analysis_profiles.property_bundle,
-                    **oir_profiles.validation_bundle,
+                    **oir_profiles.projection_bundle,
                 },
             ),
             (
-                oir_profiles.validation.identity,
+                oir_profiles.projection.identity,
                 {
-                    **oir_profiles.validation_bundle,
+                    **oir_profiles.projection_bundle,
                     **analysis_profiles.theorem_source_validation_bundle,
                 },
             ),
@@ -555,8 +560,8 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
 
         expected = {
             witness.analysis_lanes.finite_profile.profile_id: (
-                model.analysis.K3C_ANALYSIS_PROPERTY_PROFILE_ID,
-                6,
+                model.analysis.ANALYSIS_PROPERTY_PROFILE_ID,
+                7,
             )
         }
         for lane in (witness.verifier, witness.prover):
@@ -570,10 +575,6 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
                     lane.validation.proposition.proposition_id: (
                         model.oir.RELATION_PROFILE,
                         6,
-                    ),
-                    lane.checked.validation_request_id: (
-                        model.oir.VALIDATION_PROFILE,
-                        7,
                     ),
                 }
             )
@@ -600,7 +601,7 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
         self.assertEqual(seen, set(expected))
 
     def test_analysis_law_identity_rotations_follow_exact_descendants(self) -> None:
-        original = model.analysis.K3C_ANALYSIS_SEMANTIC_PROFILES
+        original = model.analysis.ANALYSIS_SEMANTIC_PROFILES
         original_profiles = self._analysis_profiles(original)
         cases = (
             ("kernel_law", {0, 1, 2, 3}),
@@ -627,10 +628,9 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
         original = model.oir.K3D_SEMANTIC_PROFILES
         original_profiles = self._oir_profiles(original)
         cases = (
-            ("endpoint_graph_law", {0, 1, 2, 3}),
-            ("source_view_law", {1, 2, 3}),
-            ("projection_law", {2, 3}),
-            ("validation_law", {3}),
+            ("endpoint_graph_law", {0, 1, 2}),
+            ("source_view_law", {1, 2}),
+            ("projection_law", {2}),
         )
         for argument, rotated in cases:
             with self.subTest(argument=argument):
@@ -643,7 +643,7 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
                     rotated,
                 )
         self.assertEqual(
-            model.analysis.K3C_ANALYSIS_SEMANTIC_PROFILES,
+            model.analysis.ANALYSIS_SEMANTIC_PROFILES,
             model.analysis.make_k3c_analysis_semantic_profiles(),
         )
 
@@ -664,7 +664,7 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
             changed_k3b.relations_correspondence.identity,
         )
         self.assert_exact_rotations(
-            self._analysis_profiles(model.analysis.K3C_ANALYSIS_SEMANTIC_PROFILES),
+            self._analysis_profiles(model.analysis.ANALYSIS_SEMANTIC_PROFILES),
             self._analysis_profiles(changed_analysis),
             {1, 2, 3},
         )
@@ -691,7 +691,7 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
             changed_k3b.relations_correspondence.identity,
         )
         self.assert_exact_rotations(
-            self._analysis_profiles(model.analysis.K3C_ANALYSIS_SEMANTIC_PROFILES),
+            self._analysis_profiles(model.analysis.ANALYSIS_SEMANTIC_PROFILES),
             self._analysis_profiles(changed_analysis),
             {1, 2, 3},
         )

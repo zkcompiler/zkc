@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the bounded K3-B dependent-surface research gate."""
+"""Run the bounded dependent-surface research gate."""
 
 from __future__ import annotations
 
@@ -24,12 +24,15 @@ def main(argv: list[str] | None = None) -> int:
         str(ROOT / "tests"), top_level_dir=str(ROOT / "tests")
     )
     count = suite.countTestCases()
-    print(f"K3-B dependent surfaces: {count} tests")
+    print(f"Dependent Interface, Plan, and Relations surfaces: {count} tests")
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if result.wasSuccessful():
-        print(f"K3-B dependent surfaces: {count}/{count} tests passed")
+        print(
+            "Dependent Interface, Plan, and Relations surfaces: "
+            f"{count}/{count} tests passed"
+        )
         return 0
-    print("K3-B dependent surfaces: FAILED", file=sys.stderr)
+    print("Dependent Interface, Plan, and Relations surfaces: FAILED", file=sys.stderr)
     return 1
 
 

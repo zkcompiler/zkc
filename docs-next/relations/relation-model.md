@@ -448,7 +448,7 @@ The declaration's `start` algorithm has exact ABI
 `resume` has exactly one entry per Oracle ordinal, and entry `o` has exact ABI
 `SatisfactionMachineResumeInputType(C,o) ->
 SatisfactionMachineCommandType(C)`. Every algorithm is same-regime, total,
-and has the K1-derived empty semantic-failure row. These algorithms define the
+and has the Foundation-derived empty typed-failure row. These algorithms define the
 evaluator denotation; no callback or implementation-supplied Boolean does.
 
 ~~~text
@@ -1365,17 +1365,17 @@ ForwardAlgorithm(b) =
     Embedding(e)       -> e.embed
     LossyProjection(e) -> e.project
 
-ApplyValueRelation(SameExactType, x:T, y:T) = K1Equal_T(x,y)
+ApplyValueRelation(SameExactType, x:T, y:T) = CanonicalValueEqual_T(x,y)
 
 ApplyValueRelation(ApplyBridge(b,Forward), x:source_type(b),
                    y:target_type(b)) =
-  K1Equal_target(Evaluate(ForwardAlgorithm(b),x), y)
+  CanonicalValueEqual_target(Evaluate(ForwardAlgorithm(b),x), y)
 
 ApplyValueRelation(ApplyBridge(b,Backward), x:target_type(b),
                    y:source_type(b)) =
   match lane(b) with
-    Equivalence(e) -> K1Equal_source(Evaluate(e.backward,x),y)
-    Embedding(e)   -> K1Equal(InImage(y),Evaluate(e.recover,x))
+    Equivalence(e) -> CanonicalValueEqual_source(Evaluate(e.backward,x),y)
+    Embedding(e)   -> CanonicalValueEqual(InImage(y),Evaluate(e.recover,x))
     LossyProjection(e) -> Unsupported
 ~~~
 
@@ -3060,7 +3060,7 @@ generic object carrier.
 | `ArtifactInterfaceComparison` | Requested observed fields agree or disagree with requested relation facts | Artifact provenance or relation truth |
 | `GroundingEquationHolds` | Exact typed runtime/artifact/relation operands satisfy the equation | Cryptographic faithfulness beyond the equation |
 | `CommitmentGroundingHolds` | Exact relation material and exact publication occurrence satisfy the construction equation | Binding, hiding, or extraction |
-| `RunGroundedCorrespondence` | One qualified run's selected public facts and, when requested, one causally supplied whole initial logical-Oracle carrier agree with one exact instance/binding | Universal protocol behavior, satisfaction, or Oracle security |
+| `RunGroundedCorrespondence` | One operation-derived, object-identical execution basis supplies all selected public facts and every requested causally supplied whole initial logical-Oracle carrier, which agree with one exact instance/binding | Universal protocol behavior, satisfaction, or Oracle security |
 | `PlanWitnessRunGrounding` | Selected relation-secret occurrences and selected causally generated Plan-witness occurrences satisfy their exact binding-edge value relations | Witness satisfaction, fold preservation, or next-run handoff |
 | `CheckedSameRunPlanWitnessCorrespondence` | Affirmative public and private correspondence results retain the identical instance, Protocol, invocation object, completed-record object, and causal-generation capability | A prescribed public/private coordinate pairing, next-run recurrence, or IVC induction |
 | `CheckedPlanWitnessHandoffCorrespondence` | Two same-run results and one live PIR handoff capability retain the exact source relation assignment and Plan export occurrence and the exact fresh target ingress and relation assignment occurrence | Public recurrence, fold preservation, or serialized/physical transport |
@@ -3106,53 +3106,17 @@ exact source families. Claim recipes derive exact input/output instance
 occurrences from the selected run values before claim agreement is checked.
 Commitment groundings evaluate their separate equation DAGs.
 
-For every `OracleMaterialAgreement(e)` selected by the same question, where
-`e` is a `LogicalOracleTarget`, Relations applies this distinct law:
-
-~~~text
-relation_material =
-  ReadWholeCarrier(
-    matching OracleMaterialAssignment for instance and e.relation.ref,
-    identical live secret-value capability)
-
-pir_material =
-  ReadWholeCarrier(
-    matching ConfidentialInitialOracleView whose coordinate is {
-      protocol_id: binding.protocol_id,
-      oracle: e.protocol.oracle,
-      publication: e.protocol.publication_occurrence
-    },
-    identical CheckedConfidentialInitialOracleViewAuthority,
-    identical ConfidentialInitialOracleViewCapability)
-
-Type(relation_material)
-  = Type(pir_material)
-  = ResolvedOracleDecl(e.relation.ref).material_type
-  = OracleCarrierType(e.protocol.oracle)
-
-FoundationSameTypeEquality(relation_material,pir_material) = true
-~~~
-
-The relation assignment belongs to the question's exact `RelationInstance`;
-the PIR view belongs to the binding's exact Protocol, invocation, completed
-run, initial-supply occurrence, and causal generation. Its disclosure policy
-is the exact imported `ConfidentialInitialOracleDisclosurePolicy` with that
-coordinate, extent `WholeCanonicalCarrier`, qualification
-`CausallyGeneratedOnly`, and the exact correspondence-question ID passed
-separately through `PIRSourceConsumerRoleId` and
-`PIRSourcePurposeRoleId`. The two roles remain nominally distinct. The
-comparison is whole-carrier equality. It does not inspect only queried
-entries, accept a commitment or digest as material equality, or apply a
-`ValueBridge`.
-
-Equal carriers contribute an agreement and unequal well-formed carriers
-contribute a semantic disagreement. Neither payload, either local occurrence,
-nor a digest appears in the portable checked result. Missing or expired live
-authority is `CannotAnswer`; wrong occurrence, run, policy, consumer, purpose,
-or reconstructed bearer is `Refused`; wrong type, kind, or regime is
-`KindMismatch`; an unsupported origin, publication mode, or replay-qualified
-request is `Unsupported`; and structural, limit, or checker failures retain
-their exact qualified outcome. None is converted into material inequality.
+The exact `OracleMaterialAgreement` read law, authority checks, whole-carrier
+same-type equality, result retention, and qualified outcome partition are
+defined once in
+[Protocol Correspondence, Section 9.1](protocol-correspondence.md#91-public-and-initial-oracle-grounding).
+This model imports that law into `RunGroundedCorrespondence`; it does not
+restate or specialize it. Conceptually, the relation assignment and the
+causally generated PIR initial-Oracle occurrence must be read through the
+identical live, question-bound authorities and compared as complete carriers.
+A queried subset, commitment, digest, `ValueBridge`, reconstructed bearer, or
+replay-qualified source cannot substitute, and no secret carrier enters the
+portable result.
 
 When a selected edge uses a lossy bridge, the run-grounded operation derives
 the exact full `BridgeUseSet` and the owner-derived selection containing every
@@ -3170,18 +3134,13 @@ the fresh overall-Affirmative run-grounded checked-result capability retaining
 the exact complete selection and all join capabilities licenses its selected
 use count. Artifact comparison still has no analogous live consumer join.
 
-For every edge selected by a `PlanWitnessRunGrounding` question, Relations
-reads the exact relation-witness occurrence through a fresh
-`PrivateWitnessAssignment` source and the exact Plan occurrence through the
-question-bound confidential Plan-witness view. It then applies the edge's
-admitted `ValueRelation` at the two selected typed occurrences. Lossy edges
-reuse `IssuePrivateWitnessFieldSource`, the exact question-bound premise, and
-`CheckLossyUseAtConsumerSource`; they do not infer source identity from equal
-values. True edges record `ValueAgrees(Edge(e))`; false well-formed relations
-record `ValueDisagreement(Edge(e))`. Missing, inactive, unfinalized, expired,
-replay-qualified, cross-run, wrong-policy, wrong-type, and malformed sources
-retain the qualified non-semantic-false outcomes fixed by Protocol
-Correspondence.
+The exact per-edge read, value-relation, lossy-source, result, and qualified
+outcome law for `PlanWitnessRunGrounding` is defined once in
+[Protocol Correspondence, Section 9.2](protocol-correspondence.md#92-causal-plan-witness-grounding).
+This model imports that operation without a second copy. Its semantic boundary
+is that one fresh relation-witness occurrence and one exact, causally generated
+Plan-witness occurrence satisfy the admitted edge relation; equal reconstructed
+values, another run, replay, or an expired authority cannot establish it.
 
 The separate same-run join consumes affirmative public `RunGrounding` and
 private `PlanWitnessRunGrounding` results and their live capabilities. It

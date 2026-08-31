@@ -6389,7 +6389,7 @@ def authenticate_module_closure(
         except HashBindingConflictError as error:
             raise _Control(
                 Outcome.CHECKER_FAILURE,
-                "K1-HASH-BINDING-CONFLICT",
+                "FOUNDATION-HASH-BINDING-CONFLICT",
                 str(error),
             ) from error
         except (CanonicalError, ModelError, AttributeError, TypeError) as error:
@@ -6644,7 +6644,7 @@ def effective_semantic_context(
         except HashBindingConflictError as error:
             raise _Control(
                 Outcome.CHECKER_FAILURE,
-                "K1-HASH-BINDING-CONFLICT",
+                "FOUNDATION-HASH-BINDING-CONFLICT",
                 str(error),
             ) from error
         except DeclarationKindMismatchError as error:
@@ -6813,7 +6813,7 @@ def authenticate_profiled_semantic_content(
     except HashBindingConflictError as error:
         raise _Control(
             Outcome.CHECKER_FAILURE,
-            "K1-HASH-BINDING-CONFLICT",
+            "FOUNDATION-HASH-BINDING-CONFLICT",
             str(error),
         ) from error
     except (CanonicalError, ModelError, AttributeError, TypeError) as error:
@@ -7349,7 +7349,7 @@ class Evaluator:
         except HashBindingConflictError as error:
             raise _Control(
                 Outcome.CHECKER_FAILURE,
-                "K1-HASH-BINDING-CONFLICT",
+                "FOUNDATION-HASH-BINDING-CONFLICT",
                 str(error),
             ) from error
         except (CanonicalError, ModelError, AttributeError, TypeError) as error:
@@ -7380,7 +7380,7 @@ class Evaluator:
         except HashBindingConflictError as error:
             raise _Control(
                 Outcome.CHECKER_FAILURE,
-                "K1-HASH-BINDING-CONFLICT",
+                "FOUNDATION-HASH-BINDING-CONFLICT",
                 str(error),
             ) from error
         except (CanonicalError, ModelError, AttributeError, TypeError) as error:
@@ -7414,7 +7414,7 @@ class Evaluator:
         except HashBindingConflictError as error:
             raise _Control(
                 Outcome.CHECKER_FAILURE,
-                "K1-HASH-BINDING-CONFLICT",
+                "FOUNDATION-HASH-BINDING-CONFLICT",
                 str(error),
             ) from error
         except (CanonicalError, ModelError, AttributeError, TypeError) as error:
@@ -7434,7 +7434,7 @@ class Evaluator:
         except HashBindingConflictError as error:
             raise _Control(
                 Outcome.CHECKER_FAILURE,
-                "K1-HASH-BINDING-CONFLICT",
+                "FOUNDATION-HASH-BINDING-CONFLICT",
                 str(error),
             ) from error
         except (CanonicalError, ModelError, AttributeError, TypeError) as error:
@@ -7851,7 +7851,7 @@ class Evaluator:
             return EvaluationResult(
                 Outcome.CHECKER_FAILURE,
                 AbstractCharge(),
-                code="K1-HASH-BINDING-CONFLICT",
+                code="FOUNDATION-HASH-BINDING-CONFLICT",
                 detail=str(error),
             )
         if isinstance(error, ValueAdmissionRefusedError):

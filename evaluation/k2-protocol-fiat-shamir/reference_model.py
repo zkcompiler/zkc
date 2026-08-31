@@ -151,10 +151,9 @@ class K2SemanticProfiles:
         ):
             raise ModelError("the Transcript/FS profile must import Interaction")
         if self.public_view.profile_imports != _sorted_profile_imports(
-            self.interaction,
-            self.transcript_fs,
+            self.interaction
         ):
-            raise ModelError("the public-view profile must import both K2 languages")
+            raise ModelError("the public-view profile must import only Interaction")
 
     @property
     def bundle(self) -> dict[object, object]:
@@ -239,7 +238,7 @@ def make_k2_semantic_profiles(
     public_view = k1.SemanticLanguageProfile(
         k1.Symbol("zkc.pir.public-view-export"),
         0,
-        _sorted_profile_imports(interaction, transcript_fs),
+        _sorted_profile_imports(interaction),
         tuple(
             k1.Symbol(item)
             for item in sorted(
@@ -291,7 +290,7 @@ def k2_root_profile_preimages(
         profiles.transcript_fs.identity: profiles.transcript_fs,
     }
     public_view = {
-        **transcript,
+        **interaction,
         profiles.public_view.identity: profiles.public_view,
     }
     return MappingProxyType(
@@ -314,8 +313,8 @@ PIR_PUBLIC_SETUP_PROFILE_PREIMAGES = K2_ROOT_PROFILE_PREIMAGES[
     PIR_PUBLIC_SETUP_PROFILE_ID
 ]
 # Convenience superset for consumers that need all K2 profile preimages.  It is
-# the exact closure only for the public-view root; use the root-specific maps
-# above for Interaction or Transcript/FS authentication.
+# not an exact root closure; use the root-specific maps above for
+# authentication.
 K2_PROFILE_PREIMAGES = K2_PROFILE_BUNDLE
 
 

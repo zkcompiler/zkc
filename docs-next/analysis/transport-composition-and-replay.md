@@ -1,7 +1,7 @@
 # Analysis theorem applicability, transport, and replay
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K3-C target
+> **Document state:** Active non-normative Analysis target
 > **Target status:** Minimum theorem-applicability and property-transport seam
 > **Provisional owner:** `analysis`
 > **Authority:** This page defines a redesign target only. Current
@@ -11,7 +11,7 @@
 
 ## 1. Three separate contracts
 
-The K3-C Fresh-to-Fiat--Shamir path is:
+The Analysis Fresh-to-Fiat--Shamir path is:
 
 ```text
 CheckedFSConstruction
@@ -46,8 +46,8 @@ None implies the next. In particular:
 For the closed theorem records on this page,
 `TheoremProfileLawRef(body_schema,field_ordinal,signature)` denotes the unique
 exact `AnalysisProfileLawRef<signature>` at that field in the directly selected
-`K3CAFKTransportLanguageProfileId`. This standalone profile imports exactly
-`K3CCryptographicPropertyLanguageProfileId`; it neither copies that profile's
+`AnalysisAFKTransportLanguageProfileId`. This standalone profile imports exactly
+`AnalysisCryptographicPropertyLanguageProfileId`; it neither copies that profile's
 catalogs nor imports any additional owner profile not referenced by its closed
 contracts. A displayed mathematical or English
 expansion in a schema-, interpretation-, coherence-, transform-, map-,
@@ -66,7 +66,7 @@ TheoremSchemaComponent<C> = {
     CanonicalValue<resolved and lifted payload type of contract_ref>
 }
 
-AnalysisTheoremComponentSemanticsContract<C> = {
+AnalysisTheoremComponentSemanticsContract<P,C> = {
   exact_component_payload_meta_schema:
     AnalysisProfileLawRef<ClosedTheoremComponentPayloadSchema<C>>,
   admitted_local_binding_kinds_and_occurrence_paths:
@@ -76,7 +76,7 @@ AnalysisTheoremComponentSemanticsContract<C> = {
   cross_component_coherence_law:
     AnalysisProfileLawRef<TheoremComponentCoherenceLaw<C>>,
   failure_classification:
-    AnalysisProfileLawRef<AnalysisAttemptFailurePartition>
+    CommonAnalysisAttemptFailurePartitionRef<P>
 }
 
 ResolvedAnalysisTheoremComponentContract(P,component) =
@@ -203,12 +203,12 @@ AnalysisTheoremSourceValidationBody = {
 AnalysisTheoremSourceValidationId(B,body) =
   AnalysisId<
     "analysis.theorem-source-validation",
-    K3CAFKTheoremSourceValidationLanguageProfileId>(B,body)
+    AnalysisAFKTheoremSourceValidationLanguageProfileId>(B,body)
 
 TheoremTruthSourceFreeReasonRef =
   the one exact
   AnalysisProfileLawRef<SourceFreeFamilyReason> in
-  K3CAFKTransportLanguageProfileId whose law states that theorem-truth meaning
+  AnalysisAFKTransportLanguageProfileId whose law states that theorem-truth meaning
   is reconstructed solely from the authenticated theorem-schema subject and
   requires no source manifest or experiment; bibliographic and proof-source
   validation remain outside the question
@@ -273,9 +273,9 @@ to pair with `None` and `RetainedTheoremTruthAssumption`, and
 case.
 
 The validation body is governed by the narrow
-`K3CAFKTheoremSourceValidationLanguageProfileId`, which imports exactly the
+`AnalysisAFKTheoremSourceValidationLanguageProfileId`, which imports exactly the
 semantic transport profile. The theorem schema remains governed by
-`K3CAFKTransportLanguageProfileId` and never imports the validation profile.
+`AnalysisAFKTransportLanguageProfileId` and never imports the validation profile.
 This profile edge is directional: changing a validation schema, source-kind
 catalog, or validation law cannot rotate theorem semantics, while changing the
 semantic transport profile intentionally rotates the child validation profile
@@ -383,68 +383,31 @@ TheoremApplicabilityQuestion(selection,payload) = AnalysisQuestionBody {
 }
 ```
 
-The exact `K3CAFKTransportLanguageProfileId` family-contract catalog is the
-closed transport-owned catalog defined in
+The exact transport language profile imports the closed family-contract
+catalog defined in
 `cryptographic-properties.md#21-exact-property-family-contracts`. The
 following is its exact theorem-specific two-row projection; no ambient family
 registry is consulted:
 
 ```text
 TransportAnalysisFamilyProfileContracts = CanonicalKeySortedSeq [
-  {TheoremTruth,AnalysisFamilySemanticsContract {
-    exact_subject_schema: [the same AnalysisTheoremSchemaId in the payload],
-    exact_question_payload_meta_schema: CanonicalRecord {
-      theorem_schema_id: AnalysisTheoremSchemaId,
-      conclusion_schema:
-        exact denotation proposition reconstructed from that same schema ID
-    },
-    exact_hypothesis_free_conclusion_meta_schema:
-      the same exact denotation proposition,
-    question_to_conclusion_reconstruction_law:
-      reconstruct TheoremTruthGoal from that payload with no caller choice,
-    allowed_question_context_variants:
-      [SourceFree(TheoremTruthSourceFreeReasonRef)],
-    exact_quantitative_result_schema: NoQuantitativeResult,
-    affirmative_and_negative_meaning:
-      exact theorem denotation true or false under all admitted parameters,
-    failure_classification: common K3-C outcome partition
-  }},
-  {TheoremApplicability,AnalysisFamilySemanticsContract {
-    exact_subject_schema: ExactApplicabilitySubjects(selection),
-    exact_question_payload_meta_schema: TheoremApplicabilityPayload,
-    exact_hypothesis_free_conclusion_meta_schema:
-      exact structural applicability of the payload theorem to its selected
-      source/target experiments, maps, substitutions, and typed transform,
-    question_to_conclusion_reconstruction_law:
-      reconstruct exactly TheoremApplicabilityGoal(selection,payload),
-    allowed_question_context_variants: [
-      SemanticExperimentContext derived from ConcreteProtocolSelection,
-      FamilySemanticExperimentContext derived from AsymptoticFamilySelection
-    ],
-    exact_quantitative_result_schema: NoQuantitativeResult,
-    affirmative_and_negative_meaning:
-      exact structural applicability or inapplicability, never theorem truth or
-      a target property,
-    failure_classification: common K3-C outcome partition
-  }}
+  {TheoremTruth,
+   AnalysisFamilySemanticsContractFor(TheoremTruth)},
+  {TheoremApplicability,
+   AnalysisFamilySemanticsContractFor(TheoremApplicability)}
 ]
 ```
 
-The transport profile's inline catalogs and exact law source contain the full
-finite transport family catalog, including these two declarations, plus their
-used theorem-component declarations and closed schemas and laws. These two
-rows must be byte-identical to
-`K3CAnalysisFamilySemanticsContract(TheoremTruth)` and
-`K3CAnalysisFamilySemanticsContract(TheoremApplicability)`; they are not a
-second definition. Its profile-import DAG is exactly the property-profile
-closure described above: a missing, extra, or redundant profile import refuses
-formation. Any portable algorithm or evaluation contract selected by those
-laws carries its own exact direct ordinary-module roots; that separate no-extra
-module closure is authenticated for the subject and never becomes a profile
-import. The two coordinates above are complete property-family declaration
-references.
-The schemas are expanded to the exact canonical fields displayed on this page;
-the constructor names are not string labels accepted in place of bodies.
+Each value is the exact resolved owner body, including its
+`finite_cover_discharge_contract` and common failure-partition reference. The
+transport profile neither expands nor redefines either row. Its authenticated
+profile-import DAG must resolve those exact property-family declarations; a
+missing, extra, redundant, or locally shadowed declaration refuses formation.
+Any portable algorithm or evaluation contract selected by those laws carries
+its own exact direct ordinary-module roots; that separate no-extra module
+closure is authenticated for the subject and never becomes a profile import.
+The two keys above are complete property-family declaration references, not
+string labels accepted in place of the imported bodies.
 
 Exactly one selection variant is present. Its theorem schema ID equals the
 payload theorem ID and its concrete-versus-family tag equals
@@ -493,13 +456,13 @@ its separately supplied source-support bindings. It then takes exactly one
 variant-specific path:
 
 - for `ConcreteProtocolSelection`, it checks that the Fresh and FS Protocols
-  share the exact K2 Core and `FSConstructionView`, checks all required K2 fields
-  through the concrete manifests, and checks the exact K3-B Statement, claim,
+  share the exact PIR Core and `FSConstructionView`, checks all required PIR fields
+  through the concrete manifests, and checks the exact Relations Statement, claim,
   Witness, relation, and event maps; or
 - for `AsymptoticFamilySelection`, it resolves the one family-language contract,
   checks both dependent family manifests and experiment schemas against that
   family, and checks only symbolic family-role, map, and denotation obligations.
-  This path neither requires nor fabricates K1/K2/K3-B objects.
+  This path neither requires nor fabricates Foundation/PIR/Relations objects.
 
 Both paths then compare strategy classes, quantifier prefixes, public-coin or
 oracle models, failures, and resource dimensions to the theorem schema; check
@@ -578,7 +541,7 @@ source-validation body is refused.
 
 The caller cannot supply the target bound, delete inherited hypotheses, or
 choose a different target model. Source loss is inherited exactly as directed
-by the theorem program. Each K3-B lossy occurrence is consumed exactly once if
+by the theorem program. Each Relations lossy occurrence is consumed exactly once if
 and only if that program selects it.
 
 An established theorem-truth node requires an exact affirmative capability for
@@ -594,7 +557,7 @@ For the initial AFK profile, the source is the exact affirmative uniform
 all-`n` `2`-special-soundness judgment for one authenticated abstract family,
 not the finite native Schnorr judgment. The target is adaptive classical-ROM
 family knowledge soundness with the theorem-specific error and resource
-expressions. K3-C defines no native rule that mints the source capability, so
+expressions. Analysis defines no native rule that mints the source capability, so
 its absence is `CannotAnswer`. A finite property judgment, well-formed
 `CheckedFSConstruction`, concrete Fresh/FS run pair, or theorem-applicability
 result is `Refused` when supplied in that source-property slot; a noncanonical
@@ -605,7 +568,7 @@ or structurally invalid carrier is `Malformed`.
 Finite runs are useful controls for:
 
 - checking that source occurrence maps resolve;
-- exercising K2 generated execution and deterministic replay;
+- exercising PIR generated execution and deterministic replay;
 - checking that Statement and commitment precede a challenge;
 - observing exact failures and terminal dispositions; and
 - falsifying identity and adequacy mistakes.
@@ -617,9 +580,9 @@ property slot.
 
 ## 5. Three non-interchangeable replay notions
 
-### 5.1 K2 deterministic replay
+### 5.1 PIR deterministic replay
 
-`ReplayRun` checks that one supplied record agrees with the exact K2 transition
+`ReplayRun` checks that one supplied record agrees with the exact PIR transition
 semantics under the supplied invocation and capabilities. It may accept a
 future-informed record. `CheckedReplayMatch` therefore establishes no causal
 generation, strategy membership, nonanticipation, or security property.
@@ -629,7 +592,7 @@ generation, strategy membership, nonanticipation, or security property.
 A theorem may define a counterfactual experiment that preserves selected
 adversary coins/state while changing an oracle response or verifier challenge.
 Its extractor capabilities, state relation, scheduling, and distribution law
-belong to that theorem's Analysis experiment. They are not implemented by K2
+belong to that theorem's Analysis experiment. They are not implemented by PIR
 replay and are unavailable outside the theorem profile.
 
 The exact classical FRI instrument under

@@ -1,8 +1,8 @@
 # Analysis relation-source boundary
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active non-normative K3-C target
-> **Target status:** Exact K3-B Relations ingress fragment
+> **Document state:** Active non-normative Analysis target
+> **Target status:** Exact Relations Relations ingress fragment
 > **Provisional owner:** `analysis`
 > **Authority:** This page defines a redesign target only. The Relations target
 > pages are the semantic owner and source for relation meaning, correspondence,
@@ -13,7 +13,7 @@
 
 ## 1. Scope
 
-This page defines how Analysis selects exact K3-B relation meaning and
+This page defines how Analysis selects exact Relations relation meaning and
 occurrences without creating a shadow relation or Protocol. It owns only the
 Relations source-slot fragment. The cryptographic-property page owns the
 complete Schnorr source profile, finite transcript-pair type, challenge model,
@@ -53,32 +53,36 @@ profile by a property owner. It is not a profile or manifest, carries no ID,
 and cannot be admitted or consumed on its own:
 
 ```text
-K3BRelationOwnerSlot(kind,coordinate_schema,field_projection,
+RelationSourceIngressFailurePartitionRef =
+  CommonAnalysisAttemptFailurePartitionRef<
+    AnalysisCryptographicPropertyLanguageProfileId>
+
+AnalysisRelationsOwnerSlot(kind,coordinate_schema,field_projection,
                      purpose,adequacy_evaluator_id,binding_schema,
                      required_authority_class) =
   ConcreteOwnerReadSlotSchema(
     Relations,kind,coordinate_schema,purpose,field_projection,
     adequacy_evaluator_id,binding_schema,required_authority_class,
-    common K3-C source-ingress failure partition)
+    RelationSourceIngressFailurePartitionRef)
 
-K3BRelationDefinitionAdequacy,
-K3BRelationModelAdequacy,
-K3BRelationInterfaceAdequacy,
-K3BRelationInstanceAdequacy,
-K3BProtocolRelationBindingAdequacy,
-K3BPlanWitnessBindingAdequacy,
-K3BStatementQuestionAdequacy,
-K3BClaimQuestionAdequacy,
-K3BWitnessQuestionAdequacy,
-K3BGroundingEquationAdequacy, and
-K3BEquationGroundingQuestionAdequacy
+AnalysisRelationDefinitionAdequacy,
+AnalysisRelationModelAdequacy,
+AnalysisRelationInterfaceAdequacy,
+AnalysisRelationInstanceAdequacy,
+AnalysisProtocolRelationBindingAdequacy,
+AnalysisPlanWitnessBindingAdequacy,
+AnalysisStatementQuestionAdequacy,
+AnalysisClaimQuestionAdequacy,
+AnalysisWitnessQuestionAdequacy,
+AnalysisGroundingEquationAdequacy, and
+AnalysisEquationGroundingQuestionAdequacy
   = pairwise-distinct exact AnalysisAdequacyEvaluatorId values in the selected
-    `K3CCryptographicPropertyLanguageProfileId`; each evaluator's closed
+    `AnalysisCryptographicPropertyLanguageProfileId`; each evaluator's closed
     input schema is the complete owner body plus the typed subject coordinates
     named by its slot below, and its exact no-extra supported-input profile set
-    is the cryptographic-property profile plus the exact K3-B owner profile
+    is the cryptographic-property profile plus the exact Relations owner profile
 
-The bounded K3-C executable has not implemented this per-slot evaluator
+The bounded Analysis executable has not implemented this per-slot evaluator
 catalog. Its current property and transport law-source surrogates contain two
 generic evaluator-schema rows each, and its formed evaluator bodies currently
 name only the owning Analysis profile in `supported_input_profile_ids`. Those
@@ -87,85 +91,85 @@ pairwise-distinct evaluator identities, complete owner schemas, or two-profile
 sets required here. These target requirements remain implementation-
 correspondence obligations rather than optional refinements.
 
-K3BCheckedCorrespondenceBindingSchema =
+AnalysisCheckedCorrespondenceBindingSchema =
   ExactCheckedResultAuthorityBinding<Relations,CheckedCorrespondence>
 
-K3BSharedRelationSourceSlotFragment = CanonicalSeq [
-  K3BRelationOwnerSlot(
+AnalysisSharedRelationsSourceSlotFragment = CanonicalSeq [
+  AnalysisRelationsOwnerSlot(
     RelationDefinition,RelationDefinitionId selected by the subject schema,
     CompleteOwnerBodyProjection(RelationDefinitionBody),SemanticMeaning,
-    K3BRelationDefinitionAdequacy,
+    AnalysisRelationDefinitionAdequacy,
     ExactAdmittedSubjectAuthorityBinding<Relations,RelationDefinition>,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     RelationSemanticModel,RelationSemanticModelId selected by the subject schema,
     CompleteOwnerBodyProjection(RelationSemanticModelBody),SemanticMeaning,
-    K3BRelationModelAdequacy,
+    AnalysisRelationModelAdequacy,
     ExactAdmittedSubjectAuthorityBinding<Relations,RelationSemanticModel>,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     RelationInterface,RelationInterfaceId selected by the subject schema,
     CompleteOwnerBodyProjection(RelationInterfaceBody),SemanticMeaning,
-    K3BRelationInterfaceAdequacy,
+    AnalysisRelationInterfaceAdequacy,
     ExactAdmittedSubjectAuthorityBinding<Relations,RelationInterface>,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     RelationInstance,RelationInstanceId selected by the subject schema,
     CompleteOwnerBodyProjection(RelationInstanceBody),SemanticMeaning,
-    K3BRelationInstanceAdequacy,
+    AnalysisRelationInstanceAdequacy,
     ExactAdmittedSubjectAuthorityBinding<Relations,RelationInstance>,
     FreshSourceCapability)
 ]
 
-K3BProtocolAxisRelationSourceSlotFragment(axis) = CanonicalSeq [
-  K3BRelationOwnerSlot(
+AnalysisProtocolRelationsSourceSlotFragment(axis) = CanonicalSeq [
+  AnalysisRelationsOwnerSlot(
     ProtocolRelationBinding,ProtocolRelationBindingId selected by the subject's
       exact axis ingress,CompleteOwnerBodyProjection(ProtocolRelationBindingBody),
-    SemanticMeaning,K3BProtocolRelationBindingAdequacy,
+    SemanticMeaning,AnalysisProtocolRelationBindingAdequacy,
     ExactAdmittedSubjectAuthorityBinding<Relations,ProtocolRelationBinding>,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     PlanWitnessBinding,PlanWitnessBindingId selected by the subject's exact
       axis ingress,
     CompleteOwnerBodyProjection(PlanWitnessBindingBody),SemanticMeaning,
-    K3BPlanWitnessBindingAdequacy,
+    AnalysisPlanWitnessBindingAdequacy,
     ExactAdmittedSubjectAuthorityBinding<Relations,PlanWitnessBinding>,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     CorrespondenceQuestion,
     exact StatementEdge question and StatementEdgeRef pair selected by the
       subject's exact axis ingress,
     CompleteOwnerBodyProjection(CorrespondenceQuestionBody),PremiseSupport,
-    K3BStatementQuestionAdequacy,K3BCheckedCorrespondenceBindingSchema,
+    AnalysisStatementQuestionAdequacy,AnalysisCheckedCorrespondenceBindingSchema,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     CorrespondenceQuestion,
     exact ClaimMeaning question and ClaimMeaningRef pair selected by the
       subject's exact axis ingress,
     CompleteOwnerBodyProjection(CorrespondenceQuestionBody),PremiseSupport,
-    K3BClaimQuestionAdequacy,K3BCheckedCorrespondenceBindingSchema,
+    AnalysisClaimQuestionAdequacy,AnalysisCheckedCorrespondenceBindingSchema,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     CorrespondenceQuestion,
     exact PlanWitness question and PlanWitnessEdgeRef pair selected by the
       subject's exact axis ingress,
     CompleteOwnerBodyProjection(CorrespondenceQuestionBody),PremiseSupport,
-    K3BWitnessQuestionAdequacy,K3BCheckedCorrespondenceBindingSchema,
+    AnalysisWitnessQuestionAdequacy,AnalysisCheckedCorrespondenceBindingSchema,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     GroundingEquation,GroundingEquationId selected by the subject's exact axis
       ingress,
     CompleteOwnerBodyProjection(GroundingEquationBody),SemanticMeaning,
-    K3BGroundingEquationAdequacy,
+    AnalysisGroundingEquationAdequacy,
     ExactAdmittedSubjectAuthorityBinding<Relations,GroundingEquation>,
     FreshSourceCapability),
-  K3BRelationOwnerSlot(
+  AnalysisRelationsOwnerSlot(
     CorrespondenceQuestion,
     exact EquationGrounding question selected by the subject's exact axis
       ingress,
     CompleteOwnerBodyProjection(CorrespondenceQuestionBody),PremiseSupport,
-    K3BEquationGroundingQuestionAdequacy,
-    K3BCheckedCorrespondenceBindingSchema,FreshSourceCapability)
+    AnalysisEquationGroundingQuestionAdequacy,
+    AnalysisCheckedCorrespondenceBindingSchema,FreshSourceCapability)
 ]
 ```
 
@@ -193,7 +197,7 @@ variant-specific shadow body, tag-stripped payload, or structurally similar
 question is malformed or refused according to the evaluator contract.
 
 The admitted binding subjects remain structural operands. Each correspondence
-requirement above names the exact K3-B `CorrespondenceQuestionId`, binding ID,
+requirement above names the exact Relations `CorrespondenceQuestionId`, binding ID,
 and owner reference (`StatementEdgeRef`, `ClaimMeaningRef`,
 or `PlanWitnessEdgeRef`). Its concrete affirmative `CheckedCorrespondence`
 result binding belongs to Analysis support, and its fresh capability is
@@ -203,15 +207,15 @@ check and terminal, and the exact Relations
 `GroundingEquationId` plus its `EquationGrounding` correspondence-question
 coordinate. Analysis forms the universal acceptance-to-relation proposition
 over those owner reads and retains it in the property hypothesis context; its
-established or assumed binding belongs to support. A concrete K3-B `RunCheck` or
+established or assumed binding belongs to support. A concrete Relations `RunCheck` or
 run-grounding result can pressure one occurrence but cannot establish that
 universal premise. There is no separate Analysis-authored affirmative
 "checked binding" semantic subject: the only affirmative authority is the
 Relations-owned checked-result binding consumed in support. The checker derives
 rather than accepts:
 
-- the K2 binding occurrence corresponding to the relation Statement slot;
-- the K2 claim coordinate corresponding to the relation instance;
+- the PIR binding occurrence corresponding to the relation Statement slot;
+- the PIR claim coordinate corresponding to the relation instance;
 - the exact Plan Witness surface occurrence corresponding to the Witness slot;
 - the check, reduction, or terminal occurrence that defines acceptance for this
   property; and
@@ -220,7 +224,7 @@ rather than accepts:
 The PIR portion is exactly:
 
 ```text
-K3CAcceptanceTerminalLeaves(S) = {
+AnalysisAcceptanceTerminalLeaves(S) = {
   exact PIRStaticViewFieldCoordinate leaves in
     CoreView(S.shared_core_id,EffectView) for the selected CheckDecl algorithm,
     evaluation contract, inputs, and unique invoke, and for the selected
@@ -228,9 +232,9 @@ K3CAcceptanceTerminalLeaves(S) = {
     occurrence
 }
 
-K3CAcceptanceProducerProjection(S) =
+AnalysisAcceptanceProducerProjection(S) =
   RequiredPIRViewReadClosure(
-    CoreView(S.shared_core_id,EffectView),K3CAcceptanceTerminalLeaves(S))
+    CoreView(S.shared_core_id,EffectView),AnalysisAcceptanceTerminalLeaves(S))
 ```
 
 `RequiredPIRViewReadClosure` is PIR-owned. On an `EffectView` it returns the
@@ -246,10 +250,10 @@ computation of its verdict outside the authenticated read domain.
 
 The deterministic correspondence question universally quantifies over exact
 structurally complete transcript projections under this manifest and concludes
-that the selected K2 accepting check/terminal agrees with the admitted
+that the selected PIR accepting check/terminal agrees with the admitted
 relation-verifier equation. It is an Analysis goal, not an owner source field;
 changing the check, terminal, equation, transcript domain, or direction changes
-that goal. K3-C supplies no unconditional proof of it.
+that goal. Analysis supplies no unconditional proof of it.
 
 The concrete `CheckBridgeUseSet` result, any occurrence-local loss-source
 result, and their consumer-source joins are support or invocation inputs. They
@@ -291,11 +295,11 @@ algebraic/correspondence hypotheses.
 
 ## 5. Property-owner boundary
 
-This page deliberately defines no `K3CSubjectTuple`, challenge-domain ID,
+This page deliberately defines no `AnalysisSubjectTuple`, challenge-domain ID,
 transcript or pair carrier, source profile, manifest, experiment, extractor,
 question, goal, or property-family contract. The cryptographic-property owner
-may import `K3BSharedRelationSourceSlotFragment` and one or more exact
-`K3BProtocolAxisRelationSourceSlotFragment(axis)` instantiations and must then
+may import `AnalysisSharedRelationsSourceSlotFragment` and one or more exact
+`AnalysisProtocolRelationsSourceSlotFragment(axis)` instantiations and must then
 close all of those objects in one acyclic dependency direction. In particular,
 this page never depends on a cryptographic-property identity that later
 consumes either fragment.

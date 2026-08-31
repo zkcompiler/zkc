@@ -9,9 +9,10 @@ machinery directly. It does not reproduce a second foundation. On top of that
 fixed basis it implements a fixture-exact finite model with:
 
 - three exact standalone K1 language profiles: Interaction/Core+Fresh,
-  Transcript/FS importing Interaction, and public-view export importing both;
+  Transcript/FS importing Interaction, and family-neutral public-view export
+  importing only Interaction;
   every K2 semantic ID selects its exact profile in the preimage, and the
-  selected root's one-, two-, or three-profile bundle is authenticated as an
+  selected root's exact one- or two-profile bundle is authenticated as an
   exact no-extra import closure. Issuance requires evaluator support only for
   that root and refuses a supported profile omitting any emitted subject kind;
 - an exact finite total interaction schedule with explicit nested scope opens;

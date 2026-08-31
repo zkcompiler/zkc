@@ -1056,7 +1056,10 @@ class ProjectionRelationTests(unittest.TestCase):
         self.assertEqual(
             left.proposition.proposition_id, right.proposition.proposition_id
         )
-        self.assertNotEqual(left.validation_request_id, right.validation_request_id)
+        self.assertNotEqual(
+            left.validation_request_fingerprint,
+            right.validation_request_fingerprint,
+        )
 
     def test_runtime_receipt_is_inert(self):
         first = p01()
@@ -1064,8 +1067,8 @@ class ProjectionRelationTests(unittest.TestCase):
         self.assertEqual(target(first).asserted_id, target(second).asserted_id)
         self.assertEqual(source(first).view_id, source(second).view_id)
         self.assertEqual(
-            checked_projection(first).validation_request_id,
-            checked_projection(second).validation_request_id,
+            checked_projection(first).validation_request_fingerprint,
+            checked_projection(second).validation_request_fingerprint,
         )
 
 
@@ -1363,13 +1366,12 @@ class OwnerAdapterAndProfileTests(unittest.TestCase):
 
     def test_profile_mutation_locality_is_exact(self):
         baseline = m.K3D_SEMANTIC_PROFILES
-        validation_only = m.make_k3d_semantic_profiles(
-            validation_law=b"changed-validation-law"
+        relation_changed = m.make_k3d_semantic_profiles(
+            projection_law=b"changed-projection-and-validation-operation-law"
         )
-        self.assertEqual(validation_only.endpoint_graph, baseline.endpoint_graph)
-        self.assertEqual(validation_only.source_view, baseline.source_view)
-        self.assertEqual(validation_only.projection, baseline.projection)
-        self.assertNotEqual(validation_only.validation, baseline.validation)
+        self.assertEqual(relation_changed.endpoint_graph, baseline.endpoint_graph)
+        self.assertEqual(relation_changed.source_view, baseline.source_view)
+        self.assertNotEqual(relation_changed.projection, baseline.projection)
 
         relations_only = m.k3.make_k3b_semantic_profiles(
             relations_law=b"changed-relations-law"
@@ -1388,7 +1390,6 @@ class OwnerAdapterAndProfileTests(unittest.TestCase):
         self.assertNotEqual(rotated.endpoint_graph, baseline.endpoint_graph)
         self.assertNotEqual(rotated.source_view, baseline.source_view)
         self.assertNotEqual(rotated.projection, baseline.projection)
-        self.assertNotEqual(rotated.validation, baseline.validation)
 
     def test_every_k3d_root_uses_its_exact_no_extra_import_closure(self):
         profiles = m.K3D_SEMANTIC_PROFILES
@@ -1396,7 +1397,6 @@ class OwnerAdapterAndProfileTests(unittest.TestCase):
             (profiles.endpoint_graph, profiles.endpoint_graph_bundle, 4),
             (profiles.source_view, profiles.source_view_bundle, 5),
             (profiles.projection, profiles.projection_bundle, 6),
-            (profiles.validation, profiles.validation_bundle, 7),
         )
         for profile, bundle, expected_count in roots:
             with self.subTest(profile=profile.profile_family.value):
@@ -1416,11 +1416,11 @@ class OwnerAdapterAndProfileTests(unittest.TestCase):
 
         self.assertNotIn(
             profiles.k3b_profiles.relations_correspondence.identity,
-            profiles.validation_bundle,
+            profiles.projection_bundle,
         )
         self.assertNotIn(
             profiles.k3b_profiles.k2_profiles.public_view.identity,
-            profiles.validation_bundle,
+            profiles.projection_bundle,
         )
 
 
@@ -1501,9 +1501,9 @@ class SupplementClosureTests(unittest.TestCase):
     def test_authority_binding_refuses_an_extra_source_profile_preimage(self):
         authority = self._authority_binding()
         overcomplete = dict(m.K3D_SEMANTIC_PROFILES.source_view_bundle)
-        validation = m.K3D_SEMANTIC_PROFILES.validation
-        self.assertNotIn(validation.identity, overcomplete)
-        overcomplete[validation.identity] = validation
+        projection = m.K3D_SEMANTIC_PROFILES.projection
+        self.assertNotIn(projection.identity, overcomplete)
+        overcomplete[projection.identity] = projection
         with self.assertRaises(m.k1._Control) as caught:
             m.k1.authenticate_profiled_semantic_content(
                 authority.authority_binding_id,

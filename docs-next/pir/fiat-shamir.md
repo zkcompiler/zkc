@@ -319,7 +319,8 @@ TranscriptConstructionId =
     B, PIRCanonicalFramedFSProfileId,
     TranscriptConstructionBody(construction))
 
-TranscriptConstructionProfile(construction.id) =
+AuthenticatedTranscriptConstructionProfile(
+  exact authenticated admitted handle for construction) =
   PIRCanonicalFramedFSProfileId
 ```
 
@@ -1109,6 +1110,19 @@ A mismatch returns a field-factored negative or qualified noncompletion and
 mints no affirmative capability. There is no authored map that can hide a
 different Core.
 
+The negative tags are request-comparison facts over the admitted operands.
+Their producing predicates are, in written order: unequal source/target Core
+IDs; construction/Core disagreement; target/construction disagreement;
+absent public-coin eligibility on the source; unequal occurrence domains;
+unequal non-Challenge value domains; unequal Challenge domains; and any
+unequal Core body field. The checker evaluates all eight comparisons and
+emits every applicable tag in canonical order. Several tags may therefore
+co-occur when different Core bodies are presented: the domain and field tags
+are deliberate diagnostics beneath `SharedCoreMismatch`, not claims that two
+equal admitted Core IDs can carry different preimages. Cold authentication
+failure, missing preimages, wrong kinds, limit exhaustion, and checker faults
+remain qualified noncompletion and never manufacture a negative tag.
+
 `CheckedFSConstruction` has no semantic ID. An affirmative checking occurrence
 creates one collision-free owner-local `CheckedFSConstructionResultRef`, an
 exact K1 `OwnerLocalSourceAuthorityBinding`, and one fresh opaque
@@ -1494,7 +1508,7 @@ FrameBody =
       1:PublicBindingClassBody(class),
       2:CanonicalValueTypeBody(value_type),
       3:value.datum})
-| V(5, R{0:N(occurrence_ref),1:K1BooleanDatum(active)})
+| V(5, R{0:N(occurrence_ref),1:MetaBooleanDatum(active)})
 | V(6, MessageFrameBody)
 | V(7, MessageFrameBody)
 | V(8, OraclePublicationFrameBody)
@@ -1558,8 +1572,8 @@ OracleAnswerFrameBody = R {
 }
 ```
 
-Here `K1BooleanDatum(false) = MF` and `K1BooleanDatum(true) = MT`; neither case
-is a `MetaVariant`. For a `FullCanonicalOracle` or `PublicBinding` Oracle, an
+Here `MetaBooleanDatum` is the Foundation total constructor for `MF` and `MT`;
+neither case is a `MetaVariant`. For a `FullCanonicalOracle` or `PublicBinding` Oracle, an
 answer datum is the exact Core-owned lookup-result sum: `V(0,Unit)` when absent
 or `V(1,element.datum)` when present. For `LogicalAccess`, the exact-domain law
 makes absence unformable and the answer datum is the bare element admitted at
