@@ -2,42 +2,42 @@
   "cases": {
     "analysis/security-nonpromotion": {
       "code": "DUPLEX-SECURITY-NOT-ESTABLISHED",
-      "evidence_id": "sha256:09e838f27347dcde30c8a577a12ca33550052af10f3e131e9f5a8c9031008fff",
+      "evidence_id": "sha256:3306965f1dac57a57d88ecfe922dbb57a5aa658a2bf3ed850a7180a77adc81f3",
       "outcome": "CannotAnswer"
     },
     "construction/finite-source-applicability": {
       "code": "DUPLEX-FINITE-SOURCE-APPLICABLE",
-      "evidence_id": "sha256:8e0b4c3a7618093f6fe879efb44c5b7b1e86a5d268e0169dec785be800f5891d",
+      "evidence_id": "sha256:e9ebd41b32ddb9a4977871c3908e6e284fe861aac7e8b9dc0a1054784b993a0f",
       "outcome": "Affirmative"
     },
     "construction/structural-admission": {
       "code": "DUPLEX-STRUCTURAL-CONSTRUCTION-ADMITTED",
-      "evidence_id": "sha256:6e14b5b6ff5a259e808c658b035b0a4f1ac47d67dfe66c784ed3447a4d83f125",
+      "evidence_id": "sha256:7d1e7c6dfec09813db33614e67cba58bbb2e945b82814dd6f9e3cab93271652a",
       "outcome": "Affirmative"
     },
     "execution/independent-replay": {
       "code": "DUPLEX-INDEPENDENT-REPLAY",
-      "evidence_id": "sha256:0780d5bf14504d905f57b7ae6a0136db29a613ada72e956420e4445cf0410390",
+      "evidence_id": "sha256:3dff5db909863c1c311e84c627033571d18a39690c18324824fb29193f2f85f9",
       "outcome": "Affirmative"
     },
     "execution/public-replay": {
       "code": "DUPLEX-PUBLIC-REPLAY",
-      "evidence_id": "sha256:d05a15291e99a55ab1afab9fc7c3e604f6a066eb728583447c32116c3c165b52",
+      "evidence_id": "sha256:c680dc80a758526e981d375663dbb41db7bcc2bb73360420e3c48a9a3d2ec011",
       "outcome": "Affirmative"
     },
     "identity/same-core-distinct-protocols": {
       "code": "DUPLEX-SAME-CORE-SEPARATION",
-      "evidence_id": "sha256:00556723c839c7603c480f2ba3ff388b67441cf5e61f417b8e7157cac4af8a0f",
+      "evidence_id": "sha256:20946d4252b6b6799f64fbc62892708dcfa4ead028254a92ab9c29bbb20b7d3e",
       "outcome": "Affirmative"
     },
     "transition/source-edges": {
       "code": "DUPLEX-TRANSITION-EDGES",
-      "evidence_id": "sha256:726113c7b3bce8b024e34cc9c16f9697463c182eff054c7b63d3905d4629cecb",
+      "evidence_id": "sha256:c2dd3babc3384b9e43b28bbe1d00aa436578249d7f3dd6fda9812d9da99a269c",
       "outcome": "Affirmative"
     },
     "transition/source-law-mutations": {
       "code": "DUPLEX-TRANSITION-MUTATIONS-KILLED",
-      "evidence_id": "sha256:9705f03fdf2891631e58b98b2558fc3d67acb2934193583b49a0b98d8058bda5",
+      "evidence_id": "sha256:7a6ad0fc7f58a74536eed4bffb3b6f6ba0f368d9fd4658c53dc870f57935a96c",
       "outcome": "Affirmative"
     }
   },
@@ -55,7 +55,7 @@
     ]
   ],
   "execution_permutation_calls": 5,
-  "report_id": "sha256:26c6a7fc17d5e466f539896a07ae86c826e73fdd01c5a081efd5a7f8f4f7566a",
+  "report_id": "sha256:4d009536f7ee14394aab8a378d0a64ea2ba752edea0b57bf50c78a2fa7d5e795",
   "schema": "zkc.duplex-sponge-transcript.expected-results.v1",
   "semantic_roots": {
     "construction_id": "sha256:8eddabac61bb8eaa4e6a49d6566d5a7a2a40709f097070c0585f27b28a2c713e",
@@ -63,5 +63,5 @@
     "duplex_protocol_id": "sha256:e82d0a6e442a4846d57078a633dc7cccde4778f885851907b1414475a44767b3",
     "fresh_protocol_id": "sha256:887b04000004636b2eb4303b43d86e0fec36d1d9ddc62b8469c68a308665cb3b"
   },
-  "validation_basis_id": "sha256:67c900036edb4449f72176b4882a8ed5523ce69e8379e22c308961ae7cfcff1d"
+  "validation_basis_id": "sha256:3bda2ab46a487f13e6d80fce593487e61545a3a168b6671378c1fc6b1ffb1678"
 }
