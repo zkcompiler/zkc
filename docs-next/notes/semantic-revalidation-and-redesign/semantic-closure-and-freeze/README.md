@@ -22,7 +22,7 @@ The work proceeds through four dependency barriers:
    with exact import closure, law ownership, support decisions, comparison and
    rotation rules, and independent reconstruction.
 3. **Recursive-composition boundary research:** decide digest coverage,
-   continuation-family uniformity, IVC theorem attachment, outstanding
+   continuation-family uniformity, IVC theorem application, outstanding
    obligations, CycleFold elaboration, and serialized handoff disposition.
 4. **Dependent-profile publication and freeze synthesis:** publish Plan/OIR,
    Relations, and Analysis profiles only after their research dependencies are
@@ -60,13 +60,23 @@ must not move authority between these owners merely to simplify an encoding.
   adjudicates the independent pre-publication review, fixes the direct-import
   and law-publication rules, and routes dependent-profile defects without
   promoting the review itself to authority.
+- [Stable Profile Publication](stable-profile-publication.md) selects the
+  exact owner-source compiler, independent reconstruction contract,
+  falsifiers, and bottom-up publication order for the six stable upstream PIR
+  profiles.
+- [Recursive Composition Boundary](recursive-composition-boundary/README.md)
+  researches digest coverage, continuation-family uniformity, theorem
+  application, exact occurrence support, outstanding obligations,
+  serialization, and CycleFold's same-step companion binding before dependent
+  profiles are published.
 
-The preflight has completed its stable-upstream owner-law repair, focused
-finding adjudication, and changed-surface validation. Dependent-profile
-defects are routed in the readiness record rather than silently accepted. The
-complete uncapped aggregate remains a global exit condition for the assembled
-freeze candidate instead of a repeated per-edit loop. Stable upstream profile
-publication is now open after the repair checkpoint is committed.
+The preflight, six stable-upstream profile publications, and recursive-
+composition boundary package are complete. The latter includes exact
+owner-local Relations-result ingress into Analysis and does not rotate the six
+published upstream profiles. Dependent Relations and Analysis profile
+publication is now the open barrier. The complete uncapped aggregate remains a
+global exit condition for the assembled freeze candidate instead of a repeated
+per-edit loop.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet

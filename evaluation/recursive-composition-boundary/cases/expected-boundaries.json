@@ -1,0 +1,61 @@
+{
+  "cases": [
+    {
+      "boundary": "Relations recursion-facing instance coverage",
+      "expected": "Refused",
+      "id": "unbound-imported-instance",
+      "positive_control": "complete-acyclic-binding-tree",
+      "positive_control_expected": "Affirmative"
+    },
+    {
+      "boundary": "PIR Plan causal preparation",
+      "expected": "Affirmative",
+      "id": "two-distinct-sources-one-target",
+      "positive_control": "owner-plan-model",
+      "positive_control_expected": "Affirmative"
+    },
+    {
+      "boundary": "Realization transport versus PIR causality",
+      "expected": "AffirmativeReadmissionAndRefusedCausalJoin",
+      "id": "serialized-portable-reentry",
+      "positive_control": "live-one-use-causal-handoff",
+      "positive_control_expected": "Affirmative"
+    },
+    {
+      "boundary": "Analysis incremental-composition-family closure",
+      "expected": "Refused",
+      "id": "runtime-dependent-target-structure",
+      "positive_control": "closed-public-selector",
+      "positive_control_expected": "Affirmative"
+    },
+    {
+      "boundary": "Analysis report qualification",
+      "expected": "Refused",
+      "id": "hypothesis-free-report-with-retained-hypothesis",
+      "positive_control": "complete-exact-discharge",
+      "positive_control_expected": "Affirmative"
+    },
+    {
+      "boundary": "Relations EquationGrounding",
+      "expected": "Affirmative",
+      "id": "exact-two-run-two-instance-grounding",
+      "positive_control": "three-exact-equality-legs",
+      "positive_control_expected": "Affirmative"
+    },
+    {
+      "boundary": "Relations CycleFold elaboration",
+      "expected": "Refused",
+      "id": "companion-terminal-handoff-substitution",
+      "positive_control": "strict-same-step-io-bound-fold",
+      "positive_control_expected": "Affirmative"
+    },
+    {
+      "boundary": "Analysis theorem application",
+      "expected": "Unsupported",
+      "id": "finite-live-chain-as-induction-theorem",
+      "positive_control": "existing-analysis-judgment-path",
+      "positive_control_expected": "Affirmative"
+    }
+  ],
+  "schema": "zkc.recursive-composition-boundaries.v1"
+}

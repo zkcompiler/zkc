@@ -169,6 +169,7 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             "relations.interface",
             "relations.plan-witness-binding",
             "relations.protocol-binding",
+            "relations.recursion-binding-coverage-schema",
             "relations.refinement-question",
             "relations.semantic-model",
             "relations.source-binding-payload",
@@ -223,12 +224,13 @@ class SemanticProfileIdentityTest(unittest.TestCase):
                 "relations.correspondence-question",
                 "relations.definition-model-question",
                 "relations.instance",
+                "relations.recursion-binding-coverage-schema",
                 "relations.refinement-question",
                 "relations.semantic-model",
             }
         )
 
-        self.assertEqual(len(semantic_subjects), 23)
+        self.assertEqual(len(semantic_subjects), 24)
         self.assertEqual(len(declaration_contracts), 14)
         self.assertEqual(model.RELATIONS_SEMANTIC_SUBJECT_KINDS_V0, semantic_subjects)
         self.assertEqual(

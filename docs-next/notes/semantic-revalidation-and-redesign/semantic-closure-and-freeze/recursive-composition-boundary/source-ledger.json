@@ -1,0 +1,45 @@
+{
+  "schema": "zkc.recursive-composition-source-ledger.v1",
+  "sources": [
+    {
+      "authors": "Wilson Nguyen, Dan Boneh, and Srinath Setty",
+      "eprint": "2023/969",
+      "pdf_sha256": "f2118e5a04bd226e367639b2e8c4128eca71f1c903af450452a82de57f8c48d8",
+      "revision": "2023-06-20",
+      "title": "Revisiting the Nova Proof System on a Cycle of Curves",
+      "url": "https://eprint.iacr.org/2023/969"
+    },
+    {
+      "authors": "Benedikt Buenz and Binyi Chen",
+      "eprint": "2023/620",
+      "pdf_sha256": "e93bc711df7bc2e733d446f1f273c5d2bc9d769da2f2e4643f2bc506e87d0509",
+      "revision": "2023-12-21",
+      "title": "ProtoStar",
+      "url": "https://eprint.iacr.org/2023/620"
+    },
+    {
+      "authors": "Liam Eagen and Ariel Gabizon",
+      "eprint": "2023/1106",
+      "pdf_sha256": "72c1dfbd2f5ea880f3a4f323516a1a69894e7d2e9ad66f2d947685ff5ea3c51d",
+      "revision": "snapshot downloaded 2026-09-01",
+      "title": "ProtoGalaxy",
+      "url": "https://eprint.iacr.org/2023/1106"
+    },
+    {
+      "authors": "Benedikt Buenz, Alessandro Chiesa, Pratyush Mishra, and Nicholas Spooner",
+      "eprint": "2020/499",
+      "pdf_sha256": "1c700544a604e035d68b111b93600cdfa19f266d839abd78430747e9a71ab252",
+      "revision": "snapshot downloaded 2026-09-01",
+      "title": "Proof-Carrying Data from Accumulation Schemes",
+      "url": "https://eprint.iacr.org/2020/499"
+    },
+    {
+      "authors": "Abhiram Kothapalli and Srinath Setty",
+      "eprint": "2023/573",
+      "pdf_sha256": "08fdc3b155a9b681baecb48aad26993f53c0cb08511c0771154bd5a349761572",
+      "revision": "2026-02-20",
+      "title": "HyperNova: Recursive Arguments for Customizable Constraint Systems",
+      "url": "https://eprint.iacr.org/2023/573"
+    }
+  ]
+}

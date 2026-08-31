@@ -27,6 +27,16 @@ class Gate:
 
 GATES = (
     Gate("semantic closure", "evaluation/semantic-closure/run.py", fast=True),
+    Gate(
+        "published semantic profiles",
+        "evaluation/semantic-profile-publication/run.py",
+        fast=True,
+    ),
+    Gate(
+        "recursive composition boundary",
+        "evaluation/recursive-composition-boundary/run.py",
+        fast=True,
+    ),
     Gate("executable foundations", "evaluation/k1-executable-foundations/run.py"),
     Gate(
         "interactive protocol and Fiat--Shamir",

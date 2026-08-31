@@ -162,18 +162,23 @@ AnalysisAFKTransportFamilyCoordinates = CanonicalSeq [
   FamilyInstanceProcessCorrespondence
 ]
 
-AnalysisActiveFamilyCoordinates =
+AnalysisCryptographicBranchFamilyCoordinates =
   CanonicalAppend(
     AnalysisCryptographicPropertyFamilyCoordinates,
     AnalysisAFKTransportFamilyCoordinates)
 ```
 
-The two sequences are duplicate-free and their union is exactly the active
-family set listed in `analysis-model.md`; an omitted, extra, or multiply owned
-coordinate refuses either profile. For a coordinate `f`, let `OwnerProfile(f)`
-be the property profile for the first sequence and the semantic transport
-profile for the second. The following names are exact declaration/law refs in
-that profile, indexed by the complete coordinate rather than its spelling:
+The two sequences are duplicate-free and their union is exactly the
+cryptographic/AFK branch-owned subset of the active family set listed in
+`analysis-model.md`. The incremental-composition coordinates belong to the
+independent profiles defined in
+[Incremental Composition](incremental-composition.md) and are not members of
+this union. An omitted, extra, or multiply owned coordinate within these two
+sequences refuses the corresponding branch profile. For a coordinate `f`, let
+`OwnerProfile(f)` be the property profile for the first sequence and the
+semantic transport profile for the second. The following names are exact
+declaration/law refs in that profile, indexed by the complete coordinate rather
+than its spelling:
 
 ```text
 AnalysisFamilySubjectSchemaRef(f) =

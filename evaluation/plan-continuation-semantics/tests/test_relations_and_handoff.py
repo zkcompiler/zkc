@@ -78,6 +78,54 @@ def recurrence_legs() -> tuple[m.PublicRecurrenceLeg, ...]:
 
 
 class RelationsAndHandoffTests(unittest.TestCase):
+    def test_two_distinct_sources_can_supply_one_target_preparation(self) -> None:
+        case = fixtures.family_cases()[0]
+        first_generated, first_completed, first_cap = execute(case)
+        second_generated, second_completed, second_cap = execute(case)
+        first_supply, first_supply_cap = m.issue_accepted_plan_witness_ingress_supply(
+            first_completed,
+            first_cap,
+            "folded",
+            case.core,
+            case.plan,
+            "w1",
+        ).value
+        second_supply, second_supply_cap = m.issue_accepted_plan_witness_ingress_supply(
+            second_completed,
+            second_cap,
+            "folded",
+            case.core,
+            case.plan,
+            "w2",
+        ).value
+        prepared = m.prepare_plan_execution(
+            case.core,
+            case.construction,
+            case.invocation,
+            case.plan,
+            m.admit_plan(case.core, case.plan),
+            {},
+            case.randomness_values,
+            (
+                (first_supply, first_supply_cap),
+                (second_supply, second_supply_cap),
+            ),
+        )
+        self.assertIs(prepared.outcome, m.Outcome.AFFIRMATIVE)
+        session, _ = prepared.value
+        self.assertEqual(len(session.handoff_capabilities), 2)
+        self.assertIsNot(first_generated, second_generated)
+        self.assertIs(
+            session.ingress_occurrences["w1"].handoff_capability.source_occurrence,
+            first_completed.outputs["folded"],
+        )
+        self.assertIs(
+            session.ingress_occurrences["w2"].handoff_capability.source_occurrence,
+            second_completed.outputs["folded"],
+        )
+        self.assertFalse(first_supply_cap.active)
+        self.assertFalse(second_supply_cap.active)
+
     def test_grounding_distinguishes_agreement_from_value_disagreement(self) -> None:
         case = fixtures.family_cases()[0]
         generated, completed, cap = execute(case)

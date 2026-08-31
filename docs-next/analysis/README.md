@@ -32,6 +32,12 @@ abstract asymptotic family F
 conditional family target judgment
   + exact pointwise correspondence (F,n0,S,ell0)
   -> conditional finite-member target judgment
+
+closed finite incremental-composition family
+  + exact one-step recurrence and binding-coverage laws
+  + exact theorem schema, model, depth axes, and source validation
+  -> separate conditional completeness, knowledge-soundness, and efficiency
+     judgments with every deferred obligation still visible
 ```
 
 This is intentionally smaller than the earlier Stage 4A catalog. Analysis closes
@@ -57,7 +63,10 @@ independent proof authority supplies it.
 - typed quantitative expressions, theorem-specific transforms, and exact
   imports of authenticated loss-bearing occurrences;
 - property transport over an affirmative source judgment and an affirmative
-  theorem-applicability result; and
+  theorem-applicability result;
+- closed incremental-composition families, exact theorem application, and
+  derived carried-obligation reporting without a second execution semantics;
+  and
 - Analysis cold replay of semantic/checker dependencies, kept separate from
   Protocol replay and cryptographic rewind.
 
@@ -120,13 +129,21 @@ owner views it directly interprets; the Relations closure independently
 reaches Interface/Plan and its own PIR dependencies;
 an AFK semantic-transport profile imports the property profile; and a narrow
 theorem-source-validation profile imports that semantic-transport profile.
+An independent incremental-composition profile imports the common kernel plus
+the exact PIR Interaction, Interface/Plan, and Relations profiles whose static
+bodies it opens; its narrow source-validation child imports only that
+composition profile. The AFK and incremental-composition branches do not
+import one another.
 Each direct PIR edge has an explicit owner-view use coordinate; an edge
 supported only by transitive reachability is forbidden. Once their owner-local
 preimages are published, these are exact profile IDs with exact no-extra import
-closures, not family/revision labels. Dependency flows kernel -> property -> semantic
-transport -> theorem-source validation and never backward. An unrelated future
-profile therefore does not rotate an existing body; changing an actually used
-upstream profile intentionally rotates its downstream consumers.
+closures, not family/revision labels. One dependency branch flows
+kernel -> property -> semantic transport -> theorem-source validation; the
+other flows kernel and exact PIR/Relations owners -> incremental composition
+-> composition source validation. Neither flows backward or sideways into the
+other. An unrelated future profile therefore does not rotate an existing body;
+changing an actually used upstream profile intentionally rotates only its
+downstream consumers.
 
 The joined-path executable supplies bounded evidence only for this finite
 profile topology, exact authentication, and expected local/downstream rotation. It does
@@ -215,6 +232,12 @@ The bounded active set is:
    correspondence relates one representable family member `(F,n0)` to one
    native subject `(S,ell0)` and substitutes the family formulas pointwise. It
    cannot generalize a finite subject to all `n`.
+4. **Incremental-composition theorem application.** One closed finite family
+   names only already authenticated Protocol, Plan, and Relations subjects.
+   Runtime selectors choose existing members, while exact theorem schemas keep
+   execution depth, compliance-predicate depth, adversary quantifiers, model,
+   decider semantics, theorem truth, and each conclusion separate. Finite live
+   chains remain occurrence evidence and cannot form this family or theorem.
 
 These profiles are different propositions with different source authority. A
 concrete run may pressure-test their occurrence maps; it never proves any
@@ -307,6 +330,10 @@ named consumer. It is not achieved by adding a flag to either initial profile.
 - [Transport and Replay](transport-composition-and-replay.md) owns theorem
   applicability, property transport, loss-ledger consumption, and the three
   non-interchangeable replay notions.
+- [Incremental Composition](incremental-composition.md) owns the closed finite
+  family descriptor, theorem-application boundary, carried-obligation
+  derivation, portable-continuation distinction, and recursive-composition
+  nonclaims.
 
 The [Analysis and Compiler Architecture](../project/analysis-and-compiler-architecture.md)
 records the larger federated decision. Compiler remains downstream and cannot

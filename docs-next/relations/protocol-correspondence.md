@@ -970,7 +970,7 @@ only by the closed Relations specialization below.
 
 Foundation owns the inert `PortableSourceAuthorityBinding` and
 `OwnerLocalSourceAuthorityBinding` envelopes but deliberately does not assign
-meaning to their owner fields. Relations selects exactly five capability
+meaning to their owner fields. Relations selects exactly eight capability
 families for the source operations in this target:
 
 ```text
@@ -980,7 +980,10 @@ RelationsSourceCapabilityFamilyV0 =
     "relations-correspondence-view",
     "relation-instance-field",
     "private-witness-field",
-    "artifact-observation-field"
+    "artifact-observation-field",
+    "causal-plan-step-recurrence-result",
+    "recursion-binding-coverage-result",
+    "cyclefold-same-step-grounding-result"
   }
 
 RelationsSourceFamilySymbol(f) = f
@@ -1056,6 +1059,15 @@ RelationsSourceDescriptorV0 =
   | ArtifactObservationSource {
       observation_id: RelationArtifactObservationId
     }
+  | CausalPlanStepRecurrenceResultSource {
+      question_coordinate: CausalPlanStepRecurrenceQuestionCoordinate
+    }
+  | RecursionBindingCoverageResultSource {
+      question_coordinate: RecursionBindingCoverageQuestionCoordinate
+    }
+  | CycleFoldSameStepGroundingResultSource {
+      question_coordinate: CycleFoldSameStepGroundingQuestionCoordinate
+    }
 
 RelationsSourceManifestV0 =
     DefinitionViewFields(RelationDefinitionReadManifest)
@@ -1064,6 +1076,9 @@ RelationsSourceManifestV0 =
   | InstanceField(RelationInstanceSourceEndpoint)
   | PrivateWitnessField(RelationWitnessSourceEndpoint)
   | ArtifactObservationField(ArtifactObservationSourceEndpoint)
+  | CompleteCausalPlanStepRecurrenceResult
+  | CompleteRecursionBindingCoverageResult
+  | CompleteCycleFoldSameStepGroundingResult
 ```
 
 The payload and remaining owner subjects are:
@@ -1143,10 +1158,16 @@ Formation requires all of the following:
    | `"relation-instance-field"` | one admitted `RelationInstanceId` | one public, phase, or Oracle-public-binding endpoint belonging to that instance's Interface | `RelationInstanceId`, portable |
    | `"private-witness-field"` | the exact `instance_id` retained by one fresh `PrivateWitnessAssignment` | one witness endpoint belonging to that instance's Interface | the exact assignment occurrence, owner-local |
    | `"artifact-observation-field"` | one admitted `RelationArtifactObservationId` | one artifact selector belonging to that observation's admitted profile | `RelationArtifactObservationId`, portable |
+   | `"causal-plan-step-recurrence-result"` | one exact `CausalPlanStepRecurrenceQuestionCoordinate` | `CompleteCausalPlanStepRecurrenceResult` | the exact affirmative `CheckedCausalPlanStepRecurrence`, owner-local |
+   | `"recursion-binding-coverage-result"` | one exact `RecursionBindingCoverageQuestionCoordinate` | `CompleteRecursionBindingCoverageResult` | the exact affirmative `CheckedRecursionBindingCoverage`, owner-local |
+   | `"cyclefold-same-step-grounding-result"` | one exact `CycleFoldSameStepGroundingQuestionCoordinate` | `CompleteCycleFoldSameStepGroundingResult` | the exact affirmative `CheckedCycleFoldSameStepGrounding`, owner-local |
 
-4. every selector forms against its admitted owner and derives its type; equal
-   values, another field, another instance or observation, another assignment
-   occurrence, or another process generation do not match;
+4. for a field family, every selector forms against its admitted owner and
+   derives its type; for a checked-result family, the static question
+   coordinate reconstructs exactly from the identical affirmative local result
+   and that result's owner capability; equal values, another field, another
+   instance or observation, another assignment or result occurrence, a partial
+   result projection, or another process generation do not match;
 5. the no-policy subject contains exactly the payload ID and fixed disposition;
    the requirement contains exactly the same payload, consumer, purpose, and
    fixed bearer law; and the closure contains exactly that payload, no-policy,
@@ -1240,11 +1261,16 @@ expired otherwise matching live source is `CannotAnswer`. The private-witness
 payload contains no secret value or occurrence reference, and neither local
 binding has a canonical body.
 
-These are the complete source families selected by this document. They do not
-silently define a generic checked-result source family. A checked operation
-may issue its fresh operation-local capability as specified, but exporting a
-result through a Foundation source-authority envelope requires an additional exact
-Relations family, descriptor, and manifest in a later profile/law revision.
+These are the complete source families selected by this document. The last
+three are narrow exports for the exact recursive-composition checks defined by
+this page and by
+[Recursive-Composition Grounding](recursive-composition-grounding.md); they do
+not define a generic checked-result source family. Each uses the complete-result
+manifest arm only, derives its portable payload from the exact static question
+coordinate, and uses the checked result itself as the Foundation owner-local
+coordinate. No result field can be projected independently. Exporting any
+other checked operation requires another exact Relations family, descriptor,
+manifest, and owner formation law in a later profile revision.
 
 The invocation-issued
 [`PublicSetupInvocationView`](../pir/interactive-core.md#134-invocation-issued-public-setup-view)
@@ -1985,9 +2011,11 @@ cannot enter this affirmative-only join.
 ### 9.4 One-step causal recurrence conjunction
 
 An arbitrary true equation over two runs is not a recurrence proposition. The
-final join therefore takes one operation-local public selection that fixes the
-complete source-output-to-target-input chain. These references are dense
-ordinals in the exact admitted grounding equation and have no body or ID:
+final join therefore takes one public selection that fixes the complete
+source-output-to-target-input chain. These references are dense ordinals in
+the exact admitted grounding equation. The selection has no standalone ID,
+but it has the written `RB` body when embedded in the owner-defined question
+coordinate below:
 
 ```text
 GroundingSourceRef = ordinal in GroundingEquation.sources
@@ -2012,7 +2040,27 @@ CausalPublicRecurrenceSelection = {
   instance_transition: PublicRecurrenceEquationLeg,
   target_input_grounding: PublicRecurrenceEquationLeg
 }
+
+CausalPlanStepRecurrenceQuestionCoordinate = {
+  equation_grounding_question_id: CorrespondenceQuestionId,
+  public_selection: CausalPublicRecurrenceSelection,
+  source_plan_witness_binding_id: PlanWitnessBindingId,
+  source_edge: PlanWitnessEdgeRef,
+  target_plan_witness_binding_id: PlanWitnessBindingId,
+  target_edge: PlanWitnessEdgeRef
+}
 ```
+
+This coordinate is not a new semantic subject. It is a canonical Relations
+law coordinate over already identified static subjects. Formation
+authenticates the `EquationGrounding` question and both Plan-witness bindings;
+requires each edge to occur exactly once in its named binding; derives the
+source `DerivedWitnessExport` and target `WitnessIngress` surface roles; and
+requires the selection to fit the question's exact equation. It contains no
+run, instance, assignment, private value, result, capability, or future ID. A
+changed edge, equation, selection ordinal, or binding is therefore a different
+coordinate without turning one live recurrence occurrence into a durable
+subject.
 
 Let `P_source` be the exact admitted Protocol authenticated for
 `e.run_slots[s.source_run_slot]`, and let `C_source` be the exact admitted
@@ -2153,6 +2201,13 @@ Formation requires all of the following, without an ambient slot convention:
    `CausalPlanWitnessHandoffCapability` are exactly those retained by
    `private_handoff_capability`.
 
+The operation also derives the unique
+`CausalPlanStepRecurrenceQuestionCoordinate` from `q`, `selection`, and the
+two selected Plan-witness bindings and edges retained by `private_handoff`.
+The affirmative result and capability retain that exact coordinate. A caller
+cannot supply a coordinate independently or replace one of its fields after
+the checks above.
+
 The instance slot occurrences remain source- and target-qualified even when
 their content IDs are equal. A repeated ID does not merge two slots, and an
 equal value, equation result body, run record, or fresh causal execution does
@@ -2174,6 +2229,30 @@ or regime mismatch is `KindMismatch`; and an inconsistent affirmative input is
 `CheckerFailure`. This join has no Negative arm because either a false public
 equality or a private edge disagreement is already a Negative prerequisite
 rather than a completed recurrence conjunction.
+
+For the narrow cross-owner use selected by Analysis, Relations exposes one
+purpose-bound source operation:
+
+```text
+IssueCausalPlanStepRecurrenceResultSource(
+  exact affirmative CheckedCausalPlanStepRecurrence result,
+  identical live CheckedCausalPlanStepRecurrenceCapability result_capability,
+  exact consumer: RelationsDownstreamCoordinate,
+  exact purpose: RelationsDownstreamCoordinate)
+  -> RelationsFieldSourceIssueOutcome<OwnerLocalSourceAuthorityBinding>
+```
+
+It derives family `"causal-plan-step-recurrence-result"`, source
+`CausalPlanStepRecurrenceResultSource(result.question_coordinate)`, manifest
+`CompleteCausalPlanStepRecurrenceResult`, the two role IDs, payload, no-policy
+declaration, requirement, and closure from the exact result. The Foundation
+local coordinate is that identical result object. The separately returned
+fresh source capability retains the result capability, consumer, purpose,
+question coordinate, process generation, and lifetime. A copied result,
+reconstructed envelope, other question coordinate, stale capability, partial
+field request, or equal run values refuse. This operation exports only the
+already-checked one-step conjunction; it does not make it portable or promote
+it to an induction premise.
 
 ## 10. Combined results, persistence, and nonclaims
 

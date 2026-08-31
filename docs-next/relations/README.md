@@ -48,9 +48,11 @@ later questions automatically.
   facts, causal confidential initial logical-Oracle material agreement, and
   causal confidential Plan-witness occurrence grounding, plus its checked
   results, nonidentified same-run public/private join, direct same-process
-  witness handoff, and finite public/private one-step recurrence conjunction.
+  witness handoff, and finite public/private one-step recurrence conjunction;
+  plus one identified recursion-facing binding-coverage schema and the
+  nonidentified CycleFold same-step entry check.
 
-The exact namespace is one 23-entry semantic-subject catalog. It is disjoint
+The exact namespace is one 24-entry semantic-subject catalog. It is disjoint
 from the 14-entry module declaration-contract catalog; neither prose nor an
 executable fixture can add a kind or move one between the two. The literal
 semantic catalog and still-open profile-preimage boundary are in
@@ -167,10 +169,13 @@ A well-formed completed disagreement is Negative. `Unsupported`,
 coordinate forms; `CannotAnswer` is a supported formed operation unable to
 obtain a required premise, live read, or authority. Only a completed result
 creates a fresh process-local checked capability; portable IDs and reports are
-inert. The five selected source families have exact bodies in
+inert. The eight selected source families have exact bodies in
 [Protocol Correspondence, Section 4.3](protocol-correspondence.md#43-exact-relations-source-authority-subjects).
 There is no open family or generic checked-result source binding; exporting a
-new family requires a Relations profile/law revision.
+new family requires a Relations profile/law revision. Three of the eight are
+narrow owner-local exports for causal one-step recurrence, recursion-binding
+coverage, and CycleFold same-step grounding; none makes the checked result
+portable or identifies its occurrence.
 
 Relations has no OIR dependency in this target. Future verifier-to-relation
 descent remains unavailable until OIR defines and admits its exact source
@@ -208,6 +213,10 @@ result.
   grounding, causal confidential initial-Oracle agreement, private Plan-
   witness grounding, the same-run join, direct same-process witness handoff,
   and finite one-step recurrence conjunction
+- [Recursive-Composition Grounding](recursive-composition-grounding.md) —
+  total recursion-facing instance discharge, exact digest paths, finite-chain
+  non-aliasing, portable re-admission refusal, and the CycleFold same-step
+  guardrail
 - [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md) — PIR-
   owned external presentation, strategy recipes, `PlanRealizes`, and
   `PlanWitnessSurface`
@@ -221,7 +230,7 @@ remains normative until explicit consolidation and cutover.
 
 ## Remaining gates
 
-- The exact 23/14 catalogs and six source-authority body schemas are selected,
+- The exact 24/14 catalogs and six source-authority body schemas are selected,
   but the complete six-field `SemanticLanguageProfileBody`, exact semantic-
   law-source bytes, and independently reconstructible
   `RelationsProfileId` remain unpublished. No persistent-ID or semantic-freeze

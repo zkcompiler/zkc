@@ -211,13 +211,14 @@ profile-import DAG. It does not sweep ordinary semantic modules. Modules needed
 by a portable algorithm, evaluation contract, or owner subject are authenticated
 separately by that subject's exact domain dependency closure.
 
-The bounded Analysis executable currently constructs the four selected direct-
-import tuples explicitly and checks them for exact equality. That check
-pressures the selected finite DAG and rejects tuple substitution or padding,
-but it does not derive imports by traversing typed declaration and law
-references, because the executable law source is still the surrogate described
-above. Its passing cases are therefore not evidence for the derived-import or
-unused-reference rules in this paragraph.
+The bounded cryptographic Analysis executable currently constructs the four
+previously selected direct-import tuples explicitly and checks them for exact
+equality. The incremental-composition branch is pressured separately by its
+focused evaluator until dependent profile publication joins both branches.
+Those checks reject tuple substitution or padding, but they do not derive
+imports by traversing typed declaration and law references, because their law
+sources remain the surrogates described above. Passing cases are therefore not
+evidence for the derived-import or unused-reference rules in this paragraph.
 
 An unrelated profile or ordinary module therefore does not rotate an Analysis
 ID. Adding or changing a declaration or law inside the directly selected
@@ -231,8 +232,9 @@ live/local capability. This keeps the dependency direction
 `prior-meta basis -> profile DAG -> profiled subjects -> subject module DAG`
 acyclic.
 
-Analysis selects four independently evolvable profile layers rather than one
-Analysis universe:
+Analysis selects six independently evolvable profiles rather than one Analysis
+universe. Four form the initial cryptographic-property branch and two form the
+independent incremental-composition branch:
 
 ```text
 AnalysisKernelLanguageProfileId =
@@ -268,6 +270,24 @@ AnalysisAFKTheoremSourceValidationLanguageProfileId =
   govern those validation-bearing results,
   together with the two exact result-qualification declarations and contracts
   for AFK family transport and fixed-member specialization
+
+AnalysisIncrementalCompositionLanguageProfileId =
+  identity of the standalone profile that imports exactly
+    AnalysisKernelLanguageProfileId,
+    PIRInteractionProfileId,
+    PIRInterfacePlanProfileId,
+    the exact-used Relations Relations/correspondence profile,
+  and whose own catalogs contain only the closed finite incremental-
+  composition family, property, theorem-component, native-rule, carried-
+  obligation, report-qualification, evaluator, and failure contracts
+
+AnalysisIncrementalCompositionSourceValidationLanguageProfileId =
+  identity of the standalone profile that imports exactly
+    AnalysisIncrementalCompositionLanguageProfileId
+  and whose own catalogs contain only theorem-source-kind and source-
+  validation declarations plus the exact validation-bearing support,
+  validation, operation-policy, judgment, result-authority, consumer, and
+  purpose contracts for incremental-composition conclusions
 ```
 
 The names are typed selectors for exact profile IDs, not family/revision
@@ -278,7 +298,7 @@ Interaction static views, canonical-framed construction views, and
 `PublicSetupInvocationView` values. It therefore imports those three exact PIR
 profiles directly as well as Relations. These are required direct-use diamonds,
 not redundant convenience edges.
-These names denote the owner-local exact profile IDs once the four Analysis
+These names denote the owner-local exact profile IDs once the six Analysis
 owners publish complete preimages; joined-path validation does not fix those semantic IDs. Its
 finite integration bundle instantiates deterministic executable profile
 objects only to test the selected topology, exact authentication, and rotation
@@ -295,12 +315,13 @@ profile ID. Until then, an absent, substituted, padded, redundant, or unused
 import is a target refusal law whose finite shape has executable evidence, not
 a claim that the final owner preimages already exist.
 
-The kernel never imports a downstream profile, the cryptographic profile never
-imports either transport profile, and the semantic transport profile never
-imports the source-validation profile. Thus extending source-validation cannot
-rotate a theorem schema, extending transport cannot rotate the kernel or a
-bounded property identity, and adding an unrelated property forms a new narrow
-profile rather than changing either one. A mutation of an imported owner
+The kernel never imports a downstream profile. The cryptographic profile never
+imports either AFK child, and the AFK semantic transport profile never imports
+its source-validation child. The incremental-composition profile imports none
+of the AFK branch and never imports its own source-validation child. Thus
+source-validation changes cannot rotate theorem meaning, changes in one branch
+cannot rotate the other, and an unrelated property forms a new narrow profile
+rather than changing an ambient universe. A mutation of an imported owner
 profile intentionally rotates the direct downstream profile and governed
 subjects, but cannot flow backward into the owner profile.
 
@@ -314,12 +335,21 @@ AnalysisProfileBundle = {
   transport: AnalysisAFKTransportLanguageProfileId,
   theorem_source_validation:
     AnalysisAFKTheoremSourceValidationLanguageProfileId,
+  incremental_composition:
+    AnalysisIncrementalCompositionLanguageProfileId,
+  incremental_composition_source_validation:
+    AnalysisIncrementalCompositionSourceValidationLanguageProfileId,
   required_import_edges: exactly
     property -> [kernel,exact-used Relations Relations profile,
                  PIR Interaction, PIR canonical-framed FS,
                  PIR public-setup projection],
     transport -> [property],
-    theorem_source_validation -> [transport]
+    theorem_source_validation -> [transport],
+    incremental_composition ->
+      [kernel,PIR Interaction,PIR Interface/Plan,
+       exact-used Relations Relations profile],
+    incremental_composition_source_validation ->
+      [incremental_composition]
 }
 
 ActiveAnalysisBodyKinds =
@@ -333,6 +363,7 @@ AnalysisKernelSupportedKinds = {
 AnalysisCryptographicPropertySupportedKinds =
   ActiveAnalysisBodyKinds minus {
     "analysis.family-instance-role-map",
+    "analysis.incremental-composition-family",
     "analysis.logical-nat-literal",
     "analysis.pointwise-quantitative-normalization",
     "analysis.theorem-schema",
@@ -386,6 +417,38 @@ AnalysisAFKTheoremSourceValidationSupportedKinds = {
   "analysis.use-purpose",
   "analysis.validation-basis"
 }
+
+AnalysisIncrementalCompositionSupportedKinds = {
+  "analysis.adequacy-evaluator",
+  "analysis.consumer",
+  "analysis.goal",
+  "analysis.hypothesis-context",
+  "analysis.incremental-composition-family",
+  "analysis.proposition",
+  "analysis.quantitative-formula",
+  "analysis.question",
+  "analysis.semantic-basis",
+  "analysis.semantic-read-manifest",
+  "analysis.source-profile",
+  "analysis.theorem-schema",
+  "analysis.use-purpose"
+}
+
+AnalysisIncrementalCompositionSourceValidationSupportedKinds = {
+  "analysis.capability-requirement-payload",
+  "analysis.checked-result-coordinate",
+  "analysis.consumer",
+  "analysis.judgment-record",
+  "analysis.operation-policy",
+  "analysis.owner-policy-closure",
+  "analysis.portable-source-authority-binding",
+  "analysis.source-authority-contract",
+  "analysis.source-support",
+  "analysis.support-instantiation",
+  "analysis.theorem-source-validation",
+  "analysis.use-purpose",
+  "analysis.validation-basis"
+}
 ```
 
 For each profile, `supported_subject_kinds` and the key set of `body_schemas`
@@ -403,6 +466,15 @@ empty hypothesis context is the only body formed directly under the kernel
 profile. No generic identity operation accepts a caller-selected profile for a
 body whose required profile has not first been derived and checked by these
 rules.
+
+The incremental-composition family, its Relations-result adequacy evaluators,
+source profiles and concrete manifests, questions, goals, propositions,
+theorem schemas, quantitative formulas, and semantic bases select the
+incremental-composition profile. Source support, theorem support, validation,
+policy, judgment, and authority carriers that consume its live owner results
+or theorem-source validation select the narrow source-validation child.
+Neither profile imports or reuses the AFK
+branch merely because both use the common Analysis calculus.
 
 The selected `analysis.challenge-domain` constructor is the one explicit
 cross-layer boundary to the family-owned shorthand above. It forms a
@@ -428,6 +500,12 @@ validation basis, operation policy, or judgment body that actually consumes or
 governs one select the narrow child validation profile. A body cannot choose a
 profile, and a same-shaped body under another profile is a distinct semantic
 subject.
+
+The same rule applies independently to incremental composition: the family
+and semantic theorem bodies select its semantic profile; a source-validation
+body and every support, validation, policy, judgment, or authority body that
+consumes it select its exact child. No constructor searches both branches for
+a matching body shape.
 
 ### 2.1 Source read slots
 
@@ -1607,6 +1685,8 @@ The active dispatch is exactly:
 "analysis.experiment-profile"       -> AnalysisExperimentProfileBody
 "analysis.asymptotic-protocol-family" ->
   AnalysisAsymptoticProtocolFamilyDefinitionBody
+"analysis.incremental-composition-family" ->
+  IncrementalCompositionFamilyBody
 "analysis.family-read-manifest-schema" -> AnalysisFamilyReadManifestSchemaBody
 "analysis.challenge-domain"         -> AnalysisChallengeDomainBody
 "analysis.fixed-public-setup"       -> AFKFixedPublicSetupBody
@@ -1737,6 +1817,17 @@ FamilyProjectionAtIndex
 FamilyInstanceRoleMapAdequacy
 FamilyInstanceQuantitativeNormalizationAdequacy
 FamilyInstanceProcessCorrespondence
+ClosedIncrementalCompositionFamily
+FamilyMemberSelectionCorrespondence
+FamilyDescriptionAdviceCorrespondence
+StepRecurrenceCorrespondence
+BindingCoverageCorrespondence
+UpdateVerifierCorrectness
+FinalDeciderCorrectness
+ArbitraryContinuationCompleteness
+IncrementalCompositionCompleteness
+IncrementalCompositionKnowledgeSoundness
+IncrementalCompositionEfficiency
 ```
 
 Each spelling above denotes one exact module declaration, not a string tag.
@@ -1805,6 +1896,13 @@ analysis.fixed-public-setup = {
 analysis.asymptotic-protocol-family = {
   exact admitted family-language ref and one canonical value of its resolved
   payload type
+}
+
+analysis.incremental-composition-family = {
+  exact finite member and selector maps over authenticated Protocol, Plan, and
+  Relations subjects; exact recurrence and binding-coverage coordinates;
+  typed update-verifier, final-decider, carried-obligation, and acyclic
+  family-description-advice contracts
 }
 
 analysis.family-read-manifest-schema = {

@@ -11,14 +11,14 @@ The instrument checks these discriminators:
   Transcript/FS profiles it interprets, and one Relations/correspondence
   profile imports Interface/Plan; the five-profile convenience container is
   distinct from the three-entry Interface and four-entry Relations no-extra
-  closures. The Relations profile advertises the exact 23-kind target semantic
+  closures. The Relations profile advertises the exact 24-kind target semantic
   subject catalog and has an exactly empty `declaration_catalogs` field. A
   separate executable constant independently enumerates the exact 14-kind
   module-declaration dispatch grammar; it is not a profile declaration
   catalog. The placeholder `semantic_law_source` bytes do not publish or
   authenticate that final dispatch. The executable explicitly names the
   smaller 13-kind subset for which it constructs bounded bodies and the
-  complementary 10-kind unimplemented target-body set; catalog routing is not
+  complementary 11-kind unimplemented target-body set; catalog routing is not
   represented as complete body semantics. Real owner-view
   issuance checks the selected root's evaluator
   support and complete emitted subject-kind set. Real Interface, Plan,

@@ -1593,6 +1593,22 @@ changes either endpoint. Preparation failure likewise leaves every ready
 supply unconsumed; preparation success consumes all selected supplies
 atomically and permanently.
 
+One preparation may contain ready supplies from several distinct completed
+continuations when they target distinct `WitnessIngress` declarations of the
+same target Plan. The private-material map remains exact: every declaration has
+one source, every ready supply is target-bound, and the all-or-nothing commit
+checks and consumes the complete finite set atomically. This is the ordinary
+finite-arity Plan operation, not a tree-PCD, induction, or arbitrary-party
+continuation theorem.
+
+Material decoded after serialization enters only through the ordinary fixed-
+value arm of a fresh private-material map. Even when a decoder, decider, or
+proof checker has accepted equal bytes, that value cannot form a
+`ReadyPlanWitnessIngressSupply`, satisfy its capability input, or mint a
+`CausalPlanWitnessHandoffCapability`. Any value-level theorem relating portable
+re-admission to recursive continuation belongs to Analysis; it does not alter
+this occurrence-causal boundary.
+
 `ReplayRun`, equal records, equal continuation tuples, equal export values,
 serialization, process restart, or possession of a confidential witness view
 cannot recreate a ready supply or causal handoff capability. The handoff makes

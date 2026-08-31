@@ -7,6 +7,11 @@
 > **Authority:** None. Durable PIR, Relations, and OIR pages own the promoted
 > laws. This page preserves the selection-time reasoning, mutations, and
 > promotion ledger without claiming implementation or normative authority.
+> **Supersession note:** Catalog counts and profile-graph snapshots on this
+> page predate the later recursive-composition coverage schema and independent
+> Analysis composition branch. Durable Relations and Analysis pages own the
+> current 24-kind and six-profile target; the lifecycle laws here remain only
+> their selection-time context.
 
 ## 1. Decision
 

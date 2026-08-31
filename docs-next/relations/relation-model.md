@@ -88,6 +88,7 @@ RelationsSemanticSubjectKindCatalogV0 = [
   "relations.interface",
   "relations.plan-witness-binding",
   "relations.protocol-binding",
+  "relations.recursion-binding-coverage-schema",
   "relations.refinement-question",
   "relations.semantic-model",
   "relations.source-binding-payload",
@@ -101,7 +102,10 @@ RelationsSemanticSubjectKindCatalogV0 = [
 ]
 ~~~
 
-The six `relations.source-*` entries are ordinary Relations-profiled semantic
+The `relations.recursion-binding-coverage-schema` body and its nonidentified
+runtime check are defined in
+[Recursive-Composition Grounding](recursive-composition-grounding.md). The six
+`relations.source-*` entries are ordinary Relations-profiled semantic
 subjects. Their exact bodies and formation laws are owned by
 [Protocol Correspondence, Section 4.3](protocol-correspondence.md#43-exact-relations-source-authority-subjects).
 They are not module declarations, live capabilities, receipts, or a second
@@ -3328,6 +3332,15 @@ derives the corresponding process-local `RelationRunCoordinate` and reads the
 PIR-issued view. The live `RelationRunCoordinate`, read manifest,
 `RelationRunView`, histories, and selected entries have no K1 canonical body or
 `RB` case and never enter a durable identity preimage.
+
+`CausalPlanStepRecurrenceQuestionCoordinate`,
+`RecursionBindingCoverageQuestionCoordinate`, and
+`CycleFoldSameStepGroundingQuestionCoordinate` likewise use `RB` over their
+written static fields only when nested in an Analysis manifest or a Relations
+source-binding payload. They have no standalone Relations ID. Their associated
+checked results, runs, instances, capabilities, and owner-local source
+coordinates have no `RB` arm; the Foundation local binding carries those
+occurrences outside every portable preimage.
 
 For a same-regime `PortableAlgorithmRef`, `RB` uses
 `O(ContentRefV0(algorithm_id))`. There is no current `RB` arm for a cross-regime

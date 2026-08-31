@@ -119,6 +119,29 @@ Binding establishes exact requirement closure and ABI compatibility. It does
 not establish provider correctness, availability at a later activation,
 protected-behavior preservation, performance, or endpoint acceptance.
 
+### Portable composition material
+
+Recursive or accumulation material uses the ordinary transport boundary. A
+Realization may encode, deliver, and decode an accumulator, witness, proof,
+decider proof, or family-description value under an exact admitted format and
+endpoint. Delivery metadata and equal bytes do not preserve the source process,
+source invocation, Plan continuation occurrence, one-use supply, or any PIR
+capability.
+
+Successful decoding creates a fresh local value occurrence. The receiver may
+place it in an ordinary fresh input binding and may invoke an exact decider or
+proof-verifier endpoint. That invocation produces only its typed endpoint result
+and operational observation. Relations or Analysis may consume the exact fresh
+occurrence and qualified result under a separately formed proposition; the
+transport, decoder, and endpoint do not establish recurrence, arbitrary-party
+continuation, accumulator validity, or an incremental-composition theorem.
+
+This lane is an architecture boundary, not an activated portable-composition
+format or runtime claim. It cannot produce `ReadyPlanWitnessIngressSupply`,
+`CausalPlanWitnessHandoffCapability`, or a replacement for the source-side
+occurrence authority. A same-process causal continuation continues to use PIR's
+live Plan lifecycle and never passes through serialization.
+
 ### Production and realization checking
 
 Producing bytes and establishing semantic preservation are separate logical

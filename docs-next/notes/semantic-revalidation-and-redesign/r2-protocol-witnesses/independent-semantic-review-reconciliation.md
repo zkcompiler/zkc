@@ -5,6 +5,10 @@
 > follow-up experiments and cross-family questions remain open
 > **Authority:** None. This page records evidence classifications and work
 > gates; it does not change durable semantics.
+> **Supersession note:** The profile counts and Relations catalog size recorded
+> below describe the reviewed snapshot. Later durable recursive-composition
+> work adds one Relations kind and a two-profile Analysis branch without
+> changing this page's review disposition.
 > **Input boundary:** An independent private review of the semantic redesign at
 > commit `ae9a99f`, followed by direct reconstruction against the newer native
 > FRI/IOR branch. Private review prose is not reproduced here.
