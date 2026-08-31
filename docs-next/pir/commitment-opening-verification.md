@@ -52,43 +52,35 @@ the exact `PIRInteractionProfileId` and family-neutral
 `PIRPublicSetupProfileId`, authenticated Foundation value types and portable
 algorithms, and one exact immutable admitted Core handle.
 
-```text
-PIRCommitmentOpeningProfile = SemanticLanguageProfile {
-  profile_family: "pir.commitment-opening",
-  revision: 0,
-  profile_imports: {
-    PIRInteractionProfileId,
-    PIRPublicSetupProfileId
-  },
-  supported_subject_kinds: {
-    "pir.commitment-opening-verifier-profile",
-    "pir.commitment-opening-use"
-  },
-  declaration_catalogs: {},
-  semantic_law_source: exact nonempty bytes for this page
-}
-
-PIRCommitmentOpeningProfileId =
-  SemanticContentId<"foundation.semantic-language-profile">(
-    B, SemanticLanguageProfileBody(PIRCommitmentOpeningProfile))
-```
+The exact `PIRCommitmentOpeningProfile` is the compilation result of the
+[`commitment-opening` owner-source manifest](profiles/commitment-opening.json)
+under the [PIR profile publication grammar](profiles/README.md). Its family is
+`"pir.commitment-opening"`, revision is `0`, direct imports are exactly
+`{PIRInteractionProfileId, PIRPublicSetupProfileId}`, and supported subject
+kinds are exactly `{"pir.commitment-opening-verifier-profile",
+"pir.commitment-opening-use"}`. The publication records the complete body and
+independently reproduced `PIRCommitmentOpeningProfileId`; this page does not
+maintain a second profile preimage.
 
 The `revision` above belongs only to this PIR language-profile body. It need
 not numerically match a Relations or Analysis profile revision: cross-owner
 compatibility is established by exact imported profile IDs and checked subject
 references, never by comparing revision integers.
 
-This owner uses no profile-local `DeclarationRef`, so its Foundation declaration
-catalog sequence is exactly empty. The exact subject body compilers below and
-the nonempty semantic-law source close the syntax. A verifier profile carries
-its own six exact `PIRAlgorithmUse` values, so adding an unrelated verifier-
-profile subject does not change the language profile or any existing subject
-ID. All six algorithms are total. A mathematical partiality, decoder error, or
+The declaration catalogs are nonempty and source-bound. They contain the exact
+body compilers, semantic laws, evaluator signature, failure schema, selected
+source fragments, and generated subject-language rows; imported declaration
+references derive both direct import edges. A verifier profile carries its own
+six exact `PIRAlgorithmUse` values, so adding an unrelated verifier-profile
+subject does not change the language profile or any existing subject ID. All
+six algorithms are total. A mathematical partiality, decoder error, or
 malformed proof must be represented by a total tagged input or Boolean result;
 it cannot escape as a host exception. Bound derivation has the exact profile-
 shape input and intrinsic-bound output described below.
 
 The body compiler has no open arm:
+
+<!-- zkc-profile-source:commitment-opening-body-dispatch:start -->
 
 ```text
 CommitmentOpeningBody =
@@ -110,8 +102,12 @@ CommitmentOpeningId<K>(x) =
     the exact body arm assigned to K)
 ```
 
+<!-- zkc-profile-source:commitment-opening-body-dispatch:end -->
+
 A missing required import or kind is `Refused`; another regime or body arm is
 `KindMismatch`; an unrecognized exact profile root is `Unsupported`.
+
+<!-- zkc-profile-source:commitment-opening-semantics:start -->
 
 ## 3. Exact verifier profile
 
@@ -821,6 +817,8 @@ Profile formation, use admission, Core execution, and replay establish none of:
 
 These are not caveats that a caller may override with a Boolean. They are
 separate typed questions owned downstream.
+
+<!-- zkc-profile-source:commitment-opening-semantics:end -->
 
 ## 10. Reversal conditions
 

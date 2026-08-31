@@ -8,9 +8,10 @@ compiler implementation, protocol conformance, or a cryptographic proof.
 machinery directly. It does not reproduce a second foundation. On top of that
 fixed basis it implements a fixture-exact finite model with:
 
-- three exact standalone K1 language profiles: Interaction/Core+Fresh,
+- three exact witness-local K1 language profiles: Interaction/Core+Fresh,
   Transcript/FS importing Interaction, and family-neutral public-view export
-  importing only Interaction;
+  importing only Interaction. They are exact preimages for this bounded
+  evaluator, not the published target PIR profiles;
   every K2 semantic ID selects its exact profile in the preimage, and the
   selected root's exact one- or two-profile bundle is authenticated as an
   exact no-extra import closure. Issuance requires evaluator support only for
@@ -86,7 +87,8 @@ ordering, terminal closure, challenge-time Fresh resolution, resolver-free
 Fresh replay, resolver-independent invocation identity, owner-view closure and
 schema separation, Protocol-scoped execution views, checked FS view authority,
 public-setup attenuation, profile-identity locality, and selected-profile
-execution/replay identity. The frozen gate runs 76 tests.
+execution/replay identity. The focused runner owns the current discovered test
+count.
 
 ## Evidence boundary
 
@@ -131,6 +133,13 @@ capabilities model origin and object binding; they are not a host-language
 security boundary. The public-setup view deliberately proves attenuation only:
 it does not authorize execution, disclose Statement values, or replace the
 separate Statement binding used by strong Fiat--Shamir.
+
+The witness-local profile IDs are deliberately distinct from the published
+target IDs in [`docs-next/pir/profiles/`](../../docs-next/pir/profiles/README.md).
+The finite body encoders in this package are not the durable Appendix-A body
+compilers, so substituting a target profile ID here would be a false semantic-
+conformance claim. Joining those lanes requires an exact target body compiler
+and admission evaluator, not an ID replacement.
 
 This finite instrument also selects one challenge value per occurrence,
 unconditional scope openings, one closing terminal, linear claims only, and

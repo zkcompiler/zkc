@@ -72,41 +72,26 @@ PIR meaning. The public-setup edge is direct even though the commitment-opening
 profile also imports it, because this owner itself validates source and target
 public-setup views.
 
-```text
-PIROracleCommitmentProfile = SemanticLanguageProfile {
-  profile_family: "pir.oracle-commitment",
-  revision: 0,
-  profile_imports: {
-    PIRInteractionProfileId,
-    PIRPublicSetupProfileId,
-    PIRCommitmentOpeningProfileId
-  },
-  supported_subject_kinds: {
-    "pir.oracle-commitment-profile", "pir.oracle-commitment-construction",
-    "pir.oracle-commitment-advice-schema", "pir.oracle-commitment-consumer",
-    "pir.oracle-commitment-purpose", "pir.oracle-commitment-binding-payload",
-    "pir.oracle-commitment-no-policy",
-    "pir.oracle-commitment-policy-closure",
-    "pir.oracle-commitment-capability-requirement",
-    "pir.oracle-commitment-run-receipt",
-    "pir.oracle-commitment-run-validation-basis"
-  },
-  declaration_catalogs: {},
-  semantic_law_source: exact nonempty bytes for this page
-}
+The exact `PIROracleCommitmentProfile` is the compilation result of the
+[`oracle-commitment` owner-source manifest](profiles/oracle-commitment.json)
+under the [PIR profile publication grammar](profiles/README.md). Its family is
+`"pir.oracle-commitment"`, revision is `0`, direct imports are exactly
+`{PIRInteractionProfileId, PIRPublicSetupProfileId,
+PIRCommitmentOpeningProfileId}`, and its supported kinds are the eleven
+Oracle-commitment subjects enumerated by that manifest. The publication
+records the complete body and independently reproduced
+`PIROracleCommitmentProfileId`; this page does not maintain a second profile
+preimage.
 
-PIROracleCommitmentProfileId =
-  SemanticContentId<"foundation.semantic-language-profile">(
-    B, SemanticLanguageProfileBody(PIROracleCommitmentProfile))
-```
-
-This owner uses no profile-local `DeclarationRef`, so its Foundation declaration
-catalog sequence is exactly empty. The exact owner-body compiler and nonempty
-semantic-law source close the syntax. Concrete algorithm and evaluation-
-contract references occur in the commitment-class, advice-schema, commitment-
-profile, construction, and receipt-projection fields below. The semantic law
-checks one exact use for every written field; no ambient algorithm registry or
-role table participates in identity or admission.
+The declaration catalogs are nonempty and source-bound. They contain the
+closed owner-body compiler, semantic laws, evaluator signature, failure
+schema, selected source fragments, and generated subject-language rows. Their
+imported declaration references derive all three direct edges. Concrete
+algorithm and evaluation-contract references occur in the commitment-class,
+advice-schema, commitment-profile, construction, and receipt-projection
+fields below. The semantic law checks one exact use for every written field;
+no ambient algorithm registry or role table participates in identity or
+admission.
 
 For class `c`, let `V(c)` be the exact authenticated
 `CommitmentOpeningVerifierProfile` named by
@@ -149,6 +134,8 @@ semantic result.
 The exact owner body compiler has one arm for every advertised kind and no
 default arm:
 
+<!-- zkc-profile-source:oracle-commitment-body-dispatch:start -->
+
 ```text
 OracleCommitmentBodyV0 =
     AdviceSchemaBody(ConstructionAdviceSchema)
@@ -170,18 +157,21 @@ Each variant tag and nested record field follows the written order.
 accepts exactly the arm assigned to `K`; an omitted arm, extra kind, alternate
 compiler, or open-default dispatch is `Refused`.
 
+<!-- zkc-profile-source:oracle-commitment-body-dispatch:end -->
+
 An omitted required import or kind is `Refused`; an unrecognized exact profile
 root is `Unsupported`; a formed reference to another regime or kind is
 `KindMismatch`. No second import root, request-local catalog, or evaluator
 extension participates in semantic identity.
+
+<!-- zkc-profile-source:oracle-commitment-semantics:start -->
 
 ## 3. Exact commitment profile
 
 ### 3.1 Algorithm and type coordinates
 
 ```text
-AlgorithmUse = {algorithm: PortableAlgorithmRef,
-                evaluation_contract: EvaluationContractId}
+AlgorithmUse = PIRAlgorithmUse
 
 SourcePublicCoordinate =
   {binding: BindingRef, class: Statement | SessionContext | PublicParameter}
@@ -1125,6 +1115,8 @@ and state, unselected salts, owner inputs, goldens, and prior receipts.
 This structural result proves no concrete conformance, binding, hiding,
 collision resistance, or proof-system soundness.
 
+<!-- zkc-profile-source:oracle-commitment-semantics:end -->
+
 ## 11. Worked-profile witness
 
 The bounded
@@ -1151,6 +1143,8 @@ That instrument is finite inhabitance and falsification evidence. It does not
 implement this durable checker or capability lifecycle and cannot substitute
 for an admitted construction or one-run causal validation.
 
+<!-- zkc-profile-source:oracle-commitment-nonclaims:start -->
+
 ## 12. Nonclaims
 
 Neither admission nor a receipt proves commitment binding, hiding,
@@ -1166,6 +1160,8 @@ Analysis owns the exact property question, theorem source, assumptions,
 applicability, loss, and property transport. Relations owns source/target
 relation grounding and any outer-relation conclusion. Evidence owns observed
 implementation and replay claims.
+
+<!-- zkc-profile-source:oracle-commitment-nonclaims:end -->
 
 ## 13. Reversal conditions
 

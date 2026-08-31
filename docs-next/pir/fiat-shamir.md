@@ -76,10 +76,12 @@ profile imports are `{PIRInteractionProfileId}`; its supported subject kinds are
 "pir.source-binding-payload", "pir.source-capability-requirement",
 "pir.source-consumer", "pir.source-no-policy",
 "pir.source-policy-closure", "pir.source-purpose"}`; and its inline declaration
-catalog contains `TranscriptConstructionBody`, `FSProtocolBody`, the three
-construction-view schemas, `FSConstructionViewBody`, the profile-local
-`FSChallengeReceipt` and `FSInterpretationFailureReceipt` runtime schemas,
-and their closure and issuance laws. A construction and its canonical-framed FS Protocol rotate
+catalog contains the canonical-framed body compiler, the profile-local
+`FSChallengeReceipt` and `FSInterpretationFailureReceipt` dependent runtime
+templates, the exact construction admission, checked-construction,
+profile-closure, issuance, and nonclaim laws, one evaluator signature, and one
+qualified failure schema. The imported Interaction body compiler owns the
+`pir.protocol` body arm. A construction and its canonical-framed FS Protocol rotate
 together when this family meaning changes, while Fresh and an unreferenced FS
 sibling remain under their own profiles. The profile import is the only
 generic upstream closure; it is not a declaration-module root.
@@ -91,13 +93,13 @@ irrelevant to those operations. An unrecognized exact root is `Unsupported`,
 while a supported root omitting any emitted Protocol, construction, or
 owner-authority subject kind is `Refused`.
 
-This fixes the target owner, import topology, supported-kind set, catalog
-responsibility, and no-extra closure law. It does not yet publish the complete
-six-field K1 profile preimage or its full typed ID. The deterministic profile
-pin used by the bounded executable witness tests topology, authentication, and
-rotation only and is not semantic authority. This page must publish the
-complete owner-local preimage and independently reconstructible full typed ID
-before any dependent K4 ID is treated as persistent and before K5 freeze.
+The complete six-field profile body, owner-source manifest, exact import-use
+table, root closure, and independently reproduced full typed ID are published
+by [Published PIR Semantic Profiles](profiles/README.md). The bounded protocol
+witness still uses a witness-local approximation profile because its finite
+Core carrier is not the Appendix-A body compiler on this page. Its IDs remain
+nonpersistent evidence coordinates and must not be substituted for this
+published target profile.
 
 All collections and bodies obey the K1 constitutional bounds. In addition:
 
@@ -117,6 +119,8 @@ smaller bound. Construction admission derives the worst-case sums from Core
 schemas, module frame bounds, draw widths, and challenge rules, and preflights
 them before allocation or hashing. Reaching a bound is allowed; crossing it
 refuses admission rather than becoming evaluator-dependent behavior.
+
+<!-- zkc-profile-source:canonical-framed-fs-semantics:start -->
 
 ## 3. Construction subject
 
@@ -1406,6 +1410,8 @@ identity. None of its security theorems applies to this page's construction,
 and the sibling itself activates no theorem without a separate Analysis
 correspondence, source-validation result, and applicability judgment.
 
+<!-- zkc-profile-source:canonical-framed-fs-semantics:end -->
+
 ## 15. Bounded executable evidence
 
 The repository package
@@ -1458,6 +1464,8 @@ K2 intentionally chooses the stricter baseline in which every active prior
 prover publication is absorbed. A future theorem-backed relaxation must define
 a distinct checked source/target construction and Analysis obligation; it may
 not be an authored per-message omission flag.
+
+<!-- zkc-profile-source:canonical-framed-fs-body-grammar:start -->
 
 ## Appendix A. Canonical bodies
 
@@ -1645,3 +1653,5 @@ future sibling. A module-owned declaration change instead rotates
 that module and its exact users. The shared Foundation semantic regime rotates
 only when a Foundation-owned mechanism or its interpretation changes. Old
 bytes are never reinterpreted.
+
+<!-- zkc-profile-source:canonical-framed-fs-body-grammar:end -->

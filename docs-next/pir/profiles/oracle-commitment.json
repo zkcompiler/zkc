@@ -1,0 +1,182 @@
+{
+  "format": "zkc.pir.semantic-profile-source.v0",
+  "key": "oracle-commitment",
+  "profile_family": "pir.oracle-commitment",
+  "revision": 0,
+  "owner_page": "docs-next/pir/oracle-commitment-construction.md",
+  "expected_imports": ["commitment-opening", "interaction", "public-setup"],
+  "supported_subject_kinds": [
+    "pir.oracle-commitment-advice-schema",
+    "pir.oracle-commitment-binding-payload",
+    "pir.oracle-commitment-capability-requirement",
+    "pir.oracle-commitment-construction",
+    "pir.oracle-commitment-consumer",
+    "pir.oracle-commitment-no-policy",
+    "pir.oracle-commitment-policy-closure",
+    "pir.oracle-commitment-profile",
+    "pir.oracle-commitment-purpose",
+    "pir.oracle-commitment-run-receipt",
+    "pir.oracle-commitment-run-validation-basis"
+  ],
+  "fragments": [
+    {
+      "name": "oracle-commitment-body-dispatch",
+      "start": "zkc-profile-source:oracle-commitment-body-dispatch:start",
+      "end": "zkc-profile-source:oracle-commitment-body-dispatch:end"
+    },
+    {
+      "name": "oracle-commitment-semantics",
+      "start": "zkc-profile-source:oracle-commitment-semantics:start",
+      "end": "zkc-profile-source:oracle-commitment-semantics:end"
+    },
+    {
+      "name": "oracle-commitment-nonclaims",
+      "start": "zkc-profile-source:oracle-commitment-nonclaims:start",
+      "end": "zkc-profile-source:oracle-commitment-nonclaims:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "pir.body-compiler",
+      "name": "oracle-commitment-body-v0",
+      "revision": 0,
+      "fragment": "oracle-commitment-body-dispatch",
+      "selector": "OracleCommitmentBodyV0 =",
+      "dependencies": [
+        {"profile": "commitment-opening", "kind": "pir.body-compiler", "name": "commitment-opening-use-body-v0"},
+        {"profile": "commitment-opening", "kind": "pir.body-compiler", "name": "commitment-opening-verifier-profile-body-v0"},
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "algorithm-use-body-v0"},
+        {"profile": "public-setup", "kind": "pir.body-compiler", "name": "public-setup-invocation-view-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "oracle-commitment-construction-admission-v0",
+      "revision": 0,
+      "fragment": "oracle-commitment-semantics",
+      "selector": "CheckOracleCommitmentConstruction(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "oracle-commitment-nonclaims-v0",
+      "revision": 0,
+      "fragment": "oracle-commitment-nonclaims",
+      "selector": "## 12. Nonclaims",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "oracle-commitment-run-validation-v0",
+      "revision": 0,
+      "fragment": "oracle-commitment-semantics",
+      "selector": "ValidateOracleCommitmentRun(",
+      "dependencies": [
+        {"profile": "public-setup", "kind": "pir.semantic-law", "name": "public-setup-projection-and-issuance-v0"}
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "oracle-commitment-static-elaboration-v0",
+      "revision": 0,
+      "fragment": "oracle-commitment-semantics",
+      "selector": "CheckStaticElaborationV0(StaticElaborationCheckInput)",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "oracle-commitment-evaluator-v0",
+      "revision": 0,
+      "fragment": "oracle-commitment-semantics",
+      "selector": "CheckOracleCommitmentConstruction(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "oracle-commitment-outcome-partition-v0",
+      "revision": 0,
+      "fragment": "oracle-commitment-semantics",
+      "selector": "## 7. Closed defects and outcomes",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "pir.oracle-commitment-advice-schema",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-binding-payload",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-capability-requirement",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-construction",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-consumer",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-no-policy",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-policy-closure",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-profile",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-purpose",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-run-receipt",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.oracle-commitment-run-validation-basis",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "oracle-commitment-body-v0"},
+      "laws": ["oracle-commitment-construction-admission-v0", "oracle-commitment-nonclaims-v0", "oracle-commitment-run-validation-v0", "oracle-commitment-static-elaboration-v0"],
+      "evaluator": "oracle-commitment-evaluator-v0",
+      "failure_schema": "oracle-commitment-outcome-partition-v0"
+    }
+  ]
+}

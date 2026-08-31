@@ -1,0 +1,113 @@
+{
+  "format": "zkc.pir.semantic-profile-source.v0",
+  "key": "public-setup",
+  "profile_family": "pir.public-setup",
+  "revision": 0,
+  "owner_page": "docs-next/pir/interactive-core.md",
+  "expected_imports": ["interaction"],
+  "supported_subject_kinds": [
+    "pir.public-setup-invocation-view",
+    "pir.source-binding-payload",
+    "pir.source-capability-requirement",
+    "pir.source-consumer",
+    "pir.source-no-policy",
+    "pir.source-policy-closure",
+    "pir.source-purpose"
+  ],
+  "fragments": [
+    {
+      "name": "public-setup",
+      "start": "zkc-profile-source:public-setup:start",
+      "end": "zkc-profile-source:public-setup:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "pir.body-compiler",
+      "name": "public-setup-invocation-view-body-v0",
+      "revision": 0,
+      "fragment": "public-setup",
+      "selector": "PublicSetupInvocationViewBody(x) = R",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.body-compiler", "name": "fresh-protocol-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "public-setup-projection-and-issuance-v0",
+      "revision": 0,
+      "fragment": "public-setup",
+      "selector": "### 13.4 Invocation-issued public setup view",
+      "dependencies": [
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-issuance-v0"}
+      ]
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "public-setup-evaluator-v0",
+      "revision": 0,
+      "fragment": "public-setup",
+      "selector": "IssuePublicSetupInvocationView(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "public-setup-outcome-partition-v0",
+      "revision": 0,
+      "fragment": "public-setup",
+      "selector": "| Unsupported | MissingDependency | KindMismatch | Malformed | Refused",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "pir.public-setup-invocation-view",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "public-setup-invocation-view-body-v0"},
+      "laws": ["public-setup-projection-and-issuance-v0"],
+      "evaluator": "public-setup-evaluator-v0",
+      "failure_schema": "public-setup-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-binding-payload",
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["public-setup-projection-and-issuance-v0"],
+      "evaluator": "public-setup-evaluator-v0",
+      "failure_schema": "public-setup-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-capability-requirement",
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["public-setup-projection-and-issuance-v0"],
+      "evaluator": "public-setup-evaluator-v0",
+      "failure_schema": "public-setup-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-consumer",
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["public-setup-projection-and-issuance-v0"],
+      "evaluator": "public-setup-evaluator-v0",
+      "failure_schema": "public-setup-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-no-policy",
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["public-setup-projection-and-issuance-v0"],
+      "evaluator": "public-setup-evaluator-v0",
+      "failure_schema": "public-setup-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-policy-closure",
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["public-setup-projection-and-issuance-v0"],
+      "evaluator": "public-setup-evaluator-v0",
+      "failure_schema": "public-setup-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-purpose",
+      "body_compiler": {"profile": "interaction", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["public-setup-projection-and-issuance-v0"],
+      "evaluator": "public-setup-evaluator-v0",
+      "failure_schema": "public-setup-outcome-partition-v0"
+    }
+  ]
+}

@@ -4,8 +4,10 @@
 > **Document state:** Active non-normative redesign target
 > **Target status:** The identity-bearing Core, causal execution, public and
 > confidential owner views, bounded consumer integrations, and executable
-> integration evidence are recorded. Complete owner-profile preimages,
-> remaining protocol-family pressure, and independent freeze remain pending.
+> integration evidence are recorded. The stable Interaction, Fiat--Shamir,
+> public-setup, commitment-opening, and Oracle-commitment profile preimages
+> are published; dependent profiles, remaining protocol-family pressure, and
+> independent freeze remain pending.
 > **Provisional owner:** `pir`
 > **Authority:** None during the transition. Current normative Protocol
 > semantics remain under [`docs/`](../../docs/README.md).
@@ -130,11 +132,16 @@ meaning.
 The target does not place one catch-all PIR language above every subject. It
 selects one Interaction profile, two sibling Fiat--Shamir family profiles, and
 one family-neutral public-setup projection profile with the following exact
-import topology. This display is a symbolic owner schema, not publication of
-the complete six-field profile preimages or their full typed IDs:
+import topology. The complete six-field bodies, extraction and compilation
+rules, independently reproduced typed IDs, and exact root closures are
+published in [Published PIR Semantic Profiles](profiles/README.md). The
+display below is a readable owner schema and does not replace those source
+artifacts.
 
 The Interaction owner also defines one shared structural algorithm-use record
 for PIR operations:
+
+<!-- zkc-profile-source:interaction-algorithm-use:start -->
 
 ```text
 PIRAlgorithmUse = {
@@ -147,6 +154,8 @@ PIRAlgorithmUseBody(x) = R {
   1: Y(ContentRefV0(x.evaluation_contract))
 }
 ```
+
+<!-- zkc-profile-source:interaction-algorithm-use:end -->
 
 This record pairs an exact admitted portable algorithm with the exact contract
 under which PIR invokes it. It does not add an ambient provider or make an
@@ -205,10 +214,13 @@ duplicated in `semantic_law_source`.
 Every FS family profile importing Interaction must commit to one exact
 dependent runtime-schema template under its reserved profile-local
 `"pir.fs-challenge-receipt"` tag. It may commit to either zero or one exact
-dependent template under `"pir.fs-interpretation-failure-receipt"`. Those tags
-are catalog entries, not new semantic subject kinds. Interaction dispatches
-them only after authenticating the selected profile; a template cannot be
-supplied by the caller or inherited from a sibling.
+dependent template under `"pir.fs-interpretation-failure-receipt"`. A family
+may additionally declare a finite exact profile-local `"pir.fs-*-receipt"`
+kind only when it is reached through `LocalReceiptDeclaration` from one of
+those reserved templates; Interaction never dispatches the auxiliary kind
+directly. All such tags are catalog entries, not new semantic subject kinds.
+Interaction resolves them only after authenticating the selected profile; a
+template cannot be supplied by the caller or inherited from a sibling.
 
 The template grammar is closed and owned by Interaction:
 
@@ -300,8 +312,7 @@ dispatch. Adding a third family therefore rotates that consumer profile and
 its dependents, while neither existing family nor the Interaction profile
 rotates merely because the new family exists.
 
-The required authenticated import closure is selected-root-specific once each
-owner has published its complete profile preimage:
+The published authenticated import closure is selected-root-specific:
 
 ```text
 ExactProfilePreimages(PIRInteractionProfileId) =
@@ -349,6 +360,8 @@ kind is deliberately supported by three profiles: Fresh selects
 `PIRInteractionProfileId`, while each Fiat--Shamir Protocol selects the exact
 profile of its admitted transcript construction. The profile ID makes those
 meanings unambiguous.
+
+<!-- zkc-profile-source:interaction-kernel:start -->
 
 ### 3.2 Core and Protocol
 
@@ -1879,12 +1892,16 @@ or a semantic Protocol outcome. A record by itself carries no evaluator-budget
 or replay-match authority. Successful replay still does not mint or strengthen
 `CausalGenerationCapability`.
 
+<!-- zkc-profile-source:interaction-kernel:end -->
+
 ## 13. PIR-owned source views
 
 The names in this section denote exact owner schemas and owner operations, not
 informal tuples or consumer-defined field lists. A downstream domain may select
 a closed projection, but it cannot define a second PIR body schema, invent a
 value, weaken a dependency closure, or mint source authority.
+
+<!-- zkc-profile-source:interaction-static-views:start -->
 
 ### 13.1 Common view schema, coordinates, and projection law
 
@@ -2243,6 +2260,10 @@ unsupported view kind returns no partial projection or binding. A wrong Core,
 Protocol, view kind, result origin, manifest, capability, or purpose is
 `Refused` or `KindMismatch`, never a differently scoped affirmative.
 
+<!-- zkc-profile-source:interaction-static-views:end -->
+
+<!-- zkc-profile-source:public-setup:start -->
+
 ### 13.4 Invocation-issued public setup view
 
 Static `PublicBindingViewBody` declares public-binding meaning; it does not and
@@ -2317,6 +2338,10 @@ the exact full invocation; substituting an equal or copied portable binding
 does not move the live capability. Cold use must reauthenticate the Protocol
 and invocation and rerun issuance; the portable body or binding alone grants
 nothing.
+
+<!-- zkc-profile-source:public-setup:end -->
+
+<!-- zkc-profile-source:interaction-run-views:start -->
 
 ### 13.5 Execution-issued relation grounding view
 
@@ -2767,6 +2792,10 @@ The operation establishes only which whole initial carrier that one causal execu
 consumed; it establishes no proximity, relation satisfaction, actor knowledge,
 or security property.
 
+<!-- zkc-profile-source:interaction-run-views:end -->
+
+<!-- zkc-profile-source:interaction-composition-boundary:start -->
+
 ## 14. Composition and finite recurrence boundary
 
 Canonical composition must produce a new `InteractiveCore` body, authenticate
@@ -2842,6 +2871,10 @@ faithful finite supported extension:
   lossy; or
 - an acceptance-relevant effect that cannot state exact transition,
   visibility, influence, replay, and bounds under the module law.
+
+<!-- zkc-profile-source:interaction-composition-boundary:end -->
+
+<!-- zkc-profile-source:interaction-body-grammar:start -->
 
 ## Appendix A. Canonical bodies
 
@@ -3131,3 +3164,5 @@ every downstream profile that imports it. A module-owned declaration change
 instead rotates that module and the subjects that exactly use it. The shared
 Foundation semantic regime rotates only when a Foundation-owned mechanism or
 its interpretation changes. Old bytes are never reinterpreted.
+
+<!-- zkc-profile-source:interaction-body-grammar:end -->

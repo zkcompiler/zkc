@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from dataclasses import FrozenInstanceError, replace
 import hashlib
+import json
 from pathlib import Path
 import pickle
 import sys
@@ -1727,6 +1728,35 @@ class SemanticProfileIdentityTest(unittest.TestCase):
             },
         )
         self.assertIs(model.PIR_FS_PROFILE, model.PIR_TRANSCRIPT_PROFILE)
+
+    def test_witness_profiles_do_not_impersonate_published_target_profiles(self) -> None:
+        repository_root = PACKAGE_ROOT.parents[1]
+        published = json.loads(
+            (
+                repository_root
+                / "docs-next"
+                / "pir"
+                / "profiles"
+                / "published-identities.json"
+            ).read_text(encoding="utf-8")
+        )
+        target_digests = {
+            bytes.fromhex(published["profiles"][key]["profile_digest"])
+            for key in (
+                "interaction",
+                "canonical-framed-fiat-shamir",
+                "public-setup",
+            )
+        }
+        witness_digests = {
+            profile.identity.digest
+            for profile in (
+                model.PIR_INTERACTION_PROFILE,
+                model.PIR_TRANSCRIPT_PROFILE,
+                model.PIR_PUBLIC_SETUP_PROFILE,
+            )
+        }
+        self.assertTrue(target_digests.isdisjoint(witness_digests))
 
     def test_public_setup_profile_is_family_neutral_and_rejects_surplus_fs_edge(
         self,

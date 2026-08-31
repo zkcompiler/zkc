@@ -35,10 +35,11 @@ outputs, confidential grounding, a one-use same-process witness handoff with a
 finite one-step recurrence join, and a distinct continuation-prover endpoint.
 The selected target adds no universal accumulator, folding-scheme, recursive-
 proof, or runtime child-Protocol root, and typed public Plan parameters are
-deferred. Holdout validation, complete owner-profile preimages, independently
-reconstructible profile identities, independent identity/profile freeze,
-property judgments, full OIR/Realization, implementation correspondence, and
-normative cutover remain open.
+deferred. Six stable upstream PIR profiles now have complete independently
+reconstructed publication artifacts. Holdout validation, dependent-profile
+publication, independent identity/profile freeze, property judgments, full
+OIR/Realization, implementation correspondence, and normative cutover remain
+open.
 
 ## Where current truth lives
 
@@ -207,10 +208,10 @@ declared Challenge occurrence. Accumulation, folding, and recursive-
 verification pressure then selected the Plan-owned continuation and finite
 same-process recurrence boundaries described above. The fixed Nova fold has a
 complete source-grounded finite target encoding; the remaining named cases
-retain explicitly stated finite-target elaboration gaps. Holdouts, exact owner-profile publication,
-independent identity/profile
-freeze, property discharge, full OIR/Realization, implementation support, and
-normative cutover remain pending.
+retain explicitly stated finite-target elaboration gaps. Six stable upstream
+PIR profiles are published; holdouts, dependent-profile publication,
+independent identity/profile freeze, property discharge, full OIR/Realization,
+implementation support, and normative cutover remain pending.
 
 The first semantic reconstruction result is the
 [Candidate v0 Semantic Architecture](project/v0-semantic-architecture.md). It

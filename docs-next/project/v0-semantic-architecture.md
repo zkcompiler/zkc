@@ -7,7 +7,7 @@
 > consumer integration; one retained native FRI/IOR conservative extension;
 > and commitment-opening, complete-argument, accumulation, folding, and
 > recursive-verification pressure absorbed at documented evidence levels.
-> Holdouts, complete owner-profile publication, independent identity/profile
+> Holdouts, dependent owner-profile publication, independent identity/profile
 > freeze, and normative cutover remain pending.
 > **Provisional owner:** `project`
 > **Authority:** Non-normative. This page is a reconstruction and design
@@ -967,8 +967,10 @@ verification pressure have now reclosed their declared bounded scopes. The
 latest selection is semantic-target convergence with a complete source-
 grounded finite target encoding for the fixed Nova fold and explicit finite-
 target elaboration gaps for the other named cases, not
-owner-profile publication or independent identity/profile
-freeze. Holdout validation, property discharge, full OIR/Realization,
+dependent owner-profile publication or independent identity/profile freeze.
+The stable upstream PIR profiles are published as target identities; their
+downstream Interface/Plan, Relations, Analysis, Compiler, OIR, and Realization
+consumers remain open. Holdout validation, property discharge, full OIR/Realization,
 implementation correspondence, and normative cutover remain pending.
 
 ## 12. Deliberate non-decisions

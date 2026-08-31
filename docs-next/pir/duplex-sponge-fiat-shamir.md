@@ -78,9 +78,13 @@ Adding an unreferenced future sibling does not rotate either existing family.
 Changing this page's body grammar, admission, execution, receipt, view, or
 replay law rotates the duplex profile and its dependents only.
 
-This page does not yet publish the complete six-field profile preimage or its
-independently reconstructible full typed ID. The profile must publish that
-preimage before dependent IDs are persistent and before semantic freeze.
+The complete six-field profile body, owner-source manifest, exact import-use
+table, root closure, and independently reproduced full typed ID are published
+by [Published PIR Semantic Profiles](profiles/README.md). This publication is
+the profile identity source; the duplex behavioral witness remains bounded
+execution evidence and is not an independent profile definition.
+
+<!-- zkc-profile-source:duplex-sponge-fs-semantics:start -->
 
 ## 3. Construction subject
 
@@ -954,6 +958,8 @@ headers, namespaces, retries, or sampling failures from a duplex construction.
 It likewise prevents a canonical consumer from treating absent duplex fields
 as empty values.
 
+<!-- zkc-profile-source:duplex-sponge-fs-semantics:end -->
+
 ## 12. Analysis and theorem boundary
 
 No active Analysis profile imports a duplex security theorem. Future work must
@@ -1007,6 +1013,8 @@ independent proof exists. With no duplex theorem family registered, Analysis
 returns `Unsupported`. A future registered family returns `CannotAnswer` when
 source validation or required premises are absent, and `Refused` only when an
 exact supplied subject is inapplicable. No lane silently repairs the source.
+
+<!-- zkc-profile-source:duplex-sponge-fs-boundary:start -->
 
 ## 13. Downstream support boundary
 
@@ -1076,6 +1084,8 @@ This profile establishes none of:
   behavior, or side-channel resistance; or
 - transfer of a canonical-framed Analysis result to this family.
 
+<!-- zkc-profile-source:duplex-sponge-fs-boundary:end -->
+
 ## 15. Reopening conditions
 
 Reopen this profile if a validated source requires joint challenges, public
@@ -1092,6 +1102,8 @@ its binary instance to the fixed canonical binding encoding.
 Reopen the theorem boundary only after an exact source revision, erratum, or
 independent repaired proof resolves the recorded call-count, decoder-fiber,
 and alphabet-encoding defects.
+
+<!-- zkc-profile-source:duplex-sponge-fs-body-grammar:start -->
 
 ## Appendix A. Canonical bodies
 
@@ -1133,3 +1145,5 @@ Changing a tag, field, order, derived type, transition, eligibility condition,
 receipt, source view, or admission predicate rotates
 `PIRDuplexSpongeFSProfile` and every dependent duplex subject. It does not
 reinterpret or rotate an unreferenced canonical-framed subject.
+
+<!-- zkc-profile-source:duplex-sponge-fs-body-grammar:end -->

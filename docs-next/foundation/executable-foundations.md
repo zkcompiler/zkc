@@ -1967,6 +1967,8 @@ Let `CoreNamesV0` be this exact symbol sequence:
 `SemanticCoreLawSourceV0` is the ASCII encoding of the following lines joined
 by LF, including one LF after the last line and no CR octets:
 
+<!-- zkc-foundation-source:semantic-core-law:start -->
+
 ```text
 zkc.foundation.semantic-core-law.v0
 source-encoding=ASCII-0x20..0x7e;LF-after-every-line-including-last;no-CR
@@ -2257,6 +2259,8 @@ operational-outcome-partition=Unsupported,MissingDependency,CannotAnswer,KindMis
 host-failure=process-death,unrecordable-allocation-failure,or-unavailable-device-may-produce-no-record-and-is-never-a-semantic-completion
 nonclaims=no-universal-result-type-or-resource-or-judgment;no-security-property;no-distribution-property;no-constant-time-property;no-provider-conformance;no-unconditional-hash-binding-or-collision-resistance;no-protocol-relation-analysis-compiler-or-endpoint-admission
 ```
+
+<!-- zkc-foundation-source:semantic-core-law:end -->
 
 The byte string has length `45,933` and SHA-256 digest
 `f603cee6ce7acc601ca92a35b3de3787dcd9b9ea47a85486c8f4fb2732212658`.

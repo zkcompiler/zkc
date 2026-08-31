@@ -65,10 +65,11 @@ site-qualified private exports, confidential grounding, a one-use same-process
 output-to-fresh-ingress handoff, finite one-step recurrence, and a distinct
 continuation-prover purpose. The fixed Nova fold has a complete source-grounded
 finite target encoding; the remaining named cases retain explicit finite-
-target elaboration gaps. Holdouts,
-complete owner-profile preimages and independently reconstructible profile
-identities, independent identity/profile freeze, properties, Realization,
-implementation, and normative cutover remain open.
+target elaboration gaps. Holdouts, dependent owner-profile publication,
+independent identity/profile freeze, properties, Realization, implementation,
+and normative cutover remain open. The six stable upstream PIR profiles are
+now published under [`profiles/`](profiles/README.md); that bounded publication
+does not imply dependent-profile or implementation conformance.
 
 ## Owns
 
@@ -232,6 +233,10 @@ first being found by the optimizer or successfully projected to every target.
   active sibling owner for runtime-instance initialization, construction-
   public salt, overwrite transitions, fixed codecs, family receipts, and its
   same-Core Fresh/FS construction
+- [Published PIR Semantic Profiles](profiles/README.md) — complete
+  owner-source manifests, exact profile compilation grammar, root closures,
+  derived identity table, and independent reconstruction for the six stable
+  upstream profiles
 - [Oracle-Commitment Construction](oracle-commitment-construction.md) — exact
   logical-Oracle-to-committed-Core elaboration, admission, authority, and run
   validation boundary
@@ -311,8 +316,9 @@ later work includes:
 
 - broader Analysis theorem profiles, independent proof authority, checkers,
   and producers beyond the selected finite applicability profile;
-- holdout validation, complete owner-profile preimages, independently
-  reconstructible profile identities, and independent identity/profile freeze;
+- holdout validation, dependent owner-profile preimages, and independent
+  identity/profile freeze; the six stable upstream PIR profiles already have
+  independently reconstructed publication artifacts;
 - OIR syntax and execution beyond the bounded semantic skeleton, followed by
   concrete supplier, deployment, and runtime meaning in Realization;
 - exact normative wording, stable semantic encodings, hash primitives,

@@ -1,0 +1,242 @@
+{
+  "format": "zkc.pir.semantic-profile-source.v0",
+  "key": "interaction",
+  "profile_family": "pir.interaction",
+  "revision": 0,
+  "owner_page": "docs-next/pir/interactive-core.md",
+  "expected_imports": [],
+  "supported_subject_kinds": [
+    "pir.confidential-initial-oracle-disclosure-policy",
+    "pir.interactive-core",
+    "pir.invocation",
+    "pir.protocol",
+    "pir.source-binding-payload",
+    "pir.source-capability-requirement",
+    "pir.source-consumer",
+    "pir.source-no-policy",
+    "pir.source-policy-closure",
+    "pir.source-purpose"
+  ],
+  "fragments": [
+    {
+      "name": "interaction-algorithm-use",
+      "start": "zkc-profile-source:interaction-algorithm-use:start",
+      "end": "zkc-profile-source:interaction-algorithm-use:end"
+    },
+    {
+      "name": "interaction-kernel",
+      "start": "zkc-profile-source:interaction-kernel:start",
+      "end": "zkc-profile-source:interaction-kernel:end"
+    },
+    {
+      "name": "interaction-static-views",
+      "start": "zkc-profile-source:interaction-static-views:start",
+      "end": "zkc-profile-source:interaction-static-views:end"
+    },
+    {
+      "name": "interaction-run-views",
+      "start": "zkc-profile-source:interaction-run-views:start",
+      "end": "zkc-profile-source:interaction-run-views:end"
+    },
+    {
+      "name": "interaction-composition-boundary",
+      "start": "zkc-profile-source:interaction-composition-boundary:start",
+      "end": "zkc-profile-source:interaction-composition-boundary:end"
+    },
+    {
+      "name": "interaction-body-grammar",
+      "start": "zkc-profile-source:interaction-body-grammar:start",
+      "end": "zkc-profile-source:interaction-body-grammar:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "pir.body-compiler",
+      "name": "algorithm-use-body-v0",
+      "revision": 0,
+      "fragment": "interaction-algorithm-use",
+      "selector": "PIRAlgorithmUseBody(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "confidential-initial-oracle-disclosure-policy-body-v0",
+      "revision": 0,
+      "fragment": "interaction-body-grammar",
+      "selector": "ConfidentialInitialOracleDisclosurePolicyBody(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "core-invocation-body-v0",
+      "revision": 0,
+      "fragment": "interaction-body-grammar",
+      "selector": "CoreInvocationBody(core_id, I) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "fresh-protocol-body-v0",
+      "revision": 0,
+      "fragment": "interaction-body-grammar",
+      "selector": "ProtocolBody(P) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "interactive-core-body-v0",
+      "revision": 0,
+      "fragment": "interaction-body-grammar",
+      "selector": "InteractiveCoreBody(C) = R",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "algorithm-use-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.body-compiler",
+      "name": "source-authority-envelope-body-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRSourceConsumerRoleBody(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "composition-boundary-v0",
+      "revision": 0,
+      "fragment": "interaction-composition-boundary",
+      "selector": "## 14. Composition and finite recurrence boundary",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "core-admission-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "## 10. Core admission",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "execution-and-replay-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "## 12. Challenge-parameterized execution",
+      "dependencies": [
+        {"profile": "self", "kind": "pir.body-compiler", "name": "algorithm-use-body-v0"}
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "public-coin-eligibility-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "## 11. Structural public-coin eligibility",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "run-view-issuance-v0",
+      "revision": 0,
+      "fragment": "interaction-run-views",
+      "selector": "### 13.5 Execution-issued relation grounding view",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "static-view-issuance-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "### 13.3 Issuance, bindings, capabilities, and outcomes",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "interaction-evaluator-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "GenerateRun(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "interaction-outcome-partition-v0",
+      "revision": 0,
+      "fragment": "interaction-static-views",
+      "selector": "PIRStaticViewIssueOutcome =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "pir.confidential-initial-oracle-disclosure-policy",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "confidential-initial-oracle-disclosure-policy-body-v0"},
+      "laws": ["composition-boundary-v0", "core-admission-v0", "execution-and-replay-v0", "public-coin-eligibility-v0", "run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.interactive-core",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "interactive-core-body-v0"},
+      "laws": ["composition-boundary-v0", "core-admission-v0", "execution-and-replay-v0", "public-coin-eligibility-v0", "run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.invocation",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "core-invocation-body-v0"},
+      "laws": ["core-admission-v0", "execution-and-replay-v0", "run-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.protocol",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "fresh-protocol-body-v0"},
+      "laws": ["core-admission-v0", "execution-and-replay-v0", "public-coin-eligibility-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-binding-payload",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-capability-requirement",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-consumer",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-no-policy",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-policy-closure",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    },
+    {
+      "kind": "pir.source-purpose",
+      "body_compiler": {"profile": "self", "kind": "pir.body-compiler", "name": "source-authority-envelope-body-v0"},
+      "laws": ["run-view-issuance-v0", "static-view-issuance-v0"],
+      "evaluator": "interaction-evaluator-v0",
+      "failure_schema": "interaction-outcome-partition-v0"
+    }
+  ]
+}
