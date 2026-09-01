@@ -36,10 +36,9 @@ The primary source is:
 
 The source was read for its circle domains and function spaces, Circle FRI,
 batching, AIR protocol, theorem premises, knowledge-soundness statement, and
-zero-knowledge variants. The Stwo repository was consulted only as
-supplemental evidence that the construction has a realization using M31,
-circle FFTs, FRI, commitments, and Fiat--Shamir. It is not semantic authority
-for the paper and is not evidence of theorem truth or production security.
+the non-zero-knowledge optimized variant. No implementation repository is part
+of this source lock. In particular, this record establishes no correspondence
+to Stwo or any other realization.
 
 Source theorem statements are kept separate from the protocol reconstruction:
 
@@ -109,7 +108,9 @@ The AIR protocol contains:
   dimension-gap scalar;
 - a fresh out-of-domain circle point over an extension field;
 - claimed evaluations at that point and at its successor;
-- DEEP quotient functions; and
+- DEEP quotient functions whose queried values are derived from opened source
+  words and claimed evaluations rather than published as independent Oracles;
+  their real and imaginary components are separate words in the batch; and
 - a batched Circle FRI reduction followed by an identity check at the sampled
   point.
 
@@ -120,11 +121,12 @@ claims, and final checks.
 
 ### 3.4 Variants that must not collapse
 
-The paper discusses both randomized/zero-knowledge-oriented constructions and
-an optimized variant in Appendix C whose evaluation-domain choice is
-explicitly non-zero-knowledge. These are different protocol and Analysis
-subjects. A profile may not attach a zero-knowledge conclusion to the
-non-zero-knowledge variant because their high-level trace shapes look similar.
+The main paper describes how randomization can be added and points to HK24 for
+the detailed zero-knowledge construction; it does not specify or prove that
+separate construction in this source record. Appendix C gives an optimized
+variant whose evaluation-domain choice is explicitly non-zero-knowledge. A
+future randomized construction and the Appendix C protocol must be different
+Protocol and Analysis subjects. No zero-knowledge theorem is activated here.
 
 The verifier's field-membership abort condition is also operationally
 meaningful. A query answer outside the declared field does not become a field
@@ -176,9 +178,10 @@ transition roles are Core-owned.
 ### 4.3 Prover Plan owns honest construction
 
 The Plan computes trace encodings, quotient decomposition, gap scalars, folded
-Oracles, out-of-domain evaluations, DEEP quotients, and the final low-degree
-object. Every recipe reads only the public and private values available at its
-source site.
+Oracles, out-of-domain evaluations, and the final low-degree object. It may
+cache DEEP or batch values as a realization optimization, but that cache is not
+a logical publication. Every semantic recipe reads only the public and private
+values available at its source site.
 
 Proof-sent codeword Oracles remain `ProverOracle`s. When a Relations profile
 needs the exact private function or codeword as a witness, the Plan can export
@@ -188,6 +191,11 @@ proof-sent Oracle as initial material.
 
 This owner split also preserves non-anticipation: query positions remain in
 the verifier decision phase and are not exposed to earlier prover recipes.
+For each query, exact `Apply` nodes derive the batch word and the real and
+imaginary DEEP values from authenticated Oracle answers, claimed evaluations,
+the sampled point, and batching coefficients. Fold checks consume those
+derived values directly. The source introduces no separately committed DEEP or
+batch Oracle.
 
 ### 4.4 Relations owns AIR and code correspondence
 
@@ -231,12 +239,13 @@ publication. A complete profile would have to distinguish at least:
 - the exact Batch Circle FRI experiment and correlated-agreement premises;
 - the AIR soundness theorem and its complete error expression;
 - the knowledge-soundness theorem and extraction premises;
-- the randomized zero-knowledge-oriented protocol;
+- any randomized zero-knowledge construction selected from a separate exact
+  source;
 - the explicitly non-zero-knowledge optimized variant; and
 - any later commitment and random-oracle compiler theorem.
 
-The paper citation, a Stwo test, or structural protocol admission cannot answer
-any of these properties.
+The paper citation, an implementation test, or structural protocol admission
+cannot answer any of these properties.
 
 ## 5. First failed and tempting mappings
 
@@ -265,28 +274,32 @@ value. Hiding it changes the transcript and the verifier's observations.
 **Disposition.** Preserve it as a typed prover Message and an explicit
 decomposition relation.
 
-### 5.3 Treat DEEP quotient codewords as ungrounded virtual callbacks
+### 5.3 Publish DEEP quotient or batch words as independent Oracles
 
-**Attempt.** Give a logical Oracle a host callback that computes requested
-values from prior Oracles and claimed evaluations.
+**Attempt.** Materialize each DEEP quotient or the batch linear combination as
+a new `ProverOracle`, then run Circle FRI over that publication.
 
-**Failure.** Ambient callbacks have no authenticated semantics, Plan causality,
-or exact relation witness. They also obscure whether the prover committed to
-the whole derived codeword before seeing queries.
+**Failure.** Protocol 2 extends the query phase with the batch equation, and
+Protocol 3 derives DEEP values from already published trace/quotient words and
+claimed evaluations. A new Oracle introduces a publication and, after
+commitment elaboration, a commitment absent from the source. It changes the
+transcript influence set and permits a low-degree word unrelated to the source
+words unless the omitted per-query equation is restored.
 
-**Disposition.** At this boundary, represent source-published derived
-codewords as real ProverOracles produced by exact Plan algorithms. A later
-resource package may study nonmaterialized realization without changing the
-logical publication.
+**Disposition.** Use authenticated pure `Apply` derivations over the source
+Oracle answers and public claims at each queried point. This mapping is native
+to the frozen Core. Retain the cross-family verifier-derived-word/query-plan
+question for explicit research rather than inventing a public event.
 
 ### 5.4 Infer zero knowledge from randomization
 
 **Attempt.** Attach one zero-knowledge property to every Circle AIR profile
-because a randomized trace construction exists in the paper.
+because the paper sketches standard randomization and cites a separate note.
 
 **Failure.** The optimized Appendix C variant is explicitly non-zero-knowledge,
-and the full property depends on exact leakage, commitment, and compiler
-premises.
+and the detailed randomized construction belongs to HK24 rather than the pinned
+source. The full property also depends on exact leakage, commitment, and
+compiler premises.
 
 **Disposition.** Separate Protocol and Analysis identities; leave all results
 unevaluated until an exact theorem path exists.
@@ -316,9 +329,13 @@ remain a separate cross-family research question.
 | Accept an answer outside the declared field | exact value admission or operational field-membership check refuses |
 | Swap the sampled point and its successor | exact typed coordinate/check disagreement |
 | Drop one quotient component while keeping the same AIR claim | relation/reduction adequacy is negative |
+| Commit a DEEP quotient or batch word as an independent ProverOracle | source correspondence is negative |
+| Omit the per-query batch or DEEP derivation equation | verifier-check coverage is incomplete |
+| Supply a selector polynomial as an Oracle instead of verifier computation | source correspondence is negative |
+| Replace one jointly sampled query set with independently resampled per-word queries | distribution/correlated-agreement profile mismatch |
 | Treat the batch coefficient as an implementation RNG call | challenge construction is absent or unsupported |
 | Map AIR satisfaction to a successful Plan execution | no implication exists; property remains unanswered |
-| Reuse the optimized non-ZK protocol ID with a ZK theorem profile | applicability or identity check refuses |
+| Attach an HK24 zero-knowledge theorem to the Appendix C protocol | applicability or identity check refuses |
 | Attach Theorem 7 or 8 using only a citation | theorem applicability/truth remains `NotEvaluated` |
 | Apply Fiat--Shamir directly to uncommitted logical Oracles | unsupported argument route |
 | Exceed the frozen Oracle or Foundation carrier maximum | formation/admission refuses |
@@ -335,9 +352,9 @@ correspondence failure, unsupported construction, and unevaluated Analysis.
 | Dimension-gap coefficient | explicit prover Message and relation | Core + Relations |
 | Circle fold and batch fold | exact algorithms and claim transforms | Foundation + Relations |
 | Trace, quotient, and folded Oracles | exact logical publications | Core |
-| Honest encodings and derived codewords | source-site recipes/exports | Plan |
+| Honest encodings and published folded codewords | source-site recipes/exports | Plan |
 | AIR predicate and trace grounding | exact relation definitions | Relations |
-| DEEP samples and quotient checks | challenges, messages, checks, reductions | Core + Relations |
+| DEEP and batch values at queried points | verifier-side pure derivations and exact equations | Core + Relations |
 | Commitment/opening route | separate checked construction | PIR construction |
 | Fiat--Shamir route | separate checked construction | PIR construction |
 | Soundness, knowledge soundness, and ZK | source-pinned property/theorem profiles | Analysis |
@@ -361,8 +378,8 @@ The primary result is **`ProfileOrModule`**:
 This analysis does **not** establish:
 
 - an executable Circle STARK fixture;
-- support for any practical Stwo parameter set;
-- equivalence to the Stwo implementation;
+- support for any practical implementation parameter set;
+- equivalence to any implementation;
 - soundness, knowledge soundness, or zero knowledge;
 - security of a commitment scheme or Fiat--Shamir transform;
 - a concrete field, extension, hash, query, or transcript profile; or
@@ -375,18 +392,22 @@ No shared profile rotates. Retain the following for later packages:
 1. exact Circle algebra and AIR module/profile construction if Circle STARKs
    becomes an implementation target;
 2. source-pinned Batch Circle FRI and Circle AIR Analysis profiles;
-3. an explicit variant split between randomized/ZK-oriented and optimized
-   non-ZK protocols;
-4. the cross-family study of large or algorithmic Oracles; and
-5. a concrete commitment/transcript profile before any noninteractive claim.
+3. a separately sourced randomized/zero-knowledge construction, kept distinct
+   from the optimized non-ZK protocol;
+4. the cross-family verifier-derived-word and query-plan study exposed by
+   DEEP-ALI, STIR, and Circle FRI;
+5. the cross-family study of large or algorithmic Oracles; and
+6. a concrete commitment/transcript profile before any noninteractive claim,
+   including an executable set-difference distribution and retry/failure check
+   for the out-of-domain point.
 
 Reopen the shared candidate only if a constructive member demonstrates that:
 
 - an exact circle domain cannot inhabit a module-owned `ValueType`;
 - a required source publication, challenge, query, answer, check, claim, or
   reduction has no Core representation;
-- Plan causality cannot ground a proof-sent derived codeword without changing
-  its source origin;
+- verifier-derived batch or DEEP values cannot be formed from exact prior
+  answers and public values without inventing a new publication;
 - Relations cannot own the AIR/code law without an opaque evaluator; or
 - a protocol-sized carrier is declared in finite-v0 scope but cannot form.
 

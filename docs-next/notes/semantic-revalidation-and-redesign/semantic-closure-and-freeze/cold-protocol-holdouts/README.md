@@ -1,7 +1,7 @@
 # Source-First Protocol Holdouts
 
 > **Kind:** Temporary research-package index and execution record
-> **State:** All assigned holdouts complete; portfolio adjudication pending
+> **State:** Complete; portfolio adjudicated with no shared profile rotation
 > **Authority:** None. This package records pressure against the frozen target;
 > durable semantics remain owned by their domain specifications.
 > **Deletion rule:** Absorb retained findings into durable owners and delete
@@ -72,9 +72,14 @@ of perfect reviewer blinding.
 |---|---|---|---|
 | WHIR, Construction 5.1 | Constructive encoding | constrained Reed--Solomon claims, proof-sent logical Oracles, grouped access, evolving constraints, and round-by-round theorem premises | Complete: `ProfileOrModule` |
 | Circle STARKs | Boundary analysis | circle domains and function spaces rather than ordinary multiplicative-subgroup polynomial assumptions | Complete: `ProfileOrModule` |
-| WARPfold | Boundary analysis | range-checked movement across non-native fields and proof-system boundaries | Complete: `ProfileOrModule` |
+| WARPfold | Boundary analysis | range-checked strict-plus-relaxed folding across native and non-native fields; separately under-specified cross-system motivation | Complete: `ProfileOrModule` for the fold; cross-system application `Undetermined` |
 | Multiparty Sumcheck | Boundary analysis | several parties jointly realizing prover and verifier work | Complete: `IntentionalBoundary` for full MPC, `ProfileOrModule` for virtual proof |
 | Transparent SNARKs over Galois rings | Boundary analysis | ring rather than field algebra and the exact finite target boundary | Complete: `Undetermined` complete SNARK; `ProfileOrModule` interactive components |
+
+[Protocol-Holdout Portfolio Adjudication](portfolio-adjudication-and-freeze-decision.md)
+compares the five results, tests whether any pressure crosses an owner
+boundary, records the retained finite and two-role limits, and decides whether
+the published semantic profiles rotate.
 
 ## WHIR result
 
@@ -117,14 +122,16 @@ algorithms are exact Foundation-module content; AIR satisfaction, code laws,
 quotient decomposition, batching, and claim transforms are Relations-local.
 The dimension-gap scalar remains an explicit prover message, and trace,
 quotient, and folded codewords remain exact logical Oracles. Plan owns honest
-construction while checked commitment and transcript constructions remain
-separate.
+construction, while batch and DEEP values at queried positions are exact
+verifier-side derivations rather than invented Oracle publications. Checked
+commitment and transcript constructions remain separate.
 
-The result is `ProfileOrModule`: source-pinned soundness, knowledge-soundness,
-and zero-knowledge profiles are absent, and the paper's explicitly non-ZK
-optimized variant must not share a property identity with its randomized
-counterpart. Practical large domains remain an intentional finite-v0 boundary.
-No shared profile rotates.
+The result is `ProfileOrModule`: source-pinned soundness and
+knowledge-soundness profiles are absent, while the detailed randomized
+zero-knowledge construction requires the separately cited HK24 source. The
+paper's explicitly non-ZK optimized variant must not share a property identity
+with a future randomized counterpart. Practical large domains remain an
+intentional finite-v0 boundary. No shared profile rotates.
 
 ## WARPfold result
 
@@ -136,24 +143,27 @@ limit and extractor caveats.
 The central adjudication is that accumulated wrongfield limbs are not a
 universal bijective value bridge. They are an exact Relations predicate with
 range and modular-reconstruction laws; a narrow strict profile may separately
-admit a canonical embedding. Likewise, equality of reinforced public
-commitments is a Core check, while equality of hidden openings remains
-conditional on commitment and extraction hypotheses in Analysis. One bounded
-integer challenge is deterministically interpreted in every field rather than
-sampled independently.
+admit a canonical embedding. The reinforced public-commitment equality is a
+recursive-circuit Relations predicate, while equality of hidden openings
+remains conditional on commitment and extraction hypotheses in Analysis. One
+bounded integer challenge is deterministically interpreted in every field
+rather than sampled independently.
 
 The result is `ProfileOrModule`. Existing incremental-composition vocabulary
-expresses an exact finite-prefix `Path` family with a degradation counter and
-distinct decider/flush boundary. Weak and reinforced IVC, sequence extraction,
-and any concrete cross-proof-system composition require separate source-pinned
-Analysis profiles. No shared profile rotates.
+expresses the finite-prefix `Path` theorem coordinates and degradation
+recurrence, but complete family formation remains conditional on a total
+decider/flush profile that the paper does not specify. Weak and reinforced IVC,
+sequence extraction, and any concrete cross-proof-system composition require
+separate source-pinned Analysis profiles. No shared profile rotates.
 
 ## Multiparty Sumcheck result
 
 [Multiparty Sumcheck Boundary Analysis](multiparty-sumcheck-boundary-analysis.md)
 locks the source and distinguishes its virtual Sumcheck proof from the actual
-MPC protocol. The virtual masked transcript fits the frozen two-role model with
-owner-local field, polynomial, sharing-relation, and theorem profiles.
+MPC protocol. A commitment-anchored virtual masked transcript fits the frozen
+two-role model with owner-local field, polynomial, sharing/commitment relation,
+coin-realization, and theorem profiles. The bare transcript does not inherit
+classical Sumcheck soundness.
 
 The full protocol does not fit faithfully. Every physical party jointly
 contributes to the virtual prover and verifier; the security theorem depends on

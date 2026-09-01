@@ -1,7 +1,7 @@
 # Semantic Closure and Freeze Program
 
 > **Kind:** Temporary research-package index and execution contract
-> **State:** Active
+> **State:** Complete; post-freeze research is routed separately
 > **Authority:** None. Durable target semantics remain owned by their domain
 > pages; this package records method, evidence, decisions, and open work only.
 > **Deletion rule:** Absorb every retained conclusion into its durable owner and
@@ -76,37 +76,32 @@ must not move authority between these owners merely to simplify an encoding.
   the frozen candidate with a constructive WHIR encoding followed by
   source-grounded boundary analyses for Circle STARKs, WARPfold, multiparty
   Sumcheck, and transparent Galois-ring SNARKs.
+- [Protocol-Holdout Portfolio Adjudication](cold-protocol-holdouts/portfolio-adjudication-and-freeze-decision.md)
+  synthesizes those cases, adjudicates the bounded independent review, and
+  records the no-rotation freeze decision and retained product boundaries.
 
 The preflight, six stable-upstream profile publications, recursive-composition
-boundary, dependent-profile construction, and bounded independent freeze review
-are complete. The publication candidate contains all seventeen indexed
-profiles while preserving the six upstream PIR identities byte-for-byte. The
-full local gate matrix and uncapped aggregate are green. The review's sole
-finding was a repository-path lexical divergence between the two compilers; it
-was reproduced, repaired, and covered by negative mutations. Cold protocol
-holdouts are now the open evidence barrier. WHIR's constructive holdout is
-complete: the verifier interaction, honest Plan, relation grounding, and
-checked commitment/Fiat--Shamir route fit the frozen owners without rotation.
-The complete case is `ProfileOrModule` because its exact round-by-round
-property and theorem application remain an Analysis-local profile. The Circle
-STARKs boundary analysis is also complete: circle domains, function spaces,
-folds, and AIR laws stay in exact owner-local modules and Relations profiles,
-while the shared interaction grammar remains unchanged. WARPfold is also
-complete: its multi-field limb discipline is an exact relation rather than a
-universal bijective bridge, and its bounded sequential topology fits the
-existing finite-prefix incremental-composition family. The multiparty Sumcheck
-holdout is complete with an explicit split: its virtual proof is owner-locally
-representable, while the full coalition-secure MPC protocol is an intentional
-two-role-v0 boundary requiring a future regime-level study. The final
-Galois-ring holdout also closes: explicit interactive components are
-owner-locally representable without field-only shared laws, while the complete
-noninteractive SNARK remains undetermined because the source omits its
-transcript compiler. All assigned holdouts are complete; portfolio
-adjudication is the remaining evidence barrier.
+boundary, dependent-profile construction, bounded independent freeze review,
+and source-first holdout portfolio are complete. The publication candidate
+contains all seventeen indexed profiles while preserving the six upstream PIR
+identities byte-for-byte. The full local gate matrix and uncapped aggregate are
+green. The publication review's sole finding was a repository-path lexical
+divergence between the two compilers; it was reproduced, repaired, and covered
+by negative mutations.
 
-Later records are added only when their dependency barrier opens. This keeps
-the temporary package from pre-authoring conclusions that research has not yet
-selected.
+The holdouts classify WHIR, Circle STARKs, WARPfold, and the explicit
+interactive Galois-ring components as owner-local profile/module work. Full
+multiparty Sumcheck remains an intentional two-role-v0 boundary, and the
+source-named noninteractive Galois-ring SNARK remains undetermined because its
+pinned source omits the transcript compiler. An independent holdout review
+found no freeze blocker; three source-fidelity defects in the records were
+reproduced and repaired without changing any profile preimage. The candidate
+is therefore holdout-stable at the declared evidence depths, with no shared
+identity rotation.
+
+Later research is owned by the separate post-freeze program. This package adds
+no further records unless a new constructive counterexample reopens one of its
+explicit conditions.
 
 ## Review discipline
 

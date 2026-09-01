@@ -6,22 +6,15 @@
 > **Authority:** None. This page records an agreed method only; it changes no
 > target specification, decision, implementation claim, or Stage 4B state.
 > **Activated:** 2026-08-23
-> **Current gate:** Executable foundations, the Protocol/Fiat--Shamir kernel,
-> the minimum Relations, Analysis, and endpoint-projection seams, and one
-> joined Schnorr path are complete at their declared bounded scopes. The native
-> FRI/IOR deep case is also retained as a two-lane
-> `ConservativeExtension`: an early-terminated control and a frozen exact
-> three-fold/scalar-terminal control remain distinct. The Oracle/polynomial-
-> commitment and complete-argument clusters are complete at their assigned
-> constructive depths. Accumulation, folding, and recursive-verification
-> research has now converged at documented evidence levels: the fixed Nova fold
-> reaches T2 constructive-encoding depth, while corrected-cycle Nova,
-> HyperNova, CycleFold, ProtoStar, LatticeFold+, and imported recursive
-> verification retain their stated T1 finite-target gaps. Holdout validation,
-> complete owner-profile publication, and
-> independent identity/profile freeze remain pending. Property judgments, full
-> OIR/Realization, implementation, and normative cutover remain inactive or
-> open.
+> **Current gate:** The semantic candidate publishes seventeen independently
+> reconstructible profiles and is holdout-stable at the declared evidence
+> depths. The source-first portfolio required no shared identity rotation;
+> owner-local protocol profiles, the intentional two-role multiparty boundary,
+> and the Galois-ring transcript-source gap remain explicit. Post-freeze
+> research is active, beginning with checked finite-cover Analysis activation
+> and then verifier-derived Oracle/query-plan semantics. Property-family
+> expansion, full OIR/Realization, implementation, and normative cutover remain
+> inactive or open except where a later package explicitly activates them.
 > **Disposition:** Absorb accepted results into durable owners, retain only
 > necessary rationale and open work, then delete this package before cutover.
 
@@ -129,9 +122,12 @@ below are reader cross-references rather than inventory edges.
   owner split, durable absorption, bounded falsification evidence, and explicit
   profile-freeze and implementation nonclaims.
 - [Semantic Closure and Freeze Program](semantic-closure-and-freeze/README.md)
-  owns the active dependency-barrier plan: semantic closure preflight,
+  owns the completed dependency-barrier plan: semantic closure preflight,
   bottom-up owner-profile publication, recursive-composition boundary research,
-  dependent-profile publication, holdouts, and one bounded freeze review.
+  dependent-profile publication, holdouts, and bounded freeze reviews.
+- [Post-Freeze Research Program](post-freeze-research-program/README.md) owns
+  the dependency-ordered evidence and extension packages opened after the
+  holdout-stable freeze decision.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

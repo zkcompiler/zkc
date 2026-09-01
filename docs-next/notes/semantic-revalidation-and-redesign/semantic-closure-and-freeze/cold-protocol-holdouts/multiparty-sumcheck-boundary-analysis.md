@@ -104,6 +104,12 @@ polynomials and a sparse random mask preserve privacy while allowing selected
 evaluations to be opened. Distributed bookkeeping gives linear aggregate work
 and logarithmic rounds.
 
+In the honest-majority multiplication-verification protocol, the parties first
+obtain one public vector `z` from the coin functionality, then authentically
+open the masked claimed sum, and only afterward enter the round-polynomial and
+round-challenge sequence. This initial public coin is part of transcript order,
+not an application parameter that may be moved after the first message.
+
 In the honest-majority protocol, Shamir shares provide robustness under the
 selected threshold, but intermediate product shares need not all be
 authenticated. In the dishonest-majority protocol, authenticated SPDZ-style
@@ -136,6 +142,7 @@ part of each theorem's semantic basis.
 If the distributed machinery is deliberately abstracted away, the resulting
 logical proof has the familiar two-role form:
 
+- one initial public challenge selecting the multiplication-reduction point;
 - one prover Message for the masked claimed sum and one polynomial Message per
   round;
 - one public FreshChallenge per round;
@@ -144,12 +151,22 @@ logical proof has the familiar two-role form:
 
 Exact field, polynomial, multilinear-extension, masking, and Sumcheck laws can
 live in Foundation modules and Relations profiles. One Plan can describe an
-honest virtual prover. An Analysis profile can state the classical Sumcheck
-soundness experiment or a zero-knowledge theorem with exact premises.
+honest virtual prover.
 
-The public coin functionality projects to PublicEnvironment at this logical
-level. The projection is useful for reasoning about the proof skeleton, but it
-is not the source MPC protocol or evidence for its malicious security.
+This bare transcript does **not** inherit classical Sumcheck soundness. The
+virtual verifier does not hold the source polynomial and the final evaluation
+is prover-supplied. A faithful two-role argument must bind the initial shared
+polynomials, mask, masked sum, and final opening through an exact checked
+commitment/opening construction or an admitted abstraction of authenticated
+sharing. Its Analysis subject is then a committed-polynomial Sumcheck
+experiment with the exact binding, mask-generation, and opening premises—not
+the classical experiment in which the verifier directly evaluates the
+polynomial.
+
+The public coin functionality can project to PublicEnvironment at this logical
+level only under an exact coin-realization/correspondence premise. The
+projection is useful for reasoning about the proof skeleton, but it is not the
+source MPC protocol or evidence for its malicious security.
 
 ### 4.2 A distributed implementation is not automatically equivalent
 
@@ -254,6 +271,13 @@ built around that choice:
 - transcript influence and public-coin interpretation; and
 - Analysis strategy, extractor, and property profiles.
 
+This exclusion predates the holdout: the
+[durable Interaction boundary](../../../../pir/interactive-core.md#14-composition-and-finite-recurrence-boundary)
+already states that noncommunicating multiprover semantics and distributed-
+verifier knowledge require a future explicit extension. The present
+classification applies that declared product boundary to a concrete source; it
+does not rename a newly discovered shared obstruction.
+
 Faithful multiparty support would change all of these together. Adding a role
 count while leaving their laws unchanged would create a model that parses
 multiparty traces but cannot state their security.
@@ -323,6 +347,7 @@ those alternatives.
 | Give each party an independent Sumcheck challenge | source correlation and transcript correspondence are negative |
 | Open an unmasked round polynomial | privacy property is not applicable or is negative |
 | Treat unauthenticated input shares as binding | required premise remains unanswered |
+| Treat the mask as uncommitted Prover-private randomness in the virtual argument | binding/privacy applicability is absent |
 | Reuse Shamir robustness in the SPDZ-style protocol | sharing/profile mismatch |
 | Hide a failed authenticated opening and continue | terminal/abort correspondence is negative |
 | Let only one party verify and infer all-party acceptance | decision correspondence is negative |
@@ -336,8 +361,8 @@ those alternatives.
 
 | Source pressure | Result | Disposition |
 |---|---|---|
-| Classical masked Sumcheck transcript | `ProfileOrModule` | exact two-role protocol and relation profiles |
-| Public common coins at virtual level | `Native` | PublicEnvironment challenge occurrences |
+| Commitment-anchored masked Sumcheck transcript | `ProfileOrModule` | exact two-role protocol, commitment, and relation profiles |
+| Public common coins at virtual level | conditional projection | PublicEnvironment plus exact coin-realization premise |
 | Joint proof-message computation | not faithful in one Plan | future distributed construction semantics |
 | Every party verifies | not faithful in one Verifier | future participant/local-decision semantics |
 | Secret shares and per-party views | semantic loss under role collapse | future participant-indexed knowledge |
@@ -374,12 +399,16 @@ This analysis does **not** establish:
 
 Retain:
 
-1. the exact virtual Sumcheck projection as a future source-pinned profile;
+1. the exact commitment-anchored virtual Sumcheck projection as a future
+   source-pinned profile;
 2. the failed collapse encodings as regression cases;
 3. the distinction between distributed implementation correspondence and
    multiparty protocol security;
-4. the participant/coalition/functionality requirements above; and
-5. the paper as one source in a later cross-family multiparty study, alongside
+4. the research question whether an exact authenticated-sharing abstraction
+   can inhabit the frozen checked commitment seam and whether the coin
+   functionality has an exact PublicEnvironment realization premise;
+5. the participant/coalition/functionality requirements above; and
+6. the paper as one source in a later cross-family multiparty study, alongside
    threshold proving, distributed SNARK provers, and MPC-in-the-head.
 
 Reopen the shared architecture only after one of these decisions:

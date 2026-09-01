@@ -86,9 +86,12 @@ challenge, and derives a new relaxed instance by affine combination of public
 coordinates and commitments, with the new error given by evaluating the
 sent polynomial.
 
-The absence of relaxed-plus-relaxed support is structural: the sent
-polynomial has the reduced degree used by the check because one input is
-strict. It is not a missing convenience method.
+The sent polynomial has the reduced degree used by the check because one input
+is strict. Ordinary Protostar can fold two relaxed instances by adding the
+top-coefficient check, but WARPfold does not select that route. Its bounded
+limb argument and sequence extractor accumulate strict inputs into one relaxed
+state without a relaxed-state refresh. The strict-plus-relaxed restriction is
+therefore part of the WARPfold profile, not a universal degree obstruction.
 
 ### 3.3 Multi-field circuit and limb discipline
 
@@ -105,8 +108,9 @@ folds, and wrongfield values are reconstructed from limbs modulo the exact
 wrongfield modulus.
 
 The maximum degradation counter is part of the static construction. Once the
-bound is reached, another fold is unavailable. The zero relaxed base case and
-sequential accumulation topology are exact source requirements.
+bound is reached, a next step fails the exact relation/precondition; the static
+Plan continuation arm does not disappear at runtime. The zero relaxed base
+case and sequential accumulation topology are exact source requirements.
 
 ### 3.4 Weak and reinforced IVC
 
@@ -166,9 +170,12 @@ One Fresh fold Core contains:
 - one fresh bounded-integer fold challenge;
 - pure typed derivation of each field interpretation and the new public
   relaxed-instance coordinates;
-- explicit checks for the degradation bound and reinforced commitment
-  equality when those variants apply; and
 - accept, reject, and sampling/typed-failure terminals.
+
+The degradation bound and reinforced `g_check = g_limbs` equality are checks
+inside the recursive IVC circuit. They are Relations predicates grounded by
+the outer proof; they are not verifier-observable events of Protocol 1 and
+must not be duplicated as Core checks.
 
 The output relaxed instance may be exposed as exact public output values and
 an accepted-terminal continuation payload. It is not a new event kind.
@@ -189,9 +196,10 @@ The Plan computes:
 
 Recipes read only values available before their source site. An accepted
 terminal may provide the next relaxed witness and instance through one direct
-same-process continuation arm. Reaching the maximum degradation counter
-selects no further fold arm; a decider or flush operation is a distinct
-protocol/application route.
+same-process continuation arm. That arm is derived statically from the Plan.
+At the maximum degradation counter, attempting to consume the payload as the
+next step fails the exact relation/precondition. A decider or limb-flush
+operation is a distinct protocol/application route.
 
 Byte serialization of the accumulator does not recreate that causal handoff.
 A later process can only decode and freshly admit a new input.
@@ -231,19 +239,25 @@ opening equations; Analysis prices or retains the cryptographic assumption.
 
 ### 4.5 Incremental-composition Analysis owns the bounded family
 
-The existing family vocabulary can select:
+An exact incremental-composition theorem subject can set:
 
 - `Path` topology;
 - `ExactFinitePrefix(N_max)` execution depth;
 - one statically fixed protocol/Plan/relation member;
 - the degradation counter and folded instance as carried public coordinates;
 - the exact update verifier; and
-- a distinct final decider or flush route.
+- a distinct final-decider coordinate.
 
 It must not select a finite-in-degree DAG, all-natural execution depth, or
 arbitrary-party continuation merely because the generic vocabulary can
 describe them. The WARPfold family supports only its stated sequential and
 bounded member.
+
+Complete family formation also requires one total exact final-decider
+contract. The paper says computation can continue by calling a decider or
+flushing limbs but does not specify that protocol. A complete family/theorem
+subject is therefore conditional on a separately supplied decider profile; the
+source-complete fold and recurrence shape remain owner-local.
 
 Exact source-pinned property and theorem profiles are still required for:
 
@@ -308,16 +322,18 @@ that the hidden subsets are equal.
 fails. The paper's extraction argument explicitly branches on a commitment
 break.
 
-**Disposition.** Core checks the public equality; Relations records exact
+**Disposition.** Relations records the recursive-circuit equality and exact
 opening/copy correspondence; Analysis retains commitment binding and
-extraction hypotheses.
+extraction hypotheses. Protocol 1 does not gain an extra Core check.
 
 ### 5.4 Reuse the generic fold for two relaxed instances
 
 **Attempt.** Instantiate both input slots with relaxed instances.
 
-**Failure.** Protocol 1's degree and coefficient checks use strictness of one
-input. The paper expressly does not support relaxed-plus-relaxed folding.
+**Failure.** Although ordinary Protostar can add the highest-coefficient check,
+WARPfold's no-refresh limb-bound induction and sequence extractor are stated
+for a strict input accumulated into one relaxed state. The paper does not give
+the relaxed-plus-relaxed WARPfold profile or its extraction argument.
 
 **Disposition.** Formation or relation-profile admission refuses the wrong
 source-role assignment.
@@ -330,8 +346,9 @@ arbitrary depth or DAG composition.
 **Failure.** Limb bounds accumulate and the construction deliberately removes
 tree folding. The next step is unavailable at the selected maximum.
 
-**Disposition.** Exact finite-prefix Path family with explicit counter
-recurrence and final-decider/flush boundary.
+**Disposition.** Exact finite-prefix Path theorem coordinates with explicit
+counter recurrence. A complete family remains conditional on an exact total
+final-decider profile that this source does not supply.
 
 ### 5.6 Treat the paper's extractor discussion as an established theorem
 
@@ -353,15 +370,18 @@ all results remain `NotEvaluated` here.
 | Admit a noncanonical limb vector through a claimed equivalence bridge | bridge law check is negative |
 | Remove a limb range check | strict/relaxed relation satisfaction or fold premise is negative |
 | Let the degradation counter stay constant after a fold | recurrence grounding is negative |
-| Continue at or beyond the selected maximum | no continuation arm or explicit bound check rejects |
-| Fold two relaxed instances | source-role/degree-law admission refuses |
+| Continue at or beyond the selected maximum | the static arm exists, but next-step relation/precondition rejects |
+| Fold two relaxed instances | source-role and WARPfold sequence-profile admission refuse |
 | Use a tree predecessor set | family topology/member correspondence refuses |
 | Omit one wrongfield cross-term polynomial | message/reduction coverage is incomplete |
 | Swap cross-term polynomials of equal-degree fields | exact typed field/profile disagreement |
 | Let the prover compute a polynomial after seeing the fold challenge | Plan causality is negative |
 | Infer hidden-subset equality from equal commitments without binding support | Analysis premise remains unanswered |
+| Reverse the reinforced copy direction from checked subset into accumulated limbs | relation grounding is negative |
 | Copy an extensionally equal subset from another run | occurrence grounding is negative |
 | Serialize a continuation and reuse its one-use authority elsewhere | causal recurrence refuses |
+| Sample a full-field fold challenge instead of the source bounded integer | distribution/profile correspondence is negative |
+| Give the strict relation a hash-chain framing different from the admitted transcript construction | Relations/PIR correspondence is negative |
 | Use Conjecture 1 as theorem truth | theorem-source validation refuses |
 | Relabel weak IVC as reinforced IVC | protocol/family/theorem identity mismatch |
 | Claim all-natural-depth knowledge soundness from Theorem 1 | theorem applicability refuses depth/quantifier mismatch |
@@ -377,12 +397,13 @@ all results remain `NotEvaluated` here.
 | Cross-term publications and challenge | ordinary message/check/challenge schedule | Core |
 | Folded public instance | pure public derivation and accepted output | Core |
 | Folded witness and exposed subsets | exact causal recipes/exports | Plan |
-| Commitment equality versus opening equality | structural check versus conditional proposition | Core + Relations + Analysis |
-| Degradation counter and no-overflow limit | carried coordinate and exact Path finite prefix | Relations + Analysis |
+| Commitment equality versus opening equality | circuit relation versus conditional proposition | Relations + Analysis |
+| Degradation counter and no-overflow limit | circuit relation and exact Path finite-prefix theorem coordinate | Relations + Analysis |
 | Same-process next-step supply | one-use accepted continuation | Plan |
 | Serialized restart | transport plus fresh local admission | Realization |
 | Sequence extraction and reinforced IVC | source-pinned conditional theorem schemas | Analysis |
-| Broad proof-system warping | under-specified application, no shared primitive | future exact profile |
+| Final decider or limb flush | source under-specified; required before complete family formation | future exact profile |
+| Broad proof-system warping | under-specified application, no shared primitive | future exact source/profile |
 
 ## 8. Classification and nonclaims
 
@@ -416,8 +437,10 @@ Retain for later packages:
 5. a negative profile for the unsupported relaxed-plus-relaxed/tree cases;
 6. a concrete decider/flush boundary if WARPfold becomes an implementation
    target; and
-7. an exact cross-system composition study before using the paper's “warp”
-   motivation as a capability claim.
+7. exact correspondence between the strict relation's embedded challenge-hash
+   chain and the admitted transcript construction's framing; and
+8. an exact cross-system composition source and study before using the paper's
+   “warp” motivation as a capability claim.
 
 Reopen the shared candidate only if a constructive member demonstrates that:
 
