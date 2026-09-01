@@ -70,6 +70,26 @@ The arrows indicate semantic prerequisites, not a promise that one package
 must modify the next. A package that closes as `ProfileOrModule`,
 `IntentionalBoundary`, or `Undetermined` may leave downstream work unchanged.
 
+### 3.1 Cross-cutting Fiat--Shamir assurance track
+
+The source-grounded
+[Fiat--Shamir assurance package](../semantic-closure-and-freeze/fs-assurance-pre-freeze/README.md)
+independently confirms that the frozen owner split can host the complete
+assurance chain without shared profile rotation. Its residual program is
+cross-cutting rather than a competing package order:
+
+- reusable encoding, transition-binding, sampler, oracle-process, source-
+  property, and theorem-applicability questions enter Analysis;
+- dynamic transcript execution and exact static/dynamic preservation enter
+  transcript and endpoint completion;
+- SSA/token lowering, concrete providers, proof parsing, and `RealizesOir`
+  enter Realization and transport/deployment;
+- classical ROM, BCS/RBR, duplex ideal-permutation, concrete-instantiation,
+  and QROM remain separate source-pinned property families.
+
+The track's current finite controls establish only architecture-layer
+nonimplications. They do not activate a theorem, endpoint, or deployment.
+
 ## 4. Ordered research packages
 
 ### 4.1 Checked finite-cover Analysis activation

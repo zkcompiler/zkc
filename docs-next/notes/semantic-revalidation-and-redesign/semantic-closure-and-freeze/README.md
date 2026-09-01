@@ -79,6 +79,12 @@ must not move authority between these owners merely to simplify an encoding.
 - [Protocol-Holdout Portfolio Adjudication](cold-protocol-holdouts/portfolio-adjudication-and-freeze-decision.md)
   synthesizes those cases, adjudicates the bounded independent review, and
   records the no-rotation freeze decision and retained product boundaries.
+- [Fiat--Shamir Assurance Across Semantic Freeze](fs-assurance-pre-freeze/README.md)
+  independently pressures transcript structure, Statement closure, concrete
+  encoding and transition binding, sampler and oracle-process correspondence,
+  theorem applicability, OIR projection, Realization, and deployment. It
+  confirms the no-rotation decision while routing concrete security and
+  endpoint claims to explicit post-freeze gates.
 
 The preflight, six stable-upstream profile publications, recursive-composition
 boundary, dependent-profile construction, bounded independent freeze review,
@@ -98,6 +104,13 @@ found no freeze blocker; three source-fidelity defects in the records were
 reproduced and repaired without changing any profile preimage. The candidate
 is therefore holdout-stable at the declared evidence depths, with no shared
 identity rotation.
+
+The source-grounded Fiat--Shamir audit began from the final pre-adjudication
+commit and synchronized to the no-rotation checkpoint after it was committed.
+Its finite attack-first instrument and owner reconstruction found no reason to
+reopen a shared profile. This is an architecture result only: concrete
+encoding/primitive binding, theorem truth and applicability, dynamic OIR,
+Realization, parser, QROM, and deployment remain qualified post-freeze work.
 
 Later research is owned by the separate post-freeze program. This package adds
 no further records unless a new constructive counterexample reopens one of its

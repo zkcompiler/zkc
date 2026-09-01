@@ -44,6 +44,11 @@ GATES = (
         fast=True,
     ),
     Gate(
+        "Fiat--Shamir assurance pressure",
+        "evaluation/fs-assurance-pre-freeze/run.py",
+        fast=True,
+    ),
+    Gate(
         "dependent Interface, Plan, and Relations surfaces",
         "evaluation/k3-dependent-surfaces/run.py",
         fast=True,

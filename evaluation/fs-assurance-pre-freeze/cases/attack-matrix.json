@@ -1,0 +1,97 @@
+{
+  "schema": "zkc.fs-assurance-attack-matrix.v1",
+  "assurance_layers": [
+    "structural-prefix",
+    "closed-statement-correspondence",
+    "encoding",
+    "state-transition-binding",
+    "sampler",
+    "oracle-process",
+    "source-property-and-theorem",
+    "projection",
+    "realization-and-parser",
+    "deployment-composition"
+  ],
+  "cases": [
+    {
+      "id": "FS-A01-weak-statement-omission",
+      "detection_layers": ["closed-statement-correspondence", "source-property-and-theorem"],
+      "positive_control": "one exact external Statement route reaches one typed prefix frame"
+    },
+    {
+      "id": "FS-A02-missing-prior-prover-message",
+      "detection_layers": ["structural-prefix"],
+      "positive_control": "all active prior prover messages occur once in Core order"
+    },
+    {
+      "id": "FS-A03-last-challenge-early-draw",
+      "detection_layers": ["structural-prefix", "source-property-and-theorem"],
+      "positive_control": "the batching challenge follows every proof element it must bind"
+    },
+    {
+      "id": "FS-A04-ambiguous-frame-concatenation",
+      "detection_layers": ["encoding"],
+      "positive_control": "typed length-delimited frame encoding separates the selected domain"
+    },
+    {
+      "id": "FS-A05-trailing-zero-observation-alias",
+      "detection_layers": ["state-transition-binding"],
+      "positive_control": "the selected limb stream carries an exact length marker"
+    },
+    {
+      "id": "FS-A06-high-bit-truncation",
+      "detection_layers": ["state-transition-binding"],
+      "positive_control": "all selected representative bits reach the transition input"
+    },
+    {
+      "id": "FS-A07-variable-length-sponge-alias",
+      "detection_layers": ["encoding", "state-transition-binding"],
+      "positive_control": "length-separated padding is selected when length is adversarial"
+    },
+    {
+      "id": "FS-A08-biased-modular-decoder",
+      "detection_layers": ["sampler", "source-property-and-theorem"],
+      "positive_control": "a total exact-uniform power-of-two control is qualified"
+    },
+    {
+      "id": "FS-A09-unmodeled-rejection-exhaustion",
+      "detection_layers": ["sampler", "source-property-and-theorem"],
+      "positive_control": "conditional uniformity is accepted only with an explicit failure term"
+    },
+    {
+      "id": "FS-A10-session-or-protocol-confusion",
+      "detection_layers": ["encoding", "oracle-process", "deployment-composition"],
+      "positive_control": "session, construction, application, instance, and namespace are query inputs"
+    },
+    {
+      "id": "FS-A11-static-projection-drops-prefix-law",
+      "detection_layers": ["projection"],
+      "positive_control": "the exact static FS contract projects field-for-field"
+    },
+    {
+      "id": "FS-A12-lowering-uses-weak-query-index",
+      "detection_layers": ["realization-and-parser"],
+      "positive_control": "the candidate reproduces canonical query indices on bound vectors"
+    },
+    {
+      "id": "FS-A13-trailing-proof-bytes",
+      "detection_layers": ["realization-and-parser"],
+      "positive_control": "the parser reaches exact end-of-input"
+    },
+    {
+      "id": "FS-A14-bcs-without-state-restoration-premise",
+      "detection_layers": ["source-property-and-theorem"],
+      "positive_control": "the exact source property and theorem application are separately supplied"
+    },
+    {
+      "id": "FS-A15-classical-to-qrom-upgrade",
+      "detection_layers": ["source-property-and-theorem"],
+      "positive_control": "QROM model, theorem, applicability, and query-loss terms are distinct premises"
+    },
+    {
+      "id": "FS-A16-formally-verified-wrong-specification",
+      "detection_layers": ["closed-statement-correspondence", "source-property-and-theorem", "realization-and-parser"],
+      "positive_control": "refinement is joined with independently qualified specification and theorem obligations"
+    }
+  ]
+}
