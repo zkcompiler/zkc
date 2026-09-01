@@ -1,8 +1,9 @@
 # Formal Assurance Architecture Research
 
 > **Kind:** Temporary cross-cutting research-program index
-> **State:** Active; F0 architecture research started, F1 and F2 reserved as
-> dependent feasibility programs
+> **State:** Active; first F0 architecture pass complete at research
+> resolution and ready for F1 falsification; F1 and F2 remain dependent
+> feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
 > artifact identity, theorem status, Analysis judgment, implementation claim,
 > or product-roadmap priority.
@@ -78,13 +79,53 @@ provider, extraction tool, or durable schema.
   and target-model reconstruction and records the first design pressures and
   non-implications.
 - [`f0-source-ledger.md`](f0-source-ledger.md) records the first exact live
-  VCVio/ArkLib source pass, their actual layering, material open boundaries,
-  and the resulting architecture implications and source limits.
+  VCVio/ArkLib source pass, the broader primary-source formal-method
+  comparison, material open boundaries, and the resulting architecture
+  implications and source limits.
+- [`f0-owner-identity-observation-map.md`](f0-owner-identity-observation-map.md)
+  reconstructs current and target owners, source closures, identities,
+  authority, current receipt limitations, and the missing formal-reification
+  edge.
+- [`f0-formal-method-patterns.md`](f0-formal-method-patterns.md) compares
+  whole-compiler verification, translation validation, proof-carrying output,
+  hybrid certifying compilation, extraction, proof-environment validation, and
+  several cryptographic proof frameworks at their exact assurance boundaries.
+- [`f0-candidate-matrix.md`](f0-candidate-matrix.md) instantiates Candidates
+  P/A/S/C/R at equal resolution and records the provisional A/S/C convergence
+  with explicit reversal conditions.
+- [`f0-scenario-pressure-tests.md`](f0-scenario-pressure-tests.md) executes the
+  first Schnorr, sequential-reduction, shared-challenge/interleaving,
+  Fiat--Shamir, Oracle, Compiler-transition, and future-realization falsifiers
+  against the written architecture.
+- [`f0-assurance-lattice-and-trust.md`](f0-assurance-lattice-and-trust.md)
+  separates source admission, reification, provider correspondence, theorem
+  environment/truth/applicability, property, transition, transport, endpoint,
+  and realization claims and records their trust DAGs.
+- [`f0-provisional-architecture-and-entry-contracts.md`](f0-provisional-architecture-and-entry-contracts.md)
+  selects the provisional two-layer source-package architecture for
+  falsification, records the rotation cone and non-changes, and fixes exact
+  staged F1/F2 entry and worktree contracts.
 
-Later F0 records will extend the primary-source ledger and add code/spec
-correspondence, the candidate matrix, scenario and counterexample results, the
-convergence decision, and the current-to-target gap map. F1 and F2 gain their
-own package indexes only after F0 defines their exact entry gates.
+The first pass provisionally favors exact owner-derived Analysis source views
+plus a stable question-relative neutral source package and untrusted,
+proof-producing exporters behind independent checkers. Provider terms remain
+native to VCVio, ArkLib, SSProve, EasyCrypt, or another exact framework; no
+universal formal AST is selected. This is a research result, not a target
+change.
+
+The F2 property gate is now concrete: the first path uses VCVio's
+`Schnorr.sigma_complete` at revision
+`de0a3108140e3e04a7ebf0075aa110b459ee6e8a`. The pinned module built, the
+declaration probe succeeded, and its reported axiom closure excludes
+`sorryAx`; the exact quantitative conclusion is honest acceptance probability
+`1`. This closes theorem selection only. Source/provider correspondence and
+applicability remain F2 obligations.
+
+F1 may now open its own package index under this temporary research package.
+F1-R can test the reference package/checker boundary before the full target is
+implemented; F1-I waits for the relevant live owner-view implementation. F2
+starts only after one affirmative bounded F1 correspondence and retains a
+separate operational, property, and zkc-native discriminator stage.
 
 ## Known risks and non-claims
 

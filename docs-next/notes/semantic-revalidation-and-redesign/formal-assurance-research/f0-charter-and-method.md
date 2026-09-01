@@ -1,7 +1,9 @@
 # F0 Charter and Research Method
 
 > **Kind:** Temporary active work-package charter
-> **State:** F0 discovery started
+> **State:** First F0 research-resolution pass complete; provisional
+> architecture and exact F1/F2 handoff recorded, with F0 reopenable by every
+> dependent falsifier
 > **Authority:** None. Candidate vocabulary in this page is not a selected
 > schema, owner, operation, or public name.
 > **Scope:** Ideal formal-assurance architecture through the entry contracts
@@ -238,6 +240,12 @@ have fixed:
   policy; and
 - a second discriminating case that prevents a sequential honest-run model
   from passing vacuously.
+
+For this staged program, the provisional handoff pins the first property to
+VCVio's concrete `Schnorr.sigma_complete` theorem, with acceptance probability
+exactly `1`, at an exact revision/toolchain/manifest and reported axiom
+closure. F2 still must establish provider correspondence and applicability;
+the theorem pin does not pre-answer those questions.
 
 F2 success does not establish compiler preservation, general Fiat--Shamir
 security, backend realization, extraction correctness, or whole-protocol

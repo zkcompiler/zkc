@@ -1,8 +1,8 @@
 # F0 Current and Target Baseline
 
 > **Kind:** Temporary reconstruction dossier
-> **State:** Initial observed baseline; incomplete pending full code/spec and
-> primary-source passes
+> **State:** First current/target code-spec reconstruction complete; retained as
+> the baseline beneath the owner map, candidate matrix, and scenario dossier
 > **Authority:** None. `current` observations defer to `docs/`; `target`
 > observations defer to the cited `docs-next/` owners.
 
@@ -162,23 +162,34 @@ may already be the right authority architecture. If so, F0 should still define
 the missing subject package, correspondence relations, and trust closure rather
 than adding a `FormalKernel` or theorem-root authority.
 
-## 5. Immediate reconstruction queue
+## 5. Reconstruction outcome and remaining queue
 
-The next F0 pass will:
+The first F0 pass has now:
 
-1. enumerate every exact field a formal interpreter needs from PIR, Protocol,
-   Interface, Plan, Relations, and Analysis;
-2. trace each field to its canonical identity, owner view, implementation, and
-   refusal tests;
-3. inspect the formalization receipt driver and selected rule bindings as the
-   current external-proof seam;
-4. inspect current carrier encoding and the documented formal-extraction
-   trigger;
-5. inspect VCVio, ArkLib, Lean kernel, translation-validation, proof-carrying,
-   and extraction primary sources at exact snapshots where possible;
-6. instantiate Candidates P/A/S/C/R at equal resolution; and
-7. run the minimal Schnorr and reduction-heavy cases through each candidate on
-   paper before selecting any prototype.
+1. enumerated the source closures a formal interpreter needs from PIR,
+   Protocol, Interface, Plan, Relations, Analysis, Compiler, and later
+   OIR/Realization;
+2. traced them to canonical identities, owner views, manifests, authority, and
+   refusal boundaries;
+3. inspected the formalization receipt implementation/driver and confirmed
+   that `covers` remains authored correspondence rather than a checked edge;
+4. confirmed that F0's independently released formal-consumer scenario is one
+   of the target's documented stable-neutral-package design triggers;
+5. compared VCVio, ArkLib, Lean validation, CompCert, translation validation,
+   Alive2, PCC, Cogent, hax, SSProve, and EasyCrypt at their actual assurance
+   boundaries;
+6. instantiated Candidates P/A/S/C/R at equal resolution; and
+7. executed the first minimal, interleaved/shared-challenge, Fiat--Shamir,
+   Oracle, Compiler, and endpoint cases on paper.
+
+The companion F0 dossiers now close that first-pass queue: they define the
+assurance lattice/trust DAG, provisional two-layer package class, F1 mutations
+and independent-checker boundary, rotation cone, and staged F1/F2 contracts.
+The first F2 property proposition also selected one exact VCVio declaration;
+its module build and axiom probe are recorded in
+[`f0-source-ledger.md`](f0-source-ledger.md).
+ArkLib-wide and discriminator-specific theorem audits remain dependent F2
+work, not an open condition on this baseline reconstruction.
 
 ## 6. Current non-claims
 
