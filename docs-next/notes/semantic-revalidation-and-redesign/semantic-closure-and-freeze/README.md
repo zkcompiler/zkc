@@ -91,8 +91,11 @@ The complete case is `ProfileOrModule` because its exact round-by-round
 property and theorem application remain an Analysis-local profile. The Circle
 STARKs boundary analysis is also complete: circle domains, function spaces,
 folds, and AIR laws stay in exact owner-local modules and Relations profiles,
-while the shared interaction grammar remains unchanged. Three boundary
-holdouts remain open.
+while the shared interaction grammar remains unchanged. WARPfold is also
+complete: its multi-field limb discipline is an exact relation rather than a
+universal bijective bridge, and its bounded sequential topology fits the
+existing finite-prefix incremental-composition family. Two boundary holdouts
+remain open.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet

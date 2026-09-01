@@ -1,7 +1,7 @@
 # Source-First Protocol Holdouts
 
 > **Kind:** Temporary research-package index and execution record
-> **State:** Active; WHIR and Circle STARKs complete, remaining boundary
+> **State:** Active; WHIR, Circle STARKs, and WARPfold complete, remaining boundary
 > holdouts queued
 > **Authority:** None. This package records pressure against the frozen target;
 > durable semantics remain owned by their domain specifications.
@@ -73,7 +73,7 @@ of perfect reviewer blinding.
 |---|---|---|---|
 | WHIR, Construction 5.1 | Constructive encoding | constrained Reed--Solomon claims, proof-sent logical Oracles, grouped access, evolving constraints, and round-by-round theorem premises | Complete: `ProfileOrModule` |
 | Circle STARKs | Boundary analysis | circle domains and function spaces rather than ordinary multiplicative-subgroup polynomial assumptions | Complete: `ProfileOrModule` |
-| WARPfold | Boundary analysis | range-checked movement across non-native fields and proof-system boundaries | Queued |
+| WARPfold | Boundary analysis | range-checked movement across non-native fields and proof-system boundaries | Complete: `ProfileOrModule` |
 | Multiparty Sumcheck | Boundary analysis | several parties jointly realizing prover and verifier work | Queued |
 | Transparent SNARKs over Galois rings | Boundary analysis | ring rather than field algebra and the exact finite target boundary | Queued |
 
@@ -126,6 +126,28 @@ and zero-knowledge profiles are absent, and the paper's explicitly non-ZK
 optimized variant must not share a property identity with its randomized
 counterpart. Practical large domains remain an intentional finite-v0 boundary.
 No shared profile rotates.
+
+## WARPfold result
+
+[WARPfold Boundary Analysis](warpfold-boundary-analysis.md) locks the source,
+reconstructs strict-plus-relaxed folding, multi-field limb discipline, and the
+weak and reinforced IVC variants, and preserves the paper's finite sequential
+limit and extractor caveats.
+
+The central adjudication is that accumulated wrongfield limbs are not a
+universal bijective value bridge. They are an exact Relations predicate with
+range and modular-reconstruction laws; a narrow strict profile may separately
+admit a canonical embedding. Likewise, equality of reinforced public
+commitments is a Core check, while equality of hidden openings remains
+conditional on commitment and extraction hypotheses in Analysis. One bounded
+integer challenge is deterministically interpreted in every field rather than
+sampled independently.
+
+The result is `ProfileOrModule`. Existing incremental-composition vocabulary
+expresses an exact finite-prefix `Path` family with a degradation counter and
+distinct decider/flush boundary. Weak and reinforced IVC, sequence extraction,
+and any concrete cross-proof-system composition require separate source-pinned
+Analysis profiles. No shared profile rotates.
 
 ## Package-wide guardrails
 
