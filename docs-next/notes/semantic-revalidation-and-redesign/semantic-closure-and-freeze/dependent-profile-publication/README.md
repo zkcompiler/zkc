@@ -1,7 +1,7 @@
 # Dependent Semantic-Profile Publication
 
 > **Kind:** Temporary research-package contract and execution record
-> **State:** Freeze candidate assembled; independent review pending
+> **State:** Complete
 > **Authority:** None. Durable semantics and published profile sources belong
 > to their named domain owners.
 > **Deletion rule:** Absorb retained conclusions into durable owner pages and
@@ -226,6 +226,21 @@ profile-dependent statement digest rotated because its Analysis profile input
 rotated. The unprofiled theorem carrier, pinned paper, and theorem payload did
 not change.
 
-This record does not close the package. One bounded independent review still
-has to falsify the committed candidate, and reproducible blockers must be
-adjudicated before cold holdout validation begins.
+## Independent review adjudication (2026-09-01)
+
+One bounded cloud multi-agent review examined checkpoint `fb87f92`. It reported
+one finding: the independent compiler accepted whitespace and control bytes in
+repository paths while the reference compiler refused them. The divergence was
+reproduced directly with a space-bearing path.
+
+The selected contract is printable non-space ASCII followed by canonical
+POSIX-relative path validation. The independent compiler now enforces that
+contract before splitting or accessing a path, and the shared mutation matrix
+includes space, tab, control, and DEL cases. The affected publication gate
+remains green at 33/33 with 17/17 profiles reconstructed by both compilers;
+Python lint and whitespace checks are clean.
+
+The review produced no other finding. With the only reproducible issue repaired
+and no unresolved blocker, this package is complete. The candidate remains a
+non-authoritative target until the broader documentation cutover, and the
+cryptographic, implementation, and production nonclaims above remain in force.

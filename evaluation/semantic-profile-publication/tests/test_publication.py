@@ -224,6 +224,10 @@ class SemanticProfilePublicationTest(unittest.TestCase):
             "docs-next/pir/../pir/interfaces-and-plans.md",
             "docs-next//pir/interfaces-and-plans.md",
             "docs-next\\pir\\interfaces-and-plans.md",
+            "docs-next/pir/interfaces and-plans.md",
+            "docs-next/pir/interfaces\tand-plans.md",
+            "\x1fdocs-next/pir/interfaces-and-plans.md",
+            "docs-next/pir/interfaces-and-plans.md\x7f",
         ):
             with self.subTest(alias=alias):
                 changed = copy.deepcopy(self.manifests["interface-plan"])

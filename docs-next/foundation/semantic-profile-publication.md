@@ -47,11 +47,11 @@ SemanticProfileManifestIndexV0 = {
 
 Keys and source paths are unique. Sequence order is a stable presentation
 order only; compilers derive the topological order from exact direct imports.
-`RepositoryRelativePath` is a canonical nonempty POSIX-style relative path:
-absolute paths, backslashes, empty components, `.` or `..` components, and
-alternate spellings of one physical path are refused before file access. This
-prevents path aliases from bypassing source uniqueness or fragment-overlap
-checks.
+`RepositoryRelativePath` is a canonical nonempty POSIX-style relative path over
+printable non-space ASCII. Absolute paths, backslashes, control or whitespace
+bytes, empty components, `.` or `..` components, and alternate spellings of
+one physical path are refused before file access. This prevents lexical or
+path aliases from bypassing source uniqueness or fragment-overlap checks.
 The index, paths, and profile keys do not enter a profile body. Adding or
 removing an index row changes the repository publication set, not an existing
 profile identity. A compiler accepts neither unindexed manifests nor a

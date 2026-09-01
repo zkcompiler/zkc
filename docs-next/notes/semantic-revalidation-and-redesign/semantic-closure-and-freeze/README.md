@@ -74,12 +74,13 @@ must not move authority between these owners merely to simplify an encoding.
   bottom-up, and assembles the independently reconstructible freeze candidate.
 
 The preflight, six stable-upstream profile publications, recursive-composition
-boundary, and dependent-profile construction are complete. The latter
-publishes all seventeen indexed profiles while preserving the six upstream PIR
-identities byte-for-byte. The full local gate matrix and uncapped aggregate are
-green. The only open freeze barrier is one bounded independent review of the
-committed candidate and adjudication of any reproducible blocker; cold protocol
-holdouts follow that review.
+boundary, dependent-profile construction, and bounded independent freeze review
+are complete. The publication candidate contains all seventeen indexed
+profiles while preserving the six upstream PIR identities byte-for-byte. The
+full local gate matrix and uncapped aggregate are green. The review's sole
+finding was a repository-path lexical divergence between the two compilers; it
+was reproduced, repaired, and covered by negative mutations. Cold protocol
+holdouts are now the open evidence barrier.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet

@@ -406,9 +406,11 @@ def _repo_path(value: object, label: str) -> str:
     if type(value) is not str or not value:
         raise ColdError(f"{label} is absent")
     try:
-        value.encode("ascii")
+        raw = value.encode("ascii")
     except UnicodeEncodeError as error:
         raise ColdError(f"{label} is not ASCII") from error
+    if any(byte < 0x21 or byte > 0x7E for byte in raw):
+        raise ColdError(f"{label} is outside printable non-space ASCII")
     parts = value.split("/")
     if (
         value.startswith("/")
