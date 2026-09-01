@@ -40,25 +40,31 @@ owned by PIR. Extension occurs through semantic-module declarations and
 separately checked relations, not through untyped labels or ambient
 registries.
 
+<!-- zkc-profile-source:relations-core-semantics:start -->
+
 ## 2. Reused foundations and common rules
 
 ### 2.1 K1 identity, language profile, and values
 
-Relations selects one standalone K1 language profile. It is an ordinary
+Relations selects one standalone semantic-language profile. It is an ordinary
 same-regime semantic subject, not an ambient registry entry or a declaration
-inside a relation module. The following display fixes the profile owner and
-symbolic target fields; the catalog and law-source phrases are obligations,
-not a published complete six-field preimage:
+inside a relation module. Its strict manifest and exact marked owner source now
+publish the complete six-field preimage:
 
 ~~~text
 RelationsProfile = {
-  profile_family: "zkc.relations.correspondence",
+  profile_family: "relations.correspondence",
   revision: 0,
-  profile_imports: {PIRInterfacePlanProfileId},
+  profile_imports: {
+    PIRInteractionProfileId,
+    PIRInterfacePlanProfileId
+  },
   supported_subject_kinds: RelationsSemanticSubjectKindCatalogV0,
-  declaration_catalogs: [],
-  semantic_law_source: the exact Relations v0 law source, including
-    RelationsDeclarationContractKindCatalogV0 and its Section 2.4 body dispatch
+  declaration_catalogs:
+    exact populated owner-local source-fragment, body-compiler, semantic-law,
+    evaluator-signature, failure-schema, and subject-language catalogs,
+  semantic_law_source:
+    exact Foundation SemanticProfileLawSourceV1 direct-use and subject index
 }
 
 RelationsProfileId =
@@ -113,17 +119,19 @@ authority carrier. A kind absent from this sequence is unsupported as a
 Relations semantic subject; it cannot be admitted through a declaration
 catalog or an open-default body compiler.
 
-Relations selects no profile-local declarations: all 14 extensible contracts
-are module-owned `ModuleDeclarationRef` grammar and therefore belong to the
-Relations semantic law, not to Foundation's `ProfileDeclarationCatalog`
-field. This page must still publish the complete owner-local
-`SemanticLanguageProfileBody`, including the exact semantic-law-source bytes,
-together with its independently reconstructible full typed
-`RelationsProfileId`. The bounded executable fixture's deterministic
-profile object tests the selected topology, authentication, and rotation laws;
-it is evidence and does not own Relations meaning. Publication is required
-before any dependent profile ID is treated as persistent and before semantic
-freeze.
+Relations selects no profile-local declaration that substitutes for any of
+the 14 extensible contracts. Those contracts are module-owned
+`ModuleDeclarationRef` grammar and therefore belong to the Relations semantic
+law, not to the profile-local declaration catalogs. The publication mechanism
+does populate the owner-local body-compiler, semantic-law,
+evaluator-signature, failure-schema, source-fragment, and subject-language
+catalogs; those declarations describe this finite Relations language rather
+than module extensibility. The exact marked fragments on this page and the two
+correspondence pages are committed once through source-fragment and semantic-
+law declarations. The complete profile body and typed `RelationsProfileId`
+are independently reconstructed by the publication gate. Earlier bounded
+executable fixtures remain topology and behavior evidence; they do not own
+Relations meaning or establish semantic freeze.
 
 The imported profile edge is exact and no-extra. It authenticates the
 Interface/Plan vocabulary that Relations coordinates may cite; it does not
@@ -217,6 +225,30 @@ DeterministicLimitExceeded(exact exhausted K1 or owner-driver limit)
 CheckerFailure(exact operational failure; no semantic conclusion)
 ~~~
 
+The common admission entry point and its closed outcome carrier are:
+
+~~~text
+AdmitRelationsSubjectV0(
+  exact profiled candidate,
+  exact imported profile preimages,
+  exact module and declaration preimages,
+  exact evaluator support,
+  deterministic limits)
+  -> RelationsSubjectAdmissionOutcomeV0
+
+RelationsSubjectAdmissionOutcomeV0 =
+    Affirmative(AdmittedRelationsSubject)
+  | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+  | Refused | Malformed | DeterministicLimitExceeded | CheckerFailure
+~~~
+
+The candidate kind must be one exact member of
+`RelationsSemanticSubjectKindCatalogV0`. The evaluator dispatches to that
+kind's complete `RelationsBodyV0` schema, authenticates every exact-used
+import and module declaration, and accepts no ambient registry entry. This
+entry point establishes subject admission only; it does not answer a
+correspondence, satisfaction, refinement, grounding, or security question.
+
 Only a completed affirmative or negative may create the operation's exact
 fresh process-local checked capability. Stored IDs and result records are
 inert. They locate preimages but grant no authority. Export through a Foundation
@@ -288,8 +320,9 @@ formed only under `RelationsProfileId` and cannot be supplied as a module
 declaration. Moving a name between these catalogs changes Relations language
 meaning and therefore requires a profile/law revision; a consumer cannot
 reinterpret one namespace as the other. This 14-kind sequence and the dispatch
-below are committed through `semantic_law_source`; they are not entries in the
-profile's empty `declaration_catalogs` field.
+below are committed through the exact Relations semantic-law source fragment;
+they are not entries in the profile-local subject-language catalog or module
+declarations masquerading as semantic subjects.
 
 ~~~text
 DefinitionLanguageContractV0 = {
@@ -3262,6 +3295,10 @@ conflated. Reopening it requires an executable supported case with verifier-
 observable committed material that none of the typed coordinates can name. A
 convenience wrapper, carrier label, or backend object is not such evidence.
 
+<!-- zkc-profile-source:relations-core-semantics:end -->
+
+<!-- zkc-profile-source:relations-body-compiler:start -->
+
 ## 13. Exact Relations body compiler
 
 The identities above do not depend on a printer, host record layout, or an
@@ -3456,6 +3493,8 @@ reference, and type, then applies the compiler. Strict decode must consume the
 whole body and re-encoding must reproduce identical bytes before identity is
 authenticated.
 
+<!-- zkc-profile-source:relations-body-compiler:end -->
+
 ## 14. Rejected alternatives and remaining gates
 
 The selected model rejects:
@@ -3480,23 +3519,21 @@ The selected model rejects:
 - hardcoding one universal artifact-fact list; and
 - storing full relation artifacts or private assignments in Protocol identity.
 
-At its stated boundary, the Relations algebra and its bounded pressure result
-are selected, but the domain is not yet eligible for a persistent-profile or
-semantic-freeze claim. Its finite pressure cases and static/invariant
+At its stated boundary, the Relations algebra and persistent profile preimage
+are selected, but the domain is not yet eligible for a semantic-freeze claim.
+Its finite pressure cases and static/invariant
 instruments exercised the selected seam shapes, identities, types, authority
 boundaries, and refusal classes. They did not execute every full native
 protocol contract, the new lossy source-authority constructors, or every live
 capability path, and they are not evidence of those stronger claims.
 
-The remaining work is exact profile publication, implementation/evidence, and
-dependent-owner freeze work:
+The remaining work is implementation/evidence and dependent-owner freeze work:
 
 1. The exact semantic-subject and declaration-kind catalogs, source-authority
-   body schemas, and lossy-source portability choices are selected, but the
-   complete six-field `SemanticLanguageProfileBody`, exact semantic-law-source
-   bytes, and independently reconstructible full typed
-   `RelationsProfileId` remain a publication obligation. No persistent-ID or
-   semantic-freeze claim is made before that publication.
+   body schemas, lossy-source portability choices, complete profile body, and
+   typed `RelationsProfileId` are published and independently reconstructible.
+   This closes language identity only; it does not establish any relation fact
+   or integrated semantic freeze.
 2. The source-authority selection has not yet acquired executable constructor,
    cold-replay, stale-generation, cross-field, cross-consumer, or
    cross-purpose evidence across all three lossy source arms. Such evidence

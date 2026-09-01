@@ -1,0 +1,316 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "analysis-incremental-composition",
+  "catalog_namespace": "analysis",
+  "profile_family": "analysis.incremental-composition",
+  "revision": 0,
+  "expected_imports": [
+    "analysis-kernel",
+    "interaction",
+    "interface-plan",
+    "relations"
+  ],
+  "supported_subject_kinds": [
+    "analysis.adequacy-evaluator",
+    "analysis.consumer",
+    "analysis.goal",
+    "analysis.hypothesis-context",
+    "analysis.incremental-composition-family",
+    "analysis.proposition",
+    "analysis.quantitative-formula",
+    "analysis.question",
+    "analysis.semantic-basis",
+    "analysis.semantic-read-manifest",
+    "analysis.source-profile",
+    "analysis.theorem-schema",
+    "analysis.use-purpose"
+  ],
+  "fragments": [
+    {
+      "name": "incremental-core-semantics",
+      "owner_page": "docs-next/analysis/incremental-composition.md",
+      "start": "zkc-profile-source:analysis-incremental-core-semantics:start",
+      "end": "zkc-profile-source:analysis-incremental-core-semantics:end"
+    },
+    {
+      "name": "incremental-continuation-semantics",
+      "owner_page": "docs-next/analysis/incremental-composition.md",
+      "start": "zkc-profile-source:analysis-incremental-continuation-semantics:start",
+      "end": "zkc-profile-source:analysis-incremental-continuation-semantics:end"
+    },
+    {
+      "name": "incremental-publication",
+      "owner_page": "docs-next/analysis/profile-publication.md",
+      "start": "zkc-profile-source:analysis-incremental-publication:start",
+      "end": "zkc-profile-source:analysis-incremental-publication:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "analysis.body-compiler",
+      "name": "incremental-composition-body-v0",
+      "revision": 0,
+      "fragment": "incremental-publication",
+      "selector": "AnalysisIncrementalCompositionBodyCompilerV0(kind,body) =",
+      "dependencies": [
+        {
+          "profile": "analysis-kernel",
+          "kind": "analysis.body-compiler",
+          "name": "kernel-body-v0"
+        },
+        {
+          "profile": "interaction",
+          "kind": "pir.body-compiler",
+          "name": "interactive-core-body-v0"
+        },
+        {
+          "profile": "interface-plan",
+          "kind": "pir.body-compiler",
+          "name": "interface-plan-body-v0"
+        },
+        {
+          "profile": "relations",
+          "kind": "relations.body-compiler",
+          "name": "relations-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "incremental-composition-v0",
+      "revision": 0,
+      "fragment": "incremental-core-semantics",
+      "selector": "IncrementalCompositionFamilyBody = {",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "incremental-continuation-v0",
+      "revision": 0,
+      "fragment": "incremental-continuation-semantics",
+      "selector": "## 5. Carried obligations and report qualification",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "incremental-profile-boundary-v0",
+      "revision": 0,
+      "fragment": "incremental-publication",
+      "selector": "AnalysisIncrementalCompositionProfileSourceV0 = {",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.evaluator-signature",
+      "name": "incremental-composition-admission-v0",
+      "revision": 0,
+      "fragment": "incremental-publication",
+      "selector": "AdmitAnalysisIncrementalCompositionSubjectV0(",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.failure-schema",
+      "name": "incremental-composition-admission-outcome-v0",
+      "revision": 0,
+      "fragment": "incremental-publication",
+      "selector": "AnalysisIncrementalCompositionAdmissionOutcomeV0 =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "analysis.adequacy-evaluator",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.consumer",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.goal",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.hypothesis-context",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.incremental-composition-family",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.proposition",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.quantitative-formula",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.question",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.semantic-basis",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.semantic-read-manifest",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.source-profile",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.theorem-schema",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    },
+    {
+      "kind": "analysis.use-purpose",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "analysis.body-compiler",
+        "name": "incremental-composition-body-v0"
+      },
+      "laws": [
+        "incremental-composition-v0",
+        "incremental-continuation-v0",
+        "incremental-profile-boundary-v0"
+      ],
+      "evaluator": "incremental-composition-admission-v0",
+      "failure_schema": "incremental-composition-admission-outcome-v0"
+    }
+  ]
+}

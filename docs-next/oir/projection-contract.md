@@ -109,6 +109,8 @@ rescheduler, split/fusion lowering, or ABI transformer must select a distinct
 relation profile with exact rewrite laws and new falsification evidence. It
 cannot weaken this profile in place.
 
+<!-- zkc-profile-source:oir-endpoint-graph-semantics:start -->
+
 ## 3. Minimum semantic OIR
 
 The complete bounded target identity is:
@@ -120,11 +122,12 @@ OirEndpoint = {
 }
 ```
 
-The exact graph schema is defined physically in Appendix A below. Its
-component subbodies consume the exact source-independent value grammars fixed
-by [PIR Endpoint Projection Views](../pir/endpoint-projection-views.md#appendix-a-exact-selected-source-view-body)
-under the same exact K1 basis and exact-used language-profile closure. It
-contains:
+The exact graph schema and every target-local component body are defined
+physically in Appendix A below. The grammar uses Foundation carriers for
+typed content and declaration references, canonical values, value types, and
+failure types, but it imports no PIR semantic-language profile. A foreign
+reference is an opaque authenticated dependency until an operation governed
+by another profile interprets it. The graph contains:
 
 - role, exact-used dependencies, and exact value types;
 - canonical constants and pure-node value graph;
@@ -136,7 +139,8 @@ contains:
 - optional seven-table reachable Plan graph with site-qualified recipe nodes
   and derived exports.
 
-For a Prover graph, the imported PIR-owned Plan component is exactly:
+For a Prover graph, the OIR-owned projection of reachable Plan meaning is
+exactly:
 
 ```text
 ReachablePlanGraph = {
@@ -156,7 +160,9 @@ accepted-terminal arm and the complete export-rooted closure needed to derive
 it. Recipe-node and export sites distinguish a decision spine ref from an
 accepted-terminal ref; ordinal coincidence between those namespaces cannot
 capture a node or value. The exact `PlanGraphBody` and all of its component
-bodies are physically owned by PIR and imported here without reinterpretation.
+bodies are physically owned by OIR. PIR owns the source Plan and the checked
+translation into this target grammar; another source language may form the
+same target body without acquiring or imitating PIR authority.
 
 Private continuation outputs have their own OIR access namespace:
 
@@ -385,6 +391,10 @@ deterministic exhaustion, or evaluator failure retains its qualified result.
 Only Affirmative mints `AdmittedOir`, establishing `LocalOirValid(O)` and
 nothing source-relative.
 
+<!-- zkc-profile-source:oir-endpoint-graph-semantics:end -->
+
+<!-- zkc-profile-source:oir-projection-semantics:start -->
+
 ## 6. Semantic proposition and validation request
 
 The proposition states only semantic meaning:
@@ -516,6 +526,9 @@ conjunct.
 The semantic Negative payload is closed and nonempty:
 
 ```text
+ValidateProjection(request: ProjectionValidationRequest)
+  -> ProjectionValidationOutcomeBody
+
 EndpointGraphFieldBody =
     V(0,U) | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U)
   | V(6,U) | V(7,U) | V(8,U) | V(9,U) | V(10,U)
@@ -713,44 +726,281 @@ The bounded executable instrument is a falsifier for this contract, not a
 formal proof, complete OIR implementation, compiler-correctness theorem,
 family-wide projectability result, or security claim.
 
+<!-- zkc-profile-source:oir-projection-semantics:end -->
+
 ## Appendix A. Exact OIR and projection bodies
 
-All bodies use the exact K1 notation and the same
-`PriorMetaAuthenticationBasis`, selected `SemanticRegimeId`, and exact-used
-language-profile closure as the source graph.
-`CR(x)=Y(ContentRefV0(x))` and
-`VT(T)=CanonicalValueTypeBody(T)`. `OptionBody` is imported exactly from the
-PIR source-view appendix, where
-`OptionBody(None,F)=V(0,U)` and `OptionBody(Some(x),F)=V(1,F(x))`; OIR does not
-define a same-shaped local option encoding. `EndpointPurposeBody`, `EndpointRoleBody`,
-`EndpointDependencyBody`, `SourceConstantBody`, `SourcePureNodeBody`,
-`RoleEndpointAbiGraphBody`, `SourceSpineEventBody`,
-`StaticFsEndpointSemanticsBody`, `SourceClaimAtomBody`,
-`SourceAnchoredObligationBody`, `PlanGraphBody`,
-`PlanRecipeNodeSiteBody`, `EndpointValueRefBody`, `PrivateMaterialKindBody`,
-`PlanInitializerBody`, and `PlanUpdateBody` are imported exactly from the PIR
-source-view specification linked in Section 3. In particular the imported
-`PlanGraphBody` is the seven-table site-qualified body; OIR does not define a
-shadow Plan carrier. OIR owns the aggregate graph schema, endpoint-contract
-law and bodies, OIR profile, and projection relation below. PIR cannot
-reinterpret their tags, fields, local-reference rules, or bounds.
+All bodies use the exact Foundation content-reference notation and the selected
+`PriorMetaAuthenticationBasis` and `SemanticRegimeId`.
+`CR(x)=Y(ContentRefV0(x))`, `DR(x)=DeclarationRefBody(x)`,
+`VT(T)=CanonicalValueTypeBody(T)`,
+`FT(f)=CanonicalSemanticFailureTypeBody(f)`, and
+`DV(T,v)=v.datum` after exact Foundation admission. OIR owns every endpoint
+body in this appendix. `CR` and `DR` preserve typed foreign coordinates as
+opaque authenticated dependencies; their presence does not import a foreign
+semantic-language profile or authorize OIR to interpret the referenced
+declaration. Sets sort by complete encoded body bytes and reject duplicates.
+Sequences preserve the stated order, and sequence position is the local
+reference unless stated otherwise.
+
+<!-- zkc-profile-source:oir-endpoint-graph-bodies:start -->
 
 ```text
+EndpointChallengeModeBody = V(0,U) | V(1,U)
+// Fresh | FiatShamir
+EndpointPurposeBody =
+    V(0,EndpointChallengeModeBody) | V(1,EndpointChallengeModeBody)
+  | V(2,EndpointChallengeModeBody) | V(3,EndpointChallengeModeBody)
+// VerifierEndpoint | GenericProverEndpoint | PlanSpecializedProverEndpoint
+// PlanContinuationProverEndpoint
+EndpointRoleBody = V(0,U) | V(1,U)
+// Verifier | Prover
+EndpointOptionBody(None,F) = V(0,U)
+EndpointOptionBody(Some(x),F) = V(1,F(x))
+
+EndpointPublicBindingClassBody = V(0,U) | V(1,U) | V(2,U)
+EndpointCoinCorrelationBody =
+    V(0,U)
+  | V(1,R{0:DR(group),1:N(index),2:S[N(prior_challenge_ref)...]})
+EndpointReductionUsePolicyBody = V(0,U) | V(1,DR(sharing_contract))
+EndpointClaimUsageBody = V(0,U) | V(1,U)
+EndpointTerminalVerdictBody = V(0,U) | V(1,U) | V(2,U)
+EndpointClaimDispositionBody = V(0,U) | V(1,U)
+EndpointTransportActorBody = V(0,U) | V(1,U) | V(2,U)
+EndpointTransportDestinationBody = V(0,U) | V(1,U) | V(2,U)
+EndpointPrivateMaterialKindBody = V(0,U) | V(1,U) | V(2,U)
+
+EndpointDependencyBody =
+    V(0,CR(core_id)) | V(1,CR(construction_id))
+  | V(2,CR(algorithm_id)) | V(3,CR(evaluation_contract_id))
+  | V(4,CR(semantic_module_id))
+
+EndpointValueRefBody =
+    V(0,N(invocation_target_ref))
+  | V(1,N(constant_ref))
+  | V(2,N(pure_node_ref))
+  | V(3,R{0:N(spine_event_ref),1:N(output_ordinal)})
+
+EndpointConstantBody(x) = R{
+  0:N(type_ref),1:DV(type_table[type_ref],x.value)
+}
+EndpointPureNodeBody(x) = R{
+  0:N(algorithm_dependency),1:N(evaluation_dependency),
+  2:S[EndpointValueRefBody(input)...],3:N(result_type_ref)
+}
+
+EndpointStructuralCodecBody =
+    V(0,N(value_type_ref))
+  | V(1,R{0:N(external_type_ref),1:N(semantic_type_ref),
+          2:S[R{0:N(field_ordinal),1:N(local_codec_ref)}...]})
+  | V(2,R{0:N(external_type_ref),1:N(semantic_type_ref),
+          2:S[R{0:N(case_ordinal),1:N(local_codec_ref)}...]})
+  | V(3,R{0:N(external_type_ref),1:N(semantic_type_ref),
+          2:N(element_codec_ref)})
+EndpointCodecNodeBody(x) = R{
+  0:CR(x.interface_codec_id),
+  1:V(0,EndpointStructuralCodecBody(x)) | V(1,DR(x.general_codec_law))
+}
+EndpointSlotBody(x) = R{0:Q(x.external_key),1:N(x.codec_ref)}
+EndpointInvocationClassBody = V(0,U) | V(1,U)
+// PublicInput | VerifierPrivateInput
+EndpointInvocationTargetBody(x) = R{
+  0:EndpointInvocationClassBody(x.class),1:N(x.type_ref)
+}
+EndpointInvocationFibreBody(x) = R{
+  0:N(x.slot_ref),1:S[N(invocation_target_ref)...]
+}
+EndpointStatementFlowBody = V(0,N(invocation_target_ref)) | V(1,U)
+// SuppliesInvocation | ExposesOpenedBinding
+EndpointStatementAliasBody(x) = R{
+  0:Q(x.external_statement),1:N(x.slot_ref),2:N(x.binding_spine_ref),
+  3:EndpointStatementFlowBody(x.flow)
+}
+EndpointTransportEdgeBody(x) = R{
+  0:N(x.target_spine_ref),1:EndpointTransportActorBody(x.source),
+  2:EndpointTransportDestinationBody(x.destination),3:N(x.slot_ref)
+}
+EndpointCompletionTargetBody = V(0,N(terminal_spine_ref)) | V(1,U)
+EndpointCompletionCoordinateBody =
+    V(0,R{0:N(terminal_spine_ref),1:N(output_ordinal)})
+  | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U) | V(6,U)
+EndpointCompletionVariantBody(x) = R{
+  0:EndpointCompletionTargetBody(x.target),1:Q(x.external_tag),
+  2:S[R{0:EndpointCompletionCoordinateBody(coordinate),
+        1:N(slot_ref)}... in coordinate-body order]
+}
+RoleEndpointAbiGraphBody(x) = R{
+  0:S[EndpointCodecNodeBody...],1:S[EndpointSlotBody...],
+  2:S[EndpointInvocationTargetBody...],3:S[EndpointInvocationFibreBody...],
+  4:S[EndpointStatementAliasBody...],5:S[EndpointTransportEdgeBody...],
+  6:S[EndpointCompletionVariantBody...]
+}
+
+EndpointActivityBody = V(0,U)
+  | V(1,R{0:N(algorithm_dependency),1:N(evaluation_dependency),
+          2:S[EndpointValueRefBody(input)...]})
+// Always | Guarded
+EndpointScopeOpeningBody = V(0,U) | V(1,N(original_occurrence_ordinal))
+EndpointMessageActionBody(x) = R{0:DR(channel),1:N(result_type_ref)}
+EndpointVerifierMessageActionBody(x) = R{
+  0:DR(channel),1:N(algorithm_dependency),2:N(evaluation_dependency),
+  3:S[EndpointValueRefBody(input)...],4:N(result_type_ref)
+}
+EndpointChallengeActionBody(x) = R{0:N(challenge_law_ref)}
+EndpointCheckActionBody(x) = R{
+  0:N(algorithm_dependency),1:N(evaluation_dependency),
+  2:S[EndpointValueRefBody(input)...],3:N(boolean_result_type_ref)
+}
+EndpointActionBody =
+    V(0,EndpointMessageActionBody)
+  | V(1,EndpointVerifierMessageActionBody)
+  | V(2,EndpointChallengeActionBody)
+  | V(3,EndpointCheckActionBody)
+  | V(4,U) | V(5,U)
+EndpointSpineEventBody =
+    V(0,U)
+  | V(1,R{0:S[N(original_scope_ordinal)...],
+          1:EndpointOptionBody(parent_scope_event_ref,N),
+          2:EndpointScopeOpeningBody(opening)})
+  | V(2,R{0:N(original_binding_ordinal),1:N(scope_event_ref),
+          2:EndpointPublicBindingClassBody(class),
+          3:EndpointValueRefBody(value)})
+  | V(3,R{0:N(original_occurrence_ordinal),1:N(scope_event_ref),
+          2:EndpointActivityBody(activity),3:EndpointActionBody(action)})
+
+EndpointChallengeLawBody(x) = R{
+  0:N(original_challenge_ordinal),1:N(value_type_ref),
+  2:DR(domain),3:DR(fresh_law),
+  4:EndpointCoinCorrelationBody(correlation),
+  5:EndpointReductionUsePolicyBody(reduction_use),
+  6:S[EndpointValueRefBody(condition)...],
+  7:N(draw_bytes),8:N(maximum_draws),
+  9:N(accept_algorithm_dependency),10:N(accept_evaluation_dependency),
+ 11:N(decode_algorithm_dependency),12:N(decode_evaluation_dependency)
+}
+EndpointDerivedPrefixLawBody = V(0,U)
+EndpointChallengeTransitionLawBody = V(0,U)
+StaticFsEndpointSemanticsBody(x) = R{
+  0:N(core_dependency),1:N(construction_dependency),
+  2:N(state_type_ref),3:N(bytes_type_ref),4:N(natural_type_ref),
+  5:DV(type_table[state_type_ref],initial_state),
+  6:N(absorb_algorithm_dependency),7:N(absorb_evaluation_dependency),
+  8:N(squeeze_algorithm_dependency),9:N(squeeze_evaluation_dependency),
+ 10:N(advance_algorithm_dependency),11:N(advance_evaluation_dependency),
+ 12:DR(application_domain),13:FT(sampling_exhausted_failure),
+ 14:EndpointDerivedPrefixLawBody,15:EndpointChallengeTransitionLawBody,
+ 16:S[EndpointChallengeLawBody(rule)...]
+}
+
+EndpointClaimSourceBody = V(0,N(binding_spine_ref))
+  | V(1,R{0:N(reduction_spine_ref),1:N(output_ordinal)})
+EndpointClaimAtomBody(x) = R{
+  0:DR(contract),1:EndpointClaimUsageBody(usage),
+  2:N(scope_event_ref),3:EndpointClaimSourceBody(source)
+}
+EndpointReductionPublicationBody(x) = R{
+  0:N(publication_spine_ref),
+  1:EndpointOptionBody(next_challenge_law_ref,N)
+}
+EndpointReductionOutputClaimBody(x) = R{
+  0:N(output_ordinal),1:DR(contract),
+  2:S[N(output_claim_ref)... in claim-ref order]
+}
+EndpointTerminalClaimDispositionBody(x) = R{
+  0:N(claim_ref),1:EndpointClaimDispositionBody(disposition)
+}
+EndpointAnchoredObligationBody =
+    V(0,R{
+      0:DR(contract),1:N(scope_event_ref),2:N(apply_spine_ref),
+      3:S[N(input_claim_ref)...],4:S[EndpointValueRefBody(side_input)...],
+      5:S[N(required_challenge_law_ref)...],
+      6:S[EndpointReductionPublicationBody(requirement)...],
+      7:S[EndpointReductionOutputClaimBody(output)...]
+    })
+  | V(1,R{
+      0:N(terminal_spine_ref),1:EndpointTerminalVerdictBody(verdict),
+      2:S[EndpointValueRefBody(public_output)...],
+      3:S[N(required_check_spine_ref)...],
+      4:S[EndpointTerminalClaimDispositionBody(disposition)...]
+    })
+
+PlanValueRefBody =
+    V(0,N(private_material_ref)) | V(1,N(randomness_ref))
+  | V(2,N(state_ref)) | V(3,N(recipe_node_ref))
+  | V(4,PlanViewReadBody(read))
+  | V(5,R{0:N(type_ref),1:DV(type_table[type_ref],value)})
+PlanViewCoordinateBody =
+    V(0,N(constant_ref)) | V(1,N(invocation_target_ref))
+  | V(2,N(binding_spine_ref)) | V(3,N(message_spine_ref))
+  | V(4,N(challenge_spine_ref)) | V(5,N(prior_decision_spine_ref))
+  | V(6,N(accepted_terminal_public_output_ordinal))
+PlanViewReadBody(x) = R{
+  0:PlanViewCoordinateBody(x.coordinate),1:EndpointValueRefBody(x.value)
+}
+PlanInitializerBody = V(0,N(private_material_ref))
+  | V(1,R{0:N(type_ref),1:DV(type_table[type_ref],value)})
+PlanPrivateMaterialBody = R{
+  0:EndpointPrivateMaterialKindBody(kind),1:N(type_ref)
+}
+PlanRandomnessBody = R{
+  0:N(type_ref),1:N(first_available_decision_spine_ref)
+}
+PlanStateBody = R{0:N(type_ref),1:PlanInitializerBody(initializer)}
+PlanRecipeNodeSiteBody = V(0,N(decision_spine_ref))
+  | V(1,N(accepted_terminal_ref))
+PlanGraphRecipeNodeBody = R{
+  0:PlanRecipeNodeSiteBody(site),
+  1:N(algorithm_dependency),2:N(evaluation_dependency),
+  3:S[PlanValueRefBody(input)...],4:N(result_type_ref)
+}
+PlanMoveBody = V(0,PlanValueRefBody)
+PlanMoveEntryBody = R{0:N(decision_spine_ref),1:PlanMoveBody(move)}
+PlanUpdateBody = R{
+  0:N(decision_spine_ref),1:N(state_ref),
+  2:EndpointOptionBody(value,PlanValueRefBody)
+}
+PlanGraphDerivedExportBody = R{
+  0:PlanRecipeNodeSiteBody(source_site),
+  1:PlanValueRefBody(value),2:N(result_type_ref)
+}
+PlanGraphBody(x) = R{
+  0:S[PlanPrivateMaterialBody...],1:S[PlanRandomnessBody...],
+  2:S[PlanStateBody...],
+  3:S[PlanGraphRecipeNodeBody... in site/within-site order],
+  4:S[PlanMoveEntryBody...],5:S[PlanUpdateBody...],
+  6:S[PlanGraphDerivedExportBody... in output-ref order]
+}
+
 EndpointContractLawV0Body = V(0,U)
 
 EndpointSemanticGraphBody(x) = R{
   0:EndpointRoleBody(x.role),
   1:S[EndpointDependencyBody(d)... in body-byte order],
   2:S[VT(T)... in body-byte order],
-  3:S[SourceConstantBody...],4:S[SourcePureNodeBody...],
+  3:S[EndpointConstantBody...],4:S[EndpointPureNodeBody...],
   5:RoleEndpointAbiGraphBody(x.abi),
-  6:S[SourceSpineEventBody...],
-  7:OptionBody(x.fs,StaticFsEndpointSemanticsBody),
-  8:S[SourceClaimAtomBody...],
-  9:S[SourceAnchoredObligationBody...],
- 10:OptionBody(x.plan,PlanGraphBody)
+  6:S[EndpointSpineEventBody...],
+  7:EndpointOptionBody(x.fs,StaticFsEndpointSemanticsBody),
+  8:S[EndpointClaimAtomBody...],
+  9:S[EndpointAnchoredObligationBody...],
+ 10:EndpointOptionBody(x.plan,PlanGraphBody)
 }
 
+OirEndpointDomainBody(x) = EndpointSemanticGraphBody(x.semantic_graph)
+```
+
+The target-local enums above preserve endpoint meaning, not a source body's
+encoding by alias. The PIR projector has an explicit total mapping from each
+supported source constructor into these tags. A source enum extension is
+therefore unsupported until that mapping and the source-view profile rotate;
+it cannot silently acquire an OIR tag. Conversely, changing a target tag or
+field rotates only the OIR graph profile and its exact downstream closure.
+
+<!-- zkc-profile-source:oir-endpoint-graph-bodies:end -->
+
+<!-- zkc-profile-source:oir-endpoint-contract-law:start -->
+
+```text
 EndpointFrameRecipeBody =
     V(0,U) | V(1,U) | V(2,U)
   | V(3,N(scope_spine_ref))
@@ -840,7 +1090,7 @@ OirRequirementBody =
           1:N(algorithm_dependency),2:N(evaluation_dependency)})
   | V(1,CounterpartyUseSiteBody)
   | V(2,R{0:N(private_material_ref),
-          1:PrivateMaterialKindBody(kind),2:N(type_ref)})
+          1:EndpointPrivateMaterialKindBody(kind),2:N(type_ref)})
   | V(3,R{0:N(randomness_ref),1:N(type_ref),
           2:N(first_available_decision_spine_ref)})
   | V(4,R{0:N(state_ref),1:N(type_ref),
@@ -876,7 +1126,7 @@ DerivedEndpointContractBody(x) = R{
   0:S[EndpointStaticObligationBody... in full-body byte order],
   1:S[OirRequirementBody... in full-body byte order],
   2:EndpointCompletionInterfaceBody(x.completion_interface),
-  3:OptionBody(
+  3:EndpointOptionBody(
       x.private_plan_continuation,
       PrivatePlanContinuationContractBody)
 }
@@ -887,13 +1137,6 @@ EndpointContractDerivationOutcomeBody =
 // Affirmative | MissingDependency | KindMismatch | Malformed | Refused
 // DeterministicLimitExceeded | CheckerFailure
 
-OirEndpointDomainBody(x) = EndpointSemanticGraphBody(x.semantic_graph)
-
-ProjectionPropositionDomainBody(x) = R{
-  0:EndpointPurposeBody(x.purpose),
-  1:CR(x.source_view_id),
-  2:CR(x.target_oir_id)
-}
 ```
 
 `DeriveEndpointContractV0` applies the following exact continuation law. The
@@ -945,6 +1188,18 @@ its private continuation arm, and issuing a live right remain PIR Plan-runtime
 authority; an eventual runtime OIR design must introduce a distinct checked
 boundary rather than reinterpret this contract as an executable handoff.
 
+<!-- zkc-profile-source:oir-endpoint-contract-law:end -->
+
+<!-- zkc-profile-source:oir-projection-body:start -->
+
+```text
+ProjectionPropositionDomainBody(x) = R{
+  0:EndpointPurposeBody(x.purpose),
+  1:CR(x.source_view_id),
+  2:CR(x.target_oir_id)
+}
+```
+
 The semantic proposition domain has exactly three fields. Its exact relation
 profile is field 0 of the outer K1 `ProfiledSemanticBody`, not a fourth domain
 field. Source IDs, manifest, source maps, read receipts,
@@ -967,3 +1222,5 @@ The OIR body must fit the cumulative K1 `2^20` encoded-byte, `2^14` node,
 `2^14` aggregate-child-edge, and depth-384 limits. Local admission and
 projection each also receive an explicit request-local work limit at most
 `2^17`. Exhaustion is atomic and cannot be converted into Negative.
+
+<!-- zkc-profile-source:oir-projection-body:end -->

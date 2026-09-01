@@ -1,9 +1,12 @@
-# Stable PIR semantic-profile publication evaluator
+# Semantic-profile publication evaluator
 
-This bounded package reconstructs the six durable owner-source artifacts in
-[`docs-next/pir/profiles/`](../../docs-next/pir/profiles/README.md). It is a
-research and conformance instrument, not current repository authority, a
-cryptographic proof, or an implementation-conformance claim.
+This bounded package reconstructs the complete indexed owner-source corpus in
+[`docs-next/foundation/semantic-profile-manifests.json`](../../docs-next/foundation/semantic-profile-manifests.json)
+under the publication contract in
+[`docs-next/foundation/semantic-profile-publication.md`](../../docs-next/foundation/semantic-profile-publication.md).
+It is a research and conformance instrument, not current repository authority,
+a cryptographic proof, or an implementation-conformance claim. The six
+durable v0 PIR artifacts remain byte-for-byte backward-compatibility controls.
 
 The package contains two implementations:
 
@@ -33,11 +36,17 @@ direct imports; unresolved declaration references; missing selectors;
 unreachable source; expected-ID feedback; source-marker duplication and loss;
 CR, non-NFC, and trailing-whitespace source; concrete Core coordinates in the
 selected FS dependent receipt templates; source-coordinate exclusion; exact
-dependency rotation; sibling locality; and the Foundation law-source pins.
+dependency rotation; sibling locality; owner-namespace disagreement;
+source-page relocation under the owner-qualified source edition; parent/child
+validation locality; exact Analysis branch topology; Relations semantic/module
+catalog separation; and the Foundation law-source pins. Both compilers
+reconstruct and compare the complete seventeen-profile identity table; the
+printable table is a derived inspection artifact and is not committed.
 
 Passing demonstrates that this exact finite source corpus deterministically
-forms the six published target profiles under two implementations and that the
-listed mutations are rejected or rotate only the intended dependency cone. It
-does not prove that Markdown is equivalent to a future formal law calculus,
-that every semantic sentence is internally consistent, that any cryptographic
-theorem applies, or that a production evaluator implements these profiles.
+forms seventeen published target profiles under two implementations, preserves
+the six frozen v0 PIR controls byte-for-byte, and rejects the listed malformed
+cases or rotates only the intended dependency cone. It does not prove that the
+marked prose is equivalent to a complete typed law interpreter, that every
+semantic sentence is internally consistent, that any cryptographic theorem
+applies, or that a production evaluator implements these profiles.

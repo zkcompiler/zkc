@@ -133,7 +133,7 @@ coverage rule, identity effect, execution rule, and negative tests.
 
 Local OIR admission is source-blind but not evidence-free. It independently
 reauthenticates exact dependency preimages, reruns
-`EndpointContractLawV0`, and requires a total K3-B admission-evidence map for
+`EndpointContractLawV0`, and requires a total admission-evidence map for
 every and only General codec node. Certificate checks remain admission-only;
 runtime endpoint requirements contain only the resolved encoder/decoder uses.
 
@@ -171,13 +171,16 @@ recovery reauthenticates and readmits every exact source and target and reruns
 support classification, source-view extraction, proposition formation, and
 validation.
 
-K3-D selects no durable projection certificate because no named independent
-v0 consumer requires one. A future certificate must bind the complete
+The bounded target selects no durable projection certificate because no named
+independent v0 consumer requires one. A future certificate must bind the complete
 proposition and qualified result and still cannot serialize live authority.
 
 ## Target documents
 
 - [OIR Endpoint and Projection Contract](projection-contract.md)
+- [Published OIR Semantic Profiles](profiles/README.md) for the import-free
+  endpoint graph and PIR-relative projection profiles, their exact import
+  closure, and independently reconstructed identities
 - [PIR Endpoint Projection Views](../pir/endpoint-projection-views.md)
 - [Protocol Interfaces and Prover Plans](../pir/interfaces-and-plans.md)
 - [Interactive Core and Causal Execution](../pir/interactive-core.md)

@@ -1,10 +1,12 @@
 # Recursive-Composition Grounding
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active target extension; profile publication pending
+> **Document state:** Active target extension; semantic source published
 > **Provisional owner:** `relations`
 > **Authority:** None during transition. Current normative relation semantics
 > remain under [`docs/spec/relations.md`](../../docs/spec/relations.md).
+
+<!-- zkc-profile-source:relations-recursive-grounding-semantics:start -->
 
 ## 1. Purpose and boundary
 
@@ -334,3 +336,5 @@ accumulator validity, a decider theorem, collision resistance, completeness,
 soundness, knowledge extraction, non-malleability, IVC/NIVC/PCD, arbitrary-
 party continuation, or implementation support. Those conclusions require
 their own exact Analysis families, theorem sources, assumptions, and evidence.
+
+<!-- zkc-profile-source:relations-recursive-grounding-semantics:end -->

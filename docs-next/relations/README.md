@@ -55,15 +55,16 @@ later questions automatically.
 The exact namespace is one 24-entry semantic-subject catalog. It is disjoint
 from the 14-entry module declaration-contract catalog; neither prose nor an
 executable fixture can add a kind or move one between the two. The literal
-semantic catalog and still-open profile-preimage boundary are in
+semantic catalog and published profile boundary are in
 [Relation Model, Section 2.1](relation-model.md#21-k1-identity-language-profile-and-values),
 and the declaration catalog is in
 [Section 2.4](relation-model.md#24-closed-declaration-contract-catalog).
-The 14 declarations are module-owned grammar that the final Relations semantic
-law source must commit; the profile-local `declaration_catalogs` field is
-exactly empty. The bounded executable independently enumerates all 14 kinds,
-but its placeholder law bytes neither publish nor authenticate their complete
-dispatch grammar.
+The 14 declarations are module-owned grammar committed by the exact Relations
+semantic-law source fragment. They are not profile-local semantic subjects.
+The publication catalogs themselves are populated with source, compiler, law,
+evaluator, failure, and subject-language declarations. The complete profile is
+independently reconstructed; bounded relation evaluators remain separate
+behavioral evidence.
 
 Semantic proposition identity is separate from validation basis. Certificates,
 assumption evidence, exhaustive-check controls, evaluator charging contracts,
@@ -205,6 +206,8 @@ result.
 
 ## Target documents
 
+- [Relations Semantic Profile](profiles/README.md) — strict owner-source
+  manifest, exact direct imports, profile identity, and publication nonclaims
 - [Relation Model](relation-model.md) — definitions, four-role Interfaces,
   instances, confidential satisfaction, transforms, bridges, split bindings,
   artifacts, and grounding
@@ -230,11 +233,10 @@ remains normative until explicit consolidation and cutover.
 
 ## Remaining gates
 
-- The exact 24/14 catalogs and six source-authority body schemas are selected,
-  but the complete six-field `SemanticLanguageProfileBody`, exact semantic-
-  law-source bytes, and independently reconstructible
-  `RelationsProfileId` remain unpublished. No persistent-ID or semantic-freeze
-  claim follows from the catalog closure alone.
+- The exact 24/14 catalogs, six source-authority body schemas, complete
+  six-field profile body, and typed `RelationsProfileId` are published and
+  independently reconstructed. This is language-identity closure, not a
+  relation fact, implementation-conformance result, or semantic freeze.
 - The instance/artifact portable and private-witness owner-local source laws
   are now specified. The bounded research instrument exercises continuation-
   view issuance, Plan-witness grounding, same-run joining, one-use handoff,

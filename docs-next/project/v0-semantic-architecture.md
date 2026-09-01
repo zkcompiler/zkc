@@ -7,8 +7,9 @@
 > consumer integration; one retained native FRI/IOR conservative extension;
 > and commitment-opening, complete-argument, accumulation, folding, and
 > recursive-verification pressure absorbed at documented evidence levels.
-> Holdouts, dependent owner-profile publication, independent identity/profile
-> freeze, and normative cutover remain pending.
+> All seventeen selected profile identities are independently reconstructed.
+> Holdout validation, independent identity/profile freeze, and normative
+> cutover remain pending.
 > **Provisional owner:** `project`
 > **Authority:** Non-normative. This page is a reconstruction and design
 > surface for `docs-next/`. The current specifications, status, architecture,
@@ -966,11 +967,12 @@ commitment-opening, complete-argument, and accumulation/folding/recursive-
 verification pressure have now reclosed their declared bounded scopes. The
 latest selection is semantic-target convergence with a complete source-
 grounded finite target encoding for the fixed Nova fold and explicit finite-
-target elaboration gaps for the other named cases, not
-dependent owner-profile publication or independent identity/profile freeze.
-The stable upstream PIR profiles are published as target identities; their
-downstream Interface/Plan, Relations, Analysis, Compiler, OIR, and Realization
-consumers remain open. Holdout validation, property discharge, full OIR/Realization,
+target elaboration gaps for the other named cases, not independent
+identity/profile freeze. The selected PIR, OIR, Relations, and Analysis
+profiles are published as target identities. Their language identities are
+reconstructible, while semantic support, property discharge, Compiler and
+Realization consumption, implementation correspondence, and reliance remain
+separate. Holdout validation, full OIR/Realization, independent freeze,
 implementation correspondence, and normative cutover remain pending.
 
 ## 12. Deliberate non-decisions

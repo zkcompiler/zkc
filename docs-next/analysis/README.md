@@ -1,8 +1,9 @@
 # Protocol Property Analysis
 
 > **Document kind:** Domain index
-> **Document state:** Active non-normative Analysis target; its finite executable
-> join was exercised by bounded joined-path validation, while owner profile preimages remain open
+> **Document state:** Active non-normative Analysis target; six selected owner
+> profiles have independently reconstructed publication identities, and the
+> finite executable join has bounded joined-path validation evidence
 > **Target alignment:** Bounded minimum Analysis kernel over Foundation, PIR, and Relations;
 > its selected finite P01/Schnorr path has joined-path validation executable join evidence, while
 > broader Analysis families remain deferred
@@ -135,8 +136,8 @@ bodies it opens; its narrow source-validation child imports only that
 composition profile. The AFK and incremental-composition branches do not
 import one another.
 Each direct PIR edge has an explicit owner-view use coordinate; an edge
-supported only by transitive reachability is forbidden. Once their owner-local
-preimages are published, these are exact profile IDs with exact no-extra import
+supported only by transitive reachability is forbidden. Their published
+owner-local preimages form exact profile IDs with exact no-extra import
 closures, not family/revision labels. One dependency branch flows
 kernel -> property -> semantic transport -> theorem-source validation; the
 other flows kernel and exact PIR/Relations owners -> incremental composition
@@ -146,14 +147,16 @@ changing an actually used upstream profile intentionally rotates only its
 downstream consumers.
 
 The joined-path executable supplies bounded evidence only for this finite
-profile topology, exact authentication, and expected local/downstream rotation. It does
-not own Analysis semantics or publish the final profile identities. In
-particular, the current symbolic-law and host-dispatch profile objects are
-correspondence surrogates and must not become the ideal typed Analysis
-preimages. Each Analysis owner must publish its complete six-field profile
-preimage, exact typed law-source bytes, and independently reconstructible full
-typed ID before any dependent profile ID is treated as persistent and before
-independent freeze.
+profile topology, exact authentication, and expected local/downstream rotation.
+It does not own Analysis semantics. The six selected owner manifests, marked
+semantic fragments, and publication-law declarations now compile into complete
+six-field profile preimages and independently reconstructible typed IDs through
+the Foundation publication mechanism. The earlier symbolic-law and
+host-dispatch profile objects remain correspondence surrogates; they are not
+publication sources and cannot substitute for the marked owner semantics.
+Publication does not implement the complete typed Analysis law interpreter,
+establish any property or theorem, demonstrate implementation conformance, or
+complete independent semantic freeze.
 
 The AFK semantic theorem schema, questions, goals, propositions, and semantic
 bases remain under the semantic-transport profile. The child profile governs
@@ -334,6 +337,10 @@ named consumer. It is not achieved by adding a flag to either initial profile.
   family descriptor, theorem-application boundary, carried-obligation
   derivation, portable-continuation distinction, and recursive-composition
   nonclaims.
+- [Analysis Profile Publication](profile-publication.md) assigns the selected
+  semantic fragments and publication-law declarations to six exact profiles.
+- [Published Analysis Profiles](profiles/README.md) routes the strict source
+  manifests, direct-import graph, and independently reconstructed identities.
 
 The [Analysis and Compiler Architecture](../project/analysis-and-compiler-architecture.md)
 records the larger federated decision. Compiler remains downstream and cannot

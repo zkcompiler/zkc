@@ -1,9 +1,9 @@
-"""Foundation-backed compiler for published PIR semantic profiles.
+"""Foundation-backed compiler for published semantic profiles.
 
 This is a bounded research and conformance instrument.  The durable source
-format is specified by ``docs-next/pir/profiles/README.md``; this module uses
-the selected Foundation reference model to compile that source into exact
-``SemanticLanguageProfile`` bodies.
+formats are specified by ``docs-next/foundation/semantic-profile-publication.md``;
+this module uses the selected Foundation reference model to compile exact
+owner source into ``SemanticLanguageProfile`` bodies.
 """
 
 from __future__ import annotations
@@ -14,17 +14,21 @@ import copy
 import hashlib
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import sys
 from typing import Any, Iterable, Mapping
 import unicodedata
+import re
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PROFILE_SOURCE_DIR = ROOT / "docs-next" / "pir" / "profiles"
+PROFILE_INDEX = (
+    ROOT / "docs-next" / "foundation" / "semantic-profile-manifests.json"
+)
 FOUNDATION_PAGE = ROOT / "docs-next" / "foundation" / "executable-foundations.md"
-SOURCE_FORMAT = "zkc.pir.semantic-profile-source.v0"
-PROFILE_KEYS = (
+LEGACY_SOURCE_FORMAT = "zkc.pir.semantic-profile-source.v0"
+OWNER_QUALIFIED_SOURCE_FORMAT = "zkc.semantic-profile-source.v1"
+LEGACY_PROFILE_KEYS = (
     "interaction",
     "canonical-framed-fiat-shamir",
     "duplex-sponge-fiat-shamir",
@@ -32,20 +36,8 @@ PROFILE_KEYS = (
     "commitment-opening",
     "oracle-commitment",
 )
-MANIFEST_FILES = {
-    key: PROFILE_SOURCE_DIR / f"{key}.json" for key in PROFILE_KEYS
-}
-COMMON_DEFINITION_KINDS = frozenset(
-    {
-        "pir.body-compiler",
-        "pir.evaluator-signature",
-        "pir.failure-schema",
-        "pir.semantic-law",
-    }
-)
-GENERATED_CATALOG_KINDS = frozenset(
-    {"pir.source-fragment", "pir.subject-language"}
-)
+PROFILE_KEYS = LEGACY_PROFILE_KEYS
+MANIFEST_FILES: dict[str, Path] = {}
 
 
 _K1_NAME = "_zkc_k1_executable_foundations"
@@ -133,8 +125,75 @@ def _read_manifest(path: Path) -> dict[str, Any]:
     return value
 
 
+def _load_manifest_index() -> tuple[tuple[str, ...], dict[str, Path]]:
+    index = _read_manifest(PROFILE_INDEX)
+    _require_exact_fields(
+        index,
+        ("format", "manifests"),
+        "semantic-profile manifest index",
+    )
+    if index["format"] != "zkc.semantic-profile-manifest-index.v0":
+        raise PublicationError("unsupported semantic-profile manifest index")
+    rows = _sequence(index["manifests"], "manifest index rows")
+    if not rows:
+        raise PublicationError("semantic-profile manifest index is empty")
+    keys: list[str] = []
+    files: dict[str, Path] = {}
+    source_paths: set[str] = set()
+    for ordinal, raw_row in enumerate(rows):
+        row = _require_exact_fields(
+            raw_row,
+            ("key", "source"),
+            f"manifest index row {ordinal}",
+        )
+        key = _ascii_symbol(row["key"], f"manifest index row {ordinal} key")
+        source = _repository_relative_path(
+            row["source"], f"manifest index row {ordinal} source"
+        )
+        path = (ROOT / source).resolve()
+        try:
+            path.relative_to(ROOT)
+        except ValueError as error:
+            raise PublicationError("manifest index source escapes repository") from error
+        if key in files or source in source_paths:
+            raise PublicationError("manifest index repeats a key or source path")
+        keys.append(key)
+        files[key] = path
+        source_paths.add(source)
+    return tuple(keys), files
+
+
 def load_repository_manifests() -> dict[str, dict[str, Any]]:
     return {key: _read_manifest(MANIFEST_FILES[key]) for key in PROFILE_KEYS}
+
+
+def _catalog_namespace(manifest: Mapping[str, Any]) -> str:
+    if manifest["format"] == LEGACY_SOURCE_FORMAT:
+        return "pir"
+    return manifest["catalog_namespace"]
+
+
+def _common_definition_kinds(namespace: str) -> frozenset[str]:
+    return frozenset(
+        f"{namespace}.{suffix}"
+        for suffix in (
+            "body-compiler",
+            "evaluator-signature",
+            "failure-schema",
+            "semantic-law",
+        )
+    )
+
+
+def _generated_catalog_kinds(namespace: str) -> frozenset[str]:
+    return frozenset(
+        f"{namespace}.{suffix}"
+        for suffix in ("source-fragment", "subject-language")
+    )
+
+
+def _common_kind(manifest: Mapping[str, Any], suffix: str) -> str:
+    return f"{_catalog_namespace(manifest)}.{suffix}"
 
 
 def _require_exact_fields(value: object, fields: Iterable[str], label: str) -> dict[str, Any]:
@@ -186,10 +245,29 @@ def _sorted_unique_ascii(values: object, label: str, *, nonempty: bool) -> tuple
     return items
 
 
+def _repository_relative_path(value: object, label: str) -> str:
+    text = _ascii_symbol(value, label)
+    path = PurePosixPath(text)
+    if (
+        path.is_absolute()
+        or not path.parts
+        or text != path.as_posix()
+        or "\\" in text
+        or any(part in ("", ".", "..") for part in path.parts)
+    ):
+        raise PublicationError(f"{label} must be a canonical repository-relative path")
+    return text
+
+
+PROFILE_KEYS, MANIFEST_FILES = _load_manifest_index()
+
+
 def _validate_manifest_shape(key: str, raw: object) -> dict[str, Any]:
-    manifest = _require_exact_fields(
-        raw,
-        (
+    if type(raw) is not dict:
+        raise PublicationError(f"manifest {key} must be an exact object")
+    source_format = raw.get("format")
+    if source_format == LEGACY_SOURCE_FORMAT:
+        fields = (
             "format",
             "key",
             "profile_family",
@@ -200,17 +278,48 @@ def _validate_manifest_shape(key: str, raw: object) -> dict[str, Any]:
             "fragments",
             "definitions",
             "subjects",
-        ),
+        )
+    elif source_format == OWNER_QUALIFIED_SOURCE_FORMAT:
+        fields = (
+            "format",
+            "key",
+            "catalog_namespace",
+            "profile_family",
+            "revision",
+            "expected_imports",
+            "supported_subject_kinds",
+            "fragments",
+            "definitions",
+            "subjects",
+        )
+    else:
+        raise PublicationError(f"manifest {key} has an unsupported format")
+    manifest = _require_exact_fields(
+        raw,
+        fields,
         f"manifest {key}",
     )
-    if manifest["format"] != SOURCE_FORMAT:
-        raise PublicationError(f"manifest {key} has an unsupported format")
+    if source_format == OWNER_QUALIFIED_SOURCE_FORMAT:
+        namespace = _ascii_symbol(
+            manifest["catalog_namespace"],
+            f"manifest {key} catalog namespace",
+        )
+        if re.fullmatch(r"[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*)*", namespace) is None:
+            raise PublicationError(
+                f"manifest {key} has an invalid catalog namespace"
+            )
+    else:
+        namespace = "pir"
+    common_definition_kinds = _common_definition_kinds(namespace)
+    generated_catalog_kinds = _generated_catalog_kinds(namespace)
     if _ascii_symbol(manifest["key"], f"manifest {key} key") != key:
         raise PublicationError(f"manifest key mismatch for {key}")
     _ascii_symbol(manifest["profile_family"], f"manifest {key} profile family")
     _u64(manifest["revision"], f"manifest {key} revision")
-    if type(manifest["owner_page"]) is not str or not manifest["owner_page"]:
-        raise PublicationError(f"manifest {key} owner page must be nonempty text")
+    if source_format == LEGACY_SOURCE_FORMAT:
+        _repository_relative_path(
+            manifest["owner_page"], f"manifest {key} owner page"
+        )
     expected_imports = _sorted_unique_ascii(
         manifest["expected_imports"],
         f"manifest {key} expected imports",
@@ -227,17 +336,29 @@ def _validate_manifest_shape(key: str, raw: object) -> dict[str, Any]:
     if not fragments:
         raise PublicationError(f"manifest {key} must select source fragments")
     fragment_names: list[str] = []
+    marker_names: set[str] = set()
     for ordinal, raw_fragment in enumerate(fragments):
+        fragment_fields = (
+            ("name", "start", "end")
+            if source_format == LEGACY_SOURCE_FORMAT
+            else ("name", "owner_page", "start", "end")
+        )
         fragment = _require_exact_fields(
             raw_fragment,
-            ("name", "start", "end"),
+            fragment_fields,
             f"manifest {key} fragment {ordinal}",
         )
         name = _ascii_symbol(fragment["name"], f"manifest {key} fragment name")
+        if source_format == OWNER_QUALIFIED_SOURCE_FORMAT:
+            _repository_relative_path(
+                fragment["owner_page"],
+                f"manifest {key} fragment owner page",
+            )
         start = _ascii_symbol(fragment["start"], f"manifest {key} start marker")
         end = _ascii_symbol(fragment["end"], f"manifest {key} end marker")
-        if start == end:
-            raise PublicationError(f"manifest {key} has equal source markers")
+        if start == end or start in marker_names or end in marker_names:
+            raise PublicationError(f"manifest {key} repeats a source marker")
+        marker_names.update((start, end))
         fragment_names.append(name)
     if len(fragment_names) != len(set(fragment_names)):
         raise PublicationError(f"manifest {key} repeats a fragment name")
@@ -256,13 +377,13 @@ def _validate_manifest_shape(key: str, raw: object) -> dict[str, Any]:
             f"manifest {key} definition {ordinal}",
         )
         kind = _ascii_symbol(definition["kind"], f"manifest {key} definition kind")
-        if not kind.startswith("pir.") or kind in GENERATED_CATALOG_KINDS:
+        if not kind.startswith(f"{namespace}.") or kind in generated_catalog_kinds:
             raise PublicationError(f"manifest {key} uses a reserved definition kind")
         name = _ascii_symbol(definition["name"], f"manifest {key} definition name")
         if name in names_by_kind[kind]:
             raise PublicationError(f"manifest {key} repeats {kind}/{name}")
         names_by_kind[kind].add(name)
-        if kind in COMMON_DEFINITION_KINDS:
+        if kind in common_definition_kinds:
             common_seen.add(kind)
         _u64(definition["revision"], f"manifest {key} definition revision")
         if definition["fragment"] not in fragment_names:
@@ -281,10 +402,10 @@ def _validate_manifest_shape(key: str, raw: object) -> dict[str, Any]:
                 dependency,
                 f"manifest {key} definition dependency {dependency_ordinal}",
             )
-    if common_seen != COMMON_DEFINITION_KINDS:
+    if common_seen != common_definition_kinds:
         raise PublicationError(
             f"manifest {key} omits common definition kinds "
-            f"{sorted(COMMON_DEFINITION_KINDS - common_seen)}"
+            f"{sorted(common_definition_kinds - common_seen)}"
         )
 
     subjects = _sequence(manifest["subjects"], f"manifest {key} subjects")
@@ -351,6 +472,7 @@ def _topological_order(manifests: Mapping[str, dict[str, Any]]) -> tuple[str, ..
 
 
 def _read_page(path_text: str, page_overrides: Mapping[str, bytes] | None) -> bytes:
+    _repository_relative_path(path_text, "owner page")
     path = (ROOT / path_text).resolve()
     try:
         path.relative_to(ROOT)
@@ -402,10 +524,15 @@ def _extract_fragments(
     manifest: Mapping[str, Any],
     page_overrides: Mapping[str, bytes] | None,
 ) -> dict[str, bytes]:
-    page = _read_page(manifest["owner_page"], page_overrides)
     fragments: dict[str, bytes] = {}
-    occupied: list[tuple[int, int]] = []
+    occupied_by_page: dict[str, list[tuple[int, int]]] = defaultdict(list)
     for source in manifest["fragments"]:
+        page_name = (
+            manifest["owner_page"]
+            if manifest["format"] == LEGACY_SOURCE_FORMAT
+            else source["owner_page"]
+        )
+        page = _read_page(page_name, page_overrides)
         start_line = f"<!-- {source['start']} -->\n".encode("ascii")
         end_line = f"<!-- {source['end']} -->\n".encode("ascii")
         if page.count(start_line) != 1 or page.count(end_line) != 1:
@@ -414,9 +541,12 @@ def _extract_fragments(
         end = page.index(end_line) + len(end_line)
         if start >= end:
             raise PublicationError("source marker interval is reversed")
-        if any(not (end <= left or right <= start) for left, right in occupied):
+        if any(
+            not (end <= left or right <= start)
+            for left, right in occupied_by_page[page_name]
+        ):
             raise PublicationError("source marker intervals overlap")
-        occupied.append((start, end))
+        occupied_by_page[page_name].append((start, end))
         fragments[source["name"]] = extract_marked_fragment(
             page, source["start"], source["end"]
         )
@@ -495,9 +625,13 @@ def _validate_global_fragment_disjointness(
     occupied_by_page: dict[str, list[tuple[int, int, str, str]]] = defaultdict(list)
     for key in PROFILE_KEYS:
         manifest = manifests[key]
-        page_name = manifest["owner_page"]
-        page = _read_page(page_name, page_overrides)
         for source in manifest["fragments"]:
+            page_name = (
+                manifest["owner_page"]
+                if manifest["format"] == LEGACY_SOURCE_FORMAT
+                else source["owner_page"]
+            )
+            page = _read_page(page_name, page_overrides)
             start_line = f"<!-- {source['start']} -->\n".encode("ascii")
             end_line = f"<!-- {source['end']} -->\n".encode("ascii")
             if page.count(start_line) != 1 or page.count(end_line) != 1:
@@ -525,14 +659,19 @@ def _compile_one(
 ) -> CompiledProfile:
     fragments = _extract_fragments(manifest, page_overrides)
     definitions = manifest["definitions"]
+    source_fragment_kind = _common_kind(manifest, "source-fragment")
+    subject_language_kind = _common_kind(manifest, "subject-language")
+    semantic_law_kind = _common_kind(manifest, "semantic-law")
+    evaluator_kind = _common_kind(manifest, "evaluator-signature")
+    failure_kind = _common_kind(manifest, "failure-schema")
 
     names_by_kind: dict[str, list[str]] = defaultdict(list)
-    names_by_kind["pir.source-fragment"] = [
+    names_by_kind[source_fragment_kind] = [
         source["name"] for source in manifest["fragments"]
     ]
     for definition in definitions:
         names_by_kind[definition["kind"]].append(definition["name"])
-    names_by_kind["pir.subject-language"] = list(
+    names_by_kind[subject_language_kind] = list(
         manifest["supported_subject_kinds"]
     )
     declaration_index = {
@@ -600,9 +739,9 @@ def _compile_one(
         if body_compiler["profile"] == "self":
             mark_local((body_compiler["kind"], body_compiler["name"]))
         for law in subject["laws"]:
-            mark_local(("pir.semantic-law", law))
-        mark_local(("pir.evaluator-signature", subject["evaluator"]))
-        mark_local(("pir.failure-schema", subject["failure_schema"]))
+            mark_local((semantic_law_kind, law))
+        mark_local((evaluator_kind, subject["evaluator"]))
+        mark_local((failure_kind, subject["failure_schema"]))
     if used_definitions != frozenset(definition_by_coordinate):
         unused = sorted(frozenset(definition_by_coordinate) - used_definitions)
         raise PublicationError(f"manifest {key} contains unreachable definitions {unused}")
@@ -612,7 +751,7 @@ def _compile_one(
 
     catalog_bodies: dict[str, list[Any]] = defaultdict(list)
     for source in manifest["fragments"]:
-        catalog_bodies["pir.source-fragment"].append(
+        catalog_bodies[source_fragment_kind].append(
             k1.DatumRecord(
                 (
                     (0, k1.Symbol(source["name"])),
@@ -625,8 +764,8 @@ def _compile_one(
     uses_by_import: dict[str, list[Any]] = defaultdict(list)
     for definition in definitions:
         fragment_ref = k1.ProfileLocalDeclarationRef(
-            "pir.source-fragment",
-            declaration_index[("pir.source-fragment", definition["fragment"])],
+            source_fragment_kind,
+            declaration_index[(source_fragment_kind, definition["fragment"])],
         )
         dependency_datums: list[Any] = []
         for raw_dependency in definition["dependencies"]:
@@ -677,13 +816,13 @@ def _compile_one(
             )
         law_refs = tuple(
             k1.ProfileLocalDeclarationRef(
-                "pir.semantic-law",
-                declaration_index[("pir.semantic-law", law)],
+                semantic_law_kind,
+                declaration_index[(semantic_law_kind, law)],
             )
             for law in subject["laws"]
         )
-        evaluator_coordinate = ("pir.evaluator-signature", subject["evaluator"])
-        failure_coordinate = ("pir.failure-schema", subject["failure_schema"])
+        evaluator_coordinate = (evaluator_kind, subject["evaluator"])
+        failure_coordinate = (failure_kind, subject["failure_schema"])
         if evaluator_coordinate not in declaration_index:
             raise PublicationError(f"manifest {key} names an unknown evaluator")
         if failure_coordinate not in declaration_index:
@@ -718,7 +857,7 @@ def _compile_one(
                 ),
             )
         )
-        catalog_bodies["pir.subject-language"].append(body)
+        catalog_bodies[subject_language_kind].append(body)
         subject_rows.append(
             k1.DatumRecord(
                 (
@@ -727,9 +866,9 @@ def _compile_one(
                         1,
                         k1.profile_declaration_ref_datum(
                             k1.ProfileLocalDeclarationRef(
-                                "pir.subject-language",
+                                subject_language_kind,
                                 declaration_index[
-                                    ("pir.subject-language", subject["kind"])
+                                    (subject_language_kind, subject["kind"])
                                 ],
                             )
                         ),
@@ -789,19 +928,26 @@ def _compile_one(
 
     evaluator_refs = tuple(
         k1.profile_declaration_ref_datum(
-            k1.ProfileLocalDeclarationRef("pir.evaluator-signature", ordinal)
+            k1.ProfileLocalDeclarationRef(evaluator_kind, ordinal)
         )
-        for ordinal in range(len(names_by_kind["pir.evaluator-signature"]))
+        for ordinal in range(len(names_by_kind[evaluator_kind]))
     )
     failure_refs = tuple(
         k1.profile_declaration_ref_datum(
-            k1.ProfileLocalDeclarationRef("pir.failure-schema", ordinal)
+            k1.ProfileLocalDeclarationRef(failure_kind, ordinal)
         )
-        for ordinal in range(len(names_by_kind["pir.failure-schema"]))
+        for ordinal in range(len(names_by_kind[failure_kind]))
     )
     law_source = k1.DatumRecord(
         (
-            (0, k1.Nat(0)),
+            (
+                0,
+                k1.Nat(
+                    0
+                    if manifest["format"] == LEGACY_SOURCE_FORMAT
+                    else 1
+                ),
+            ),
             (1, k1.DatumSeq(tuple(import_use_rows))),
             (2, k1.DatumSeq(tuple(subject_rows))),
             (3, k1.DatumSeq(evaluator_refs)),
@@ -905,6 +1051,28 @@ def identity_table(publication: Publication) -> dict[str, Any]:
     foundation = verify_foundation_source()
     profiles: dict[str, Any] = {}
     for key in PROFILE_KEYS:
+        artifact = publication.profiles[key]
+        profiles[key] = {
+            "profile_family": artifact.manifest["profile_family"],
+            "revision": artifact.manifest["revision"],
+            "direct_imports": list(artifact.direct_import_keys),
+            "exact_closure": list(publication.exact_closure(key)),
+            "body_length": len(artifact.body_bytes),
+            "body_sha256": hashlib.sha256(artifact.body_bytes).hexdigest(),
+            "profile_digest": artifact.profile_id.digest.hex(),
+            "content_ref_hex": artifact.profile_id.internal_reference().hex(),
+        }
+    return {
+        "format": "zkc.semantic-profile-identities.v1",
+        "foundation": foundation,
+        "profiles": profiles,
+    }
+
+
+def legacy_identity_table(publication: Publication) -> dict[str, Any]:
+    foundation = verify_foundation_source()
+    profiles: dict[str, Any] = {}
+    for key in LEGACY_PROFILE_KEYS:
         artifact = publication.profiles[key]
         profiles[key] = {
             "profile_family": artifact.manifest["profile_family"],

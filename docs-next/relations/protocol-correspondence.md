@@ -7,6 +7,8 @@
 > model. It is non-normative until consolidation and cutover; the current
 > specifications under [`docs/`](../../docs/README.md) remain authoritative.
 
+<!-- zkc-profile-source:relations-correspondence-semantics:start -->
+
 ## 1. Scope and ownership
 
 This page owns one closed family of questions over already admitted Relations
@@ -68,9 +70,11 @@ coordinates only in the joins below. It cannot form a supply, consume one,
 copy a private value, or mint the handoff capability.
 
 The Relations language selects the companion page's standalone
-`RelationsProfileId`. It imports exactly
-`{PIRInterfacePlanProfileId}` and therefore reaches the two K2 PIR profiles
-only through that transitive edge. Its supported subject-kind namespace is
+`RelationsProfileId`. It directly imports exactly
+`{PIRInteractionProfileId,PIRInterfacePlanProfileId}`. The Interface/Plan
+edge also reaches the canonical framed transcript profile; direct Interaction
+use is nevertheless declared directly rather than discharged by transitive
+reachability. Its supported subject-kind namespace is
 exactly `RelationsSemanticSubjectKindCatalogV0`, and its module-declaration
 namespace is exactly the disjoint
 `RelationsDeclarationContractKindCatalogV0`, both owned in
@@ -83,11 +87,12 @@ it cannot supply a shadow PIR profile, flatten imports into module roots, add
 a consumer-authored declaration catalog, or treat a declaration kind as a
 semantic subject.
 
-The Relations profile's `declaration_catalogs` field is exactly empty. The
-14-kind declaration sequence belongs to the final Relations semantic-law
-source rather than to that profile field. The bounded executable independently
-enumerates the sequence for dispatch tests, but the currently unpublished
-semantic-law bytes do not yet publish or authenticate that full dispatch.
+The 14-kind module declaration sequence belongs to the Relations semantic-law
+source rather than to the profile-local declaration catalogs. Those local
+catalogs contain only the publication's body compiler, semantic laws,
+evaluator and failure declarations, selected source fragments, and supported
+subject language. The bounded executable independently enumerates the module
+sequence for dispatch tests; it does not replace the selected durable source.
 
 The Relations issuer requires only `RelationsProfileId` in evaluator support;
 the three imported profiles are authenticated preimages, not three additional
@@ -2306,3 +2311,5 @@ No correspondence result establishes:
 - compatibility with another semantic regime.
 
 Those require separately owned admitted subjects and qualified judgments.
+
+<!-- zkc-profile-source:relations-correspondence-semantics:end -->

@@ -20,17 +20,24 @@ It is not the place for every concept that several documents mention.
 ## Selected documents
 
 - [Executable Semantic Foundations](executable-foundations.md) defines the
-  selected K1 candidate for bootstrap, typed identity, exact semantic-language
+  selected candidate for bootstrap, typed identity, exact semantic-language
   profiles, semantic modules, domain-indexed values, portable algorithms,
   deterministic evaluation control, inert source-authority envelopes, and the
   boundary between semantic completion and operational noncompletion. Domain
   language contents, predicates, judgments, policy derivations, live
-  capabilities, and resource policies remain with their owners. Bounded K3-B
-  Relations, K3-C Analysis, and K3-D OIR have demonstrated three aligned
-  consumer extractions, and K3-E has exercised their joined profile and inert-
-  envelope boundary over one finite witness. This satisfies the bounded
-  extraction gate only; it does not move owner predicates or live authority
-  into Foundation and does not freeze the kernel.
+  capabilities, and resource policies remain with their owners. Bounded
+  Relations, Analysis, and OIR constructions have demonstrated three aligned
+  consumer extractions, and joined-path validation has exercised their shared
+  profile and inert-envelope boundary over one finite witness. This satisfies
+  the bounded extraction gate only; it does not move owner predicates or live
+  authority into Foundation and does not freeze the kernel.
+- [Semantic Profile Publication](semantic-profile-publication.md) defines the
+  owner-neutral source-corpus index, the backward-compatible source editions,
+  exact direct-use reconstruction, and independent compiler agreement. Each
+  domain still owns every profile meaning and source fragment it publishes.
+  The publication gate reconstructs the complete selected identity table
+  independently and can print it as an inspection artifact; the derived table
+  is not committed as a second source of truth.
 
 ## Owns
 
@@ -38,7 +45,8 @@ It is not the place for every concept that several documents mention.
   meaning is independent of the subject domain;
 - the exact standalone semantic-language-profile envelope, authenticated
   profile-import closure, profiled-subject wrapper, and effective-context
-  equality law selected by K1, including the exact disjoint standalone catalog
+  equality law selected by the semantic foundation, including the exact
+  disjoint standalone catalog
   for canonical values, evaluation contracts, external-operation contracts,
   portable algorithms, semantic-language profiles, semantic modules, and
   semantic primitives, while each domain owns its actual profiled language;
@@ -71,7 +79,8 @@ It is not the place for every concept that several documents mention.
 - a terminology index that routes each semantic term to its actual owner.
 
 Foundation fixes the common canonical-value encoding, typed identity-preimage
-framing, profile envelope, and inert authority envelope selected by K1. Each
+framing, profile envelope, and inert authority envelope selected by the
+semantic foundation. Each
 artifact-owning domain still defines its exact domain-specific semantic body,
 profile contents and exact-use derivation, subject-specific dependency
 meaning, admission predicate, complete policy-closure derivation, capability

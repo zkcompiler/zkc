@@ -1,4 +1,4 @@
-# Published PIR Semantic Profiles
+# PIR Semantic Profile Publication
 
 > **Document kind:** Target semantic specification and publication index
 > **Document state:** Active non-normative target
@@ -8,12 +8,12 @@
 
 ## 1. Purpose
 
-This directory publishes the complete source of the stable upstream PIR
-semantic-language profiles. A source manifest and the exact marked fragments
-in its owning durable page compile to one complete six-field Foundation
-`SemanticLanguageProfileBody`. The adjacent identity table is derived output;
-it is reproduced by two independent compilers and never participates in a
-profile preimage.
+This directory publishes the complete owner source for the six stable upstream
+PIR semantic-language profiles and two dependent PIR profiles. A strict source
+manifest and the exact marked fragments in its durable owner pages compile to
+one complete six-field Foundation `SemanticLanguageProfileBody`. Identity
+tables are derived output; two independent compilers reproduce them, and they
+never participate in a profile preimage.
 
 The published graph is:
 
@@ -24,6 +24,13 @@ pir.interaction
 `- pir.public-setup
    `- pir.commitment-opening
       `- pir.oracle-commitment
+
+(pir.interaction + pir.canonical-framed-fiat-shamir)
+  `- pir.interface-plan
+
+(pir.interaction + pir.canonical-framed-fiat-shamir
+ + pir.interface-plan + oir.endpoint-graph)
+  `- pir.endpoint-source-view
 ```
 
 The display elides direct-use diamonds. Commitment opening directly imports
@@ -42,13 +49,17 @@ The source artifacts are:
 | `public-setup` | [`public-setup.json`](public-setup.json) | [`interactive-core.md`](../interactive-core.md) |
 | `commitment-opening` | [`commitment-opening.json`](commitment-opening.json) | [`commitment-opening-verification.md`](../commitment-opening-verification.md) |
 | `oracle-commitment` | [`oracle-commitment.json`](oracle-commitment.json) | [`oracle-commitment-construction.md`](../oracle-commitment-construction.md) |
+| `interface-plan` | [`interface-plan.json`](interface-plan.json) | [`interfaces-and-plans.md`](../interfaces-and-plans.md) |
+| `endpoint-source-view` | [`endpoint-source-view.json`](endpoint-source-view.json) | [`endpoint-projection-views.md`](../endpoint-projection-views.md) |
 
 [`published-identities.json`](published-identities.json) records the derived
 body length, body SHA-256, full typed content-reference bytes, and profile-ID
-digest for each source artifact. Those values are conformance pins, not source
-inputs or independent semantic claims.
+digest for the six frozen v0 artifacts. The owner-neutral publication gate
+reconstructs and can print the complete indexed graph, including the two
+dependent PIR rows. Those values are conformance results, not source inputs or
+independent semantic claims.
 
-## 3. Owner-source manifest
+## 3. Frozen v0 owner-source manifest
 
 Every manifest is strict JSON with exactly these fields:
 
@@ -66,6 +77,11 @@ ProfileSourceManifestV0 = {
   subjects: CanonicalSeq<SubjectLanguageSource>
 }
 ```
+
+The two dependent manifests use the owner-qualified v1 edition defined by
+[Semantic Profile Publication](../../foundation/semantic-profile-publication.md).
+That edition moves `owner_page` into each fragment and fixes the local catalog
+namespace explicitly; it does not reinterpret or upgrade the v0 rows below.
 
 `owner_page` and marker names are build coordinates and are excluded from the
 compiled profile. Each `FragmentSource` names one unique start marker and end
@@ -211,9 +227,11 @@ derived imports and uses, exact root closures, and the identity table.
 
 ## 7. Scope and change rule
 
-This publication closes the profile preimages for the six rows in Section 2.
-It does not publish Interface/OIR, Relations, Analysis, Compiler, Realization,
-Evidence, a cryptographic theorem, or an implementation-conformance profile.
+This publication closes the PIR-owned profile preimages for the eight rows in
+Section 2. It does not publish the OIR projection relation, Relations,
+Analysis, Compiler, Realization, Evidence, a cryptographic theorem, or an
+implementation-conformance profile. The complete cross-domain publication set
+is indexed by Foundation.
 A change to the source format, catalog grammar, law-source grammar, extraction
 normalization, or compiler interpretation requires a new explicit publication
 format. Existing bytes are never reinterpreted under a changed compiler.

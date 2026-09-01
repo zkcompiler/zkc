@@ -11,6 +11,8 @@
 > authoritative until cutover. This page establishes no relation truth or
 > cryptographic property.
 
+<!-- zkc-profile-source:analysis-property-relations-semantics:start -->
+
 ## 1. Scope
 
 This page defines how Analysis selects exact Relations relation meaning and
@@ -334,3 +336,5 @@ cost family must define its own source manifest, observer, map direction,
 experiment, complete negative meaning, and quantitative semantics. No result
 on one exact map refutes existence of another map, and no finite trace becomes
 a distributional statement without a separate rule.
+
+<!-- zkc-profile-source:analysis-property-relations-semantics:end -->

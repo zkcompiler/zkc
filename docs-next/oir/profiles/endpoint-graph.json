@@ -1,0 +1,89 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "oir-endpoint-graph",
+  "catalog_namespace": "oir",
+  "profile_family": "oir.endpoint-graph",
+  "revision": 0,
+  "expected_imports": [],
+  "supported_subject_kinds": [
+    "oir.endpoint"
+  ],
+  "fragments": [
+    {
+      "name": "endpoint-graph-semantics",
+      "owner_page": "docs-next/oir/projection-contract.md",
+      "start": "zkc-profile-source:oir-endpoint-graph-semantics:start",
+      "end": "zkc-profile-source:oir-endpoint-graph-semantics:end"
+    },
+    {
+      "name": "endpoint-graph-bodies",
+      "owner_page": "docs-next/oir/projection-contract.md",
+      "start": "zkc-profile-source:oir-endpoint-graph-bodies:start",
+      "end": "zkc-profile-source:oir-endpoint-graph-bodies:end"
+    },
+    {
+      "name": "endpoint-contract-law",
+      "owner_page": "docs-next/oir/projection-contract.md",
+      "start": "zkc-profile-source:oir-endpoint-contract-law:start",
+      "end": "zkc-profile-source:oir-endpoint-contract-law:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "oir.body-compiler",
+      "name": "endpoint-graph-body-v0",
+      "revision": 0,
+      "fragment": "endpoint-graph-bodies",
+      "selector": "EndpointSemanticGraphBody(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "oir.semantic-law",
+      "name": "endpoint-contract-derivation-v0",
+      "revision": 0,
+      "fragment": "endpoint-contract-law",
+      "selector": "`DeriveEndpointContractV0` applies the following exact continuation law.",
+      "dependencies": []
+    },
+    {
+      "kind": "oir.semantic-law",
+      "name": "local-oir-admission-v0",
+      "revision": 0,
+      "fragment": "endpoint-graph-semantics",
+      "selector": "## 5. Independent local OIR admission",
+      "dependencies": []
+    },
+    {
+      "kind": "oir.evaluator-signature",
+      "name": "derive-endpoint-contract-v0",
+      "revision": 0,
+      "fragment": "endpoint-contract-law",
+      "selector": "DerivedEndpointContractBody(x) = R",
+      "dependencies": []
+    },
+    {
+      "kind": "oir.failure-schema",
+      "name": "endpoint-contract-derivation-outcome-v0",
+      "revision": 0,
+      "fragment": "endpoint-contract-law",
+      "selector": "EndpointContractDerivationOutcomeBody =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "oir.endpoint",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "oir.body-compiler",
+        "name": "endpoint-graph-body-v0"
+      },
+      "laws": [
+        "endpoint-contract-derivation-v0",
+        "local-oir-admission-v0"
+      ],
+      "evaluator": "derive-endpoint-contract-v0",
+      "failure_schema": "endpoint-contract-derivation-outcome-v0"
+    }
+  ]
+}

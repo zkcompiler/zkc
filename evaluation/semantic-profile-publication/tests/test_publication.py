@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+import re
 import unittest
 
 import independent as cold
@@ -40,6 +41,39 @@ class SemanticProfilePublicationTest(unittest.TestCase):
         path = self.manifests[key]["owner_page"]
         assert type(path) is str
         return path, (ROOT / path).read_bytes()
+
+    @staticmethod
+    def literal_catalog(page: str, declaration: str, closing: str) -> tuple[str, ...]:
+        text = (ROOT / page).read_text(encoding="utf-8")
+        start = text.index(f"{declaration} = ")
+        end = text.index(f"\n{closing}", start)
+        return tuple(re.findall(r'  "([a-z][a-z0-9.-]+)"', text[start:end]))
+
+    def assert_page_change_rotates_exactly(
+        self,
+        *,
+        path: str,
+        old: bytes,
+        new: bytes,
+        rotated: set[str],
+    ) -> None:
+        page = (ROOT / path).read_bytes()
+        self.assertIn(old, page)
+        changed_page = page.replace(old, new, 1)
+        changed = ref.compile_repository(page_overrides={path: changed_page})
+        cold_changed = cold.compile_repository(page_overrides={path: changed_page})
+        for key in ref.PROFILE_KEYS:
+            with self.subTest(profile=key):
+                self.assertEqual(
+                    changed.profiles[key].profile_id
+                    != self.reference.profiles[key].profile_id,
+                    key in rotated,
+                )
+                self.assertEqual(
+                    cold_changed.profiles[key].identifier
+                    != self.independent.profiles[key].identifier,
+                    key in rotated,
+                )
 
     def test_cold_foundation_reconstruction_matches_selected_basis(self) -> None:
         self.assertEqual(ref.verify_foundation_source(), cold.foundation_record())
@@ -91,8 +125,32 @@ class SemanticProfilePublicationTest(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertEqual(published, ref.identity_table(self.reference))
-        self.assertEqual(published, cold.identity_table(self.independent))
+        self.assertEqual(published, ref.legacy_identity_table(self.reference))
+        self.assertEqual(published, cold.legacy_identity_table(self.independent))
+
+    def test_frozen_upstream_profiles_remain_byte_identical_under_indexed_publication(self) -> None:
+        published = json.loads(
+            (ROOT / "docs-next/pir/profiles/published-identities.json").read_text(
+                encoding="utf-8"
+            )
+        )["profiles"]
+        self.assertEqual(tuple(ref.LEGACY_PROFILE_KEYS), tuple(cold.LEGACY_KEYS))
+        for key in ref.LEGACY_PROFILE_KEYS:
+            with self.subTest(profile=key):
+                reference = self.reference.profiles[key]
+                independent = self.independent.profiles[key]
+                self.assertEqual(
+                    reference.body_bytes.hex(),
+                    independent.body_bytes.hex(),
+                )
+                self.assertEqual(
+                    reference.profile_id.digest.hex(),
+                    published[key]["profile_digest"],
+                )
+                self.assertEqual(
+                    independent.identifier.digest.hex(),
+                    published[key]["profile_digest"],
+                )
 
     def test_source_fragments_are_stored_once_and_not_copied_into_law_source(self) -> None:
         for key, artifact in self.reference.profiles.items():
@@ -130,6 +188,52 @@ class SemanticProfilePublicationTest(unittest.TestCase):
                 moved.profiles["interaction"].body_bytes,
             )
 
+    def test_owner_qualified_fragment_pages_are_not_identity_bearing(self) -> None:
+        key = "interface-plan"
+        manifest = copy.deepcopy(self.manifests[key])
+        owner_paths = {fragment["owner_page"] for fragment in manifest["fragments"]}
+        self.assertEqual(owner_paths, {"docs-next/pir/interfaces-and-plans.md"})
+        old_path = owner_paths.pop()
+        page = (ROOT / old_path).read_bytes()
+        moved_path = "docs-next/pir/profiles/moved-interface-plan-owner.md"
+        for fragment in manifest["fragments"]:
+            fragment["owner_page"] = moved_path
+        moved = ref.compile_repository(
+            manifest_overrides={key: manifest},
+            page_overrides={moved_path: page},
+        )
+        cold_moved = cold.compile_repository(
+            manifest_overrides={key: manifest},
+            page_overrides={moved_path: page},
+        )
+        self.assertEqual(
+            moved.profiles[key].body_bytes,
+            self.reference.profiles[key].body_bytes,
+        )
+        self.assertEqual(
+            cold_moved.profiles[key].body_bytes,
+            self.independent.profiles[key].body_bytes,
+        )
+        self.assertNotIn(old_path.encode("utf-8"), moved.profiles[key].body_bytes)
+        self.assertNotIn(moved_path.encode("utf-8"), moved.profiles[key].body_bytes)
+
+    def test_owner_page_paths_are_canonical_and_cannot_alias_overlap_checks(self) -> None:
+        for alias in (
+            ".",
+            "/docs-next/pir/interfaces-and-plans.md",
+            "docs-next/pir/../pir/interfaces-and-plans.md",
+            "docs-next//pir/interfaces-and-plans.md",
+            "docs-next\\pir\\interfaces-and-plans.md",
+        ):
+            with self.subTest(alias=alias):
+                changed = copy.deepcopy(self.manifests["interface-plan"])
+                changed["fragments"][0]["owner_page"] = alias
+                self.assert_both_refuse(manifests={"interface-plan": changed})
+
+        legacy = copy.deepcopy(self.manifests["interaction"])
+        legacy["owner_page"] = "./docs-next/pir/interactive-core.md"
+        self.assert_both_refuse(manifests={"interaction": legacy})
+
     def test_text_outside_selected_fragments_does_not_rotate_identity(self) -> None:
         path, page = self.owner_page("canonical-framed-fiat-shamir")
         changed = b"<!-- nonsemantic relocated-page prefix -->\n" + page
@@ -142,7 +246,7 @@ class SemanticProfilePublicationTest(unittest.TestCase):
             cold.identity_table(independent), cold.identity_table(self.independent)
         )
 
-    def test_interaction_change_rotates_every_dependent_profile(self) -> None:
+    def test_interaction_change_rotates_exactly_its_dependency_closure(self) -> None:
         path, page = self.owner_page("interaction")
         old = b"Old bytes are never reinterpreted."
         new = b"Old bytes are never reinterpreted under this source edition."
@@ -150,18 +254,25 @@ class SemanticProfilePublicationTest(unittest.TestCase):
         changed_page = page.replace(old, new, 1)
         changed = ref.compile_repository(page_overrides={path: changed_page})
         cold_changed = cold.compile_repository(page_overrides={path: changed_page})
+        rotated = {
+            key
+            for key in ref.PROFILE_KEYS
+            if "interaction" in self.reference.exact_closure(key)
+        }
         for key in ref.PROFILE_KEYS:
             with self.subTest(profile=key):
-                self.assertNotEqual(
-                    changed.profiles[key].profile_id,
-                    self.reference.profiles[key].profile_id,
+                self.assertEqual(
+                    changed.profiles[key].profile_id
+                    != self.reference.profiles[key].profile_id,
+                    key in rotated,
                 )
-                self.assertNotEqual(
-                    cold_changed.profiles[key].identifier,
-                    self.independent.profiles[key].identifier,
+                self.assertEqual(
+                    cold_changed.profiles[key].identifier
+                    != self.independent.profiles[key].identifier,
+                    key in rotated,
                 )
 
-    def test_sibling_change_is_local(self) -> None:
+    def test_canonical_fs_change_rotates_exactly_its_dependency_closure(self) -> None:
         path, page = self.owner_page("canonical-framed-fiat-shamir")
         old = b"The construction body does not repeat a `core_id` outside field 0"
         new = b"The construction body never repeats a `core_id` outside field 0"
@@ -169,18 +280,23 @@ class SemanticProfilePublicationTest(unittest.TestCase):
         changed_page = page.replace(old, new, 1)
         changed = ref.compile_repository(page_overrides={path: changed_page})
         cold_changed = cold.compile_repository(page_overrides={path: changed_page})
+        rotated = {
+            key
+            for key in ref.PROFILE_KEYS
+            if "canonical-framed-fiat-shamir"
+            in self.reference.exact_closure(key)
+        }
         for key in ref.PROFILE_KEYS:
-            should_rotate = key == "canonical-framed-fiat-shamir"
             with self.subTest(profile=key):
                 self.assertEqual(
                     changed.profiles[key].body_bytes
                     != self.reference.profiles[key].body_bytes,
-                    should_rotate,
+                    key in rotated,
                 )
                 self.assertEqual(
                     cold_changed.profiles[key].body_bytes
                     != self.independent.profiles[key].body_bytes,
-                    should_rotate,
+                    key in rotated,
                 )
 
     def test_public_setup_change_rotates_only_its_descendants(self) -> None:
@@ -191,7 +307,11 @@ class SemanticProfilePublicationTest(unittest.TestCase):
         changed_page = page.replace(old, new, 1)
         changed = ref.compile_repository(page_overrides={path: changed_page})
         cold_changed = cold.compile_repository(page_overrides={path: changed_page})
-        rotated = {"public-setup", "commitment-opening", "oracle-commitment"}
+        rotated = {
+            key
+            for key in ref.PROFILE_KEYS
+            if "public-setup" in self.reference.exact_closure(key)
+        }
         for key in ref.PROFILE_KEYS:
             with self.subTest(profile=key):
                 self.assertEqual(
@@ -217,10 +337,69 @@ class SemanticProfilePublicationTest(unittest.TestCase):
         ]
         self.assert_both_refuse(manifests={"public-setup": surplus})
 
+    def test_dependent_profile_import_graph_is_exact(self) -> None:
+        expected = {
+            "interface-plan": ("canonical-framed-fiat-shamir", "interaction"),
+            "oir-endpoint-graph": (),
+            "endpoint-source-view": (
+                "canonical-framed-fiat-shamir",
+                "interaction",
+                "interface-plan",
+                "oir-endpoint-graph",
+            ),
+            "oir-projection-relation": (
+                "endpoint-source-view",
+                "oir-endpoint-graph",
+            ),
+            "relations": ("interaction", "interface-plan"),
+            "analysis-kernel": (),
+            "analysis-cryptographic-property": (
+                "analysis-kernel",
+                "canonical-framed-fiat-shamir",
+                "interaction",
+                "public-setup",
+                "relations",
+            ),
+            "analysis-afk-transport": ("analysis-cryptographic-property",),
+            "analysis-afk-theorem-source-validation": (
+                "analysis-afk-transport",
+            ),
+            "analysis-incremental-composition": (
+                "analysis-kernel",
+                "interaction",
+                "interface-plan",
+                "relations",
+            ),
+            "analysis-incremental-composition-source-validation": (
+                "analysis-incremental-composition",
+            ),
+        }
+        for key, imports in expected.items():
+            with self.subTest(profile=key):
+                self.assertEqual(self.reference.profiles[key].direct_import_keys, imports)
+                self.assertEqual(self.independent.profiles[key].direct_import_keys, imports)
+
+    def test_owner_qualified_namespace_mismatch_refuses(self) -> None:
+        changed = copy.deepcopy(self.manifests["relations"])
+        changed["catalog_namespace"] = "analysis"
+        self.assert_both_refuse(manifests={"relations": changed})
+
     def test_profile_import_cycle_refuses_before_hashing(self) -> None:
         cyclic = copy.deepcopy(self.manifests["interaction"])
         cyclic["expected_imports"] = ["canonical-framed-fiat-shamir"]
         self.assert_both_refuse(manifests={"interaction": cyclic})
+
+    def test_oir_graph_cannot_import_its_pir_source_view(self) -> None:
+        changed = copy.deepcopy(self.manifests["oir-endpoint-graph"])
+        changed["expected_imports"] = ["endpoint-source-view"]
+        changed["definitions"][0]["dependencies"].append(
+            {
+                "profile": "endpoint-source-view",
+                "kind": "pir.body-compiler",
+                "name": "endpoint-source-view-body-v0",
+            }
+        )
+        self.assert_both_refuse(manifests={"oir-endpoint-graph": changed})
 
     def test_unresolved_imported_declaration_refuses(self) -> None:
         changed = copy.deepcopy(self.manifests["commitment-opening"])
@@ -262,6 +441,81 @@ class SemanticProfilePublicationTest(unittest.TestCase):
         changed = copy.deepcopy(self.manifests["interaction"])
         changed["subjects"] = changed["subjects"][:-1]
         self.assert_both_refuse(manifests={"interaction": changed})
+
+    def test_relations_semantic_and_module_namespaces_are_exact_and_disjoint(self) -> None:
+        semantic = self.literal_catalog(
+            "docs-next/relations/relation-model.md",
+            "RelationsSemanticSubjectKindCatalogV0",
+            "]",
+        )
+        declarations = self.literal_catalog(
+            "docs-next/relations/relation-model.md",
+            "RelationsDeclarationContractKindCatalogV0",
+            "]",
+        )
+        self.assertEqual(len(semantic), 24)
+        self.assertEqual(len(declarations), 14)
+        self.assertEqual(tuple(self.manifests["relations"]["supported_subject_kinds"]), semantic)
+        self.assertEqual(set(semantic).intersection(declarations), set())
+
+    def test_analysis_supported_kind_catalogs_match_their_exact_manifests(self) -> None:
+        declarations = {
+            "analysis-kernel": "AnalysisKernelSupportedKinds",
+            "analysis-cryptographic-property": (
+                "AnalysisCryptographicPropertySupportedKinds"
+            ),
+            "analysis-afk-transport": "AnalysisAFKTransportSupportedKinds",
+            "analysis-afk-theorem-source-validation": (
+                "AnalysisAFKTheoremSourceValidationSupportedKinds"
+            ),
+            "analysis-incremental-composition": (
+                "AnalysisIncrementalCompositionSupportedKinds"
+            ),
+            "analysis-incremental-composition-source-validation": (
+                "AnalysisIncrementalCompositionSourceValidationSupportedKinds"
+            ),
+        }
+        for key, declaration in declarations.items():
+            with self.subTest(profile=key):
+                catalog = self.literal_catalog(
+                    "docs-next/analysis/analysis-model.md", declaration, "}"
+                )
+                self.assertEqual(
+                    tuple(self.manifests[key]["supported_subject_kinds"]),
+                    tuple(sorted(catalog)),
+                )
+
+    def test_analysis_property_change_is_confined_to_its_import_branch(self) -> None:
+        root = "analysis-cryptographic-property"
+        rotated = {
+            key for key in ref.PROFILE_KEYS if root in self.reference.exact_closure(key)
+        }
+        self.assert_page_change_rotates_exactly(
+            path="docs-next/analysis/cryptographic-properties.md",
+            old=b"This profile selects one exact theorem edge",
+            new=b"This profile selects exactly one theorem edge",
+            rotated=rotated,
+        )
+
+    def test_incremental_parent_change_rotates_only_parent_and_child(self) -> None:
+        root = "analysis-incremental-composition"
+        rotated = {
+            key for key in ref.PROFILE_KEYS if root in self.reference.exact_closure(key)
+        }
+        self.assert_page_change_rotates_exactly(
+            path="docs-next/analysis/incremental-composition.md",
+            old=b"one place to state their static family and theorem obligations",
+            new=b"one place to state exact static family and theorem obligations",
+            rotated=rotated,
+        )
+
+    def test_incremental_validation_change_does_not_rotate_theorem_meaning(self) -> None:
+        self.assert_page_change_rotates_exactly(
+            path="docs-next/analysis/incremental-composition.md",
+            old=b"The theorem body and its source record remain separate:",
+            new=b"The theorem body and its source record remain strictly separate:",
+            rotated={"analysis-incremental-composition-source-validation"},
+        )
 
     def test_source_fragments_cannot_overlap_across_manifests(self) -> None:
         changed = copy.deepcopy(self.manifests["public-setup"])

@@ -1,0 +1,243 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "interface-plan",
+  "catalog_namespace": "pir",
+  "profile_family": "pir.interface-plan",
+  "revision": 0,
+  "expected_imports": [
+    "canonical-framed-fiat-shamir",
+    "interaction"
+  ],
+  "supported_subject_kinds": [
+    "pir.confidential-plan-witness-disclosure-policy",
+    "pir.plan-witness-surface",
+    "pir.protocol-interface",
+    "pir.prover-plan",
+    "pir.source-binding-payload",
+    "pir.source-capability-requirement",
+    "pir.source-consumer",
+    "pir.source-no-policy",
+    "pir.source-policy-closure",
+    "pir.source-purpose"
+  ],
+  "fragments": [
+    {
+      "name": "interface-plan-semantics",
+      "owner_page": "docs-next/pir/interfaces-and-plans.md",
+      "start": "zkc-profile-source:interface-plan-semantics:start",
+      "end": "zkc-profile-source:interface-plan-semantics:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "pir.body-compiler",
+      "name": "interface-plan-body-v0",
+      "revision": 0,
+      "fragment": "interface-plan-semantics",
+      "selector": "## 6. Exact canonical bodies",
+      "dependencies": [
+        {
+          "profile": "canonical-framed-fiat-shamir",
+          "kind": "pir.body-compiler",
+          "name": "canonical-framed-transcript-construction-body-v0"
+        },
+        {
+          "profile": "interaction",
+          "kind": "pir.body-compiler",
+          "name": "interactive-core-body-v0"
+        }
+      ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "interface-admission-v0",
+      "revision": 0,
+      "fragment": "interface-plan-semantics",
+      "selector": "### 3.6 Identity and admission",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "plan-admission-and-realization-v0",
+      "revision": 0,
+      "fragment": "interface-plan-semantics",
+      "selector": "### 4.3 Identity, admission, and `PlanRealizes`",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "plan-witness-authority-v0",
+      "revision": 0,
+      "fragment": "interface-plan-semantics",
+      "selector": "## 5. `PlanWitnessSurface`",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "profile-boundary-v0",
+      "revision": 0,
+      "fragment": "interface-plan-semantics",
+      "selector": "All identified subjects on this page select one standalone",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.evaluator-signature",
+      "name": "interface-plan-evaluator-v0",
+      "revision": 0,
+      "fragment": "interface-plan-semantics",
+      "selector": "AdmitProtocolInterface(",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.failure-schema",
+      "name": "interface-plan-qualified-admission-v0",
+      "revision": 0,
+      "fragment": "interface-plan-semantics",
+      "selector": "-> QualifiedAdmission<AdmittedProtocolInterface>",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {
+      "kind": "pir.confidential-plan-witness-disclosure-policy",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "interface-plan-body-v0"
+      },
+      "laws": [
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.plan-witness-surface",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "interface-plan-body-v0"
+      },
+      "laws": [
+        "plan-admission-and-realization-v0",
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.protocol-interface",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "interface-plan-body-v0"
+      },
+      "laws": [
+        "interface-admission-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.prover-plan",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "interface-plan-body-v0"
+      },
+      "laws": [
+        "plan-admission-and-realization-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.source-binding-payload",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "interface-plan-body-v0"
+      },
+      "laws": [
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.source-capability-requirement",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "interface-plan-body-v0"
+      },
+      "laws": [
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.source-consumer",
+      "body_compiler": {
+        "profile": "interaction",
+        "kind": "pir.body-compiler",
+        "name": "source-authority-envelope-body-v0"
+      },
+      "laws": [
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.source-no-policy",
+      "body_compiler": {
+        "profile": "interaction",
+        "kind": "pir.body-compiler",
+        "name": "source-authority-envelope-body-v0"
+      },
+      "laws": [
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.source-policy-closure",
+      "body_compiler": {
+        "profile": "self",
+        "kind": "pir.body-compiler",
+        "name": "interface-plan-body-v0"
+      },
+      "laws": [
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    },
+    {
+      "kind": "pir.source-purpose",
+      "body_compiler": {
+        "profile": "interaction",
+        "kind": "pir.body-compiler",
+        "name": "source-authority-envelope-body-v0"
+      },
+      "laws": [
+        "plan-witness-authority-v0",
+        "profile-boundary-v0"
+      ],
+      "evaluator": "interface-plan-evaluator-v0",
+      "failure_schema": "interface-plan-qualified-admission-v0"
+    }
+  ]
+}

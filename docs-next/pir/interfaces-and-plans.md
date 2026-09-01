@@ -9,6 +9,8 @@
 > authoritative. This page makes no implementation, compatibility, migration,
 > or cryptographic-security claim.
 
+<!-- zkc-profile-source:interface-plan-semantics:start -->
+
 ## 1. Contract and boundary
 
 An admitted [Protocol](interactive-core.md) fixes verifier-observable
@@ -102,10 +104,10 @@ requires a newly formed `PIRInterfacePlanProfileId`. It does not change
 InteractiveCore execution meaning. Old Interface/Plan-profiled bytes are never
 interpreted under the rotated profile.
 
-The required Interface/Plan root closure has three entries once their owners
-publish complete profile preimages: the two K2 profiles plus
+The published Interface/Plan root closure has exactly three entries: the
+Interaction profile, the canonical-framed Fiat--Shamir profile, and
 `PIRInterfacePlanProfileId`. The five-entry convenience bundle
-that also contains the unrelated K2 public-setup profile and
+that also contains the unrelated public-setup profile and
 `RelationsProfileId` is not valid Interface/Plan intake. Interface formation
 and owner-view issuance authenticate only this three-entry
 closure and require only the Interface/Plan root in evaluator support; lack of
@@ -113,13 +115,13 @@ Relations support cannot block an Interface view. An authenticated but
 evaluator-unrecognized root is `Unsupported`, while a supported profile that
 omits the Interface or any emitted owner-authority subject kind is `Refused`.
 
-This section fixes the target profile owner, import topology, supported-kind
-set, catalog responsibility, and no-extra closure law. It does not yet publish
-the complete six-field owner-local K1 profile preimage or its full typed ID.
-The bounded executable profile pin is evidence only for deterministic
-topology, authentication, and rotation. The owner must publish the complete
-preimage and independently reconstructible full typed ID before any dependent
-K4 ID is treated as persistent and before K5 freeze.
+This section fixes the profile owner, import topology, supported-kind set,
+catalog responsibility, and no-extra closure law. Its strict owner manifest
+and marked semantic sources now publish the complete six-field preimage and
+full typed ID, and two independent compilers reproduce that result. The
+bounded executable profile pin remains evidence only for deterministic
+topology, authentication, and rotation; neither publication nor the pin
+establishes implementation conformance, semantic support, or final freeze.
 
 ## 2. Shared local vocabulary
 
@@ -2095,6 +2097,8 @@ objects above to a semantic preimage. A module-owned declaration change instead
 rotates that module and its exact users. The shared Foundation semantic regime
 rotates only when a Foundation-owned mechanism or its interpretation changes.
 Old bytes are never reinterpreted.
+
+<!-- zkc-profile-source:interface-plan-semantics:end -->
 
 ## 7. Nonclaims and reopening conditions
 

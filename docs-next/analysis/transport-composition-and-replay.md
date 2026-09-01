@@ -9,6 +9,8 @@
 > It establishes no theorem truth, transported property, replayed authority,
 > implementation support, or consumer reliance.
 
+<!-- zkc-profile-source:analysis-theorem-validation-semantics:start -->
+
 ## 1. Three separate contracts
 
 The Analysis Fresh-to-Fiat--Shamir path is:
@@ -81,7 +83,7 @@ AnalysisTheoremComponentSemanticsContract<P,C> = {
 
 ResolvedAnalysisTheoremComponentContract(P,component) =
   the one theorem-component contract of the same component kind resolved from
-  P's authenticated `AnalysisLanguageProfileLawSourceV0` by the complete
+  P's authenticated `AnalysisLanguageProfileLawProgramV0` by the complete
   declaration coordinate and body
 
 TheoremLocalBindingKind =
@@ -632,3 +634,5 @@ registries remain deferred. A future composition rule must name exact child and
 target subjects, an independently checked structural relation, a theorem edge,
 occurrence maps, hypothesis union, and typed loss. Structural composition alone
 will still transport no property.
+
+<!-- zkc-profile-source:analysis-theorem-validation-semantics:end -->

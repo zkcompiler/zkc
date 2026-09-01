@@ -10,6 +10,8 @@
 > Admitting these schemas or passing a finite gate establishes no theorem truth,
 > cryptographic security, concrete-hash security, or implementation support.
 
+<!-- zkc-profile-source:analysis-property-semantics:start -->
+
 ## 1. Selection and research basis
 
 This profile selects one exact theorem edge, not a generic rule that Fiat--Shamir
@@ -2716,6 +2718,10 @@ A biased decoder, an unmodeled exhaustion branch, or an unsupported reverse-
 sampling/programming operation prevents applicability. A finite SHA-256 run is
 neither sampler proof nor ROM evidence.
 
+<!-- zkc-profile-source:analysis-property-semantics:end -->
+
+<!-- zkc-profile-source:analysis-transport-family-semantics:start -->
+
 ### 4.4 Asymptotic family profile and concrete-member split
 
 The Definition-10 subject is a mathematical family. It is not an infinite
@@ -4132,6 +4138,10 @@ bound, treat raw random-oracle queries as adversary invocations, or turn a
 concrete hash into a random oracle. Admission forms
 `TheoremTruthPropositionId(AFKV2TheoremSchemaId)` but establishes none of it.
 
+<!-- zkc-profile-source:analysis-transport-family-semantics:end -->
+
+<!-- zkc-profile-source:analysis-property-quantitative-semantics:start -->
+
 ## 6. Typed quantitative language
 
 ### 6.1 Closed sorts
@@ -4574,6 +4584,10 @@ Witness or a primitive-break Witness such as a binding/collision break. The FS
 theorem can target that extended relation, while a separate exact reduction and
 assumption price the primitive-break branch. This preserves occurrence and
 outcome meaning more faithfully than an ambient additive collision term.
+
+<!-- zkc-profile-source:analysis-property-quantitative-semantics:end -->
+
+<!-- zkc-profile-source:analysis-transport-application-semantics:start -->
 
 ## 7. Exact AFK applicability and family transport
 
@@ -6044,3 +6058,5 @@ Its theorem-truth and applicability coordinates remain unresolved and its
 property status remains unevaluated. Durable activation requires exact family,
 experiment, adversary, source-manifest, question, proposition, support, and
 authority bodies under an explicit Analysis profile revision.
+
+<!-- zkc-profile-source:analysis-transport-application-semantics:end -->

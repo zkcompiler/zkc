@@ -1700,7 +1700,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
         self.assertEqual(digest, schema.authority.statement_content_sha256)
         self.assertEqual(
             digest,
-            "49d2a707ff0e83229ce28e5480437d165e88f46b7022f98e52ecc5b92ad4a18b",
+            "d1a9c8a18bc9e54cd14f699d1f4353f6103aa73d7ebddd2cfea38649ea8637c5",
         )
         self.assertNotEqual(digest, unprofiled_digest)
         self.assertNotEqual(digest, schema.authority.artifact_sha256)

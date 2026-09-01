@@ -97,10 +97,17 @@ class IndependentOracleVectorParityTest(unittest.TestCase):
         marker = (
             b"`SemanticCoreLawSourceV0` is the ASCII encoding of the following "
             b"lines joined\nby LF, including one LF after the last line and no CR "
-            b"octets:\n\n```text\n"
+            b"octets:\n\n"
+            b"<!-- zkc-foundation-source:semantic-core-law:start -->\n\n"
+            b"```text\n"
         )
         start = document.index(marker) + len(marker)
-        end = document.index(b"```\n\nThe byte string has length", start)
+        end = document.index(
+            b"```\n\n"
+            b"<!-- zkc-foundation-source:semantic-core-law:end -->\n\n"
+            b"The byte string has length",
+            start,
+        )
 
         self.assertEqual(document[start:end], model.SEMANTIC_CORE_LAW_SOURCE)
 

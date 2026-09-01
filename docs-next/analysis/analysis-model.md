@@ -9,6 +9,8 @@
 > authoritative until explicit consolidation and cutover. This page establishes
 > no theorem truth, property, implementation, migration, or reliance claim.
 
+<!-- zkc-profile-source:analysis-kernel-foundation-semantics:start -->
+
 ## 1. Scope and fixed separations
 
 The minimum Analysis kernel evaluates exact conditional propositions over
@@ -56,9 +58,13 @@ ambient Analysis catalog inside `B`. Every portable Analysis body is governed
 by one direct standalone `SemanticLanguageProfileId`. The selected profile is
 an ordinary same-regime semantic subject, not a module declaration and not a
 prior-meta axis. Its `supported_subject_kinds` contains the exact Analysis
-subject kind being formed, its inline declaration catalogs contain every local
-Analysis declaration used by its laws, and its `semantic_law_source` is the
-canonical byte encoding of one closed `AnalysisLanguageProfileLawSourceV0`:
+subject kind being formed, and its populated publication catalogs contain the
+exact marked source fragments plus every local Analysis declaration used by
+its laws. Foundation's owner-qualified `SemanticProfileLawSourceV1` is the
+exact direct-use, subject-language, evaluator, and failure-schema index; it
+does not copy the domain law. Each `analysis.semantic-law` declaration instead
+selects exact bytes in one authenticated source fragment and denotes one
+closed `AnalysisLanguageProfileLawProgramV0`:
 
 ```text
 AnalysisDeclarationContractV0 = {
@@ -87,7 +93,7 @@ AnalysisBodySchemaDeclarationV0 = {
   ordered_field_schemas: CanonicalSeq<MetaSymbol>
 }
 
-AnalysisLanguageProfileLawSourceV0 = {
+AnalysisLanguageProfileLawProgramV0 = {
   version: exactly 0,
   declaration_contracts:
     CanonicalKeySortedSeq<
@@ -171,9 +177,10 @@ local ordinal under two unequal profiles never denotes one reusable reference.
 
 The profile body has exactly the Foundation fields `profile_family`, `revision`,
 `profile_imports`, `supported_subject_kinds`, `declaration_catalogs`, and
-`semantic_law_source`. The law-source record is strictly decoded from its exact
-bytes, must consume those bytes completely, and must re-encode identically.
-Catalog kinds are sorted and unique; local declaration ordinals are contiguous.
+`semantic_law_source`. The publication catalogs and generic v1 law-source
+record are strictly decoded from their exact bytes, must consume those bytes
+completely, and must re-encode identically. Catalog kinds are sorted and
+unique; local declaration ordinals are contiguous.
 Local references are interpreted only against the selected profile's catalog;
 imported references name an exact profile ID in its authenticated import
 closure plus a kind and ordinal. No ID-looking bytes acquire reference meaning.
@@ -211,14 +218,13 @@ profile-import DAG. It does not sweep ordinary semantic modules. Modules needed
 by a portable algorithm, evaluation contract, or owner subject are authenticated
 separately by that subject's exact domain dependency closure.
 
-The bounded cryptographic Analysis executable currently constructs the four
-previously selected direct-import tuples explicitly and checks them for exact
-equality. The incremental-composition branch is pressured separately by its
-focused evaluator until dependent profile publication joins both branches.
-Those checks reject tuple substitution or padding, but they do not derive
-imports by traversing typed declaration and law references, because their law
-sources remain the surrogates described above. Passing cases are therefore not
-evidence for the derived-import or unused-reference rules in this paragraph.
+The earlier bounded Analysis executables construct their selected direct-import
+tuples explicitly and check them for exact equality. The independent profile
+publication compilers now join both branches and derive imports from exact
+declaration dependencies in the published manifests. Those manifests and
+source-bound definitions still do not implement the complete typed law-term
+interpreter described above. Passing publication therefore establishes exact
+preimage reconstruction and import locality, not execution of every typed law.
 
 An unrelated profile or ordinary module therefore does not rotate an Analysis
 ID. Adding or changing a declaration or law inside the directly selected
@@ -231,6 +237,8 @@ never its future ID, a governed subject ID, evidence, a policy decision, or a
 live/local capability. This keeps the dependency direction
 `prior-meta basis -> profile DAG -> profiled subjects -> subject module DAG`
 acyclic.
+
+<!-- zkc-profile-source:analysis-kernel-foundation-semantics:end -->
 
 Analysis selects six independently evolvable profiles rather than one Analysis
 universe. Four form the initial cryptographic-property branch and two form the
@@ -298,22 +306,14 @@ Interaction static views, canonical-framed construction views, and
 `PublicSetupInvocationView` values. It therefore imports those three exact PIR
 profiles directly as well as Relations. These are required direct-use diamonds,
 not redundant convenience edges.
-These names denote the owner-local exact profile IDs once the six Analysis
-owners publish complete preimages; joined-path validation does not fix those semantic IDs. Its
-finite integration bundle instantiates deterministic executable profile
-objects only to test the selected topology, exact authentication, and rotation
-behavior. Those pins are evidence, not Analysis semantic authority, and the
-current symbolic-law/host-dispatch bodies must not be promoted into the ideal
-typed target identities.
-
-Before any dependent profile ID is treated as persistent and before independent freeze, each
-Analysis profile owner must publish its complete six-field
-`SemanticLanguageProfileBody`: exact family and revision, exact import IDs,
-exact supported kinds, complete declaration catalogs, exact typed
-semantic-law-source bytes, and the independently reconstructible full typed
-profile ID. Until then, an absent, substituted, padded, redundant, or unused
-import is a target refusal law whose finite shape has executable evidence, not
-a claim that the final owner preimages already exist.
+These names now denote the six owner-local exact profile IDs published from
+strict manifests and exact marked owner source. Two independent compilers
+reconstruct every complete six-field body, direct-use edge, typed content
+reference, and downstream rotation cone. The older joined-path profile objects
+remain bounded correspondence surrogates and do not own these identities.
+Publication establishes persistent target language coordinates, not typed-law
+interpreter completeness, theorem truth, property establishment, implementation
+conformance, or integrated semantic freeze.
 
 The kernel never imports a downstream profile. The cryptographic profile never
 imports either AFK child, and the AFK semantic transport profile never imports
@@ -360,15 +360,40 @@ AnalysisKernelSupportedKinds = {
   "analysis.hypothesis-context"
 }
 
-AnalysisCryptographicPropertySupportedKinds =
-  ActiveAnalysisBodyKinds minus {
-    "analysis.family-instance-role-map",
-    "analysis.incremental-composition-family",
-    "analysis.logical-nat-literal",
-    "analysis.pointwise-quantitative-normalization",
-    "analysis.theorem-schema",
-    "analysis.theorem-source-validation"
-  }
+AnalysisCryptographicPropertySupportedKinds = {
+  "analysis.adequacy-evaluator",
+  "analysis.asymptotic-protocol-family",
+  "analysis.capability-requirement-payload",
+  "analysis.challenge-domain",
+  "analysis.checked-result-coordinate",
+  "analysis.consumer",
+  "analysis.distribution-profile",
+  "analysis.experiment-profile",
+  "analysis.extractor-profile",
+  "analysis.family-read-manifest-schema",
+  "analysis.fixed-public-setup",
+  "analysis.goal",
+  "analysis.hypothesis-context",
+  "analysis.judgment-record",
+  "analysis.loss-semantic-import",
+  "analysis.operation-policy",
+  "analysis.owner-policy-closure",
+  "analysis.portable-source-authority-binding",
+  "analysis.positive-polynomial",
+  "analysis.positive-polynomial-profile",
+  "analysis.proposition",
+  "analysis.quantitative-formula",
+  "analysis.question",
+  "analysis.semantic-basis",
+  "analysis.semantic-read-manifest",
+  "analysis.source-authority-contract",
+  "analysis.source-profile",
+  "analysis.source-support",
+  "analysis.strategy-class",
+  "analysis.support-instantiation",
+  "analysis.use-purpose",
+  "analysis.validation-basis"
+}
 
 AnalysisAFKTransportSupportedKinds = {
   "analysis.adequacy-evaluator",
@@ -506,6 +531,8 @@ and semantic theorem bodies select its semantic profile; a source-validation
 body and every support, validation, policy, judgment, or authority body that
 consumes it select its exact child. No constructor searches both branches for
 a matching body shape.
+
+<!-- zkc-profile-source:analysis-kernel-domain-semantics:start -->
 
 ### 2.1 Source read slots
 
@@ -838,7 +865,7 @@ AnalysisAsymptoticFamilyLanguageDeclarationBody(name,payload_type,
 
 ResolvedAnalysisFamilyLanguageContract(P,language_ref) =
   the one asymptotic-family-language declaration contract resolved from P's
-  authenticated `AnalysisLanguageProfileLawSourceV0`; the complete declaration
+  authenticated `AnalysisLanguageProfileLawProgramV0`; the complete declaration
   body and payload schema must match exactly
 
 AnalysisAsymptoticFamilyLanguageContract = {
@@ -1418,7 +1445,7 @@ profiled wrapper; it is not recovered from the unprofiled domain body.
 `AnalysisId<K>(B,body)` in later compact displays means the unique well-typed
 `AnalysisId<K,P>(B,body)` after the surrounding constructor has fixed `P`.
 There is no unqualified runtime overload. `RequiredAnalysisLanguageProfile` is
-not a registry lookup or caller choice. In the target it accepts only the four
+not a registry lookup or caller choice. In the target it accepts only the six
 exact owner-published profile IDs and their authenticated no-extra closure; a
 structurally compatible ad-hoc, rotated, family/revision-equal, or broader
 profile is refused. Each
@@ -1536,7 +1563,7 @@ display label or an unconstrained extension point.
 ```text
 ResolvedAnalysisFamilyContract(P,family) =
   the one property-family contract in P's authenticated
-  `AnalysisLanguageProfileLawSourceV0` whose complete declaration coordinate
+  `AnalysisLanguageProfileLawProgramV0` whose complete declaration coordinate
   and body equal family; absence, duplication, or a wrong-profile body rejects
 
 ExactFamilyQuestionPayload<f> =
@@ -3677,3 +3704,5 @@ proof language, theorem database, persistence format, cache, solver, or
 general composition algebra. New families must define their own exact source
 manifest, experiment, property, negative meaning, quantitative sort and
 operations, semantic basis, and validation boundary before admission.
+
+<!-- zkc-profile-source:analysis-kernel-domain-semantics:end -->

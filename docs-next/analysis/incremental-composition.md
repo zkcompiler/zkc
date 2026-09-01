@@ -1,10 +1,12 @@
 # Incremental Composition Analysis
 
 > **Document kind:** Target semantic specification
-> **Document state:** Active target extension; profile publication pending
+> **Document state:** Active target extension; semantic source published
 > **Provisional owner:** `analysis`
 > **Authority:** None during transition. Current normative property semantics
 > remain under [`docs/spec/soundness.md`](../../docs/spec/soundness.md).
+
+<!-- zkc-profile-source:analysis-incremental-core-semantics:start -->
 
 ## 1. Purpose and authority boundary
 
@@ -426,6 +428,10 @@ families. A theorem application forms a separate proposition and judgment for
 each conclusion it actually provides. There is no result subtype relation and
 no bundled `VerifiedRecursiveComposition` conclusion.
 
+<!-- zkc-profile-source:analysis-incremental-core-semantics:end -->
+
+<!-- zkc-profile-source:analysis-incremental-validation-semantics:start -->
+
 ### 4.2 Source and theorem truth
 
 The theorem body and its source record remain separate:
@@ -460,6 +466,10 @@ enter any of these preimages. The semantic basis references the family and
 theorem schema; support binds every established premise and retained
 assumption; validation records the checker and exact source validation actually
 used; the judgment preserves the exact conditional conclusion.
+
+<!-- zkc-profile-source:analysis-incremental-validation-semantics:end -->
+
+<!-- zkc-profile-source:analysis-incremental-continuation-semantics:start -->
 
 ## 5. Carried obligations and report qualification
 
@@ -587,10 +597,11 @@ may name one: the family treats the authenticated Protocol as a complete
 member and does not interpret a construction-specific law. A theorem that
 does interpret such a law must use a narrower importing profile.
 
-The exact supported-kind sets, declaration catalogs, typed law-source bytes,
-complete six-field bodies, and profile IDs are publication obligations. Until
-they are published and independently reconstructed, this page selects the
-semantic shape but establishes no persistent identity or freeze claim.
+The exact supported-kind sets, marked semantic source, declaration catalogs,
+complete six-field bodies, and profile IDs are published and independently
+reconstructed. This establishes persistent target language identity only; it
+does not establish theorem truth, implementation conformance, or semantic
+freeze.
 
 Adding this family kind does not rotate the six published upstream PIR
 profiles. It rotates only downstream profiles whose exact law source or import
@@ -647,3 +658,5 @@ recursive-proof theorem; arbitrary-party continuation; relation satisfaction;
 fold preservation; accumulator validity; theorem truth; standard-model, ROM,
 or QROM security; concrete-hash security; knowledge extraction; zero
 knowledge; polynomial depth; implementation support; or production readiness.
+
+<!-- zkc-profile-source:analysis-incremental-continuation-semantics:end -->

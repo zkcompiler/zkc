@@ -8,6 +8,8 @@
 > specifications under [`docs/`](../../docs/README.md), does not activate full
 > Stage 4B, and makes no implementation or cryptographic-security claim.
 
+<!-- zkc-profile-source:endpoint-source-view-semantics:start -->
+
 ## 1. Boundary
 
 OIR projection is a relation between exact source meaning and exact target
@@ -257,25 +259,25 @@ subroutines.
 and the following exact-used profile import DAG:
 
 ```text
-PIRInteractionProfileId
-  <- PIRCanonicalFramedFSProfileId ----+--> PirEndpointSourceViewProfileId
-
-PIRInterfacePlanProfileId
-  <- OirEndpointGraphProfileId --------+
-
-PirEndpointSourceViewProfileId
-  <- OirProjectionRelationProfileId
+PIRInteractionProfileId ---------+
+PIRCanonicalFramedFSProfileId ---+
+PIRInterfacePlanProfileId -------+--> PirEndpointSourceViewProfileId
+OirEndpointGraphProfileId -------+                 |
+                                  +-----------------+--> OirProjectionRelationProfileId
+OirEndpointGraphProfileId -----------------------------^
 ```
 
-The source-view profile directly imports the canonical-framed and OIR
-endpoint-graph profiles. The construction profile imports Interaction, while
-the graph profile imports Interface/Plan. Every other arrow
-is the exact-used `profile_imports` edge shown above, not an ambient bundle hash
-or textual version label. This is the Foundation composition-profile rule
-applied at the first consumer that compares both families; neither sibling
-imports the other. The older bounded executable baseline exercised only the
-pre-composition linear subgraph with the following profile-ID digests under the
-selected regime, in the same order:
+The source-view profile directly imports all four profiles because its
+projector opens Interaction, canonical-framed construction, and
+Interface/Plan owner declarations while constructing the OIR-owned graph
+grammar. The OIR graph profile is an import-free target-language root: opaque
+typed content and declaration references in a graph do not authorize it to
+open their foreign semantics. The projection relation directly imports the
+two languages it compares. Every arrow is an exact-used `profile_imports`
+edge, not an ambient bundle hash, textual version label, or transitive-use
+shortcut. The older bounded executable baseline exercised only the
+pre-composition graph with the following profile-ID digests under the selected
+regime, in the same order:
 `3249d35408bd507c6613eb2d7496b95c6d3313a85bac41f28751d1957d6e4f8c`,
 `6138f0ffe95880b2cfe0a4ccd3da71610974193a2fcf6aaa60ae3cf7bfacdfa4`,
 `ccb080314d48881cf89d8b59bc3d14364311797b49f2048b31fd59e684fbaaa7`,
@@ -293,6 +295,32 @@ constants. They do not supply the complete canonical
 parity. Until those complete owner profile preimages are published, this page
 fixes the ideal target equations and import topology, not independently
 reconstructible profile IDs.
+
+The source-view profile supports exactly the following portable semantic
+subject kinds, in ASCII order:
+
+```text
+pir.endpoint-owner-schema-set
+pir.endpoint-owner-supplement
+pir.endpoint-read-manifest
+pir.endpoint-source-view
+pir.source-binding-payload
+pir.source-capability-requirement
+pir.source-consumer
+pir.source-no-policy
+pir.source-policy-closure
+pir.source-purpose
+```
+
+The first four are the owner-schema contract, bounded residual supplement,
+purpose-specific manifest, and complete source quotient. The remaining six
+are this profile's inert source-authority artifacts and nominal consumer and
+purpose roles. `SupportedExtractionBasis`, provisional or activated bearers,
+`CheckedProjectionOwnerAdapterV0`, checked dependency closure, checked source
+view, capabilities, validation requests, operation results, receipts retained
+only by a live capability, and diagnostics are process-local operation state;
+none is a portable supported subject. Listing such a bearer-shaped object in
+the profile is malformed rather than a serialization feature.
 
 The owner-schema-set and read-manifest IDs are formed under the exact source-
 view profile. A same-shaped future regime or profile does not inherit this
@@ -395,6 +423,85 @@ recipe/evaluation/export detail. Core occurrence, binding, challenge,
 claim/reduction-use, Interface coordinate/codec/Statement/transport, and Plan
 route facts already exposed by owner views must agree exactly and cannot be
 overridden by the supplement.
+
+The portable supplement and its inert source-authority artifacts are exact
+semantic subjects. Live activation state is not:
+
+```text
+EndpointOwnerSupplementFamily = "endpoint-owner-supplement-v0"
+
+FutureOwnerSupplementV0 = {
+  protocol_id: ProtocolId,
+  core_id: CoreId,
+  construction_id: TranscriptConstructionId,
+  interface_id: ProtocolInterfaceId,
+  plan_id: None | Some(ProverPlanId),
+  purpose: EndpointProjectionPurpose,
+  owner_schema_set_id: EndpointOwnerSchemaSetId,
+  read_manifest_id: EndpointReadManifestId,
+  residual_receipts:
+    NonEmptyCanonicalSortedUniqueSeq<OwnerReadReceipt>
+}
+
+FutureOwnerSupplementBodyV0(x) = R{
+  0:CR(x.protocol_id),1:CR(x.core_id),2:CR(x.construction_id),
+  3:CR(x.interface_id),4:EndpointOptionBody(x.plan_id,CR),
+  5:EndpointPurposeBody(x.purpose),6:CR(x.owner_schema_set_id),
+  7:CR(x.read_manifest_id),
+  8:S[OwnerReadReceiptBody(receipt)... in owner-coordinate body order]
+}
+
+FutureOwnerSupplementId(x) =
+  ProfiledSemanticId<"pir.endpoint-owner-supplement">(
+    B, PirEndpointSourceViewProfileId,
+    FutureOwnerSupplementBodyV0(x))
+
+EndpointSupplementBindingPayloadBody(x) = R{
+  0:Q(EndpointOwnerSupplementFamily),1:CR(x.supplement_id),
+  2:CR(x.owner_schema_set_id),3:CR(x.read_manifest_id),
+  4:CR(x.consumer_id),5:CR(x.purpose_id),
+  6:Q("whole-endpoint-owner-supplement-v0")
+}
+EndpointSupplementCapabilityRequirementBody(x) = R{
+  0:Q(EndpointOwnerSupplementFamily),1:CR(x.binding_payload_id),
+  2:CR(x.no_policy_id),3:CR(x.consumer_id),4:CR(x.purpose_id),
+  5:Q("fresh-identical-activated-supplement-bearer")
+}
+EndpointSupplementNoPolicyBody(x) = R{
+  0:Q(EndpointOwnerSupplementFamily),1:CR(x.supplement_id)
+}
+EndpointSupplementPolicyClosureBody(x) = R{
+  0:Q(EndpointOwnerSupplementFamily),1:CR(x.binding_payload_id),
+  2:CR(x.no_policy_id),3:CR(x.capability_requirement_id)
+}
+
+EndpointSupplementBindingPayloadId(x) =
+  ProfiledSemanticId<"pir.source-binding-payload">(
+    B,PirEndpointSourceViewProfileId,
+    EndpointSupplementBindingPayloadBody(x))
+EndpointSupplementCapabilityRequirementId(x) =
+  ProfiledSemanticId<"pir.source-capability-requirement">(
+    B,PirEndpointSourceViewProfileId,
+    EndpointSupplementCapabilityRequirementBody(x))
+EndpointSupplementNoPolicyId(x) =
+  ProfiledSemanticId<"pir.source-no-policy">(
+    B,PirEndpointSourceViewProfileId,
+    EndpointSupplementNoPolicyBody(x))
+EndpointSupplementPolicyClosureId(x) =
+  ProfiledSemanticId<"pir.source-policy-closure">(
+    B,PirEndpointSourceViewProfileId,
+    EndpointSupplementPolicyClosureBody(x))
+```
+
+The residual sequence is exactly the subset of Appendix B owner coordinates
+assigned to the supplement path set, with no overlap, omission, or additional
+coordinate. Its root IDs, purpose, schema set, and manifest must equal the
+support request. A receipt carries the exact public semantic source subbody,
+not a runtime secret, private assignment, capability, checker result, or
+producer-selected graph. The binding payload, no-policy artifact, requirement,
+and closure are inert identities. Activation validates them and mints one
+fresh process-local bearer; no ID, body, digest, or reconstructed equal object
+is that bearer.
 
 `CheckedProjectionOwnerAdapterV0` is minted only after that join. It retains
 the exact request, purpose, all live owner views, checked FS authority,
@@ -528,7 +635,7 @@ The endpoint spine is a single total semantic order. Each occurrence carries
 its exact endpoint action rather than a kind tag plus a second effect table:
 
 ```text
-SourceSpineEvent =
+EndpointSpineEvent =
     FsInitialization
   | ScopeOpening {
       core_scope_path,
@@ -555,7 +662,7 @@ SourceSpineEvent =
     }
 ```
 
-Sequence position is the local `SourceSpineEventRef`. Scope and binding events
+Sequence position is the local `EndpointSpineEventRef`. Scope and binding events
 are inserted at their exact owner-derived K2 boundaries before affected
 occurrences. The activity law includes scope ancestry/opening, guard
 evaluation, and suppression after an earlier terminal or FS interpretation
@@ -955,7 +1062,7 @@ Claims, reductions, and terminal closure remain identity-bearing graph
 semantics, distinct from the derived static contract:
 
 ```text
-SourceClaimAtom = {
+EndpointClaimAtom = {
   contract,
   Linear | Reusable,
   scope_event,
@@ -963,7 +1070,7 @@ SourceClaimAtom = {
     | ReductionOutput(reduction_spine_event, output_ordinal)
 }
 
-SourceAnchoredObligation = {
+EndpointAnchoredObligation = {
     ReductionApplication {
       contract,
       scope_event,
@@ -1296,148 +1403,57 @@ bytes and reject duplicates. Sequence position is the local ref unless stated
 otherwise.
 
 The following imported value schemas are exactly those of the selected basis
-and regime, never copies with local reinterpretation:
+and regime. The OIR rows are target constructors, not aliases of PIR bodies:
+this profile owns the total source-to-target mapping and cannot reinterpret or
+extend an OIR tag locally.
 
 | Body | Owning appendix |
 |---|---|
 | `DeclarationRefBody`, `CanonicalValueTypeBody`, canonical datums and failure types | K1 [`executable-foundations.md`](../foundation/executable-foundations.md#appendix-a-exact-selected-v0-bodies) |
 | `ModuleDeclarationRefBody`, `PublicBindingClassBody`, `CoinCorrelationBody`, `ReductionUsePolicyBody`, `TerminalVerdictBody`, `ClaimUsageBody`, `ClaimDispositionBody` | K2 [`interactive-core.md`](interactive-core.md#appendix-a-canonical-bodies) |
 | construction algorithm and transition ABIs, `InfluenceAtomBody` | K2 [`fiat-shamir.md`](fiat-shamir.md#appendix-a-canonical-bodies) |
-| transport actor/destination, completion-coordinate cases, and `PrivateMaterialKindBody` | K3-B [`interfaces-and-plans.md`](interfaces-and-plans.md#6-exact-canonical-bodies) |
-| endpoint static-obligation, access-route, requirement, completion-interface, private-continuation, aggregate-contract, and derivation-outcome bodies | OIR [`projection-contract.md`](../oir/projection-contract.md#appendix-a-exact-oir-and-projection-bodies) |
+| source Interface and Plan bodies used by extraction | [`interfaces-and-plans.md`](interfaces-and-plans.md#6-exact-canonical-bodies) |
+| every `Endpoint*Body`, `RoleEndpointAbiGraphBody`, `StaticFsEndpointSemanticsBody`, `Plan*Body`, aggregate graph, static-obligation, requirement, completion, continuation, and contract body | OIR [`projection-contract.md`](../oir/projection-contract.md#appendix-a-exact-oir-and-projection-bodies) |
 
 Use under another `PriorMetaAuthenticationBasis`, `SemanticRegimeId`, or
 incompatible exact-used language-profile closure is a kind/regime mismatch,
 even when bytes happen to resemble the selected body.
 
-```text
-ChallengeModeBody = V(0,U) | V(1,U)
-// Fresh | FiatShamir
-EndpointPurposeBody =
-    V(0,ChallengeModeBody) | V(1,ChallengeModeBody)
-  | V(2,ChallengeModeBody) | V(3,ChallengeModeBody)
-// VerifierEndpoint | GenericProverEndpoint | PlanSpecializedProverEndpoint
-// PlanContinuationProverEndpoint
-// EndpointContractLawV0Body and EndpointSemanticGraphBody are imported
-// exactly from OIR's Appendix A.  Their owning profile is named by the
-// outer PirEndpointSourceViewProfileId wrapper.
-EndpointRoleBody = V(0,U) | V(1,U)
-// Verifier | Prover
-OptionBody(None,F) = V(0,U)
-OptionBody(Some(x),F) = V(1,F(x))
-
-EndpointDependencyBody =
-    V(0,CR(core_id)) | V(1,CR(construction_id))
-  | V(2,CR(algorithm_id)) | V(3,CR(evaluation_contract_id))
-  | V(4,CR(semantic_module_id))
-
-EndpointValueRefBody =
-    V(0,N(invocation_target_ref))
-  | V(1,N(constant_ref))
-  | V(2,N(pure_node_ref))
-  | V(3,R{0:N(spine_event_ref),1:N(output_ordinal)})
-
-SourceConstantBody(x) = R{0:N(type_ref),1:DV(type_table[type_ref],x.value)}
-SourcePureNodeBody(x) = R{
-  0:N(algorithm_dependency),1:N(evaluation_dependency),
-  2:S[EndpointValueRefBody(input)...],3:N(result_type_ref)
-}
-```
-
-The role ABI graph is exact and local:
+The source-to-target body mapping is closed and injects no source identity:
 
 ```text
-EndpointStructuralCodecBody =
-    V(0,N(value_type_ref))
-  | V(1,R{0:N(external_type_ref),1:N(semantic_type_ref),
-          2:S[R{0:N(field_ordinal),1:N(local_codec_ref)}...]})
-  | V(2,R{0:N(external_type_ref),1:N(semantic_type_ref),
-          2:S[R{0:N(case_ordinal),1:N(local_codec_ref)}...]})
-  | V(3,R{0:N(external_type_ref),1:N(semantic_type_ref),
-          2:N(element_codec_ref)})
-EndpointCodecNodeBody(x) = R{
-  0:CR(x.interface_codec_id),
-  1:V(0,EndpointStructuralCodecBody(x))
-    | V(1,ModuleDeclarationRefBody(x.general_codec_law))
-}
-EndpointSlotBody(x) = R{0:Q(x.external_key),1:N(x.codec_ref)}
-InvocationClassBody = V(0,U) | V(1,U)
-// PublicInput | VerifierPrivateInput
-InvocationTargetBody(x) = R{0:InvocationClassBody(x.class),1:N(x.type_ref)}
-InvocationFibreBody(x) = R{
-  0:N(x.slot_ref),1:S[N(invocation_target_ref)...]
-}
-StatementFlowBodyRebased = V(0,N(invocation_target_ref)) | V(1,U)
-// SuppliesInvocation | ExposesOpenedBinding
-StatementAliasBody(x) = R{
-  0:Q(x.external_statement),1:N(x.slot_ref),2:N(x.binding_spine_ref),
-  3:StatementFlowBodyRebased(x.flow)
-}
-TransportEdgeBody(x) = R{
-  0:N(x.target_spine_ref),1:TransportActorBody(x.source),
-  2:TransportDestinationBody(x.destination),3:N(x.slot_ref)
-}
-CompletionTargetBodyRebased = V(0,N(terminal_spine_ref)) | V(1,U)
-CompletionCoordinateBodyRebased =
-    V(0,R{0:N(terminal_spine_ref),1:N(output_ordinal)})
-  | V(1,U) | V(2,U) | V(3,U) | V(4,U) | V(5,U) | V(6,U)
-CompletionVariantBody(x) = R{
-  0:CompletionTargetBodyRebased(x.target),1:Q(x.external_tag),
-  2:S[R{0:CompletionCoordinateBodyRebased(coordinate),
-        1:N(slot_ref)}... in coordinate-body order]
-}
-RoleEndpointAbiGraphBody(x) = R{
-  0:S[EndpointCodecNodeBody...],1:S[EndpointSlotBody...],
-  2:S[InvocationTargetBody...],3:S[InvocationFibreBody...],
-  4:S[StatementAliasBody...],5:S[TransportEdgeBody...],
-  6:S[CompletionVariantBody...]
-}
+MapEndpointPurposeV0(PIR purpose) -> OIR EndpointPurposeBody
+MapEndpointRoleV0(PIR role) -> OIR EndpointRoleBody
+MapEndpointDependencyV0(authenticated PIR dependency) -> OIR EndpointDependencyBody
+MapEndpointValueRefV0(selected and rebased PIR value ref)
+  -> OIR EndpointValueRefBody
+MapEndpointConstantV0(selected PIR constant) -> OIR EndpointConstantBody
+MapEndpointPureNodeV0(selected PIR derived value) -> OIR EndpointPureNodeBody
 ```
+
+Each mapping is a total function only on the exact supported source
+constructors selected by Sections 2--10. It copies semantic operands after
+authentication, rebases only the named local references, and rejects an
+unknown source alternative. Equality of source and target encodings is never
+used as the mapping law.
+
+The role ABI mapping forms the exact OIR-local
+`RoleEndpointAbiGraphBody`. Structural codecs map recursively after the
+Interface codec DAG is admitted; General codecs retain their authenticated
+declaration coordinate as an opaque target dependency. Slots, invocation
+fibres, Statement aliases, transport edges, and completion variants are
+filtered and rebased by the selectors below. No PIR Interface body is nested
+in the OIR graph.
 
 Codec child refs point backward. Fibres are nonempty, cover each invocation
 target exactly once, and are in target order. ABI table order is the filtered
 Interface-relative order; no duplicated numeric `order` field exists.
 
-The endpoint spine and value activity are:
-
-```text
-ActivityBody = V(0,U)
-  | V(1,R{0:N(algorithm_dependency),1:N(evaluation_dependency),
-          2:S[EndpointValueRefBody(input)...]})
-// Always | Guarded
-ScopeOpeningBodyRebased = V(0,U) | V(1,N(original_occurrence_ordinal))
-EndpointMessageActionBody(x) = R{
-  0:ModuleDeclarationRefBody(channel),1:N(result_type_ref)
-}
-EndpointVerifierMessageActionBody(x) = R{
-  0:ModuleDeclarationRefBody(channel),
-  1:N(algorithm_dependency),2:N(evaluation_dependency),
-  3:S[EndpointValueRefBody(input)...],4:N(result_type_ref)
-}
-EndpointChallengeActionBody(x) = R{
-  0:N(challenge_law_ref)
-}
-EndpointCheckActionBody(x) = R{
-  0:N(algorithm_dependency),1:N(evaluation_dependency),
-  2:S[EndpointValueRefBody(input)...],3:N(boolean_result_type_ref)
-}
-EndpointActionBody =
-    V(0,EndpointMessageActionBody)
-  | V(1,EndpointVerifierMessageActionBody)
-  | V(2,EndpointChallengeActionBody)
-  | V(3,EndpointCheckActionBody)
-  | V(4,U)
-  | V(5,U)
-SourceSpineEventBody =
-    V(0,U)
-  | V(1,R{0:S[N(original_scope_ordinal)...],
-          1:OptionBody(parent_scope_event_ref,N),
-          2:ScopeOpeningBodyRebased(opening)})
-  | V(2,R{0:N(original_binding_ordinal),1:N(scope_event_ref),
-          2:PublicBindingClassBody(class),3:EndpointValueRefBody(value)})
-  | V(3,R{0:N(original_occurrence_ordinal),1:N(scope_event_ref),
-          2:ActivityBody(activity),3:EndpointActionBody(action)})
-```
+The endpoint spine and value-activity mapping form the OIR-local
+`EndpointSpineEventBody`, `EndpointActivityBody`, and `EndpointActionBody`
+constructors. The projector maps every supported source action explicitly;
+Reduction and Terminal remain anchor-backed target tags, and an Oracle or
+module occurrence has no mapping in this bounded profile.
 
 Formation requires one initialization event, a rooted scope-event tree, one
 binding event per selected binding, one occurrence event per retained
@@ -1457,79 +1473,20 @@ declared result type, challenge value type, and exact K1 Boolean result type.
 Reduction and Terminal have no `EndpointValueRef` output. Every occurrence
 output ref points backward from its consumer.
 
-Static FS bodies retain exact K2 frame coordinates while the fixed derivation
-law constructs frame and namespace recipes from the spine:
+Static FS mapping retains exact checked Fiat--Shamir frame coordinates while forming the
+OIR-local `StaticFsEndpointSemanticsBody` and `EndpointChallengeLawBody`. The
+OIR `EndpointDerivedPrefixLawBody` and
+`EndpointChallengeTransitionLawBody` each have one selected tag; the source
+projector may emit those tags only after the imported canonical-framed
+construction laws have been authenticated and checked. The derived namespace
+recipe is evaluated with a runtime draw ordinal and contains no stored
+namespace datum.
 
-```text
-ChallengeEndpointLawBody(x) = R{
-  0:N(original_challenge_ordinal),1:N(value_type_ref),
-  2:ModuleDeclarationRefBody(domain),
-  3:ModuleDeclarationRefBody(fresh_law),
-  4:CoinCorrelationBody(correlation),
-  5:ReductionUsePolicyBody(reduction_use),
-  6:S[EndpointValueRefBody(condition)...],
-  7:N(draw_bytes),8:N(maximum_draws),
-  9:N(accept_algorithm_dependency),
- 10:N(accept_evaluation_dependency),
- 11:N(decode_algorithm_dependency),
- 12:N(decode_evaluation_dependency)
-}
-
-StaticFsEndpointSemanticsBody(x) = R{
-  0:N(core_dependency),1:N(construction_dependency),
-  2:N(state_type_ref),3:N(bytes_type_ref),4:N(natural_type_ref),
-  5:DV(type_table[state_type_ref],initial_state),
-  6:N(absorb_algorithm_dependency),7:N(absorb_evaluation_dependency),
-  8:N(squeeze_algorithm_dependency),9:N(squeeze_evaluation_dependency),
- 10:N(advance_algorithm_dependency),11:N(advance_evaluation_dependency),
- 12:ModuleDeclarationRefBody(application_domain),
- 13:FT(sampling_exhausted_failure),
- 14:DerivedPrefixLawBody,15:ChallengeTransitionLawBody,
-  16:S[ChallengeEndpointLawBody(rule)...]
-}
-```
-
-`DerivedPrefixLawBody = V(0,U)` and
-`ChallengeTransitionLawBody = V(0,U)` select the exact K2 laws rather than an
-authored callback. The derived namespace recipe is evaluated with a runtime
-draw ordinal and contains no stored namespace datum.
-
-Claim and anchor bodies are:
-
-```text
-ClaimSourceBodyRebased = V(0,N(binding_spine_ref))
-  | V(1,R{0:N(reduction_spine_ref),1:N(output_ordinal)})
-SourceClaimAtomBody(x) = R{
-  0:ModuleDeclarationRefBody(contract),1:ClaimUsageBody(usage),
-  2:N(scope_event_ref),3:ClaimSourceBodyRebased(source)
-}
-ReductionPublicationBodyRebased(x) = R{
-  0:N(publication_spine_ref),
-  1:OptionBody(next_challenge_law_ref,N)
-}
-ReductionOutputClaimBody(x) = R{
-  0:N(output_ordinal),1:ModuleDeclarationRefBody(contract),
-  2:S[N(output_claim_ref)... in ClaimRef order]
-}
-TerminalClaimDispositionBodyRebased(x) = R{
-  0:N(claim_ref),1:ClaimDispositionBody(disposition)
-}
-SourceAnchoredObligationBody =
-    V(0,R{
-      0:ModuleDeclarationRefBody(contract),1:N(scope_event_ref),
-      2:N(apply_spine_ref),3:S[N(input_claim_ref)...],
-      4:S[EndpointValueRefBody(side_input)...],
-      5:S[N(required_challenge_law_ref)...],
-      6:S[ReductionPublicationBodyRebased(requirement)...],
-      7:S[ReductionOutputClaimBody(output)...]
-    })
-  | V(1,R{
-      0:N(terminal_spine_ref),1:TerminalVerdictBody(verdict),
-      2:S[EndpointValueRefBody(public_output)...],
-      3:S[N(required_check_spine_ref)...],
-      4:S[TerminalClaimDispositionBodyRebased(disposition)...]
-    })
-```
+Claim and anchor mapping forms the OIR-local `EndpointClaimAtomBody` and
+`EndpointAnchoredObligationBody` tables. Nominal declaration references are
+retained as opaque authenticated coordinates, while source claim, reduction,
+publication, output, and terminal refs are rebased into their distinct target
+namespaces. No source-owned enum body is copied by alias.
 
 For every reduction, field 7 has exactly one row per declared output contract
 in output-ordinal order. The row's claim sequence equals every and only local
@@ -1539,59 +1496,12 @@ one-claim-per-output law. The one FS interpretation-failure type is obtained
 from the enclosing static construction. No per-challenge or protected-action
 copy is admitted.
 
-Plan refs are class-specific:
-
-```text
-PlanValueRefBody =
-    V(0,N(private_material_ref)) | V(1,N(randomness_ref))
-  | V(2,N(state_ref)) | V(3,N(recipe_node_ref))
-  | V(4,PlanViewReadBody(read))
-  | V(5,R{0:N(type_ref),1:DV(type_table[type_ref],value)})
-PlanViewCoordinateBodyRebased =
-    V(0,N(constant_ref))
-  | V(1,N(invocation_target_ref))
-  | V(2,N(binding_spine_ref))
-  | V(3,N(message_spine_ref))
-  | V(4,N(challenge_spine_ref))
-  | V(5,N(prior_decision_spine_ref))
-  | V(6,N(accepted_terminal_public_output_ordinal))
-PlanViewReadBody(x) = R{
-  0:PlanViewCoordinateBodyRebased(x.coordinate),
-  1:EndpointValueRefBody(x.value)
-}
-PlanInitializerBody = V(0,N(private_material_ref))
-  | V(1,R{0:N(type_ref),1:DV(type_table[type_ref],value)})
-PlanPrivateMaterialBody = R{0:PrivateMaterialKindBody(kind),1:N(type_ref)}
-PlanRandomnessBody = R{0:N(type_ref),1:N(first_available_decision_spine_ref)}
-PlanStateBody = R{0:N(type_ref),1:PlanInitializerBody(initializer)}
-PlanRecipeNodeSiteBody =
-    V(0,N(decision_spine_ref))
-  | V(1,N(accepted_terminal_ref))
-PlanGraphRecipeNodeBody = R{
-  0:PlanRecipeNodeSiteBody(site),
-  1:N(algorithm_dependency),2:N(evaluation_dependency),
-  3:S[PlanValueRefBody(input)...],4:N(result_type_ref)
-}
-PlanMoveBody = V(0,PlanValueRefBody)
-// MessageValue; OracleValue and ModuleMove cannot reach the bounded graph
-PlanMoveEntryBody = R{0:N(decision_spine_ref),1:PlanMoveBody(move)}
-PlanUpdateBody = R{
-  0:N(decision_spine_ref),1:N(state_ref),
-  2:OptionBody(value,PlanValueRefBody)
-}
-PlanGraphDerivedExportBody = R{
-  0:PlanRecipeNodeSiteBody(source_site),
-  1:PlanValueRefBody(value),
-  2:N(result_type_ref)
-}
-PlanGraphBody(x) = R{
-  0:S[PlanPrivateMaterialBody...],1:S[PlanRandomnessBody...],
-  2:S[PlanStateBody...],
-  3:S[PlanGraphRecipeNodeBody... in site/within-site order],
-  4:S[PlanMoveEntryBody...],5:S[PlanUpdateBody...],
-  6:S[PlanGraphDerivedExportBody... in output-ref order]
-}
-```
+Plan mapping forms the OIR-local seven-table `PlanGraphBody`. It maps only
+the selected reachable Plan closure, rebases every class-specific reference,
+and preserves site qualification. `OracleValue` and `ModuleMove` have no
+bounded target arm. Source `KeepState` maps to the absent OIR update value;
+`ReplaceState` maps to the present arm. These are explicit constructor
+mappings, not reuse of the PIR Plan body compiler.
 
 The closed `EndpointValueRefBody` has no Plan arm, which prevents recursive
 self-wrapping and keeps K2-owned positions Plan-free. Every decision spine ref
@@ -1630,16 +1540,14 @@ EndpointSourceViewDomainBody(x) = R{
 }
 ```
 
-`PirEndpointSourceViewProfileId` directly imports the exact
-`OirEndpointGraphProfileId` and `PIRCanonicalFramedFSProfileId`. The OIR
-profile's authenticated preimage owns the graph schema and
-`EndpointContractLawV0`; the construction import closes the one supported
-dispatch arm above; and `DeriveEndpointContractV0` is OIR's
-evaluator. None is an authored graph field. The source view and OIR endpoint
-therefore reach the same graph law through their authenticated profile-import
-edge, while family dispatch grants support only through the exact canonical
-import rather than embedding a second profile-shaped body or interpreting an
-unsupported family.
+`PirEndpointSourceViewProfileId` directly imports the exact Interaction,
+canonical-framed FS, Interface/Plan, and OIR endpoint-graph profiles. The OIR
+profile's authenticated preimage owns every target constructor and
+`EndpointContractLawV0`; the three PIR imports own every source declaration
+the projector opens; and `DeriveEndpointContractV0` is OIR's evaluator. None
+is an authored graph field. Family dispatch grants support only through the
+exact canonical import rather than embedding a second profile-shaped body or
+interpreting an unsupported family.
 
 The complete K1 profiled body, not merely each domain table, must fit K1's
 `2^20` encoded-byte, `2^14` node, `2^14` aggregate-child-edge, and depth-384
@@ -1881,3 +1789,5 @@ Selected receipts are sorted by exact owner coordinate body before comparison
 with the view constructor's read set. Complement is the exact finite owner
 domain minus selected. Any nonpartition, dangling edge, role disagreement, or
 limit exhaustion produces no view.
+
+<!-- zkc-profile-source:endpoint-source-view-semantics:end -->

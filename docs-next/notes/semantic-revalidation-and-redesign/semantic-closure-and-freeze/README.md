@@ -69,14 +69,17 @@ must not move authority between these owners merely to simplify an encoding.
   application, exact occurrence support, outstanding obligations,
   serialization, and CycleFold's same-step companion binding before dependent
   profiles are published.
+- [Dependent Semantic-Profile Publication](dependent-profile-publication/README.md)
+  repairs endpoint graph ownership, publishes the dependent owner profiles
+  bottom-up, and assembles the independently reconstructible freeze candidate.
 
-The preflight, six stable-upstream profile publications, and recursive-
-composition boundary package are complete. The latter includes exact
-owner-local Relations-result ingress into Analysis and does not rotate the six
-published upstream profiles. Dependent Relations and Analysis profile
-publication is now the open barrier. The complete uncapped aggregate remains a
-global exit condition for the assembled freeze candidate instead of a repeated
-per-edit loop.
+The preflight, six stable-upstream profile publications, recursive-composition
+boundary, and dependent-profile construction are complete. The latter
+publishes all seventeen indexed profiles while preserving the six upstream PIR
+identities byte-for-byte. The full local gate matrix and uncapped aggregate are
+green. The only open freeze barrier is one bounded independent review of the
+committed candidate and adjudication of any reproducible blocker; cold protocol
+holdouts follow that review.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet

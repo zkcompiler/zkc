@@ -1,0 +1,96 @@
+{
+  "format": "zkc.semantic-profile-source.v1",
+  "key": "analysis-afk-theorem-source-validation",
+  "catalog_namespace": "analysis",
+  "profile_family": "analysis.afk-theorem-source-validation",
+  "revision": 0,
+  "expected_imports": [
+    "analysis-afk-transport"
+  ],
+  "supported_subject_kinds": [
+    "analysis.capability-requirement-payload",
+    "analysis.checked-result-coordinate",
+    "analysis.consumer",
+    "analysis.judgment-record",
+    "analysis.operation-policy",
+    "analysis.owner-policy-closure",
+    "analysis.portable-source-authority-binding",
+    "analysis.source-authority-contract",
+    "analysis.support-instantiation",
+    "analysis.theorem-source-validation",
+    "analysis.use-purpose",
+    "analysis.validation-basis"
+  ],
+  "fragments": [
+    {
+      "name": "theorem-validation-semantics",
+      "owner_page": "docs-next/analysis/transport-composition-and-replay.md",
+      "start": "zkc-profile-source:analysis-theorem-validation-semantics:start",
+      "end": "zkc-profile-source:analysis-theorem-validation-semantics:end"
+    },
+    {
+      "name": "theorem-validation-publication",
+      "owner_page": "docs-next/analysis/profile-publication.md",
+      "start": "zkc-profile-source:analysis-theorem-validation-publication:start",
+      "end": "zkc-profile-source:analysis-theorem-validation-publication:end"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "analysis.body-compiler",
+      "name": "afk-theorem-source-validation-body-v0",
+      "revision": 0,
+      "fragment": "theorem-validation-publication",
+      "selector": "AnalysisAFKTheoremSourceValidationBodyCompilerV0(kind,body) =",
+      "dependencies": [
+        {"profile": "analysis-afk-transport", "kind": "analysis.body-compiler", "name": "afk-transport-body-v0"}
+      ]
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "theorem-source-validation-v0",
+      "revision": 0,
+      "fragment": "theorem-validation-semantics",
+      "selector": "## 1. Three separate contracts",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.semantic-law",
+      "name": "validation-profile-boundary-v0",
+      "revision": 0,
+      "fragment": "theorem-validation-publication",
+      "selector": "AnalysisAFKTheoremSourceValidationProfileSourceV0 = {",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.evaluator-signature",
+      "name": "afk-theorem-source-validation-admission-v0",
+      "revision": 0,
+      "fragment": "theorem-validation-publication",
+      "selector": "AdmitAnalysisAFKTheoremSourceValidationSubjectV0(",
+      "dependencies": []
+    },
+    {
+      "kind": "analysis.failure-schema",
+      "name": "afk-theorem-source-validation-admission-outcome-v0",
+      "revision": 0,
+      "fragment": "theorem-validation-publication",
+      "selector": "AnalysisAFKTheoremSourceValidationAdmissionOutcomeV0 =",
+      "dependencies": []
+    }
+  ],
+  "subjects": [
+    {"kind": "analysis.capability-requirement-payload", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.checked-result-coordinate", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.consumer", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.judgment-record", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.operation-policy", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.owner-policy-closure", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.portable-source-authority-binding", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.source-authority-contract", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.support-instantiation", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.theorem-source-validation", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.use-purpose", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"},
+    {"kind": "analysis.validation-basis", "body_compiler": {"profile": "self", "kind": "analysis.body-compiler", "name": "afk-theorem-source-validation-body-v0"}, "laws": ["theorem-source-validation-v0", "validation-profile-boundary-v0"], "evaluator": "afk-theorem-source-validation-admission-v0", "failure_schema": "afk-theorem-source-validation-admission-outcome-v0"}
+  ]
+}
