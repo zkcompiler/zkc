@@ -1,8 +1,8 @@
 # Post-Freeze Research Program
 
 > **Kind:** Temporary dependency-ordered research charter
-> **State:** Active; finite-cover Analysis activation completed, verifier-
-> derived words and query plans next
+> **State:** Active; finite-cover Analysis and verifier-derived query-plan
+> packages completed, algorithmic large carriers and Oracles next
 > **Authority:** None. Durable semantics remain owned by their domain pages.
 > **Entry condition:** The seventeen-profile candidate is holdout-stable at its
 > declared evidence depths with no shared identity rotation.
@@ -110,6 +110,16 @@ Reject any candidate that invents a prover publication, hides an ambient
 callback, changes transcript influence, or loses source-query correlation.
 Promote a shared primitive only if the same law is required by at least two
 materially different families; otherwise retain exact owner-local profiles.
+
+**Result:** completed. A separately identified finite word-program and logical
+query-plan language now elaborates deterministically into one independently
+admitted flat Core. Exact maps retain logical order, multiplicity, and source
+leaves; no publication, transcript frame, commitment root, or runtime callback
+was added. The profile is an additive Interaction-dependent leaf. The bounded
+instrument covers four materially different source-shaped families with an
+independent oracle and 25 tests. Exact paper correspondence and theorem claims
+remain downstream obligations. The full temporary record is under
+[`verifier-derived-query-plans/`](verifier-derived-query-plans/README.md).
 
 ### 4.3 Algorithmic large carriers and Oracles
 

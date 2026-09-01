@@ -329,6 +329,14 @@ class SemanticProfilePublicationTest(unittest.TestCase):
                     key in rotated,
                 )
 
+    def test_verifier_derived_query_plan_change_rotates_only_its_leaf(self) -> None:
+        self.assert_page_change_rotates_exactly(
+            path="docs-next/pir/verifier-derived-query-plans.md",
+            old=b"Program identity changes with route, cases, algorithms, types, visibility, or\nsemantic bounds.",
+            new=b"Program identity changes with route, cases, algorithms, exact types, visibility, or\nsemantic bounds.",
+            rotated={"verifier-derived-query-plan"},
+        )
+
     def test_missing_and_surplus_direct_imports_refuse(self) -> None:
         missing = copy.deepcopy(self.manifests["commitment-opening"])
         missing["expected_imports"] = ["interaction"]
@@ -343,6 +351,7 @@ class SemanticProfilePublicationTest(unittest.TestCase):
 
     def test_dependent_profile_import_graph_is_exact(self) -> None:
         expected = {
+            "verifier-derived-query-plan": ("interaction",),
             "interface-plan": ("canonical-framed-fiat-shamir", "interaction"),
             "oir-endpoint-graph": (),
             "endpoint-source-view": (

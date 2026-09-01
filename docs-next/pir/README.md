@@ -40,6 +40,14 @@ through deterministic bounded elaboration and total static maps. This is a
 Core-changing construction, unlike the same-Core Fresh/Fiat--Shamir
 construction, and it establishes no cryptographic property by itself.
 
+Verifier-derived-word pressure selects a separate checked
+[query-plan satellite](verifier-derived-query-plans.md). It identifies finite
+logical reads and deterministically elaborates them into ordinary guarded
+source-Oracle accesses and pure values in one independently admitted flat
+Core. The plan preserves logical multiplicity and exact source-leaf maps, but
+creates no publication, transcript event, commitment root, runtime callback,
+or theorem claim.
+
 Polynomial-commitment pressure selects a smaller shared
 [Commitment-Opening Verification](commitment-opening-verification.md) boundary.
 One exact verifier profile fixes public setup roles, ordered
@@ -67,7 +75,7 @@ continuation-prover purpose. The fixed Nova fold has a complete source-grounded
 finite target encoding; the remaining named cases retain explicit finite-
 target elaboration gaps. Holdout validation, independent identity/profile
 freeze, properties, Realization, implementation, and normative cutover remain
-open. All eight selected PIR profiles are now published under
+open. All nine selected PIR profiles are now published under
 [`profiles/`](profiles/README.md), and the complete selected cross-domain graph
 is reconstructed through Foundation. That bounded publication does not imply
 implementation conformance or semantic freeze.
@@ -114,7 +122,11 @@ implementation conformance or semantic freeze.
 - authoring `link` as proposal construction and the finite composition
   boundary: all child references must be resolved into one newly authenticated
   and admitted flat `InteractiveCore`, with no child execution handle retained;
-  a reusable checked elaboration/composition satellite is not active yet;
+  a generic checked Core-composition satellite is not active yet;
+- separately identified finite verifier-derived word programs and logical
+  query plans, deterministic bounded static elaboration into an independently
+  admitted flat Core, and exact multiplicity-preserving logical-to-source
+  occurrence maps;
 - separately admitted `TranscriptConstruction` siblings, deterministic
   Fresh-to-Fiat--Shamir construction under each exact closed family profile,
   independently admitted target Protocol, and exact `CheckedFSConstruction`
@@ -187,11 +199,11 @@ first being found by the optimizer or successfully projected to every target.
 - `analysis/` consumes exact admitted Protocol subjects and narrow PIR-owned
   authenticated views; it adds an admitted `TranscriptConstruction`,
   affirmative `CheckedFSConstruction`, exact checked Oracle-commitment
-  construction, Interface, or Plan only when its exact family question or rule
-  reads that structural satellite or result; none of those PIR-owned
-  structural results establishes a property by itself. A future checked
-  elaboration or composition result must be added as a new exact operand rather
-  than inferred from the historical candidate;
+  construction, checked verifier-derived query elaboration, Interface, or Plan
+  only when its exact family question or rule reads that structural satellite
+  or result; none of those PIR-owned structural results establishes a property
+  by itself. A future checked composition result must be added as a new exact
+  operand rather than inferred from the historical candidate;
 - `relations/` consumes an admitted Protocol, independently admitted relation
   subjects, and a `ProtocolRelationBinding` for structural correspondence. A
   separate `PlanWitnessBinding` may attach relation-witness occurrences to one
@@ -237,10 +249,14 @@ first being found by the optimizer or successfully projected to every target.
 - [Published PIR Semantic Profiles](profiles/README.md) — complete
   owner-source manifests, exact profile compilation grammar, root closures,
   derived identity table, and independent reconstruction for six frozen
-  upstream profiles plus the Interface/Plan and endpoint-source-view profiles
+  upstream profiles plus verifier-derived-query, Interface/Plan, and
+  endpoint-source-view profiles
 - [Oracle-Commitment Construction](oracle-commitment-construction.md) — exact
   logical-Oracle-to-committed-Core elaboration, admission, authority, and run
   validation boundary
+- [Verifier-Derived Query Plans](verifier-derived-query-plans.md) — finite
+  logical derived-word programs, exact nonadaptive query plans, static
+  flat-Core elaboration, maps, bounds, and checked structural result
 - [Commitment-Opening Verification](commitment-opening-verification.md) — exact
   verifier-side setup, claim, evidence, Core-use, replay, and family-profile
   boundary for Merkle and polynomial commitments

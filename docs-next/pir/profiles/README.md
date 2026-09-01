@@ -9,7 +9,7 @@
 ## 1. Purpose
 
 This directory publishes the complete owner source for the six stable upstream
-PIR semantic-language profiles and two dependent PIR profiles. A strict source
+PIR semantic-language profiles and three dependent PIR profiles. A strict source
 manifest and the exact marked fragments in its durable owner pages compile to
 one complete six-field Foundation `SemanticLanguageProfileBody`. Identity
 tables are derived output; two independent compilers reproduce them, and they
@@ -21,6 +21,7 @@ The published graph is:
 pir.interaction
 |- pir.canonical-framed-fiat-shamir
 |- pir.duplex-sponge-fiat-shamir
+|- pir.verifier-derived-query-plan
 `- pir.public-setup
    `- pir.commitment-opening
       `- pir.oracle-commitment
@@ -49,13 +50,14 @@ The source artifacts are:
 | `public-setup` | [`public-setup.json`](public-setup.json) | [`interactive-core.md`](../interactive-core.md) |
 | `commitment-opening` | [`commitment-opening.json`](commitment-opening.json) | [`commitment-opening-verification.md`](../commitment-opening-verification.md) |
 | `oracle-commitment` | [`oracle-commitment.json`](oracle-commitment.json) | [`oracle-commitment-construction.md`](../oracle-commitment-construction.md) |
+| `verifier-derived-query-plan` | [`verifier-derived-query-plan.json`](verifier-derived-query-plan.json) | [`verifier-derived-query-plans.md`](../verifier-derived-query-plans.md) |
 | `interface-plan` | [`interface-plan.json`](interface-plan.json) | [`interfaces-and-plans.md`](../interfaces-and-plans.md) |
 | `endpoint-source-view` | [`endpoint-source-view.json`](endpoint-source-view.json) | [`endpoint-projection-views.md`](../endpoint-projection-views.md) |
 
 [`published-identities.json`](published-identities.json) records the derived
 body length, body SHA-256, full typed content-reference bytes, and profile-ID
 digest for the six frozen v0 artifacts. The owner-neutral publication gate
-reconstructs and can print the complete indexed graph, including the two
+reconstructs and can print the complete indexed graph, including the three
 dependent PIR rows. Those values are conformance results, not source inputs or
 independent semantic claims.
 
@@ -78,7 +80,7 @@ ProfileSourceManifestV0 = {
 }
 ```
 
-The two dependent manifests use the owner-qualified v1 edition defined by
+The three dependent manifests use the owner-qualified v1 edition defined by
 [Semantic Profile Publication](../../foundation/semantic-profile-publication.md).
 That edition moves `owner_page` into each fragment and fixes the local catalog
 namespace explicitly; it does not reinterpret or upgrade the v0 rows below.

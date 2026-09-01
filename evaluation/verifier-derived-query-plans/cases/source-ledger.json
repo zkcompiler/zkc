@@ -1,0 +1,50 @@
+{
+  "schema": "zkc.verifier-derived-query-plan-sources.v0",
+  "retrieved_utc_date": "2026-09-01",
+  "sources": [
+    {
+      "key": "deep-fri-author-manuscript-v1",
+      "title": "DEEP-FRI: Sampling Outside the Box Improves Soundness",
+      "authors": ["Eli Ben-Sasson", "Lior Goldberg", "Swastik Kopparty", "Shubhangi Saraf"],
+      "url": "https://arxiv.org/pdf/1903.12243v1",
+      "sha256": "e0f1d73000bb740729d8d5af4b610276befa836928787d1005ef7723348615f9",
+      "used_locators": ["Section 5.2.1", "Protocol 6.4"]
+    },
+    {
+      "key": "stir-2024-390",
+      "title": "STIR: Reed-Solomon Proximity Testing with Fewer Queries",
+      "authors": ["Gal Arnon", "Alessandro Chiesa", "Giacomo Fenzi", "Eylon Yogev"],
+      "url": "https://eprint.iacr.org/2024/390.pdf",
+      "sha256": "766a5d955c5db75cdbfea2fdbf8939ec5c9dfe12df0ed054d6ec6f604e0615d2",
+      "used_locators": ["Definition 4.2", "Construction 5.2", "Remark 5.3", "Lemma 5.4"]
+    },
+    {
+      "key": "circle-starks-2024-278",
+      "title": "Circle STARKs",
+      "authors": ["Ulrich Haboeck", "David Levit", "Shahar Papini"],
+      "url": "https://eprint.iacr.org/2024/278.pdf",
+      "sha256": "8e60498a671ff147c211ac7733435057dff27b31b8bd3211485b85b4035d296d",
+      "used_locators": ["Section 6", "Protocols 1-2", "Appendix B, Theorem 6"]
+    },
+    {
+      "key": "whir-2024-1586",
+      "title": "WHIR: Reed-Solomon Proximity Testing with Super-Fast Verification",
+      "authors": ["Gal Arnon", "Alessandro Chiesa", "Giacomo Fenzi", "Eylon Yogev"],
+      "url": "https://eprint.iacr.org/2024/1586.pdf",
+      "sha256": "ccacc62cf5529ff95c3cf115cf730b020336f8d95c310c8deb64e3beac30ce61",
+      "used_locators": ["Definition 4.5", "Construction 5.1", "Theorem 5.2"]
+    }
+  ],
+  "claim_boundary": {
+    "establishes": [
+      "exact-byte source coordinates reused from the source-first protocol review",
+      "primary-source locations that motivated the four bounded witness shapes"
+    ],
+    "does_not_establish": [
+      "source correspondence of the executable finite witnesses",
+      "theorem applicability or truth",
+      "cryptographic security",
+      "implementation conformance"
+    ]
+  }
+}

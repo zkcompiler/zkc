@@ -39,12 +39,13 @@ selected FS dependent receipt templates; source-coordinate exclusion; exact
 dependency rotation; sibling locality; owner-namespace disagreement;
 source-page relocation under the owner-qualified source edition; parent/child
 validation locality; exact Analysis branch topology; Relations semantic/module
-catalog separation; and the Foundation law-source pins. Both compilers
-reconstruct and compare the complete seventeen-profile identity table; the
+catalog separation; additive verifier-derived-query leaf locality; and the
+Foundation law-source pins. Both compilers
+reconstruct and compare the complete eighteen-profile identity table; the
 printable table is a derived inspection artifact and is not committed.
 
 Passing demonstrates that this exact finite source corpus deterministically
-forms seventeen published target profiles under two implementations, preserves
+forms eighteen published target profiles under two implementations, preserves
 the six frozen v0 PIR controls byte-for-byte, and rejects the listed malformed
 cases or rotates only the intended dependency cone. It does not prove that the
 marked prose is equivalent to a complete typed law interpreter, that every

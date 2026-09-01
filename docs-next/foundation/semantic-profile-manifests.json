@@ -26,6 +26,10 @@
       "source": "docs-next/pir/profiles/oracle-commitment.json"
     },
     {
+      "key": "verifier-derived-query-plan",
+      "source": "docs-next/pir/profiles/verifier-derived-query-plan.json"
+    },
+    {
       "key": "interface-plan",
       "source": "docs-next/pir/profiles/interface-plan.json"
     },
