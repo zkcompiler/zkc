@@ -1,7 +1,7 @@
 # Source-First Protocol Holdouts
 
 > **Kind:** Temporary research-package index and execution record
-> **State:** Active; WHIR constructive validation complete, remaining boundary
+> **State:** Active; WHIR and Circle STARKs complete, remaining boundary
 > holdouts queued
 > **Authority:** None. This package records pressure against the frozen target;
 > durable semantics remain owned by their domain specifications.
@@ -72,7 +72,7 @@ of perfect reviewer blinding.
 | Protocol family | Required depth | Principal pressure | State |
 |---|---|---|---|
 | WHIR, Construction 5.1 | Constructive encoding | constrained Reed--Solomon claims, proof-sent logical Oracles, grouped access, evolving constraints, and round-by-round theorem premises | Complete: `ProfileOrModule` |
-| Circle STARKs | Boundary analysis | circle domains and function spaces rather than ordinary multiplicative-subgroup polynomial assumptions | Queued |
+| Circle STARKs | Boundary analysis | circle domains and function spaces rather than ordinary multiplicative-subgroup polynomial assumptions | Complete: `ProfileOrModule` |
 | WARPfold | Boundary analysis | range-checked movement across non-native fields and proof-system boundaries | Queued |
 | Multiparty Sumcheck | Boundary analysis | several parties jointly realizing prover and verifier work | Queued |
 | Transparent SNARKs over Galois rings | Boundary analysis | ring rather than field algebra and the exact finite target boundary | Queued |
@@ -105,6 +105,28 @@ and conjecture-dependent broader regimes must be different Analysis subjects.
 This missing profile does not require a Core, Plan, Relations, Fiat--Shamir, or
 identity redesign.
 
+## Circle STARKs result
+
+[Circle STARKs Boundary Analysis](circle-starks-boundary-analysis.md) locks the
+paper, reconstructs Circle FRI, batched Circle FRI, and the Circle IOP for AIR,
+and tests the frozen target without translating circle algebra into an
+ordinary univariate-polynomial fiction.
+
+The shared protocol grammar remains native. Circle points, twin-coset domains,
+the quotient-algebra function space, projections, twiddle factors, and fold
+algorithms are exact Foundation-module content; AIR satisfaction, code laws,
+quotient decomposition, batching, and claim transforms are Relations-local.
+The dimension-gap scalar remains an explicit prover message, and trace,
+quotient, and folded codewords remain exact logical Oracles. Plan owns honest
+construction while checked commitment and transcript constructions remain
+separate.
+
+The result is `ProfileOrModule`: source-pinned soundness, knowledge-soundness,
+and zero-knowledge profiles are absent, and the paper's explicitly non-ZK
+optimized variant must not share a property identity with its randomized
+counterpart. Practical large domains remain an intentional finite-v0 boundary.
+No shared profile rotates.
+
 ## Package-wide guardrails
 
 - A logical Oracle is not a commitment. Hash commitment, opening,
@@ -128,4 +150,3 @@ record, each demonstrated mismatch has one adjudicated owner, every retained
 negative control is explicit, and any shared repair has been independently
 reconstructed with affected descendants rerun. If no holdout contradicts the
 shared grammar, the candidate advances without identity rotation.
-

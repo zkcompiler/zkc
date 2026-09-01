@@ -49,6 +49,29 @@
         "The repository identifies itself as an academic prototype and is not production evidence.",
         "Implementation behavior does not establish source theorem truth or semantic correspondence."
       ]
+    },
+    {
+      "key": "circle-starks-paper-2024-278",
+      "role": "primary_protocol_and_theorem_source",
+      "title": "Circle STARKs",
+      "authors": [
+        "Ulrich Haboeck",
+        "David Levit",
+        "Shahar Papini"
+      ],
+      "url": "https://eprint.iacr.org/2024/278.pdf",
+      "retrieved_utc_date": "2026-09-01",
+      "document_date": "2024-12-17",
+      "pages": 46,
+      "sha256": "8e60498a671ff147c211ac7733435057dff27b31b8bd3211485b85b4035d296d",
+      "used_sections": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "Appendix C"
+      ]
     }
   ]
 }

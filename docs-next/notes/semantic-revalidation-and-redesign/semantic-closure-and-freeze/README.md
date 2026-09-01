@@ -88,8 +88,11 @@ holdouts are now the open evidence barrier. WHIR's constructive holdout is
 complete: the verifier interaction, honest Plan, relation grounding, and
 checked commitment/Fiat--Shamir route fit the frozen owners without rotation.
 The complete case is `ProfileOrModule` because its exact round-by-round
-property and theorem application remain an Analysis-local profile; the four
-boundary holdouts remain open.
+property and theorem application remain an Analysis-local profile. The Circle
+STARKs boundary analysis is also complete: circle domains, function spaces,
+folds, and AIR laws stay in exact owner-local modules and Relations profiles,
+while the shared interaction grammar remains unchanged. Three boundary
+holdouts remain open.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet
