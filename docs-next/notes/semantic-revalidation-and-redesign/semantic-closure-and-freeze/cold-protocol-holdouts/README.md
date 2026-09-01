@@ -1,8 +1,8 @@
 # Source-First Protocol Holdouts
 
 > **Kind:** Temporary research-package index and execution record
-> **State:** Active; WHIR, Circle STARKs, and WARPfold complete, remaining boundary
-> holdouts queued
+> **State:** Active; WHIR, Circle STARKs, WARPfold, and multiparty Sumcheck
+> complete; final boundary holdout queued
 > **Authority:** None. This package records pressure against the frozen target;
 > durable semantics remain owned by their domain specifications.
 > **Deletion rule:** Absorb retained findings into durable owners and delete
@@ -74,7 +74,7 @@ of perfect reviewer blinding.
 | WHIR, Construction 5.1 | Constructive encoding | constrained Reed--Solomon claims, proof-sent logical Oracles, grouped access, evolving constraints, and round-by-round theorem premises | Complete: `ProfileOrModule` |
 | Circle STARKs | Boundary analysis | circle domains and function spaces rather than ordinary multiplicative-subgroup polynomial assumptions | Complete: `ProfileOrModule` |
 | WARPfold | Boundary analysis | range-checked movement across non-native fields and proof-system boundaries | Complete: `ProfileOrModule` |
-| Multiparty Sumcheck | Boundary analysis | several parties jointly realizing prover and verifier work | Queued |
+| Multiparty Sumcheck | Boundary analysis | several parties jointly realizing prover and verifier work | Complete: `IntentionalBoundary` for full MPC, `ProfileOrModule` for virtual proof |
 | Transparent SNARKs over Galois rings | Boundary analysis | ring rather than field algebra and the exact finite target boundary | Queued |
 
 ## WHIR result
@@ -148,6 +148,24 @@ expresses an exact finite-prefix `Path` family with a degradation counter and
 distinct decider/flush boundary. Weak and reinforced IVC, sequence extraction,
 and any concrete cross-proof-system composition require separate source-pinned
 Analysis profiles. No shared profile rotates.
+
+## Multiparty Sumcheck result
+
+[Multiparty Sumcheck Boundary Analysis](multiparty-sumcheck-boundary-analysis.md)
+locks the source and distinguishes its virtual Sumcheck proof from the actual
+MPC protocol. The virtual masked transcript fits the frozen two-role model with
+owner-local field, polynomial, sharing-relation, and theorem profiles.
+
+The full protocol does not fit faithfully. Every physical party jointly
+contributes to the virtual prover and verifier; the security theorem depends on
+participant-local shares and views, corrupted coalitions, broadcasts and
+openings, correlated randomness, ideal functionalities, and common abort.
+Collapsing parties into one Prover or Verifier erases those distinctions.
+
+The primary result is therefore `IntentionalBoundary` for finite two-role v0,
+not a silent claim of support. Faithful inclusion would be a regime-level
+multiparty research program spanning Core, Plan, Interface/OIR, Realization,
+and Analysis. No local shared profile edit or identity rotation is selected.
 
 ## Package-wide guardrails
 

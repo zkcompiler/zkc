@@ -94,8 +94,11 @@ folds, and AIR laws stay in exact owner-local modules and Relations profiles,
 while the shared interaction grammar remains unchanged. WARPfold is also
 complete: its multi-field limb discipline is an exact relation rather than a
 universal bijective bridge, and its bounded sequential topology fits the
-existing finite-prefix incremental-composition family. Two boundary holdouts
-remain open.
+existing finite-prefix incremental-composition family. The multiparty Sumcheck
+holdout is complete with an explicit split: its virtual proof is owner-locally
+representable, while the full coalition-secure MPC protocol is an intentional
+two-role-v0 boundary requiring a future regime-level study. One boundary
+holdout remains open.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet
