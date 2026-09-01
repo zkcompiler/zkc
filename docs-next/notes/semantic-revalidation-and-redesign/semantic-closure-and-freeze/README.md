@@ -72,6 +72,10 @@ must not move authority between these owners merely to simplify an encoding.
 - [Dependent Semantic-Profile Publication](dependent-profile-publication/README.md)
   repairs endpoint graph ownership, publishes the dependent owner profiles
   bottom-up, and assembles the independently reconstructible freeze candidate.
+- [Source-First Protocol Holdouts](cold-protocol-holdouts/README.md) pressure
+  the frozen candidate with a constructive WHIR encoding followed by
+  source-grounded boundary analyses for Circle STARKs, WARPfold, multiparty
+  Sumcheck, and transparent Galois-ring SNARKs.
 
 The preflight, six stable-upstream profile publications, recursive-composition
 boundary, dependent-profile construction, and bounded independent freeze review
@@ -80,7 +84,12 @@ profiles while preserving the six upstream PIR identities byte-for-byte. The
 full local gate matrix and uncapped aggregate are green. The review's sole
 finding was a repository-path lexical divergence between the two compilers; it
 was reproduced, repaired, and covered by negative mutations. Cold protocol
-holdouts are now the open evidence barrier.
+holdouts are now the open evidence barrier. WHIR's constructive holdout is
+complete: the verifier interaction, honest Plan, relation grounding, and
+checked commitment/Fiat--Shamir route fit the frozen owners without rotation.
+The complete case is `ProfileOrModule` because its exact round-by-round
+property and theorem application remain an Analysis-local profile; the four
+boundary holdouts remain open.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet

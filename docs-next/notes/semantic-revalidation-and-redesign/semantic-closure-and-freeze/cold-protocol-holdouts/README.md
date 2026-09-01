@@ -1,0 +1,131 @@
+# Source-First Protocol Holdouts
+
+> **Kind:** Temporary research-package index and execution record
+> **State:** Active; WHIR constructive validation complete, remaining boundary
+> holdouts queued
+> **Authority:** None. This package records pressure against the frozen target;
+> durable semantics remain owned by their domain specifications.
+> **Deletion rule:** Absorb retained findings into durable owners and delete
+> this package before documentation cutover.
+
+## Objective
+
+Test the reconstructible semantic candidate against protocol families that did
+not author its shared grammar. A holdout succeeds only when a primary-source
+protocol can be mapped without an opaque evaluator, duplicated authority,
+invented public event, or silent theorem assumption. A failure is retained
+before any repair so that a later extension cannot rewrite the evidence.
+
+The frozen candidate for this package is commit
+`63c48b22c7aac56d9af3ab460e4ea135a87039f3`. Model documents and published
+profile identities are read-only during each first attempt. Owner-local
+profiles and intentional finite limits are distinguished from defects in the
+shared grammar.
+
+## Method
+
+Each holdout follows the same source-first sequence:
+
+1. lock exact primary sources and preserve their bytes or immutable revision;
+2. reconstruct actors, inputs, messages, coins, oracle access, checks, claims,
+   reductions, algebraic assumptions, and theorem premises without target
+   vocabulary;
+3. attempt the assigned mapping against the frozen owners;
+4. record the first failed mapping, if any, before designing a repair;
+5. test identity, authority, causality, visibility, resource, and negative
+   boundaries rather than only the happy path;
+6. assign exactly one classification; and
+7. reopen the smallest owner boundary capable of resolving a demonstrated
+   shared defect.
+
+The classifications are:
+
+- `Native`: existing shared semantics suffice;
+- `ProfileOrModule`: owner-local semantic content suffices;
+- `ConservativeExtension`: one new typed primitive is required while existing
+  meanings remain valid;
+- `ModelingWorkaround`: only an undesirable encoding is available;
+- `SemanticLoss`: a source distinction cannot be recovered;
+- `FundamentalObstruction`: a shared lifecycle, identity, authority, or Core
+  boundary must change;
+- `IntentionalBoundary`: the capability is deliberately outside the finite
+  target; or
+- `Undetermined`: the assigned depth cannot decide.
+
+Passing a holdout establishes representational evidence at its stated depth.
+It does not establish theorem truth, cryptographic security, implementation
+support, wire compatibility, or production readiness.
+
+## Coldness disclosure
+
+These families were selected before the freeze, so this is not a statistically
+blind evaluation. During source discovery for WHIR, one repository-wide file
+search exposed only the already-written high-level selection rationale: WHIR
+combines constrained-code claims, Sumcheck, out-of-domain values, shifted
+grouped reads, changing domains, and recursively evolved weights. The prior
+detailed WHIR correspondence section was not opened or consulted after the
+freeze. The result is therefore a **source-first frozen holdout**, not a claim
+of perfect reviewer blinding.
+
+## Ordered portfolio
+
+| Protocol family | Required depth | Principal pressure | State |
+|---|---|---|---|
+| WHIR, Construction 5.1 | Constructive encoding | constrained Reed--Solomon claims, proof-sent logical Oracles, grouped access, evolving constraints, and round-by-round theorem premises | Complete: `ProfileOrModule` |
+| Circle STARKs | Boundary analysis | circle domains and function spaces rather than ordinary multiplicative-subgroup polynomial assumptions | Queued |
+| WARPfold | Boundary analysis | range-checked movement across non-native fields and proof-system boundaries | Queued |
+| Multiparty Sumcheck | Boundary analysis | several parties jointly realizing prover and verifier work | Queued |
+| Transparent SNARKs over Galois rings | Boundary analysis | ring rather than field algebra and the exact finite target boundary | Queued |
+
+## WHIR result
+
+The complete WHIR record is split by responsibility:
+
+- [Source and Protocol Anatomy](whir-source-and-anatomy.md) locks the sources,
+  reconstructs Construction 5.1, and separates the protocol from Theorem 5.2;
+- [Constructive Semantic Encoding](whir-constructive-encoding.md) gives one
+  finite typed member, its complete event trace, owner and identity graph,
+  Relations and Plan grounding, optional commitment/Fiat--Shamir route, and
+  resource accounting; and
+- [Falsification and Decision](whir-falsification-and-decision.md) records the
+  failed attempts, negative mutations, classification, exact retained work,
+  and reopening conditions.
+
+The structural protocol is native to the frozen model. Its initial logical
+Oracle uses the existing Relations Oracle-statement seam; its proof-sent
+folded Oracle is generated by the Plan and grounded as an exact derived private
+witness while retaining a verifier-visible logical-access occurrence. The
+evolving constrained-code claim is an explicit claim reduction whose dynamic
+parameters are grounded in public challenges, messages, and Oracle answers.
+
+The overall result is `ProfileOrModule`, not `Native`, because the paper's
+round-by-round soundness conclusion requires an exact source-pinned Analysis
+property and theorem profile that is not published. The unique-decoding proof
+and conjecture-dependent broader regimes must be different Analysis subjects.
+This missing profile does not require a Core, Plan, Relations, Fiat--Shamir, or
+identity redesign.
+
+## Package-wide guardrails
+
+- A logical Oracle is not a commitment. Hash commitment, opening,
+  authentication, and Fiat--Shamir are introduced only by the checked
+  Oracle-commitment construction and then the checked transcript construction.
+- A proof-sent Oracle is not reclassified as an initial Oracle merely to reuse
+  Relations' initial-Oracle material seam.
+- A Plan witness export grounds exact private material; it does not establish
+  relation satisfaction or a proximity property.
+- A paper theorem, implementation test, or source citation never becomes a
+  property result without an Analysis applicability and truth path.
+- Finite carrier limits are stated as v0 scope. They are not hidden behind an
+  algorithmic callback or misreported as universal family support.
+- Source implementation code is supplemental evidence about a realization,
+  not authority for the paper's protocol or proof.
+
+## Exit conditions
+
+The package closes when every queued family has its assigned source-grounded
+record, each demonstrated mismatch has one adjudicated owner, every retained
+negative control is explicit, and any shared repair has been independently
+reconstructed with affected descendants rerun. If no holdout contradicts the
+shared grammar, the candidate advances without identity rotation.
+
