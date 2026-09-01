@@ -1,8 +1,7 @@
 # Source-First Protocol Holdouts
 
 > **Kind:** Temporary research-package index and execution record
-> **State:** Active; WHIR, Circle STARKs, WARPfold, and multiparty Sumcheck
-> complete; final boundary holdout queued
+> **State:** All assigned holdouts complete; portfolio adjudication pending
 > **Authority:** None. This package records pressure against the frozen target;
 > durable semantics remain owned by their domain specifications.
 > **Deletion rule:** Absorb retained findings into durable owners and delete
@@ -75,7 +74,7 @@ of perfect reviewer blinding.
 | Circle STARKs | Boundary analysis | circle domains and function spaces rather than ordinary multiplicative-subgroup polynomial assumptions | Complete: `ProfileOrModule` |
 | WARPfold | Boundary analysis | range-checked movement across non-native fields and proof-system boundaries | Complete: `ProfileOrModule` |
 | Multiparty Sumcheck | Boundary analysis | several parties jointly realizing prover and verifier work | Complete: `IntentionalBoundary` for full MPC, `ProfileOrModule` for virtual proof |
-| Transparent SNARKs over Galois rings | Boundary analysis | ring rather than field algebra and the exact finite target boundary | Queued |
+| Transparent SNARKs over Galois rings | Boundary analysis | ring rather than field algebra and the exact finite target boundary | Complete: `Undetermined` complete SNARK; `ProfileOrModule` interactive components |
 
 ## WHIR result
 
@@ -166,6 +165,25 @@ The primary result is therefore `IntentionalBoundary` for finite two-role v0,
 not a silent claim of support. Faithful inclusion would be a regime-level
 multiparty research program spanning Core, Plan, Interface/OIR, Realization,
 and Analysis. No local shared profile edit or identity rotation is selected.
+
+## Galois-ring result
+
+[Transparent SNARKs over Galois Rings Boundary Analysis](galois-ring-snarks-boundary-analysis.md)
+locks the source and tests zero-divisor-aware ring algebra, extension-ring
+challenges, randomized ring-linear codes, interactive polynomial commitment,
+and the Libra/HyperPlonk PIOP routes.
+
+The algebraic pressure is `ProfileOrModule`: exact rings, units, ideals,
+extensions, block packing, codes, and mixed operations remain Foundation
+module content; ring circuits, Sumcheck, ZeroCheck, and permutation laws remain
+Relations-local. Core interaction and the checked Oracle-commitment seam are
+algebra-neutral. No field-only shared assumption was found.
+
+The complete source-named noninteractive SNARK is `Undetermined`, which is the
+portfolio's primary classification. The paper defines a noninteractive SNARK
+but specifies interactive commitment and PIOP schedules without a concrete
+Fiat--Shamir or other transcript compiler. The missing source step is not
+filled by convention and does not select a shared-model rotation.
 
 ## Package-wide guardrails
 

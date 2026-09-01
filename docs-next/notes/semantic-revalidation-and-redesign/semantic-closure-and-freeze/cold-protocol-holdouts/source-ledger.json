@@ -121,6 +121,32 @@
         "Appendix D",
         "Appendix E"
       ]
+    },
+    {
+      "key": "galois-ring-snarks-paper-2025-263",
+      "role": "primary_protocol_and_theorem_source",
+      "title": "Transparent SNARKs over Galois Rings",
+      "authors": [
+        "Yuanju Wei",
+        "Xinxuan Zhang",
+        "Yi Deng"
+      ],
+      "url": "https://eprint.iacr.org/2025/263.pdf",
+      "retrieved_utc_date": "2026-09-01",
+      "document_date": "2025-02-19",
+      "pages": 53,
+      "sha256": "51b93823a94cb83d4aa899621ebbadc93ea73a31568dfedfb2f77ba1bbb29f61",
+      "used_sections": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "4.1",
+        "4.2",
+        "5",
+        "6",
+        "Appendices A-F"
+      ]
     }
   ]
 }

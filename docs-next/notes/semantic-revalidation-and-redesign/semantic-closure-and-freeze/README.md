@@ -97,8 +97,12 @@ universal bijective bridge, and its bounded sequential topology fits the
 existing finite-prefix incremental-composition family. The multiparty Sumcheck
 holdout is complete with an explicit split: its virtual proof is owner-locally
 representable, while the full coalition-secure MPC protocol is an intentional
-two-role-v0 boundary requiring a future regime-level study. One boundary
-holdout remains open.
+two-role-v0 boundary requiring a future regime-level study. The final
+Galois-ring holdout also closes: explicit interactive components are
+owner-locally representable without field-only shared laws, while the complete
+noninteractive SNARK remains undetermined because the source omits its
+transcript compiler. All assigned holdouts are complete; portfolio
+adjudication is the remaining evidence barrier.
 
 Later records are added only when their dependency barrier opens. This keeps
 the temporary package from pre-authoring conclusions that research has not yet
