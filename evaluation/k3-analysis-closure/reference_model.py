@@ -50,6 +50,28 @@ else:
 k2 = k3.k2
 k1 = k3.k1
 
+_FINITE_COVER_NAME = "_zkc_finite_cover_portable_arithmetic"
+_FINITE_COVER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "finite-cover-analysis"
+    / "portable_arithmetic.py"
+)
+if _FINITE_COVER_NAME in sys.modules:
+    finite_cover = sys.modules[_FINITE_COVER_NAME]
+else:
+    _finite_cover_spec = importlib.util.spec_from_file_location(
+        _FINITE_COVER_NAME, _FINITE_COVER_PATH
+    )
+    if (
+        _finite_cover_spec is None or _finite_cover_spec.loader is None
+    ):  # pragma: no cover - host failure
+        raise ImportError(
+            f"cannot load finite-cover arithmetic model from {_FINITE_COVER_PATH}"
+        )
+    finite_cover = importlib.util.module_from_spec(_finite_cover_spec)
+    sys.modules[_FINITE_COVER_NAME] = finite_cover
+    _finite_cover_spec.loader.exec_module(finite_cover)
+
 
 # ---------------------------------------------------------------------------
 # Common finite helpers and refusal classes
@@ -788,14 +810,19 @@ ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
     "analysis.native-rule": (
         ("existential-extractor-introduction", "exact-bounded-native-rule"),
         ("conditional-family-instance-correspondence", "exact-bounded-native-rule"),
+        ("checked-finite-cover-certificate", "exact-bounded-native-rule"),
+        ("checked-finite-cover-universal-discharge", "exact-bounded-native-rule"),
     ),
     "analysis.named-consumer": (
         ("pir-analysis-source-view", "typed-intake-consumer"),
         ("finite-special-soundness", "analysis-premise-consumer"),
+        ("finite-fixed-extractor", "analysis-premise-consumer"),
     ),
     "analysis.qualification": (
         ("finite-special-soundness-result", "conditional-affirmative"),
         ("conditional-assumed-external-all-n", "conditional-affirmative"),
+        ("finite-cover-certificate-result", "conditional-affirmative"),
+        ("finite-fixed-extractor-universal-result", "conditional-affirmative"),
     ),
     "analysis.property-family": (
         ("k-out-of-n-special-soundness", "exact-family-semantics"),
@@ -833,6 +860,26 @@ ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ("source-free-premise-reason", "closed-source-free-reason"),
         ("finite-challenge-domain-v0", "owner-bound-cardinality-derivation"),
         ("k-out-of-n-conclusion-v0", "exact-family-conclusion-schema"),
+        (
+            "fixed-extractor-universal-conclusion-v0",
+            "exact-family-conclusion-schema",
+        ),
+        (
+            "finite-cover-certificate-conclusion-v0",
+            "exact-family-conclusion-schema",
+        ),
+        (
+            "finite-cover-target-reconstruction-v0",
+            "exact-subject-parametric-cover-reconstruction",
+        ),
+        ("finite-cover-cover-schema-v0", "exact-finite-cover-schema"),
+        ("finite-cover-candidate-schema-v0", "exact-candidate-schema"),
+        ("finite-cover-success-schema-v0", "exact-success-schema"),
+        ("finite-cover-coverage-certificate-v0", "exact-certificate-schema"),
+        ("finite-cover-congruence-certificate-v0", "exact-certificate-schema"),
+        ("finite-cover-transfer-certificate-v0", "exact-certificate-schema"),
+        ("finite-cover-operation-binding-v0", "exact-checker-binding-law"),
+        ("finite-cover-stream-progress-v0", "exact-stream-progress-law"),
         ("adaptive-knowledge-conclusion-v0", "exact-family-conclusion-schema"),
         (
             "afk-fixed-public-setup-projection-v0",
@@ -872,6 +919,7 @@ ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ("transcript-declaration-view", "pir-owner-view-use"),
         ("schnorr-relation-definition-view", "relations-owner-view-use"),
         ("finite-special-soundness", "analysis-result-use"),
+        ("fixed-extractor-universal-correctness", "analysis-result-use"),
     ),
 }
 
@@ -1123,6 +1171,9 @@ ANALYSIS_PROPERTY_LAW_SOURCE = _profile_law_source(
         "exact-used-static-view-and-relations-dependencies",
         "bounded-quantitative-expression-and-resource-basis",
         "independent-premises-are-not-derived-proofs",
+        "checked-finite-cover-requires-coverage-congruence-and-transfer",
+        "finite-cover-receipts-are-occurrence-evidence-not-semantic-authority",
+        "fixed-extractor-finite-result-has-no-efficiency-or-family-lift",
     ),
     declaration_catalogs=ANALYSIS_PROPERTY_DECLARATION_CATALOGS,
     body_schema_kinds=ANALYSIS_PROPERTY_SUBJECT_KINDS,
@@ -4079,6 +4130,42 @@ _QUALIFICATION_LAW_SPECS = (
         True,
     ),
     _QualificationLawSpec(
+        "finite-cover-certificate-result",
+        "fixed-extractor-universal-correctness",
+        (
+            "pir.protocol",
+            "relations.definition",
+            "relations.protocol-binding",
+            "analysis.challenge-domain",
+            "foundation.portable-algorithm",
+        ),
+        1,
+        "checked-finite-cover-certificate",
+        "finite-cover-certificate-conclusion-v0",
+        "hypothesis-context",
+        0,
+        0,
+        True,
+    ),
+    _QualificationLawSpec(
+        "finite-fixed-extractor-universal-result",
+        "fixed-extractor-universal-correctness",
+        (
+            "pir.protocol",
+            "relations.definition",
+            "relations.protocol-binding",
+            "analysis.challenge-domain",
+            "foundation.portable-algorithm",
+        ),
+        1,
+        "checked-finite-cover-universal-discharge",
+        "fixed-extractor-universal-conclusion-v0",
+        "hypothesis-context",
+        3,
+        0,
+        True,
+    ),
+    _QualificationLawSpec(
         "conditional-assumed-external-all-n",
         "asymptotic-k-out-of-n-special-soundness",
         ("analysis.asymptotic-protocol-family",),
@@ -5057,6 +5144,60 @@ def _exact_qualification_expectation(
             empty_closure,
         )
 
+    if label == "finite-cover-certificate-result":
+        kind = _certificate_kind_from_context(context)
+        _validate_finite_cover_certificate_semantics(kind)
+        proposition_id = finite_cover_certificate_proposition_id(
+            _SCHNORR_PINNED_SOURCE,
+            _SCHNORR_PINNED_PROFILE,
+            kind,
+        )
+        basis = finite_cover_certificate_semantic_basis_id(
+            _SCHNORR_PINNED_SOURCE,
+            _SCHNORR_PINNED_PROFILE,
+            kind,
+        )
+        policy = _finite_cover_operation_policy_id(proposition_id)
+        return _QualificationExpectation(
+            basis,
+            _finite_cover_empty_support_id(basis, proposition_id),
+            _finite_cover_certificate_conclusion(
+                _SCHNORR_PINNED_SOURCE,
+                _SCHNORR_PINNED_PROFILE,
+                kind,
+            ),
+            unit,
+            policy,
+            empty_closure,
+        )
+
+    if label == "finite-fixed-extractor-universal-result":
+        certificate_ids = _validate_finite_cover_certificate_bindings(
+            context.support
+        )
+        _run_finite_cover_stream()
+        proposition_id = fixed_extractor_proposition_id(
+            _SCHNORR_PINNED_SOURCE, _SCHNORR_PINNED_PROFILE
+        )
+        basis = fixed_extractor_semantic_basis_id(
+            _SCHNORR_PINNED_SOURCE, _SCHNORR_PINNED_PROFILE
+        )
+        policy = _finite_cover_operation_policy_id(proposition_id)
+        return _QualificationExpectation(
+            basis,
+            finite_cover_support_id(
+                _SCHNORR_PINNED_SOURCE,
+                _SCHNORR_PINNED_PROFILE,
+                certificate_ids,
+            ),
+            _fixed_extractor_conclusion_body(
+                _SCHNORR_PINNED_SOURCE, _SCHNORR_PINNED_PROFILE
+            ),
+            unit,
+            policy,
+            empty_closure,
+        )
+
     if label == "conditional-assumed-external-all-n":
         family = _qualification_family(law, context)
         hypotheses = _family_source_hypotheses_for_qualification(family)
@@ -5533,6 +5674,16 @@ def _require_exact_question_constructor(
     expected_proposition: object | None = None
     if law.qualification_label == "finite-special-soundness-result":
         expected_proposition = analysis_proposition_id(_SCHNORR_PINNED_PROPOSITION)
+    elif law.qualification_label == "finite-cover-certificate-result":
+        expected_proposition = finite_cover_certificate_proposition_id(
+            _SCHNORR_PINNED_SOURCE,
+            _SCHNORR_PINNED_PROFILE,
+            _certificate_kind_from_context(context),
+        )
+    elif law.qualification_label == "finite-fixed-extractor-universal-result":
+        expected_proposition = fixed_extractor_proposition_id(
+            _SCHNORR_PINNED_SOURCE, _SCHNORR_PINNED_PROFILE
+        )
     elif law.qualification_label == "conditional-assumed-external-all-n":
         family = _qualification_family(law, context)
         expected_proposition = family_source_property_proposition_id(
@@ -5716,8 +5867,14 @@ def _require_exact_support_and_validation(
         raise AuthorityError(
             "qualification support does not cover its exact hypotheses"
         )
-    expected_validation = analysis_validation_basis_id(
-        (), profile=context.semantic_profile
+    expected_validation = (
+        finite_cover_validation_basis_id()
+        if law.qualification_label
+        in (
+            "finite-cover-certificate-result",
+            "finite-fixed-extractor-universal-result",
+        )
+        else analysis_validation_basis_id((), profile=context.semantic_profile)
     )
     if context.validation_basis_id != expected_validation:
         raise AuthorityError(
@@ -6202,6 +6359,7 @@ def derive_source_policy_closure(
 _ANALYSIS_CONSUMER_DECLARATION_OWNERS = {
     "pir-analysis-source-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "finite-special-soundness": lambda: ANALYSIS_PROPERTY_PROFILE,
+    "finite-fixed-extractor": lambda: ANALYSIS_PROPERTY_PROFILE,
     "afk-family-property-transport": lambda: ANALYSIS_TRANSPORT_PROFILE,
     "afk-member-specialization": lambda: ANALYSIS_TRANSPORT_PROFILE,
 }
@@ -6216,6 +6374,7 @@ _ANALYSIS_PURPOSE_DECLARATION_OWNERS = {
     "transcript-declaration-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "schnorr-relation-definition-view": lambda: ANALYSIS_PROPERTY_PROFILE,
     "finite-special-soundness": lambda: ANALYSIS_PROPERTY_PROFILE,
+    "fixed-extractor-universal-correctness": lambda: ANALYSIS_PROPERTY_PROFILE,
     "exact-family-applicability": lambda: ANALYSIS_TRANSPORT_PROFILE,
     "all-n-two-special-soundness-source": lambda: ANALYSIS_TRANSPORT_PROFILE,
     "selected-afk-theorem-truth": lambda: ANALYSIS_TRANSPORT_PROFILE,
@@ -13908,7 +14067,11 @@ def total_uniform_schnorr_case() -> object:
 # ---------------------------------------------------------------------------
 
 
-_SCHNORR_EXTRACTOR_ALGORITHM_BODY = k1.build_mod_algorithm()
+FINITE_COVER_ARITHMETIC = finite_cover.build_bundle(k1)
+FINITE_COVER_PORTABLE_EVALUATOR = finite_cover.CheckedPortableEvaluator(
+    k1, FINITE_COVER_ARITHMETIC
+)
+_SCHNORR_EXTRACTOR_ALGORITHM_BODY = FINITE_COVER_ARITHMETIC.candidate_algorithm
 SCHNORR_EXTRACTOR_ALGORITHM = k1.authenticate_algorithm_identity(
     _SCHNORR_EXTRACTOR_ALGORITHM_BODY
 )
@@ -14595,6 +14758,1358 @@ def extract_schnorr_witness(
         return AttemptOutcome(AttemptKind.MALFORMED, detail=str(error))
     except AnalysisError as error:
         return AttemptOutcome(AttemptKind.MALFORMED, detail=str(error))
+
+
+# ---------------------------------------------------------------------------
+# Checked finite-cover activation for one exact fixed extractor
+# ---------------------------------------------------------------------------
+
+
+FINITE_COVER_CERTIFICATE_KINDS = (
+    "coverage",
+    "congruence",
+    "success-transfer",
+)
+FINITE_COVER_OPERATION_LABELS = (
+    "representative-stream",
+    "representative-domain",
+    "representative-embedding",
+    "candidate",
+    "representative-success",
+)
+
+
+def _finite_cover_cache_coordinate(value: object) -> object:
+    """Form a live-operation cache key, never a persistent semantic key."""
+
+    if type(value) in (str, int, bytes, bool, type(None)):
+        return value
+    if type(value) is tuple:
+        return tuple(_finite_cover_cache_coordinate(item) for item in value)
+    internal_reference = getattr(value, "internal_reference", None)
+    if callable(internal_reference):
+        return (type(value).__name__, internal_reference())
+    return (type(value).__name__, id(value))
+
+
+def _with_finite_cover_derivation(
+    label: str,
+) -> Callable[[Callable[..., object]], Callable[..., object]]:
+    """Memoize pure identity formation only during one live operation."""
+
+    def decorate(function: Callable[..., object]) -> Callable[..., object]:
+        @wraps(function)
+        def scoped(*args: object, **kwargs: object) -> object:
+            with _family_derivation_scope():
+                key = (
+                    "finite-cover",
+                    label,
+                    ANALYSIS_PROPERTY_PROFILE_ID,
+                    tuple(_finite_cover_cache_coordinate(item) for item in args),
+                    tuple(
+                        (name, _finite_cover_cache_coordinate(value))
+                        for name, value in sorted(kwargs.items())
+                    ),
+                )
+                return _family_derivation_value(
+                    key, lambda: function(*args, **kwargs)
+                )
+
+        return scoped
+
+    return decorate
+
+
+@dataclass(frozen=True)
+class FiniteCoverStreamReceipt:
+    validation_basis_id: object
+    exact_representative_count: int
+    ordered_representative_stream_digest: bytes
+    ordered_evaluation_stream_digest: bytes
+    terminal_count: int
+    terminal_digest: bytes
+    consumed_enumerator_steps: int
+    consumed_member_evaluations: int
+
+
+@dataclass(frozen=True)
+class CheckedFixedExtractorJudgment:
+    proposition_id: object
+    semantic_basis_id: object
+    support_id: object
+    validation_basis_id: object
+    qualification: object
+    judgment_id: object
+    certificate_judgment_ids: tuple[object, ...]
+    stream_receipt: FiniteCoverStreamReceipt
+    _issuer: object
+
+
+_FINITE_COVER_JUDGMENT_ISSUER = object()
+
+
+def _fixed_extractor_family_ref() -> object:
+    return analysis_profile_declaration_ref(
+        ANALYSIS_PROPERTY_PROFILE,
+        ANALYSIS_PROPERTY_PROFILE,
+        "analysis.property-family",
+        "fixed-extractor-universal-correctness",
+    )
+
+
+@_with_finite_cover_derivation("exact-subjects")
+def _finite_cover_exact_subjects(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> tuple[object, ...]:
+    require_fresh_fs_relation_source(source)
+    require_schnorr_special_soundness_profile(source, profile)
+    return (
+        source.protocol_source.fresh_protocol_id,
+        profile.relation_definition_id,
+        profile.fresh_binding_id,
+        profile.challenge_domain_id,
+        SCHNORR_EXTRACTOR_ALGORITHM,
+    )
+
+
+@_with_finite_cover_derivation("experiment-profile")
+def fixed_extractor_experiment_profile_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    """Form the exact singleton-ForAllValue fixed-candidate experiment."""
+
+    _finite_cover_exact_subjects(source, profile)
+    base_id = experiment_model_id(
+        fresh_special_soundness_model(
+            k=profile.extraction_arity,
+            challenge_count=profile.challenge_count,
+        )
+    )
+    base = _formed_analysis_body(base_id, "analysis.experiment-profile")
+    quantified_domain = Quantifier(
+        QuantifierKind.FOR_ALL_VALUE,
+        "accepted-transcript-pair",
+        _subject_bound_schnorr_pair_domain_id(profile),
+    )
+    return _analysis_id(
+        "analysis.experiment-profile",
+        replace(
+            base,
+            family=analysis_profile_declaration_ref_body(
+                _fixed_extractor_family_ref()
+            ),
+            quantifier_prefix=k1.DatumSeq((_quantifier_body(quantified_domain, 0),)),
+            role_interfaces=k1.DatumSeq(
+                (
+                    _id_datum(
+                        profile.extractor_profile_id,
+                        "analysis.extractor-profile",
+                    ),
+                )
+            ),
+            failure_abort_and_noncompletion_law=k1.Symbol(
+                "candidate-failure-on-one-member-is-an-exact-counterexample"
+            ),
+            termination_law=k1.Symbol(
+                "total-on-this-exact-finite-domain-no-efficiency-conclusion"
+            ),
+            output_type=k1.Symbol(
+                "deterministic-fixed-extractor-universal-judgment"
+            ),
+        ),
+    )
+
+
+@_with_finite_cover_derivation("fixed-conclusion")
+def _fixed_extractor_conclusion_body(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    experiment_id = fixed_extractor_experiment_profile_id(source, profile)
+    return k1.DatumVariant(
+        2,
+        k1.DatumRecord(
+            (
+                (
+                    0,
+                    _id_datum(experiment_id, "analysis.experiment-profile"),
+                ),
+                (
+                    1,
+                    _id_datum(
+                        profile.extractor_profile_id,
+                        "analysis.extractor-profile",
+                    ),
+                ),
+                (
+                    2,
+                    _id_datum(
+                        SCHNORR_EXTRACTOR_ALGORITHM,
+                        "foundation.portable-algorithm",
+                    ),
+                ),
+                (3, k1.Nat(profile.statement_anchor_value)),
+                (4, k1.Nat(profile.challenge_count)),
+                (5, k1.Symbol("affirmative-exact-finite-subject-only")),
+            )
+        ),
+    )
+
+
+@_with_finite_cover_derivation("fixed-question-payload")
+def _fixed_extractor_question_payload(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol("fixed-extractor-universal")),
+            (1, _id_datum(profile.profile_id, "analysis.experiment-profile")),
+            (
+                2,
+                _id_datum(
+                    profile.extractor_profile_id, "analysis.extractor-profile"
+                ),
+            ),
+            (
+                3,
+                _id_datum(
+                    SCHNORR_EXTRACTOR_ALGORITHM,
+                    "foundation.portable-algorithm",
+                ),
+            ),
+            (4, k1.value_type_datum(FINITE_COVER_ARITHMETIC.raw_pair_type)),
+            (
+                5,
+                k1.value_type_datum(
+                    FINITE_COVER_ARITHMETIC.representative_pair_type
+                ),
+            ),
+            (6, _fixed_extractor_conclusion_body(source, profile)),
+        )
+    )
+
+
+@_with_finite_cover_derivation("fixed-question")
+def fixed_extractor_question_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    experiment_id = fixed_extractor_experiment_profile_id(source, profile)
+    return _analysis_id(
+        "analysis.question",
+        AnalysisQuestionBodyV0(
+            _fixed_extractor_family_ref(),
+            _finite_cover_exact_subjects(source, profile),
+            _semantic_experiment_context(
+                (source_manifest_id(source.fresh_manifest),),
+                (experiment_id,),
+            ),
+            _fixed_extractor_question_payload(source, profile),
+        ),
+    )
+
+
+@_with_finite_cover_derivation("fixed-goal")
+def fixed_extractor_goal_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    return _analysis_id(
+        "analysis.goal",
+        AnalysisGoalBodyV0(fixed_extractor_question_id(source, profile)),
+    )
+
+
+@_with_finite_cover_derivation("fixed-proposition")
+def fixed_extractor_proposition_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    return _analysis_id(
+        "analysis.proposition",
+        AnalysisPropositionBodyV0(
+            fixed_extractor_goal_id(source, profile),
+            analysis_hypothesis_context_id(()),
+        ),
+    )
+
+
+def _require_certificate_kind(kind: str) -> str:
+    if type(kind) is not str or kind not in FINITE_COVER_CERTIFICATE_KINDS:
+        raise PropertyError("finite-cover certificate kind is not active")
+    return kind
+
+
+@_with_finite_cover_derivation("certificate-question-payload")
+def _finite_cover_certificate_question_payload(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    kind: str,
+) -> object:
+    _require_certificate_kind(kind)
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol("finite-cover-certificate")),
+            (1, k1.Symbol(kind)),
+            (2, _id_datum(profile.profile_id, "analysis.experiment-profile")),
+            (
+                3,
+                _id_datum(
+                    SCHNORR_EXTRACTOR_ALGORITHM,
+                    "foundation.portable-algorithm",
+                ),
+            ),
+            (
+                4,
+                _id_datum(
+                    fixed_extractor_proposition_id(source, profile),
+                    "analysis.proposition",
+                ),
+            ),
+        )
+    )
+
+
+@_with_finite_cover_derivation("certificate-question")
+def finite_cover_certificate_question_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    kind: str,
+) -> object:
+    return _analysis_id(
+        "analysis.question",
+        AnalysisQuestionBodyV0(
+            _fixed_extractor_family_ref(),
+            _finite_cover_exact_subjects(source, profile),
+            _semantic_experiment_context(
+                (source_manifest_id(source.fresh_manifest),),
+                (fixed_extractor_experiment_profile_id(source, profile),),
+            ),
+            _finite_cover_certificate_question_payload(source, profile, kind),
+        ),
+    )
+
+
+@_with_finite_cover_derivation("certificate-goal")
+def finite_cover_certificate_goal_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    kind: str,
+) -> object:
+    return _analysis_id(
+        "analysis.goal",
+        AnalysisGoalBodyV0(
+            finite_cover_certificate_question_id(source, profile, kind)
+        ),
+    )
+
+
+@_with_finite_cover_derivation("certificate-proposition")
+def finite_cover_certificate_proposition_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    kind: str,
+) -> object:
+    return _analysis_id(
+        "analysis.proposition",
+        AnalysisPropositionBodyV0(
+            finite_cover_certificate_goal_id(source, profile, kind),
+            analysis_hypothesis_context_id(()),
+        ),
+    )
+
+
+def _finite_cover_law_ref(label: str) -> object:
+    return analysis_profile_declaration_ref_body(
+        analysis_profile_declaration_ref(
+            ANALYSIS_PROPERTY_PROFILE,
+            ANALYSIS_PROPERTY_PROFILE,
+            "analysis.semantic-law",
+            label,
+        )
+    )
+
+
+@_with_finite_cover_derivation("target-body")
+def _finite_cover_target_body(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    proposition_id = fixed_extractor_proposition_id(source, profile)
+    certificate_goals = tuple(
+        finite_cover_certificate_goal_id(source, profile, kind)
+        for kind in FINITE_COVER_CERTIFICATE_KINDS
+    )
+    return k1.DatumRecord(
+        (
+            (0, _id_datum(proposition_id, "analysis.proposition")),
+            (
+                1,
+                _id_datum(
+                    fixed_extractor_experiment_profile_id(source, profile),
+                    "analysis.experiment-profile",
+                ),
+            ),
+            (2, k1.value_type_datum(FINITE_COVER_ARITHMETIC.raw_pair_type)),
+            (3, k1.Symbol("exact-fresh-accepted-transcript-pair")),
+            (4, _finite_cover_law_ref("finite-cover-cover-schema-v0")),
+            (
+                5,
+                k1.value_type_datum(
+                    FINITE_COVER_ARITHMETIC.representative_pair_type
+                ),
+            ),
+            (6, k1.Symbol("canonical-schnorr-pair-representative")),
+            (
+                7,
+                _id_datum(
+                    FINITE_COVER_ARITHMETIC.normalization_algorithm.identity,
+                    "foundation.portable-algorithm",
+                ),
+            ),
+            (
+                8,
+                _id_datum(
+                    FINITE_COVER_ARITHMETIC.embedding_algorithm.identity,
+                    "foundation.portable-algorithm",
+                ),
+            ),
+            (
+                9,
+                _id_datum(
+                    FINITE_COVER_ARITHMETIC.representative_stream_algorithm.identity,
+                    "foundation.portable-algorithm",
+                ),
+            ),
+            (
+                10,
+                _id_datum(
+                    profile.extractor_profile_id, "analysis.extractor-profile"
+                ),
+            ),
+            (
+                11,
+                _id_datum(
+                    SCHNORR_EXTRACTOR_ALGORITHM,
+                    "foundation.portable-algorithm",
+                ),
+            ),
+            (12, _finite_cover_law_ref("finite-cover-candidate-schema-v0")),
+            (13, k1.Symbol("exact-witness-equality-after-normalization")),
+            (14, k1.Symbol("representative-output-satisfies-bound-relation")),
+            (15, k1.Symbol("raw-member-output-satisfies-bound-relation")),
+            (
+                16,
+                k1.DatumSeq(
+                    tuple(
+                        _id_datum(item, "analysis.goal")
+                        for item in certificate_goals
+                    )
+                ),
+            ),
+            (
+                17,
+                _id_datum(
+                    FINITE_COVER_ARITHMETIC.module_id,
+                    "foundation.semantic-module",
+                ),
+            ),
+            (18, k1.Nat(308)),
+            (19, k1.BytesValue(FINITE_COVER_ARITHMETIC.representative_stream_digest)),
+        )
+    )
+
+
+@_with_finite_cover_derivation("certificate-conclusion")
+def _finite_cover_certificate_conclusion(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    kind: str,
+) -> object:
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol(_require_certificate_kind(kind))),
+            (
+                1,
+                _id_datum(
+                    finite_cover_certificate_goal_id(source, profile, kind),
+                    "analysis.goal",
+                ),
+            ),
+            (2, _finite_cover_target_body(source, profile)),
+            (3, k1.Symbol("affirmative-exact-certificate-only")),
+        )
+    )
+
+
+@_with_finite_cover_derivation("checker-contract")
+def _finite_cover_checker_contract_id(label: str) -> object:
+    if label not in FINITE_COVER_OPERATION_LABELS:
+        raise PropertyError("unknown finite-cover checker operation")
+    body = k1.DatumRecord(
+        (
+            (0, k1.Symbol(label)),
+            (1, _finite_cover_law_ref("finite-cover-operation-binding-v0")),
+            (2, k1.Symbol("python-reference-provider-with-exact-closed-abi")),
+        )
+    )
+    return k1.content_id(
+        "analysis.finite-cover-checker-contract",
+        k1.encode_datum(body),
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+
+
+@_with_finite_cover_derivation("validation-basis")
+def finite_cover_validation_basis_id() -> object:
+    checker_entries = k1.DatumSeq(
+        tuple(
+            k1.DatumRecord(
+                (
+                    (0, k1.Nat(ordinal)),
+                    (1, k1.Symbol(label)),
+                    (
+                        2,
+                        _id_datum(
+                            _finite_cover_checker_contract_id(label),
+                            "analysis.finite-cover-checker-contract",
+                        ),
+                    ),
+                )
+            )
+            for ordinal, label in enumerate(FINITE_COVER_OPERATION_LABELS)
+        )
+    )
+    translations = k1.DatumSeq(
+        tuple(
+            k1.DatumRecord(
+                (
+                    (0, k1.Nat(ordinal)),
+                    (1, k1.Symbol(label)),
+                    (2, k1.Symbol("exact-canonical-input-translation")),
+                    (3, k1.Symbol("exact-canonical-output-translation")),
+                )
+            )
+            for ordinal, label in enumerate(FINITE_COVER_OPERATION_LABELS)
+        )
+    )
+    controls = k1.DatumSeq(
+        (
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol("representative-stream-steps")),
+                    (1, k1.Nat(309)),
+                )
+            ),
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol("representative-member-evaluations")),
+                    (1, k1.Nat(308)),
+                )
+            ),
+        )
+    )
+    residual = analysis_profile_declaration_ref(
+        ANALYSIS_PROPERTY_PROFILE,
+        ANALYSIS_KERNEL_PROFILE,
+        "analysis.residual-trust-root",
+        "python-runtime-and-reference-model",
+    )
+    return _analysis_id(
+        "analysis.validation-basis",
+        AnalysisValidationBasisBodyV0(
+            checker_entries,
+            translations,
+            controls,
+            k1.DatumSeq(()),
+            k1.DatumSeq((analysis_profile_declaration_ref_body(residual),)),
+        ),
+    )
+
+
+@_with_finite_cover_derivation("operation-policy")
+def _finite_cover_operation_policy_id(
+    proposition_id: object,
+) -> object:
+    return _analysis_operation_policy_id(
+        proposition_id,
+        (
+            (
+                "finite-fixed-extractor",
+                ("fixed-extractor-universal-correctness",),
+            ),
+        ),
+        profile=ANALYSIS_PROPERTY_PROFILE,
+    )
+
+
+@_with_finite_cover_derivation("certificate-semantic-basis")
+def finite_cover_certificate_semantic_basis_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    kind: str,
+) -> object:
+    proposition_id = fixed_extractor_proposition_id(source, profile)
+    return _analysis_id(
+        "analysis.semantic-basis",
+        AnalysisSemanticBasisBodyV0(
+            _fixed_extractor_family_ref(),
+            finite_cover_certificate_question_id(source, profile, kind),
+            _native_rule_source(
+                ANALYSIS_PROPERTY_PROFILE,
+                ANALYSIS_PROPERTY_PROFILE,
+                "checked-finite-cover-certificate",
+                k1.DatumRecord(
+                    (
+                        (0, k1.Symbol(_require_certificate_kind(kind))),
+                        (1, _finite_cover_target_body(source, profile)),
+                    )
+                ),
+            ),
+            k1.DatumSeq(()),
+            complete_read_purpose_requirements(
+                concrete_manifest_ids=(source_manifest_id(source.fresh_manifest),)
+            ),
+            _conclusion_schema_ref(
+                ANALYSIS_PROPERTY_PROFILE,
+                ANALYSIS_PROPERTY_PROFILE,
+                "finite-cover-certificate-conclusion-v0",
+            ),
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol("checked-finite-cover-certificate")),
+                    (1, k1.Symbol(kind)),
+                    (2, _id_datum(proposition_id, "analysis.proposition")),
+                )
+            ),
+        ),
+    )
+
+
+@_with_finite_cover_derivation("fixed-semantic-basis")
+def fixed_extractor_semantic_basis_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    certificate_goals = tuple(
+        finite_cover_certificate_goal_id(source, profile, kind)
+        for kind in FINITE_COVER_CERTIFICATE_KINDS
+    )
+    return _analysis_id(
+        "analysis.semantic-basis",
+        AnalysisSemanticBasisBodyV0(
+            _fixed_extractor_family_ref(),
+            fixed_extractor_question_id(source, profile),
+            _native_rule_source(
+                ANALYSIS_PROPERTY_PROFILE,
+                ANALYSIS_PROPERTY_PROFILE,
+                "checked-finite-cover-universal-discharge",
+                _finite_cover_target_body(source, profile),
+            ),
+            k1.DatumSeq(
+                tuple(
+                    k1.DatumVariant(
+                        1, _id_datum(goal_id, "analysis.goal")
+                    )
+                    for goal_id in certificate_goals
+                )
+            ),
+            complete_read_purpose_requirements(
+                concrete_manifest_ids=(source_manifest_id(source.fresh_manifest),)
+            ),
+            _conclusion_schema_ref(
+                ANALYSIS_PROPERTY_PROFILE,
+                ANALYSIS_PROPERTY_PROFILE,
+                "fixed-extractor-universal-conclusion-v0",
+            ),
+            k1.DatumRecord(
+                (
+                    (0, k1.Symbol("checked-exact-finite-cover")),
+                    (1, _finite_cover_target_body(source, profile)),
+                    (
+                        2,
+                        k1.Symbol(
+                            "no-efficiency-family-asymptotic-probabilistic-or-security-lift"
+                        ),
+                    ),
+                )
+            ),
+        ),
+    )
+
+
+@_with_finite_cover_derivation("empty-support")
+def _finite_cover_empty_support_id(
+    semantic_basis_id: object,
+    proposition_id: object,
+) -> object:
+    return _analysis_support_instantiation_id(
+        profile=ANALYSIS_PROPERTY_PROFILE,
+        semantic_basis_id=semantic_basis_id,
+        proposition_id=proposition_id,
+    )
+
+
+@_with_finite_cover_derivation("support-bindings")
+def _finite_cover_support_bindings(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    certificate_judgment_ids: tuple[object, ...],
+) -> object:
+    if (
+        type(certificate_judgment_ids) is not tuple
+        or len(certificate_judgment_ids) != 3
+    ):
+        raise PropertyError("finite-cover discharge needs exactly three certificates")
+    return k1.DatumSeq(
+        tuple(
+            k1.DatumRecord(
+                (
+                    (0, k1.Nat(ordinal)),
+                    (
+                        1,
+                        k1.DatumRecord(
+                            (
+                                (
+                                    0,
+                                    _id_datum(
+                                        finite_cover_certificate_goal_id(
+                                            source, profile, kind
+                                        ),
+                                        "analysis.goal",
+                                    ),
+                                ),
+                                (
+                                    1,
+                                    _id_datum(
+                                        judgment_id,
+                                        "analysis.judgment-record",
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                )
+            )
+            for ordinal, (kind, judgment_id) in enumerate(
+                zip(
+                    FINITE_COVER_CERTIFICATE_KINDS,
+                    certificate_judgment_ids,
+                    strict=True,
+                )
+            )
+        )
+    )
+
+
+@_with_finite_cover_derivation("support")
+def finite_cover_support_id(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    certificate_judgment_ids: tuple[object, ...],
+) -> object:
+    return _analysis_support_instantiation_id(
+        profile=ANALYSIS_PROPERTY_PROFILE,
+        semantic_basis_id=fixed_extractor_semantic_basis_id(source, profile),
+        proposition_id=fixed_extractor_proposition_id(source, profile),
+        non_hypothesis_premise_bindings=_finite_cover_support_bindings(
+            source, profile, certificate_judgment_ids
+        ),
+    )
+
+
+def _datum_pair(value: object) -> tuple[SchnorrTranscript, SchnorrTranscript]:
+    if type(value) is k1.CanonicalValue:
+        datum = value.datum
+    else:
+        datum = value
+    if type(datum) is not k1.DatumRecord or tuple(dict(datum.fields)) != (0, 1):
+        raise PropertyError("finite-cover pair datum has another shape")
+
+    def transcript(item: object) -> SchnorrTranscript:
+        if type(item) is not k1.DatumRecord or tuple(dict(item.fields)) != (0, 1, 2, 3):
+            raise PropertyError("finite-cover transcript datum has another shape")
+        fields = dict(item.fields)
+        if any(type(fields[index]) is not k1.Nat for index in range(4)):
+            raise PropertyError("finite-cover transcript leaf is not a natural")
+        return SchnorrTranscript(*(fields[index].value for index in range(4)))
+
+    fields = dict(datum.fields)
+    return transcript(fields[0]), transcript(fields[1])
+
+
+def _raw_pair_value(
+    first: SchnorrTranscript,
+    second: SchnorrTranscript,
+) -> object:
+    datum = k1.DatumRecord(
+        (
+            (
+                0,
+                k1.DatumRecord(
+                    tuple(
+                        (index, k1.Nat(value))
+                        for index, value in enumerate(
+                            (
+                                first.statement,
+                                first.commitment,
+                                first.challenge,
+                                first.response,
+                            )
+                        )
+                    )
+                ),
+            ),
+            (
+                1,
+                k1.DatumRecord(
+                    tuple(
+                        (index, k1.Nat(value))
+                        for index, value in enumerate(
+                            (
+                                second.statement,
+                                second.commitment,
+                                second.challenge,
+                                second.response,
+                            )
+                        )
+                    )
+                ),
+            ),
+        )
+    )
+    return k1.admit_value(FINITE_COVER_ARITHMETIC.raw_pair_type, datum)
+
+
+def _representative_value(datum: object) -> object:
+    return k1.admit_value(
+        FINITE_COVER_ARITHMETIC.representative_pair_type, datum
+    )
+
+
+def _portable_success(
+    algorithm: object,
+    inputs: tuple[object, ...],
+    what: str,
+) -> object:
+    outcome = FINITE_COVER_PORTABLE_EVALUATOR.evaluate(algorithm, inputs)
+    if outcome.kind != "success" or outcome.value is None:
+        raise AuthorityError(
+            f"finite-cover {what} did not complete successfully: {outcome.kind}"
+        )
+    return outcome.value
+
+
+def _noncanonical_variants(
+    first: SchnorrTranscript,
+    second: SchnorrTranscript,
+) -> tuple[tuple[SchnorrTranscript, SchnorrTranscript], ...]:
+    return (
+        (first, second),
+        (
+            replace(
+                first,
+                commitment=first.commitment + 23,
+                response=first.response + 11,
+            ),
+            replace(
+                second,
+                commitment=second.commitment + 23,
+                response=second.response + 22,
+            ),
+        ),
+        (
+            replace(
+                first,
+                commitment=first.commitment + 23 * 257,
+                response=first.response + 11 * 257,
+            ),
+            replace(
+                second,
+                commitment=second.commitment + 23 * 257,
+                response=second.response + 11 * 509,
+            ),
+        ),
+    )
+
+
+def _finite_cover_member_after_source_admission(
+    profile: SchnorrSpecialSoundnessProfile,
+    first: SchnorrTranscript,
+    second: SchnorrTranscript,
+) -> bool:
+    """Execute the exact admitted pair law after authenticating its owner once.
+
+    ``require_schnorr_special_soundness_profile`` proves that these coordinates
+    are the selected Fresh Core's Schnorr Check, Terminal, statement edge, and
+    challenge domain.  Reconstructing those owner views for every member would
+    change no judgment and would turn a 308-element finite check into repeated
+    profile formation work.
+    """
+
+    if type(first) is not SchnorrTranscript or type(second) is not SchnorrTranscript:
+        raise PropertyError("finite-cover member needs two exact transcripts")
+    values = (
+        first.statement,
+        first.commitment,
+        first.challenge,
+        first.response,
+        second.statement,
+        second.commitment,
+        second.challenge,
+        second.response,
+    )
+    if any(type(item) is not int or not 0 <= item < (1 << 64) for item in values):
+        return False
+    if (
+        first.statement != profile.statement_anchor_value
+        or second.statement != first.statement
+        or second.commitment != first.commitment
+        or not 0 <= first.challenge < profile.challenge_count
+        or not 0 <= second.challenge < profile.challenge_count
+        or k1.encode_datum(k1.Nat(first.challenge))
+        >= k1.encode_datum(k1.Nat(second.challenge))
+    ):
+        return False
+
+    def accepts(transcript: SchnorrTranscript) -> bool:
+        return pow(
+            profile.generator,
+            transcript.response,
+            profile.group_modulus,
+        ) == (
+            transcript.commitment
+            * pow(
+                transcript.statement,
+                transcript.challenge,
+                profile.group_modulus,
+            )
+        ) % profile.group_modulus
+
+    return accepts(first) and accepts(second)
+
+
+def _validate_finite_cover_certificate_semantics(kind: str) -> None:
+    """Validate one exact quotient law, never a broader theorem claim."""
+
+    kind = _require_certificate_kind(kind)
+    source = _SCHNORR_PINNED_SOURCE
+    profile = _SCHNORR_PINNED_PROFILE
+    require_schnorr_special_soundness_profile(source, profile)
+    representatives = tuple(FINITE_COVER_ARITHMETIC.representative_datums)
+    encoded_representatives = tuple(k1.encode_datum(item) for item in representatives)
+    if (
+        len(representatives) != 308
+        or len(set(encoded_representatives)) != 308
+        or encoded_representatives != tuple(sorted(encoded_representatives))
+    ):
+        raise AuthorityError("finite-cover canonical representatives are incomplete")
+
+    if kind == "coverage":
+        residue_members = []
+        for commitment in range(profile.group_modulus):
+            for first_challenge in range(profile.challenge_count):
+                for second_challenge in range(
+                    first_challenge + 1, profile.challenge_count
+                ):
+                    first_responses = tuple(
+                        response
+                        for response in range(profile.subgroup_order)
+                        if pow(profile.generator, response, profile.group_modulus)
+                        == (
+                            commitment
+                            * pow(
+                                profile.statement_anchor_value,
+                                first_challenge % profile.subgroup_order,
+                                profile.group_modulus,
+                            )
+                        )
+                        % profile.group_modulus
+                    )
+                    second_responses = tuple(
+                        response
+                        for response in range(profile.subgroup_order)
+                        if pow(profile.generator, response, profile.group_modulus)
+                        == (
+                            commitment
+                            * pow(
+                                profile.statement_anchor_value,
+                                second_challenge % profile.subgroup_order,
+                                profile.group_modulus,
+                            )
+                        )
+                        % profile.group_modulus
+                    )
+                    for first_response in first_responses:
+                        for second_response in second_responses:
+                            residue_members.append(
+                                _raw_pair_value(
+                                    SchnorrTranscript(
+                                        profile.statement_anchor_value,
+                                        commitment,
+                                        first_challenge,
+                                        first_response,
+                                    ),
+                                    SchnorrTranscript(
+                                        profile.statement_anchor_value,
+                                        commitment,
+                                        second_challenge,
+                                        second_response,
+                                    ),
+                                ).datum
+                            )
+        encoded_residue_members = tuple(
+            sorted(k1.encode_datum(item) for item in residue_members)
+        )
+        if encoded_residue_members != encoded_representatives:
+            raise AuthorityError(
+                "finite-cover residues do not equal the exact accepted quotient"
+            )
+        for datum in representatives:
+            representative = _representative_value(datum)
+            embedded = _portable_success(
+                FINITE_COVER_ARITHMETIC.embedding_algorithm,
+                (representative,),
+                "representative embedding",
+            )
+            first, second = _datum_pair(embedded)
+            if not _finite_cover_member_after_source_admission(
+                profile, first, second
+            ):
+                raise AuthorityError(
+                    "finite-cover representative does not embed to a raw member"
+                )
+            for raw_first, raw_second in _noncanonical_variants(first, second):
+                if not _finite_cover_member_after_source_admission(
+                    profile, raw_first, raw_second
+                ):
+                    raise AuthorityError(
+                        "finite-cover quotient omits an accepted noncanonical member"
+                    )
+                normalized = _portable_success(
+                    FINITE_COVER_ARITHMETIC.normalization_algorithm,
+                    (_raw_pair_value(raw_first, raw_second),),
+                    "normalization",
+                )
+                if normalized.datum != datum:
+                    raise AuthorityError(
+                        "finite-cover normalization reaches another representative"
+                    )
+        return
+
+    if kind == "congruence":
+        for datum in representatives:
+            representative = _representative_value(datum)
+            embedded = _portable_success(
+                FINITE_COVER_ARITHMETIC.embedding_algorithm,
+                (representative,),
+                "representative embedding",
+            )
+            canonical_output = _portable_success(
+                FINITE_COVER_ARITHMETIC.candidate_algorithm,
+                (embedded,),
+                "candidate",
+            )
+            first, second = _datum_pair(embedded)
+            for raw_first, raw_second in _noncanonical_variants(first, second):
+                raw = _raw_pair_value(raw_first, raw_second)
+                normalized = _portable_success(
+                    FINITE_COVER_ARITHMETIC.normalization_algorithm,
+                    (raw,),
+                    "normalization",
+                )
+                if normalized.datum != datum:
+                    raise AuthorityError("finite-cover congruence normalization changed")
+                output = _portable_success(
+                    FINITE_COVER_ARITHMETIC.candidate_algorithm,
+                    (raw,),
+                    "candidate",
+                )
+                if output.datum != canonical_output.datum:
+                    raise AuthorityError(
+                        "finite-cover candidate does not factor through normalization"
+                    )
+        return
+
+    for datum in representatives:
+        representative = _representative_value(datum)
+        embedded = _portable_success(
+            FINITE_COVER_ARITHMETIC.embedding_algorithm,
+            (representative,),
+            "representative embedding",
+        )
+        output = _portable_success(
+            FINITE_COVER_ARITHMETIC.candidate_algorithm,
+            (embedded,),
+            "candidate",
+        )
+        first, second = _datum_pair(embedded)
+        if (
+            output.datum.value != 3
+            or pow(profile.generator, output.datum.value, profile.group_modulus)
+            != first.statement
+            or first.statement != second.statement
+        ):
+            raise AuthorityError(
+                "finite-cover representative success does not transfer to the relation"
+            )
+
+
+def _run_finite_cover_stream() -> FiniteCoverStreamReceipt:
+    source = _SCHNORR_PINNED_SOURCE
+    profile = _SCHNORR_PINNED_PROFILE
+    require_schnorr_special_soundness_profile(source, profile)
+    state = 0
+    seen_states: set[int] = set()
+    seen_representatives: set[bytes] = set()
+    stream_hash = hashlib.sha256()
+    evaluation_hash = hashlib.sha256()
+    evaluations = 0
+    previous_body: bytes | None = None
+    terminal_count = -1
+    terminal_digest = b""
+    while True:
+        if state in seen_states or len(seen_states) >= 309:
+            raise AuthorityError("finite-cover stream repeated or exceeded its state bound")
+        seen_states.add(state)
+        state_value = k1.admit_value(
+            FINITE_COVER_ARITHMETIC.stream_state_type, k1.Nat(state)
+        )
+        outcome = FINITE_COVER_PORTABLE_EVALUATOR.evaluate(
+            FINITE_COVER_ARITHMETIC.representative_stream_algorithm,
+            (state_value,),
+        )
+        if outcome.kind != "success" or outcome.value is None:
+            raise AuthorityError(
+                f"finite-cover representative stream failed: {outcome.kind}"
+            )
+        result = outcome.value.datum
+        if result.case == 1:
+            fields = dict(result.payload.fields)
+            terminal_count = fields[0].value
+            terminal_digest = fields[1].value
+            break
+        if result.case != 0:
+            raise AuthorityError("finite-cover stream emitted an unknown marker")
+        fields = dict(result.payload.fields)
+        representative = _representative_value(fields[0])
+        successor = fields[1].value
+        body = k1.encode_datum(representative.datum)
+        if (
+            body in seen_representatives
+            or (previous_body is not None and body <= previous_body)
+            or successor != state + 1
+        ):
+            raise AuthorityError(
+                "finite-cover stream is duplicate, reordered, or has another successor"
+            )
+        seen_representatives.add(body)
+        previous_body = body
+        stream_hash.update(len(body).to_bytes(8, "big"))
+        stream_hash.update(body)
+        embedded = _portable_success(
+            FINITE_COVER_ARITHMETIC.embedding_algorithm,
+            (representative,),
+            "representative embedding",
+        )
+        first, second = _datum_pair(embedded)
+        if not _finite_cover_member_after_source_admission(
+            profile, first, second
+        ):
+            raise AuthorityError("finite-cover stream yielded a nonmember")
+        candidate = _portable_success(
+            FINITE_COVER_ARITHMETIC.candidate_algorithm,
+            (embedded,),
+            "candidate",
+        )
+        if pow(profile.generator, candidate.datum.value, profile.group_modulus) != first.statement:
+            raise AuthorityError("finite-cover stream candidate failed its relation")
+        evaluation_body = k1.encode_datum(
+            k1.DatumRecord(((0, representative.datum), (1, candidate.datum)))
+        )
+        evaluation_hash.update(len(evaluation_body).to_bytes(8, "big"))
+        evaluation_hash.update(evaluation_body)
+        evaluations += 1
+        state = successor
+    if (
+        terminal_count != 308
+        or terminal_digest != FINITE_COVER_ARITHMETIC.representative_stream_digest
+        or stream_hash.digest() != terminal_digest
+        or evaluations != 308
+        or state != 308
+    ):
+        raise AuthorityError("finite-cover terminal receipt disagrees with the exact run")
+    return FiniteCoverStreamReceipt(
+        finite_cover_validation_basis_id(),
+        evaluations,
+        stream_hash.digest(),
+        evaluation_hash.digest(),
+        terminal_count,
+        terminal_digest,
+        len(seen_states),
+        evaluations,
+    )
+
+
+def _certificate_kind_from_context(context: QualificationSubjectContext) -> str:
+    payload = context.question_payload
+    if type(payload) is not k1.DatumRecord:
+        raise AuthorityError("finite-cover certificate payload is malformed")
+    fields = dict(payload.fields)
+    if (
+        tuple(fields) != (0, 1, 2, 3, 4)
+        or fields[0] != k1.Symbol("finite-cover-certificate")
+        or type(fields[1]) is not k1.Symbol
+    ):
+        raise AuthorityError("finite-cover certificate payload is incomplete")
+    return _require_certificate_kind(fields[1].value)
+
+
+def _validate_finite_cover_certificate_bindings(
+    support: AnalysisSupportInstantiationBodyV0,
+) -> tuple[object, ...]:
+    bindings = support.non_hypothesis_premise_bindings
+    if type(bindings) is not k1.DatumSeq or len(bindings.values) != 3:
+        raise AuthorityError("finite-cover support lacks three exact certificates")
+    result = []
+    for ordinal, (kind, entry) in enumerate(
+        zip(FINITE_COVER_CERTIFICATE_KINDS, bindings.values, strict=True)
+    ):
+        if type(entry) is not k1.DatumRecord:
+            raise AuthorityError("finite-cover certificate binding is malformed")
+        fields = dict(entry.fields)
+        if tuple(fields) != (0, 1) or fields[0] != k1.Nat(ordinal):
+            raise AuthorityError("finite-cover certificate binding ordinal changed")
+        payload = fields[1]
+        if type(payload) is not k1.DatumRecord or tuple(dict(payload.fields)) != (0, 1):
+            raise AuthorityError("finite-cover certificate binding payload is incomplete")
+        payload_fields = dict(payload.fields)
+        expected_goal = finite_cover_certificate_goal_id(
+            _SCHNORR_PINNED_SOURCE, _SCHNORR_PINNED_PROFILE, kind
+        )
+        if payload_fields[0] != _id_datum(expected_goal, "analysis.goal"):
+            raise AuthorityError("finite-cover certificate binds another goal")
+        judgment_id = _formed_analysis_id(
+            payload_fields[1], "analysis.judgment-record"
+        )
+        judgment = _formed_analysis_body(judgment_id, "analysis.judgment-record")
+        context = _derive_qualification_subject_context(
+            semantic_profile=ANALYSIS_PROPERTY_PROFILE,
+            proposition_id=_formed_analysis_id(
+                judgment.proposition_id, "analysis.proposition"
+            ),
+            semantic_basis_id=_formed_analysis_id(
+                judgment.semantic_basis_id, "analysis.semantic-basis"
+            ),
+            support_id=_formed_analysis_id(
+                judgment.support_coordinate, "analysis.support-instantiation"
+            ),
+            validation_basis_id=_formed_analysis_id(
+                judgment.validation_basis_id, "analysis.validation-basis"
+            ),
+            judgment_record=judgment,
+        )
+        qualification = analysis_profile_declaration_ref(
+            ANALYSIS_PROPERTY_PROFILE,
+            ANALYSIS_PROPERTY_PROFILE,
+            "analysis.qualification",
+            "finite-cover-certificate-result",
+        )
+        _require_actual_qualification(context, qualification)
+        if _certificate_kind_from_context(context) != kind:
+            raise AuthorityError("finite-cover certificate kind was substituted")
+        result.append(judgment_id)
+    return tuple(result)
+
+
+def _issue_finite_cover_certificate_judgment(kind: str) -> object:
+    source = _SCHNORR_PINNED_SOURCE
+    profile = _SCHNORR_PINNED_PROFILE
+    proposition_id = finite_cover_certificate_proposition_id(source, profile, kind)
+    basis_id = finite_cover_certificate_semantic_basis_id(source, profile, kind)
+    support_id = _finite_cover_empty_support_id(basis_id, proposition_id)
+    qualification = analysis_profile_declaration_ref(
+        ANALYSIS_PROPERTY_PROFILE,
+        ANALYSIS_PROPERTY_PROFILE,
+        "analysis.qualification",
+        "finite-cover-certificate-result",
+    )
+    return _analysis_judgment_record_id(
+        profile=ANALYSIS_PROPERTY_PROFILE,
+        proposition_id=proposition_id,
+        exact_family_conclusion=_finite_cover_certificate_conclusion(
+            source, profile, kind
+        ),
+        inherited_hypothesis_context_id=analysis_hypothesis_context_id(()),
+        typed_quantitative_result=k1.DatumVariant(0, k1.UNIT),
+        semantic_basis_id=basis_id,
+        support_id=support_id,
+        validation_basis_id=finite_cover_validation_basis_id(),
+        qualification=qualification,
+        operation_policy_id=_finite_cover_operation_policy_id(proposition_id),
+    )
+
+
+@_with_family_derivation_scope
+def establish_checked_fixed_extractor() -> CheckedFixedExtractorJudgment:
+    """Rerun the exact cover and issue one hypothesis-free ordinary judgment."""
+
+    source = _SCHNORR_PINNED_SOURCE
+    profile = _SCHNORR_PINNED_PROFILE
+    certificate_ids = tuple(
+        _issue_finite_cover_certificate_judgment(kind)
+        for kind in FINITE_COVER_CERTIFICATE_KINDS
+    )
+    receipt = _run_finite_cover_stream()
+    proposition_id = fixed_extractor_proposition_id(source, profile)
+    basis_id = fixed_extractor_semantic_basis_id(source, profile)
+    support_id = finite_cover_support_id(source, profile, certificate_ids)
+    validation_basis_id = finite_cover_validation_basis_id()
+    qualification = analysis_profile_declaration_ref(
+        ANALYSIS_PROPERTY_PROFILE,
+        ANALYSIS_PROPERTY_PROFILE,
+        "analysis.qualification",
+        "finite-fixed-extractor-universal-result",
+    )
+    judgment_id = _analysis_judgment_record_id(
+        profile=ANALYSIS_PROPERTY_PROFILE,
+        proposition_id=proposition_id,
+        exact_family_conclusion=_fixed_extractor_conclusion_body(source, profile),
+        inherited_hypothesis_context_id=analysis_hypothesis_context_id(()),
+        typed_quantitative_result=k1.DatumVariant(0, k1.UNIT),
+        semantic_basis_id=basis_id,
+        support_id=support_id,
+        validation_basis_id=validation_basis_id,
+        qualification=qualification,
+        operation_policy_id=_finite_cover_operation_policy_id(proposition_id),
+    )
+    return CheckedFixedExtractorJudgment(
+        proposition_id,
+        basis_id,
+        support_id,
+        validation_basis_id,
+        qualification,
+        judgment_id,
+        certificate_ids,
+        receipt,
+        _FINITE_COVER_JUDGMENT_ISSUER,
+    )
+
+
+def require_checked_fixed_extractor(
+    judgment: CheckedFixedExtractorJudgment,
+) -> None:
+    if (
+        type(judgment) is not CheckedFixedExtractorJudgment
+        or judgment._issuer is not _FINITE_COVER_JUDGMENT_ISSUER
+    ):
+        raise AuthorityError("fixed-extractor judgment lacks Analysis issuance")
+    expected = establish_checked_fixed_extractor()
+    if judgment != expected:
+        raise AuthorityError("fixed-extractor judgment or receipt was substituted")
 
 
 def schnorr_special_soundness_rule(
@@ -17624,7 +19139,7 @@ def _selected_statement_template_body(
 # from the body it authenticates: a statement edit must fail closed until a
 # reviewer deliberately rotates the literal and the accompanying source record.
 AFK_SELECTED_STATEMENT_CONTENT_SHA256 = (
-    "d1a9c8a18bc9e54cd14f699d1f4353f6103aa73d7ebddd2cfea38649ea8637c5"
+    "595c760d2624d20d39cb70487d37d83c76fcc8181af9c6f3e44e10536d1154be"
 )
 
 

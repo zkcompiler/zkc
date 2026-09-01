@@ -1400,6 +1400,8 @@ class QualificationLawRegistryTest(unittest.TestCase):
             {item.qualification_label for item in model._QUALIFICATION_LAW_SPECS},
             {
                 "finite-special-soundness-result",
+                "finite-cover-certificate-result",
+                "finite-fixed-extractor-universal-result",
                 "conditional-assumed-external-all-n",
                 "conditional-assumed-theorem-truth",
                 "afk-family-applicability-result",
@@ -1407,10 +1409,6 @@ class QualificationLawRegistryTest(unittest.TestCase):
                 "afk-family-instance-correspondence-result",
                 "afk-member-specialization-result",
             },
-        )
-        self.assertNotIn(
-            "finite-fixed-extractor-universal-result",
-            {item.qualification_label for item in model._QUALIFICATION_LAW_SPECS},
         )
 
     def test_wrong_family_or_qualification_is_refused(self) -> None:
@@ -1700,7 +1698,7 @@ class GlobalTheoremSchemaTest(unittest.TestCase):
         self.assertEqual(digest, schema.authority.statement_content_sha256)
         self.assertEqual(
             digest,
-            "d1a9c8a18bc9e54cd14f699d1f4353f6103aa73d7ebddd2cfea38649ea8637c5",
+            "595c760d2624d20d39cb70487d37d83c76fcc8181af9c6f3e44e10536d1154be",
         )
         self.assertNotEqual(digest, unprofiled_digest)
         self.assertNotEqual(digest, schema.authority.artifact_sha256)

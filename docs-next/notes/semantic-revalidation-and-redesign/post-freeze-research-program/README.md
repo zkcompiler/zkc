@@ -1,7 +1,8 @@
 # Post-Freeze Research Program
 
 > **Kind:** Temporary dependency-ordered research charter
-> **State:** Active; finite-cover Analysis activation is first
+> **State:** Active; finite-cover Analysis activation completed, verifier-
+> derived words and query plans next
 > **Authority:** None. Durable semantics remain owned by their domain pages.
 > **Entry condition:** The seventeen-profile candidate is holdout-stable at its
 > declared evidence depths with no shared identity rotation.
@@ -80,11 +81,17 @@ five checker bindings, three independent certificate goals, resource controls,
 and replayable receipt. Rotate exactly the property profile and its dependent
 closure.
 
-Exit requires one genuinely hypothesis-free affirmative finite judgment and
+Exit required one genuinely hypothesis-free affirmative finite judgment and
 mutations for incomplete coverage, duplicate/reordered representatives,
 congruence failure, transfer failure, checker mismatch, false extraction,
 resource exhaustion, and attempted efficiency overclaim. The result discharges
 only fixed-extractor correctness for the exact finite subject.
+
+**Result:** completed. The exact ordinary arithmetic module, portable
+algorithms, 308-member stream, three certificate judgments, and final empty-
+hypothesis judgment are executable. An independently implemented enumerator
+and encoder reproduce the stream digest and extractor outputs. Durable meaning
+is absorbed; the temporary package remains only until program cleanup.
 
 ### 4.2 Verifier-derived words and query plans
 

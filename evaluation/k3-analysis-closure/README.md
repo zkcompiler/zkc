@@ -198,7 +198,9 @@ native bound or for the stock modulus-11 bounded-rejection member, and
 post-issuance substitutions are refused when the inert or live authority
 boundary is consumed.
 
-Qualification is executable for exactly the seven active result constructors.
+Qualification is executable for exactly the nine active result constructors,
+including the three finite-cover certificate judgments as one constructor
+shape and the final fixed-extractor universal judgment.
 Each law reconstructs its exact question-bound semantic basis and result
 carrier; judgment-backed results also reconstruct their conclusion,
 quantitative witness, operation policy, and used-source policy closure.
@@ -243,16 +245,20 @@ The exact-acceptance tests execute only the selected Schnorr fixture with one
 `Check`, one `Terminal`, and direct references; they do not execute generic
 derived-value or multi-`Check` owner-closure semantics.
 
-The bounded executable also has no checked finite-cover enumerator and no
-portable Schnorr pair-to-Witness extractor. The authenticated candidate
-algorithm used by the fixture is a generic modulus surface, while complete
-extraction remains host-language occurrence code. Consequently finite
-evaluation mints no affirmative fixed-extractor universal judgment: the
-Schnorr source judgment retains its explicit fixed-extractor correctness
-assumption. A future discharge must authenticate a normalization/quotient
-cover, streaming representative enumeration, and separate coverage,
-congruence, and success-transfer certificates. It would discharge only fixed
-correctness, not the independent polynomial-time premise.
+The bounded executable now activates one checked finite cover for the exact
+Schnorr subject `(p,q,g,Y)=(23,11,2,8)` and challenge set `{0,...,7}`. An
+ordinary Foundation modular-arithmetic module supplies authenticated portable
+normalization, embedding, response-difference extraction, and representative-
+stream algorithms. Three separately qualified certificates cover quotient
+coverage, candidate congruence, and success transfer. Their exact conjunction
+and a 308-member checked stream mint one hypothesis-free affirmative fixed-
+extractor universal judgment. An independently implemented enumerator and
+canonical encoder reproduce the stream digest and all extractor outputs.
+
+That judgment is not a generic Schnorr result and does not establish the
+independent polynomial-time premise, existential special soundness, the
+broader bounded theorem assumption retained by the source fixture, an all-`n`
+property, or any ROM/QROM security statement.
 
 Directional-loss import remains a separate negative probe: even a checked Relations
 loss occurrence plus matching fixture fact returns `CannotAnswer` until an

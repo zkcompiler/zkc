@@ -1,0 +1,41 @@
+{
+  "schema": "zkc.finite-cover-analysis.source-ledger.v1",
+  "entries": [
+    {
+      "id": "cfrg-sigma-protocols-03",
+      "kind": "InternetDraft",
+      "title": "Sigma Protocols",
+      "revision": "03",
+      "published": "2026-08-17",
+      "url": "https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-sigma-protocols-03",
+      "use": "three-message flow, verifier equation, stateful single-use prover boundary, and two-accepting-transcript special-soundness motivation",
+      "status": "work-in-progress-not-a-standard"
+    },
+    {
+      "id": "gonthier-mahboubi-small-scale-reflection-2010",
+      "kind": "ResearchArticle",
+      "title": "An introduction to small scale reflection in Coq",
+      "revision": "Journal of Formalized Reasoning 3(2)",
+      "published": "2010",
+      "url": "https://jfr.unibo.it/article/view/1979",
+      "use": "methodological support for reducing finite propositions to exact decidable computations over canonical finite representatives",
+      "status": "methodological-input-not-a-proof-of-this-cover"
+    },
+    {
+      "id": "becker-et-al-flover-2017",
+      "kind": "ResearchPaper",
+      "title": "A Verified Certificate Checker for Finite-Precision Error Bounds in Coq and HOL4",
+      "revision": "arXiv:1707.02115",
+      "published": "2017",
+      "url": "https://arxiv.org/abs/1707.02115",
+      "use": "separation of untrusted certificate generation from a small exact checker and explicit checker soundness obligations",
+      "status": "architecture-input-not-a-proof-of-this-cover"
+    }
+  ],
+  "repository_subject": {
+    "profile": "finite toy Schnorr subject p=23, q=11, g=2, statement=8, challenges 0 through 7",
+    "wire_and_value_conformance": false,
+    "security_parameters": false,
+    "claim": "exact finite semantic judgment and falsification witness only"
+  }
+}

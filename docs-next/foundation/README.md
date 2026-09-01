@@ -38,6 +38,10 @@ It is not the place for every concept that several documents mention.
   The publication gate reconstructs the complete selected identity table
   independently and can print it as an inspection artifact; the derived table
   is not committed as a second source of truth.
+- [Natural Modular Arithmetic Semantic Module](natural-modular-arithmetic.md)
+  defines one ordinary owner-local extension module for exact natural modular
+  operations and typed failures. It is not part of the Foundation root profile;
+  its first bounded consumer is the finite-cover Analysis instrument.
 
 ## Owns
 

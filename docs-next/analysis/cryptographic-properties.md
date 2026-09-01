@@ -244,8 +244,31 @@ AnalysisFamilyQuantitativeResultSchema(f) =
   AnalysisNoQuantitativeResultSchemaRef(f) for every other active f;
   undefined otherwise
 
+FixedExtractorFiniteCoverDischargeContract = {
+  exact_cover_schema:
+    AnalysisProfileLawRef<"finite-cover-cover-schema-v0">,
+  exact_candidate_algorithm_schema:
+    AnalysisProfileLawRef<"finite-cover-candidate-schema-v0">,
+  exact_representative_success_schema:
+    AnalysisProfileLawRef<"finite-cover-success-schema-v0">,
+  exact_coverage_certificate_schema:
+    AnalysisProfileLawRef<"finite-cover-coverage-certificate-v0">,
+  exact_congruence_certificate_schema:
+    AnalysisProfileLawRef<"finite-cover-congruence-certificate-v0">,
+  exact_success_transfer_certificate_schema:
+    AnalysisProfileLawRef<"finite-cover-transfer-certificate-v0">,
+  finite_cover_target_reconstruction_law:
+    AnalysisLawTerm<"finite-cover-target-reconstruction-v0">,
+  operation_checker_binding_admission_law:
+    AnalysisLawTerm<"finite-cover-operation-binding-v0">,
+  deterministic_stream_progress_law:
+    AnalysisLawTerm<"finite-cover-stream-progress-v0">
+}
+
 ActiveFamilyFiniteCoverDischargeContract(f) =
-  None for every active f;
+  FixedExtractorFiniteCoverDischargeContract
+    when f is FixedExtractorUniversalCorrectness;
+  None for every other active f;
   undefined otherwise
 
 AnalysisFamilySemanticsContractFor(f) =
@@ -273,13 +296,13 @@ AnalysisFamilyContractCatalog(P) =
   }
 ```
 
-The checked finite-cover contract in `analysis-model.md` is a selected target
-shape, but no active property family enables it here. Enabling it for
-`FixedExtractorUniversalCorrectness` requires a profile rotation that publishes
-the exact subject-parametric cover reconstruction law, coverage, congruence,
-and success-transfer certificate schemas, canonical representative-stream
-checker, and portable candidate extractor. An unprofiled finite enumeration
-cannot add that contract to the authenticated family catalog.
+The property profile enables checked finite-cover discharge for exactly
+`FixedExtractorUniversalCorrectness`. The row publishes the exact
+subject-parametric target reconstruction, three pairwise-distinct certificate
+schemas, operation-binding law, and deterministic-stream law. Every other
+active family retains `None`; in particular the finite result cannot discharge
+`KOutOfNSpecialSoundness`, an asymptotic family, or a security experiment. An
+unprofiled enumeration cannot add or widen this authenticated contract.
 
 For `TheoremTruth` and `TheoremApplicability`, the two expanded rows in
 `transport-composition-and-replay.md` must be byte-identical to the result of
@@ -1273,40 +1296,89 @@ SchnorrFixedExtractorWorksPropositionBody(S,Ext) =
   }
 ```
 
-The fixed-extractor proposition is an exact target, but the active property
-profile has no rule that discharges it. Enumerating the complete raw
-`SchnorrSpecialSoundnessPair(S)` carrier before applying
-`admitted_pair_predicate` is not a viable implementation: the selected fixture
-uses eight `Nat64` leaves, so that route encounters the full raw product rather
-than the much smaller accepted semantic domain.
-
-Activating this lane requires a checked normalization/quotient cover. Its
-coverage certificate must show that every raw admitted pair maps to
-one canonical representative and that a canonical streaming enumerator reaches
-every representative exactly once. Its congruence certificate must show that
-normalization preserves the exact portable extractor's observable behavior.
-Its success-transfer certificate must carry successful extraction and relation
-membership from each representative back to every raw pair it covers. The
-checker then evaluates representatives incrementally and retains only a
-replayable stream receipt, never the raw carrier or carrier-sized outcome maps.
-
-No such cover checker or portable Schnorr pair-to-Witness algorithm exists in
-the bounded executable. Its authenticated candidate coordinate currently names
-a generic modulus algorithm, while the complete extraction formula is host
-code. Neither can mint an affirmative fixed-extractor judgment. The current
-authority therefore keeps `SchnorrFixedExtractorWorksGoal(S,Ext)` as an
-explicit assumed hypothesis in `GammaSpecialBody(S,Ext)`.
+### 3.1 Activated checked finite cover
 
 The fixed-extractor subquestion names `Ext` as an exact subject and reuses the
 same pair domain and experiment body with the existential removed. A member on
-which `Ext` fails is a counterexample to that subquestion. If the checked-cover
-lane is later activated, its affirmative judgment may discharge exactly this
-correctness node. It does not establish `SchnorrExtractorEfficiencyGoal(S,Ext)`;
-total polynomial-time extraction remains the separate premise immediately
-below. Failure of a proposed extractor supports rejection of that proposal,
-not `Negative` for special soundness. The existential family may emit
-`Negative` only if a separately admitted procedure completely refutes every
-extractor in its exact quantified domain; no such procedure is selected.
+which `Ext` fails is an exact counterexample to that subquestion. The selected
+property profile now admits one checked finite-cover rule for this family, and
+the bounded executable instantiates it for exactly:
+
+```text
+p = 23, q = 11, g = 2, Statement = 8,
+challenge carrier = {0,...,7},
+Ext = the authenticated response-difference portable algorithm
+```
+
+The raw quantified value remains an ordered pair of transcripts with eight
+`Nat64` leaves. Raw membership is evaluated first and requires the same exact
+Statement and commitment, strictly ordered distinct challenges, and the
+selected Fresh `Check` and accepting `Terminal` for both transcripts. The
+checker never treats normalization as permission to repair a nonmember.
+
+For an admitted pair, the selected normalization maps each transcript as:
+
+```text
+Statement  -> Statement mod 9
+commitment -> commitment mod 23
+challenge  -> challenge mod 8
+response   -> response mod 11
+```
+
+Raw membership already fixes `Statement=8` and challenges in `{0,...,7}`, so
+the first and third operations are identity on the admitted domain. Commitment
+and response reduction remove exactly the distinctions that the selected
+Fresh verifier and candidate cannot observe. The inverse embedding widens the
+canonical representatives back into the raw `Nat64` carrier. Both algorithms,
+the candidate, and the representative stream are portable algorithms over the
+ordinary Foundation
+[natural modular-arithmetic module](../foundation/natural-modular-arithmetic.md);
+none is an opaque host-only `schnorr.extract` operation.
+
+The representative stream contains the eleven subgroup commitment residues
+
+```text
+1, 2, 3, 4, 6, 8, 9, 12, 13, 16, 18
+```
+
+and all twenty-eight pairs `0 <= c0 < c1 < 8`, with the unique canonical
+responses accepted by the verifier. It therefore has exactly `308` sorted,
+duplicate-free representatives. Its selected ordered-stream digest is:
+
+```text
+1d9472a4470c26748e864ea0b4b7383ee17ee4e83210a70a90fb03081532a3dd
+```
+
+This count and digest are checked outputs of the authenticated stream, not a
+replacement for semantic coverage. Three separate ordinary affirmative
+Analysis judgments establish:
+
+1. coverage of every admitted raw residue class and exact stream reachability;
+2. candidate-output congruence through normalization; and
+3. transfer of representative success to the raw member relation.
+
+The final rule requires all three judgment IDs in their exact goal order and
+exactly five operation bindings: representative stream, representative-domain
+predicate, representative embedding, candidate, and representative-success
+predicate. It reruns the bounded stream and forms an ordinary affirmative
+`FixedExtractorUniversalCorrectness` judgment with the empty hypothesis
+context. The receipt records counts, digests, and consumed controls but carries
+no independent proof authority.
+
+This activation establishes only the exact fixed-candidate universal above. It
+does not establish `SchnorrExtractorEfficiencyGoal(S,Ext)`, existential or
+asymptotic special soundness, knowledge soundness, Fiat--Shamir security, ROM
+security, or QROM security. `GammaSpecialBody(S,Ext)` therefore remains the
+general conditional shape. For the exact selected `(S,Ext)`, its fixed-
+extractor node may now be supported by this ordinary judgment; the current
+bounded special-soundness fixture still retains its broader explicit theorem
+assumption and does not claim that the other algebraic, correspondence, or
+efficiency obligations have been discharged.
+
+Failure of a proposed extractor supports rejection of that proposal, not
+`Negative` for special soundness. The existential family may emit `Negative`
+only if a separately admitted procedure completely refutes every extractor in
+its exact quantified domain; no such procedure is selected.
 
 An affirmative existential judgment records the exact admitted
 `PortableAlgorithmRef` used for `Ext` as its quantified witness and binds it to

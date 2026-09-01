@@ -5,7 +5,8 @@
 > profiles have independently reconstructed publication identities, and the
 > finite executable join has bounded joined-path validation evidence
 > **Target alignment:** Bounded minimum Analysis kernel over Foundation, PIR, and Relations;
-> its selected finite P01/Schnorr path has joined-path validation executable join evidence, while
+> its selected finite Schnorr path has joined-path validation and one checked
+> fixed-extractor finite-cover judgment, while
 > broader Analysis families remain deferred
 > **Provisional owner:** `analysis`
 > **Authority:** None during transition. The current property calculus remains
@@ -23,6 +24,10 @@ truth of an imported theorem. Its minimum active pipeline is:
 ```text
 finite PIR/Relations subject S
   -> finite relation-bound Fresh proposition and conditional judgment
+
+exact fixed Schnorr subject and response-difference extractor
+  + checked coverage, congruence, and success-transfer certificates
+  -> hypothesis-free fixed-extractor universal judgment
 
 abstract asymptotic family F
   + independently established family Fresh source-property judgment
@@ -220,7 +225,14 @@ The bounded active set is:
    Witness role, relation instance, verifier equation, and accepting event come
    from exact PIR/Relations sources. Its universal pair quantifier is over one finite
    native profile, not an asymptotic family and not an AFK source theorem.
-2. **Abstract classical-ROM Fresh-to-FS transport.** One exact asymptotic
+2. **Checked fixed-extractor universal correctness.** For the exact
+   `(p,q,g,Y)=(23,11,2,8)` subject and challenges `{0,...,7}`, one authenticated
+   response-difference portable algorithm is checked over a 308-member
+   verifier-observation quotient. Three distinct ordinary certificate
+   judgments establish coverage, output congruence, and success transfer; the
+   final judgment has an empty hypothesis context. It establishes no
+   efficiency, existential special soundness, family lift, or security claim.
+3. **Abstract classical-ROM Fresh-to-FS transport.** One exact asymptotic
    family description is matched to one exact theorem profile. The initial
    profile is the three-move, adaptive-statement specialization of Attema,
    Fehr, and Klooß for a `2`-special-sound family. It requires an independently
@@ -231,11 +243,11 @@ The bounded active set is:
    truth, and the theorem-specific
    quantitative transform. This is an explicit restricted-query subprofile,
    not the full all-`Q` Definition 10 property.
-3. **Pointwise family/member specialization.** A separately checked exact
+4. **Pointwise family/member specialization.** A separately checked exact
    correspondence relates one representable family member `(F,n0)` to one
    native subject `(S,ell0)` and substitutes the family formulas pointwise. It
    cannot generalize a finite subject to all `n`.
-4. **Incremental-composition theorem application.** One closed finite family
+5. **Incremental-composition theorem application.** One closed finite family
    names only already authenticated Protocol, Plan, and Relations subjects.
    Runtime selectors choose existing members, while exact theorem schemas keep
    execution depth, compliance-predicate depth, adversary quantifiers, model,
