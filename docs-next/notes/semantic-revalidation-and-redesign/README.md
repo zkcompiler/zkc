@@ -128,6 +128,11 @@ below are reader cross-references rather than inventory edges.
 - [Post-Freeze Research Program](post-freeze-research-program/README.md) owns
   the dependency-ordered evidence and extension packages opened after the
   holdout-stable freeze decision.
+- [Formal Assurance Architecture Research](formal-assurance-research/README.md)
+  owns the cross-cutting F0 ideal-architecture audit and the dependent F1
+  concrete-subject and F2 operational-semantics research contracts. It is a
+  side research program and does not reorder the post-freeze main lane or
+  activate Stage 4B.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target
