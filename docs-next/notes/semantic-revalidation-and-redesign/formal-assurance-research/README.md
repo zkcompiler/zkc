@@ -28,7 +28,10 @@
 > integrates all fourteen PCNode cases and all four PCClass cases across five
 > exact carriers, closing the static graph family at bounded resolution. The
 > B2D2 Fresh runtime/Oracle-receipt family and F0-V2C target migration remain
-> open.
+> open. A 2026-09-03 program reassessment finds the provider side of the
+> bridge untested, classifies the Terminal repair as a main-design reopening,
+> and proposes an F2-O0 provider-observable audit before F0-V2C; that
+> proposal awaits the design lane's decision.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -410,6 +413,14 @@ provider, extraction tool, or durable schema.
   fail closed. One of two B2D families is complete at bounded resolution;
   Fresh runtime/Oracle receipts, target migration, live correspondence, proof,
   security, and Q1 remain open.
+- [`f0-program-reassessment-and-direction.md`](f0-program-reassessment-and-direction.md)
+  reassesses the program after D1 from the records, the target text, a D1
+  replay, and the uncited parallel Fiat--Shamir assurance package. It finds
+  the source side exact but the provider side untested, states precisely
+  what the typed/cold agreement does and does not exclude, classifies the
+  Terminal grammar repair as a main-design reopening, records the two-lattice
+  reconciliation obligation, and proposes an F2-O0 provider-observable audit
+  ahead of F0-V2C. It is a recommendation, not a selection.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
