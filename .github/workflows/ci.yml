@@ -33,18 +33,34 @@ jobs:
   # material, and a pull request that adds some should say so before any
   # build time is spent on it.
   public-tree:
-    name: Public tree boundary
+    name: Control plane and public boundary
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Refuse development-repository paths
-        run: tools/public-tree-guard.sh
+      - name: Run source-only validation controls
+        run: |
+          python3 -B checks/run.py run \
+            --check checks.control-plane \
+            --check checks.method-portfolio \
+            --check policy.public-tree \
+            --keep-going \
+            --artifacts-dir target/checks/ci-control \
+            --result target/checks/ci-control/result.json
+      - name: Retain structured control results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-control-${{ github.run_id }}
+          path: target/checks/ci-control
+          if-no-files-found: error
+          retention-days: 14
 
   reference:
     name: Reference suites (conformance oracle)
+    needs: public-tree
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -58,21 +74,33 @@ jobs:
       - name: Sync the reference environment
         working-directory: reference
         run: uv sync --locked
-      - name: Run the oracle self-checks
-        working-directory: reference
-        run: uv run --locked python -m oracle.model
-      - name: Check the reference architecture
-        run: uv run --locked --project reference python -m unittest discover -s reference/tests -v
       # Every Python in the tree, under the one configuration in
       # ruff.toml. The fixture generators were outside this and had no
       # reason to be: what they emit is pinned by lit, so a defect in
       # one of them shows up as a mismatch nobody can read rather than
       # as a lint finding.
-      - name: Lint the Python (defect rules only)
-        run: uvx ruff check .
+      - name: Run reference and Python validation checks
+        run: |
+          python3 -B checks/run.py run \
+            --check reference.semantic-self-check \
+            --check reference.canonical-laws \
+            --check reference.architecture \
+            --check python.static-quality \
+            --keep-going \
+            --artifacts-dir target/checks/ci-reference \
+            --result target/checks/ci-reference/result.json
+      - name: Retain structured reference results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-reference-${{ github.run_id }}
+          path: target/checks/ci-reference
+          if-no-files-found: warn
+          retention-days: 14
 
   build:
     name: Build and test (C++ / MLIR)
+    needs: public-tree
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -100,12 +128,16 @@ jobs:
             build/cargo-target
           key: cargo-${{ runner.os }}-${{ hashFiles('emit/Cargo.lock', 'evaluation/upstream/plonky3-replay/Cargo.lock') }}
 
-      - name: Emit workspace suites (tests, lints, format)
+      - name: Emit workspace validation checks
         run: |
-          cargo test --locked --manifest-path emit/Cargo.toml -p zkc-emit
-          cargo test --locked --manifest-path emit/Cargo.toml -p zkc-rt --features toy,plonky3
-          cargo clippy --locked --manifest-path emit/Cargo.toml --all-targets --all-features -- -D warnings
-          (cd emit && cargo fmt --check)
+          python3 -B checks/run.py run \
+            --check rust.emit-unit \
+            --check rust.runtime-integration \
+            --check rust.clippy \
+            --check rust.format \
+            --keep-going \
+            --artifacts-dir target/checks/ci-build/rust \
+            --result target/checks/ci-build/rust/result.json
 
       - name: Install MLIR and the build tools
         run: |
@@ -149,5 +181,19 @@ jobs:
       - name: Build
         run: cmake --build --preset ci
 
-      - name: Lit suite (with cross-implementation differentials)
-        run: cmake --build --preset ci --target check-zkc
+      - name: Native validation suite
+        run: |
+          python3 -B checks/run.py run \
+            --check native.compiler-suite \
+            --build-dir build \
+            --artifacts-dir target/checks/ci-build/native \
+            --result target/checks/ci-build/native/result.json
+
+      - name: Retain structured build results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-build-${{ github.run_id }}
+          path: target/checks/ci-build
+          if-no-files-found: warn
+          retention-days: 14

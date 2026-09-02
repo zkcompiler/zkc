@@ -118,7 +118,24 @@ expect}]}`; the checked-in examples are under
 
 ## 5. Run the checks
 
-These are what continuous integration runs.
+For routine source and reference feedback, use the fast declared developer
+tier:
+
+```sh
+python3 -B checks/run.py run --tier developer
+```
+
+After configuring the native build and installing the Rust tools, the declared
+pull-request set can be reproduced with:
+
+```sh
+python3 -B checks/run.py run --tier pr --build-dir build --keep-going
+```
+
+The runner writes a structured result and per-check logs under
+`target/checks/`. Stable check IDs, tier contents, evidence methods, and exact
+non-claims are documented in [`checks/README.md`](../checks/README.md). The
+commands below remain useful when diagnosing one underlying tool directly.
 
 ```sh
 tools/public-tree-guard.sh

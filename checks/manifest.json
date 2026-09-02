@@ -34,7 +34,7 @@
       "claim": "The checked control-plane invariants hold for the committed manifest and synthetic runner cases.",
       "classification": "control-plane",
       "methods": ["unit", "negative", "policy"],
-      "source_paths": ["checks/run.py", "checks/method_portfolio.py", "checks/manifest.json", "checks/tests/test_control_plane.py", "checks/tests/test_method_portfolio.py"],
+      "source_paths": ["checks/run.py", "checks/method_portfolio.py", "checks/manifest.json", ".github/workflows/ci.yml", "checks/tests/test_control_plane.py", "checks/tests/test_method_portfolio.py", "checks/tests/test_ci_topology.py"],
       "tiers": ["developer", "pr", "research-checkpoint", "scheduled", "release-freeze"],
       "cost": "instant",
       "environment": "python-stdlib",

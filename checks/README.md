@@ -151,6 +151,33 @@ the selection was incomplete or the manifest/selection was invalid. A
 non-blocking diagnostic failure is retained as an observation; it is not
 rewritten as a semantic failure.
 
+## Continuous integration topology
+
+Routine CI invokes stable manifest IDs rather than spelling test commands a
+second time in workflow YAML:
+
+```text
+control job    control-plane + method portfolio + public-tree policy
+      |
+      +--> reference job    semantic twin + canonical laws + architecture + lint
+      |
+      `--> build job        Rust checks -> configured C++/MLIR suite
+```
+
+The cheap control job is a dependency of the two expensive jobs, so a public
+boundary or inventory failure stops resource-heavy setup. The reference and
+build jobs otherwise remain separate: a compiler toolchain outage does not
+erase the Python result, and a reference failure is not rewritten as a native
+failure. Each job retains the runner's `result.json` and per-check logs for
+fourteen days. The workflow artifact contains no hidden files and the runner
+records only clean/dirty state, not dirty path names.
+
+The `research-checkpoint`, `scheduled`, `release-freeze`, and `formal-reading`
+tiers are intentionally absent from pull-request CI. They answer different
+questions and have different environments; in particular, the canonical
+one-process Analysis gate remains an explicit freeze operation rather than an
+hour-long pull-request tax.
+
 ## Method policy
 
 No single method is treated as sufficient. Checks may declare known-answer,
