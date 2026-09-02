@@ -75,10 +75,13 @@ infer admission from a typed digest.
 The subsequent F1-R1B gate now supplies one complete fourteen-field target
 Fresh Schnorr Core and its two-field Protocol, exact-used semantic modules and
 declarations, a separately written body re-encoder, and a bounded
-implementation of the applicable target admission sequence. F1-R1C still
-needs the owner static views and exact read closure. F1-R1D integrates those
-target values with Relations/correspondence roots and the F1-R0 package
-checker. F1-I remains the separate live-handle and source-authority gate.
+implementation of the applicable target admission sequence. The following
+[`F1-R1C0 audit`](../formal-source-owner-views-f1r1c/README.md) preserves that
+admitted subject but returns `CannotAnswer` for exact owner-view source
+determinacy, reopening F0-V at the PIR schema/publication boundary. F1-R1C
+waits on that repair; F1-R1D then integrates the target values with
+Relations/correspondence roots and the F1-R0 package checker. F1-I remains the
+separate live-handle and source-authority gate.
 
 The retained K2 witness remains useful as an execution and mutation oracle,
 but it cannot be promoted by profile substitution. A complete semantic bridge

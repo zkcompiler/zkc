@@ -4,8 +4,9 @@
 > **State:** F1-R0 package/checker boundary complete at bounded reference
 > resolution; F1-R1A target profile/source basis is now complete at bounded
 > resolution, and one-slice F1-R1B target carrier/admission is complete at
-> bounded resolution, while F1-R1C/R1D, live-owner F1-I, and all F2 stages
-> remain open
+> bounded resolution. F1-R1C0 returns `CannotAnswer` and opens F0-V at the
+> owner-view schema/publication contract; F1-R1C waits on that repair, while
+> F1-R1D, live-owner F1-I, and all F2 stages remain open
 > **Authority:** None. This result changes no current or target semantic
 > definition, artifact identity, admission result, Analysis judgment,
 > implementation claim, or roadmap priority.
@@ -45,6 +46,8 @@ F1 is consequently split more precisely:
 F1-R0  package/checker and mutation feasibility over manual target-shaped data
   -> F1-R1A  exact target profile/source basis
   -> F1-R1B  exact target carrier/admission
+  -> F1-R1C0 owner-view source determinacy
+  -> F0-V    owner-view schema/publication repair
   -> F1-R1C  exact owner views/read closure
   -> F1-R1D  exact integrated target package
   -> F1-I   live admitted-owner issuance and authority binding
@@ -52,7 +55,9 @@ F1-R0  package/checker and mutation feasibility over manual target-shaped data
 ```
 
 This is a sequencing repair, not a reversal of the two-layer architecture.
-No missing `InteractiveCore` field or owner boundary was found.
+F1-R0 itself found no missing `InteractiveCore` field or owner boundary; the
+later R1C0 source audit preserves the Core result but does find an incomplete
+owner-view publication boundary.
 
 ## 2. Executable construction
 
@@ -199,8 +204,10 @@ identities. It needs:
 2. the durable canonical body compiler and admission evaluator for the exact
    `InteractiveCore`, Fresh `Protocol`, relation definition/model/instance,
    and Protocol-correspondence bodies;
-3. exact owner view evaluators for `PublicBindingView`, `PublicCoinView`,
-   `EffectView`, `ClaimReductionView`, and Protocol `ExecutionView`;
+3. a closed, published owner schema for `PublicBindingView`,
+   `StrategyDecisionView`, `PublicCoinView`, `EffectView`,
+   `ClaimReductionView`, and Protocol `ExecutionView`, followed by exact owner
+   evaluators for those schemas;
 4. an exact formal-source contract whose observation/read map is issued or
    independently reconstructed from those owners; and
 5. two checker paths that reproduce the target root IDs and package result,
@@ -215,9 +222,13 @@ substitute for target admission. The subsequent
 [`F1-R1B target-admission gate`](f1r1b-target-core-admission.md) closes the
 carrier/admission part of item 2 for one complete finite Schnorr target slice,
 while explicitly refusing unsupported constructor families and retaining
-offline-only authority. The remaining parts of items 2 through 5 are sequenced
-as F1-R1C owner views/read closure and F1-R1D
-Relations/correspondence/package integration.
+offline-only authority. The subsequent
+[`F1-R1C0 source-determinacy audit`](f1r1c-owner-view-source-determinacy.md)
+shows that item 3 cannot yet be implemented exactly: the authenticated source
+names the six views, but the profile does not publish the promised schema
+catalog, complete nested grammars, exact law bindings, or complete authority
+envelope bodies. F0-V must repair that PIR-owned contract before F1-R1C owner
+views/read closure and F1-R1D Relations/correspondence/package integration.
 
 F1-I then replaces offline formed values with exact admitted live owner
 handles, reissues the same views, checks source-authority bindings, and forms
@@ -230,16 +241,18 @@ semantic finding.
 
 ## 7. Effect on F0 and the main design
 
-F1-R0 supports the F0 A/S/C composition and finds no reason to add a
+F1-R0 supports the F0 A/S/C composition, and R1C0 preserves that topology.
+Neither result gives reason to add a
 `FormalKernel`, make a theorem prover authoritative, serialize live support,
 change the Core/Protocol split, or rotate challenge/reduction ownership. It
-does require the F1 entry sequence and minimum package contract to incorporate
-the refinements above.
+does require a PIR-owned F0-V schema/publication repair and the refined F1
+entry sequence above.
 
-No durable target page should absorb this format or its local diagnostics yet.
-The earliest durable change remains after exact F1-R1C/R1D and F1-I evidence:
-owner portable-view contracts plus an Analysis formal-source correspondence
-family. Broader target admission implementation beyond the F1-R1B slice
+No durable target page should absorb the F1-R0 package format or its local
+diagnostics yet. The earliest target work is now the F0-V owner-view contract
+repair, with its identity migration reviewed before R1C. Analysis
+formal-source correspondence remains later, after exact F1-R1C/R1D and F1-I
+evidence. Broader target admission implementation beyond the F1-R1B slice
 remains ordinary owner coverage rather than evidence for a new formal
 authority.
 

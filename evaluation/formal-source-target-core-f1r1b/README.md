@@ -126,10 +126,13 @@ fail-closed or outside the positive fragment. In particular:
 - the offline handle is issued by this research evaluator, not by current zkc
   implementation authority. Q0 and Q1 therefore remain open.
 
-F1-R1C should retain these identities and admitted-handle lifecycle while
-implementing the exact target `PublicBindingView`, `StrategyDecisionView`,
-`PublicCoinView`, `EffectView`, `ClaimReductionView`, Fresh `ExecutionView`,
-field-coordinate resolver, and required-read fixed point for this same subject.
-If a required view leaf cannot be derived from the admitted owner without
-trusting a caller or exporter, F0 reopens; ordinary missing evaluator plumbing
-is an R1C implementation gap.
+The subsequent
+[`F1-R1C0 determinacy audit`](../formal-source-owner-views-f1r1c/README.md)
+retains these identities and admitted handles but returns
+`CannotAnswer/F1R1C-C-SOURCE-DETERMINACY`. The authenticated target source
+names all six owner views, yet the profile does not publish the promised closed
+schema catalog, exact nested body grammars, field-to-law bindings, and complete
+authority-envelope bodies needed to derive a target read manifest without
+guessing. This is the F0-reopening branch, not ordinary evaluator plumbing.
+F0-V must repair and republish that owner contract before R1C resumes with the
+same admitted-handle lifecycle.

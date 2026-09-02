@@ -3,8 +3,9 @@
 > **Kind:** Temporary F1 exact-source prerequisite result
 > **State:** F1-R1A target profile/source basis complete at bounded research
 > resolution; one-slice F1-R1B target carrier/admission is now complete at
-> bounded research resolution, while F1-R1C owner views, F1-R1D package
-> integration, F1-I live authority, and F2 remain open
+> bounded research resolution. F1-R1C0 returns `CannotAnswer` and reopens F0-V
+> at the owner-view publication boundary; R1C waits on that repair, while R1D,
+> F1-I, and F2 remain open
 > **Authority:** None. This result changes no current or target semantic law,
 > profile identity, admission outcome, Analysis judgment, or product claim.
 > **Evidence:** The focused gate under
@@ -112,7 +113,9 @@ different failure boundaries. The executable result refines it as follows:
 ```text
 F1-R1A  exact target profile and owner-source basis       [complete, bounded]
   -> F1-R1B  exact target carrier and admission           [complete, bounded slice]
-  -> F1-R1C  exact owner static views and read closure    [open]
+  -> F1-R1C0 owner-view source determinacy                [complete, CannotAnswer]
+  -> F0-V    owner-view schema/publication repair         [open]
+  -> F1-R1C  exact owner static views and read closure    [waiting on F0-V]
   -> F1-R1D  Relations/correspondence/package integration [open]
   -> F1-I    live owner handles and source authority      [open]
 ```
@@ -158,15 +161,24 @@ claimed.
 ### F1-R1C — owner views and read closure
 
 After target admission, implement the exact owner evaluator for
-`PublicBindingView`, `PublicCoinView`, `EffectView`, `ClaimReductionView`, and
-Protocol `ExecutionView`. The evaluator must derive fields from one exact
-admitted target handle and return the target qualified outcome partition. The
-offline research lane may reconstruct portable view values, but it must not
-forge the live capability that F1-I later requires.
+`PublicBindingView`, `StrategyDecisionView`, `PublicCoinView`, `EffectView`,
+`ClaimReductionView`, and Protocol `ExecutionView`. The evaluator must derive
+fields from one exact admitted target handle and return the target qualified
+outcome partition. The offline research lane may reconstruct portable view
+values, but it must not forge the live capability that F1-I later requires.
 
 The F1-R0 protected-observation map then becomes a test of those owner outputs,
 not a hand-authored source of semantic facts. Missing owner observability
 reopens F0; ordinary encoder or evaluator absence is an implementation gap.
+
+The subsequent
+[`F1-R1C0 source-determinacy audit`](f1r1c-owner-view-source-determinacy.md)
+classifies the present case as the former. The static-view prose is
+profile-authenticated and names all six surfaces, but the published profile
+does not expose the promised closed schema catalog, exact nested grammars,
+field-to-law bindings, or complete authority-envelope bodies. F0-V must repair
+that PIR-owned contract before an R1C evaluator can distinguish implementation
+from invention.
 
 ### F1-R1D — integrated exact package
 
@@ -179,19 +191,21 @@ incomplete until F1-I binds exact live owner authority.
 ## 5. Main-design implications
 
 The result argues against waiting for the entire semantic redesign. R1B and
-R1C are direct executable reviews of the written target owner boundaries and
-can expose missing fields or unobservable obligations while changes are still
-cheap. They should continue sequentially on the shared design branch.
+R1C0 already exposed the carrier/admission and view-publication boundaries
+while changes are still cheap. Work should continue sequentially on the shared
+design branch through F0-V review, then resume R1C against the repaired source.
 
 It also argues against jumping directly to VCVio or ArkLib. A provider can
 help with Q2 and later theorem obligations only after the source side has an
 admitted target subject and exact views. Otherwise a successful provider
 proof can be attached to a recursively relabelled but unadmitted source.
 
-No durable target semantic change is selected by F1-R1A or the subsequent
-bounded F1-R1B result. The one factual
-publication-page count is corrected from seventeen to eighteen indexed
-profiles; this is documentation drift and does not change a profile preimage.
+No durable target semantic change was selected by F1-R1A or the subsequent
+bounded F1-R1B result. F1-R1C0 now provides evidence that the target owner-view
+publication contract requires a repair, but this research note does not select
+its durable encoding or perform the resulting identity migration. The one
+factual publication-page count corrected from seventeen to eighteen indexed
+profiles remains documentation drift and does not change a profile preimage.
 
 ## 6. Assurance-lattice position
 

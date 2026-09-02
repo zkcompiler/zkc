@@ -1,0 +1,74 @@
+{
+  "aggregate": {
+    "code": "F1R1C-C-SOURCE-DETERMINACY",
+    "outcome": "CannotAnswer"
+  },
+  "target_profile_digest": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
+  "cases": [
+    {
+      "name": "published-profile-independent-agreement",
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-PROFILE"
+    },
+    {
+      "name": "published-profile-frozen-control",
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-FROZEN-PROFILE"
+    },
+    {
+      "name": "static-view-source-authenticated",
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-STATIC-SOURCE"
+    },
+    {
+      "name": "six-owner-view-surfaces-named",
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-VIEW-SURFACE"
+    },
+    {
+      "name": "retained-admitted-owner-subject",
+      "outcome": "Affirmative",
+      "code": "F1R1C-A-ADMITTED-SUBJECT"
+    },
+    {
+      "name": "promised-view-schema-catalog",
+      "outcome": "CannotAnswer",
+      "code": "F1R1C-C-SCHEMA-CATALOG"
+    },
+    {
+      "name": "view-schema-entry-routing",
+      "outcome": "CannotAnswer",
+      "code": "F1R1C-C-SCHEMA-ENTRY"
+    },
+    {
+      "name": "canonical-view-body-grammar",
+      "outcome": "CannotAnswer",
+      "code": "F1R1C-C-VIEW-BODY"
+    },
+    {
+      "name": "atomic-coordinate-and-manifest-grammar",
+      "outcome": "CannotAnswer",
+      "code": "F1R1C-C-COORDINATE-BODY"
+    },
+    {
+      "name": "view-law-reference-map",
+      "outcome": "CannotAnswer",
+      "code": "F1R1C-C-LAW-MAP"
+    },
+    {
+      "name": "static-view-authority-envelope-bodies",
+      "outcome": "CannotAnswer",
+      "code": "F1R1C-C-AUTHORITY-BODIES"
+    },
+    {
+      "name": "fixture-view-substitution",
+      "outcome": "Refused",
+      "code": "F1R1C-R-FIXTURE-VIEW"
+    },
+    {
+      "name": "exact-required-read-manifest",
+      "outcome": "CannotAnswer",
+      "code": "F1R1C-C-READ-MANIFEST"
+    }
+  ]
+}

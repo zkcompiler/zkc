@@ -2,7 +2,8 @@
 
 > **Kind:** Temporary F0 convergence and dependent-program handoff
 > **State:** Provisional F0 architecture selected for feasibility testing;
-> durable target changes remain unselected until F1 evidence
+> F1-R1C0 has reopened F0-V at the owner-view schema/publication boundary;
+> durable target repair remains unselected pending that design pass
 > **Authority:** None. Placeholder schema names and implementation paths are
 > research coordinates, not public contracts.
 
@@ -127,22 +128,26 @@ theorem-prover-owned top-level subject.
 
 ## 5. Target changes and explicit non-changes
 
-### 5.1 Changes F1 may justify
+### 5.1 F1-driven changes
 
-If F1 succeeds, the durable design should consider:
+F1 evidence now requires item 1 before R1C can resume. Later affirmative F1
+evidence may justify items 2--7:
 
-1. selecting the formal-extraction trigger and its retention/compatibility
+1. repairing the PIR owner-view publication contract with a closed schema
+   catalog, exact nested body grammars, law bindings, closure dispatch, and
+   authority-envelope bodies before owner-view evaluation proceeds;
+2. selecting the formal-extraction trigger and its retention/compatibility
    promise in `docs-next/project/protocol-ir-architecture.md`;
-2. specifying portable owner authentication preimages and package read
+3. specifying portable owner authentication preimages and package read
    projections without altering owner subject identity;
-3. instantiating a formal-source/provider-correspondence family in Analysis;
-4. defining package/checker/translation contracts, validation bases, exact
+4. instantiating a formal-source/provider-correspondence family in Analysis;
+5. defining package/checker/translation contracts, validation bases, exact
    outcomes, cold replay, and reliance policy;
-5. adding two independent package decoders/checkers and mutation vectors; and
-6. defining one property-specific transition family for the first Compiler
+6. adding two independent package decoders/checkers and mutation vectors; and
+7. defining one property-specific transition family for the first Compiler
    preservation pilot.
 
-### 5.2 Non-changes under the present evidence
+### 5.2 Surviving non-changes and the reopened claim
 
 F0 finds no current reason to change:
 
@@ -150,7 +155,8 @@ F0 finds no current reason to change:
 - the `CoreId`/`ProtocolId` split or profile-sensitive challenge
   interpretation;
 - challenge correlation and reduction-sharing declarations;
-- owner-local confidential views and nonserializable causal capabilities;
+- owner ownership of static views and nonserializable causal capabilities,
+  although their exact publication and issuance schema now requires repair;
 - Relations ownership of definitions, satisfaction, refinement, and
   correspondence;
 - Analysis ownership of properties, theorem applicability, trust closure, and
@@ -159,9 +165,12 @@ F0 finds no current reason to change:
   assessment, and decision; or
 - OIR/Realization activation order.
 
-The positive non-change rationale is substantive: the first scenario suite can
-recover every required source observation through exact existing owner views
-and manifests. F1 must still falsify that claim mechanically.
+The A/S/C topology therefore survives, but the former positive claim that the
+existing owner-view contract was already exact enough does not. F1-R1C0 found
+that the authenticated Interaction source names the required facts while the
+published profile omits the promised closed schema catalog and exact
+machine-resolvable bodies. F0-V must repair that owner boundary; Analysis must
+not compensate by inventing a second schema.
 
 ## 6. Rotation cone
 
@@ -169,7 +178,7 @@ and manifests. F1 must still falsify that claim mechanically.
 |---|---|---|---|
 | current `docs/` and current C++ semantics | none; current receipt limitation is documented | later roadmap/status update only after a real bridge lands | target design is implemented now |
 | `docs-next/project/` | records formal-extraction trigger and integrated owner boundary | after F1 validates package class and consumer | package bytes or public compatibility are selected by this note |
-| `docs-next/pir/` and family transcript pages | may need portable authentication/read-package issuance contracts | only for exact owner-specific portable source fields | formal provider syntax enters Protocol identity |
+| `docs-next/pir/` and family transcript pages | F0-V must repair the owner-view schema, field/law resolution, and authority-envelope publication contract | before F1-R1C resumes, after explicit migration review | formal provider syntax enters Protocol identity |
 | `docs-next/relations/` | may need portable relation source projection hooks if generic owner views are insufficient | only after Schnorr relation package test | relation satisfaction becomes Analysis-owned |
 | `docs-next/analysis/` | main semantic addition: Q1/Q2 family and validation/reliance rules | after F1 proposition/result behavior is falsified | a universal proof language or one assurance Boolean |
 | `docs-next/compiler/` | one property-specific transition consumer/validator | F2 or later pass pilot | generic target admission preserves properties |
@@ -194,8 +203,9 @@ the selected target's exact canonical bodies:
 - admitted `InteractiveCore` and Fresh `Protocol`;
 - public statement binding;
 - message/challenge/response/check/terminal occurrences;
-- exact `PublicBindingView`, `PublicCoinView`, `EffectView`,
-  `ClaimReductionView`, and Protocol `ExecutionView` closures; and
+- exact `PublicBindingView`, `StrategyDecisionView`, `PublicCoinView`,
+  `EffectView`, `ClaimReductionView`, and Protocol `ExecutionView` closures;
+  and
 - exact relation definition/model/instance roles and Protocol correspondence
   needed to state the verifier relation.
 
@@ -263,7 +273,9 @@ selected topology:
 F1-R0  manual package/checker and mutation feasibility
 F1-R1A exact target profile/source basis and fixture discriminator
 F1-R1B exact target carrier and admission
-F1-R1C exact owner views and read closure
+F1-R1C0 owner-view source determinacy
+F0-V    owner-view schema/publication repair
+F1-R1C  exact owner views and read closure
 F1-R1D exact Relations/correspondence/package integration
 F1-I   admitted live-owner issuance and authority binding
 ```
@@ -276,11 +288,14 @@ basis and mechanically refuses fixture or identity-only substitution. The
 subsequent bounded F1-R1B result forms and admits one complete fourteen-field
 target slice and requires that exact admitted handle for Fresh Protocol
 formation; it remains offline research authority and explicitly fails closed
-outside the selected constructor fragment. F1-R1C/R1D and F1-I retain the
-remaining owner-view, package, and live source-authority obligations in
-Sections 7.1 and 7.2; the split prevents profile publication, fixture-local
-bodies, or an offline admitted record from being mislabeled as live target
-correspondence.
+outside the selected constructor fragment. F1-R1C0 then returns
+`CannotAnswer/F1R1C-C-SOURCE-DETERMINACY`: the six view surfaces are
+authenticated, but an independent evaluator cannot resolve the promised exact
+schema and read closure without making owner choices. F0-V is therefore open,
+R1C waits on its publication repair, and R1D/F1-I retain the package and live
+source-authority obligations in Sections 7.1 and 7.2. The split prevents
+profile publication, fixture-local bodies, or an offline admitted record from
+being mislabeled as live target correspondence.
 
 ## 8. F2 exact entry contract
 
@@ -389,8 +404,9 @@ research resolution:
 8. gap and rotation-cone analysis; and
 9. exact staged F1/F2 entry contracts.
 
-F0 remains reopenable throughout F1/F2. “Closed” here means ready for the next
-falsification program, not normative design freeze.
+F0 remains reopenable throughout F1/F2. F1-R1C0 has now exercised that rule:
+the broad architecture pass is complete, while the narrow F0-V owner-view
+publication repair is open. “Closed” here never meant normative design freeze.
 
 ## 11. Non-claims
 

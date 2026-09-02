@@ -126,8 +126,10 @@ another coherently formed package is not authority to substitute it.
   emitted from admitted live owner handles and do not establish Q1 for the
   implementation. F1-R1A closes the exact target profile/source prerequisite,
   and F1-R1B now closes one bounded exact-target carrier/admission slice.
-  F1-R1C/R1D remain the owner-view and integrated-package gates. F1-I remains
-  the live source-correspondence gate.
+  F1-R1C0 subsequently returns `CannotAnswer` because the exact owner-view
+  schema and read closure are not fully published; F0-V must repair that
+  boundary before F1-R1C/R1D continue. F1-I remains the live
+  source-correspondence gate.
 - The two checkers are diverse finite programs, not verified checkers. Their
   agreement and mutation performance are bounded evidence only.
 - The package authenticates static portable values. It deliberately excludes
@@ -142,10 +144,11 @@ another coherently formed package is not authority to substitute it.
   later decision after F1-I.
 
 F1-R1B preserves this frozen reference corpus while replacing the manual Core
-and Protocol bodies with one admitted exact target slice. F1-R1C/R1D should
-continue by replacing manual selectors with exact owner views and integrating
-the target package. Their durable identities are not expected to equal this
-temporary JSON package's identities. F1-I then requires the offline exact
-package and the live admitted owner-issued package to agree under the same
-durable contract. Any unavoidable missing owner observation reopens F0;
-ordinary wire adaptation or implementation plumbing does not.
+and Protocol bodies with one admitted exact target slice. F1-R1C0 has now
+confirmed an unavoidable missing owner-schema premise and reopened F0-V. After
+that PIR-owned contract is repaired, F1-R1C/R1D should replace manual selectors
+with exact owner views and integrate the target package. Their durable
+identities are not expected to equal this temporary JSON package's identities.
+F1-I then requires the offline exact package and the live admitted owner-issued
+package to agree under the same durable contract. Ordinary wire adaptation or
+implementation plumbing does not substitute for the owner repair.

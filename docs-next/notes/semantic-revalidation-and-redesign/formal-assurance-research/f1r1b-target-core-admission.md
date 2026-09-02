@@ -2,8 +2,8 @@
 
 > **Kind:** Temporary F1 exact-source carrier/admission result
 > **State:** F1-R1B complete for one bounded target Fresh Schnorr slice;
-> F1-R1C owner views, F1-R1D package integration, F1-I live implementation
-> authority, and F2 remain open
+> F1-R1C0 now returns `CannotAnswer` on owner-view source determinacy and opens
+> F0-V; R1C waits on that repair, while R1D, F1-I, and F2 remain open
 > **Authority:** None. This result changes no current or target semantic law,
 > profile identity, implementation admission result, Analysis judgment, or
 > product claim.
@@ -204,7 +204,7 @@ The following remain outside this result:
 | Q3--Q6 theorem and property | not started |
 | Q7--Q10 transition through realization | not started |
 
-## 7. F1-R1C entry contract
+## 7. F1-R1C entry contract and determinacy result
 
 R1C should reuse this exact Core/Protocol pair and require only the identical
 admitted handles. It must implement the target `PublicBindingView`,
@@ -231,3 +231,17 @@ If the exact target source does not determine a required leaf or closure edge,
 that is an F0 owner-observability defect. If it does determine the fact but no
 evaluator exists, that is an R1C implementation gap. The distinction should
 remain explicit before R1D packages any result.
+
+The subsequent
+[`F1-R1C0 source-determinacy audit`](f1r1c-owner-view-source-determinacy.md)
+resolves this branch as an F0 defect. It preserves this exact admitted
+Core/Protocol and process-local handle result, but finds that the Interaction
+profile does not publish the closed view-schema catalog, nested canonical body
+grammars, field-to-law map, and authority-envelope bodies required to derive
+an exact manifest independently. Its 13/13 expected observations therefore
+aggregate to `CannotAnswer/F1R1C-C-SOURCE-DETERMINACY`, and the K2 view shape is
+explicitly refused as a substitute.
+
+F0-V must repair and independently republish that PIR-owned boundary before
+the evaluator and mutation program above resume. This requires no new Core
+field, no change to the Core/Protocol split, and no Analysis-owned schema.
