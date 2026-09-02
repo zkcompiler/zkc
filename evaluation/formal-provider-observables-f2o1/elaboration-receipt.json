@@ -1,0 +1,31 @@
+{
+  "axioms": {
+    "ZkcF2O1.interaction": []
+  },
+  "classification": "environment fact only: elaboration of untrusted generated syntax; no correspondence, property, proof, or security claim",
+  "command": [
+    "lake",
+    "env",
+    "lean",
+    "/home/wonjae/code/zkc-lanes/f2o1-integrated-audit/evaluation/formal-provider-observables-f2o1/generated/Integrated.lean"
+  ],
+  "exit_status": 0,
+  "format": "zkc.formal-provider-observables-f2o1.elaboration-receipt.v0",
+  "generated_file": "generated/Integrated.lean",
+  "generated_sha256": "711f3c7883ab342d6b38bfffe58f0771486e323d9f51faa9c36f0ae755e06de1",
+  "ledger_file": "generated/ledger.json",
+  "ledger_sha256": "3ec81363913c1010925b8ea699cb53d53e69803f9c92913955b86290c096f7b7",
+  "observed_at": "2026-09-02T21:27:12+00:00",
+  "provider": {
+    "checkout": "/tmp/zkc-f0-sources.b66lUO/VCVio",
+    "imported_module": "VCVio.OracleComp.ProbComp",
+    "lake_manifest_sha256": "b4b094936808380b97898e72e962df48052df6c69c03c3698b85faac6919d4ab",
+    "lean_version": "Lean (version 4.33.1, x86_64-unknown-linux-gnu, commit 819816b2e0a3bf405af45ae5c7af2491d8f5bee6, Release)",
+    "name": "VCVio",
+    "revision": "de0a3108140e3e04a7ebf0075aa110b459ee6e8a",
+    "toolchain": "leanprover/lean4:v4.33.1"
+  },
+  "stderr": "",
+  "stdout": "'ZkcF2O1.interaction' does not depend on any axioms\n",
+  "wall_seconds": 2.509
+}

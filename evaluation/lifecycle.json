@@ -71,6 +71,7 @@
       "exit_rule": "Close the enumerated missing-observable list against the published owner views and their durable owners, record each remaining absence as an owner decision rather than an adapter default, replay the predecessor ledger against the successor generator and checker, and then remove superseded predecessor executables.",
       "checks": [
         "research.provider-observable-audit",
+        "research.provider-observable-audit-integrated",
         "research.schnorr-relations-plan-coupling"
       ]
     },

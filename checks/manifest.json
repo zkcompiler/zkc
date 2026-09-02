@@ -1236,6 +1236,28 @@
       }
     },
     {
+      "id": "research.provider-observable-audit-integrated",
+      "title": "Integrated carrier provider observable audit",
+      "subject": "Whether the exact D1 integrated-baseline Core and Fresh Protocol, as exposed by normalized owner-view bodies actually issued for that authority, carry every observable needed by a generic VCVio OracleComp/ProbComp interpretation of all 23 occurrences.",
+      "claim": "An untrusted generator emits a 23-occurrence interaction and a 93-construct ledger; an independent cold-byte checker validates totality, coordinate injection and validity over the 906-leaf D1 PublicCoinView, cold-projects four D1 neighbours, enumerates every gap, and rejects six integrated-discriminator mutations by name. D1 issues no integrated body for five of the six normalized views, leaving 56 operational observables and five property premises without source coordinates, so the aggregate fails closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "mutation", "differential", "static-analysis"],
+      "source_paths": ["evaluation/formal-provider-observables-f2o1/run.py", "evaluation/formal-provider-observables-f2o1/generator.py", "evaluation/formal-provider-observables-f2o1/checker.py", "evaluation/formal-provider-observables-f2o1/README.md", "evaluation/formal-provider-observables-f2o1/expected-findings.json", "evaluation/formal-provider-observables-f2o1/elaboration-receipt.json", "evaluation/formal-provider-observables-f2o1/generated/Integrated.lean", "evaluation/formal-provider-observables-f2o1/generated/ledger.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The audit establishes no provider/PIR correspondence, runtime or replay correctness, semantic-module or Oracle denotation, Claim or Reduction truth, theorem applicability, protocol or cryptographic property, security result, target change, or authority for the generated Lean; the elaboration receipt is an environment fact only."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-provider-observables-f2o1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.kernel-mechanization-feasibility",
       "title": "Mechanized kernel edges and canonicity",
       "subject": "Core-only Lean 4 decoding and Section 11 PCGraph construction from canonical admitted-Core and semantic-module bytes, complete D1 graph-product comparison, decoder canonicity, topological class-fold independence, and the exact natural byte-bound decision.",
