@@ -222,10 +222,13 @@ authenticated content. The scoped result and its remaining obligations are
 recorded in
 [`f0v2b2c0-canonical-byte-owner-admission.md`](f0v2b2c0-canonical-byte-owner-admission.md).
 
-The remaining constructor-isolation program is B2C1. It inherits the
-following entry contract without making B2C0 a new semantic stage or owner.
+The exact-value prerequisite is now complete as B2C1A. It found that target
+K1 bodies and diagnostic JSON disagree on one minimal sorted-unique PCNode
+order and that identifier leaves require complete MetaValue framing. The
+remaining constructor-isolation program is B2C1B. It inherits the following
+entry contract without making B2C0 or B2C1A a new semantic stage or owner.
 
-B2C1 should use the B2B source as a falsifiable candidate while deriving
+B2C1B should use the B2B source as a falsifiable candidate while deriving
 values from owner state. It must not accept the generated B2B values as
 fixtures. The minimum program is:
 

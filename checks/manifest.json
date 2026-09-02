@@ -950,6 +950,28 @@
       }
     },
     {
+      "id": "research.owner-view-exact-codec",
+      "title": "Exact owner-view value codec",
+      "subject": "The exact K1 value interpretation and collection order for the six constructor-complete candidate owner-view schemas.",
+      "claim": "Recursive and independently organized iterative codecs agree on exact bodies for all bounded schema inhabitants, while frozen framing, compiler, law, profile, and target-order substitutions fail closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic", "bounded-exhaustive"],
+      "source_paths": ["evaluation/formal-source-view-codec-f0v2b2c1a/run.py", "evaluation/formal-source-view-codec-f0v2b2c1a/model.py", "evaluation/formal-source-view-codec-f0v2b2c1a/independent.py", "evaluation/formal-source-view-codec-f0v2b2c1a/README.md", "evaluation/formal-source-view-codec-f0v2b2c1a/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["Exact value encoding and target-body ordering are not admitted-owner projection, constructor-isolation closure, integrated PCGraph or runtime semantics, profile publication, implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-view-codec-f0v2b2c1a/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

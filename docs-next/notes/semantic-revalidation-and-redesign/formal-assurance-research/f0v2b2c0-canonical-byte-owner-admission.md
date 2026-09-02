@@ -123,9 +123,11 @@ the canonical byte snapshot, alias-freedom, and closure-content comparison
 normatively explicit when the redesign is next edited. It does not edit that
 target from this research note.
 
-## 5. B2C1 entry contract
+## 5. B2C1A/B entry contract
 
-B2C1 inherits all twenty-one B2A pressure families assigned to B2C. Each
+B2C1A now supplies the exact schema-directed value codec and records why B2B's
+diagnostic JSON order cannot serve as the target ordering oracle. B2C1B
+inherits all twenty-one B2A pressure families assigned to B2C. Each
 family needs one minimal authenticated Core and one named discriminator. The
 reference path should project from admission-retained owner facts. The cold
 path must start again from `AdmittedCoreSnapshot.domain_body`, strictly decode
@@ -138,7 +140,7 @@ the B2C ordering oracle. If exact target order conflicts with the B2B JSON
 validator's order, B2C must use the target order and report the diagnostic
 validator as inapplicable rather than reorder semantic data to satisfy it.
 
-B2C1 must also distinguish:
+B2C1B must also distinguish:
 
 - owner admission from Fresh-versus-FS eligibility;
 - stored Core fields from derived owner facts;
@@ -154,4 +156,4 @@ the normalized six B2B views, establish owner/source correspondence, validate
 the complete `PCGraph`, execute an Oracle or Protocol, publish or migrate a
 profile, verify current implementation correspondence, prove a theorem, or
 establish a cryptographic property. The overall result remains
-`CannotAnswer` until B2C1 closes constructor isolation and dual projection.
+`CannotAnswer` until B2C1B closes constructor isolation and dual projection.

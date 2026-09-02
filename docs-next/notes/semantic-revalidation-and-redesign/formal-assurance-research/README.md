@@ -14,8 +14,10 @@
 > topology. F0-V2B2B now supplies a constructor-complete candidate schema and
 > branch-inhabitance result. F0-V2B2C0 now supplies the canonical-byte,
 > immutable owner-admission substrate and exposes the predecessor handle's
-> ordinary mutability; B2C1/B2D constructor projection and integrated semantic
-> closure and F0-V2C target migration remain open.
+> ordinary mutability. F0-V2B2C1A supplies the exact view-value codec and
+> exposes a target-byte versus diagnostic-JSON ordering inversion; B2C1B/B2D
+> constructor projection and integrated semantic closure and F0-V2C target
+> migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -63,7 +65,8 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2B2A constructor census and execution topology  [complete, CannotAnswer]
   -> F0-V2B2B complete schema source and inhabitance     [complete, bounded]
   -> F0-V2B2C0 canonical-byte owner admission            [complete, CannotAnswer]
-  -> F0-V2B2C1 isolated constructor owner projections    [open]
+  -> F0-V2B2C1A exact view-value codec                    [complete, bounded]
+  -> F0-V2B2C1B isolated constructor owner projections   [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -139,7 +142,13 @@ still ordinarily mutable. It selects strict canonical-byte intake, immutable
 alias-free Core and Fresh Protocol snapshots, authenticated closure-content
 pairing, and a separately structured cold decoder. Its 22 findings validate
 that bounded substrate but admit no additional constructor and derive no
-normalized view, so B2C1 and B2D remain open.
+normalized view. F0-V2B2C1A then gives the constructor-complete schemas an
+exact K1 value interpretation. Recursive and worklist codecs agree on all 302
+generated branch inhabitants and expose two prototype-only mismatches: target
+body order for PCNode cases 2 and 10 is the reverse of diagnostic JSON order,
+and identifier leaves require one complete `MetaBytes(ContentRefV0(...))`
+datum rather than raw content-reference bytes. These are codec results, not
+admitted owner projections, so B2C1B and B2D remain open.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -256,6 +265,13 @@ provider, extraction tool, or durable schema.
   complete admission, six owner projections, integrated graph/runtime
   behavior, migration, implementation correspondence, proof, security, and
   Q1 remain open.
+- [`f0v2b2c1a-exact-view-value-codec.md`](f0v2b2c1a-exact-view-value-codec.md)
+  records the 22-case exact-value-codec result. Recursive and independently
+  organized iterative paths encode all 302 B2B inhabitants to identical K1
+  bodies, enforce sorted-unique collections by exact child bodies, distinguish
+  target order from diagnostic JSON order, and reject raw identifier framing.
+  It does not derive any value from an admitted owner; B2C1B, B2D, migration,
+  implementation correspondence, proof, security, and Q1 remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
