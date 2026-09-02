@@ -551,19 +551,27 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
 
     def test_actual_branch_subjects_authenticate_in_branch_local_contexts(self) -> None:
         authenticator = model.k1.authenticate_profiled_semantic_content
+        prepared_authenticator = (
+            model.k1.authenticate_profiled_semantic_content_in_context
+        )
         with patch.object(
             model.k1,
             "authenticate_profiled_semantic_content",
             wraps=authenticator,
-        ) as authenticated:
+        ) as authenticated, patch.object(
+            model.k1,
+            "authenticate_profiled_semantic_content_in_context",
+            wraps=prepared_authenticator,
+        ) as prepared_authenticated:
             witness = model.build_integrated_witness()
 
-        expected = {
+        prepared_expected = {
             witness.analysis_lanes.finite_profile.profile_id: (
                 model.analysis.ANALYSIS_PROPERTY_PROFILE_ID,
                 7,
             )
         }
+        expected = {}
         for lane in (witness.verifier, witness.prover):
             authority = lane.request.supplement_authority
             self.assertIs(type(authority), model.oir.IssuedFutureOwnerSupplement)
@@ -578,6 +586,31 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
                     ),
                 }
             )
+
+        prepared_seen = set()
+        for call in prepared_authenticated.call_args_list:
+            if not call.args or call.args[0] not in prepared_expected:
+                continue
+            identifier, selected_profile, _domain_body, context = call.args
+            expected_profile, expected_count = prepared_expected[identifier]
+            with self.subTest(
+                subject_kind=identifier.subject_kind,
+                seam="prepared-context",
+            ):
+                self.assertEqual(selected_profile, expected_profile)
+                self.assertEqual(
+                    call.kwargs,
+                    {"supported_profiles": (expected_profile,)},
+                )
+                self.assertIs(type(context), model.k1.EffectiveSemanticContext)
+                self.assertEqual(context.selected_profile, expected_profile)
+                self.assertEqual(
+                    context.semantic_regime,
+                    model.k1.SEMANTIC_REGIME_ID,
+                )
+                self.assertEqual(len(context.authenticated_profiles), expected_count)
+            prepared_seen.add(identifier)
+        self.assertEqual(prepared_seen, set(prepared_expected))
 
         seen = set()
         for call in authenticated.call_args_list:
@@ -599,6 +632,10 @@ class SemanticLanguageProfileIdentityLocalityTest(unittest.TestCase):
                 self.assertEqual(len(context.authenticated_profiles), expected_count)
             seen.add(identifier)
         self.assertEqual(seen, set(expected))
+        self.assertNotIn(
+            witness.analysis_lanes.finite_profile.profile_id,
+            {call.args[0] for call in authenticated.call_args_list if call.args},
+        )
 
     def test_analysis_law_identity_rotations_follow_exact_descendants(self) -> None:
         original = model.analysis.ANALYSIS_SEMANTIC_PROFILES

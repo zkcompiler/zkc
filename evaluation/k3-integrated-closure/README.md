@@ -44,11 +44,12 @@ source profile, but it cannot replace the live supplement bearer: omission is
 
 The imported declaration roots have exact closures. K3-C's
 kernel/property/transport/theorem-source-validation closures contain
-1/6/7/8 profiles. K3-E actively selects the six-profile property root for its
-finite Analysis descriptor; it does not execute transport or theorem-source
-validation. K3-D's endpoint/source/projection/validation closures contain
-4/5/6/7 profiles, and the concrete endpoint subjects are observed
-authenticating under their respective roots.
+1/7/8/9 profiles. K3-E actively selects the seven-profile property root for its
+finite Analysis descriptor and observes that subject authenticating through
+K1's build-once/check-many prepared-context seam; it does not execute transport
+or theorem-source validation. K3-D's endpoint/source/projection/validation
+closures contain 4/5/6/7 profiles, and the concrete endpoint subjects are
+observed authenticating under their respective roots.
 
 The K3-C property and K3-D validation closures intersect only at the identical
 K2 Interaction, K2 Transcript/Fiat--Shamir, and K3-B Interface/Plan profile
