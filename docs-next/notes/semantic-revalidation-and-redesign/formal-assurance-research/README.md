@@ -12,8 +12,10 @@
 > the bounded normalized grammar and owner derivation. F0-V2B2A freezes the
 > 79-case constructor census, exact B1 delta, and four-stage B2 execution
 > topology. F0-V2B2B now supplies a constructor-complete candidate schema and
-> branch-inhabitance result; B2C/B2D owner and integrated semantic closure and
-> F0-V2C target migration remain open.
+> branch-inhabitance result. F0-V2B2C0 now supplies the canonical-byte,
+> immutable owner-admission substrate and exposes the predecessor handle's
+> ordinary mutability; B2C1/B2D constructor projection and integrated semantic
+> closure and F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -60,7 +62,8 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2B1 exact bounded-slice normalized grammar      [complete, bounded]
   -> F0-V2B2A constructor census and execution topology  [complete, CannotAnswer]
   -> F0-V2B2B complete schema source and inhabitance     [complete, bounded]
-  -> F0-V2B2C isolated admission and owner projections   [open]
+  -> F0-V2B2C0 canonical-byte owner admission            [complete, CannotAnswer]
+  -> F0-V2B2C1 isolated constructor owner projections    [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -130,7 +133,13 @@ research resolution. Two differently organized compilers agree on six
 schemas, and 302 synthetic values cover 914 reachable constructor
 requirements under two validators. It also corrects the candidate sequence
 algebra to carry lower bounds and ordered versus sorted-unique discipline.
-These values are not admitted owner projections; B2C and B2D remain open.
+These values are not admitted owner projections. F0-V2B2C0 then probes the
+owner substrate and finds that the predecessor's nonserializable handle is
+still ordinarily mutable. It selects strict canonical-byte intake, immutable
+alias-free Core and Fresh Protocol snapshots, authenticated closure-content
+pairing, and a separately structured cold decoder. Its 22 findings validate
+that bounded substrate but admit no additional constructor and derive no
+normalized view, so B2C1 and B2D remain open.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -239,6 +248,14 @@ provider, extraction tool, or durable schema.
   discipline, but retains seven `CannotAnswer` boundaries for admission,
   owner projection, graph/runtime semantics, migration, implementation
   correspondence, and formal or cryptographic claims.
+- [`f0v2b2c0-canonical-byte-owner-admission.md`](f0v2b2c0-canonical-byte-owner-admission.md)
+  records the 22-case B2C0 authority result. It exposes ordinary mutation of
+  the predecessor Core handle, selects strict byte-authenticated immutable
+  snapshots with alias-free closure retention and exact Fresh pairing, and
+  obtains agreement from a separately structured cold parser. Constructor-
+  complete admission, six owner projections, integrated graph/runtime
+  behavior, migration, implementation correspondence, proof, security, and
+  Q1 remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,

@@ -49,7 +49,8 @@
         "research.owner-view-body-determinacy",
         "research.owner-view-bounded-derivation",
         "research.owner-view-constructor-census",
-        "research.owner-view-constructor-schema"
+        "research.owner-view-constructor-schema",
+        "research.owner-view-admission-substrate"
       ]
     },
     {

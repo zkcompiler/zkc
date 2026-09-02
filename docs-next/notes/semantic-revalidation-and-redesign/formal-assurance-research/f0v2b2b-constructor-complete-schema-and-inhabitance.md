@@ -211,9 +211,21 @@ It does not support any of the following stronger statements:
 - profile identity can remain unchanged; or
 - any formal, relation, theorem, security, Fiat--Shamir, or Q1 claim holds.
 
-## 6. B2C entry contract
+## 6. B2C entry contract and B2C0 refinement
 
-B2C should now use the B2B source as a falsifiable candidate while deriving
+B2C0 has now executed the authority prerequisite. It found that the F1-R1B
+handle is nonserializable but ordinarily mutable, and therefore cannot safely
+be reused as the source of a later owner projection. The selected substrate
+instead admits from exact canonical bytes into immutable, alias-free Core and
+Fresh Protocol snapshots and pairs reconstructed dependency closures by
+authenticated content. The scoped result and its remaining obligations are
+recorded in
+[`f0v2b2c0-canonical-byte-owner-admission.md`](f0v2b2c0-canonical-byte-owner-admission.md).
+
+The remaining constructor-isolation program is B2C1. It inherits the
+following entry contract without making B2C0 a new semantic stage or owner.
+
+B2C1 should use the B2B source as a falsifiable candidate while deriving
 values from owner state. It must not accept the generated B2B values as
 fixtures. The minimum program is:
 

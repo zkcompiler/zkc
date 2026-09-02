@@ -928,6 +928,28 @@
       }
     },
     {
+      "id": "research.owner-view-admission-substrate",
+      "title": "Canonical-byte owner-admission substrate",
+      "subject": "The immutable owner-authority substrate required before constructor-complete PIR owner-view projection.",
+      "claim": "Strict canonical-byte admission, an independently structured cold parser, immutable alias-free Core and Fresh Protocol snapshots, and frozen authority substitutions agree on the bounded admission substrate.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic"],
+      "source_paths": ["evaluation/formal-source-owner-admission-f0v2b2c0/run.py", "evaluation/formal-source-owner-admission-f0v2b2c0/model.py", "evaluation/formal-source-owner-admission-f0v2b2c0/independent.py", "evaluation/formal-source-owner-admission-f0v2b2c0/README.md", "evaluation/formal-source-owner-admission-f0v2b2c0/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["Canonical-byte and immutable-handle evidence is not constructor-complete admission, six-view owner projection, integrated PCGraph or runtime semantics, target migration, implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-owner-admission-f0v2b2c0/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",
