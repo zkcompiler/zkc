@@ -1016,6 +1016,28 @@
       }
     },
     {
+      "id": "research.owner-view-claim-reduction-projections",
+      "title": "Claim and reduction owner-view projections",
+      "subject": "Five Claim, Reduction, publication-order, joint-Challenge, and shared-Challenge constructor-isolation families projected from immutable admitted Core and Fresh Protocol owners into the six normalized PIR views.",
+      "claim": "Reference owner projection and a separately structured cold byte-derived projector agree on all six exact view bodies for five minimal carriers, while frozen lifecycle, ordering, guard, graph-transfer, owner-value, and authority substitutions fail closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic"],
+      "source_paths": ["evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/run.py", "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/model.py", "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/independent.py", "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/README.md", "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["Five bounded Claim, Reduction, publication-order, and Challenge-sharing projection families are not the remaining four B2C families, either B2D integration family, path-sensitive Claim liveness or runtime execution, target publication, live implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

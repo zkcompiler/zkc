@@ -53,7 +53,8 @@
         "research.owner-view-admission-substrate",
         "research.owner-view-exact-codec",
         "research.owner-view-foundation-projections",
-        "research.owner-view-oracle-projections"
+        "research.owner-view-oracle-projections",
+        "research.owner-view-claim-reduction-projections"
       ]
     },
     {

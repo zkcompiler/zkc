@@ -12,6 +12,10 @@
 > [`F0-V2B2C1B1 Foundation owner projections`](f0v2b2c1b1-foundation-owner-projections.md)
 > **Executable gate:**
 > [`evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2`](../../../../evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/README.md)
+> **Successor:**
+> [`F0-V2B2C1B3 Claim and Reduction owner projections`](f0v2b2c1b3-claim-reduction-owner-projections.md)
+> now closes the next five B2C families at bounded research resolution; the
+> nine-family count below records this checkpoint's historical boundary
 
 ## 1. Decision
 

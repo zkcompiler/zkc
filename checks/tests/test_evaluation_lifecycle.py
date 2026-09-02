@@ -19,14 +19,14 @@ class EvaluationLifecycleTest(unittest.TestCase):
     def test_every_research_check_and_tracked_package_has_one_disposition(self) -> None:
         self.assertEqual("pass", self.report["outcome"], self.report["findings"])
         self.assertEqual([], self.report["findings"])
-        self.assertEqual(35, self.report["summary"]["research_checks"])
-        self.assertEqual(37, self.report["summary"]["packages"])
+        self.assertEqual(36, self.report["summary"]["research_checks"])
+        self.assertEqual(38, self.report["summary"]["packages"])
 
     def test_current_dispositions_make_no_bulk_retirement_claim(self) -> None:
         dispositions = self.report["summary"]["dispositions"]
         self.assertEqual(
             {
-                "active-sequence": 14,
+                "active-sequence": 15,
                 "promote-then-retire": 10,
                 "retain": 13,
             },

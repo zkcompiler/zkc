@@ -16,9 +16,11 @@
 > immutable owner-admission substrate and exposes the predecessor handle's
 > ordinary mutability. F0-V2B2C1A supplies the exact view-value codec and
 > exposes a target-byte versus diagnostic-JSON ordering inversion.
-> F0-V2B2C1B1 now validates owner-derived exact projections for four of the
-> twenty-one B2C isolation families; the other seventeen B2C families, both
-> B2D integration families, and F0-V2C target migration remain open.
+> F0-V2B2C1B1 through B2C1B3 now validate owner-derived exact projections for
+> seventeen of the twenty-one B2C isolation families across Foundation,
+> Oracle, Claim, Reduction, publication-order, joint-Challenge, and shared-
+> Challenge surfaces. Four B2C families, both B2D integration families, and
+> F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -69,7 +71,10 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2B2C1A exact view-value codec                    [complete, bounded]
   -> F0-V2B2C1B isolated constructor owner projections   [in progress]
        B2C1B1 foundation families 4/21                   [complete, bounded]
-       B2C1B2+ remaining families 17/21                  [open]
+       B2C1B2 Oracle families 8/21                       [complete, bounded]
+       B2C1B3 claim/reduction/challenge families 5/21    [complete, bounded]
+       B2C1B4 module-effect families 3/21                [open]
+       B2C1B5 expanded-terminal family 1/21              [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -299,10 +304,19 @@ provider, extraction tool, or durable schema.
   admission plus Fresh pairing from failed same-Core FS eligibility when
   logical-Oracle influence reaches acceptance. The slice also separates causal
   PCGraph edges from node-local class-transfer operands and rejects lifecycle,
-  domain, ABI,
-  owner-value, and authority substitutions. Nine B2C and both B2D families,
+  domain, ABI, owner-value, and authority substitutions. Nine B2C and both B2D
+  families,
   runtime receipts, target publication, live correspondence, proof, security,
   and Q1 remain open.
+- [`f0v2b2c1b3-claim-reduction-owner-projections.md`](f0v2b2c1b3-claim-reduction-owner-projections.md)
+  records the 61-finding Claim/Reduction/Challenge B2C1B isolation slice.
+  Typed and cold byte-derived projectors agree on 30 distinct exact bodies
+  over five carriers. The slice derives Claim creation/use histories and
+  Challenge consumers from existing Core owners, validates the Last-Challenge
+  bridge into FS required influence, and rejects 25 authenticated semantic
+  mutations plus four schema-valid owner substitutions. Four B2C and both B2D
+  families, path-sensitive liveness, runtime history, target publication,
+  live correspondence, proof, security, and Q1 remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -368,10 +382,13 @@ runtime behavior, profile migration, implementation correspondence, and Q1
 remain `CannotAnswer`; no profile has changed.
 F0-V2B2C0 and C1A subsequently establish the immutable canonical-byte owner
 substrate and exact value codec prerequisites. F0-V2B2C1B1 then matches 39/39
-findings for the first four constructor-isolation families: two projector
-paths agree on 36 distinct bodies over six carriers, fifteen scoped findings
-are affirmative, and eight findings preserve the remaining `CannotAnswer`
-boundaries. This is progress within B2C1B, not completion of B2C, B2D, target
+findings for the first four constructor-isolation families, and B2C1B2 matches
+44/44 findings for eight Oracle families. B2C1B3 now matches 61/61 findings for
+five Claim/Reduction/Challenge families: typed and cold paths agree on 30
+distinct bodies, the Last-Challenge and derived-consumer laws are explicit,
+and path-sensitive liveness remains a named open boundary. Together the three
+slices cover seventeen of twenty-one B2C families at bounded research
+resolution. This is progress within B2C1B, not completion of B2C, B2D, target
 publication, implementation correspondence, or Q1; no profile has changed.
 
 ## Known risks and non-claims
