@@ -444,6 +444,28 @@
       }
     },
     {
+      "id": "research.fs-assurance-pre-freeze",
+      "title": "Pre-freeze Fiat-Shamir assurance pressure",
+      "subject": "The finite ten-layer Fiat-Shamir assurance model, separating exact logical challenge prefixes, closed external-Statement correspondence, typed encoding, concrete state-transition binding, challenge-sampler adequacy, oracle-process correspondence, interactive source properties and theorem application, static OIR projection, realization and parser conformance, and deployment composition, together with its sixteen-case attack matrix.",
+      "claim": "The finite positive controls and attack-shaped mutations produce their expected qualified outcomes in every layer: exact-prefix and closed-Statement checks detect omitted, reordered, duplicated, and substituted material; the typed length-delimited, complete-limb, and full-width encoders have no alias in the enumerated domains while the unframed, trailing-zero, and high-bit-truncated encoders expose explicit aliases; total exact-uniform and conditional-with-failure sampler contracts stay distinct over the complete enumerated draw spaces; the exact static projection and bounded realization vectors detect a dropped prefix law, a weak query index, and unconsumed proof bytes; and a security request stays incomplete when theorem, source-property, or QROM premises are absent, with the all-green chain retaining evidence kind bounded-control.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "mutation", "bounded-exhaustive"],
+      "source_paths": ["evaluation/fs-assurance-pre-freeze/run.py", "evaluation/fs-assurance-pre-freeze/reference_model.py", "evaluation/fs-assurance-pre-freeze/tests/test_reference_model.py", "evaluation/fs-assurance-pre-freeze/cases/attack-matrix.json", "evaluation/fs-assurance-pre-freeze/README.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["It does not prove injectivity outside the selected finite domains, collision resistance, sponge security, random-oracle correspondence, state-restoration or round-by-round soundness, theorem truth, OIR correctness, compiler correctness, implementation conformance, parser safety, QROM security, or deployment readiness.", "The finite limb and truncation cases are advisory-shaped witnesses: they demonstrate the class of semantic distinction exposed by CVE-2026-46654 but do not reproduce Plonky3's field, permutation, exploit, or patched code."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/fs-assurance-pre-freeze/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.dependent-surfaces",
       "title": "Interface, Plan, and Relations surfaces",
       "subject": "The bounded semantic surfaces downstream of the interactive protocol core.",
