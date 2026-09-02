@@ -3,8 +3,10 @@
 > **Kind:** Temporary main-lane synthesis of the F2-O0, M0, Q3-A, and
 > reconciliation results into the decisions F0-V2C must take
 > **State:** Options compared at equal resolution; recommendations recorded;
-> nothing selected. Inputs from D2, F0-V3, F2-O1, M1, and the gates-green
-> lane are still outstanding and have marked slots below
+> nothing selected. The five second-round lanes (gates-green, M1, F2-O1,
+> D2, F0-V3) and the migration-candidate and Relations--Plan lanes have
+> reported; their inputs are folded into Sections 6 and 10. This is the
+> decision packet for the design lane and the user
 > **Authority:** None. This note changes no owner page, profile, identity,
 > evaluator, or judgment.
 > **Inputs:** `f2o0-provider-observable-audit.md`,
@@ -122,12 +124,53 @@ Check under C1 plus Block 1.
    implementations do); and the Foundation byte bound is confirmed as
    "reaching a bound is allowed", with the K1 model moved to the prose.
 
-Slots for outstanding lanes: D2 supplies the completed-record schema and may
-adjust item 3; F0-V3 decides whether the FS-family view catalogs enter the
-same migration or are explicitly excluded from the frozen view surface; F2-O1
-may add operational gaps for joint and shared Challenges, Oracles, and module
-effects; M1 may turn a Section 11 wording item into a law defect; the
-gates-green lane must be green before any of this is applied.
+The second-round lanes filled the slots as follows.
+
+- **gates-green.** K3-E is green again: the finite Analysis subject
+  authenticates through K1's build-once/check-many prepared-context seam and
+  the recorded profile counts were stale; the query-plan instrument now
+  propagates site-argument answer taint and checks a path-to-occurrence map, so
+  the two confirmed defects refuse with regression fixtures. No owner page
+  changed. The precondition "all gates green" holds at the integrated head.
+- **M1.** Edge construction from an admitted Core reproduces all five D1 graph
+  tables in Lean; decoder canonicity and class-fold order independence are
+  proved on `propext` and `Quot.sound`; the K1 byte bound is now the prose
+  reading in the Python model with an exact-bound oracle case. Five Section 11
+  wording items remain: three transfer coordinates, the public-Query sink
+  coordinates, and Challenge failure precedence. Item 4 above absorbs them.
+- **F2-O1.** On the integrated carrier the discriminating mutations all
+  refuse from Challenge facts the views do carry, so the shared-challenge and
+  ordering discipline survives the provider side. The 56 operational gaps
+  split into two kinds. Most are *source-boundary* gaps: D1 issues only the
+  `PublicCoinView` for the integrated carrier, so the other five views were
+  never derived for it; that is an evidence obligation on the migration's
+  fixtures, not a semantic gap. The rest extend F2-O0's classes: module-effect
+  denotation for the three decision classes, Oracle carrier representation for
+  the three modes, and the same distribution, denotation, and outcome-map gaps.
+  Module denotations fall under sub-decision A (the authenticated module
+  declaration bodies are part of the closure); Oracle carriers are a Q2 design
+  question (a provider must model a confidential carrier as a typed unknown
+  behind a handler), not a V2C item.
+- **D2.** The Fresh completed-record schema is representable and reconstructs
+  through two paths for all five carriers, with zero runs. It leaves five
+  owner-text choices, all of which belong in this migration: where the
+  LogicalAccess fixation marker lives in the `Published` receipt; whether
+  occurrence receipts run through the active terminal; the exact body of
+  `PartialRunRecord`; whether `StrategyStopped` is a lane of the record sum or
+  stays diagnostic; and the field name `run_record_schema`. Recommendation:
+  take D2's candidate readings for the first three, keep `StrategyStopped`
+  outside `CompletedProtocolRecord` as the page says while adding it as a lane
+  of the *abstract outcome partition* of Section 5 (so providers see it
+  without PIR calling it a completed record), and keep the target's field name.
+- **F0-V3.** The eight Fiat--Shamir family view bodies are 37 exact, 40 prose,
+  and 20 undefined fields; a bounded normalized grammar compiles and derives
+  from the K2 and duplex witnesses; eleven owner obligations are named.
+  Recommendation: the FS profiles are inside the freeze scope, so their view
+  catalogs enter the same migration, authored from F0-V3's candidate under the
+  same generic algebra, rather than being excluded from the frozen view
+  surface; the alternative, freezing FS construction semantics while leaving
+  its views declared but indeterminate, would repeat the R1C0 defect for the
+  family that motivates the whole assurance program.
 
 ## 7. Two decisions that are not V2C
 
@@ -161,6 +204,31 @@ the endpoint receipt catalogs, are frozen as declared but unexercised and are
 not part of the claim that later consumers rely on. This is the "deliberately
 smaller v0" of the peer review's Section 9.C, stated as scope rather than as
 deletion; consolidation can follow the freeze.
+
+## 10. Decisions requested
+
+1. Sub-decision A: adopt A2 (views keep identities; the closure obliges the
+   consumer to hold the authenticated algorithm and module preimages).
+2. Sub-decision B: adopt B2 (nominal coin law stays the hook; Analysis binds a
+   distribution as a named Q5 premise).
+3. Sub-decision C: adopt C1 (one PIR-owned abstract outcome partition in the
+   ExecutionView; provider carriers mapped in Analysis), with
+   `StrategyStopped` as a partition lane but not a completed record.
+4. D2's five owner choices as recommended above.
+5. Section 11 wording: fix the five M1 items and the two D1 items by the
+   readings D1 and M1 implement (lattice priority; `Publish(activity)` on the
+   LogicalAccess publication effect; named transfer nodes; both public-Query
+   sink coordinates).
+6. F0-V3: author the FS-family view catalogs in the same migration.
+7. Identity pin: P2 (prose-fragment identity for this migration; transcription
+   discrepancies are named reopenings; the pin is decided after the
+   transcription covers admission, execution, and FS construction).
+8. Freeze scope as in Section 8.
+
+With these eight decisions the migration candidate of Block 7 can be refreshed
+into exact owner text, both publication compilers rerun, old-profile refusal
+controls retained, and the holdout and independent freeze review scheduled.
+The identity-rotating publication itself remains the user's gate.
 
 ## 9. Non-claims
 
