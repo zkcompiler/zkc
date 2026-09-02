@@ -62,6 +62,14 @@ the exact target bodies, owner derivation, target migration, and proper-subset
 closure. This validates the architecture as the input to F0-V2B; it does not
 close F0-V2.
 
+The subsequent
+[`F0-V2B0 owner-body audit`](f0v2b-owner-view-body-audit-and-redesign.md)
+finds that the current six displays cannot simply instantiate this algebra:
+they contain undefined vocabulary and prose-valued fields, and the displayed
+`PublicCoinView` omits retained PCGraph evidence. F0-V2B0 therefore selects
+normalized replacement bodies for B1/B2 authoring while retaining this
+algebra and its generic algorithms.
+
 ## 2. Why the current text is not executable
 
 The current Interaction source already states several important invariants:
@@ -440,7 +448,7 @@ not establish the exact six target bodies or any owner derivation.
 representative leaves and refuse all 27 selected mutations. The four named
 target obligations remain `CannotAnswer`, so F0-V2B is now the next gate.
 
-### F0-V2B — exact six-body grammar
+### F0-V2B — exact normalized six-body grammar
 
 - translate every field in the current six displays into the selected
   structural universe;
@@ -453,6 +461,11 @@ target obligations remain `CannotAnswer`, so F0-V2B is now the next gate.
 
 F0-V2B must stop with `CannotAnswer` for any field whose exact owner source is
 still missing. It may not fill a gap from K2 or an Analysis consumer.
+
+**F0-V2B0 result:** the current displays do contain such gaps. The dedicated
+audit returns `CannotAnswer/F0V2B0-C-OWNER-BODY-DETERMINACY`, selects normalized
+replacement bodies, and splits completion into B1 exact bounded-slice
+authoring and B2 constructor-complete derivation pressure.
 
 ### F0-V2C — target publication and migration
 

@@ -7,7 +7,9 @@
 > returns `CannotAnswer` on exact owner-view source determinacy. Reopened F0-V1
 > confirms the selected repair topology through both publication compilers;
 > F0-V2A now selects and validates a bounded generic view-schema algebra.
-> F0-V2B exact six-body grammar and F0-V2C target migration remain open.
+> F0-V2B0 then finds that the current six displays cannot be compiled
+> verbatim and selects normalized replacement bodies. F0-V2B1/B2 exact
+> bounded/full-constructor grammar and F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -50,7 +52,9 @@ F0  ideal assurance architecture and current-design falsification
   -> F1-R1C0 owner-view source determinacy              [complete, CannotAnswer]
   -> F0-V1   owner-view publication topology            [complete, bounded]
   -> F0-V2A  generic schema-algebra feasibility          [complete, bounded]
-  -> F0-V2B  exact six-body grammar                      [open]
+  -> F0-V2B0 owner-body audit/redesign                   [complete, CannotAnswer]
+  -> F0-V2B1 exact bounded-slice normalized grammar      [open]
+  -> F0-V2B2 constructor-complete grammar/derivation     [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -99,7 +103,11 @@ generic enumeration/resolution through recursive and iterative implementations
 over representative six-view structures. It still does not supply the exact
 target bodies or owner derivation. F0-V2B must author the six exact grammars,
 and F0-V2C must republish and migrate the boundary before F1-R1C/R1D continue
-with owner views, Relations roots, and the integrated package.
+with owner views, Relations roots, and the integrated package. F0-V2B0 now
+shows that authoring cannot copy the displays verbatim: undefined reference and
+decision vocabulary, prose-valued closures, and omitted retained `PCGraph`
+evidence require normalized replacement bodies. It selects those bodies and a
+bounded-then-constructor-complete B1/B2 sequence.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -178,6 +186,13 @@ provider, extraction tool, or durable schema.
   leaves while 27 schema, value, law, extension, path, and manifest mutations
   refuse. Exact target grammar, derivation, migration, and partial closure
   remain `CannotAnswer`.
+- [`f0v2b-owner-view-body-audit-and-redesign.md`](f0v2b-owner-view-body-audit-and-redesign.md)
+  audits every displayed field against exact Core/Protocol source, Appendix-A
+  bodies, retained derivations, current consumers, and the F1-R1B constructor
+  surface. It returns `CannotAnswer` for compiling the current displays
+  verbatim, selects normalized six-view replacements, makes retained PCGraph
+  evidence explicit, and splits exact authoring into bounded B1 and
+  constructor-complete B2 gates before target migration.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -217,7 +232,13 @@ closure. F0-V2B/C must complete the PIR-owned source contract; R1C and R1D must
 then form exact owner views and the integrated package before F1-I supplies
 live implementation authority. F2 starts only after one affirmative bounded
 Q1 correspondence and retains separate operational, property, and zkc-native
-discriminator stages.
+discriminator stages. F0-V2B0 further classifies the current six-body display
+as non-determinate: several field types are undefined, multiple fields are
+English placeholders, and the displayed `PublicCoinView` omits graph evidence
+that Section 11 says it retains. Its frozen 18/18 source-audit projection has
+five affirmative prerequisites, ten `CannotAnswer` obligations, and three
+refused repair routes. The selected normalized replacements now define the
+F0-V2B1/B2 implementation target; no profile has yet changed.
 
 ## Known risks and non-claims
 
