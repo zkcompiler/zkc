@@ -292,6 +292,17 @@ provider, extraction tool, or durable schema.
   bounded research resolution; seventeen B2C families, both B2D integration
   families, target publication, live correspondence, proof, security, and Q1
   remain open.
+- [`f0v2b2c1b2-oracle-owner-projections.md`](f0v2b2c1b2-oracle-owner-projections.md)
+  records the 44-finding Oracle B2C1B isolation slice. Reference and cold
+  byte-derived projectors agree on 48 distinct exact bodies over the eight
+  origin/mode/visibility families, while a ninth carrier distinguishes Core
+  admission plus Fresh pairing from failed same-Core FS eligibility when
+  logical-Oracle influence reaches acceptance. The slice also separates causal
+  PCGraph edges from node-local class-transfer operands and rejects lifecycle,
+  domain, ABI,
+  owner-value, and authority substitutions. Nine B2C and both B2D families,
+  runtime receipts, target publication, live correspondence, proof, security,
+  and Q1 remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,

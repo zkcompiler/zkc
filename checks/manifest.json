@@ -994,6 +994,28 @@
       }
     },
     {
+      "id": "research.owner-view-oracle-projections",
+      "title": "Oracle owner-view projections",
+      "subject": "Eight Oracle constructor-isolation families projected from immutable admitted Core and Fresh Protocol owners into the six normalized PIR views.",
+      "claim": "Reference owner projection and a separately structured cold byte-derived projector agree on all six exact view bodies for eight minimal Oracle carriers and one logical-acceptance discriminator, while lifecycle, declaration, transfer, owner-value, and authority substitutions fail closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic"],
+      "source_paths": ["evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/run.py", "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/model.py", "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/independent.py", "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/README.md", "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["Eight bounded Oracle projection families are not the remaining nine B2C families, either B2D integration family, runtime Oracle execution or receipt validation, target publication, live implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

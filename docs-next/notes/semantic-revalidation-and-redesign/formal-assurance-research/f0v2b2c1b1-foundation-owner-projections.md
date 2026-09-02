@@ -209,3 +209,11 @@ This checkpoint does not:
 - prove the candidate projection, schema sufficiency, or theorem truth;
 - establish a Fiat--Shamir or other cryptographic property; or
 - close F1 Q1 correspondence.
+
+## 7. Successor status
+
+[`F0-V2B2C1B2`](f0v2b2c1b2-oracle-owner-projections.md) subsequently closes
+the eight Oracle isolation families at bounded research resolution and leaves
+nine B2C families plus both B2D families open. It also sharpens one graph-law
+point for future publication: causal edges are retained independently of the
+constructor-selected operands used by a node's `PCClass` transfer.
