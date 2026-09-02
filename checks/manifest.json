@@ -72,6 +72,28 @@
       }
     },
     {
+      "id": "checks.evaluation-lifecycle",
+      "title": "Evaluation lifecycle inventory",
+      "subject": "The ownership, disposition, and tracked footprint of every evaluation package.",
+      "claim": "Every research check and tracked evaluation package has exactly one declared lifecycle disposition, and the measured inventory is emitted.",
+      "classification": "control-plane",
+      "methods": ["unit", "policy", "static-analysis", "negative"],
+      "source_paths": ["checks/evaluation_lifecycle.py", "checks/manifest.json", "checks/tests/test_evaluation_lifecycle.py", "evaluation/lifecycle.json", "evaluation/LIFECYCLE.md"],
+      "tiers": ["developer", "pr", "research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "instant",
+      "environment": "python-stdlib",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["Lifecycle coverage and size measurements do not grade research quality, promote a package, or authorize automatic deletion."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "-m", "checks.evaluation_lifecycle", "--check", "--output", "{artifacts}/evaluation-lifecycle.json"],
+        "cwd": "{repo}",
+        "requires": ["{python}", "git"],
+        "artifacts": ["evaluation-lifecycle.json"]
+      }
+    },
+    {
       "id": "policy.public-tree",
       "title": "Public-tree boundary",
       "subject": "Repository paths forbidden from the public source tree.",

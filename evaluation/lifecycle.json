@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "id": "retained-bounded-instruments",
+      "disposition": "retain",
+      "purpose": "Distinct bounded falsifiers, protocol witnesses, and design-pressure instruments that still answer live questions not owned by a smaller durable suite.",
+      "exit_rule": "Retire an instrument only after a named durable successor preserves its exact exercised law, fixtures, refusals, and non-claims, and all live consumers have moved.",
+      "checks": [
+        "research.semantic-closure",
+        "research.profile-publication",
+        "research.recursive-composition-boundary",
+        "research.indexed-core-elaboration",
+        "research.plan-continuation",
+        "research.duplex-transcript",
+        "research.native-fri-ior",
+        "research.schnorr-portfolio-witness",
+        "research.fri-grinding-residual",
+        "research.finite-cover",
+        "research.verifier-derived-query-plans"
+      ]
+    },
+    {
+      "id": "semantic-twin-promotion",
+      "disposition": "promote-then-retire",
+      "purpose": "Large target-model prototypes whose stable owner-local laws and minimal counterexamples belong in the durable reference twin or native regression suites.",
+      "exit_rule": "Extract one semantic owner at a time, retain byte-stable or judgment-stable parity where applicable, pass the predecessor corpus against the successor, repoint durable consumers, and then remove the aggregate prototype.",
+      "checks": [
+        "research.executable-foundations",
+        "research.interactive-fiat-shamir",
+        "research.dependent-surfaces",
+        "research.property-analysis",
+        "research.endpoint-projection",
+        "research.joined-semantic-boundary"
+      ]
+    },
+    {
+      "id": "active-source-definition-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Successive falsifiers for defining, deriving, publishing, and checking exact owner-view source without promoting an intermediate bounded grammar as authority.",
+      "exit_rule": "Complete constructor coverage and the publication or migration decision, absorb predecessor conclusions into the selected owner and a minimal retained falsifier, verify downstream source correspondence, and then remove superseded predecessor executables.",
+      "checks": [
+        "research.formal-source-package",
+        "research.formal-source-target-basis",
+        "research.formal-source-target-core",
+        "research.formal-source-owner-views",
+        "research.owner-view-publication-topology",
+        "research.owner-view-schema-algebra",
+        "research.owner-view-body-determinacy",
+        "research.owner-view-bounded-derivation"
+      ]
+    },
+    {
+      "id": "cross-cutting-probe-promotion",
+      "disposition": "promote-then-retire",
+      "purpose": "Small cross-cutting pressure probes whose useful laws must acquire a durable semantic or implementation owner rather than becoming a parallel architecture.",
+      "exit_rule": "For each probe, either land the selected law and its negative or generated cases under the owning reference or implementation suite, or record that the proposed law was rejected; then remove the probe.",
+      "checks": [
+        "research.probe-commitment",
+        "research.probe-logup",
+        "research.probe-value-bridges",
+        "research.probe-guard-cost"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "path": "fri-bench",
+      "role": "benchmark-evidence",
+      "disposition": "retain",
+      "exit_rule": "Replace only with a reproducible benchmark over the same or explicitly superseding instance, wire-equality control, toolchain, and provenance record."
+    },
+    {
+      "path": "upstream",
+      "role": "pinned-upstream-correspondence",
+      "disposition": "retain",
+      "exit_rule": "Replace only when every consuming replay and integration check moves to an exact successor pin with an explicit adapter-boundary review."
+    }
+  ]
+}

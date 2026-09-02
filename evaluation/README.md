@@ -16,6 +16,10 @@ python3 -B checks/run.py run --check research.native-fri-ior
 python3 -B checks/run.py run --tier research-checkpoint --keep-going
 ```
 
+Package retention and promotion are governed separately by the
+[`evaluation/` lifecycle](LIFECYCLE.md). The lifecycle catalog makes no
+semantic claim and performs no automatic deletion.
+
 The legacy [`semantic_checks.py`](semantic_checks.py) entry point remains for
 older local scripts, but it is not the inventory authority. The expensive
 Analysis gate retains one canonical one-process execution in the

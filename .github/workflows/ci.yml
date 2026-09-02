@@ -45,6 +45,7 @@ jobs:
           python3 -B checks/run.py run \
             --check checks.control-plane \
             --check checks.method-portfolio \
+            --check checks.evaluation-lifecycle \
             --check policy.public-tree \
             --keep-going \
             --artifacts-dir target/checks/ci-control \

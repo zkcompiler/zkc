@@ -230,6 +230,15 @@ second implementation of the entire product. Exploratory packages graduate
 only when the exercised law, fixture, expected outcome, and non-claims have
 stabilized; otherwise they remain research instruments or are retired.
 
+The operational disposition of every research package is declared in
+[`evaluation/lifecycle.json`](../evaluation/lifecycle.json) and audited by
+[`evaluation_lifecycle.py`](evaluation_lifecycle.py). The audit maps each
+research check to exactly one tracked package, accounts for pinned non-check
+assets, and emits measured file, byte, and line counts. Its disposition labels
+are review inputs, not authority and not deletion commands. The full promotion
+and retirement gates are documented in
+[`evaluation/LIFECYCLE.md`](../evaluation/LIFECYCLE.md).
+
 ## Performance policy
 
 The property-Analysis suite is retained as one canonical one-process freeze
