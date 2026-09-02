@@ -4,7 +4,8 @@
 > result
 > **State:** Complete with
 > `Affirmative/F0V2B1-A-BOUNDED-NORMALIZED-DERIVATION`; constructor-complete
-> F0-V2B2 remains required
+> F0-V2B2 remains required. F0-V2B2A has since closed the constructor census
+> and split executable closure into B2B/B2C/B2D
 > **Authority:** None. This note and its candidate source change no PIR source,
 > profile manifest, semantic identity, admission judgment, implementation, or
 > Analysis result
@@ -331,6 +332,14 @@ admitted by an explicitly extended offline evaluator, while its report states
 that the carrier is research support rather than current implementation
 support.
 
+The subsequent
+[`F0-V2B2A census`](f0v2b2a-constructor-closure-census.md) authenticates 79
+closed source/derived cases, measures twenty absent B1 variant cases and eight
+maximum-zero references, and expands this matrix into twenty-three exact
+pressure families. It refines execution into B2B schema/inhabitance, B2C
+isolated admission/projection, and B2D integrated graph closure. This is a work
+decomposition result, not constructor closure.
+
 ## 8. F0-V2B2 exit gate
 
 F0-V2B2 may close only when:
@@ -360,7 +369,8 @@ shared ephemeral Core fact index, simultaneous five-Core-view derivation, and
 separate Protocol-owned Execution derivation. Add an explicit immutable-owner
 state requirement to the target implementation contract.
 
-Proceed to F0-V2B2. Do not publish, migrate, form Q1, or resume the ArkLib/VCVio
+Proceed through F0-V2B2A--D, beginning with the B2B complete schema and
+inhabitance gate. Do not publish, migrate, form Q1, or resume the ArkLib/VCVio
 provider lane from the B1 result.
 
 ## 10. Non-claims

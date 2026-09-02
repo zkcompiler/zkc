@@ -474,6 +474,12 @@ validates the normalized method only. Maximum-zero B2-family sequences,
 general PCGraph transfers, target publication, implementation correspondence,
 and partial closure remain explicitly open.
 
+**F0-V2B2A result:** the authenticated constructor census contains 79 closed
+source/derived cases and measures twenty absent B1 variant cases plus eight
+maximum-zero references. Its 44/44 result selects B2B schema/inhabitance, B2C
+isolated admission/projection, and B2D integrated graph gates; all executable
+constructor-closure claims remain `CannotAnswer`.
+
 ### F0-V2C — target publication and migration
 
 - update the Interaction source and profile manifest coherently;

@@ -884,6 +884,28 @@
       }
     },
     {
+      "id": "research.owner-view-constructor-census",
+      "title": "Owner-view constructor-closure census",
+      "subject": "The exact Interaction constructor surface and executable pressure topology required for constructor-complete PIR owner views.",
+      "claim": "Two profile compilers, authenticated source extraction, an exact B1 delta, and a frozen mutation corpus agree on the bounded constructor census and fail-closed B2 work decomposition.",
+      "classification": "research-falsifier",
+      "methods": ["diagnostic", "known-answer", "negative", "differential", "mutation", "static-analysis", "bounded-exhaustive"],
+      "source_paths": ["evaluation/formal-source-constructor-closure-f0v2b2a/run.py", "evaluation/formal-source-constructor-closure-f0v2b2a/README.md", "evaluation/formal-source-constructor-closure-f0v2b2a/inventory.json", "evaluation/formal-source-constructor-closure-f0v2b2a/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["A complete source census and pressure topology are not complete schemas, constructor inhabitance, extended owner admission, owner-view derivation, general PCGraph validation, target migration, implementation correspondence, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-constructor-closure-f0v2b2a/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

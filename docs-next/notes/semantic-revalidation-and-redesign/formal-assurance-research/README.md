@@ -9,8 +9,10 @@
 > F0-V2A now selects and validates a bounded generic view-schema algebra.
 > F0-V2B0 then finds that the current six displays cannot be compiled
 > verbatim and selects normalized replacement bodies. F0-V2B1 now validates
-> the bounded normalized grammar and owner derivation; F0-V2B2
-> constructor-complete grammar and F0-V2C target migration remain open.
+> the bounded normalized grammar and owner derivation. F0-V2B2A now freezes
+> the 79-case constructor census, exact B1 delta, and four-stage B2 execution
+> topology; B2B/B2C/B2D constructor closure and F0-V2C target migration remain
+> open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -55,7 +57,10 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2A  generic schema-algebra feasibility          [complete, bounded]
   -> F0-V2B0 owner-body audit/redesign                   [complete, CannotAnswer]
   -> F0-V2B1 exact bounded-slice normalized grammar      [complete, bounded]
-  -> F0-V2B2 constructor-complete grammar/derivation     [open]
+  -> F0-V2B2A constructor census and execution topology  [complete, CannotAnswer]
+  -> F0-V2B2B complete schema source and inhabitance     [open]
+  -> F0-V2B2C isolated admission and owner projections   [open]
+  -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -113,7 +118,13 @@ finite source contract through recursive and worklist implementations and
 derives all six values through algorithmic and finite-oracle paths from
 separately admitted F1-R1B handles. The paths agree on 329 active leaves and a
 retained 21-node/27-edge public-coin graph. B2-only families remain explicit
-maximum-zero sequences, so this is not the complete target grammar.
+maximum-zero sequences, so this is not the complete target grammar. F0-V2B2A
+then authenticates the exact remaining surface: fourteen Core fields,
+fifty-seven canonical variant cases, twenty-two derived semantic cases,
+twenty missing B1 variant cases, eight maximum-zero references, and
+twenty-three positive/negative pressure families. It splits B2 into complete
+schema/inhabitance, isolated admission/projection, and integrated graph gates;
+it does not close any of them.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -206,6 +217,14 @@ provider, extraction tool, or durable schema.
   runtime descriptions. Forty-six mutations refuse; five complete-target,
   general-graph, migration, implementation, and partial-closure obligations
   remain `CannotAnswer`.
+- [`f0v2b2a-constructor-closure-census.md`](f0v2b2a-constructor-closure-census.md)
+  records the 44-case constructor census and B2 execution topology. It
+  authenticates 79 closed source/derived cases, measures twenty absent B1
+  variant cases and eight maximum-zero references, and requires twenty-three
+  pressure families spanning the complete Oracle origin/mode product, both
+  query visibilities, all module decision classes, claim/reduction and
+  correlation closure, terminal dispositions, and Fresh runtime receipts.
+  B2B/B2C/B2D remain `CannotAnswer`.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -256,8 +275,12 @@ Its two paths agree on six schema/value/manifest triples, 329 leaves, two
 decisions, seven guaranteed reads, and the complete bounded 21-node/27-edge
 PCGraph. It also makes retained-subject immutability and exact Protocol/Core
 bearer pairing explicit implementation requirements. F0-V2B2 must now replace
-all maximum-zero constructor holes and exercise the general graph transfers;
-no profile has yet changed.
+all maximum-zero constructor holes and exercise the general graph transfers.
+F0-V2B2A matches 44/44 findings and closes only the census/program question:
+79 closed cases, 23 pressure families, and the B2B grammar, B2C isolation, and
+B2D integration sequence. Complete schemas, admitted extended carriers, owner
+projections, general graph transfers, runtime receipt descriptions, and target
+migration remain `CannotAnswer`; no profile has yet changed.
 
 ## Known risks and non-claims
 

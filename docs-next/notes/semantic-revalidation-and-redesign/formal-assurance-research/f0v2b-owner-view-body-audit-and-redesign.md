@@ -6,7 +6,8 @@
 > is retained, but the six current displays cannot be compiled verbatim into
 > exact target schemas. A normalized replacement is selected for F0-V2B1
 > authoring and bounded derivation. F0-V2B1 has since validated that bounded
-> method; constructor-complete F0-V2B2 remains open
+> method. F0-V2B2A has since closed the constructor census and work topology;
+> executable B2B/B2C/B2D constructor closure remains open
 > **Authority:** None. This note changes no PIR source, profile manifest,
 > revision, semantic identity, evaluator, owner handle, or Analysis result
 > **Predecessor:**
@@ -519,7 +520,10 @@ The next gate must therefore separate:
 
 ```text
 F0-V2B1  exact normalized source grammar and bounded F1-R1B derivation
-F0-V2B2  constructor-complete synthetic carriers and mutation coverage
+F0-V2B2A constructor census and execution topology
+F0-V2B2B complete schema source and inhabitance
+F0-V2B2C isolated admitted carriers and owner projections
+F0-V2B2D integrated carrier and complete graph pressure
 F0-V2C   target publication, identity migration, and old-profile controls
 ```
 
@@ -538,6 +542,13 @@ six values, 329 leaves, two decisions, seven guaranteed reads, and one retained
 21-node/27-edge bounded PCGraph. B2-only families are maximum-zero sequences,
 so this result validates the selected method without closing this
 constructor-complete gap.
+
+The subsequent
+[`F0-V2B2A census`](f0v2b2a-constructor-closure-census.md) matches 44/44
+findings and authenticates 79 closed source/derived cases plus twenty-three
+pressure families. It validates the B2A work census only; complete schemas,
+inhabitance, extended admission, owner projection, and integrated graph
+closure remain B2B/B2C/B2D obligations.
 
 ## 8. Required source declarations
 
