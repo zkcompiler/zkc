@@ -1060,6 +1060,28 @@
       }
     },
     {
+      "id": "research.owner-view-terminal-path-algebra",
+      "title": "Terminal path algebra and contract gap",
+      "subject": "Compact first-active guard-region analysis and an independent bounded execution oracle for Accept, Reject, Abort, and conditional Claim flow.",
+      "claim": "The candidate and oracle agree on one safe branch-complete carrier and reject 21 mutations; required-Check truth and required-Reduction owner semantics remain CannotAnswer.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-terminal-path-algebra-f0v2b2c1b5a/run.py", "evaluation/formal-source-terminal-path-algebra-f0v2b2c1b5a/model.py", "evaluation/formal-source-terminal-path-algebra-f0v2b2c1b5a/independent.py", "evaluation/formal-source-terminal-path-algebra-f0v2b2c1b5a/README.md", "evaluation/formal-source-terminal-path-algebra-f0v2b2c1b5a/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This method-selection and semantic-gap result is not B2C1B5 exact Core admission or six-view projection, a general guard theorem, B2D runtime integration, target publication, live implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-terminal-path-algebra-f0v2b2c1b5a/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

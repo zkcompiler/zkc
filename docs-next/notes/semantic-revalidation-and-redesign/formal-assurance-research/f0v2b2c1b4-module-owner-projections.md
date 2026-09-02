@@ -257,3 +257,12 @@ This checkpoint does not:
 - establish soundness, a random-oracle theorem, Fiat--Shamir security, or a
   concrete hash/sponge claim; or
 - close F1 Q1 correspondence.
+
+## 7. Successor checkpoint
+
+[`F0-V2B2C1B5A Terminal Path Algebra`](f0v2b2c1b5a-terminal-path-algebra.md)
+replaces B2C1B3's global-live-set shortcut with a compact first-active guard-
+region candidate and validates it against an independent bounded path oracle.
+It does not complete the final Terminal family: the successor finds that
+required-Check truth and “required Reduction” lack complete target semantics,
+so exact-byte projection remains B2C1B5B rather than being guessed here.

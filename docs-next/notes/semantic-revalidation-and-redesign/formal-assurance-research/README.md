@@ -19,8 +19,11 @@
 > F0-V2B2C1B1 through B2C1B4 now validate owner-derived exact projections for
 > twenty of the twenty-one B2C isolation families across Foundation, Oracle,
 > Claim, Reduction, publication-order, joint-Challenge, shared-Challenge, and
-> semantic-module surfaces. One B2C family, both B2D integration families, and
-> F0-V2C target migration remain open.
+> semantic-module surfaces. F0-V2B2C1B5A selects a compact first-active guard-
+> region method for path-sensitive Claim flow, but returns `CannotAnswer`
+> because required-Check truth and required-Reduction ownership are not yet
+> defined. B2C therefore remains at twenty of twenty-one families; B2C1B5B,
+> both B2D integration families, and F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -74,7 +77,9 @@ F0  ideal assurance architecture and current-design falsification
        B2C1B2 Oracle families 8/21                       [complete, bounded]
        B2C1B3 claim/reduction/challenge families 5/21    [complete, bounded]
        B2C1B4 module-effect families 3/21                [complete, bounded]
-       B2C1B5 expanded-terminal family 1/21              [open]
+       B2C1B5 expanded-terminal family 1/21              [in progress]
+         B2C1B5A compact path algebra                    [complete, CannotAnswer]
+         B2C1B5B owner contracts and exact projection    [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -173,7 +178,16 @@ publication semantics; the Core owns occurrence coordinates; and the
 evaluator fingerprint owns exact implementation support. All three Cores
 admit, while structural FS eligibility is true for deterministic/publication
 modules and false when a private decision output reaches acceptance. One B2C
-family and both B2D families remain open.
+family and both B2D families remain open. F0-V2B2C1B5A then replaces B3's
+global-live-set shortcut with compact first-active guard regions for the
+current closed syntactic fragment. The candidate and an independently
+structured exhaustive oracle agree over one branch-complete carrier and 21
+mutations, producing 38 frozen findings. The result nevertheless remains
+`CannotAnswer`: the target contract neither connects Terminal Guards to the
+truth of `required_true_checks` nor identifies which Reductions are required
+at a Terminal. B2C coverage therefore remains twenty of twenty-one until
+B2C1B5B settles those owner contracts and applies the exact-byte six-view
+projection pattern.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -337,6 +351,14 @@ provider, extraction tool, or durable schema.
   eligibility. One B2C and both B2D families, general module execution,
   target publication, live correspondence, proof, security, and Q1 remain
   open.
+- [`f0v2b2c1b5a-terminal-path-algebra.md`](f0v2b2c1b5a-terminal-path-algebra.md)
+  records the 38-finding Terminal path-algebra and semantic-gap result. A
+  compact non-enumerating guard-region analyzer and independently structured
+  exhaustive oracle agree on a branch-complete first-active carrier and reject
+  21 mutations. The aggregate remains `CannotAnswer` because required-Check
+  truth and required-Reduction ownership are absent from the target contract;
+  exact Core admission, six-view projection, B2D, target publication, live
+  correspondence, proof, security, and Q1 remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -411,6 +433,13 @@ and Core admission remains distinct from FS structural eligibility. Together
 the four slices cover twenty of twenty-one B2C families at bounded research
 resolution. This is progress within B2C1B, not completion of B2C, B2D, target
 publication, implementation correspondence, or Q1; no profile has changed.
+F0-V2B2C1B5A subsequently matches 38/38 frozen findings: its compact guard-
+region analyzer agrees with an independent four-valuation oracle and both
+reject 21 mutations. Its aggregate is intentionally `CannotAnswer`, however,
+because the written Terminal contract lacks required-Check truth entailment
+and a required-Reduction owner field. B2C remains at twenty of twenty-one;
+B2C1B5B, B2D, publication, implementation correspondence, and Q1 remain open,
+and no profile has changed.
 
 ## Known risks and non-claims
 

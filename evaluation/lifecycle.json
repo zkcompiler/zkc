@@ -55,7 +55,8 @@
         "research.owner-view-foundation-projections",
         "research.owner-view-oracle-projections",
         "research.owner-view-claim-reduction-projections",
-        "research.owner-view-module-projections"
+        "research.owner-view-module-projections",
+        "research.owner-view-terminal-path-algebra"
       ]
     },
     {
