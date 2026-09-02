@@ -92,7 +92,9 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2B2D integrated graph and mutation closure      [active]
        B2D1 static PCGraph and eligibility closure       [complete, bounded]
        B2D2 Fresh runtime and Oracle receipt replay       [open]
-  -> F0-V2C  target publication and migration            [open]
+  -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
+  -> M0     mechanized kernel definition feasibility    [complete, bounded]
+  -> F0-V2C  target publication and migration            [open; scoped by F2-O0]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
@@ -427,6 +429,22 @@ provider, extraction tool, or durable schema.
   lacks, and proposes one vocabulary for Analysis absorption: the spine
   stays owner-neutral, the FS layers become that family's Q5 premise
   catalog, and the numeric labels retire at absorption.
+- [`f2o0-provider-observable-audit.md`](f2o0-provider-observable-audit.md)
+  records the 45-finding provider-side audit of the F1-R1B Schnorr slice:
+  28 of 37 VCVio-shaped constructs have a coordinate among the 329 view
+  leaves; four operational observables (Check and guard denotations, the
+  Fresh sampling law, the verdict/run-outcome map) and five property
+  premises do not. Aggregate `CannotAnswer`; the formal source closure is
+  therefore the views plus the authenticated algorithm closure plus one
+  law binding, which F0-V2C must decide.
+- [`m0-mechanized-kernel-feasibility.md`](m0-mechanized-kernel-feasibility.md)
+  records the 34-finding measurement: core-Lean transcriptions of the
+  constitutional datum encoder and decoder and of the PublicCoin lattice
+  and order reproduce 22 golden bodies and all five D1 class and order
+  tables; encoding prefix-freedom and injectivity and the lattice laws are
+  proved on standard axioms; one K1 byte-bound discrepancy and three
+  Section 11 underdeterminations are recorded. Edge construction and
+  decoder canonicity are the next increment.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
