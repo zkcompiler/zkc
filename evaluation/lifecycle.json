@@ -60,7 +60,8 @@
         "research.owner-view-terminal-path-algebra",
         "research.owner-view-terminal-owner-contracts",
         "research.owner-view-terminal-projections",
-        "research.owner-view-integrated-pcgraph"
+        "research.owner-view-integrated-pcgraph",
+        "research.semantic-migration-candidate"
       ]
     },
     {

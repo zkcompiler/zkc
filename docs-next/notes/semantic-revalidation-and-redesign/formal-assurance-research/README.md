@@ -415,6 +415,11 @@ provider, extraction tool, or durable schema.
   fail closed. One of two B2D families is complete at bounded resolution;
   Fresh runtime/Oracle receipts, target migration, live correspondence, proof,
   security, and Q1 remain open.
+- [`semantic-migration-candidate-2026-09-03.md`](semantic-migration-candidate-2026-09-03.md)
+  composes the selected owner changes as a non-publishing candidate, records
+  the exact sixteen-profile identity cone and old-profile refusals, translates
+  the three F1 prerequisite gates, and preserves the Foundation and
+  provider-observable choices as explicit holds.
 - [`f0-program-reassessment-and-direction.md`](f0-program-reassessment-and-direction.md)
   reassesses the program after D1 from the records, the target text, a D1
   replay, and the uncited parallel Fiat--Shamir assurance package. It finds

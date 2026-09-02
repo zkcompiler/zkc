@@ -1170,6 +1170,28 @@
       }
     },
     {
+      "id": "research.semantic-migration-candidate",
+      "title": "Non-publishing semantic migration candidate",
+      "subject": "The exact owner-page, source-manifest, identity-rotation, old-profile refusal, endpoint Terminal, and migrated prerequisite-gate effects of composing the selected semantic repairs before publication.",
+      "claim": "Both existing publication compilers and an independent raw-source audit agree on the same eighteen-row candidate table, with sixteen dependent profiles rotated and two independent roots stable; the translated bounded Schnorr and source-determinacy prerequisites reclose, old profile and Terminal carriers fail closed, and all Foundation and provider-observable choices remain explicit holds.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "static-analysis"],
+      "source_paths": ["evaluation/semantic-migration-candidate/run.py", "evaluation/semantic-migration-candidate/model.py", "evaluation/semantic-migration-candidate/independent.py", "evaluation/semantic-migration-candidate/candidate-contract.json", "evaluation/semantic-migration-candidate/README.md", "evaluation/semantic-migration-candidate/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "medium",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This branch-only candidate does not edit durable owner pages, write the publication table, finalize an identity, select a Foundation or provider-observable owner, establish general projection or implementation correspondence, prove a protocol or cryptographic property, or authorize deployment."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/semantic-migration-candidate/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.provider-observable-audit",
       "title": "Provider observable audit",
       "subject": "Whether the exact admitted finite Schnorr Core and Fresh Protocol, as exposed by their six normalized owner views, carry every observable that a VCVio-shaped operational interpretation needs, and exactly which observables are missing.",
