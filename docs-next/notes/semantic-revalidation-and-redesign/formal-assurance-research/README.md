@@ -15,9 +15,10 @@
 > branch-inhabitance result. F0-V2B2C0 now supplies the canonical-byte,
 > immutable owner-admission substrate and exposes the predecessor handle's
 > ordinary mutability. F0-V2B2C1A supplies the exact view-value codec and
-> exposes a target-byte versus diagnostic-JSON ordering inversion; B2C1B/B2D
-> constructor projection and integrated semantic closure and F0-V2C target
-> migration remain open.
+> exposes a target-byte versus diagnostic-JSON ordering inversion.
+> F0-V2B2C1B1 now validates owner-derived exact projections for four of the
+> twenty-one B2C isolation families; the other seventeen B2C families, both
+> B2D integration families, and F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -66,7 +67,9 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2B2B complete schema source and inhabitance     [complete, bounded]
   -> F0-V2B2C0 canonical-byte owner admission            [complete, CannotAnswer]
   -> F0-V2B2C1A exact view-value codec                    [complete, bounded]
-  -> F0-V2B2C1B isolated constructor owner projections   [open]
+  -> F0-V2B2C1B isolated constructor owner projections   [in progress]
+       B2C1B1 foundation families 4/21                   [complete, bounded]
+       B2C1B2+ remaining families 17/21                  [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -147,8 +150,15 @@ exact K1 value interpretation. Recursive and worklist codecs agree on all 302
 generated branch inhabitants and expose two prototype-only mismatches: target
 body order for PCNode cases 2 and 10 is the reverse of diagnostic JSON order,
 and identifier leaves require one complete `MetaBytes(ContentRefV0(...))`
-datum rather than raw content-reference bytes. These are codec results, not
-admitted owner projections, so B2C1B and B2D remain open.
+datum rather than raw content-reference bytes. F0-V2B2C1B1 then composes the
+candidate schemas, immutable owner substrate, and exact codec for four
+foundation families. Reference and cold byte-derived projectors agree on 36
+distinct exact bodies over six minimal carriers. The slice also corrects the
+private-predecessor field to carry source nodes rather than the complete taint
+closure, retains exact binding/message/terminal-output sink coordinates,
+checks binding availability at the opening boundary, and requires same-
+evaluator Fresh/Core authority. Seventeen B2C families and both B2D families
+remain open.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -270,8 +280,18 @@ provider, extraction tool, or durable schema.
   organized iterative paths encode all 302 B2B inhabitants to identical K1
   bodies, enforce sorted-unique collections by exact child bodies, distinguish
   target order from diagnostic JSON order, and reject raw identifier framing.
-  It does not derive any value from an admitted owner; B2C1B, B2D, migration,
-  implementation correspondence, proof, security, and Q1 remain open.
+  By itself it derives no value from an admitted owner; the remaining B2C1B
+  slices, B2D, migration, implementation correspondence, proof, security, and
+  Q1 remain open.
+- [`f0v2b2c1b1-foundation-owner-projections.md`](f0v2b2c1b1-foundation-owner-projections.md)
+  records the 39-finding first B2C1B isolation slice. Reference and separately
+  structured cold projectors agree on all six exact owner views for six
+  minimal carriers, producing 36 distinct target bodies across verifier-
+  private, constant/derived-value, child-scope/guard, and deterministic-
+  Verifier-message families. It closes four of 21 B2C families only at
+  bounded research resolution; seventeen B2C families, both B2D integration
+  families, target publication, live correspondence, proof, security, and Q1
+  remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -335,6 +355,13 @@ values covering 914 requirements. Thirty source mutations and eighteen value
 mutations refuse. Extended owner admission/projection, integrated graph and
 runtime behavior, profile migration, implementation correspondence, and Q1
 remain `CannotAnswer`; no profile has changed.
+F0-V2B2C0 and C1A subsequently establish the immutable canonical-byte owner
+substrate and exact value codec prerequisites. F0-V2B2C1B1 then matches 39/39
+findings for the first four constructor-isolation families: two projector
+paths agree on 36 distinct bodies over six carriers, fifteen scoped findings
+are affirmative, and eight findings preserve the remaining `CannotAnswer`
+boundaries. This is progress within B2C1B, not completion of B2C, B2D, target
+publication, implementation correspondence, or Q1; no profile has changed.
 
 ## Known risks and non-claims
 

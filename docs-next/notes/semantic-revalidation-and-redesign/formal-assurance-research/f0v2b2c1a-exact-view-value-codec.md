@@ -2,8 +2,9 @@
 
 > **Kind:** Temporary reopened-F0 owner-projection prerequisite
 > **State:** Complete at exact-value codec resolution with
-> `Affirmative/F0V2B2C1A-A-EXACT-VIEW-VALUE-CODEC`; isolated admitted owner
-> projection remains B2C1B
+> `Affirmative/F0V2B2C1A-A-EXACT-VIEW-VALUE-CODEC`; B2C1B1 has since completed
+> four foundation projection families, while seventeen isolation families
+> remain
 > **Authority:** None. This note and executable package do not change PIR,
 > the Interaction profile, a compiler, evaluator, runtime, or Analysis
 > judgment
@@ -95,10 +96,12 @@ It is the closed structural meaning of Record, Variant, Sequence, and the
 authenticated atom compiler catalog. This keeps body formation with the
 existing PIR profile owner and gives `SortedUnique` one unambiguous order.
 
-B2C1B must consume this codec rather than compare JSON values. Each of the 21
-isolation families still needs an authenticated minimal carrier, retained
-owner facts, a reference projection, a cold byte-derived projection, exact
-six-body equality where applicable, and its named negative discriminator.
+B2C1B must consume this codec rather than compare JSON values. B2C1B1 has
+since done so for the first four foundation families. Each of the remaining
+seventeen isolation families still needs an authenticated minimal carrier,
+retained owner facts, a reference projection, a cold byte-derived projection,
+exact six-body equality where applicable, and its named negative
+discriminator.
 
 ## 5. Non-claims
 
@@ -106,4 +109,5 @@ This result does not admit or project any new Core constructor, establish
 complete owner/source correspondence, validate a complete or integrated
 `PCGraph`, define runtime Oracle receipts, publish or migrate the Interaction
 profile, verify current implementation correspondence, prove a theorem,
-establish a cryptographic property, or close Q1. B2C1B and B2D remain open.
+establish a cryptographic property, or close Q1. The remaining B2C1B slices
+and B2D remain open.

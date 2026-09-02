@@ -5,7 +5,8 @@
 > **State:** Complete at schema resolution with
 > `Affirmative/F0V2B2B-A-CONSTRUCTOR-COMPLETE-SCHEMA-INHABITANCE`; owner
 > admission/projection and integrated semantic behavior remain B2C/B2D
-> obligations
+> obligations; B2C1B1 has since completed four foundation projection families
+> at bounded research resolution
 > **Authority:** None. This note and its executable package do not change a
 > PIR source, semantic profile, identity, evaluator, owner handle, compiler,
 > runtime, or Analysis judgment
@@ -224,9 +225,11 @@ recorded in
 
 The exact-value prerequisite is now complete as B2C1A. It found that target
 K1 bodies and diagnostic JSON disagree on one minimal sorted-unique PCNode
-order and that identifier leaves require complete MetaValue framing. The
-remaining constructor-isolation program is B2C1B. It inherits the following
-entry contract without making B2C0 or B2C1A a new semantic stage or owner.
+order and that identifier leaves require complete MetaValue framing. B2C1B1
+has since applied this contract to the first four foundation families; two
+projectors agree on 36 exact bodies over six carriers. The remaining seventeen
+constructor-isolation families retain the following entry contract without
+making B2C0, B2C1A, or B2C1B1 a new semantic stage or owner.
 
 B2C1B should use the B2B source as a falsifiable candidate while deriving
 values from owner state. It must not accept the generated B2B values as

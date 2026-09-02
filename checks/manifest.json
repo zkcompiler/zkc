@@ -972,6 +972,28 @@
       }
     },
     {
+      "id": "research.owner-view-foundation-projections",
+      "title": "Foundation owner-view projections",
+      "subject": "Four foundation constructor-isolation families projected from immutable admitted Core and Fresh Protocol owners into the six normalized PIR views.",
+      "claim": "Reference owner projection and a separately structured cold byte-derived projector agree on all six exact view bodies for six minimal carriers, while frozen owner, ABI, availability, ordering, and authority substitutions fail closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic"],
+      "source_paths": ["evaluation/formal-source-owner-projections-f0v2b2c1b1/run.py", "evaluation/formal-source-owner-projections-f0v2b2c1b1/model.py", "evaluation/formal-source-owner-projections-f0v2b2c1b1/independent.py", "evaluation/formal-source-owner-projections-f0v2b2c1b1/README.md", "evaluation/formal-source-owner-projections-f0v2b2c1b1/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["Four bounded foundation projection families are not the remaining seventeen B2C families, either B2D integration family, target publication, live implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-owner-projections-f0v2b2c1b1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

@@ -3,7 +3,8 @@
 > **Kind:** Temporary reopened-F0 owner-admission and authority-design result
 > **State:** Complete at admission-substrate resolution with
 > `CannotAnswer/F0V2B2C0-C-CONSTRUCTOR-ISOLATION`; the selected substrate
-> passes, while extended constructors and complete projection remain B2C1
+> passes; B2C1B1 has since projected four foundation families, while seventeen
+> B2C families and complete integrated behavior remain open
 > **Authority:** None. This note and executable package do not change PIR,
 > the published Interaction profile, an evaluator, compiler, runtime, or
 > Analysis judgment
@@ -127,12 +128,13 @@ target from this research note.
 
 B2C1A now supplies the exact schema-directed value codec and records why B2B's
 diagnostic JSON order cannot serve as the target ordering oracle. B2C1B
-inherits all twenty-one B2A pressure families assigned to B2C. Each
-family needs one minimal authenticated Core and one named discriminator. The
-reference path should project from admission-retained owner facts. The cold
-path must start again from `AdmittedCoreSnapshot.domain_body`, strictly decode
-it through a separately structured parser, and independently derive the same
-six values.
+inherits all twenty-one B2A pressure families assigned to B2C. B2C1B1 has
+since applied this contract to the first four foundation families; seventeen
+remain. Each family needs one minimal authenticated Core and one named
+discriminator. The reference path should project from admission-retained owner
+facts. The cold path must start again from
+`AdmittedCoreSnapshot.domain_body`, strictly decode it through a separately
+structured parser, and independently derive the same six values.
 
 Both paths must use exact target body encodings for every sorted-unique set.
 B2B's JSON wire was only a diagnostic inhabitance order; it is not eligible as
@@ -156,4 +158,5 @@ the normalized six B2B views, establish owner/source correspondence, validate
 the complete `PCGraph`, execute an Oracle or Protocol, publish or migrate a
 profile, verify current implementation correspondence, prove a theorem, or
 establish a cryptographic property. The overall result remains
-`CannotAnswer` until B2C1B closes constructor isolation and dual projection.
+`CannotAnswer` until the remaining B2C1B slices close constructor isolation
+and dual projection.
