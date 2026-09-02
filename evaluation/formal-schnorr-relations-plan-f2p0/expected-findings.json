@@ -1,0 +1,120 @@
+{
+  "aggregate": "CannotAnswer/F2P0-C-EXACT-COUPLING-UNDERDETERMINED",
+  "ambiguity_witnesses": [
+    {
+      "accepted_honest_runs": 27,
+      "commit": "a:=r",
+      "name": "knowledge-shaped",
+      "private_state_carrier": "Z3 nonce",
+      "rejected_plus_one_controls": 27,
+      "relation": "rel(y,x) iff y=x in Z3",
+      "respond": "z:=r+c*x mod 3",
+      "witness_carrier": "Z3"
+    },
+    {
+      "accepted_honest_runs": 9,
+      "commit": "a:=0",
+      "name": "statement-only",
+      "private_state_carrier": "Unit",
+      "rejected_plus_one_controls": 9,
+      "relation": "rel(y,unit) is always true",
+      "respond": "z:=c*y mod 3",
+      "witness_carrier": "Unit"
+    }
+  ],
+  "finding_codes": [
+    ["exact-cutoff-and-source-pins", "Affirmative", "F2P0-A-SOURCE-PINS"],
+    ["f1-core-and-protocol-reconstructed", "Affirmative", "F2P0-A-SUBJECT"],
+    ["six-view-cold-reconstruction", "Affirmative", "F2P0-A-COLD-VIEWS"],
+    ["f2o0-five-gap-inventory", "Affirmative", "F2P0-A-GAP-INVENTORY"],
+    ["statement-binding-role-site", "Affirmative", "F2P0-A-STATEMENT-SITE"],
+    ["commit-and-respond-role-sites", "Affirmative", "F2P0-A-DECISION-SITES"],
+    ["forward-contract-construction-route", "Affirmative", "F2P0-A-CONSTRUCTION-ROUTE"],
+    ["acyclic-independent-attachment-routes", "Affirmative", "F2P0-A-ACYCLIC-ATTACHMENTS"],
+    ["conditional-owner-coordinate-matrix", "Affirmative", "F2P0-A-CONDITIONAL-COORDINATES"],
+    ["knowledge-shaped-finite-completion", "Affirmative", "F2P0-A-AMBIGUITY-WITNESS-A"],
+    ["statement-only-finite-completion", "Affirmative", "F2P0-A-AMBIGUITY-WITNESS-B"],
+    ["plus-one-response-controls", "Refused", "F2P0-R-BAD-RESPONSE"],
+    ["verifier-check-implies-relation", "Refused", "F2P0-R-CHECK-AS-RELATION"],
+    ["decision-site-implies-honest-algorithm", "Refused", "F2P0-R-ROLE-AS-ALGORITHM"],
+    ["plan-realizes-implies-honesty", "Refused", "F2P0-R-REALIZES-AS-HONESTY"],
+    ["finite-completion-selection", "Refused", "F2P0-R-COMPLETION-SELECTION"],
+    ["two-path-exact-agreement", "Affirmative", "F2P0-A-PATH-AGREEMENT"],
+    ["exact-relation-definition", "CannotAnswer", "F2P0-C-RELATION-DEFINITION"],
+    ["exact-relation-semantic-model", "CannotAnswer", "F2P0-C-RELATION-MODEL"],
+    ["definition-model-correspondence", "CannotAnswer", "F2P0-C-DEFINITION-MODEL"],
+    ["concrete-relation-instance", "CannotAnswer", "F2P0-C-RELATION-INSTANCE"],
+    ["current-relation-predicate", "CannotAnswer", "F2P0-C-RELATION"],
+    ["current-witness-type", "CannotAnswer", "F2P0-C-WITNESS-TYPE"],
+    ["current-prover-private-state", "CannotAnswer", "F2P0-C-PROVER-STATE"],
+    ["current-honest-commit", "CannotAnswer", "F2P0-C-HONEST-COMMIT"],
+    ["current-honest-respond", "CannotAnswer", "F2P0-C-HONEST-RESPOND"],
+    ["provider-total-relation-translation", "CannotAnswer", "F2P0-C-PROVIDER-RELATION"],
+    ["provider-private-state-translation", "CannotAnswer", "F2P0-C-PROVIDER-STATE"],
+    ["relation-relative-plan-honesty", "CannotAnswer", "F2P0-C-HONESTY-JOIN"],
+    ["exact-relations-plan-coupling", "CannotAnswer", "F2P0-C-EXACT-COUPLING-UNDERDETERMINED"]
+  ],
+  "findings_sha256": "9501e11056383c0acea33c2ad892e021be4e73929211ff20512a83eb5f2e29a4",
+  "measurements": {
+    "accepted_honest_runs": 36,
+    "agreement_sha256": "4d9a5257b06eff86ec89db5be220990dd9f776c942d969b93c224f4108625da2",
+    "anchors": 51,
+    "cited_ranges": 18,
+    "conditional_owner_coordinate_families": 5,
+    "contract_sources": 3,
+    "current_premise_coordinates": 0,
+    "finite_completions": 2,
+    "outcomes": {
+      "Affirmative": 12,
+      "CannotAnswer": 13,
+      "Refused": 5
+    },
+    "predecessor_sources": 7,
+    "premises": 5,
+    "reconstruction_paths": 2,
+    "rejected_plus_one_controls": 36,
+    "verifier_cases_per_path": 81
+  },
+  "premise_matrix": {
+    "honest-commit": {
+      "after_authored_bundle": "exact strategy recipe coordinate",
+      "conditional_owner_coordinates": ["ProverPlan.decision_recipes[0]", "PlanStrategyStep(decision 0)"],
+      "current_outcome": "CannotAnswer",
+      "current_premise_coordinate": null,
+      "current_role_site": "StrategyDecisionView decision 0",
+      "provider_residual": "relation-relative honesty/correctness and provider-field correspondence"
+    },
+    "honest-respond": {
+      "after_authored_bundle": "exact strategy recipe coordinate",
+      "conditional_owner_coordinates": ["ProverPlan.decision_recipes[2]", "PlanStrategyStep(decision 2)"],
+      "current_outcome": "CannotAnswer",
+      "current_premise_coordinate": null,
+      "current_role_site": "StrategyDecisionView decision 2",
+      "provider_residual": "relation-relative honesty/correctness and provider-field correspondence"
+    },
+    "prover-private-state": {
+      "after_authored_bundle": "exact Plan state vector and adapter-state coordinate",
+      "conditional_owner_coordinates": ["ProverPlan.persistent_state[i].value_type", "PlanExecutionState"],
+      "current_outcome": "CannotAnswer",
+      "current_premise_coordinate": null,
+      "current_role_site": null,
+      "provider_residual": "translation from the richer adapter-private state to one provider PrvState carrier"
+    },
+    "relation-predicate": {
+      "after_authored_bundle": "owner-local partial decision coordinate",
+      "conditional_owner_coordinates": ["RelationSemanticModel.evaluator", "CheckedRelationSatisfaction"],
+      "current_outcome": "CannotAnswer",
+      "current_premise_coordinate": null,
+      "current_role_site": "Statement binding 0 names the public side only",
+      "provider_residual": "total Stmt->Wit->Bool translation, termination basis, and acceptance correspondence"
+    },
+    "witness-type": {
+      "after_authored_bundle": "exact type-and-occurrence coordinate",
+      "conditional_owner_coordinates": ["RelationInterface.private_witness[i].value_type", "PlanWitnessBinding.witness_edges[i]"],
+      "current_outcome": "CannotAnswer",
+      "current_premise_coordinate": null,
+      "current_role_site": null,
+      "provider_residual": "provider carrier translation unless the exact representation is reused"
+    }
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "format": "zkc.formal-schnorr-relations-plan-f2p0.contract-ledger.v0",
+  "cutoff": "de49641aba0086b1e3f7eff48f5276ffd8af2845",
+  "question": "Can the current Relations and ProverPlan contracts alone select and exactly couple a finite relation definition, model, instance, and Plan strategy roles to the F1-R1B Schnorr target?",
+  "contract_sources": [
+    {
+      "path": "docs-next/relations/relation-model.md",
+      "sha256": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
+      "ranges": [
+        {
+          "id": "REL-DEFINITION",
+          "section": "3.1 Definition",
+          "start": 562,
+          "end": 584,
+          "anchors": ["RelationDefinition = {", "separate semantic-model contract below fixes one evaluator meaning"]
+        },
+        {
+          "id": "REL-INTERFACE",
+          "section": "3.2 Four non-collapsible Interface roles",
+          "start": 672,
+          "end": 716,
+          "anchors": ["RelationInterface = {", "`PrivateWitness`: prover-held existential material"]
+        },
+        {
+          "id": "REL-INSTANCE",
+          "section": "3.3 Public instance and 3.4 admission claims",
+          "start": 759,
+          "end": 810,
+          "anchors": ["RelationInstance = {", "Each stronger proposition has a separate question and result"]
+        },
+        {
+          "id": "REL-MODEL",
+          "section": "4.2 Semantic model",
+          "start": 847,
+          "end": 937,
+          "anchors": ["RelationSemanticModel = {", "does not by itself", "`CheckDefinitionModelCorrespondence` owns that proposition"]
+        },
+        {
+          "id": "REL-SATISFACTION",
+          "section": "4.3 Occurrence-local satisfaction",
+          "start": 1007,
+          "end": 1070,
+          "anchors": ["CheckedRelationSatisfaction<C> =", "exact deterministic partial decision procedure", "requires a separately checked termination basis", "Satisfaction says nothing about Protocol acceptance"]
+        },
+        {
+          "id": "REL-PROTOCOL-BINDING",
+          "section": "7.2 Protocol relation binding",
+          "start": 1607,
+          "end": 1688,
+          "anchors": ["ProtocolRelationBinding = {", "never depends on a `ProtocolInterfaceId`, Plan", "It cannot create a second transcript declaration"]
+        },
+        {
+          "id": "REL-PLAN-BINDING",
+          "section": "7.4 Plan witness binding",
+          "start": 1917,
+          "end": 1962,
+          "anchors": ["PlanWitnessBinding = {", "nonce/randomness, search state, and mutable state are absent", "The Plan never cites a relation Interface"]
+        },
+        {
+          "id": "REL-RESULT-DIRECTIONS",
+          "section": "11.3 Result direction",
+          "start": 3252,
+          "end": 3269,
+          "anchors": ["None means relation acceptance", "relation satisfaction", "Protocol acceptance at one run", "No subtype rule"]
+        }
+      ]
+    },
+    {
+      "path": "docs-next/relations/README.md",
+      "sha256": "3589e9f131a3e395190fb999d3f3150d23897b49a2c2e51fe97a59e83801ae2b",
+      "ranges": [
+        {
+          "id": "REL-SEPARATE-QUESTIONS",
+          "section": "Purpose",
+          "start": 14,
+          "end": 29,
+          "anchors": ["keeps five questions separate", "Admission of a definition, Interface, instance, or binding answers none"]
+        },
+        {
+          "id": "REL-INDEPENDENT-ATTACHMENTS",
+          "section": "Protocol and Plan dependency cut",
+          "start": 74,
+          "end": 86,
+          "anchors": ["two attachment paths are deliberately independent", "A checked aggregate may combine independently"]
+        },
+        {
+          "id": "REL-NONOWNERSHIP",
+          "section": "Does not own",
+          "start": 185,
+          "end": 193,
+          "anchors": ["witness generation, storage, secrecy policy", "soundness, knowledge, completeness"]
+        }
+      ]
+    },
+    {
+      "path": "docs-next/pir/interfaces-and-plans.md",
+      "sha256": "bb359aa65a9037c8202a08bd8b62947566ce762a9708cf3cf7f6022953fea5a0",
+      "ranges": [
+        {
+          "id": "PLAN-SUBJECT",
+          "section": "4.1 Boundary and complete subject",
+          "start": 687,
+          "end": 753,
+          "anchors": ["It contains no relation definition", "ProverPlan = {", "Relations may later attach one of these generic coordinates"]
+        },
+        {
+          "id": "PLAN-RECIPES",
+          "section": "4.2 Recipe language",
+          "start": 853,
+          "end": 930,
+          "anchors": ["DecisionRecipe = {", "PathwiseOneShotRandomness"]
+        },
+        {
+          "id": "PLAN-EXPORT-AND-ADMISSION",
+          "section": "4.2 derived witness export and 4.3 admission",
+          "start": 948,
+          "end": 994,
+          "anchors": ["It does not classify its derivation as", "It does not establish decision coverage"]
+        },
+        {
+          "id": "PLAN-REALIZES",
+          "section": "4.3 PlanRealizes",
+          "start": 996,
+          "end": 1029,
+          "anchors": ["PlanLifecycleReadBasis = {", "PlanRealizes(", "CheckedPlanRealizes"]
+        },
+        {
+          "id": "PLAN-REALIZES-LIMIT",
+          "section": "4.3 PlanRealizes result boundary",
+          "start": 1184,
+          "end": 1189,
+          "anchors": ["proves structural decision coverage", "proves no algorithmic", "witness correspondence or", "satisfaction"]
+        },
+        {
+          "id": "PLAN-ADAPTER",
+          "section": "4.4 Exact Plan adapter",
+          "start": 1267,
+          "end": 1378,
+          "anchors": ["PlanStrategyStep(", "private state contains the exact Plan state vector", "select the unique admitted recipe", "There is no fallback to another strategy"]
+        },
+        {
+          "id": "PLAN-WITNESS-SURFACE",
+          "section": "5.1 Static surface and private extraction",
+          "start": 1623,
+          "end": 1688,
+          "anchors": ["Relations needs a narrower acyclic attachment seam", "PlanWitnessSurfaceBody = {", "claims correspondence,", "satisfaction"]
+        }
+      ]
+    }
+  ],
+  "predecessor_sources": [
+    {
+      "path": "evaluation/formal-source-target-core-f1r1b/reference_model.py",
+      "sha256": "f9b43c9c83f067a448502a83abc6d07af1eb8f508ec58502e09a80c51fdf2d53"
+    },
+    {
+      "path": "evaluation/formal-source-target-core-f1r1b/independent.py",
+      "sha256": "6cf53062bd1f1cf6413fa4887c9e5fdfd861e8c18ad01a79111f303b10447049"
+    },
+    {
+      "path": "evaluation/formal-source-target-core-f1r1b/expected-identities.json",
+      "sha256": "e5534e317ca67e54a3d40b43d79564a7f7ff4cd14ff3b1463ce26ec2509a81c3"
+    },
+    {
+      "path": "evaluation/formal-source-view-bodies-f0v2b1/independent.py",
+      "sha256": "3afbfb76b7ec7be38c09ccd7ead3eb23affc7097a9d7e917ec6fa0f1bd42c341"
+    },
+    {
+      "path": "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json",
+      "sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
+    },
+    {
+      "path": "evaluation/formal-provider-observables-f2o0/generated/ledger.json",
+      "sha256": "5caa422405cb7b6fa542124e48d55348b569104b35afbdd386d39ad942f467e4"
+    },
+    {
+      "path": "evaluation/formal-provider-observables-f2o0/expected-findings.json",
+      "sha256": "c00fab28c75f0b25515faaf7911233f68a3b1f418791286b200a7e628a8aab02"
+    }
+  ]
+}

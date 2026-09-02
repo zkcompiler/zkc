@@ -31,7 +31,10 @@
 > open. A 2026-09-03 program reassessment finds the provider side of the
 > bridge untested, classifies the Terminal repair as a main-design reopening,
 > and proposes an F2-O0 provider-observable audit before F0-V2C; that
-> proposal awaits the design lane's decision.
+> proposal awaits the design lane's decision. F2-P0 now audits the five
+> missing property premises against the current Relations and Plan contracts:
+> the acyclic attachment grammar exists, but no exact relation, Plan, or
+> provider premise is selected for F1-R1B.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -93,6 +96,7 @@ F0  ideal assurance architecture and current-design falsification
        B2D1 static PCGraph and eligibility closure       [complete, bounded]
        B2D2 Fresh runtime and Oracle receipt replay       [open]
   -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
+  -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F0-V2C  target publication and migration            [open; scoped by F2-O0]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -442,6 +446,13 @@ provider, extraction tool, or durable schema.
   premises do not. Aggregate `CannotAnswer`; the formal source closure is
   therefore the views plus the authenticated algorithm closure plus one
   law binding, which F0-V2C must decide.
+- [`f2p0-schnorr-relations-plan-coupling-audit.md`](f2p0-schnorr-relations-plan-coupling-audit.md)
+  records the 30-finding follow-up on F2-O0's five property gaps. The current
+  contracts support independent Protocol--relation and Plan-witness attachment
+  paths and exact Plan recipe roles, but do not select their relation or Plan
+  operands. Typed-forward and cold-view/countermodel paths agree; two
+  incompatible finite completions both make every honest target trace accept.
+  The aggregate remains `CannotAnswer`, and no owner-page change is proposed.
 - [`m0-mechanized-kernel-feasibility.md`](m0-mechanized-kernel-feasibility.md)
   records the 34-finding measurement: core-Lean transcriptions of the
   constitutional datum encoder and decoder and of the PublicCoin lattice

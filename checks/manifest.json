@@ -1214,6 +1214,28 @@
       }
     },
     {
+      "id": "research.schnorr-relations-plan-coupling",
+      "title": "Schnorr Relations--Plan coupling audit",
+      "subject": "Whether the current Relations and ProverPlan contracts alone select and exactly couple a finite relation definition, semantic model, instance, and strategy roles to F2-O0's five missing property premises for the admitted F1-R1B Schnorr target.",
+      "claim": "Forward typed-owner and reverse cold-view/countermodel paths independently reconstruct the exact target and contract route, agree on all five conditional coordinate families and current absences, exhaustively evaluate the 81-case verifier, and exhibit two incompatible finite relation/Plan completions that make all 36 honest runs accept while all plus-one response controls reject; the contracts provide an acyclic attachment grammar but do not select an exact bundle.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "mutation", "differential", "property", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-schnorr-relations-plan-f2p0/run.py", "evaluation/formal-schnorr-relations-plan-f2p0/model.py", "evaluation/formal-schnorr-relations-plan-f2p0/independent.py", "evaluation/formal-schnorr-relations-plan-f2p0/README.md", "evaluation/formal-schnorr-relations-plan-f2p0/expected-findings.json", "evaluation/formal-schnorr-relations-plan-f2p0/contract-ledger.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2p0-schnorr-relations-plan-coupling-audit.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The audit does not author or admit a relation, model, instance, Plan, binding, satisfaction result, provider translation, correspondence, completeness or security theorem, target change, or owner-page change; its two finite completions are non-selection witnesses only."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-schnorr-relations-plan-f2p0/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.kernel-mechanization-feasibility",
       "title": "Mechanized kernel definition feasibility",
       "subject": "Core-only Lean 4 transcriptions of the constitutional datum grammar, its canonical encoder and strict decoder, and the PublicCoin class lattice with its Kahn order and class fold, compared with the frozen K1 oracle vectors and the five D1 carriers.",
