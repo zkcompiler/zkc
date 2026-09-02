@@ -2,9 +2,9 @@
 
 > **Kind:** Temporary cross-cutting research-program index
 > **State:** Active; first F0 architecture pass, bounded F1-R0 package/checker
-> pass, and bounded F1-R1A target profile/source-basis pass complete at
-> research resolution. Target carrier/admission F1-R1B, owner-view F1-R1C,
-> integrated-package F1-R1D, live-owner F1-I, and F2 remain dependent
+> pass, bounded F1-R1A target profile/source-basis pass, and one-slice F1-R1B
+> target carrier/admission pass complete at research resolution. Owner-view
+> F1-R1C, integrated-package F1-R1D, live-owner F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
 > artifact identity, theorem status, Analysis judgment, implementation claim,
@@ -42,7 +42,7 @@ semantic redesign when the gain and migration cone justify it.
 F0  ideal assurance architecture and current-design falsification
   -> F1-R0  package/checker feasibility                 [complete, bounded]
   -> F1-R1A exact target profile/source basis           [complete, bounded]
-  -> F1-R1B exact target carrier/admission              [open]
+  -> F1-R1B exact target carrier/admission              [complete, bounded slice]
   -> F1-R1C exact owner views/read closure              [open]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
@@ -67,13 +67,16 @@ bound the wrong identity, or assigned authority to the wrong owner; such a
 finding reopens F0 explicitly.
 
 The first executable pass exposed a necessary sequencing distinction. F1-R0
-tests the package/checker boundary over manual target-shaped data. F1-R1A now
+tests the package/checker boundary over manual target-shaped data. F1-R1A
 establishes that the exact target profile and source declarations are
 independently reconstructible and mechanically distinguishes them from K2's
-witness-local profile and eight-field carrier. F1-R1B through R1D still need
-the durable target body/admission evaluator, owner views, Relations roots, and
-integrated package. F1-I then binds the same proposition class to admitted
-live owner handles and authority. No Q1 claim is complete before F1-I.
+witness-local profile and eight-field carrier. F1-R1B now forms and admits one
+complete fourteen-field finite Schnorr target slice and requires its admitted
+handle for Fresh Protocol formation. It is an offline bounded evaluator, not
+the live compiler owner or a complete evaluator for every target constructor.
+F1-R1C/R1D still need owner views, Relations roots, and the integrated package.
+F1-I then binds the same proposition class to admitted live owner handles and
+authority. No Q1 claim is complete before F1-I.
 
 ### F2 — operational semantics
 
@@ -129,6 +132,10 @@ provider, extraction tool, or durable schema.
   records the independently reconstructed frozen target Interaction profile,
   target/K2 carrier discriminator, executable identity-versus-admission gap,
   and the refined F1-R1A/R1B/R1C/R1D sequence.
+- [`f1r1b-target-core-admission.md`](f1r1b-target-core-admission.md) records the
+  complete target carrier and bounded ten-stage admission result for one
+  finite Fresh Schnorr slice, exact dependency and live-handle findings, the
+  27-case mutation evidence, explicit unsupported surface, and R1C contract.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -149,11 +156,14 @@ F1-R0 passes 18/18 frozen cases with a zero-dependency Python checker and a
 standalone no-crate Rust checker that share no parser or canonical encoder.
 F1-R1A passes 10/10 heterogeneous boundary checks: the exact target profile
 and source routing are available, while fixture profile substitution and
-identity-only recursive relabelling are refused. Neither result is Q1.
-F1-R1B through R1D must still form admitted exact target bodies, owner views,
-and the integrated package before F1-I supplies live owner authority. F2
-starts only after one affirmative bounded Q1 correspondence and retains
-separate operational, property, and zkc-native discriminator stages.
+identity-only recursive relabelling are refused. F1-R1B passes 27/27 cases for
+one exact target slice: the fourteen-field Core and Fresh Protocol admit, while
+identity, dependency, declaration/ABI, schedule, visibility, liveness,
+profile, and authority substitutions fail closed. None of these results is Q1. F1-R1C
+and R1D must still form exact owner views and the integrated package before
+F1-I supplies live implementation authority. F2 starts only after one
+affirmative bounded Q1 correspondence and retains separate operational,
+property, and zkc-native discriminator stages.
 
 ## Known risks and non-claims
 

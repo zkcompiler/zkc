@@ -3,8 +3,9 @@
 > **Kind:** Temporary F1 executable-feasibility result and sequencing repair
 > **State:** F1-R0 package/checker boundary complete at bounded reference
 > resolution; F1-R1A target profile/source basis is now complete at bounded
-> resolution, while F1-R1B/R1C/R1D, live-owner F1-I, and all F2 stages remain
-> open
+> resolution, and one-slice F1-R1B target carrier/admission is complete at
+> bounded resolution, while F1-R1C/R1D, live-owner F1-I, and all F2 stages
+> remain open
 > **Authority:** None. This result changes no current or target semantic
 > definition, artifact identity, admission result, Analysis judgment,
 > implementation claim, or roadmap priority.
@@ -210,8 +211,12 @@ The subsequent
 only item 1 and the source-declaration part of items 2 and 3. It independently
 reconstructs the frozen target Interaction profile and demonstrates that K2's
 witness-local profile, eight-field Core, and recursively relabelled IDs cannot
-substitute for target admission. Items 2 through 5 are now sequenced as
-F1-R1B carrier/admission, F1-R1C owner views/read closure, and F1-R1D
+substitute for target admission. The subsequent
+[`F1-R1B target-admission gate`](f1r1b-target-core-admission.md) closes the
+carrier/admission part of item 2 for one complete finite Schnorr target slice,
+while explicitly refusing unsupported constructor families and retaining
+offline-only authority. The remaining parts of items 2 through 5 are sequenced
+as F1-R1C owner views/read closure and F1-R1D
 Relations/correspondence/package integration.
 
 F1-I then replaces offline formed values with exact admitted live owner
@@ -232,9 +237,11 @@ does require the F1 entry sequence and minimum package contract to incorporate
 the refinements above.
 
 No durable target page should absorb this format or its local diagnostics yet.
-The earliest durable change remains after exact F1-R1B/R1C/R1D and F1-I
-evidence: owner portable-view contracts plus an Analysis formal-source
-correspondence family.
+The earliest durable change remains after exact F1-R1C/R1D and F1-I evidence:
+owner portable-view contracts plus an Analysis formal-source correspondence
+family. Broader target admission implementation beyond the F1-R1B slice
+remains ordinary owner coverage rather than evidence for a new formal
+authority.
 
 ## 8. Non-claims
 

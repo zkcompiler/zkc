@@ -272,10 +272,15 @@ The bounded F1-R0 result and exact nonclaims are recorded in
 [`f1r-reference-package-feasibility.md`](f1r-reference-package-feasibility.md).
 F1-R0 cannot satisfy Q1 or mint an Analysis capability. The bounded F1-R1A
 result now closes only the independently published target profile/source
-basis and mechanically refuses fixture or identity-only substitution.
-F1-R1B/R1C/R1D and F1-I retain the remaining exact source-subject obligations
-in Sections 7.1 and 7.2; the split only prevents profile publication and
-fixture-local bodies from being mislabeled as target admission.
+basis and mechanically refuses fixture or identity-only substitution. The
+subsequent bounded F1-R1B result forms and admits one complete fourteen-field
+target slice and requires that exact admitted handle for Fresh Protocol
+formation; it remains offline research authority and explicitly fails closed
+outside the selected constructor fragment. F1-R1C/R1D and F1-I retain the
+remaining owner-view, package, and live source-authority obligations in
+Sections 7.1 and 7.2; the split prevents profile publication, fixture-local
+bodies, or an offline admitted record from being mislabeled as live target
+correspondence.
 
 ## 8. F2 exact entry contract
 

@@ -72,11 +72,12 @@ infer admission from a typed digest.
 
 ## Next gate
 
-F1-R1B needs one complete fourteen-field target Fresh Schnorr Core and its
-two-field Fresh Protocol, their exact used semantic modules and declarations,
-and a bounded implementation of the target admission sequence. F1-R1C then
-implements the owner static views and exact read closure. F1-R1D integrates
-those target values with Relations/correspondence roots and the F1-R0 package
+The subsequent F1-R1B gate now supplies one complete fourteen-field target
+Fresh Schnorr Core and its two-field Protocol, exact-used semantic modules and
+declarations, a separately written body re-encoder, and a bounded
+implementation of the applicable target admission sequence. F1-R1C still
+needs the owner static views and exact read closure. F1-R1D integrates those
+target values with Relations/correspondence roots and the F1-R0 package
 checker. F1-I remains the separate live-handle and source-authority gate.
 
 The retained K2 witness remains useful as an execution and mutation oracle,
