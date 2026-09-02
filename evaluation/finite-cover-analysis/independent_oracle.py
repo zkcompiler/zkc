@@ -74,19 +74,14 @@ def verifier_accepts(transcript: Transcript) -> bool:
 
 
 def representative_stream() -> tuple[Representative, ...]:
-    commitments = tuple(
-        value
-        for value in range(GROUP_MODULUS)
-        if any(
-            pow(GENERATOR, exponent, GROUP_MODULUS) == value
-            for exponent in range(SUBGROUP_ORDER)
-        )
-    )
     result: list[Representative] = []
-    for commitment in commitments:
+    # Enumerate the complete residue carrier first.  Subgroup membership is a
+    # consequence of verifier acceptance here, not a prefilter shared with the
+    # primary stream constructor.
+    for commitment in range(GROUP_MODULUS):
         for first_challenge in range(CHALLENGE_COUNT):
             for second_challenge in range(first_challenge + 1, CHALLENGE_COUNT):
-                responses = []
+                response_sets = []
                 for challenge in (first_challenge, second_challenge):
                     accepted = tuple(
                         response
@@ -95,11 +90,14 @@ def representative_stream() -> tuple[Representative, ...]:
                             (STATEMENT, commitment, challenge, response)
                         )
                     )
-                    if len(accepted) != 1:
+                    if len(accepted) > 1:
                         raise AssertionError(
-                            "one selected residue has no unique response"
+                            "one accepted residue has multiple responses"
                         )
-                    responses.append(accepted[0])
+                    response_sets.append(accepted)
+                if any(not accepted for accepted in response_sets):
+                    continue
+                responses = (response_sets[0][0], response_sets[1][0])
                 result.append(
                     (
                         (

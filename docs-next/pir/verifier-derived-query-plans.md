@@ -184,6 +184,7 @@ ProgramCase = {
 VerifierDerivedWordProgram = {
   index_type: ValueType,
   result_type: ValueType,
+  algebra_profile: PrimeFieldV0 { modulus: PrimeNatural },
   parameters: CanonicalSeq<ProgramParameterDecl>,
   oracle_ports: CanonicalSeq<ProgramOraclePortDecl>,
   route: ProgramRoute,
@@ -207,6 +208,13 @@ under an explicit branch; it is never hidden as an evaluator exception. For
 example, a quotient program may route denominator-zero indices to a named
 terminal and evaluate its totalized division algorithm only on the disjoint
 return case.
+
+Every route and pure algorithm is interpreted under the program's exact
+algebra profile. The v0 profile admits only a prime-field carrier with a
+checked prime modulus. A composite modulus is `Refused`; an otherwise formed
+future algebra profile without selected semantics is `Unsupported`. Inverse,
+quotient, and fold operations expose zero or invalid domains through their
+closed route cases rather than relying on host-language arithmetic behavior.
 
 A source read has no independent logical publication. It denotes one leaf in
 the later static elaboration. Its answer type exactly equals the bound source
@@ -241,6 +249,12 @@ claims supplied by the author.
 
 An unequal declared bound is `Refused`. Independent evaluator work limits are
 not fields of the program and do not rotate its ID.
+
+Static expansion also receives an external maximum-event control. Exhausting
+that control yields `DeterministicLimitExceeded` and no elaboration; it does not
+change program, plan, or Core identity. The v0 semantic bounds remain exact
+per-program depth and leaf-read counts rather than a caller-selected template
+budget.
 
 ## 5. Logical query plans
 
@@ -277,15 +291,29 @@ VerifierDerivedQueryPlan = {
 
 The logical-use sequence preserves labels by ordinal, multiplicity, and causal
 order. A repeated logical read remains repeated even if all runtime indices
-and answers are equal. A prior logical result may be used only after every
-nonterminal branch producing it; a terminal branch stops that path. Route and
-index nonadaptivity is rechecked across the complete plan, so passing a prior
-source-derived result into a later route cannot bypass the program-local law.
+and answers are equal. The v0 profile exposes a prior logical result only from
+an unconditionally active producer with one total static return. Its existing
+target value is reused directly; elaboration does not mint a logical-result
+event or join node. Supporting conditional or multi-return joins requires a
+separately specified Core construction and is `Unsupported` here.
+
+Source-answer taint is rejected from activation, requested indices, routes,
+and every nested argument that can transitively affect routing or a source-read
+index. It may flow into post-read pure value computation. This effect-sensitive
+rule permits ordinary verifier arithmetic over earlier answers without making
+the query schedule answer-adaptive.
 
 Plan inputs and source Oracles are formal typed ports, not runtime values or
 Core references. The plan can therefore be identified independently of one
 target Core. Runtime values, prover strategies, commitment roots, evidence,
 and evaluator budgets are absent from its identity.
+
+One admitted plan describes one concrete parameterization and is checked
+against one concrete Core. A compile-time family may produce separately
+identified plans and Cores from public parameters, but that generating function
+is authoring/compiler machinery rather than a v0 query-plan subject. Generic
+family admission remains future work and cannot be inferred from successful
+member elaborations.
 
 ## 6. Static elaboration
 
@@ -382,10 +410,10 @@ CheckVerifierDerivedQueryElaboration(
   AuthenticatedElaboration,
   exact supported evaluator,
   deterministic work limit)
-  -> Completed(AffirmativeCheckedElaboration)
-   | Completed(NegativeElaborationResult)
-   | QualifiedFailure
-   | DeterministicNoncompletion
+  -> Affirmative(CheckedVerifierDerivedQueryElaboration)
+   | Negative(ElaborationDefectSet)
+   | Unsupported | MissingDependency | CannotAnswer | KindMismatch
+   | Malformed | Refused | DeterministicLimitExceeded | CheckerFailure
 ```
 
 An affirmative result retains exact authenticated handles for the plan,
@@ -447,32 +475,40 @@ distance, soundness, knowledge, or zero-knowledge statement.
 The checker and bounded evaluator distinguish:
 
 ```text
-Malformed
-MissingDependency
-KindMismatch
 Unsupported
+MissingDependency
+CannotAnswer
+KindMismatch
+Malformed
 Refused
-SemanticFailure
-DeterministicNoncompletion
+DeterministicLimitExceeded
+CheckerFailure
 ```
 
-- `Malformed` covers invalid carrier shape, duplicate map keys, and
-  noncanonical finite collections.
+- `Unsupported` covers an unknown program constructor, algebra profile,
+  algorithm semantics, or answer-adaptive query profile.
 - `MissingDependency` covers an absent program, algorithm, contract, plan
-  input, source Oracle, target value, occurrence, or terminal.
+  input, source Oracle, target value, occurrence, terminal, or authenticated
+  preimage.
+- `CannotAnswer` covers a supported live source read whose required entry is
+  unavailable without asserting a semantic negative.
 - `KindMismatch` covers a valid foreign profile/kind or unequal type and ABI.
-- `Unsupported` covers an unknown program constructor, algorithm semantics, or
-  answer-adaptive query profile.
+- `Malformed` covers invalid carrier shape, duplicate map keys, noncanonical
+  finite collections, and strict input-decode failure.
 - `Refused` covers cycles, future dependencies, nonexhaustive routes, false
-  bounds, declassification, dynamic occurrence creation, and map mismatch.
-- `SemanticFailure` is a source-declared runtime branch such as absent lookup
-  or a selected quotient-collision disposition. It is not evaluator failure.
-- `DeterministicNoncompletion` covers exhaustion of the independent evaluator
-  work limit before a completed outcome. It is not a Core rejection or
+  bounds, composite prime-field carriers, declassification, dynamic occurrence
+  creation, and map mismatch.
+- `DeterministicLimitExceeded` covers exhaustion of the independent evaluator
+  work limit before a completed outcome. It is not a Core rejection or a
   transcript event.
+- `CheckerFailure` covers disagreement by a selected algorithm provider,
+  checker, derived ABI, or request-local authenticated binding.
 
-Host exceptions, timeouts, and undeclared algorithm failures are not semantic
-outcomes and cannot be converted into an affirmative or negative result.
+A source-declared quotient collision, absent tagged value, or other protocol
+terminal is an ordinary completed target-Core branch, not a ninth operational
+outcome. Incidental host exceptions and process timeouts may produce no record
+at all; they cannot be converted into an affirmative, negative, or semantic
+terminal result.
 
 ## 10. Canonical bodies and identity
 
@@ -483,6 +519,9 @@ Interaction meanings.
 ```text
 VisibilityBody = V(0,Unit) | V(1,Unit)
 // Public | VerifierOnly
+
+ProgramAlgebraProfileBody = V(0,R{0:N(prime_modulus)})
+// PrimeFieldV0; admission checks that prime_modulus is prime
 
 ProgramLocalValueRefBody =
     V(0,U)
@@ -531,15 +570,16 @@ ProgramCaseBody(x) = R {
 VerifierDerivedWordProgramBodyV0(x) = R {
   0: ValueTypeBody(x.index_type),
   1: ValueTypeBody(x.result_type),
-  2: S[ProgramParameterBody(parameter)...],
-  3: S[ProgramOraclePortBody(port)...],
-  4: R{0:PIRAlgorithmUseBody(x.route.algorithm),
+  2: ProgramAlgebraProfileBody(x.algebra_profile),
+  3: S[ProgramParameterBody(parameter)...],
+  4: S[ProgramOraclePortBody(port)...],
+  5: R{0:PIRAlgorithmUseBody(x.route.algorithm),
        1:S[ProgramRouteInputRefBody(input)...],
        2:ValueTypeBody(x.route.case_type)},
-  5: S[ProgramCaseBody(case)...],
-  6: VisibilityBody(x.output_visibility),
-  7: N(x.maximum_elaboration_depth),
-  8: N(x.maximum_leaf_reads)
+  6: S[ProgramCaseBody(case)...],
+  7: VisibilityBody(x.output_visibility),
+  8: N(x.maximum_elaboration_depth),
+  9: N(x.maximum_leaf_reads)
 }
 
 QueryPlanValueRefBody = V(0,N(input_ref)) | V(1,N(prior_use_ref))
@@ -694,12 +734,15 @@ support or target-map validation.
 
 The bounded instrument under
 [`evaluation/verifier-derived-query-plans/`](../../evaluation/verifier-derived-query-plans/README.md)
-forms five programs and one plan, elaborates 57 static events, and executes
+forms five programs and one plan, elaborates 62 static events, and executes
 DEEP-ALI-shaped quotient, STIR-shaped branching/nested fold, batch
 Circle-FRI-shaped combination, and WHIR-shaped grouped-fold cases. An
 independently coded oracle reproduces all outputs and ordered leaf reads.
-Mutations exercise cycle, adaptivity, route, bounds, visibility, map,
-collision, missing-source, multiplicity, and resource boundaries.
+It also checks a two-use activation/prior-result plan against a nine-event
+flat-Core body authored without importing the elaborator. Forty-one tests
+exercise cycle, adaptivity, route, algebra, componentwise bounds, transitive
+visibility, explicit terminals, map, Core substitution/reordering,
+missing-source, multiplicity, and resource boundaries.
 
 That evidence is finite inhabitance and falsification only. This page and the
 instrument establish none of:
@@ -713,7 +756,8 @@ instrument establish none of:
   structures;
 - equivalence between logical query count, source-leaf count, and physical
   opening count;
-- complete target-Core formation or admission by the bounded instrument;
+- general target-Core formation or admission beyond the independently authored
+  bounded activation-and-prior-result Core;
 - implementation, MLIR, backend, or endpoint conformance; or
 - production fitness or cryptographic security.
 

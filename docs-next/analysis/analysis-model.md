@@ -1507,22 +1507,24 @@ AnalysisFamilySemanticsContract<P> = {
 }
 
 AnalysisFiniteCoverFamilyContract = {
-  finite_cover_target_reconstruction_law:
-    AnalysisProfileLawRef<TotalFiniteCoverTargetReconstruction>,
-  operation_checker_binding_admission_law:
-    AnalysisProfileLawRef<TotalFiniteCoverCheckerBindingAdmission>,
   exact_cover_schema:
     AnalysisProfileLawRef<ClosedFiniteCoverSchema>,
-  exact_representative_success_schema:
-    AnalysisProfileLawRef<ClosedFiniteRepresentativeSuccessSchema>,
   exact_candidate_algorithm_schema:
     AnalysisProfileLawRef<ClosedFiniteCandidateAlgorithmSchema>,
+  exact_representative_success_schema:
+    AnalysisProfileLawRef<ClosedFiniteRepresentativeSuccessSchema>,
   exact_coverage_certificate_schema:
     AnalysisProfileLawRef<ClosedFiniteCoverageCertificateSchema>,
-  exact_congruence_certificate_schema:
-    AnalysisProfileLawRef<ClosedFiniteCongruenceCertificateSchema>,
+  exact_quotient_factorization_certificate_schema:
+    AnalysisProfileLawRef<ClosedFiniteQuotientFactorizationCertificateSchema>,
   exact_success_transfer_certificate_schema:
-    AnalysisProfileLawRef<ClosedFiniteSuccessTransferCertificateSchema>
+    AnalysisProfileLawRef<ClosedFiniteSuccessTransferCertificateSchema>,
+  finite_cover_target_reconstruction_law:
+    AnalysisLawTerm<TotalFiniteCoverTargetReconstruction>,
+  operation_checker_binding_admission_law:
+    AnalysisLawTerm<TotalFiniteCoverCheckerBindingAdmission>,
+  deterministic_stream_progress_law:
+    AnalysisLawTerm<DeterministicFiniteStreamProgress>
 }
 ```
 
@@ -1549,10 +1551,11 @@ ClosedFiniteRepresentativeSuccessSchema =
   predicates and their ABIs in one AnalysisFiniteCoverTarget
 
 ClosedFiniteCoverageCertificateSchema,
-ClosedFiniteCongruenceCertificateSchema,
+ClosedFiniteQuotientFactorizationCertificateSchema,
 ClosedFiniteSuccessTransferCertificateSchema =
   three pairwise-distinct exact goal-body schemas for, respectively, only the
-  coverage, congruence, and success-transfer obligations stated below
+  quotient coverage, universal quotient-factorization, and success-transfer
+  obligations stated below
 ```
 
 These are semantic schemas. They do not name an implementation of a checker.
@@ -2453,9 +2456,17 @@ AnalysisFiniteCoverSemanticOperation =
       exact_abi: AnalysisProfileLawRef<
         FiniteCoverRepresentativeStreamABI>
     }
+  | RawDomainOperation {
+      predicate: AnalysisLawTerm<FiniteUniversalDomainPredicate>,
+      exact_abi: AnalysisProfileLawRef<FiniteCoverPredicateABI>
+    }
   | RepresentativeDomainOperation {
       predicate: AnalysisLawTerm<FiniteRepresentativeDomainPredicate>,
       exact_abi: AnalysisProfileLawRef<FiniteCoverPredicateABI>
+    }
+  | NormalizationOperation {
+      algorithm_ref: PortableAlgorithmRef,
+      exact_abi: AnalysisProfileLawRef<FiniteCoverNormalizationABI>
     }
   | RepresentativeEmbeddingOperation {
       algorithm_ref: PortableAlgorithmRef,
@@ -2465,9 +2476,30 @@ AnalysisFiniteCoverSemanticOperation =
       algorithm_ref: PortableAlgorithmRef,
       exact_abi: AnalysisProfileLawRef<FiniteCoverCandidateAlgorithmABI>
     }
+  | QuotientFactorizationOperation {
+      raw_predicate: AnalysisLawTerm<FiniteUniversalDomainPredicate>,
+      normalization_algorithm_ref: PortableAlgorithmRef,
+      representative_embedding_algorithm_ref: PortableAlgorithmRef,
+      candidate_algorithm_ref: PortableAlgorithmRef,
+      output_congruence:
+        AnalysisLawTerm<FiniteCoverOutputCongruence>,
+      exact_certificate_schema:
+        AnalysisProfileLawRef<
+          ClosedFiniteQuotientFactorizationCertificateSchema>
+    }
   | RepresentativeSuccessOperation {
       predicate: AnalysisLawTerm<FiniteRepresentativeSuccessPredicate>,
       exact_abi: AnalysisProfileLawRef<FiniteCoverPredicateABI>
+    }
+  | SuccessTransferOperation {
+      representative_success_predicate:
+        AnalysisLawTerm<FiniteRepresentativeSuccessPredicate>,
+      output_congruence:
+        AnalysisLawTerm<FiniteCoverOutputCongruence>,
+      raw_member_success_predicate:
+        AnalysisLawTerm<FiniteUniversalMemberSuccessPredicate>,
+      exact_certificate_schema:
+        AnalysisProfileLawRef<ClosedFiniteSuccessTransferCertificateSchema>
     }
 
 AnalysisFiniteCoverCheckerBinding = {
@@ -2516,7 +2548,7 @@ AnalysisFiniteCoverTarget = {
   exact_raw_member_success_predicate_abi:
     AnalysisProfileLawRef<FiniteCoverPredicateABI>,
   coverage_goal_id: AnalysisGoalId,
-  congruence_goal_id: AnalysisGoalId,
+  quotient_factorization_goal_id: AnalysisGoalId,
   success_transfer_goal_id: AnalysisGoalId
 }
 
@@ -2537,24 +2569,29 @@ ExactFiniteCoverTargetOf(P,proposition_id) =
   candidate fields, and success fields against, respectively, the family
   contract's exact_cover_schema, exact_candidate_algorithm_schema, and
   exact_representative_success_schema; validate coverage_goal_id against
-  exact_coverage_certificate_schema, congruence_goal_id against
-  exact_congruence_certificate_schema, and success_transfer_goal_id against
+  exact_coverage_certificate_schema, quotient_factorization_goal_id against
+  exact_quotient_factorization_certificate_schema, and success_transfer_goal_id against
   exact_success_transfer_certificate_schema; require the three goals to state
-  exactly the coverage, congruence, and success-transfer obligations below;
+  exactly the coverage, quotient-factorization, and success-transfer obligations below;
   and return the one resulting `AnalysisFiniteCoverTarget`
 
 The three target-derived certificate goals have disjoint meanings:
 
-1. `coverage_goal_id` states that every raw-domain member normalizes to an
-   admitted representative, every admitted representative has the exact
-   canonical embedded raw member selected by the cover, and the selected
+1. `coverage_goal_id` states that the canonical quotient carrier contains every
+   accepted residue representative, every admitted representative has the exact
+   canonical embedded raw member selected by that quotient, and the selected
    `exact_representative_stream_algorithm_ref` reaches every representative
    exactly once before its terminal marker under
    `exact_representative_stream_algorithm_abi`;
-2. `congruence_goal_id` states that normalization and representative embedding
-   preserve every candidate-observable input distinction used by the exact
-   candidate ABI and relate candidate outputs by the target's exact output
-   congruence; and
+2. `quotient_factorization_goal_id` states universally over the complete raw
+   domain that every value satisfying the raw predicate normalizes to the
+   corresponding representative domain, that normalization and representative
+   embedding preserve every candidate-observable distinction used by the exact
+   candidate ABI on those raw members, and that raw and representative
+   candidate outputs satisfy the target's exact output congruence. It does not
+   require a nonmember to remain a nonmember after narrowing normalization.
+   Finite examples or a bounded set of noncanonical lifts cannot discharge
+   this goal; and
 3. `success_transfer_goal_id` states that representative success, together
    with that output congruence, entails the raw member-success predicate for
    every raw-domain member covered by that representative.
@@ -2603,7 +2640,7 @@ ExactFiniteCoverSemanticRulePayload = {
   exact_raw_member_success_predicate_abi:
     AnalysisProfileLawRef<FiniteCoverPredicateABI>,
   coverage_goal_id: AnalysisGoalId,
-  congruence_goal_id: AnalysisGoalId,
+  quotient_factorization_goal_id: AnalysisGoalId,
   success_transfer_goal_id: AnalysisGoalId
 }
 
@@ -2638,7 +2675,7 @@ CheckedFiniteCoverUniversalDischargeContract(
      the profile-owned checked-finite-cover rule, its canonical payload to equal
      `ExactFiniteCoverSemanticRulePayload(target)`, its conclusion to be exactly
      proposition_id's goal, and its complete premise requirements to include
-     exactly target.coverage_goal_id, target.congruence_goal_id, and
+     exactly target.coverage_goal_id, target.quotient_factorization_goal_id, and
      target.success_transfer_goal_id in addition to the source obligations
      derived by the family contract; the semantic basis contains no checker,
      stream output, run result, or resource limit;
@@ -2647,14 +2684,16 @@ CheckedFiniteCoverUniversalDischargeContract(
      no opaque certificate body or self-asserted checker result may substitute;
   4. authenticate validation_basis_id and require validation_selection to be
      its exact no-extra checker/control projection; require exactly one checked
-     operation binding for the target's representative stream, representative
-     predicate, embedding, candidate, and representative-success operations;
+     operation binding for each of the target's nine semantic operations:
+     representative stream, raw-domain predicate, representative-domain
+     predicate, normalization, representative embedding, candidate,
+     quotient-factorization, representative success, and success transfer;
      require every binding's semantic operation to equal the corresponding
-     target field, require its input/output translations to connect the
-     checker's exact schemas to that operation's exact ABI; require exactly one
-     canonical assignment of the validation basis's no-extra checker and
-     translation entries to those five bindings; execute the resolved finite-
-     cover family contract's fixed
+     target field or exact composite law tuple, require its input/output
+     translations to connect the checker's exact schemas to that operation's
+     exact ABI; require exactly one canonical assignment of the validation
+     basis's no-extra checker and translation entries to those nine bindings;
+     execute the resolved finite-cover family contract's fixed
      operation_checker_binding_admission_law on every binding; require the two
      controls to cover the declared representative stream and member-evaluation
      counts;
@@ -2888,7 +2927,8 @@ stream is not evidence that the candidate algorithm is polynomial time.
 The four inputs to this contract have disjoint authority. The semantic basis
 identifies the exact logical rule, raw target, checked cover obligations,
 candidate algorithm, and success predicates. The support binds independently
-established coverage, congruence, and success-transfer judgments. The
+established coverage, universal quotient-factorization, and success-transfer
+judgments. The
 validation basis identifies the independently admitted streaming enumerator,
 evaluators, ABIs, finite controls, and residual trust used to carry out that
 rule. The stream receipt is occurrence-local replay evidence; it has no

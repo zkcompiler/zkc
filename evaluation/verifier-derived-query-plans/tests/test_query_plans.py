@@ -7,6 +7,7 @@ from pathlib import Path
 import unittest
 
 import independent_oracle
+import independent_target
 import model
 
 
@@ -50,11 +51,11 @@ class ProgramFormationTest(ErrorAssertions):
         self.assertEqual(len(self.plan.sites), 5)
         self.assertEqual(
             model.program_id(self.programs["stir-folded-word"]),
-            "7861ba7da4cf28e7ef2717e6d4edd01cc54d88304edd4d1745b230c4c1a9d533",
+            "4bcf1c25a3801603de66e215baedac620e28d23275bf403b76773c2c1f68efcf",
         )
         self.assertEqual(
             model.plan_id(self.plan, self.programs),
-            "c692a112493d0457b9dea4c9dd967c5a17af536145b2ef0b269ec208b8a28669",
+            "c301e7600d2d35affe6a28045631f90014063188dd862c7eaa7c6ad6ce6b47a5",
         )
 
     def test_exact_program_bounds_are_derived_not_advisory(self):
@@ -124,6 +125,101 @@ class ProgramFormationTest(ErrorAssertions):
             lambda: model.validate_programs(changed),
         )
 
+    def test_transitive_verifier_only_source_cannot_be_declassified(self):
+        quotient = self.programs["stir-quotient-word"]
+        folded = self.programs["stir-folded-word"]
+        changed = dict(self.programs)
+        changed[quotient.name] = replace(
+            quotient,
+            oracle_ports=tuple(
+                replace(port, visibility=model.Visibility.VERIFIER_ONLY)
+                for port in quotient.oracle_ports
+            ),
+            output_visibility=model.Visibility.VERIFIER_ONLY,
+        )
+        changed[folded.name] = replace(
+            folded,
+            oracle_ports=tuple(
+                replace(port, visibility=model.Visibility.VERIFIER_ONLY)
+                for port in folded.oracle_ports
+            ),
+        )
+        self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_programs(changed),
+        )
+
+    def test_prime_field_profile_refuses_composite_modulus(self):
+        circle = self.programs["circle-batched-word"]
+        changed = dict(self.programs)
+        changed[circle.name] = replace(circle, modulus=15)
+        error = self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_programs(changed),
+        )
+        self.assertEqual(error.boundary, "formation:algebra")
+
+    def test_componentwise_program_bounds_are_not_lexicographic(self):
+        leaf = model.DerivedWordProgram(
+            name="leaf",
+            modulus=17,
+            algebra_profile=model.AlgebraProfile.PRIME_FIELD,
+            arguments=(),
+            oracle_ports=(model.OraclePort("source"),),
+            route_algorithm="always",
+            route_inputs=(),
+            cases=(
+                model.ProgramCase(
+                    "only",
+                    (model.ReadStep("read", "source", "index"),),
+                    result="read",
+                ),
+            ),
+            output_visibility=model.Visibility.PUBLIC,
+            output_is_boolean=False,
+            maximum_elaboration_depth=1,
+            maximum_leaf_reads=1,
+        )
+        mixed = model.DerivedWordProgram(
+            name="mixed",
+            modulus=17,
+            algebra_profile=model.AlgebraProfile.PRIME_FIELD,
+            arguments=(),
+            oracle_ports=(model.OraclePort("source"),),
+            route_algorithm="zero-vs-nonzero",
+            route_inputs=("index",),
+            cases=(
+                model.ProgramCase(
+                    "nonzero",
+                    (
+                        model.CallStep(
+                            "child",
+                            "leaf",
+                            "index",
+                            (),
+                            (("source", "source"),),
+                        ),
+                    ),
+                    result="child",
+                ),
+                model.ProgramCase(
+                    "zero",
+                    tuple(
+                        model.ReadStep(f"read-{index}", "source", "index")
+                        for index in range(4)
+                    ),
+                    result="read-3",
+                ),
+            ),
+            output_visibility=model.Visibility.PUBLIC,
+            output_is_boolean=False,
+            maximum_elaboration_depth=2,
+            maximum_leaf_reads=4,
+        )
+        catalog = {"leaf": leaf, "mixed": mixed}
+        self.assertEqual(model._program_metrics("mixed", catalog), (2, 4))
+        model.validate_programs(catalog)
+
     def test_plan_requires_total_argument_and_oracle_bindings(self):
         site = self.plan.sites[0]
         broken = replace(site, oracle_bindings=site.oracle_bindings[:-1])
@@ -153,14 +249,29 @@ class StaticElaborationTest(ErrorAssertions):
     def setUp(self):
         self.programs = model.representative_programs()
         self.plan = model.representative_plan()
-        self.elaboration = model.elaborate(self.plan, self.programs)
+        events, _ = model.derive_static_template(self.plan, self.programs)
+        self.target_core = model.admit_flat_core(events)
+        self.elaboration = model.elaborate(
+            self.plan, self.programs, self.target_core
+        )
 
     def test_complete_elaboration_checks(self):
         checked = model.check_elaboration(
-            self.plan, self.programs, self.elaboration
+            self.plan, self.programs, self.target_core, self.elaboration
         )
-        self.assertEqual(checked.event_count, 57)
+        self.assertEqual(checked.event_count, 62)
         self.assertEqual(checked.plan_id, self.elaboration.plan_id)
+
+    def test_static_elaboration_limit_is_external_and_fail_closed(self):
+        error = self.assertPlanError(
+            model.OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
+            lambda: model.derive_static_template(
+                self.plan,
+                self.programs,
+                maximum_static_events=61,
+            ),
+        )
+        self.assertEqual(error.boundary, "elaboration:budget")
 
     def test_flattened_events_have_no_derived_publication_or_runtime_emission(self):
         kinds = {event.kind for event in self.elaboration.events}
@@ -193,7 +304,9 @@ class StaticElaborationTest(ErrorAssertions):
         )
         error = self.assertPlanError(
             model.OutcomeClass.REFUSED,
-            lambda: model.check_elaboration(self.plan, self.programs, candidate),
+            lambda: model.check_elaboration(
+                self.plan, self.programs, self.target_core, candidate
+            ),
         )
         self.assertEqual(error.boundary, "checking:authority")
 
@@ -213,14 +326,18 @@ class StaticElaborationTest(ErrorAssertions):
         missing = replace(self.elaboration, events=self.elaboration.events[:-1])
         self.assertPlanError(
             model.OutcomeClass.REFUSED,
-            lambda: model.check_elaboration(self.plan, self.programs, missing),
+            lambda: model.check_elaboration(
+                self.plan, self.programs, self.target_core, missing
+            ),
         )
         events = list(self.elaboration.events)
         events[1], events[2] = events[2], events[1]
         reordered = replace(self.elaboration, events=tuple(events))
         self.assertPlanError(
             model.OutcomeClass.REFUSED,
-            lambda: model.check_elaboration(self.plan, self.programs, reordered),
+            lambda: model.check_elaboration(
+                self.plan, self.programs, self.target_core, reordered
+            ),
         )
 
     def test_multiplicity_loss_in_map_refuses(self):
@@ -232,19 +349,25 @@ class StaticElaborationTest(ErrorAssertions):
         )
         self.assertPlanError(
             model.OutcomeClass.REFUSED,
-            lambda: model.check_elaboration(self.plan, self.programs, candidate),
+            lambda: model.check_elaboration(
+                self.plan, self.programs, self.target_core, candidate
+            ),
         )
 
     def test_wrong_plan_or_target_identity_is_not_reinterpreted(self):
         wrong_plan = replace(self.elaboration, plan_id="00" * 32)
         self.assertPlanError(
             model.OutcomeClass.KIND_MISMATCH,
-            lambda: model.check_elaboration(self.plan, self.programs, wrong_plan),
+            lambda: model.check_elaboration(
+                self.plan, self.programs, self.target_core, wrong_plan
+            ),
         )
         wrong_target = replace(self.elaboration, target_core_id="11" * 32)
         self.assertPlanError(
             model.OutcomeClass.KIND_MISMATCH,
-            lambda: model.check_elaboration(self.plan, self.programs, wrong_target),
+            lambda: model.check_elaboration(
+                self.plan, self.programs, self.target_core, wrong_target
+            ),
         )
 
 
@@ -306,16 +429,38 @@ class RuntimeWitnessTest(ErrorAssertions):
         del absent_tables["deep-first"][self.inputs["deep-index"]]
         absent = model.freeze_oracles(absent_tables)
         self.assertPlanError(
-            model.OutcomeClass.SEMANTIC_FAILURE,
+            model.OutcomeClass.CANNOT_ANSWER,
             lambda: self._execute("deep-first-quotient", oracles=absent),
         )
 
-    def test_evaluator_exhaustion_is_noncompletion_not_protocol_rejection(self):
+    def test_evaluator_exhaustion_is_limit_not_protocol_rejection(self):
         error = self.assertPlanError(
-            model.OutcomeClass.NONCOMPLETION,
+            model.OutcomeClass.DETERMINISTIC_LIMIT_EXCEEDED,
             lambda: self._execute("whir-grouped-fold", work_limit=2),
         )
         self.assertEqual(error.boundary, "execution:budget")
+
+    def test_partial_fold_is_routed_to_an_explicit_terminal(self):
+        inputs = dict(self.inputs)
+        inputs["stir-index"] = 0
+        result = self._execute("stir-fold", inputs=inputs)
+        self.assertEqual(result.terminal, "UndefinedFold")
+        self.assertIsNone(result.value)
+        self.assertEqual(result.queries, ())
+
+    def test_field_zero_representation_is_routed_before_inversion(self):
+        inputs = dict(self.inputs)
+        inputs["stir-index"] = 17
+        result = self._execute("stir-fold", inputs=inputs)
+        self.assertEqual(result.terminal, "UndefinedFold")
+        self.assertEqual(result.queries, ())
+
+    def test_invalid_interpolation_shape_is_an_explicit_terminal(self):
+        inputs = dict(self.inputs)
+        inputs["deep-answers-first"] = (inputs["deep-answers-first"][0],)
+        result = self._execute("deep-first-quotient", inputs=inputs)
+        self.assertEqual(result.terminal, "InvalidQuotientDomain")
+        self.assertEqual(result.queries, ())
 
     def test_repeated_source_reads_are_not_deduplicated(self):
         site = self.plan.sites[0]
@@ -355,6 +500,160 @@ class RuntimeWitnessTest(ErrorAssertions):
             self.oracles["new"] = {}
 
 
+class ActivationAndPriorResultClosureTest(ErrorAssertions):
+    def setUp(self):
+        self.programs = model.activation_and_prior_result_programs()
+        self.plan = model.activation_and_prior_result_plan()
+        plain = independent_target.activation_and_prior_result_events()
+        self.events = tuple(model.StaticEvent(**item) for item in plain)
+        self.target_core = model.admit_flat_core(self.events)
+
+    def test_independent_target_is_the_complete_expected_core(self):
+        expected, mapping = model.derive_static_template(self.plan, self.programs)
+        self.assertEqual(self.events, expected)
+        elaboration = model.elaborate(
+            self.plan, self.programs, self.target_core
+        )
+        checked = model.check_elaboration(
+            self.plan,
+            self.programs,
+            self.target_core,
+            elaboration,
+        )
+        self.assertEqual(checked.event_count, 9)
+        self.assertEqual([len(items) for _, items in mapping], [1, 1])
+
+    def test_prior_answer_is_allowed_only_in_value_flow(self):
+        results = model.execute_plan(
+            plan=self.plan,
+            programs=self.programs,
+            inputs={"active": True, "first-index": 2, "second-index": 3},
+            oracles=model.freeze_oracles(
+                {"first-source": {2: 5}, "second-source": {3: 7}}
+            ),
+        )
+        self.assertEqual(results["first-read"].value, 5)
+        self.assertEqual(results["second-combination"].value, 12)
+
+        second = self.plan.sites[1]
+        adaptive_index = replace(
+            second, requested_index=model.prior_logical_result("first-read")
+        )
+        self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_plan(
+                replace(self.plan, sites=(self.plan.sites[0], adaptive_index)),
+                self.programs,
+            ),
+        )
+
+    def test_future_logical_result_is_refused_not_missing(self):
+        future_first = replace(
+            self.plan.sites[0],
+            requested_index=model.prior_logical_result("second-combination"),
+        )
+        error = self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_plan(
+                replace(
+                    self.plan,
+                    sites=(future_first, self.plan.sites[1]),
+                ),
+                self.programs,
+            ),
+        )
+        self.assertEqual(error.boundary, "formation:plan-reference")
+
+    def test_answer_tainted_activation_refuses(self):
+        producer = self.programs["read-word"]
+        changed_programs = dict(self.programs)
+        changed_programs[producer.name] = replace(
+            producer, output_is_boolean=True
+        )
+        changed_programs = model.validate_programs(changed_programs)
+        second = self.plan.sites[1]
+        changed_site = replace(
+            second,
+            activation=model.LogicalActivation(
+                model.prior_logical_result("first-read")
+            ),
+        )
+        self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_plan(
+                replace(self.plan, sites=(self.plan.sites[0], changed_site)),
+                changed_programs,
+            ),
+        )
+
+    def test_prior_answer_cannot_enter_child_control_parameter(self):
+        consumer = self.programs["value-only-combination"]
+        regular = consumer.cases[0]
+        controlling = replace(
+            consumer,
+            route_algorithm="zero-vs-nonzero",
+            route_inputs=("prior",),
+            cases=(
+                replace(regular, tag="nonzero"),
+                model.ProgramCase("zero", (), terminal="InactiveControlBranch"),
+            ),
+        )
+        changed = dict(self.programs)
+        changed[consumer.name] = controlling
+        changed = model.validate_programs(changed)
+        self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_plan(self.plan, changed),
+        )
+
+    def test_public_activation_false_suppresses_all_work(self):
+        results = model.execute_plan(
+            plan=self.plan,
+            programs=self.programs,
+            inputs={"active": False, "first-index": 2, "second-index": 3},
+            oracles=model.freeze_oracles(
+                {"first-source": {2: 5}, "second-source": {3: 7}}
+            ),
+        )
+        self.assertFalse(results["second-combination"].active)
+        self.assertEqual(results["second-combination"].queries, ())
+
+    def test_independent_core_mutations_fail_before_elaboration(self):
+        changed = list(self.events)
+        changed[1], changed[2] = changed[2], changed[1]
+        self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.admit_flat_core(tuple(changed)),
+        )
+        altered = list(self.events)
+        event = altered[-2]
+        details = tuple(
+            (key, "plan-input:first-index" if key == "inputs" else value)
+            for key, value in event.details
+        )
+        altered[-2] = replace(event, details=details)
+        foreign = model.admit_flat_core(tuple(altered))
+        self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.elaborate(self.plan, self.programs, foreign),
+        )
+
+    def test_operational_outcomes_equal_the_foundation_partition(self):
+        self.assertEqual(
+            {item.value for item in model.OutcomeClass},
+            {
+                "Unsupported",
+                "MissingDependency",
+                "CannotAnswer",
+                "KindMismatch",
+                "Malformed",
+                "Refused",
+                "DeterministicLimitExceeded",
+                "CheckerFailure",
+            },
+        )
+
+
 class ProvenanceAndIndependenceTest(unittest.TestCase):
     def test_source_ledger_is_strict_and_primary_source_pinned(self):
         path = HERE / "cases" / "source-ledger.json"
@@ -373,6 +672,15 @@ class ProvenanceAndIndependenceTest(unittest.TestCase):
         self.assertNotIn("from model", source)
         result = independent_oracle.evaluate()
         self.assertEqual(set(result), {"queries", "values"})
+
+    def test_independent_target_imports_no_reference_model(self):
+        source = inspect.getsource(independent_target)
+        self.assertNotIn("import model", source)
+        self.assertNotIn("from model", source)
+        self.assertEqual(
+            len(independent_target.activation_and_prior_result_events()),
+            9,
+        )
 
 
 if __name__ == "__main__":

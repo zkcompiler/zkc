@@ -253,8 +253,8 @@ FixedExtractorFiniteCoverDischargeContract = {
     AnalysisProfileLawRef<"finite-cover-success-schema-v0">,
   exact_coverage_certificate_schema:
     AnalysisProfileLawRef<"finite-cover-coverage-certificate-v0">,
-  exact_congruence_certificate_schema:
-    AnalysisProfileLawRef<"finite-cover-congruence-certificate-v0">,
+  exact_quotient_factorization_certificate_schema:
+    AnalysisProfileLawRef<"finite-cover-factorization-certificate-v0">,
   exact_success_transfer_certificate_schema:
     AnalysisProfileLawRef<"finite-cover-transfer-certificate-v0">,
   finite_cover_target_reconstruction_law:
@@ -1354,13 +1354,17 @@ replacement for semantic coverage. Three separate ordinary affirmative
 Analysis judgments establish:
 
 1. coverage of every admitted raw residue class and exact stream reachability;
-2. candidate-output congruence through normalization; and
+2. universal quotient factorization and candidate-output congruence through
+   normalization; and
 3. transfer of representative success to the raw member relation.
 
 The final rule requires all three judgment IDs in their exact goal order and
-exactly five operation bindings: representative stream, representative-domain
-predicate, representative embedding, candidate, and representative-success
-predicate. It reruns the bounded stream and forms an ordinary affirmative
+exactly nine operation bindings: representative stream, raw-domain predicate,
+representative-domain predicate, normalization, representative embedding,
+candidate, quotient factorization, representative success, and success
+transfer. Its bounded stream rerun directly exercises the five operational
+members of that set; the three certificate judgments bind the remaining
+universal and transfer obligations. The rule then forms an ordinary affirmative
 `FixedExtractorUniversalCorrectness` judgment with the empty hypothesis
 context. The receipt records counts, digests, and consumed controls but carries
 no independent proof authority.

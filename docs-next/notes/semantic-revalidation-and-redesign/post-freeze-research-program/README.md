@@ -82,16 +82,20 @@ and replayable receipt. Rotate exactly the property profile and its dependent
 closure.
 
 Exit required one genuinely hypothesis-free affirmative finite judgment and
-mutations for incomplete coverage, duplicate/reordered representatives,
-congruence failure, transfer failure, checker mismatch, false extraction,
-resource exhaustion, and attempted efficiency overclaim. The result discharges
-only fixed-extractor correctness for the exact finite subject.
+mutations for incomplete quotient coverage, duplicate/reordered
+representatives, universal-factorization failure, transfer failure, checker
+mismatch, false extraction, resource exhaustion, and attempted efficiency
+overclaim. The result discharges only fixed-extractor correctness for the exact
+finite subject.
 
 **Result:** completed. The exact ordinary arithmetic module, portable
 algorithms, 308-member stream, three certificate judgments, and final empty-
 hypothesis judgment are executable. An independently implemented enumerator
-and encoder reproduce the stream digest and extractor outputs. Durable meaning
-is absorbed; the temporary package remains only until program cleanup.
+and encoder reproduce the stream digest and extractor outputs. A later semantic
+reclosure separates finite quotient coverage from the universal raw-`Nat64`
+factorization basis and binds every executed checker to an exact operation.
+Durable meaning is absorbed; the temporary package remains only until program
+cleanup.
 
 ### 4.2 Verifier-derived words and query plans
 
@@ -117,8 +121,11 @@ admitted flat Core. Exact maps retain logical order, multiplicity, and source
 leaves; no publication, transcript frame, commitment root, or runtime callback
 was added. The profile is an additive Interaction-dependent leaf. The bounded
 instrument covers four materially different source-shaped families with an
-independent oracle and 25 tests. Exact paper correspondence and theorem claims
-remain downstream obligations. The full temporary record is under
+independent arithmetic oracle and 41 tests. A separate two-use witness checks
+public activation and value-only prior-answer flow against a nine-event target
+Core authored without importing the elaborator. Exact paper correspondence,
+general target-Core admission, and theorem claims remain downstream
+obligations. The full temporary record is under
 [`verifier-derived-query-plans/`](verifier-derived-query-plans/README.md).
 
 ### 4.3 Algorithmic large carriers and Oracles

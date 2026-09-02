@@ -74,6 +74,19 @@ class PortableArithmeticBundle:
     representative_stream_digest: bytes
 
 
+@dataclass(frozen=True)
+class QuotientFactorizationReceipt:
+    module_id: object
+    normalization_algorithm_id: object
+    embedding_algorithm_id: object
+    candidate_algorithm_id: object
+    statement_period: int
+    commitment_period: int
+    challenge_bound: int
+    response_period: int
+    checked_algebraic_facts: tuple[str, ...]
+
+
 class _Unsupported(Exception):
     pass
 
@@ -258,43 +271,48 @@ def _pair_datum(
     )
 
 
-def _accepted_response(commitment: int, challenge: int) -> int:
-    candidates = tuple(
-        response
-        for response in range(SUBGROUP_ORDER)
-        if pow(GENERATOR, response, GROUP_MODULUS)
-        == (
-            commitment
-            * pow(STATEMENT, challenge % SUBGROUP_ORDER, GROUP_MODULUS)
-        )
-        % GROUP_MODULUS
-    )
-    if len(candidates) != 1:
-        raise AssertionError("the selected subgroup commitment has no unique response")
-    return candidates[0]
-
-
 def _canonical_representative_datums(k1: object) -> tuple[object, ...]:
-    commitments = tuple(
-        value
-        for value in range(GROUP_MODULUS)
-        if value in {pow(GENERATOR, exponent, GROUP_MODULUS) for exponent in range(SUBGROUP_ORDER)}
-    )
     values = []
-    for commitment in commitments:
+    for commitment in range(GROUP_MODULUS):
         for first_challenge in range(CHALLENGE_COUNT):
             for second_challenge in range(first_challenge + 1, CHALLENGE_COUNT):
+                first_responses = tuple(
+                    response
+                    for response in range(SUBGROUP_ORDER)
+                    if pow(GENERATOR, response, GROUP_MODULUS)
+                    == (
+                        commitment
+                        * pow(STATEMENT, first_challenge, GROUP_MODULUS)
+                    )
+                    % GROUP_MODULUS
+                )
+                second_responses = tuple(
+                    response
+                    for response in range(SUBGROUP_ORDER)
+                    if pow(GENERATOR, response, GROUP_MODULUS)
+                    == (
+                        commitment
+                        * pow(STATEMENT, second_challenge, GROUP_MODULUS)
+                    )
+                    % GROUP_MODULUS
+                )
+                if not first_responses or not second_responses:
+                    continue
+                if len(first_responses) != 1 or len(second_responses) != 1:
+                    raise AssertionError(
+                        "an accepted quotient residue has non-unique responses"
+                    )
                 first = (
                     STATEMENT,
                     commitment,
                     first_challenge,
-                    _accepted_response(commitment, first_challenge),
+                    first_responses[0],
                 )
                 second = (
                     STATEMENT,
                     commitment,
                     second_challenge,
-                    _accepted_response(commitment, second_challenge),
+                    second_responses[0],
                 )
                 values.append(_pair_datum(k1, first, second))
     if len(values) != 308:
@@ -562,6 +580,107 @@ def build_bundle(k1: object) -> PortableArithmeticBundle:
         stream,
         representative_datums,
         stream_digest,
+    )
+
+
+def check_quotient_factorization_basis(
+    k1: object,
+    bundle: PortableArithmeticBundle,
+    *,
+    group_modulus: int,
+    subgroup_order: int,
+    generator: int,
+    statement: int,
+    challenge_count: int,
+) -> QuotientFactorizationReceipt:
+    """Check the exact symbolic basis used for the raw-to-quotient lift.
+
+    The check is target-specific but universal over the admitted Nat64 carrier:
+    it authenticates the exact normalization, embedding, and candidate terms,
+    then establishes the periodicity and invertibility facts that make the raw
+    verifier predicate and candidate factor through those terms.  Boundary
+    examples remain falsifiers only; they are not used as the universal premise.
+    """
+
+    if type(bundle) is not PortableArithmeticBundle:
+        raise ValueError("factorization basis has another carrier")
+    expected = build_bundle(k1)
+    exact_fields = (
+        "module_id",
+        "raw_pair_type",
+        "representative_pair_type",
+        "normalization_algorithm",
+        "embedding_algorithm",
+        "candidate_algorithm",
+    )
+    if any(getattr(bundle, field) != getattr(expected, field) for field in exact_fields):
+        raise ValueError("factorization basis changes an exact operation preimage")
+    if (
+        group_modulus,
+        subgroup_order,
+        generator,
+        statement,
+        challenge_count,
+    ) != (
+        GROUP_MODULUS,
+        SUBGROUP_ORDER,
+        GENERATOR,
+        STATEMENT,
+        CHALLENGE_COUNT,
+    ):
+        raise ValueError("factorization basis is detached from the selected source")
+    if group_modulus <= 2 or subgroup_order <= 1 or challenge_count <= 1:
+        raise ValueError("factorization basis has degenerate algebraic bounds")
+    if challenge_count > subgroup_order:
+        raise ValueError("distinct admitted challenges need not remain distinct modulo q")
+    if pow(generator, subgroup_order, group_modulus) != 1:
+        raise ValueError("response periodicity is not established")
+    if any(
+        pow(generator, exponent, group_modulus) == 1
+        for exponent in range(1, subgroup_order)
+    ):
+        raise ValueError("the selected generator has smaller order")
+    if pow(statement, subgroup_order, group_modulus) != 1:
+        raise ValueError("the statement is outside the selected response subgroup")
+    if any(
+        gcd(first - second, subgroup_order) != 1
+        for first in range(challenge_count)
+        for second in range(first + 1, challenge_count)
+    ):
+        raise ValueError("one admitted challenge difference is not invertible modulo q")
+    accepted_residues = 0
+    for commitment in range(group_modulus):
+        for challenge in range(challenge_count):
+            responses = tuple(
+                response
+                for response in range(subgroup_order)
+                if pow(generator, response, group_modulus)
+                == (
+                    commitment * pow(statement, challenge, group_modulus)
+                )
+                % group_modulus
+            )
+            if len(responses) > 1:
+                raise ValueError("an accepted quotient residue has ambiguous response")
+            accepted_residues += len(responses)
+    if accepted_residues != subgroup_order * challenge_count:
+        raise ValueError("accepted residue count disagrees with the selected quotient")
+    return QuotientFactorizationReceipt(
+        bundle.module_id,
+        bundle.normalization_algorithm.identity,
+        bundle.embedding_algorithm.identity,
+        bundle.candidate_algorithm.identity,
+        9,
+        group_modulus,
+        challenge_count,
+        subgroup_order,
+        (
+            "raw-statements-are-exactly-anchored-before-modulo-nine",
+            "equal-raw-commitments-factor-modulo-group-modulus",
+            "verifier-acceptance-is-periodic-in-responses-modulo-subgroup-order",
+            "candidate-output-is-periodic-in-responses-modulo-subgroup-order",
+            "admitted-challenge-differences-are-invertible-modulo-subgroup-order",
+        ),
     )
 
 

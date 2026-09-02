@@ -170,7 +170,7 @@ def evaluate(path: Path = FIXTURE) -> dict[str, Any]:
     ) % modulus
 
     whir_indices = tuple(
-        inputs["whir-index"] + offset
+        (inputs["whir-index"] + offset) % modulus
         for offset in (0, inputs["offset-one"], inputs["offset-two"], inputs["offset-three"])
     )
     whir_values = tuple(oracle["whir-source"][index] for index in whir_indices)

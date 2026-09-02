@@ -128,6 +128,11 @@ below are reader cross-references rather than inventory edges.
 - [Post-Freeze Research Program](post-freeze-research-program/README.md) owns
   the dependency-ordered evidence and extension packages opened after the
   holdout-stable freeze decision.
+- [Finite-Cover and Query-Plan Semantic Reclosure](finite-cover-and-query-plan-semantic-reclosure/README.md)
+  records the bounded repair that separates finite quotient coverage from a
+  universal raw-domain factorization basis and closes the nonadaptive
+  activation/prior-result query-plan boundary against an independently
+  authored flat Core.
 - [Formal Assurance Architecture Research](formal-assurance-research/README.md)
   owns the cross-cutting F0 ideal-architecture audit, the bounded F1-R0
   package/checker feasibility result, the bounded F1-R1A target profile/source

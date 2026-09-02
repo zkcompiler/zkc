@@ -876,10 +876,21 @@ ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ("finite-cover-candidate-schema-v0", "exact-candidate-schema"),
         ("finite-cover-success-schema-v0", "exact-success-schema"),
         ("finite-cover-coverage-certificate-v0", "exact-certificate-schema"),
-        ("finite-cover-congruence-certificate-v0", "exact-certificate-schema"),
+        ("finite-cover-factorization-certificate-v0", "exact-certificate-schema"),
         ("finite-cover-transfer-certificate-v0", "exact-certificate-schema"),
         ("finite-cover-operation-binding-v0", "exact-checker-binding-law"),
         ("finite-cover-stream-progress-v0", "exact-stream-progress-law"),
+        ("finite-cover-raw-domain-v0", "exact-raw-domain-predicate"),
+        (
+            "finite-cover-representative-domain-v0",
+            "exact-representative-domain-predicate",
+        ),
+        ("finite-cover-output-congruence-v0", "exact-output-congruence-law"),
+        (
+            "finite-cover-representative-success-v0",
+            "exact-representative-success-predicate",
+        ),
+        ("finite-cover-raw-success-v0", "exact-raw-success-predicate"),
         ("adaptive-knowledge-conclusion-v0", "exact-family-conclusion-schema"),
         (
             "afk-fixed-public-setup-projection-v0",
@@ -1171,7 +1182,7 @@ ANALYSIS_PROPERTY_LAW_SOURCE = _profile_law_source(
         "exact-used-static-view-and-relations-dependencies",
         "bounded-quantitative-expression-and-resource-basis",
         "independent-premises-are-not-derived-proofs",
-        "checked-finite-cover-requires-coverage-congruence-and-transfer",
+        "checked-finite-cover-requires-coverage-factorization-and-transfer",
         "finite-cover-receipts-are-occurrence-evidence-not-semantic-authority",
         "fixed-extractor-finite-result-has-no-efficiency-or-family-lift",
     ),
@@ -14875,15 +14886,19 @@ def extract_schnorr_witness(
 
 FINITE_COVER_CERTIFICATE_KINDS = (
     "coverage",
-    "congruence",
+    "quotient-factorization",
     "success-transfer",
 )
 FINITE_COVER_OPERATION_LABELS = (
     "representative-stream",
+    "raw-domain",
     "representative-domain",
+    "normalization",
     "representative-embedding",
     "candidate",
+    "quotient-factorization",
     "representative-success",
+    "success-transfer",
 )
 
 
@@ -15262,7 +15277,7 @@ def _finite_cover_target_body(
                 ),
             ),
             (2, k1.value_type_datum(FINITE_COVER_ARITHMETIC.raw_pair_type)),
-            (3, k1.Symbol("exact-fresh-accepted-transcript-pair")),
+            (3, _finite_cover_law_ref("finite-cover-raw-domain-v0")),
             (4, _finite_cover_law_ref("finite-cover-cover-schema-v0")),
             (
                 5,
@@ -15270,7 +15285,7 @@ def _finite_cover_target_body(
                     FINITE_COVER_ARITHMETIC.representative_pair_type
                 ),
             ),
-            (6, k1.Symbol("canonical-schnorr-pair-representative")),
+            (6, _finite_cover_law_ref("finite-cover-representative-domain-v0")),
             (
                 7,
                 _id_datum(
@@ -15306,9 +15321,9 @@ def _finite_cover_target_body(
                 ),
             ),
             (12, _finite_cover_law_ref("finite-cover-candidate-schema-v0")),
-            (13, k1.Symbol("exact-witness-equality-after-normalization")),
-            (14, k1.Symbol("representative-output-satisfies-bound-relation")),
-            (15, k1.Symbol("raw-member-output-satisfies-bound-relation")),
+            (13, _finite_cover_law_ref("finite-cover-output-congruence-v0")),
+            (14, _finite_cover_law_ref("finite-cover-representative-success-v0")),
+            (15, _finite_cover_law_ref("finite-cover-raw-success-v0")),
             (
                 16,
                 k1.DatumSeq(
@@ -15361,7 +15376,8 @@ def _finite_cover_checker_contract_id(label: str) -> object:
         (
             (0, k1.Symbol(label)),
             (1, _finite_cover_law_ref("finite-cover-operation-binding-v0")),
-            (2, k1.Symbol("python-reference-provider-with-exact-closed-abi")),
+            (2, _finite_cover_semantic_operation_body(label)),
+            (3, k1.Symbol("python-reference-provider-with-exact-closed-abi")),
         )
     )
     return k1.content_id(
@@ -15369,6 +15385,158 @@ def _finite_cover_checker_contract_id(label: str) -> object:
         k1.encode_datum(body),
         semantic_regime=k1.SEMANTIC_REGIME_ID,
     )
+
+
+def _finite_cover_semantic_operation_body(label: str) -> object:
+    if label == "representative-stream":
+        return k1.DatumVariant(
+            0,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            FINITE_COVER_ARITHMETIC.representative_stream_algorithm.identity,
+                            "foundation.portable-algorithm",
+                        ),
+                    ),
+                    (1, _finite_cover_law_ref("finite-cover-stream-progress-v0")),
+                )
+            ),
+        )
+    if label == "representative-domain":
+        return k1.DatumVariant(
+            2,
+            k1.DatumRecord(
+                (
+                    (0, _finite_cover_law_ref("finite-cover-representative-domain-v0")),
+                    (1, _finite_cover_law_ref("finite-cover-cover-schema-v0")),
+                )
+            ),
+        )
+    if label == "raw-domain":
+        return k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                (
+                    (0, _finite_cover_law_ref("finite-cover-raw-domain-v0")),
+                    (1, _finite_cover_law_ref("finite-cover-cover-schema-v0")),
+                )
+            ),
+        )
+    if label == "normalization":
+        return k1.DatumVariant(
+            3,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            FINITE_COVER_ARITHMETIC.normalization_algorithm.identity,
+                            "foundation.portable-algorithm",
+                        ),
+                    ),
+                    (1, _finite_cover_law_ref("finite-cover-cover-schema-v0")),
+                )
+            ),
+        )
+    if label == "representative-embedding":
+        return k1.DatumVariant(
+            4,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            FINITE_COVER_ARITHMETIC.embedding_algorithm.identity,
+                            "foundation.portable-algorithm",
+                        ),
+                    ),
+                    (1, _finite_cover_law_ref("finite-cover-cover-schema-v0")),
+                )
+            ),
+        )
+    if label == "candidate":
+        return k1.DatumVariant(
+            5,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            FINITE_COVER_ARITHMETIC.candidate_algorithm.identity,
+                            "foundation.portable-algorithm",
+                        ),
+                    ),
+                    (1, _finite_cover_law_ref("finite-cover-candidate-schema-v0")),
+                )
+            ),
+        )
+    if label == "quotient-factorization":
+        return k1.DatumVariant(
+            6,
+            k1.DatumRecord(
+                (
+                    (0, _finite_cover_law_ref("finite-cover-raw-domain-v0")),
+                    (
+                        1,
+                        _id_datum(
+                            FINITE_COVER_ARITHMETIC.normalization_algorithm.identity,
+                            "foundation.portable-algorithm",
+                        ),
+                    ),
+                    (
+                        2,
+                        _id_datum(
+                            FINITE_COVER_ARITHMETIC.embedding_algorithm.identity,
+                            "foundation.portable-algorithm",
+                        ),
+                    ),
+                    (
+                        3,
+                        _id_datum(
+                            FINITE_COVER_ARITHMETIC.candidate_algorithm.identity,
+                            "foundation.portable-algorithm",
+                        ),
+                    ),
+                    (4, _finite_cover_law_ref("finite-cover-output-congruence-v0")),
+                    (
+                        5,
+                        _finite_cover_law_ref(
+                            "finite-cover-factorization-certificate-v0"
+                        ),
+                    ),
+                )
+            ),
+        )
+    if label == "representative-success":
+        return k1.DatumVariant(
+            7,
+            k1.DatumRecord(
+                (
+                    (0, _finite_cover_law_ref("finite-cover-representative-success-v0")),
+                    (1, _finite_cover_law_ref("finite-cover-success-schema-v0")),
+                )
+            ),
+        )
+    if label == "success-transfer":
+        return k1.DatumVariant(
+            8,
+            k1.DatumRecord(
+                (
+                    (0, _finite_cover_law_ref("finite-cover-representative-success-v0")),
+                    (1, _finite_cover_law_ref("finite-cover-output-congruence-v0")),
+                    (2, _finite_cover_law_ref("finite-cover-raw-success-v0")),
+                    (
+                        3,
+                        _finite_cover_law_ref(
+                            "finite-cover-transfer-certificate-v0"
+                        ),
+                    ),
+                )
+            ),
+        )
+    raise PropertyError("unknown finite-cover checker operation")
 
 
 @_with_finite_cover_derivation("validation-basis")
@@ -15381,6 +15549,10 @@ def finite_cover_validation_basis_id() -> object:
                     (1, k1.Symbol(label)),
                     (
                         2,
+                        _finite_cover_semantic_operation_body(label),
+                    ),
+                    (
+                        3,
                         _id_datum(
                             _finite_cover_checker_contract_id(label),
                             "analysis.finite-cover-checker-contract",
@@ -15711,39 +15883,6 @@ def _portable_success(
     return outcome.value
 
 
-def _noncanonical_variants(
-    first: SchnorrTranscript,
-    second: SchnorrTranscript,
-) -> tuple[tuple[SchnorrTranscript, SchnorrTranscript], ...]:
-    return (
-        (first, second),
-        (
-            replace(
-                first,
-                commitment=first.commitment + 23,
-                response=first.response + 11,
-            ),
-            replace(
-                second,
-                commitment=second.commitment + 23,
-                response=second.response + 22,
-            ),
-        ),
-        (
-            replace(
-                first,
-                commitment=first.commitment + 23 * 257,
-                response=first.response + 11 * 257,
-            ),
-            replace(
-                second,
-                commitment=second.commitment + 23 * 257,
-                response=second.response + 11 * 509,
-            ),
-        ),
-    )
-
-
 def _finite_cover_member_after_source_admission(
     profile: SchnorrSpecialSoundnessProfile,
     first: SchnorrTranscript,
@@ -15798,6 +15937,36 @@ def _finite_cover_member_after_source_admission(
         ) % profile.group_modulus
 
     return accepts(first) and accepts(second)
+
+
+def _checked_quotient_factorization_receipt(
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    try:
+        receipt = finite_cover.check_quotient_factorization_basis(
+            k1,
+            FINITE_COVER_ARITHMETIC,
+            group_modulus=profile.group_modulus,
+            subgroup_order=profile.subgroup_order,
+            generator=profile.generator,
+            statement=profile.statement_anchor_value,
+            challenge_count=profile.challenge_count,
+        )
+    except (TypeError, ValueError) as error:
+        raise AuthorityError(
+            f"finite-cover quotient factorization basis failed: {error}"
+        ) from error
+    if (
+        receipt.normalization_algorithm_id
+        != FINITE_COVER_ARITHMETIC.normalization_algorithm.identity
+        or receipt.embedding_algorithm_id
+        != FINITE_COVER_ARITHMETIC.embedding_algorithm.identity
+        or receipt.candidate_algorithm_id != SCHNORR_EXTRACTOR_ALGORITHM
+    ):
+        raise AuthorityError(
+            "finite-cover quotient factorization binds another exact operation"
+        )
+    return receipt
 
 
 def _validate_finite_cover_certificate_semantics(kind: str) -> None:
@@ -15890,25 +16059,10 @@ def _validate_finite_cover_certificate_semantics(kind: str) -> None:
                 raise AuthorityError(
                     "finite-cover representative does not embed to a raw member"
                 )
-            for raw_first, raw_second in _noncanonical_variants(first, second):
-                if not _finite_cover_member_after_source_admission(
-                    profile, raw_first, raw_second
-                ):
-                    raise AuthorityError(
-                        "finite-cover quotient omits an accepted noncanonical member"
-                    )
-                normalized = _portable_success(
-                    FINITE_COVER_ARITHMETIC.normalization_algorithm,
-                    (_raw_pair_value(raw_first, raw_second),),
-                    "normalization",
-                )
-                if normalized.datum != datum:
-                    raise AuthorityError(
-                        "finite-cover normalization reaches another representative"
-                    )
         return
 
-    if kind == "congruence":
+    if kind == "quotient-factorization":
+        _checked_quotient_factorization_receipt(profile)
         for datum in representatives:
             representative = _representative_value(datum)
             embedded = _portable_success(
@@ -15921,25 +16075,29 @@ def _validate_finite_cover_certificate_semantics(kind: str) -> None:
                 (embedded,),
                 "candidate",
             )
-            first, second = _datum_pair(embedded)
-            for raw_first, raw_second in _noncanonical_variants(first, second):
-                raw = _raw_pair_value(raw_first, raw_second)
-                normalized = _portable_success(
-                    FINITE_COVER_ARITHMETIC.normalization_algorithm,
-                    (raw,),
-                    "normalization",
+            normalized = _portable_success(
+                FINITE_COVER_ARITHMETIC.normalization_algorithm,
+                (embedded,),
+                "normalization",
+            )
+            if normalized.datum != datum:
+                raise AuthorityError(
+                    "finite-cover representative embedding is not a normalization section"
                 )
-                if normalized.datum != datum:
-                    raise AuthorityError("finite-cover congruence normalization changed")
-                output = _portable_success(
-                    FINITE_COVER_ARITHMETIC.candidate_algorithm,
-                    (raw,),
-                    "candidate",
+            normalized_embedding = _portable_success(
+                FINITE_COVER_ARITHMETIC.embedding_algorithm,
+                (normalized,),
+                "normalized representative embedding",
+            )
+            normalized_output = _portable_success(
+                FINITE_COVER_ARITHMETIC.candidate_algorithm,
+                (normalized_embedding,),
+                "normalized candidate",
+            )
+            if normalized_output.datum != canonical_output.datum:
+                raise AuthorityError(
+                    "finite-cover candidate disagrees on the canonical quotient section"
                 )
-                if output.datum != canonical_output.datum:
-                    raise AuthorityError(
-                        "finite-cover candidate does not factor through normalization"
-                    )
         return
 
     for datum in representatives:
@@ -19247,7 +19405,7 @@ def _selected_statement_template_body(
 # from the body it authenticates: a statement edit must fail closed until a
 # reviewer deliberately rotates the literal and the accompanying source record.
 AFK_SELECTED_STATEMENT_CONTENT_SHA256 = (
-    "595c760d2624d20d39cb70487d37d83c76fcc8181af9c6f3e44e10536d1154be"
+    "13d270f6f386241d7c1d62e1a007432fd8522b1ad00b26f9ede5a91312505a1c"
 )
 
 

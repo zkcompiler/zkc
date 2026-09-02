@@ -136,6 +136,107 @@ class PortableArithmeticTest(unittest.TestCase):
         self.assertEqual(candidate.kind, "success")
         self.assertEqual(candidate.value.datum, k1.Nat(3))
 
+    def test_universal_factorization_basis_binds_exact_operations(self) -> None:
+        expected_algorithm_digests = {
+            "normalization_algorithm": (
+                "40474de91b628c285cd7ae052909a8be7f7644a481a84c93ecf0cf7024c0670d"
+            ),
+            "embedding_algorithm": (
+                "fe1e4e156ec8dcc40c83e12663a7a779b09c8cf457564d97bb57619be52c607f"
+            ),
+            "candidate_algorithm": (
+                "cadb2ba807b5d7146faa9b50bd99802ebb6755322e4bc9f6e4a2136d79ee3440"
+            ),
+            "representative_stream_algorithm": (
+                "351b1df4ad016cb8825b6724298efaf11681e671dbd2e1fe96526e3fde410539"
+            ),
+        }
+        self.assertEqual(
+            {
+                field: getattr(self.bundle, field).identity.digest.hex()
+                for field in expected_algorithm_digests
+            },
+            expected_algorithm_digests,
+        )
+        receipt = portable.check_quotient_factorization_basis(
+            k1,
+            self.bundle,
+            group_modulus=23,
+            subgroup_order=11,
+            generator=2,
+            statement=8,
+            challenge_count=8,
+        )
+        self.assertEqual(
+            receipt.normalization_algorithm_id,
+            self.bundle.normalization_algorithm.identity,
+        )
+        self.assertEqual(
+            receipt.candidate_algorithm_id,
+            self.bundle.candidate_algorithm.identity,
+        )
+        self.assertEqual(len(receipt.checked_algebraic_facts), 5)
+
+        for field in (
+            "normalization_algorithm",
+            "embedding_algorithm",
+            "candidate_algorithm",
+        ):
+            original = getattr(self.bundle, field)
+            changed_algorithm = k1.CanonicalAlgorithm(
+                k1.Symbol(f"analysis.finite-cover.changed-{field}"),
+                original.inputs,
+                original.term,
+            )
+            changed = replace(self.bundle, **{field: changed_algorithm})
+            with self.assertRaisesRegex(
+                ValueError, "changes an exact operation preimage"
+            ):
+                portable.check_quotient_factorization_basis(
+                    k1,
+                    changed,
+                    group_modulus=23,
+                    subgroup_order=11,
+                    generator=2,
+                    statement=8,
+                    challenge_count=8,
+                )
+
+    def test_nat64_boundary_lift_is_only_a_falsifier_not_the_certificate(self) -> None:
+        first, second = oracle.representative_stream()[0]
+
+        def largest_congruent(residue: int, period: int) -> int:
+            return portable.UINT64_MAX - (
+                (portable.UINT64_MAX - residue) % period
+            )
+
+        commitment = largest_congruent(first[1], portable.GROUP_MODULUS)
+        raw = _raw_pair_value(
+            self.bundle,
+            (
+                first[0],
+                commitment,
+                first[2],
+                largest_congruent(first[3], portable.SUBGROUP_ORDER),
+            ),
+            (
+                second[0],
+                commitment,
+                second[2],
+                largest_congruent(second[3], portable.SUBGROUP_ORDER),
+            ),
+        )
+        normalized = self.evaluator.evaluate(
+            self.bundle.normalization_algorithm, (raw,)
+        )
+        candidate = self.evaluator.evaluate(self.bundle.candidate_algorithm, (raw,))
+        self.assertEqual(normalized.kind, "success")
+        self.assertEqual(
+            normalized.value.datum, self.bundle.representative_datums[0]
+        )
+        self.assertEqual(candidate.kind, "success")
+        self.assertEqual(candidate.value.datum, k1.Nat(3))
+
     def test_evaluator_failure_partition_is_closed_and_distinct(self) -> None:
         with self.assertRaises(TypeError):
             self.bundle.module_preimages[self.bundle.module_id] = object()
@@ -239,6 +340,10 @@ class AnalysisActivationTest(unittest.TestCase):
         self.assertEqual(hypothesis_context.nodes, ())
         self.assertEqual(len(checked.certificate_judgment_ids), 3)
         self.assertEqual(len(set(checked.certificate_judgment_ids)), 3)
+        self.assertEqual(
+            model.FINITE_COVER_CERTIFICATE_KINDS,
+            ("coverage", "quotient-factorization", "success-transfer"),
+        )
         self.assertEqual(checked.stream_receipt.exact_representative_count, 308)
         self.assertEqual(
             checked.stream_receipt.ordered_representative_stream_digest.hex(),
@@ -271,6 +376,25 @@ class AnalysisActivationTest(unittest.TestCase):
             checked.validation_basis_id, "analysis.validation-basis"
         )
         checker_entries = validation.admitted_checker_contract_ids_and_abis
+        operation_bodies = tuple(
+            dict(entry.fields)[2] for entry in checker_entries.values
+        )
+        self.assertEqual(len(set(map(model.k1.encode_datum, operation_bodies))), 9)
+        candidate_contract_id = model._finite_cover_checker_contract_id("candidate")
+        changed_algorithm = model.k1.CanonicalAlgorithm(
+            model.k1.Symbol("analysis.fixed-extractor.changed-candidate"),
+            model.FINITE_COVER_ARITHMETIC.candidate_algorithm.inputs,
+            model.FINITE_COVER_ARITHMETIC.candidate_algorithm.term,
+        )
+        changed_bundle = replace(
+            model.FINITE_COVER_ARITHMETIC,
+            candidate_algorithm=changed_algorithm,
+        )
+        with patch.object(model, "FINITE_COVER_ARITHMETIC", changed_bundle):
+            self.assertNotEqual(
+                model._finite_cover_checker_contract_id("candidate"),
+                candidate_contract_id,
+            )
         wrong_validation_id = model._analysis_id(
             "analysis.validation-basis",
             replace(

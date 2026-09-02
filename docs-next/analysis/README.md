@@ -26,7 +26,8 @@ finite PIR/Relations subject S
   -> finite relation-bound Fresh proposition and conditional judgment
 
 exact fixed Schnorr subject and response-difference extractor
-  + checked coverage, congruence, and success-transfer certificates
+  + checked quotient coverage, universal quotient-factorization, and
+    success-transfer certificates
   -> hypothesis-free fixed-extractor universal judgment
 
 abstract asymptotic family F
@@ -229,7 +230,8 @@ The bounded active set is:
    `(p,q,g,Y)=(23,11,2,8)` subject and challenges `{0,...,7}`, one authenticated
    response-difference portable algorithm is checked over a 308-member
    verifier-observation quotient. Three distinct ordinary certificate
-   judgments establish coverage, output congruence, and success transfer; the
+   judgments establish quotient coverage, universal factorization with output
+   congruence, and success transfer; the
    final judgment has an empty hypothesis context. It establishes no
    efficiency, existential special soundness, family lift, or security claim.
 3. **Abstract classical-ROM Fresh-to-FS transport.** One exact asymptotic
