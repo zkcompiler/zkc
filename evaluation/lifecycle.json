@@ -64,6 +64,15 @@
       ]
     },
     {
+      "id": "formal-provider-correspondence-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Successive falsifiers that test whether an exact admitted source object, as exposed by its owner views, admits a provider-side interpretation whose correspondence can be checked, without promoting a generated provider term, an elaboration receipt, or a proof assistant into semantic authority.",
+      "exit_rule": "Close the enumerated missing-observable list against the published owner views and their durable owners, record each remaining absence as an owner decision rather than an adapter default, replay the predecessor ledger against the successor generator and checker, and then remove superseded predecessor executables.",
+      "checks": [
+        "research.provider-observable-audit"
+      ]
+    },
+    {
       "id": "cross-cutting-probe-promotion",
       "disposition": "promote-then-retire",
       "purpose": "Small cross-cutting pressure probes whose useful laws must acquire a durable semantic or implementation owner rather than becoming a parallel architecture.",

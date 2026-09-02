@@ -1,0 +1,3260 @@
+{
+  "authority": "none; untrusted generator output",
+  "constructs": [
+    {
+      "consulted": [],
+      "id": "subject.core",
+      "kind": "subject-identity",
+      "layer": "interaction",
+      "lean": {
+        "line": 24,
+        "name": "coreIdBody",
+        "text": "def coreIdBody : String := \"00000000000000167a6b632e666f756e646174696f6e2e6d6574612e7630000000000000006100000000000000167a6b632e666f756e646174696f6e2e6d6574612e7630000000000000001b666f756e646174696f6e2e6964656e746974792d70726f66696c650764186d53048eb619e79783581331dd7ef7c3939215b8000239c94768237ac1000000000000005b00000000000000167a6b632e666f756e646174696f6e2e6d6574612e76300000000000000015666f756e646174696f6e2e686173682d7375697465c24b580c31bf26bf314e746c87a93cb7ff61d3c33880fbd0ad8e31b30711080500000000000000147069722e696e7465726163746976652d636f7265000000000000006000000000000000167a6b632e666f756e646174696f6e2e6d6574612e7630000000000000001a666f756e646174696f6e2e73656d616e7469632d726567696d650c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef33f9d34abd61e22565b85fbfe03a35b3ca55f1a3980b71c5e9b729b3a93027f5\""
+      },
+      "realizes": null,
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "core-id-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "subject.protocol",
+      "kind": "subject-identity",
+      "layer": "interaction",
+      "lean": {
+        "line": 25,
+        "name": "protocolIdBody",
+        "text": "def protocolIdBody : String := \"00000000000000167a6b632e666f756e646174696f6e2e6d6574612e7630000000000000006100000000000000167a6b632e666f756e646174696f6e2e6d6574612e7630000000000000001b666f756e646174696f6e2e6964656e746974792d70726f66696c650764186d53048eb619e79783581331dd7ef7c3939215b8000239c94768237ac1000000000000005b00000000000000167a6b632e666f756e646174696f6e2e6d6574612e76300000000000000015666f756e646174696f6e2e686173682d7375697465c24b580c31bf26bf314e746c87a93cb7ff61d3c33880fbd0ad8e31b307110805000000000000000c7069722e70726f746f636f6c000000000000006000000000000000167a6b632e666f756e646174696f6e2e6d6574612e7630000000000000001a666f756e646174696f6e2e73656d616e7469632d726567696d650c537a1d1638992bd0c3efd2256ed4c3506ecb96bb6136b6084189de10b86bef5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94\""
+      },
+      "realizes": null,
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "protocol-id-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "ExecutionView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "type.z3",
+      "kind": "value-carrier",
+      "layer": "interaction",
+      "lean": {
+        "line": 31,
+        "name": "Z3",
+        "text": "abbrev Z3 : Type := Fin 3"
+      },
+      "realizes": null,
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "type.bool",
+      "kind": "value-carrier",
+      "layer": "interaction",
+      "lean": {
+        "line": 32,
+        "name": "CheckOutput",
+        "text": "abbrev CheckOutput : Type := Bool"
+      },
+      "realizes": null,
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "read.0.public-invocation-input.0",
+      "kind": "prover-read",
+      "layer": "interaction",
+      "lean": {
+        "line": 38,
+        "name": "publicInput0",
+        "text": "publicInput0 : Z3"
+      },
+      "realizes": {
+        "decision": 0,
+        "read": "public-invocation-input",
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "public-input-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "read.0.opened-binding.0",
+      "kind": "prover-read",
+      "layer": "interaction",
+      "lean": {
+        "line": 39,
+        "name": "openedBinding0",
+        "text": "openedBinding0 : Z3"
+      },
+      "realizes": {
+        "decision": 0,
+        "read": "opened-binding",
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "binding-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "read.2.public-invocation-input.0",
+      "kind": "prover-read",
+      "layer": "interaction",
+      "lean": {
+        "line": 43,
+        "name": "publicInput0",
+        "text": "publicInput0 : Z3"
+      },
+      "realizes": {
+        "decision": 2,
+        "read": "public-invocation-input",
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "public-input-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "read.2.opened-binding.0",
+      "kind": "prover-read",
+      "layer": "interaction",
+      "lean": {
+        "line": 44,
+        "name": "openedBinding0",
+        "text": "openedBinding0 : Z3"
+      },
+      "realizes": {
+        "decision": 2,
+        "read": "opened-binding",
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "binding-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "read.2.observed-message.0",
+      "kind": "prover-read",
+      "layer": "interaction",
+      "lean": {
+        "line": 45,
+        "name": "observedMessage0",
+        "text": "observedMessage0 : Z3"
+      },
+      "realizes": {
+        "decision": 2,
+        "read": "observed-message",
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "read.2.observed-challenge.1",
+      "kind": "prover-read",
+      "layer": "interaction",
+      "lean": {
+        "line": 46,
+        "name": "observedChallenge1",
+        "text": "observedChallenge1 : Z3"
+      },
+      "realizes": {
+        "decision": 2,
+        "read": "observed-challenge",
+        "target": 1
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "read.2.prior-own-move.0",
+      "kind": "prover-read",
+      "layer": "interaction",
+      "lean": {
+        "line": 47,
+        "name": "priorOwnMove0",
+        "text": "priorOwnMove0 : Z3"
+      },
+      "realizes": {
+        "decision": 2,
+        "read": "prior-own-move",
+        "target": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "decision-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 9,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "decision.0",
+      "kind": "prover-decision",
+      "layer": "interaction",
+      "lean": {
+        "line": 51,
+        "name": "decide0",
+        "text": "decide0 : ProverView0 \u2192 ProbComp Z3"
+      },
+      "realizes": {
+        "decision": 0,
+        "occurrence": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "decision-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "decision-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "decision.2",
+      "kind": "prover-decision",
+      "layer": "interaction",
+      "lean": {
+        "line": 52,
+        "name": "decide2",
+        "text": "decide2 : ProverView2 \u2192 ProbComp Z3"
+      },
+      "realizes": {
+        "decision": 2,
+        "occurrence": 2
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "decision-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "terminal.0.verdict",
+      "kind": "terminal-verdict",
+      "layer": "interaction",
+      "lean": {
+        "line": 57,
+        "name": "accept",
+        "text": "| accept"
+      },
+      "realizes": {
+        "terminal": 0,
+        "verdict": "accept"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 5,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "terminal.1.verdict",
+      "kind": "terminal-verdict",
+      "layer": "interaction",
+      "lean": {
+        "line": 58,
+        "name": "reject",
+        "text": "| reject"
+      },
+      "realizes": {
+        "terminal": 1,
+        "verdict": "reject"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "kind": "unit"
+          },
+          "path": [
+            {
+              "ordinal": 7,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "ExecutionView"
+        },
+        {
+          "boundary": {
+            "compiler": "challenge-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "ExecutionView"
+        },
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "ExecutionView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "ExecutionView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      ],
+      "id": "challenge.0.interpretation",
+      "kind": "challenge-interpretation",
+      "layer": "interaction",
+      "lean": {
+        "line": 65,
+        "name": "FreshChallenge0",
+        "text": "abbrev FreshChallenge0 : Type := ProbComp Z3"
+      },
+      "realizes": {
+        "challenge": 0,
+        "interpretation": "Fresh"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "ExecutionView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "challenge.0.law",
+      "kind": "distribution",
+      "layer": "interaction",
+      "lean": {
+        "line": 73,
+        "name": "freshLaw0",
+        "text": "variable (freshLaw0 : FreshChallenge0)"
+      },
+      "realizes": {
+        "challenge": 0
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-distribution",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md Section 5.2: the Fresh law denotes a distribution independent of prover-controlled history; distribution truth is an Analysis/evidence obligation",
+            "docs-next/pir/interactive-core.md Section 12.1: FreshResolver obtains one value from a scoped public-coin capability; source identity proves no distribution",
+            "docs-next/pir/interactive-core.md Section 2: a nominal ProtocolDeclarationRef proves no distribution",
+            "evaluation/formal-source-target-core-f1r1b/reference_model.py protocol_module: the nominal declaration bodies finite-additive-z3 and fresh-uniform-z3",
+            "VCVio/CryptoFoundations/SigmaProtocol.lean PerfectlyComplete and VCVio/OracleComp/Constructions/SampleableType.lean: the provider-side uniform draw"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "module-declaration-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                }
+              ],
+              "view": "PublicCoinView"
+            },
+            {
+              "boundary": {
+                "compiler": "module-declaration-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                }
+              ],
+              "view": "PublicCoinView"
+            },
+            {
+              "boundary": {
+                "compiler": "module-declaration-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 3,
+                  "step": "field"
+                }
+              ],
+              "view": "ExecutionView"
+            },
+            {
+              "boundary": {
+                "compiler": "module-declaration-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 4,
+                  "step": "field"
+                }
+              ],
+              "view": "ExecutionView"
+            }
+          ],
+          "needed_for": "occurrence.1 (the sampling step) and the provider's challenge draw, which ChallengeVerifyProtocol.PerfectlyComplete fixes as `$\u1d57 Chal`, the uniform draw of SampleableType",
+          "reason": "The six views carry the Fresh interpretation, the challenge's value type (Fin 3), and nominal references to the declarations pir.challenge-domain #0 and pir.public-coin-law #0 of module zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7. No leaf carries the distribution those references denote; the referenced declaration bodies are nominal symbols (finite-additive-z3, fresh-uniform-z3) whose formation, by the target text, proves no distribution."
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "check.0.denotation",
+      "kind": "denotation",
+      "layer": "interaction",
+      "lean": {
+        "line": 74,
+        "name": "check0",
+        "text": "variable (check0 : Z3 \u2192 Z3 \u2192 Z3 \u2192 Z3 \u2192 CheckOutput)"
+      },
+      "realizes": {
+        "check": 0
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "evaluation/formal-source-target-core-f1r1b/reference_model.py finite_schnorr_algorithm: the authenticated 179,147-octet preimage",
+            "evaluation/k1-executable-foundations/reference_model.py Evaluator.evaluate: the evaluation semantics",
+            "docs-next/foundation/executable-foundations.md Sections 5.1, 5.2, and 7.2: denotation boundary, canonical calculus, evaluation contract",
+            "docs-next/pir/interactive-core.md Section 6.1: Checks"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "algorithm-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "field"
+                }
+              ],
+              "view": "EffectView"
+            },
+            {
+              "boundary": {
+                "compiler": "evaluation-contract-id-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 5,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "field"
+                }
+              ],
+              "view": "EffectView"
+            }
+          ],
+          "needed_for": "occurrence.3 (the Check step) and ChallengeVerifyProtocol.verify",
+          "reason": "The views carry the Check's portable-algorithm identity (zkcidv0:foundation.portable-algorithm:86a47a88f56ed94a258b1e8215ec9b4f4537265f435bf32f7569d05f725722df), its evaluation contract (zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63), its 4 ordered input value references, and its Boolean output type. No leaf carries the algorithm's term; the identity is a content reference to a K1 portable-algorithm preimage that lives outside every view."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "guard.4.denotation",
+      "kind": "denotation",
+      "layer": "interaction",
+      "lean": {
+        "line": 75,
+        "name": "guard4",
+        "text": "variable (guard4 : CheckOutput \u2192 Bool)"
+      },
+      "realizes": {
+        "occurrence": 4,
+        "role": "guard"
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-denotation",
+          "lives_in": [
+            "evaluation/formal-source-target-core-f1r1b/reference_model.py boolean_identity_algorithm: the authenticated preimage",
+            "docs-next/pir/interactive-core.md Sections 5.1 and 6.4: Guards; terminal required checks",
+            "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2b2c1b5b1-terminal-owner-contracts.md: the later selected Check-use predicate, absent from the B1 views"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "guard-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 1,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 4,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "field"
+                }
+              ],
+              "view": "EffectView"
+            }
+          ],
+          "needed_for": "occurrence.4 (first-active guarded Accept) and ChallengeVerifyProtocol.verify",
+          "reason": "The views carry the Accept terminal's guard as one opaque guard-body-v0 leaf; decoded under the codec premise it names the portable algorithm zkcidv0:foundation.portable-algorithm:aa07d7da5eae94db0a943c1c653d2450d18b6d5b9b501bdfeb9cbfe836548be6, the evaluation contract zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63, and the input ['OccurrenceOutput', 3, 0]. No leaf carries that algorithm's term, and no view states that the guard's truth equals the required Check's truth."
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "decision-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "decision-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "strategy.parameter",
+      "kind": "strategy-parameter",
+      "layer": "interaction",
+      "lean": {
+        "line": 80,
+        "name": "prover",
+        "text": "(prover : Prover)"
+      },
+      "realizes": null,
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "exact-profile-law",
+            "law": "core-admission-v0"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "PublicBindingView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "view": "PublicBindingView"
+        }
+      ],
+      "id": "input.public.0",
+      "kind": "public-input",
+      "layer": "interaction",
+      "lean": {
+        "line": 81,
+        "name": "publicInput0",
+        "text": "(publicInput0 : Z3)"
+      },
+      "realizes": {
+        "public_input": 0
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "public-input-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "binding-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "occurrence.0",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 83,
+        "name": "msg0",
+        "text": "let msg0 \u2190 prover.decide0 \u27e8publicInput0, publicInput0\u27e9"
+      },
+      "realizes": {
+        "decision": 0,
+        "effect": "ProverMessage",
+        "occurrence": 0,
+        "realization": "strategy-move"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      ],
+      "id": "occurrence.1",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 84,
+        "name": "chal1",
+        "text": "let chal1 \u2190 freshLaw0"
+      },
+      "realizes": {
+        "challenge": 0,
+        "effect": "Challenge",
+        "occurrence": 1,
+        "realization": "sample",
+        "samples_from": "challenge.0.law"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "challenge-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "public-input-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "binding-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        },
+        {
+          "boundary": {
+            "compiler": "decision-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 6,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 9,
+              "step": "variant"
+            }
+          ],
+          "view": "StrategyDecisionView"
+        }
+      ],
+      "id": "occurrence.2",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 85,
+        "name": "msg2",
+        "text": "let msg2 \u2190 prover.decide2 \u27e8publicInput0, publicInput0, msg0, chal1, msg0\u27e9"
+      },
+      "realizes": {
+        "decision": 2,
+        "effect": "ProverMessage",
+        "occurrence": 2,
+        "realization": "strategy-move"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "module-declaration-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 2,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 5,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "occurrence.3",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 86,
+        "name": "chk3",
+        "text": "let chk3 : CheckOutput := check0 publicInput0 msg0 chal1 msg2"
+      },
+      "realizes": {
+        "check": 0,
+        "effect": "InvokeCheck",
+        "occurrence": 3,
+        "realization": "denotation-application"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "check-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 3,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "kind": "unit"
+          },
+          "path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "compiler": "check-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "occurrence.4",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 87,
+        "name": "terminal0",
+        "text": "if guard4 chk3 then"
+      },
+      "realizes": {
+        "effect": "ReachTerminal",
+        "occurrence": 4,
+        "realization": "guarded-terminal",
+        "terminal": 0,
+        "verdict": "accept"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "terminal-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 4,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "guard-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        },
+        {
+          "boundary": {
+            "kind": "unit"
+          },
+          "path": [
+            {
+              "ordinal": 6,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "occurrence.5",
+      "kind": "occurrence-step",
+      "layer": "interaction",
+      "lean": {
+        "line": 90,
+        "name": "terminal1",
+        "text": "return Verdict.reject"
+      },
+      "realizes": {
+        "effect": "ReachTerminal",
+        "occurrence": 5,
+        "realization": "fallback-terminal",
+        "terminal": 1,
+        "verdict": "reject"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "terminal-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 1,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 5,
+              "step": "variant"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "value-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "PublicBindingView"
+        },
+        {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 4,
+              "step": "field"
+            }
+          ],
+          "view": "PublicBindingView"
+        }
+      ],
+      "id": "provider.statement-type",
+      "kind": "provider-type-parameter",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 94,
+        "name": "Stmt",
+        "text": "abbrev Stmt : Type := Z3"
+      },
+      "realizes": {
+        "provider_parameter": "Stmt"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "kind": "unit"
+          },
+          "path": [
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 2,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "variant"
+            }
+          ],
+          "view": "PublicBindingView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "provider.commit-type",
+      "kind": "provider-type-parameter",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 95,
+        "name": "Commit",
+        "text": "abbrev Commit : Type := Z3"
+      },
+      "realizes": {
+        "occurrence": 0,
+        "provider_parameter": "Commit"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "challenge-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      ],
+      "id": "provider.challenge-type",
+      "kind": "provider-type-parameter",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 96,
+        "name": "Chal",
+        "text": "abbrev Chal : Type := Z3"
+      },
+      "realizes": {
+        "challenge": 0,
+        "provider_parameter": "Chal"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 4,
+              "step": "field"
+            },
+            {
+              "ordinal": 0,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "PublicCoinView"
+        }
+      }
+    },
+    {
+      "consulted": [
+        {
+          "boundary": {
+            "compiler": "occurrence-ref-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 0,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      ],
+      "id": "provider.response-type",
+      "kind": "provider-type-parameter",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 97,
+        "name": "Resp",
+        "text": "abbrev Resp : Type := Z3"
+      },
+      "realizes": {
+        "occurrence": 2,
+        "provider_parameter": "Resp"
+      },
+      "source": {
+        "coordinate": {
+          "boundary": {
+            "compiler": "value-type-body-v0",
+            "kind": "canonical-body"
+          },
+          "path": [
+            {
+              "ordinal": 3,
+              "step": "field"
+            },
+            {
+              "ordinal": 1,
+              "step": "sequence"
+            },
+            {
+              "ordinal": 3,
+              "step": "field"
+            }
+          ],
+          "view": "EffectView"
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "provider.witness-type",
+      "kind": "private-type",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 99,
+        "name": "Wit",
+        "text": "variable (Wit : Type)"
+      },
+      "realizes": {
+        "provider_parameter": "Wit"
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/relations/relation-model.md Sections 3, 4, and 7.2: relation definitions, confidential assignments, Protocol relation binding",
+            "no Relations binding exists for this admitted subject (evaluation/formal-source-target-core-f1r1b/README.md)"
+          ],
+          "named_by": [],
+          "needed_for": "ChallengeVerifyProtocol's Wit parameter and PerfectlyComplete's quantification over witnesses",
+          "reason": "No view carries a witness type. The Core has no Verifier-private input, no Claim, and no Relations binding, and the Prover's private inputs are not Core observables by design."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "provider.prover-state-type",
+      "kind": "private-type",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 100,
+        "name": "PrvState",
+        "text": "variable (PrvState : Type)"
+      },
+      "realizes": {
+        "provider_parameter": "PrvState"
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md Section 9.2: ProverView has no private state field; Section 12.3: ProverStrategyCapability",
+            "docs-next/pir/interfaces-and-plans.md: Plan-owned strategy execution and StrategyStateSlot",
+            "Examples/Schnorr/SigmaProtocol.lean: the provider's commit returns (r \u2022 g, r)"
+          ],
+          "named_by": [],
+          "needed_for": "ChallengeVerifyProtocol's PrvState parameter",
+          "reason": "The Prover's private state between decisions is a strategy-owned object. The views expose only the guaranteed reads, including the Prover's own prior move, and no private state field."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "provider.relation",
+      "kind": "relation",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 101,
+        "name": "rel",
+        "text": "variable (rel : Stmt \u2192 Wit \u2192 Bool)"
+      },
+      "realizes": {
+        "provider_parameter": "rel"
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/relations/relation-model.md Sections 3 and 7.2",
+            "docs-next/analysis/semantic-relations.md",
+            "Examples/Schnorr/SigmaProtocol.lean: fun pk sk => decide (sk \u2022 g = pk)"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "kind": "unit"
+              },
+              "path": [
+                {
+                  "ordinal": 2,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 2,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "variant"
+                }
+              ],
+              "view": "PublicBindingView"
+            }
+          ],
+          "needed_for": "ChallengeVerifyProtocol's rel parameter and PerfectlyComplete's hypothesis rel x w = true",
+          "reason": "No view carries a relation predicate. The ClaimReductionView of this subject is empty and no relation is bound to the Statement binding."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "provider.commit",
+      "kind": "honest-strategy",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 102,
+        "name": "honestCommit",
+        "text": "variable (honestCommit : Stmt \u2192 Wit \u2192 ProbComp (Commit \u00d7 PrvState))"
+      },
+      "realizes": {
+        "decision": 0,
+        "provider_field": "commit"
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md Sections 9.2 and 12.3",
+            "docs-next/pir/interfaces-and-plans.md",
+            "Examples/Schnorr/SigmaProtocol.lean: Schnorr.sigma commit"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "decision-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 1,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "field"
+                }
+              ],
+              "view": "StrategyDecisionView"
+            }
+          ],
+          "needed_for": "ChallengeVerifyProtocol.commit and the honest execution inside PerfectlyComplete",
+          "reason": "The views fix decision point 0's guaranteed reads and legal move type, not an honest algorithm producing the move; strategies are execution inputs, not Core observables."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "provider.respond",
+      "kind": "honest-strategy",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 103,
+        "name": "honestRespond",
+        "text": "variable (honestRespond : Stmt \u2192 Wit \u2192 PrvState \u2192 Chal \u2192 ProbComp Resp)"
+      },
+      "realizes": {
+        "decision": 2,
+        "provider_field": "respond"
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "property-premise",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md Sections 9.2 and 12.3",
+            "docs-next/pir/interfaces-and-plans.md",
+            "Examples/Schnorr/SigmaProtocol.lean: Schnorr.sigma respond"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "compiler": "decision-ref-body-v0",
+                "kind": "canonical-body"
+              },
+              "path": [
+                {
+                  "ordinal": 1,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "field"
+                }
+              ],
+              "view": "StrategyDecisionView"
+            }
+          ],
+          "needed_for": "ChallengeVerifyProtocol.respond and the honest execution inside PerfectlyComplete",
+          "reason": "The views fix decision point 2's guaranteed reads and legal move type, not an honest algorithm producing the move; strategies are execution inputs, not Core observables."
+        }
+      }
+    },
+    {
+      "consulted": [],
+      "id": "provider.verify",
+      "kind": "outcome-map",
+      "layer": "provider-shape",
+      "lean": {
+        "line": 108,
+        "name": "verify",
+        "text": "verify := fun x pc c z => guard4 (check0 x pc c z)"
+      },
+      "realizes": {
+        "provider_field": "verify"
+      },
+      "source": {
+        "no_source_coordinate": {
+          "class": "operational-outcome-map",
+          "lives_in": [
+            "docs-next/pir/interactive-core.md Sections 6.4, 12.3, and 12.4",
+            "docs-next/foundation/executable-foundations.md Section 8",
+            "VCVio/CryptoFoundations/SigmaProtocol.lean: verify : Bool; VCVio/OracleComp/OracleComp.lean: OptionT failure"
+          ],
+          "named_by": [
+            {
+              "boundary": {
+                "kind": "unit"
+              },
+              "path": [
+                {
+                  "ordinal": 6,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "variant"
+                }
+              ],
+              "view": "EffectView"
+            },
+            {
+              "boundary": {
+                "kind": "unit"
+              },
+              "path": [
+                {
+                  "ordinal": 6,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "sequence"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 1,
+                  "step": "variant"
+                }
+              ],
+              "view": "EffectView"
+            },
+            {
+              "boundary": {
+                "kind": "unit"
+              },
+              "path": [
+                {
+                  "ordinal": 7,
+                  "step": "field"
+                },
+                {
+                  "ordinal": 0,
+                  "step": "variant"
+                }
+              ],
+              "view": "ExecutionView"
+            }
+          ],
+          "needed_for": "ChallengeVerifyProtocol.verify and any operational trace relation that must include every failure or noncompletion branch",
+          "reason": "The views carry the two terminal verdict cases Accept and Reject and an interpretation-failure schema of None. No leaf maps the Core's terminal verdicts (Accept | Reject | Abort) and run-outcome lanes (CompletedRun, InterpretationFailed, StrategyStopped, and the qualified operational noncompletion partition) into the provider's Boolean verify result and OptionT failure layer. The generator renders Accept as true and Reject as false and has no image for Abort or for any noncompletion outcome."
+        }
+      }
+    }
+  ],
+  "format": "zkc.formal-provider-observables-f2o0.ledger.v0",
+  "gaps": [
+    {
+      "class": "operational-distribution",
+      "construct": "challenge.0.law",
+      "needed_for": "occurrence.1 (the sampling step) and the provider's challenge draw, which ChallengeVerifyProtocol.PerfectlyComplete fixes as `$\u1d57 Chal`, the uniform draw of SampleableType"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "check.0.denotation",
+      "needed_for": "occurrence.3 (the Check step) and ChallengeVerifyProtocol.verify"
+    },
+    {
+      "class": "operational-denotation",
+      "construct": "guard.4.denotation",
+      "needed_for": "occurrence.4 (first-active guarded Accept) and ChallengeVerifyProtocol.verify"
+    },
+    {
+      "class": "property-premise",
+      "construct": "provider.witness-type",
+      "needed_for": "ChallengeVerifyProtocol's Wit parameter and PerfectlyComplete's quantification over witnesses"
+    },
+    {
+      "class": "property-premise",
+      "construct": "provider.prover-state-type",
+      "needed_for": "ChallengeVerifyProtocol's PrvState parameter"
+    },
+    {
+      "class": "property-premise",
+      "construct": "provider.relation",
+      "needed_for": "ChallengeVerifyProtocol's rel parameter and PerfectlyComplete's hypothesis rel x w = true"
+    },
+    {
+      "class": "property-premise",
+      "construct": "provider.commit",
+      "needed_for": "ChallengeVerifyProtocol.commit and the honest execution inside PerfectlyComplete"
+    },
+    {
+      "class": "property-premise",
+      "construct": "provider.respond",
+      "needed_for": "ChallengeVerifyProtocol.respond and the honest execution inside PerfectlyComplete"
+    },
+    {
+      "class": "operational-outcome-map",
+      "construct": "provider.verify",
+      "needed_for": "ChallengeVerifyProtocol.verify and any operational trace relation that must include every failure or noncompletion branch"
+    }
+  ],
+  "marker": "-- [f2o0:<id>]",
+  "premises": [
+    {
+      "compilers_decoded": [
+        "algorithm-ref-body-v0",
+        "binding-ref-body-v0",
+        "challenge-ref-body-v0",
+        "check-ref-body-v0",
+        "core-id-body-v0",
+        "decision-ref-body-v0",
+        "evaluation-contract-id-body-v0",
+        "guard-body-v0",
+        "module-declaration-ref-body-v0",
+        "occurrence-ref-body-v0",
+        "protocol-id-body-v0",
+        "public-input-ref-body-v0",
+        "terminal-ref-body-v0",
+        "value-ref-body-v0",
+        "value-type-body-v0"
+      ],
+      "id": "body-compiler-codec",
+      "lives_in": [
+        "docs-next/foundation/executable-foundations.md Section 4 and Appendices A.2 and A.3",
+        "evaluation/k1-executable-foundations/reference_model.py decode_datum, value_type_datum, schema_datum",
+        "evaluation/formal-source-target-core-f1r1b/reference_model.py value_ref_datum, module_declaration_ref_datum, _guard_datum"
+      ],
+      "statement": "Reading any view leaf requires the decoders of the body compilers named in the F0-V2B1 schema source and the K1 canonical datum codec. The generator decoded ordinal references, value references, value types, module declaration references, the guard body, and content identifiers under that premise; the premise is a Foundation and PIR law, not a view leaf."
+    }
+  ],
+  "provider": {
+    "imported_module": "VCVio.CryptoFoundations.SigmaProtocol",
+    "interaction_monad": "ProbComp (OracleComp unifSpec)",
+    "name": "VCVio",
+    "revision": "de0a3108140e3e04a7ebf0075aa110b459ee6e8a",
+    "shape": "ChallengeVerifyProtocol",
+    "toolchain": "leanprover/lean4:v4.33.1"
+  },
+  "rendering_rules": [
+    {
+      "id": "root-nat-carrier",
+      "rule": "a value type whose domain is root ordinal 2 (nat) with schema Nat(m) is carried by Fin (m + 1)"
+    },
+    {
+      "id": "root-bool-carrier",
+      "rule": "the root ordinal 1 (bool) value type is carried by Bool"
+    },
+    {
+      "id": "message-step",
+      "rule": "a ProverMessage occurrence is a monadic bind of the strategy's decision at that point applied to its guaranteed reads in view order"
+    },
+    {
+      "id": "challenge-step",
+      "rule": "a Challenge occurrence under the Fresh interpretation is a monadic bind of its public-coin law parameter"
+    },
+    {
+      "id": "check-step",
+      "rule": "an InvokeCheck occurrence is a let-binding of the Check's denotation parameter applied to its ordered inputs"
+    },
+    {
+      "id": "terminal-steps",
+      "rule": "a guarded ReachTerminal occurrence is an if on the guard's denotation parameter applied to its inputs; the unconditional final ReachTerminal is the else branch; first-active selection is the if/else order"
+    },
+    {
+      "id": "verdict-cases",
+      "rule": "the Verdict inductive has one constructor per Terminal in Core order named by its verdict"
+    }
+  ],
+  "subject": {
+    "core_id": "zkcidv0:pir.interactive-core:33f9d34abd61e22565b85fbfe03a35b3ca55f1a3980b71c5e9b729b3a93027f5",
+    "protocol_id": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
+    "view_leaf_counts": {
+      "ClaimReductionView": 1,
+      "EffectView": 68,
+      "ExecutionView": 32,
+      "PublicBindingView": 10,
+      "PublicCoinView": 180,
+      "StrategyDecisionView": 38
+    },
+    "view_source_digest": "c03b6e9b53871a95605310a3c89288dff95ff1d99c725faf4995ccbdd1e3d84a"
+  }
+}

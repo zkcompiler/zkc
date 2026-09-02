@@ -1170,6 +1170,28 @@
       }
     },
     {
+      "id": "research.provider-observable-audit",
+      "title": "Provider observable audit",
+      "subject": "Whether the exact admitted finite Schnorr Core and Fresh Protocol, as exposed by their six normalized owner views, carry every observable that a VCVio-shaped operational interpretation needs, and exactly which observables are missing.",
+      "claim": "An untrusted generator derives one parametric VCVio-shaped interaction and a construct-to-coordinate ledger from the admitted subject and its 329 active view leaves; an independent checker confirms schedule totality, coordinate injectivity and validity, Lean/ledger consistency, and Fresh sampling, rejects fourteen mutations by name, and enumerates four operational observables and five property premises with no source coordinate; the committed elaboration receipt is bound to the generated file by digest.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "mutation", "differential", "static-analysis"],
+      "source_paths": ["evaluation/formal-provider-observables-f2o0/run.py", "evaluation/formal-provider-observables-f2o0/generator.py", "evaluation/formal-provider-observables-f2o0/checker.py", "evaluation/formal-provider-observables-f2o0/README.md", "evaluation/formal-provider-observables-f2o0/expected-findings.json", "evaluation/formal-provider-observables-f2o0/elaboration-receipt.json", "evaluation/formal-provider-observables-f2o0/generated/Schnorr.lean", "evaluation/formal-provider-observables-f2o0/generated/ledger.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The audit establishes no provider correspondence, theorem applicability, protocol or cryptographic property, security result, or target change; the generated Lean file is untrusted output, the elaboration receipt records an environment fact only, and a sourced construct is a coordinate claim, not a proof of meaning."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-provider-observables-f2o0/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",
