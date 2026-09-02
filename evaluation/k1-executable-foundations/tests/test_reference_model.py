@@ -1616,18 +1616,56 @@ class SemanticProfileAndAuthorityEnvelopeTest(unittest.TestCase):
             supplied_profiles,
             semantic_regime=model.SEMANTIC_REGIME_ID,
         )
+        prepared = model.authenticate_profiled_semantic_content_in_context(
+            identifier,
+            profile,
+            domain_body,
+            repeated,
+            supported_profiles=(profile,),
+        )
 
         self.assertEqual(context.selected_profile, profile)
-        self.assertEqual(context.selected_profile_body.profile_family.value,
-                         "zkc.analysis.kernel-language")
+        self.assertEqual(
+            context.selected_profile_body.profile_family.value,
+            "zkc.analysis.kernel-language",
+        )
         self.assertEqual(len(context.authenticated_profiles), 2)
         self.assertTrue(model.semantic_contexts_are_identical(context, repeated))
+        self.assertTrue(model.semantic_contexts_are_identical(context, prepared))
         body = model.profiled_semantic_body(profile, domain_body)
         self.assertEqual(tuple(dict(body.fields)), (0, 1))
         self.assertEqual(
             dict(body.fields)[0],
             model.BytesValue(profile.internal_reference()),
         )
+
+    def test_prepared_profile_context_is_exactly_subject_bound(self) -> None:
+        profile, supplied_profiles = self.profile_fixture()
+        changed_profile, changed_profiles = self.profile_fixture(b"analysis-law-v1")
+        domain_body = model.DatumRecord(((0, model.Symbol("goal-7")),))
+        identifier = model.profiled_content_id(
+            "analysis.goal",
+            profile,
+            domain_body,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+        wrong_context = model.effective_semantic_context(
+            changed_profile,
+            changed_profiles,
+            semantic_regime=model.SEMANTIC_REGIME_ID,
+        )
+
+        with self.assertRaises(model._Control) as caught:
+            model.authenticate_profiled_semantic_content_in_context(
+                identifier,
+                profile,
+                domain_body,
+                wrong_context,
+                supported_profiles=(profile,),
+            )
+
+        self.assertIs(caught.exception.outcome, model.Outcome.KIND_MISMATCH)
+        self.assertEqual(caught.exception.code, "K1-KIND-PREPARED-PROFILE-CONTEXT")
 
     def test_profile_change_rotates_only_dependent_profiled_subjects(self) -> None:
         profile_v0, profiles_v0 = self.profile_fixture(

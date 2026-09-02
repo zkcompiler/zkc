@@ -230,6 +230,23 @@ Run the focused gate from the repository root:
 python3 -B evaluation/k3-analysis-closure/run.py --check
 ```
 
+This is intentionally the canonical one-process freeze path and may take
+hours on a cold host. It is not an edit-time loop. Exact test IDs can be
+inspected without execution, and a freeze run can emit non-authoritative
+per-case and per-class timing telemetry:
+
+```sh
+python3 -B evaluation/k3-analysis-closure/run.py --list-tests
+python3 -B evaluation/k3-analysis-closure/run.py --check --jobs 1 \
+  --telemetry target/checks/analysis-timings.json
+```
+
+The reference model authenticates immutable semantic-profile closures once
+per exact value snapshot and shares inert family derivations only within one
+live validation operation. It does not persist capabilities, issuers,
+registries, or theorem results. Timing records are host- and cache-dependent
+diagnostics, not semantic evidence.
+
 ## Evidence boundary
 
 Passing the gate establishes only constructor behavior, conditional judgments,

@@ -8,9 +8,10 @@ an admission authority.
 
 - `reference_model.py` implements `FoundationMetaProfileV0` structural
   encoding, typed content IDs, exact semantic-language profiles and effective
-  contexts, inert source-authority envelopes, domain-indexed values, a bounded
-  first-order term calculus, exact fixture primitives, deterministic charging,
-  and qualified outcomes.
+  contexts, including an exact build-once/check-many subject-authentication
+  seam over an already authenticated inert context, inert source-authority
+  envelopes, domain-indexed values, a bounded first-order term calculus, exact
+  fixture primitives, deterministic charging, and qualified outcomes.
 - `oracle/` is separately written. It imports no reference-model code and
   independently checks the constitutional value encoding and typed content identity against
   frozen JSONL vectors.
@@ -23,9 +24,9 @@ Run the bounded gate from the repository root:
 python3 -B evaluation/k1-executable-foundations/run.py --check
 ```
 
-The final bounded gate runs 104 reference/parity tests and 26
-independent-oracle tests over 24 frozen oracle vectors: 130/130 pass. The
-reference/parity lane contains 102 direct `reference_model` tests, one
+The final bounded gate runs 105 reference/parity tests and 26
+independent-oracle tests over 24 frozen oracle vectors: 131/131 pass. The
+reference/parity lane contains 103 direct `reference_model` tests, one
 record-by-record cross-check, and one exact durable-law transcription check.
 The record cross-check recomputes exact shared positive
 constructions and checks bounded contrasts or declared projections for the

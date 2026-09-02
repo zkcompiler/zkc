@@ -6,21 +6,23 @@ fixtures and revisions named here.
 
 ## Semantic revalidation witnesses and probes
 
-Run the bounded semantic checks from the repository root. The fast tier covers
-the actively edited cross-owner seam; the full tier runs every selected
-redesign gate without a timeout and is required once at a checkpoint rather
-than after every local edit:
+The canonical inventory and execution tiers live under
+[`checks/`](../checks/README.md). Inspect a semantic check by stable ID and run
+the research tier appropriate to the boundary being closed:
 
 ```sh
-python3 -B evaluation/semantic_checks.py --tier fast
-python3 -B evaluation/semantic_checks.py --tier full
+python3 -B checks/run.py list --tier research-checkpoint
+python3 -B checks/run.py run --check research.native-fri-ior
+python3 -B checks/run.py run --tier research-checkpoint --keep-going
 ```
 
-The full runner executes the expensive Analysis test classes in four isolated
-processes. This preserves the exact discovered test set while preventing
-repeated canonical reconstruction in one class from serializing unrelated
-classes. The focused Analysis runner retains a one-process mode by default and
-accepts `--jobs N` when isolated parallel validation is desired.
+The legacy [`semantic_checks.py`](semantic_checks.py) entry point remains for
+older local scripts, but it is not the inventory authority. The expensive
+Analysis gate retains one canonical one-process execution in the
+`release-freeze` tier. Isolated process sharding is available for diagnosis,
+but is not the default because it repeats the dominant cold fixture
+construction. Routine edits should use focused stable IDs and smaller tiers;
+one meaningful checkpoint receives one broad run.
 
 Neither tier combines the scopes below into one proof or conformance claim.
 

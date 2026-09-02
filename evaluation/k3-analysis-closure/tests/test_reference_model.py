@@ -188,6 +188,54 @@ class SemanticProfileIntegrationTest(unittest.TestCase):
             ((0, model.k1.Symbol("k3c-profile-locality-probe")),)
         )
 
+    def test_authenticated_profile_context_cache_is_exact_value_keyed(self) -> None:
+        model._authenticated_analysis_profile_context.cache_clear()
+        baseline = model._analysis_profile_bundle_snapshot(
+            model.ANALYSIS_TRANSPORT_PROFILE_BUNDLE
+        )
+        first = model._authenticated_analysis_profile_context(
+            model.ANALYSIS_TRANSPORT_PROFILE_ID, baseline
+        )
+        second = model._authenticated_analysis_profile_context(
+            model.ANALYSIS_TRANSPORT_PROFILE_ID, baseline
+        )
+        self.assertIs(first, second)
+        self.assertEqual(
+            model._authenticated_analysis_profile_context.cache_info().hits,
+            1,
+        )
+
+        changed = model.make_k3c_analysis_semantic_profiles(
+            transport_law=model._profile_law_source(
+                "zkc.analysis.bounded-transport-law.v1",
+                ("cache-key-rotation-probe",),
+            )
+        )
+        changed_snapshot = model._analysis_profile_bundle_snapshot(
+            changed.transport_bundle
+        )
+        changed_context = model._authenticated_analysis_profile_context(
+            changed.transport.identity, changed_snapshot
+        )
+        self.assertNotEqual(first.selected_profile, changed_context.selected_profile)
+
+    def test_family_static_cache_is_request_local(self) -> None:
+        formed: list[object] = []
+
+        def form() -> object:
+            value = object()
+            formed.append(value)
+            return value
+
+        with model._family_derivation_scope():
+            first = model._family_static_value("test-probe", 0, form=form)
+            repeated = model._family_static_value("test-probe", 0, form=form)
+        outside = model._family_static_value("test-probe", 0, form=form)
+
+        self.assertIs(first, repeated)
+        self.assertIsNot(first, outside)
+        self.assertEqual(len(formed), 2)
+
     def test_transport_profile_has_one_exact_transitive_import_closure(self) -> None:
         profiles = model.ANALYSIS_SEMANTIC_PROFILES
         self.assertEqual(profiles.kernel.profile_imports, ())

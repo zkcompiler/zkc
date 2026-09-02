@@ -6761,6 +6761,77 @@ def authenticate_profiled_semantic_content(
         semantic_regime=identifier.semantic_regime,
         ledger=ledger,
     )
+    return authenticate_profiled_semantic_content_in_context(
+        identifier,
+        selected_profile,
+        domain_body,
+        context,
+        supported_profiles=supported_profiles,
+        ledger=ledger,
+    )
+
+
+def authenticate_profiled_semantic_content_in_context(
+    identifier: TypedContentId,
+    selected_profile: SemanticLanguageProfileId,
+    domain_body: Datum,
+    context: EffectiveSemanticContext,
+    *,
+    supported_profiles: tuple[SemanticLanguageProfileId, ...],
+    ledger: AuthenticationLedger | None = None,
+) -> EffectiveSemanticContext:
+    """Authenticate one subject against an already authenticated closure.
+
+    This is the build-once/check-many seam.  Callers must obtain
+    ``context`` from :func:`effective_semantic_context`; the checks below bind
+    it back to the exact selected profile and subject regime before the
+    subject preimage is authenticated.  No live authority is carried by the
+    context, and the public entry point above still authenticates the closure
+    on every standalone call.
+    """
+
+    try:
+        _require_typed_content_id(identifier, axis_name="profiled semantic subject")
+    except CanonicalError as error:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PROFILED-SUBJECT",
+            str(error),
+        ) from error
+    if identifier.subject_kind in PROFILED_FORBIDDEN_SUBJECT_KINDS:
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PROFILED-SUBJECT",
+            "profiled semantic subjects cannot use a prior-meta or standalone "
+            "Foundation subject kind",
+        )
+    if type(context) is not EffectiveSemanticContext:
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PREPARED-PROFILE-CONTEXT",
+            "prepared semantic context has the wrong exact shape",
+        )
+    authenticated_profiles = context.authenticated_profiles
+    if type(authenticated_profiles) is not tuple or any(
+        type(entry) is not tuple or len(entry) != 2 for entry in authenticated_profiles
+    ):
+        raise _Control(
+            Outcome.MALFORMED,
+            "K1-MALFORMED-PREPARED-PROFILE-CONTEXT",
+            "prepared semantic context has a malformed profile snapshot",
+        )
+    profile_map = dict(authenticated_profiles)
+    if (
+        len(profile_map) != len(authenticated_profiles)
+        or context.semantic_regime != identifier.semantic_regime
+        or context.selected_profile != selected_profile
+        or profile_map.get(selected_profile) != context.selected_profile_body
+    ):
+        raise _Control(
+            Outcome.KIND_MISMATCH,
+            "K1-KIND-PREPARED-PROFILE-CONTEXT",
+            "prepared semantic context does not bind the selected profile and regime",
+        )
     try:
         supported = _profile_reference_sequence(
             supported_profiles,
@@ -6779,8 +6850,7 @@ def authenticate_profiled_semantic_content(
             str(error),
         ) from error
     if any(
-        profile.semantic_regime != identifier.semantic_regime
-        for profile in supported
+        profile.semantic_regime != identifier.semantic_regime for profile in supported
     ):
         raise _Control(
             Outcome.KIND_MISMATCH,

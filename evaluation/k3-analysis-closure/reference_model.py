@@ -18,7 +18,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, fields as dataclass_fields, replace
 from enum import Enum
 from fractions import Fraction
-from functools import wraps
+from functools import lru_cache, wraps
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -1389,6 +1389,47 @@ ANALYSIS_PROFILE_BUNDLE = ANALYSIS_SEMANTIC_PROFILES.bundle
 ANALYSIS_PROFILE_PREIMAGES = ANALYSIS_PROFILE_BUNDLE
 
 
+def _analysis_profile_bundle_snapshot(
+    profile_bundle: object,
+) -> tuple[tuple[object, object], ...]:
+    """Form one immutable, value-keyed profile-closure cache key."""
+
+    if type(profile_bundle) is not dict:
+        raise AnalysisError("Analysis profile bundle has the wrong exact shape")
+    try:
+        snapshot = tuple(
+            sorted(
+                profile_bundle.items(),
+                key=lambda entry: entry[0].internal_reference(),
+            )
+        )
+        hash(snapshot)
+    except (AttributeError, TypeError, k1.CanonicalError) as error:
+        raise AnalysisError(
+            "Analysis profile bundle is not immutable canonical data"
+        ) from error
+    return snapshot
+
+
+@lru_cache(maxsize=64)
+def _authenticated_analysis_profile_context(
+    profile_id: object,
+    profile_snapshot: tuple[tuple[object, object], ...],
+) -> object:
+    """Authenticate one inert profile closure once per exact value snapshot.
+
+    The cache contains no invocation capability, issuer, mutable registry, or
+    theorem result.  A changed profile body or identity changes the tuple key;
+    unsuccessful authentication is never cached.
+    """
+
+    return k1.effective_semantic_context(
+        profile_id,
+        dict(profile_snapshot),
+        semantic_regime=k1.SEMANTIC_REGIME_ID,
+    )
+
+
 _FAMILY_DERIVATION_VALUES: ContextVar[dict[tuple[object, ...], object] | None] = (
     ContextVar("analysis_family_derivation_values", default=None)
 )
@@ -1423,6 +1464,31 @@ def _family_derivation_value(
     value = form()
     cache[key] = value
     return value
+
+
+def _family_static_value(
+    label: str,
+    *coordinates: object,
+    form: Callable[[], object],
+) -> object:
+    """Share one inert family value during a single live operation.
+
+    The active transport-profile identity is part of every key.  The cache is
+    still deliberately request-local: it never survives a public validation
+    operation and therefore cannot retain issuers, capabilities, registries,
+    or a result formed under a later profile activation.
+    """
+
+    with _family_derivation_scope():
+        return _family_derivation_value(
+            (
+                "family-static",
+                label,
+                ANALYSIS_TRANSPORT_PROFILE_ID,
+                *coordinates,
+            ),
+            form,
+        )
 
 
 def _with_family_derivation_scope(
@@ -1494,6 +1560,19 @@ def _analysis_profile_declaration_ordinal(
 
     if type(profile) is not k1.SemanticLanguageProfile:
         raise AnalysisError("declaration owner must be one exact language profile")
+    return _cached_analysis_profile_declaration_ordinal(
+        profile, declaration_kind, label
+    )
+
+
+@lru_cache(maxsize=2048)
+def _cached_analysis_profile_declaration_ordinal(
+    profile: object,
+    declaration_kind: str,
+    label: str,
+) -> int:
+    """Resolve one immutable profile catalog entry once per exact value."""
+
     catalog = k1.profile_declaration_catalogs(profile).get(declaration_kind)
     if catalog is None:
         raise AnalysisError(
@@ -2943,11 +3022,13 @@ def _form_analysis_profiled_content_id(
         ),
     }[profile_id]
     try:
-        k1.authenticate_profiled_semantic_content(
+        profile_snapshot = _analysis_profile_bundle_snapshot(profile_bundle)
+        context = _authenticated_analysis_profile_context(profile_id, profile_snapshot)
+        k1.authenticate_profiled_semantic_content_in_context(
             identifier,
             profile_id,
             domain_body,
-            profile_bundle,
+            context,
             supported_profiles=(profile_id,),
         )
     except (k1.ModelError, k1.CanonicalError) as error:
@@ -4312,6 +4393,20 @@ def _resolved_profile_declaration(
         raise AuthorityError("qualification declaration has a foreign reference")
     if kind != declaration_kind:
         raise AuthorityError("qualification declaration has the wrong kind")
+    label, body = _cached_resolved_profile_declaration(owner, declaration_kind, ordinal)
+    return owner, label, body
+
+
+@lru_cache(maxsize=4096)
+def _cached_resolved_profile_declaration(
+    owner: object,
+    declaration_kind: str,
+    ordinal: int,
+) -> tuple[str, object]:
+    """Resolve an immutable profile catalog coordinate by exact value."""
+
+    if type(owner) is not k1.SemanticLanguageProfile:
+        raise AuthorityError("qualification declaration owner is malformed")
     catalog = k1.profile_declaration_catalogs(owner).get(declaration_kind)
     if catalog is None or not 0 <= ordinal < len(catalog.values):
         raise AuthorityError("qualification declaration is outside its catalog")
@@ -4319,7 +4414,7 @@ def _resolved_profile_declaration(
     label = _record_field(body, 0, "qualification declaration")
     if type(label) is not k1.Symbol:
         raise AuthorityError("qualification declaration label is malformed")
-    return owner, label.value, body
+    return label.value, body
 
 
 def _derive_qualification_subject_context(
@@ -12815,7 +12910,7 @@ def _semantic_experiment_context(
     )
 
 
-def _family_semantic_context(
+def _form_family_semantic_context(
     family: "AFKAsymptoticFamily",
     *,
     axes: tuple[str, ...],
@@ -12852,6 +12947,19 @@ def _family_semantic_context(
                 ),
             )
         ),
+    )
+
+
+def _family_semantic_context(
+    family: "AFKAsymptoticFamily",
+    *,
+    axes: tuple[str, ...],
+) -> object:
+    return _family_static_value(
+        "semantic-context",
+        family,
+        axes,
+        form=lambda: _form_family_semantic_context(family, axes=axes),
     )
 
 
@@ -19658,15 +19766,11 @@ def _form_family_definition_id(family: AFKAsymptoticFamily) -> object:
 def family_definition_id(family: AFKAsymptoticFamily) -> object:
     """Share the family identity only within one live derivation scope."""
 
-    with _family_derivation_scope():
-        return _family_derivation_value(
-            (
-                "family-definition",
-                ANALYSIS_TRANSPORT_PROFILE_ID,
-                family,
-            ),
-            lambda: _form_family_definition_id(family),
-        )
+    return _family_static_value(
+        "definition-id",
+        family,
+        form=lambda: _form_family_definition_id(family),
+    )
 
 
 SELECTED_AFK_FAMILY = form_afk_asymptotic_family(
@@ -19674,7 +19778,7 @@ SELECTED_AFK_FAMILY = form_afk_asymptotic_family(
 )
 
 
-def family_ro_index_domain_id(family: AFKAsymptoticFamily) -> object:
+def _form_family_ro_index_domain_id(family: AFKAsymptoticFamily) -> object:
     family_id = family_definition_id(family)
     return _legacy_component_id(
         "analysis.family-ro-index-domain",
@@ -19690,7 +19794,15 @@ def family_ro_index_domain_id(family: AFKAsymptoticFamily) -> object:
     )
 
 
-def family_query_dimension_id(family: AFKAsymptoticFamily) -> object:
+def family_ro_index_domain_id(family: AFKAsymptoticFamily) -> object:
+    return _family_static_value(
+        "ro-index-domain-id",
+        family,
+        form=lambda: _form_family_ro_index_domain_id(family),
+    )
+
+
+def _form_family_query_dimension_id(family: AFKAsymptoticFamily) -> object:
     return _legacy_component_id(
         "analysis.resource-dimension",
         k1.DatumRecord(
@@ -19709,7 +19821,15 @@ def family_query_dimension_id(family: AFKAsymptoticFamily) -> object:
     )
 
 
-def family_invocation_dimension_id(family: AFKAsymptoticFamily) -> object:
+def family_query_dimension_id(family: AFKAsymptoticFamily) -> object:
+    return _family_static_value(
+        "query-dimension-id",
+        family,
+        form=lambda: _form_family_query_dimension_id(family),
+    )
+
+
+def _form_family_invocation_dimension_id(family: AFKAsymptoticFamily) -> object:
     return _legacy_component_id(
         "analysis.resource-dimension",
         k1.DatumRecord(
@@ -19725,6 +19845,14 @@ def family_invocation_dimension_id(family: AFKAsymptoticFamily) -> object:
                 (2, k1.Symbol("expected-count")),
             )
         ),
+    )
+
+
+def family_invocation_dimension_id(family: AFKAsymptoticFamily) -> object:
+    return _family_static_value(
+        "invocation-dimension-id",
+        family,
+        form=lambda: _form_family_invocation_dimension_id(family),
     )
 
 
@@ -19747,7 +19875,7 @@ def _family_coordinate_id(role: str) -> object:
     )
 
 
-def family_question_id(family: AFKAsymptoticFamily, role: str) -> object:
+def _form_family_question_id(family: AFKAsymptoticFamily, role: str) -> object:
     family_id = family_definition_id(family)
     family_coordinate = _family_coordinate_id(role)
     axis = (
@@ -19818,14 +19946,34 @@ def family_question_id(family: AFKAsymptoticFamily, role: str) -> object:
     )
 
 
-def family_goal_id(family: AFKAsymptoticFamily, role: str) -> object:
+def family_question_id(family: AFKAsymptoticFamily, role: str) -> object:
+    return _family_static_value(
+        "question-id",
+        family,
+        role,
+        form=lambda: _form_family_question_id(family, role),
+    )
+
+
+def _form_family_goal_id(family: AFKAsymptoticFamily, role: str) -> object:
     return _analysis_transport_id(
         "analysis.goal",
         AnalysisGoalBodyV0(family_question_id(family, role)),
     )
 
 
-def family_experiment_profile_id(family: AFKAsymptoticFamily, axis: str) -> object:
+def family_goal_id(family: AFKAsymptoticFamily, role: str) -> object:
+    return _family_static_value(
+        "goal-id",
+        family,
+        role,
+        form=lambda: _form_family_goal_id(family, role),
+    )
+
+
+def _form_family_experiment_profile_id(
+    family: AFKAsymptoticFamily, axis: str
+) -> object:
     if axis not in ("fresh-source", "adaptive-fs-target"):
         raise TheoremError("unsupported family experiment axis")
     family_id = family_definition_id(family)
@@ -19902,7 +20050,20 @@ def family_experiment_profile_id(family: AFKAsymptoticFamily, axis: str) -> obje
     )
 
 
-def family_member_source_profile_id(family: AFKAsymptoticFamily, axis: str) -> object:
+def family_experiment_profile_id(family: AFKAsymptoticFamily, axis: str) -> object:
+    if axis not in ("fresh-source", "adaptive-fs-target"):
+        raise TheoremError("unsupported family experiment axis")
+    return _family_static_value(
+        "experiment-profile-id",
+        family,
+        axis,
+        form=lambda: _form_family_experiment_profile_id(family, axis),
+    )
+
+
+def _form_family_member_source_profile_id(
+    family: AFKAsymptoticFamily, axis: str
+) -> object:
     if axis not in ("fresh-source", "adaptive-fs-target"):
         raise TheoremError("unsupported family source-profile axis")
     family_id = family_definition_id(family)
@@ -19967,7 +20128,18 @@ def family_member_source_profile_id(family: AFKAsymptoticFamily, axis: str) -> o
     )
 
 
-def family_manifest_schema_id(family: AFKAsymptoticFamily, axis: str) -> object:
+def family_member_source_profile_id(family: AFKAsymptoticFamily, axis: str) -> object:
+    if axis not in ("fresh-source", "adaptive-fs-target"):
+        raise TheoremError("unsupported family source-profile axis")
+    return _family_static_value(
+        "member-source-profile-id",
+        family,
+        axis,
+        form=lambda: _form_family_member_source_profile_id(family, axis),
+    )
+
+
+def _form_family_manifest_schema_id(family: AFKAsymptoticFamily, axis: str) -> object:
     if axis not in ("fresh-source", "adaptive-fs-target"):
         raise TheoremError("unsupported family manifest axis")
     return _analysis_transport_id(
@@ -19976,6 +20148,17 @@ def family_manifest_schema_id(family: AFKAsymptoticFamily, axis: str) -> object:
             family_definition_id(family),
             family_member_source_profile_id(family, axis),
         ),
+    )
+
+
+def family_manifest_schema_id(family: AFKAsymptoticFamily, axis: str) -> object:
+    if axis not in ("fresh-source", "adaptive-fs-target"):
+        raise TheoremError("unsupported family manifest axis")
+    return _family_static_value(
+        "manifest-schema-id",
+        family,
+        axis,
+        form=lambda: _form_family_manifest_schema_id(family, axis),
     )
 
 
@@ -20158,7 +20341,7 @@ def _family_formula_body(
     )
 
 
-def family_operator_bindings(
+def _form_family_operator_bindings(
     family: AFKAsymptoticFamily,
 ) -> tuple[AFKFamilyOperatorBinding, ...]:
     bindings = []
@@ -20184,6 +20367,16 @@ def family_operator_bindings(
             )
         )
     return tuple(bindings)
+
+
+def family_operator_bindings(
+    family: AFKAsymptoticFamily,
+) -> tuple[AFKFamilyOperatorBinding, ...]:
+    return _family_static_value(
+        "operator-bindings",
+        family,
+        form=lambda: _form_family_operator_bindings(family),
+    )
 
 
 def family_operator_binding_id(binding: AFKFamilyOperatorBinding) -> object:
