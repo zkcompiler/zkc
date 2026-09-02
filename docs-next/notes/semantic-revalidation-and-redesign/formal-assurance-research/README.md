@@ -20,10 +20,11 @@
 > twenty of the twenty-one B2C isolation families across Foundation, Oracle,
 > Claim, Reduction, publication-order, joint-Challenge, shared-Challenge, and
 > semantic-module surfaces. F0-V2B2C1B5A selects a compact first-active guard-
-> region method for path-sensitive Claim flow, but returns `CannotAnswer`
-> because required-Check truth and required-Reduction ownership are not yet
-> defined. B2C therefore remains at twenty of twenty-one families; B2C1B5B,
-> both B2D integration families, and F0-V2C target migration remain open.
+> region method for path-sensitive Claim flow, then B2C1B5B1 selects bounded
+> Terminal owner contracts for required-Check truth, required-Reduction
+> application, and Claim disposition. Exact byte-derived six-view projection
+> remains B2C1B5B2, so B2C stays at twenty of twenty-one families; both B2D
+> integration families and F0-V2C target migration also remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -79,7 +80,8 @@ F0  ideal assurance architecture and current-design falsification
        B2C1B4 module-effect families 3/21                [complete, bounded]
        B2C1B5 expanded-terminal family 1/21              [in progress]
          B2C1B5A compact path algebra                    [complete, CannotAnswer]
-         B2C1B5B owner contracts and exact projection    [open]
+         B2C1B5B1 Terminal owner-contract selection      [complete, bounded]
+         B2C1B5B2 exact Terminal owner projection        [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -185,9 +187,15 @@ structured exhaustive oracle agree over one branch-complete carrier and 21
 mutations, producing 38 frozen findings. The result nevertheless remains
 `CannotAnswer`: the target contract neither connects Terminal Guards to the
 truth of `required_true_checks` nor identifies which Reductions are required
-at a Terminal. B2C coverage therefore remains twenty of twenty-one until
-B2C1B5B settles those owner contracts and applies the exact-byte six-view
-projection pattern.
+at a Terminal. F0-V2B2C1B5B1 now selects a bounded candidate without changing
+target authority: retain first-active selection; require the Terminal Guard's
+authenticated Foundation term to carry each required Check output as a
+positive must-fact under a PIR-owned use predicate; add sorted-unique required
+Reduction references; and derive Claim disposition from verdict. Its
+non-enumerating abstraction is sound against 320 independent Boolean
+valuations, is exact on 39 of 40 selected terms, and rejects 25 dual-path
+mutations. B2C coverage still remains twenty of twenty-one until B2C1B5B2
+applies exact-byte admission and six-view projection.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -359,6 +367,14 @@ provider, extraction tool, or durable schema.
   truth and required-Reduction ownership are absent from the target contract;
   exact Core admission, six-view projection, B2D, target publication, live
   correspondence, proof, security, and Q1 remain open.
+- [`f0v2b2c1b5b1-terminal-owner-contracts.md`](f0v2b2c1b5b1-terminal-owner-contracts.md)
+  records the 58-finding bounded Terminal owner-contract selection. It keeps
+  first-active control, assigns the Check-use predicate to PIR over exact
+  Foundation terms, adds explicit required Reductions, and derives Claim
+  disposition from verdict. A non-enumerating candidate is sound against an
+  independent 320-valuation oracle and rejects 25 mutations. Exact Core bytes,
+  six-view projection, B2C completion, B2D, migration, live correspondence,
+  proof, security, and Q1 remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -437,9 +453,12 @@ F0-V2B2C1B5A subsequently matches 38/38 frozen findings: its compact guard-
 region analyzer agrees with an independent four-valuation oracle and both
 reject 21 mutations. Its aggregate is intentionally `CannotAnswer`, however,
 because the written Terminal contract lacks required-Check truth entailment
-and a required-Reduction owner field. B2C remains at twenty of twenty-one;
-B2C1B5B, B2D, publication, implementation correspondence, and Q1 remain open,
-and no profile has changed.
+and a required-Reduction owner field. B2C1B5B1 then matches 58/58 frozen
+findings and selects the bounded repair: a PIR-owned Check must-fact predicate,
+explicit required Reductions, and verdict-derived Claim disposition. B2C
+remains at twenty of twenty-one because B2C1B5B2 exact owner projection, B2D,
+publication, implementation correspondence, and Q1 remain open, and no
+profile has changed.
 
 ## Known risks and non-claims
 

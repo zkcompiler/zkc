@@ -159,6 +159,12 @@ B2C1A codec and typed/cold projection pattern. B2D should remain separate: it
 combines all PCGraph classes and validates actual occurrence/Claim/Reduction/
 Terminal receipts.
 
+The B5B1 successor selects a PIR-owned Terminal-use predicate over an
+authenticated Foundation term; it supersedes B5A's tentative suggestion of a
+generic Foundation-owned implication result. It also selects explicit required
+Reduction references and verdict-derived Claim disposition. Exact owner
+projection remains the separate B5B2 gate.
+
 This package does not publish a target profile, establish compiler/runtime
 correspondence, prove the compact algorithm correct for an unbounded or richer
 guard language, prove a refinement theorem, establish Fiat--Shamir security,

@@ -257,6 +257,13 @@ contracts. It can then extend the existing exact-byte admission, typed/cold
 projection, schema-valid substitution, and six-view comparison pattern. Only
 that result may move B2C coverage from 20/21 to 21/21.
 
+Successor correction: B5B1 found that Foundation does not own a generic
+qualified-result judgment. The B5A phrase suggesting a qualified
+Foundation-owned implication result is superseded by a PIR-owned
+Terminal-use predicate over the denotation of an authenticated Foundation
+term. See
+[`F0-V2B2C1B5B1 Terminal Owner Contracts`](f0v2b2c1b5b1-terminal-owner-contracts.md).
+
 B2D remains a separate integration gate: it must combine all PCGraph classes,
 first-active control, actual Check results, Claim/Reduction state transitions,
 and completed Fresh records. F0-V2C publication still waits on those results.

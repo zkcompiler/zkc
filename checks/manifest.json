@@ -1082,6 +1082,28 @@
       }
     },
     {
+      "id": "research.owner-view-terminal-owner-contracts",
+      "title": "Terminal owner-contract selection",
+      "subject": "A bounded PIR-owned Terminal-use predicate over authenticated Foundation Boolean terms, explicit required Reduction references, and verdict-derived Claim disposition under first-active control.",
+      "claim": "A non-enumerating must-fact candidate is sound against an independent 320-valuation Boolean oracle, exact on 39 of 40 selected terms, admits one branch-complete eight-valuation carrier, and agrees with the oracle in rejecting 25 mutations.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-terminal-owner-contracts-f0v2b2c1b5b1/run.py", "evaluation/formal-source-terminal-owner-contracts-f0v2b2c1b5b1/model.py", "evaluation/formal-source-terminal-owner-contracts-f0v2b2c1b5b1/independent.py", "evaluation/formal-source-terminal-owner-contracts-f0v2b2c1b5b1/README.md", "evaluation/formal-source-terminal-owner-contracts-f0v2b2c1b5b1/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This bounded owner-contract selection is not exact target Core admission or six-view projection, B2C completion, full Foundation-term support, B2D runtime integration, target publication, live implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-terminal-owner-contracts-f0v2b2c1b5b1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",
