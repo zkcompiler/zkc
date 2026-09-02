@@ -840,6 +840,28 @@
       }
     },
     {
+      "id": "research.owner-view-bounded-derivation",
+      "title": "Bounded normalized owner-view derivation",
+      "subject": "One finite source grammar and owner-derived value package for the six normalized PIR views.",
+      "claim": "Two source compilers and two owner-derivation paths agree on the declared bounded package and refuse its frozen mutation corpus.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "bounded-exhaustive"],
+      "source_paths": ["evaluation/formal-source-view-bodies-f0v2b1/run.py", "evaluation/formal-source-view-bodies-f0v2b1/README.md", "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json", "evaluation/formal-source-view-bodies-f0v2b1/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "medium",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The bounded result is not constructor-complete owner derivation, target publication, live implementation correspondence, proper-subset closure, or a cryptographic property."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-view-bodies-f0v2b1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",
