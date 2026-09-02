@@ -5,10 +5,11 @@
 > pass, bounded F1-R1A target profile/source-basis pass, and one-slice F1-R1B
 > target carrier/admission pass complete at research resolution. F1-R1C0
 > returns `CannotAnswer` on exact owner-view source determinacy. Reopened F0-V1
-> now confirms the selected repair topology through both publication compilers;
-> F0-V2 exact grammar and target migration remain open. Owner-view F1-R1C
-> waits on F0-V2; F1-R1D, F1-I, and F2 remain dependent feasibility programs,
-> not selected product implementation
+> confirms the selected repair topology through both publication compilers;
+> F0-V2A now selects and validates a bounded generic view-schema algebra.
+> F0-V2B exact six-body grammar and F0-V2C target migration remain open.
+> Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
+> feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
 > artifact identity, theorem status, Analysis judgment, implementation claim,
 > or product-roadmap priority.
@@ -48,8 +49,10 @@ F0  ideal assurance architecture and current-design falsification
   -> F1-R1B exact target carrier/admission              [complete, bounded slice]
   -> F1-R1C0 owner-view source determinacy              [complete, CannotAnswer]
   -> F0-V1   owner-view publication topology            [complete, bounded]
-  -> F0-V2   exact grammar and target migration          [open]
-  -> F1-R1C  exact owner views/read closure             [waiting on F0-V2]
+  -> F0-V2A  generic schema-algebra feasibility          [complete, bounded]
+  -> F0-V2B  exact six-body grammar                      [open]
+  -> F0-V2C  target publication and migration            [open]
+  -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
   -> F2  zkc-native operational interpretation and one property pilot
@@ -89,9 +92,14 @@ evaluator plumbing. F0-V1 now demonstrates, using discarded in-memory
 overrides, that the existing publication mechanism can carry a six-entry
 Interaction catalog, two common role compilers, four profile-local envelope
 compilers, and the exact dependent identity rotation. It does not supply the
-canonical body grammar. F0-V2 must author and republish that boundary before
-F1-R1C/R1D continue with owner views, Relations roots, and the integrated
-package.
+canonical body grammar. F0-V2A now selects one finite PIR-owned description
+universe, embeds exact body compilers and fixed law references as semantic
+atoms, makes an admitted module effect an explicit opaque atom, and validates
+generic enumeration/resolution through recursive and iterative implementations
+over representative six-view structures. It still does not supply the exact
+target bodies or owner derivation. F0-V2B must author the six exact grammars,
+and F0-V2C must republish and migrate the boundary before F1-R1C/R1D continue
+with owner views, Relations roots, and the integrated package.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -163,6 +171,13 @@ provider, extraction tool, or durable schema.
   independent compilers accept the candidate topology, derive the exact
   sixteen-profile rotation cone, and refuse ten structural mutations while
   canonical grammar and partial closure remain open.
+- [`f0v2-canonical-view-schema-design.md`](f0v2-canonical-view-schema-design.md)
+  compares six grammar strategies, selects one finite PIR-owned description
+  universe and simultaneous five-Core-view derivation, and records the F0-V2A
+  40-case result: recursive and iterative observers agree on 52 representative
+  leaves while 27 schema, value, law, extension, path, and manifest mutations
+  refuse. Exact target grammar, derivation, migration, and partial closure
+  remain `CannotAnswer`.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -194,10 +209,14 @@ findings and establishes publication-topology feasibility only: six schemas,
 the role/family compiler split, six synthetic revision advances, and exactly
 sixteen rotated profile identities reconstruct identically, while canonical
 grammar and partial closure stay `CannotAnswer`. None of these results is Q1.
-F0-V2 must complete the PIR-owned source contract; R1C and R1D must then form
-exact owner views and the integrated package before F1-I supplies live
-implementation authority. F2 starts only after one affirmative bounded Q1
-correspondence and retains separate operational, property, and zkc-native
+F0-V2A then matches 40/40 findings for the selected generic schema algebra:
+both paths agree on six representative schema/manifest identities and 52
+active leaves, and all 27 mutations refuse. Its four `CannotAnswer` findings
+are the exact target grammars, owner derivation, target migration, and partial
+closure. F0-V2B/C must complete the PIR-owned source contract; R1C and R1D must
+then form exact owner views and the integrated package before F1-I supplies
+live implementation authority. F2 starts only after one affirmative bounded
+Q1 correspondence and retains separate operational, property, and zkc-native
 discriminator stages.
 
 ## Known risks and non-claims
@@ -218,6 +237,9 @@ discriminator stages.
   absent from the published declaration closure.
 - Showing that a proposed catalog compiles and rotates the predicted identity
   cone does not supply the canonical bodies named by that catalog.
+- Showing that one generic schema algebra handles representative six-view
+  structures does not establish the exact target schemas or derive their
+  values from an admitted owner.
 - F0 may find no required kernel change; that outcome is valid only after the
   generative and capability-expanding candidates receive equal-resolution
   treatment.

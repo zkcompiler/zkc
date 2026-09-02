@@ -2,8 +2,9 @@
 
 > **Kind:** Temporary F1 source-contract falsification and F0 reopen record
 > **State:** F1-R1C0 determinacy audit complete with `CannotAnswer`; F0-V1 has
-> since established publication-topology feasibility, while F0-V2 exact target
-> grammar and migration remain required before the evaluator may proceed
+> since established publication-topology feasibility, and F0-V2A has selected
+> and validated a bounded generic schema algebra. Exact target grammar and
+> migration remain required before the evaluator may proceed
 > **Authority:** None. This result changes no current or target semantic law,
 > profile identity, admission judgment, Analysis result, or roadmap priority.
 > **Evidence:** The focused audit under
@@ -202,8 +203,14 @@ both publication implementations, produce the predicted sixteen-profile
 rotation cone, and refuse the bounded topology mutations. See the
 [`F0-V design and result`](f0v-owner-view-publication-repair-design.md) and
 [`executable gate`](../../../../evaluation/formal-source-owner-view-repair-f0v/README.md).
-That result closes mechanism feasibility only; the exact grammars in items
-2--4 above remain F0-V2 work.
+That result closes mechanism feasibility only. F0-V2A has since selected one
+finite PIR-owned schema universe and independently validated its generic
+enumeration/resolution method over representative six-view structures; see
+the [`F0-V2 design and result`](f0v2-canonical-view-schema-design.md) and
+[`executable gate`](../../../../evaluation/formal-source-view-schema-f0v2a/README.md).
+It also replaces the separate field-to-law table with fixed law atoms and
+treats a complete admitted module effect as an opaque semantic leaf. Exact
+six-body grammar and migration remain F0-V2B/C work.
 
 ### R1C-P1 — migrate and independently reconstruct
 
@@ -250,8 +257,10 @@ The corrected sequence is:
 F1-R1B   exact target carrier/admission                 [complete, bounded]
   -> F1-R1C0 owner-view source determinacy              [complete, CannotAnswer]
   -> F0-V1   publication-topology feasibility           [complete, bounded]
-  -> F0-V2   exact grammar and target migration          [open]
-  -> F1-R1C  owner view, read closure, issuance         [waiting on F0-V2]
+  -> F0-V2A  generic schema-algebra feasibility          [complete, bounded]
+  -> F0-V2B  exact six-body grammar                      [open]
+  -> F0-V2C  target publication and migration            [open]
+  -> F1-R1C  owner view, read closure, issuance         [waiting on F0-V2C]
   -> F1-R1D  integrated Relations/source package        [waiting]
   -> F1-I    live implementation authority              [waiting]
 ```

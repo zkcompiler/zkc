@@ -3,8 +3,9 @@
 > **Kind:** Temporary reopened-F0 architecture selection and repair contract
 > **State:** F0-V0 candidate comparison and F0-V1 publication-topology
 > feasibility complete. The selected architecture compiles identically through
-> both publication implementations and survives its bounded mutations; F0-V2
-> exact grammar and target migration remain open. No target source, profile
+> both publication implementations and survives its bounded mutations. F0-V2A
+> has since selected and validated a bounded generic schema algebra; exact
+> six-body grammar and target migration remain open. No target source, profile
 > revision, identity table, evaluator, or Analysis profile has changed
 > **Authority:** None. Names and encodings below are research coordinates until
 > the PIR owner contract is changed and independently republished.
@@ -53,8 +54,12 @@ profile bodies and identities; the repair rotates exactly the predicted
 sixteen-profile cone and leaves `analysis-kernel` and `oir-endpoint-graph`
 stable. Its 18/18 frozen findings include ten dual-path mutation refusals.
 Canonical body grammar and proper-subset closure intentionally remain
-`CannotAnswer`, so this result is permission to design F0-V2 precisely, not a
-claim that the target has already been repaired.
+`CannotAnswer`, so this result was permission to design F0-V2 precisely, not a
+claim that the target had already been repaired. F0-V2A has now validated one
+generic structural/semantic-atom algebra over representative values through
+two implementations; see the
+[`F0-V2 design`](f0v2-canonical-view-schema-design.md). Exact target grammar
+and publication remain open.
 
 ## 2. Constraints recovered from the live target
 

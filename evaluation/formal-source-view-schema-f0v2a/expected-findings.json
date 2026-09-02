@@ -1,0 +1,243 @@
+{
+  "aggregate": {
+    "outcome": "Affirmative",
+    "code": "F0V2A-A-SCHEMA-ALGEBRA-FEASIBLE"
+  },
+  "evidence_control": {
+    "views": {
+      "public-binding-view-v0": {
+        "schema_digest": "4bee241eee3518d25c8ee70f76605cd4416d57b792d3965557533a7bba5876e8",
+        "leaf_count": 12,
+        "manifest_digest": "dce22e765d759cf9bee0370124029c655a3fdd358b1971910c907ed210a59fc4"
+      },
+      "strategy-decision-view-v0": {
+        "schema_digest": "2f65c17ae0a27527d5789d169fbe99012c650142a9cdce30f70bfed430ce504e",
+        "leaf_count": 7,
+        "manifest_digest": "7f88818a916826835fbbb6d4784907df855d30cdb3fe8773b5baf757daee996e"
+      },
+      "public-coin-view-v0": {
+        "schema_digest": "23f3ff543fb507bcbd118c9f9f6fa992e6b32e7986b4b6deb0aa1de508bd5732",
+        "leaf_count": 9,
+        "manifest_digest": "c9e7d111f7b0fac16d681e8ad77c5136e4cf3edfa46d65d1d0e050c1f3aece8e"
+      },
+      "effect-view-v0": {
+        "schema_digest": "1d67e26a5094e5fe8bd825d1aca1bd71693cf01d14eedc2c01f64b953c6e2aef",
+        "leaf_count": 6,
+        "manifest_digest": "900e4bb15c44d711206b4855be1debbf0fcc852171701fd3291db3e775922217"
+      },
+      "claim-reduction-view-v0": {
+        "schema_digest": "079b692c98e131411faf3cdeb64ccd1e9891003672b2caed076ea0ffe4e6ca08",
+        "leaf_count": 10,
+        "manifest_digest": "ece6e45be48e2f4e293ada842fbc4231948c1b3f8f1790babcb6f1db345c17e6"
+      },
+      "execution-view-v0": {
+        "schema_digest": "c693b4884d1add1c29a0bab2b36eabc6069387cffe4350143eecae687d3d40bf",
+        "leaf_count": 8,
+        "manifest_digest": "839838df95ecc3a1d3faa3053676b6b70993b2f306099f1a86d8c383e7f6e0ec"
+      }
+    },
+    "total_leaf_count": 52
+  },
+  "cases": [
+    {
+      "name": "six-view-representative-catalog",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-SIX-VIEWS"
+    },
+    {
+      "name": "finite-structural-universe",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-STRUCTURAL-UNIVERSE"
+    },
+    {
+      "name": "closed-semantic-atom-universe",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-ATOM-UNIVERSE"
+    },
+    {
+      "name": "recursive-iterative-agreement",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-INDEPENDENT-AGREEMENT"
+    },
+    {
+      "name": "enumeration-resolution-inverse",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-RESOLVER-INVERSE"
+    },
+    {
+      "name": "exact-complete-manifests",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-COMPLETE-MANIFEST"
+    },
+    {
+      "name": "fixed-law-atoms",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-FIXED-LAWS"
+    },
+    {
+      "name": "opaque-module-effect-boundary",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-OPAQUE-MODULE"
+    },
+    {
+      "name": "equal-values-distinct-coordinates",
+      "outcome": "Affirmative",
+      "code": "F0V2A-A-NO-VALUE-ALIAS"
+    },
+    {
+      "name": "exact-six-target-body-grammars",
+      "outcome": "CannotAnswer",
+      "code": "F0V2A-C-EXACT-TARGET-GRAMMAR"
+    },
+    {
+      "name": "complete-owner-view-derivation",
+      "outcome": "CannotAnswer",
+      "code": "F0V2A-C-OWNER-DERIVATION"
+    },
+    {
+      "name": "target-profile-publication-and-migration",
+      "outcome": "CannotAnswer",
+      "code": "F0V2A-C-TARGET-MIGRATION"
+    },
+    {
+      "name": "proper-subset-read-closure",
+      "outcome": "CannotAnswer",
+      "code": "F0V2A-C-PARTIAL-CLOSURE"
+    },
+    {
+      "name": "host-reflection-node",
+      "outcome": "Refused",
+      "code": "F0V2A-R-HOST-REFLECTION"
+    },
+    {
+      "name": "noncanonical-field-order",
+      "outcome": "Refused",
+      "code": "F0V2A-R-FIELD-ORDER"
+    },
+    {
+      "name": "duplicate-field-ordinal",
+      "outcome": "Refused",
+      "code": "F0V2A-R-DUPLICATE-FIELD"
+    },
+    {
+      "name": "empty-variant-schema",
+      "outcome": "Refused",
+      "code": "F0V2A-R-EMPTY-VARIANT"
+    },
+    {
+      "name": "unknown-atom-kind",
+      "outcome": "Refused",
+      "code": "F0V2A-R-UNKNOWN-ATOM"
+    },
+    {
+      "name": "unknown-leaf-body-compiler",
+      "outcome": "Refused",
+      "code": "F0V2A-R-UNKNOWN-COMPILER"
+    },
+    {
+      "name": "module-payload-generic-descent",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MODULE-DESCENT"
+    },
+    {
+      "name": "missing-record-field",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MISSING-FIELD"
+    },
+    {
+      "name": "extra-record-field",
+      "outcome": "Refused",
+      "code": "F0V2A-R-EXTRA-FIELD"
+    },
+    {
+      "name": "absent-variant-case",
+      "outcome": "Refused",
+      "code": "F0V2A-R-VARIANT-CASE"
+    },
+    {
+      "name": "sequence-bound-overflow",
+      "outcome": "Refused",
+      "code": "F0V2A-R-SEQUENCE-BOUND"
+    },
+    {
+      "name": "exact-profile-law-substitution",
+      "outcome": "Refused",
+      "code": "F0V2A-R-LAW-SUBSTITUTION"
+    },
+    {
+      "name": "canonical-body-compiler-substitution",
+      "outcome": "Refused",
+      "code": "F0V2A-R-COMPILER-SUBSTITUTION"
+    },
+    {
+      "name": "unadmitted-canonical-value",
+      "outcome": "Refused",
+      "code": "F0V2A-R-CANONICAL-VALUE"
+    },
+    {
+      "name": "unsupported-module-effect",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MODULE-UNSUPPORTED"
+    },
+    {
+      "name": "invalid-module-payload",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MODULE-PAYLOAD"
+    },
+    {
+      "name": "module-effect-owner-substitution",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MODULE-OWNER"
+    },
+    {
+      "name": "boolean-natural-alias",
+      "outcome": "Refused",
+      "code": "F0V2A-R-BOOLEAN-TYPE"
+    },
+    {
+      "name": "missing-complete-manifest-leaf",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MANIFEST-OMISSION"
+    },
+    {
+      "name": "duplicate-manifest-coordinate",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MANIFEST-DUPLICATE"
+    },
+    {
+      "name": "reordered-complete-manifest",
+      "outcome": "Refused",
+      "code": "F0V2A-R-MANIFEST-ORDER"
+    },
+    {
+      "name": "wrong-atomic-boundary",
+      "outcome": "Refused",
+      "code": "F0V2A-R-WRONG-BOUNDARY"
+    },
+    {
+      "name": "interior-or-empty-path",
+      "outcome": "Refused",
+      "code": "F0V2A-R-INTERIOR-PATH"
+    },
+    {
+      "name": "textual-field-path",
+      "outcome": "Refused",
+      "code": "F0V2A-R-TEXT-PATH"
+    },
+    {
+      "name": "absent-sequence-element",
+      "outcome": "Refused",
+      "code": "F0V2A-R-SEQUENCE-PATH"
+    },
+    {
+      "name": "cross-view-coordinate",
+      "outcome": "Refused",
+      "code": "F0V2A-R-CROSS-VIEW"
+    },
+    {
+      "name": "equal-value-coordinate-alias",
+      "outcome": "Refused",
+      "code": "F0V2A-R-EQUAL-VALUE-ALIAS"
+    }
+  ]
+}

@@ -72,8 +72,14 @@ views, coordinates, paths, boundaries, manifests, or authority values. The
 gate also does not define the constructor-specific dependency graph required
 for proper-subset projections.
 
+The later F0-V2A gate now validates one generic finite schema algebra over
+representative six-view values, but it still does not supply the exact target
+six-body grammar or migrate this synthetic topology. See
+[`formal-source-view-schema-f0v2a/`](../formal-source-view-schema-f0v2a/README.md).
+
 Accordingly, F0-V1 does not repair the target, publish new identities, admit a
 Core, derive a view, establish Q1 correspondence, validate a provider, prove a
-theorem, or verify implementation code. F0-V2 must author and review the exact
-grammar and perform the real profile migration. F1-R1C1 may then test complete
-owner views; F1-R1C2 remains the separate proper-subset closure gate.
+theorem, or verify implementation code. F0-V2B must author and review the exact
+grammar, and F0-V2C must perform the real profile migration. F1-R1C1 may then
+test complete owner views; F1-R1C2 remains the separate proper-subset closure
+gate.
