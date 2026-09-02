@@ -98,7 +98,11 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
-  -> F0-V2C  target publication and migration            [open; scoped by F2-O0]
+  -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
+  -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
+  -> B2D2   Fresh completed-record schema               [complete, schema only]
+  -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
+  -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
@@ -477,6 +481,27 @@ provider, extraction tool, or durable schema.
   partition; three sub-decisions compared at equal resolution with
   recommendations; the identity-pin question and the freeze scope stated
   as separate decisions; slots for the five outstanding lanes.
+- [`m1-mechanized-kernel-edges-and-canonicity.md`](m1-mechanized-kernel-edges-and-canonicity.md)
+  records the second mechanization increment: PCGraph edge construction
+  from an admitted Core in Lean reproduces all five D1 graph tables, decoder
+  canonicity is proved, the K1 byte bound is moved to the prose with a new
+  oracle case, and five Section 11 wording gaps are recorded.
+- [`f2o1-integrated-provider-observable-audit.md`](f2o1-integrated-provider-observable-audit.md)
+  repeats the provider-observable audit on the D1 integrated baseline:
+  93 constructs, 32 sourced, 56 operational gaps and five premise gaps,
+  six discriminating mutations refused, elaboration clean; aggregate
+  `CannotAnswer`.
+- [`f0v2b2d2-fresh-run-schema.md`](f0v2b2d2-fresh-run-schema.md) closes
+  the second B2D family at schema resolution: the Fresh completed-record
+  schema derives through typed and cold paths for all five D1 carriers, with
+  the fixation-marker placement, the partial-record body, and the
+  `StrategyStopped` lane recorded as target underdeterminations; no run is
+  executed.
+- [`f0v3-fs-family-view-determinacy.md`](f0v3-fs-family-view-determinacy.md)
+  audits the eight Fiat--Shamir family view bodies field by field: 37
+  exact, 40 prose, 20 undefined; a bounded normalized grammar compiles
+  through two paths and eleven owner obligations are named; aggregate
+  `CannotAnswer` for determinacy.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
