@@ -261,15 +261,21 @@ selected topology:
 
 ```text
 F1-R0  manual package/checker and mutation feasibility
-F1-R1  exact offline durable target body/view reification
+F1-R1A exact target profile/source basis and fixture discriminator
+F1-R1B exact target carrier and admission
+F1-R1C exact owner views and read closure
+F1-R1D exact Relations/correspondence/package integration
 F1-I   admitted live-owner issuance and authority binding
 ```
 
 The bounded F1-R0 result and exact nonclaims are recorded in
 [`f1r-reference-package-feasibility.md`](f1r-reference-package-feasibility.md).
-F1-R0 cannot satisfy Q1 or mint an Analysis capability. F1-R1 and F1-I retain
-the exact source-subject obligations in Sections 7.1 and 7.2; the split only
-prevents fixture-local bodies from being mislabeled as target conformance.
+F1-R0 cannot satisfy Q1 or mint an Analysis capability. The bounded F1-R1A
+result now closes only the independently published target profile/source
+basis and mechanically refuses fixture or identity-only substitution.
+F1-R1B/R1C/R1D and F1-I retain the remaining exact source-subject obligations
+in Sections 7.1 and 7.2; the split only prevents profile publication and
+fixture-local bodies from being mislabeled as target admission.
 
 ## 8. F2 exact entry contract
 

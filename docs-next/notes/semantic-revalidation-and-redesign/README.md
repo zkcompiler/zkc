@@ -130,9 +130,10 @@ below are reader cross-references rather than inventory edges.
   holdout-stable freeze decision.
 - [Formal Assurance Architecture Research](formal-assurance-research/README.md)
   owns the cross-cutting F0 ideal-architecture audit, the bounded F1-R0
-  package/checker feasibility result, and the dependent exact-source F1 and F2
-  operational-semantics research contracts. It is a side research program and
-  does not reorder the post-freeze main lane or activate Stage 4B.
+  package/checker feasibility result, the bounded F1-R1A target profile/source
+  basis and substitution discriminator, and the dependent exact-source F1 and
+  F2 operational-semantics research contracts. It is a side research program
+  and does not reorder the post-freeze main lane or activate Stage 4B.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target

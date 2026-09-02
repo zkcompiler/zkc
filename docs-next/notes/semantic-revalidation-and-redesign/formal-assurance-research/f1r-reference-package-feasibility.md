@@ -2,7 +2,8 @@
 
 > **Kind:** Temporary F1 executable-feasibility result and sequencing repair
 > **State:** F1-R0 package/checker boundary complete at bounded reference
-> resolution; exact target-body F1-R1, live-owner F1-I, and all F2 stages remain
+> resolution; F1-R1A target profile/source basis is now complete at bounded
+> resolution, while F1-R1B/R1C/R1D, live-owner F1-I, and all F2 stages remain
 > open
 > **Authority:** None. This result changes no current or target semantic
 > definition, artifact identity, admission result, Analysis judgment,
@@ -41,7 +42,10 @@ F1 is consequently split more precisely:
 
 ```text
 F1-R0  package/checker and mutation feasibility over manual target-shaped data
-  -> F1-R1  exact offline target body/view reification
+  -> F1-R1A  exact target profile/source basis
+  -> F1-R1B  exact target carrier/admission
+  -> F1-R1C  exact owner views/read closure
+  -> F1-R1D  exact integrated target package
   -> F1-I   live admitted-owner issuance and authority binding
   -> F2-O/P/D
 ```
@@ -183,10 +187,11 @@ It would be incorrect to relabel the common `F1R-AFFIRMATIVE` record as an
 Analysis `Affirmative` Q1 result. No source authority entered the evaluator,
 and no capability can be minted from its bytes.
 
-## 6. F1-R1 and F1-I entry contract
+## 6. Staged F1-R1 and F1-I entry contract
 
-F1-R1 begins only when the exact bounded target source can be formed without
-substituting fixture-local profiles or hand-authored identities. It needs:
+The complete F1-R1 sequence succeeds only when the exact bounded target source
+can be formed without substituting fixture-local profiles or hand-authored
+identities. It needs:
 
 1. the exact published target semantic-profile closure selected for the
    bounded Fresh Schnorr source;
@@ -199,6 +204,15 @@ substituting fixture-local profiles or hand-authored identities. It needs:
    independently reconstructed from those owners; and
 5. two checker paths that reproduce the target root IDs and package result,
    with the F1-R0 corpus retained as a compatibility and mutation control.
+
+The subsequent
+[`F1-R1A target-basis gate`](f1r1a-target-basis-and-admission-gap.md) closes
+only item 1 and the source-declaration part of items 2 and 3. It independently
+reconstructs the frozen target Interaction profile and demonstrates that K2's
+witness-local profile, eight-field Core, and recursively relabelled IDs cannot
+substitute for target admission. Items 2 through 5 are now sequenced as
+F1-R1B carrier/admission, F1-R1C owner views/read closure, and F1-R1D
+Relations/correspondence/package integration.
 
 F1-I then replaces offline formed values with exact admitted live owner
 handles, reissues the same views, checks source-authority bindings, and forms
@@ -218,8 +232,9 @@ does require the F1 entry sequence and minimum package contract to incorporate
 the refinements above.
 
 No durable target page should absorb this format or its local diagnostics yet.
-The earliest durable change remains after exact F1-R1/F1-I evidence: owner
-portable-view contracts plus an Analysis formal-source correspondence family.
+The earliest durable change remains after exact F1-R1B/R1C/R1D and F1-I
+evidence: owner portable-view contracts plus an Analysis formal-source
+correspondence family.
 
 ## 8. Non-claims
 

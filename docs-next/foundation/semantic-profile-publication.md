@@ -149,7 +149,7 @@ owner fragments, and the selected Foundation basis. They must agree on:
 - topological order and exact root closure; and
 - the complete derived identity table.
 
-The current selected corpus contains seventeen indexed profiles. The
+The current selected corpus contains eighteen indexed profiles. The
 publication gate independently reconstructs their full typed identities,
 direct imports, and root closures and can print the complete derived table.
 That output is an inspection artifact rather than a committed source of truth.

@@ -1,10 +1,11 @@
 # Formal Assurance Architecture Research
 
 > **Kind:** Temporary cross-cutting research-program index
-> **State:** Active; first F0 architecture pass and bounded F1-R0
-> package/checker feasibility pass complete at research resolution. Exact
-> target-body F1-R1, live-owner F1-I, and F2 remain dependent feasibility
-> programs, not selected product implementation
+> **State:** Active; first F0 architecture pass, bounded F1-R0 package/checker
+> pass, and bounded F1-R1A target profile/source-basis pass complete at
+> research resolution. Target carrier/admission F1-R1B, owner-view F1-R1C,
+> integrated-package F1-R1D, live-owner F1-I, and F2 remain dependent
+> feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
 > artifact identity, theorem status, Analysis judgment, implementation claim,
 > or product-roadmap priority.
@@ -40,7 +41,10 @@ semantic redesign when the gain and migration cone justify it.
 ```text
 F0  ideal assurance architecture and current-design falsification
   -> F1-R0  package/checker feasibility                 [complete, bounded]
-  -> F1-R1  exact offline target-body/view reification  [open]
+  -> F1-R1A exact target profile/source basis           [complete, bounded]
+  -> F1-R1B exact target carrier/admission              [open]
+  -> F1-R1C exact owner views/read closure              [open]
+  -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
   -> F2  zkc-native operational interpretation and one property pilot
 ```
@@ -63,12 +67,13 @@ bound the wrong identity, or assigned authority to the wrong owner; such a
 finding reopens F0 explicitly.
 
 The first executable pass exposed a necessary sequencing distinction. F1-R0
-tests the package/checker boundary over manual target-shaped data. F1-R1 waits
-for exact durable target body compilers and view evaluators, because the live
-K2/K3 reference instruments explicitly use witness-local profiles and mostly
-fixture-exact bodies rather than durable target encoders. F1-I then binds the
-same proposition class to admitted live owner handles and authority. No Q1
-claim is complete before F1-I.
+tests the package/checker boundary over manual target-shaped data. F1-R1A now
+establishes that the exact target profile and source declarations are
+independently reconstructible and mechanically distinguishes them from K2's
+witness-local profile and eight-field carrier. F1-R1B through R1D still need
+the durable target body/admission evaluator, owner views, Relations roots, and
+integrated package. F1-I then binds the same proposition class to admitted
+live owner handles and authority. No Q1 claim is complete before F1-I.
 
 ### F2 — operational semantics
 
@@ -119,7 +124,11 @@ provider, extraction tool, or durable schema.
 - [`f1r-reference-package-feasibility.md`](f1r-reference-package-feasibility.md)
   records the 18-case, two-checker F1-R0 result, the protected-observation/read
   and alias-free closure refinements, the exact nonclaim about manual source
-  bodies, and the repaired F1-R1/F1-I sequence.
+  bodies, and the staged F1-R1/F1-I sequence.
+- [`f1r1a-target-basis-and-admission-gap.md`](f1r1a-target-basis-and-admission-gap.md)
+  records the independently reconstructed frozen target Interaction profile,
+  target/K2 carrier discriminator, executable identity-versus-admission gap,
+  and the refined F1-R1A/R1B/R1C/R1D sequence.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -136,14 +145,15 @@ declaration probe succeeded, and its reported axiom closure excludes
 `1`. This closes theorem selection only. Source/provider correspondence and
 applicability remain F2 obligations.
 
-F1-R0 now passes 18/18 frozen cases with a zero-dependency Python checker and
-a standalone no-crate Rust checker that share no parser or canonical encoder.
-The result supports the package class and rejects all required F0 mutations,
-but it is not Q1: the source bodies are manual target-shaped values, not exact
-durable target bodies or admitted owner-issued views. F1-R1 therefore forms
-the exact offline target bodies/views before F1-I supplies live owner
-authority. F2 starts only after one affirmative bounded Q1 correspondence and
-retains separate operational, property, and zkc-native discriminator stages.
+F1-R0 passes 18/18 frozen cases with a zero-dependency Python checker and a
+standalone no-crate Rust checker that share no parser or canonical encoder.
+F1-R1A passes 10/10 heterogeneous boundary checks: the exact target profile
+and source routing are available, while fixture profile substitution and
+identity-only recursive relabelling are refused. Neither result is Q1.
+F1-R1B through R1D must still form admitted exact target bodies, owner views,
+and the integrated package before F1-I supplies live owner authority. F2
+starts only after one affirmative bounded Q1 correspondence and retains
+separate operational, property, and zkc-native discriminator stages.
 
 ## Known risks and non-claims
 

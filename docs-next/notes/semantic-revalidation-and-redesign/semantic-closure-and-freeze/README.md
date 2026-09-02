@@ -83,7 +83,7 @@ must not move authority between these owners merely to simplify an encoding.
 The preflight, six stable-upstream profile publications, recursive-composition
 boundary, dependent-profile construction, bounded independent freeze review,
 and source-first holdout portfolio are complete. The publication candidate
-contains all seventeen indexed profiles while preserving the six upstream PIR
+contains all eighteen indexed profiles while preserving the six upstream PIR
 identities byte-for-byte. The full local gate matrix and uncapped aggregate are
 green. The publication review's sole finding was a repository-path lexical
 divergence between the two compilers; it was reproduced, repaired, and covered
