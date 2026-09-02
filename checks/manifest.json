@@ -1214,6 +1214,28 @@
       }
     },
     {
+      "id": "research.formalization-receipt-assurance",
+      "title": "Formalization-receipt Q3 assurance audit",
+      "subject": "Whether the current exact-pin ArkLib FormalizationReceipt reading forms an independently authenticated Q3 theorem-environment result with exact identity, failure partition, and residual trust.",
+      "claim": "A direct registry and frozen-environment audit and a separate black-box production-driver path reproduce one clean six-declaration exact-pin reading, refuse five malformed receipt classes, and demonstrate by accepted mutations that incompleteness cause, coverage meaning, complete offline source authentication, checkability downgrade, four external receipts, and a durable typed Q3 result remain unauthenticated.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "mutation", "differential", "static-analysis"],
+      "source_paths": ["evaluation/formalization-receipt-assurance-q3a/run.py", "evaluation/formalization-receipt-assurance-q3a/model.py", "evaluation/formalization-receipt-assurance-q3a/independent.py", "evaluation/formalization-receipt-assurance-q3a/README.md", "evaluation/formalization-receipt-assurance-q3a/expected-findings.json", "evaluation/formalization-receipt-assurance-q3a/live-observation.json", "test/Soundness/Inputs/formalization_receipts.py", "registry/soundness-signature.json", "registry/upstreams.json", ".github/workflows/lean-reading.yml", "docs/formalization.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The audit is not Q1 source reification, Q2 provider correspondence, Q4 theorem truth treatment, Q5 applicability, Q6 property truth, verification of ArkLib or the receipt driver, authentication of the four external receipts, compiler verification, or a target change; the frozen live reading is a dated research observation rather than a workflow-issued Q3 result."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formalization-receipt-assurance-q3a/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

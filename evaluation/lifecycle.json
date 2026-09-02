@@ -82,6 +82,15 @@
       ]
     },
     {
+      "id": "formal-environment-assurance-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Bounded falsifiers for deciding whether pinned theorem-environment observations are sufficient provenance or should become typed, independently authenticated Q3 results, without confusing environment identity with source correspondence, applicability, or property truth.",
+      "exit_rule": "Either retain the receipt path with a deliberately narrow drift-observation claim, or move the package's identity fields, qualified outcomes, mutation refusals, and non-claims into the selected Analysis-owned theorem-environment validation path; then remove this audit after its exact counterexamples are preserved.",
+      "checks": [
+        "research.formalization-receipt-assurance"
+      ]
+    },
+    {
       "id": "cross-cutting-probe-promotion",
       "disposition": "promote-then-retire",
       "purpose": "Small cross-cutting pressure probes whose useful laws must acquire a durable semantic or implementation owner rather than becoming a parallel architecture.",

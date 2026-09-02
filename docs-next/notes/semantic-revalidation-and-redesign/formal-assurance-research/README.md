@@ -445,6 +445,14 @@ provider, extraction tool, or durable schema.
   proved on standard axioms; one K1 byte-bound discrepancy and three
   Section 11 underdeterminations are recorded. Edge construction and
   decoder canonicity are the next increment.
+- [`q3a-formalization-receipt-assurance-audit.md`](q3a-formalization-receipt-assurance-audit.md)
+  records the 29-finding audit of the current ArkLib receipt path. A clean
+  exact-pin run reproduces six statements and axiom sets, and five malformed
+  receipt mutations fail closed. The direct and black-box paths nevertheless
+  classify a durable environment-result envelope, exact incompleteness cause,
+  coverage meaning, complete offline source authentication, and four external
+  receipts as `CannotAnswer`. The existing mechanism is retained as a bounded
+  Q3 input, not promoted to a Q3 result or any Q1/Q2/Q4/Q5/Q6 claim.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,

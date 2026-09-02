@@ -1,0 +1,78 @@
+{
+  "schema": "zkc.formalization-receipt-assurance-q3a.observation.v0",
+  "observed_at": "2026-09-03T06:35:20+09:00",
+  "zkc_cutoff": "faea36ef6da3f82e29ff5fddc6750a4824bfbc2a",
+  "zkc_sources": {
+    "driver": {
+      "path": "test/Soundness/Inputs/formalization_receipts.py",
+      "sha256": "4d8cd8a4f7b7bcee8f1050f543d951436d0f318fb51206f58e2aaf597073f5f6"
+    },
+    "signature": {
+      "path": "registry/soundness-signature.json",
+      "sha256": "e55f1d6c2ad7832c82e1991e6078f07526bccdd6079488cf04feb0ae442d1e74"
+    },
+    "upstreams": {
+      "path": "registry/upstreams.json",
+      "sha256": "a722a778a9290edffaf6960a6c50d10e7478c3325f796c7e172d0a6a7e46a3a4"
+    },
+    "workflow": {
+      "path": ".github/workflows/lean-reading.yml",
+      "sha256": "408c66f4b0cf1d1cec1c4c193df0eee62fd08bb3a5f8b9bea7fd267c44f490b3"
+    }
+  },
+  "arklib_environment": {
+    "repository": "https://github.com/Verified-zkEVM/ArkLib",
+    "origin": "https://github.com/Verified-zkEVM/ArkLib.git",
+    "revision": "fad5cbf808774838924dc8273715724c6a6caa1f",
+    "tree": "e38383088598a1305c15447c53db309ccd6b35ee",
+    "clean_worktree": true,
+    "toolchain": "leanprover/lean4:v4.31.0",
+    "lean_version": "4.31.0",
+    "lean_commit": "68218e876d2a38b1985b8590fff244a83c321783",
+    "lake_version": "5.0.0-src+68218e8",
+    "lean_toolchain_sha256": "efac0b94923b2d8b6840cd35be9177ad0fc5ab2332f4f4311c98712cee92fdee",
+    "lake_manifest_sha256": "25e545bb447c1f4e0bc1d55ffb17813ae58f9abd0c7cb48273186e0e5fd367a5",
+    "lakefile_toml_sha256": "f1de06f1b58a7f069cf6cf505981db3d400bd4daee22d838f6649f2856672520"
+  },
+  "reading": {
+    "command": "python3 -B test/Soundness/Inputs/formalization_receipts.py registry/soundness-signature.json --checkout /home/wonjae/code/ArkLib",
+    "exit_status": 0,
+    "checkable": 6,
+    "outside_checkout": 4,
+    "agree": 6,
+    "declarations": [
+      {
+        "declaration": "RandomQuery.oracleReduction_completeness",
+        "statement": "agree",
+        "axioms": "agree"
+      },
+      {
+        "declaration": "Sumcheck.Spec.reduction_perfectCompleteness",
+        "statement": "agree",
+        "axioms": "agree"
+      },
+      {
+        "declaration": "RandomQuery.oracleVerifier_rbrKnowledgeSoundness",
+        "statement": "agree",
+        "axioms": "agree"
+      },
+      {
+        "declaration": "OracleVerifier.seqCompose_rbrSoundness",
+        "statement": "agree",
+        "axioms": "agree"
+      },
+      {
+        "declaration": "OracleVerifier.seqCompose_rbrKnowledgeSoundness",
+        "statement": "agree",
+        "axioms": "agree"
+      },
+      {
+        "declaration": "Sumcheck.Spec.oracleVerifier_rbrKnowledgeSoundness",
+        "statement": "agree",
+        "axioms": "agree"
+      }
+    ]
+  },
+  "scope": "A dated research observation of one clean exact-pin reading. It is not a signed workflow artifact, a Q3 judgment, theorem-to-PIR correspondence, applicability result, or property result.",
+  "observation_body_sha256": "a8bc4d14b58c6004cbf76c88fede139ab8f28e3014dc59a47b0c0bd115cc6dc2"
+}
