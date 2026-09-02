@@ -73,6 +73,15 @@
       ]
     },
     {
+      "id": "kernel-mechanization-sequence",
+      "disposition": "active-sequence",
+      "purpose": "Bounded measurements of whether the kernel laws that the research packages mechanize by hand in Python, the constitutional datum encoding and the PublicCoin class lattice and order, can be zkc-owned proof-assistant definitions that reproduce the Python goldens, and what one checked theorem costs, without making any other package depend on the proof-assistant toolchain.",
+      "exit_rule": "Either the design lane adopts a mechanized definition as a durable owner-checked leg of the reference twin and this package's vectors, refusals, and theorems move to that owner, or the measurement is recorded as sufficient and the package is removed; until that decision the Python goldens remain the comparison target and no Lean text is cited as authority.",
+      "checks": [
+        "research.kernel-mechanization-feasibility"
+      ]
+    },
+    {
       "id": "cross-cutting-probe-promotion",
       "disposition": "promote-then-retire",
       "purpose": "Small cross-cutting pressure probes whose useful laws must acquire a durable semantic or implementation owner rather than becoming a parallel architecture.",
