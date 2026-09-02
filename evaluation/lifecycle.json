@@ -57,7 +57,8 @@
         "research.owner-view-claim-reduction-projections",
         "research.owner-view-module-projections",
         "research.owner-view-terminal-path-algebra",
-        "research.owner-view-terminal-owner-contracts"
+        "research.owner-view-terminal-owner-contracts",
+        "research.owner-view-terminal-projections"
       ]
     },
     {

@@ -16,15 +16,16 @@
 > immutable owner-admission substrate and exposes the predecessor handle's
 > ordinary mutability. F0-V2B2C1A supplies the exact view-value codec and
 > exposes a target-byte versus diagnostic-JSON ordering inversion.
-> F0-V2B2C1B1 through B2C1B4 now validate owner-derived exact projections for
+> F0-V2B2C1B1 through B2C1B4 validate owner-derived exact projections for
 > twenty of the twenty-one B2C isolation families across Foundation, Oracle,
 > Claim, Reduction, publication-order, joint-Challenge, shared-Challenge, and
 > semantic-module surfaces. F0-V2B2C1B5A selects a compact first-active guard-
 > region method for path-sensitive Claim flow, then B2C1B5B1 selects bounded
 > Terminal owner contracts for required-Check truth, required-Reduction
-> application, and Claim disposition. Exact byte-derived six-view projection
-> remains B2C1B5B2, so B2C stays at twenty of twenty-one families; both B2D
-> integration families and F0-V2C target migration also remain open.
+> application, and Claim disposition. B2C1B5B2 now realizes that selection as
+> exact synthetic candidate bytes and all six owner views, closing 21 of 21
+> B2C isolation families at bounded research resolution. Both B2D integration
+> families and F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -73,15 +74,15 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2B2B complete schema source and inhabitance     [complete, bounded]
   -> F0-V2B2C0 canonical-byte owner admission            [complete, CannotAnswer]
   -> F0-V2B2C1A exact view-value codec                    [complete, bounded]
-  -> F0-V2B2C1B isolated constructor owner projections   [in progress]
+  -> F0-V2B2C1B isolated constructor owner projections   [complete, bounded]
        B2C1B1 foundation families 4/21                   [complete, bounded]
        B2C1B2 Oracle families 8/21                       [complete, bounded]
        B2C1B3 claim/reduction/challenge families 5/21    [complete, bounded]
        B2C1B4 module-effect families 3/21                [complete, bounded]
-       B2C1B5 expanded-terminal family 1/21              [in progress]
+       B2C1B5 expanded-terminal family 1/21              [complete, bounded]
          B2C1B5A compact path algebra                    [complete, CannotAnswer]
          B2C1B5B1 Terminal owner-contract selection      [complete, bounded]
-         B2C1B5B2 exact Terminal owner projection        [open]
+         B2C1B5B2 exact Terminal owner projection        [complete, bounded]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -194,8 +195,11 @@ positive must-fact under a PIR-owned use predicate; add sorted-unique required
 Reduction references; and derive Claim disposition from verdict. Its
 non-enumerating abstraction is sound against 320 independent Boolean
 valuations, is exact on 39 of 40 selected terms, and rejects 25 dual-path
-mutations. B2C coverage still remains twenty of twenty-one until B2C1B5B2
-applies exact-byte admission and six-view projection.
+mutations. B2C1B5B2 then applies that selection to exact candidate Core bytes:
+typed and independent cold paths agree on all six projected bodies, all eight
+executions, and the 28-node/49-edge graph, while rejecting 17 semantic
+mutations and six encodable owner-view substitutions. This closes all 21 B2C
+families at bounded constructor-isolation resolution; it does not close B2D.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -375,6 +379,14 @@ provider, extraction tool, or durable schema.
   independent 320-valuation oracle and rejects 25 mutations. Exact Core bytes,
   six-view projection, B2C completion, B2D, migration, live correspondence,
   proof, security, and Q1 remain open.
+- [`f0v2b2c1b5b2-terminal-owner-projections.md`](f0v2b2c1b5b2-terminal-owner-projections.md)
+  records the 62-finding exact Terminal owner-projection result. Typed and
+  independent cold byte-derived paths agree on six exact owner-view bodies,
+  all eight executions, and a 28-node/49-edge graph; 17 semantic mutations
+  and six schema-valid owner-view substitutions fail closed. This completes
+  21/21 B2C constructor-isolation families at bounded research resolution,
+  while B2D, target migration, live correspondence, proof, security, and Q1
+  remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -455,10 +467,13 @@ reject 21 mutations. Its aggregate is intentionally `CannotAnswer`, however,
 because the written Terminal contract lacks required-Check truth entailment
 and a required-Reduction owner field. B2C1B5B1 then matches 58/58 frozen
 findings and selects the bounded repair: a PIR-owned Check must-fact predicate,
-explicit required Reductions, and verdict-derived Claim disposition. B2C
-remains at twenty of twenty-one because B2C1B5B2 exact owner projection, B2D,
-publication, implementation correspondence, and Q1 remain open, and no
-profile has changed.
+explicit required Reductions, and verdict-derived Claim disposition.
+B2C1B5B2 matches 62/62 frozen findings: the typed and cold paths agree on six
+exact owner-view bodies, eight executions, and the expanded graph, and reject
+the selected semantic and owner-view substitutions. B2C is therefore complete
+at bounded 21/21 constructor-isolation resolution. B2D, publication,
+implementation correspondence, proof, security, and Q1 remain open, and no
+target profile has changed.
 
 ## Known risks and non-claims
 

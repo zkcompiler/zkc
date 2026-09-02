@@ -1,0 +1,49 @@
+{
+  "format": "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-delta.v0",
+  "predecessor": {
+    "format": "zkc.formal-source-view-schema-f0v2b2b.source.v0",
+    "sha256": "d70587b4459c8d445233f96279205f7fd2ee14ce09093f32a2fbafb46439b179"
+  },
+  "candidate_format": "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-source.v0",
+  "candidate_scope": "interaction-r2-expanded-terminal-normalized-six-view-grammar",
+  "remove_definitions": {
+    "ClaimDispositionEntry": "ed39bad7d39bda8254038f9e8e43d93e5aa67e633fc005aac1ad060d3f2c474b"
+  },
+  "replace_definitions": {
+    "ClaimReductionViewBody": {
+      "prior_sha256": "bbd35acda013f707748a0c8ff628399c1cefd2acb2c1fa08076f1ae69eeb2bf2",
+      "value": {
+        "record": [
+          [0, {"ref": "CoreId"}],
+          [1, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "ClaimEntry"}}}],
+          [2, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "ReductionEntry"}}}],
+          [3, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "TerminalDispositionEntry"}}}],
+          [4, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "TerminalReductionRequirementEntry"}}}]
+        ]
+      }
+    },
+    "TerminalEntry": {
+      "prior_sha256": "3f9f89bbfde040b15de48feb7a0f2d4a52e6ea4fbac23a5222c677a3ee816a49",
+      "value": {
+        "record": [
+          [0, {"ref": "TerminalRef"}],
+          [1, {"ref": "TerminalVerdict"}],
+          [2, {"sequence": {"min": 0, "max": 16384, "discipline": "ordered", "element": {"ref": "ValueRef"}}}],
+          [3, {"sequence": {"min": 0, "max": 16384, "discipline": "sorted-unique", "element": {"ref": "CheckRef"}}}],
+          [4, {"sequence": {"min": 0, "max": 16384, "discipline": "sorted-unique", "element": {"ref": "ReductionRef"}}}],
+          [5, {"sequence": {"min": 0, "max": 16384, "discipline": "sorted-unique", "element": {"ref": "ClaimRef"}}}],
+          [6, {"ref": "OccurrenceRef"}]
+        ]
+      }
+    }
+  },
+  "add_definitions": {
+    "TerminalReductionRequirementEntry": {
+      "record": [
+        [0, {"ref": "OccurrenceRef"}],
+        [1, {"ref": "TerminalRef"}],
+        [2, {"sequence": {"min": 0, "max": 16384, "discipline": "sorted-unique", "element": {"ref": "ReductionRef"}}}]
+      ]
+    }
+  }
+}

@@ -1104,6 +1104,28 @@
       }
     },
     {
+      "id": "research.owner-view-terminal-projections",
+      "title": "Exact Terminal owner-view projections",
+      "subject": "Exact candidate Core-byte admission and six normalized PIR owner projections for the selected first-active Terminal contract.",
+      "claim": "Typed and independently structured cold byte-derived paths agree on six exact owner-view bodies, all eight bounded executions, and the integrated Terminal graph, while rejecting 17 semantic mutations and six schema-valid owner-view substitutions.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py", "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py", "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/independent.py", "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/schema-delta.json", "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/README.md", "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This bounded exact Terminal projection result is not B2D integrated closure, target publication, live implementation correspondence, a mechanized refinement or analyzer proof, a protocol or cryptographic security theorem, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",
