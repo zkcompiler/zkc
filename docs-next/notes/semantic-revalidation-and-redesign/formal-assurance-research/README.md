@@ -1,9 +1,10 @@
 # Formal Assurance Architecture Research
 
 > **Kind:** Temporary cross-cutting research-program index
-> **State:** Active; first F0 architecture pass complete at research
-> resolution and ready for F1 falsification; F1 and F2 remain dependent
-> feasibility programs, not selected product implementation
+> **State:** Active; first F0 architecture pass and bounded F1-R0
+> package/checker feasibility pass complete at research resolution. Exact
+> target-body F1-R1, live-owner F1-I, and F2 remain dependent feasibility
+> programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
 > artifact identity, theorem status, Analysis judgment, implementation claim,
 > or product-roadmap priority.
@@ -38,7 +39,9 @@ semantic redesign when the gain and migration cone justify it.
 
 ```text
 F0  ideal assurance architecture and current-design falsification
-  -> F1  concrete admitted-subject reification and correspondence
+  -> F1-R0  package/checker feasibility                 [complete, bounded]
+  -> F1-R1  exact offline target-body/view reification  [open]
+  -> F1-I   live admitted-owner correspondence          [open]
   -> F2  zkc-native operational interpretation and one property pilot
 ```
 
@@ -58,6 +61,14 @@ untrusted; a smaller independent checker or proof object must establish the
 claimed subject correspondence. F1 may reveal that F0 omitted an observable,
 bound the wrong identity, or assigned authority to the wrong owner; such a
 finding reopens F0 explicitly.
+
+The first executable pass exposed a necessary sequencing distinction. F1-R0
+tests the package/checker boundary over manual target-shaped data. F1-R1 waits
+for exact durable target body compilers and view evaluators, because the live
+K2/K3 reference instruments explicitly use witness-local profiles and mostly
+fixture-exact bodies rather than durable target encoders. F1-I then binds the
+same proposition class to admitted live owner handles and authority. No Q1
+claim is complete before F1-I.
 
 ### F2 — operational semantics
 
@@ -105,6 +116,10 @@ provider, extraction tool, or durable schema.
   selects the provisional two-layer source-package architecture for
   falsification, records the rotation cone and non-changes, and fixes exact
   staged F1/F2 entry and worktree contracts.
+- [`f1r-reference-package-feasibility.md`](f1r-reference-package-feasibility.md)
+  records the 18-case, two-checker F1-R0 result, the protected-observation/read
+  and alias-free closure refinements, the exact nonclaim about manual source
+  bodies, and the repaired F1-R1/F1-I sequence.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -121,11 +136,14 @@ declaration probe succeeded, and its reported axiom closure excludes
 `1`. This closes theorem selection only. Source/provider correspondence and
 applicability remain F2 obligations.
 
-F1 may now open its own package index under this temporary research package.
-F1-R can test the reference package/checker boundary before the full target is
-implemented; F1-I waits for the relevant live owner-view implementation. F2
-starts only after one affirmative bounded F1 correspondence and retains a
-separate operational, property, and zkc-native discriminator stage.
+F1-R0 now passes 18/18 frozen cases with a zero-dependency Python checker and
+a standalone no-crate Rust checker that share no parser or canonical encoder.
+The result supports the package class and rejects all required F0 mutations,
+but it is not Q1: the source bodies are manual target-shaped values, not exact
+durable target bodies or admitted owner-issued views. F1-R1 therefore forms
+the exact offline target bodies/views before F1-I supplies live owner
+authority. F2 starts only after one affirmative bounded Q1 correspondence and
+retains separate operational, property, and zkc-native discriminator stages.
 
 ## Known risks and non-claims
 
@@ -138,6 +156,8 @@ separate operational, property, and zkc-native discriminator stage.
   canonical encoder, generated code, cryptographic primitives, or deployment.
 - A feasibility prototype is disposable evidence and cannot rotate a durable
   profile, establish theorem truth, or authorize implementation.
+- Internal agreement over a manual source package is not admitted-source Q1
+  correspondence; coherently formed bytes have no source authority.
 - F0 may find no required kernel change; that outcome is valid only after the
   generative and capability-expanding candidates receive equal-resolution
   treatment.

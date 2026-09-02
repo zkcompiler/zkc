@@ -250,6 +250,27 @@ If F1-R discovers a missing source fact, F0 reopens immediately. If F1-R
 succeeds but F1-I cannot bind the live owner views without trusting the
 exporter, the implementation boundary—not the package bytes—must be repaired.
 
+### 7.3 Execution refinement after the first F1 pass
+
+The first executable pass found that this entry contract joined two distinct
+premises. The package/checker boundary can be tested over manual target-shaped
+values, but the live K2/K3 evaluators explicitly do not supply the durable
+target body compilers or target profile identities required by the “exact
+canonical bodies” premise above. F1 is therefore refined without changing the
+selected topology:
+
+```text
+F1-R0  manual package/checker and mutation feasibility
+F1-R1  exact offline durable target body/view reification
+F1-I   admitted live-owner issuance and authority binding
+```
+
+The bounded F1-R0 result and exact nonclaims are recorded in
+[`f1r-reference-package-feasibility.md`](f1r-reference-package-feasibility.md).
+F1-R0 cannot satisfy Q1 or mint an Analysis capability. F1-R1 and F1-I retain
+the exact source-subject obligations in Sections 7.1 and 7.2; the split only
+prevents fixture-local bodies from being mislabeled as target conformance.
+
 ## 8. F2 exact entry contract
 
 F2 begins only with one affirmative F1 Q1 result and retains three stages.

@@ -1,0 +1,92 @@
+[
+  {
+    "name": "fresh-positive",
+    "expected_class": "Affirmative",
+    "expected_code": "F1R-AFFIRMATIVE"
+  },
+  {
+    "name": "shared-positive",
+    "expected_class": "Affirmative",
+    "expected_code": "F1R-AFFIRMATIVE"
+  },
+  {
+    "name": "fs-positive",
+    "expected_class": "Affirmative",
+    "expected_code": "F1R-AFFIRMATIVE"
+  },
+  {
+    "name": "root-body-retained-id",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-AUTH-ID"
+  },
+  {
+    "name": "omit-order-dependency",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-MISSING-READ"
+  },
+  {
+    "name": "phantom-provider-read",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-EXTRA-READ"
+  },
+  {
+    "name": "equal-typed-coordinate-alias",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-COORDINATE-BINDING"
+  },
+  {
+    "name": "duplicate-shared-challenge",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-SHARED-CHALLENGE"
+  },
+  {
+    "name": "reorder-interleaved-occurrences",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-EXECUTION-ORDER"
+  },
+  {
+    "name": "cross-profile-replay",
+    "expected_class": "KindMismatch",
+    "expected_code": "F1R-K-PROFILE"
+  },
+  {
+    "name": "omit-fs-transcript-input",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-MISSING-READ"
+  },
+  {
+    "name": "serialize-confidential-value",
+    "expected_class": "Refused",
+    "expected_code": "F1R-R-EXCLUDED-SUPPORT"
+  },
+  {
+    "name": "serialize-causal-capability",
+    "expected_class": "Refused",
+    "expected_code": "F1R-R-EXCLUDED-SUPPORT"
+  },
+  {
+    "name": "duplicate-json-key",
+    "expected_class": "Malformed",
+    "expected_code": "F1R-M-DUPLICATE-KEY"
+  },
+  {
+    "name": "retained-package-id",
+    "expected_class": "Negative",
+    "expected_code": "F1R-N-PACKAGE-ID"
+  },
+  {
+    "name": "uncovered-protected-read",
+    "expected_class": "Malformed",
+    "expected_code": "F1R-M-OBSERVATION-COVERAGE"
+  },
+  {
+    "name": "aliased-contract-source",
+    "expected_class": "Malformed",
+    "expected_code": "F1R-M-ALIASED-SOURCE"
+  },
+  {
+    "name": "dormant-read-catalog",
+    "expected_class": "Malformed",
+    "expected_code": "F1R-M-READ-CLOSURE"
+  }
+]
