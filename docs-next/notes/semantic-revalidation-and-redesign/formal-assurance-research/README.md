@@ -9,10 +9,11 @@
 > F0-V2A now selects and validates a bounded generic view-schema algebra.
 > F0-V2B0 then finds that the current six displays cannot be compiled
 > verbatim and selects normalized replacement bodies. F0-V2B1 now validates
-> the bounded normalized grammar and owner derivation. F0-V2B2A now freezes
-> the 79-case constructor census, exact B1 delta, and four-stage B2 execution
-> topology; B2B/B2C/B2D constructor closure and F0-V2C target migration remain
-> open.
+> the bounded normalized grammar and owner derivation. F0-V2B2A freezes the
+> 79-case constructor census, exact B1 delta, and four-stage B2 execution
+> topology. F0-V2B2B now supplies a constructor-complete candidate schema and
+> branch-inhabitance result; B2C/B2D owner and integrated semantic closure and
+> F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -58,7 +59,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2B0 owner-body audit/redesign                   [complete, CannotAnswer]
   -> F0-V2B1 exact bounded-slice normalized grammar      [complete, bounded]
   -> F0-V2B2A constructor census and execution topology  [complete, CannotAnswer]
-  -> F0-V2B2B complete schema source and inhabitance     [open]
+  -> F0-V2B2B complete schema source and inhabitance     [complete, bounded]
   -> F0-V2B2C isolated admission and owner projections   [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
@@ -124,7 +125,12 @@ fifty-seven canonical variant cases, twenty-two derived semantic cases,
 twenty missing B1 variant cases, eight maximum-zero references, and
 twenty-three positive/negative pressure families. It splits B2 into complete
 schema/inhabitance, isolated admission/projection, and integrated graph gates;
-it does not close any of them.
+it does not close any of them. F0-V2B2B then closes the first gate at bounded
+research resolution. Two differently organized compilers agree on six
+schemas, and 302 synthetic values cover 914 reachable constructor
+requirements under two validators. It also corrects the candidate sequence
+algebra to carry lower bounds and ordered versus sorted-unique discipline.
+These values are not admitted owner projections; B2C and B2D remain open.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -224,7 +230,15 @@ provider, extraction tool, or durable schema.
   pressure families spanning the complete Oracle origin/mode product, both
   query visibilities, all module decision classes, claim/reduction and
   correlation closure, terminal dispositions, and Fresh runtime receipts.
-  B2B/B2C/B2D remain `CannotAnswer`.
+  B2B/B2C/B2D remain `CannotAnswer` at the census stage.
+- [`f0v2b2b-constructor-complete-schema-and-inhabitance.md`](f0v2b2b-constructor-complete-schema-and-inhabitance.md)
+  records the 65-case B2B schema result. Two source compilers agree on 88
+  definitions and six schemas; 302 generated values cover all 914 reachable
+  branch requirements under two validators; and 48 source/value mutations
+  refuse. The result adds exact sequence lower bounds and collection
+  discipline, but retains seven `CannotAnswer` boundaries for admission,
+  owner projection, graph/runtime semantics, migration, implementation
+  correspondence, and formal or cryptographic claims.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -281,6 +295,13 @@ F0-V2B2A matches 44/44 findings and closes only the census/program question:
 B2D integration sequence. Complete schemas, admitted extended carriers, owner
 projections, general graph transfers, runtime receipt descriptions, and target
 migration remain `CannotAnswer`; no profile has yet changed.
+F0-V2B2B subsequently matches 65/65 findings and closes schema construction
+and branch inhabitance only: recursive and topological compilers agree on 88
+definitions, and recursive and worklist validators accept 302 generated
+values covering 914 requirements. Thirty source mutations and eighteen value
+mutations refuse. Extended owner admission/projection, integrated graph and
+runtime behavior, profile migration, implementation correspondence, and Q1
+remain `CannotAnswer`; no profile has changed.
 
 ## Known risks and non-claims
 

@@ -906,6 +906,28 @@
       }
     },
     {
+      "id": "research.owner-view-constructor-schema",
+      "title": "Owner-view constructor-complete schema inhabitance",
+      "subject": "The closed candidate structural schemas for all six normalized PIR owner views.",
+      "claim": "Two source compilers agree on the six schemas, every reachable constructor boundary has a generated inhabitant accepted by two validators, and the frozen negative controls fail closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "property", "bounded-exhaustive"],
+      "source_paths": ["evaluation/formal-source-view-schema-f0v2b2b/run.py", "evaluation/formal-source-view-schema-f0v2b2b/model.py", "evaluation/formal-source-view-schema-f0v2b2b/independent.py", "evaluation/formal-source-view-schema-f0v2b2b/README.md", "evaluation/formal-source-view-schema-f0v2b2b/schema-source.json", "evaluation/formal-source-view-schema-f0v2b2b/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["Structural schema compilation and synthetic branch inhabitance are not owner admission, owner projection, exact target-body ordering, integrated PCGraph or runtime semantics, profile publication, implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-view-schema-f0v2b2b/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

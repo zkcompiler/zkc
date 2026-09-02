@@ -4,7 +4,8 @@
 > topology
 > **State:** Complete with
 > `CannotAnswer/F0V2B2A-C-EXECUTABLE-CONSTRUCTOR-CLOSURE`; the source census
-> and work decomposition are affirmative, while B2B/B2C/B2D remain required
+> and work decomposition are affirmative. B2B has since completed at schema
+> and inhabitance resolution; B2C/B2D remain required
 > **Authority:** None. This note and its inventory change no PIR source,
 > profile manifest, semantic identity, admission law, implementation, or
 > Analysis result
@@ -65,7 +66,7 @@ edge errors. B2 therefore becomes an internal four-stage program:
 
 ```text
 B2A  source census, exact B1 delta, pressure topology      [complete]
-  -> B2B  complete schema source and constructor inhabitance [open]
+  -> B2B  complete schema source and constructor inhabitance [complete]
   -> B2C  isolated admitted carriers and owner projections  [open]
   -> B2D  integrated carrier and full PCGraph pressure       [open]
 ```
@@ -374,7 +375,8 @@ integrated graph closure.
 
 Proceed to B2B. Do not publish profile source, reuse B1 identities, claim
 constructor-complete admission, form Q1, or resume the ArkLib/VCVio provider
-lane from B2A.
+lane from B2A. B2B now passes at structural resolution; the next executable
+step is B2C isolated admission and owner projection under the same non-claims.
 
 ## 12. Non-claims
 

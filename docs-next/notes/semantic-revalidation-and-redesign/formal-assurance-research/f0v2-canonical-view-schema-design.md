@@ -136,8 +136,10 @@ PIRViewSchema =
       schema: PIRViewSchema
     }>)
   | Sequence({
+      minimum_length: u64,
       element_schema: PIRViewSchema,
-      maximum_length: u64
+      maximum_length: u64,
+      discipline: Ordered | SortedUnique
     })
 ```
 
@@ -149,8 +151,19 @@ are represented only by these constructors:
 Option<T>       = Variant { 0: Atom(Unit), 1: T }
 Tuple<T0,...>   = Record  { 0: T0, ... }
 CanonicalMap<K,V>
-                = Sequence(Record { 0: K, 1: V }, maximum_length)
+                = Sequence(Record { 0: K, 1: V },
+                           minimum_length = 0,
+                           maximum_length,
+                           discipline = SortedUnique)
 ```
+
+F0-V2B2B strengthens the initial max-only sequence proposal above. Exact
+lower bounds and collection discipline are required to distinguish ordinary,
+nonempty, and sorted-unique canonical sequences. Without them, an empty scope
+path or reduction input list and duplicate/reordered graph sets remain
+structurally admissible. The executable B2B package validates this refined
+algebra at branch-inhabitance resolution; exact owner-body ordering remains a
+B2C obligation.
 
 The selected profile fixes constitutional schema-node, depth, sequence, and
 encoded-body limits. The initial proposal should reuse Foundation's existing
@@ -479,6 +492,14 @@ source/derived cases and measures twenty absent B1 variant cases plus eight
 maximum-zero references. Its 44/44 result selects B2B schema/inhabitance, B2C
 isolated admission/projection, and B2D integrated graph gates; all executable
 constructor-closure claims remain `CannotAnswer`.
+
+**F0-V2B2B result:** one candidate source now closes all twenty absent B1
+variant cases, eight maximum-zero references, and fourteen repair groups.
+Recursive and topological compilers agree on all six schemas; 302 synthetic
+values cover 914 reachable constructor requirements under recursive and
+worklist validators; and 48 source/value mutations refuse. This establishes
+grammar and inhabitance only. B2C owner admission/projection and B2D
+integrated graph/runtime behavior remain open.
 
 ### F0-V2C — target publication and migration
 

@@ -5,7 +5,8 @@
 > **State:** Complete with
 > `Affirmative/F0V2B1-A-BOUNDED-NORMALIZED-DERIVATION`; constructor-complete
 > F0-V2B2 remains required. F0-V2B2A has since closed the constructor census
-> and split executable closure into B2B/B2C/B2D
+> and split executable closure into B2B/B2C/B2D. F0-V2B2B has since closed
+> candidate schema construction and branch inhabitance; B2C/B2D remain open
 > **Authority:** None. This note and its candidate source change no PIR source,
 > profile manifest, semantic identity, admission judgment, implementation, or
 > Analysis result
@@ -369,9 +370,10 @@ shared ephemeral Core fact index, simultaneous five-Core-view derivation, and
 separate Protocol-owned Execution derivation. Add an explicit immutable-owner
 state requirement to the target implementation contract.
 
-Proceed through F0-V2B2A--D, beginning with the B2B complete schema and
-inhabitance gate. Do not publish, migrate, form Q1, or resume the ArkLib/VCVio
-provider lane from the B1 result.
+Proceed through F0-V2B2A--D. The B2B complete-schema and inhabitance gate now
+passes at bounded structural resolution; proceed to B2C owner admission and
+projection. Do not publish, migrate, form Q1, or resume the ArkLib/VCVio
+provider lane from the B1 or B2B result.
 
 ## 10. Non-claims
 

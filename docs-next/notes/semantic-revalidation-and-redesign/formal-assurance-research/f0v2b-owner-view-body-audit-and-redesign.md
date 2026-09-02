@@ -7,7 +7,8 @@
 > exact target schemas. A normalized replacement is selected for F0-V2B1
 > authoring and bounded derivation. F0-V2B1 has since validated that bounded
 > method. F0-V2B2A has since closed the constructor census and work topology;
-> executable B2B/B2C/B2D constructor closure remains open
+> B2B schema/inhabitance has since completed; executable B2C/B2D owner and
+> integrated semantic closure remains open
 > **Authority:** None. This note changes no PIR source, profile manifest,
 > revision, semantic identity, evaluator, owner handle, or Analysis result
 > **Predecessor:**

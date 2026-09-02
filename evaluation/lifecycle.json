@@ -48,7 +48,8 @@
         "research.owner-view-schema-algebra",
         "research.owner-view-body-determinacy",
         "research.owner-view-bounded-derivation",
-        "research.owner-view-constructor-census"
+        "research.owner-view-constructor-census",
+        "research.owner-view-constructor-schema"
       ]
     },
     {

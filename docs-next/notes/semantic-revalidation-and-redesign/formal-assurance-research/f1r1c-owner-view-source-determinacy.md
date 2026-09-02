@@ -6,8 +6,9 @@
 > and validated a bounded generic schema algebra. F0-V2B0 has since found that
 > the six displays require normalized replacement bodies, and F0-V2B1 has
 > validated their bounded grammar/derivation shape. F0-V2B2A has since frozen
-> the constructor census; B2B/B2C/B2D grammar, admission, derivation, graph
-> closure, and migration remain required before the evaluator may proceed
+> the constructor census, and F0-V2B2B now closes candidate grammar and branch
+> inhabitance. B2C/B2D admission, derivation, graph, and runtime closure plus
+> migration remain required before the evaluator may proceed
 > **Authority:** None. This result changes no current or target semantic law,
 > profile identity, admission judgment, Analysis result, or roadmap priority.
 > **Evidence:** The focused audit under
@@ -271,7 +272,9 @@ F1-R1B   exact target carrier/admission                 [complete, bounded]
   -> F0-V2B0 owner-body audit/redesign                   [complete, CannotAnswer]
   -> F0-V2B1 exact bounded-slice normalized grammar      [complete, bounded]
   -> F0-V2B2A constructor census and execution topology  [complete, CannotAnswer]
-  -> F0-V2B2B-D executable constructor closure           [open]
+  -> F0-V2B2B schema and branch inhabitance              [complete, bounded]
+  -> F0-V2B2C isolated admission and owner projection    [open]
+  -> F0-V2B2D integrated graph and runtime closure       [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  owner view, read closure, issuance         [waiting on F0-V2C]
   -> F1-R1D  integrated Relations/source package        [waiting]
