@@ -453,6 +453,14 @@ provider, extraction tool, or durable schema.
   coverage meaning, complete offline source authentication, and four external
   receipts as `CannotAnswer`. The existing mechanism is retained as a bounded
   Q3 input, not promoted to a Q3 result or any Q1/Q2/Q4/Q5/Q6 claim.
+- [`f0-v2c-decision-inputs.md`](f0-v2c-decision-inputs.md) synthesizes
+  F2-O0, M0, Q3-A, and the reconciliation into the decisions F0-V2C must
+  take: a formal source closure of Protocol and Core bodies with their
+  authenticated algorithm and module closure, the six views, one Analysis
+  law binding per nominal coin law, and an owner-defined outcome
+  partition; three sub-decisions compared at equal resolution with
+  recommendations; the identity-pin question and the freeze scope stated
+  as separate decisions; slots for the five outstanding lanes.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
