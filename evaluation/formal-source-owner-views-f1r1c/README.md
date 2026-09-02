@@ -92,3 +92,10 @@ F0 must reopen at the owner-view publication boundary. A repair should provide:
 Only then should R1C implement full owner-derived views, atomic field
 resolution, the least read fixed point, exact requested/realized equality,
 and process-local issuance. R1D and F1-I remain downstream.
+
+The subsequent
+[`formal-source-owner-view-repair-f0v`](../formal-source-owner-view-repair-f0v/README.md)
+gate now confirms that the proposed six-entry catalog and source-compiler split
+fit the existing publication mechanism and rotate exactly the predicted
+dependency cone. Its selectors are topology-only, so items 2--4 above—and
+therefore the precondition for R1C execution—remain open in F0-V2.
