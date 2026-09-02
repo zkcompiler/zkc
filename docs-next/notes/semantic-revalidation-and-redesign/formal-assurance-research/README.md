@@ -421,6 +421,12 @@ provider, extraction tool, or durable schema.
   Terminal grammar repair as a main-design reopening, records the two-lattice
   reconciliation obligation, and proposes an F2-O0 provider-observable audit
   ahead of F0-V2C. It is a recommendation, not a selection.
+- [`f0-assurance-lattice-reconciliation.md`](f0-assurance-lattice-reconciliation.md)
+  maps the absorbed Fiat--Shamir assurance package's ten layers and claim
+  levels onto the Q0--Q10 claim spine, names the two additions each side
+  lacks, and proposes one vocabulary for Analysis absorption: the spine
+  stays owner-neutral, the FS layers become that family's Q5 premise
+  catalog, and the numeric labels retire at absorption.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,

@@ -139,6 +139,13 @@ below are reader cross-references rather than inventory edges.
   basis and substitution discriminator, and the dependent exact-source F1 and
   F2 operational-semantics research contracts. It is a side research program
   and does not reorder the post-freeze main lane or activate Stage 4B.
+- [Terminal Contract Reopening Record](terminal-contract-reopening-2026-09-03.md)
+  opens, under the v0 design program's change control, the K2 Terminal law
+  after the owner-view derivation program found an unspecified
+  guard-true/check-false state, an ownerless required-reduction phrase, and
+  an identity split without a discriminator; it records the candidate
+  repair, its sixteen-profile identity effect, the four gates behind it,
+  and the F0-V2C decision gate at which alone the target may change.
 - [R2 Phase A State Reconciliation](r2-protocol-witnesses/r2-state-reconciliation.md)
   preserves the inspected Phase A status, evidence vocabulary, protocol/probe
   namespace, and then-unresolved P01 closure blockers without changing target
