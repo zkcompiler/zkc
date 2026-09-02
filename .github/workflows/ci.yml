@@ -61,6 +61,8 @@ jobs:
       - name: Run the oracle self-checks
         working-directory: reference
         run: uv run --locked python -m oracle.model
+      - name: Check the reference architecture
+        run: uv run --locked --project reference python -m unittest discover -s reference/tests -v
       # Every Python in the tree, under the one configuration in
       # ruff.toml. The fixture generators were outside this and had no
       # reason to be: what they emit is pinned by lit, so a defect in

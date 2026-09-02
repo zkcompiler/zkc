@@ -125,6 +125,8 @@ tools/public-tree-guard.sh
 
 cmake --build --preset ci --target check-zkc
 uv run --locked --project reference python -m oracle.model
+uv run --locked --project reference python -m unittest discover \
+  -s reference/tests -v
 uvx ruff check .
 
 cargo test --locked --manifest-path emit/Cargo.toml -p zkc-emit
@@ -135,9 +137,11 @@ cargo clippy --locked --manifest-path emit/Cargo.toml --all-targets --all-featur
 
 The lit suite includes C++/MLIR checks, differential checks against the Python
 reference twin, and Cargo-backed pinned replay checks when Cargo is available;
-`oracle.model` runs the twin's self-checks directly. `ruff` reads every Python
-file in the tree, not only the twin's. The Cargo commands cover the emit
-workspace and need Rust, which the compiler itself does not.
+`oracle.model` runs the twin's semantic self-checks directly. The adjacent
+unittest command checks its canonical facade and module dependency boundaries.
+`ruff` reads every Python file in the tree, not only the twin's. The Cargo
+commands cover the emit workspace and need Rust, which the compiler itself
+does not.
 
 Each `--locked` is deliberate: a dependency change lands together with its
 updated lock file, or the check fails.

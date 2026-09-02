@@ -78,7 +78,7 @@
       "claim": "The reference package accepts and rejects its committed bounded corpus as declared.",
       "classification": "durable-conformance",
       "methods": ["unit", "known-answer", "negative", "roundtrip"],
-      "source_paths": ["reference/oracle/model.py", "reference/README.md", "reference/uv.lock"],
+      "source_paths": ["reference/oracle/canonical.py", "reference/oracle/model.py", "reference/README.md", "reference/uv.lock"],
       "tiers": ["developer", "pr", "release-freeze"],
       "cost": "short",
       "environment": "locked-python",
@@ -88,6 +88,28 @@
       "execution": {
         "kind": "command",
         "argv": ["uv", "run", "--locked", "python", "-m", "oracle.model"],
+        "cwd": "{repo}/reference",
+        "requires": ["uv"],
+        "artifacts": []
+      }
+    },
+    {
+      "id": "reference.architecture",
+      "title": "Python reference architecture",
+      "subject": "The durable twin's canonical facade and module dependency boundaries.",
+      "claim": "The canonical boundary remains behaviorally compatible and the checked lower-layer dependency directions hold.",
+      "classification": "durable-conformance",
+      "methods": ["unit", "known-answer", "negative", "policy"],
+      "source_paths": ["reference/oracle/canonical.py", "reference/oracle/model.py", "reference/oracle/signature.py", "reference/oracle/wellformed.py", "reference/tests/test_canonical.py", "reference/tests/test_architecture.py"],
+      "tiers": ["developer", "pr", "release-freeze"],
+      "cost": "instant",
+      "environment": "locked-python",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["A clean dependency graph and facade parity do not establish semantic completeness, implementation independence for every helper, or compiler correctness."],
+      "execution": {
+        "kind": "command",
+        "argv": ["uv", "run", "--locked", "python", "-m", "unittest", "discover", "-s", "tests", "-v"],
         "cwd": "{repo}/reference",
         "requires": ["uv"],
         "artifacts": []

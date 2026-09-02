@@ -25,7 +25,7 @@ from dataclasses import dataclass, replace as dataclass_replace
 from fractions import Fraction
 from typing import Any
 
-from .model import Refusal, tagged_digest
+from .canonical import Refusal, tagged_digest
 
 RULE_DOMAIN = "zkc/soundness-rule\n"
 BINDING_DOMAIN = "zkc/soundness-binding\n"

@@ -24,7 +24,7 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import Any
 
-from .model import Refusal
+from .canonical import Refusal
 from .signature import (
     Binding,
     Bound,
