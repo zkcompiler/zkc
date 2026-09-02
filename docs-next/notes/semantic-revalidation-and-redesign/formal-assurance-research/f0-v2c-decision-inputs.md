@@ -230,6 +230,69 @@ into exact owner text, both publication compilers rerun, old-profile refusal
 controls retained, and the holdout and independent freeze review scheduled.
 The identity-rotating publication itself remains the user's gate.
 
+## 11. Consistency review against the Fiat--Shamir and Relations kernels
+
+The recommendations above were checked, by reading rather than by a package,
+against `docs-next/pir/fiat-shamir.md` Sections 5, 7, 9, 10, 11, and 12 and
+`docs-next/relations/relation-model.md` Section 7.2. No conflict was found;
+three recommendations gain a precise qualification.
+
+1. **Sub-decision C is profile-qualified.** The abstract outcome partition's
+   `InterpretationFailed` arm exists exactly for Protocols whose profile
+   declares an interpretation-failure schema: the canonical-framed family's
+   `FiatShamirSamplingFailure` with its `FSSamplingFailureReceipt` (Section
+   5.1, Section 9.2), and no arm for Fresh or for the duplex family. Section
+   9.2 also fixes that every other K1 noncompletion class "produces no
+   semantic Protocol outcome", so `OperationalNoncompletion` is a partition
+   lane visible to providers and never a record variant, and Section 9.4 keeps
+   strategy search exhaustion an operational `Stop`. The partition therefore
+   has five lanes over a Fresh Protocol and six over a canonical-framed one,
+   and D2's schema-form record sum stays exactly the page's
+   `CompletedProtocolRecord`.
+2. **Sub-decision B splits by interpretation.** For a Fresh challenge the
+   nominal `pir.public-coin-law` coordinate is the hook and the distribution is
+   an Analysis-bound premise. For a Fiat--Shamir challenge the value is fixed
+   operationally by Section 7: squeeze, exact-length check, state advance,
+   `rule.accept`, `rule.decode`, retry up to `maximum_draws`. There is nothing
+   for Analysis to bind on the PIR side; the provider-facing premises are the
+   family catalog's sampler adequacy (one of the four affirmative forms, with
+   the exhaustion term explicit) and oracle-process correspondence. B2 should
+   say so, or a reader will look for a Fresh-style law binding that FS
+   challenges do not have.
+3. **The Terminal repair and Fiat--Shamir agree, and the repair closes a case
+   the FS page already relies on.** Section 5.2's base requirements read prior
+   guard outcomes and publications and are indifferent to the terminal body;
+   `CheckFSConstruction` item 7 demands identical Core bodies on both sides,
+   which the repair preserves because it changes the shared Core once;
+   constructions are Core-scoped through `CoreHeaderAtom(CoreId)`, so the
+   measured sixteen-profile cone already contains both FS profiles. Section
+   9.4 states that an invalid grinding value "makes the ordinary check false"
+   and expects an authored non-accepting branch; under the old text that state
+   was the unspecified guard-true/check-false case, and under the repair the
+   Accept guard carries the Check as a must-fact, so the false Check falls to
+   the fallback terminal as the page assumes.
+4. **The closure definition respects the Relations attachment cut.**
+   Section 7.2 makes `ProtocolRelationBinding` depend only on the exact
+   `ProtocolId` and its relation Interfaces and forbids any PIR
+   back-reference. The formal source closure of Section 2 therefore stays a
+   PIR-plus-Foundation object; a property question adds the Relations roots
+   (binding, definition, model, instance) as separate package roots, which is
+   the question-relative package design and exactly what the Relations--Plan
+   coupling audit found: destination coordinate families exist, and the
+   Schnorr subject has selected none of them.
+5. **The LogicalAccess wording fix is what the FS page already says.**
+   Section 11 calls the publication frame "only a typed fixation marker" and
+   Section 5.2 item 6 requires "the exact logical-access fixation marker" in
+   the required prefix, matching `Publish(activity)` on the publication effect
+   node and the control-aware influence cone D1 implements.
+6. **One F0-V3 obligation has its answer in Section 10.1.**
+   `CheckedFSConstruction` has no semantic ID and its result reference is an
+   owner-local, nonserializable object, so the `FSConstructionView` body cannot
+   carry `result_ref` as bytes. The body-safe replacement F0-V3 asks for is the
+   result schema plus the source and target Protocol, shared Core, and
+   construction identities that Section 13 already lists; the reference stays
+   live authority outside the body.
+
 ## 9. Non-claims
 
 This note selects nothing. It records options, costs, and recommendations for
