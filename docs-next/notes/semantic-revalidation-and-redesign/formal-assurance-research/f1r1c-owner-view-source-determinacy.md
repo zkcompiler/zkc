@@ -4,8 +4,10 @@
 > **State:** F1-R1C0 determinacy audit complete with `CannotAnswer`; F0-V1 has
 > since established publication-topology feasibility, and F0-V2A has selected
 > and validated a bounded generic schema algebra. F0-V2B0 has since found that
-> the six displays require normalized replacement bodies. Exact B1/B2 grammar,
-> derivation, and migration remain required before the evaluator may proceed
+> the six displays require normalized replacement bodies, and F0-V2B1 has
+> validated their bounded grammar/derivation shape. Constructor-complete B2
+> grammar, derivation, and migration remain required before the evaluator may
+> proceed
 > **Authority:** None. This result changes no current or target semantic law,
 > profile identity, admission judgment, Analysis result, or roadmap priority.
 > **Evidence:** The focused audit under
@@ -267,7 +269,7 @@ F1-R1B   exact target carrier/admission                 [complete, bounded]
   -> F0-V1   publication-topology feasibility           [complete, bounded]
   -> F0-V2A  generic schema-algebra feasibility          [complete, bounded]
   -> F0-V2B0 owner-body audit/redesign                   [complete, CannotAnswer]
-  -> F0-V2B1 exact bounded-slice normalized grammar      [open]
+  -> F0-V2B1 exact bounded-slice normalized grammar      [complete, bounded]
   -> F0-V2B2 constructor-complete grammar/derivation     [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  owner view, read closure, issuance         [waiting on F0-V2C]

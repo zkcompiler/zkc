@@ -467,6 +467,13 @@ audit returns `CannotAnswer/F0V2B0-C-OWNER-BODY-DETERMINACY`, selects normalized
 replacement bodies, and splits completion into B1 exact bounded-slice
 authoring and B2 constructor-complete derivation pressure.
 
+**F0-V2B1 result:** the bounded candidate source now compiles identically
+through recursive and worklist paths, while algorithmic and finite-oracle
+owner derivations agree on six values and 329 active leaves. Its 63/63 result
+validates the normalized method only. Maximum-zero B2-family sequences,
+general PCGraph transfers, target publication, implementation correspondence,
+and partial closure remain explicitly open.
+
 ### F0-V2C — target publication and migration
 
 - update the Interaction source and profile manifest coherently;

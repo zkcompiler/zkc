@@ -5,7 +5,8 @@
 > `CannotAnswer/F0V2B0-C-OWNER-BODY-DETERMINACY`. The generic F0-V2A algebra
 > is retained, but the six current displays cannot be compiled verbatim into
 > exact target schemas. A normalized replacement is selected for F0-V2B1
-> authoring and bounded derivation
+> authoring and bounded derivation. F0-V2B1 has since validated that bounded
+> method; constructor-complete F0-V2B2 remains open
 > **Authority:** None. This note changes no PIR source, profile manifest,
 > revision, semantic identity, evaluator, owner handle, or Analysis result
 > **Predecessor:**
@@ -530,6 +531,14 @@ reduction-output claims, one reduction with before/after-challenge publication
 requirements, joint/shared challenge structure, and one supported module
 effect with an opaque payload.
 
+The subsequent
+[`F0-V2B1 bounded result`](f0v2b1-bounded-normalized-view-grammar.md)
+matches 63/63 findings. Two source compilers and two owner derivations agree on
+six values, 329 leaves, two decisions, seven guaranteed reads, and one retained
+21-node/27-edge bounded PCGraph. B2-only families are maximum-zero sequences,
+so this result validates the selected method without closing this
+constructor-complete gap.
+
 ## 8. Required source declarations
 
 F0-V2B1 must publish source-bound body compilers or exact schema declarations
@@ -572,7 +581,7 @@ No compatibility edge is implied. A later checked compatibility relation may
 compare old and new owner views for one purpose, but old profile bytes cannot
 be reinterpreted under the new grammar.
 
-## 10. F0-V2B1 executable entry contract
+## 10. F0-V2B1 executable entry contract and result
 
 The next bounded gate should:
 
@@ -592,6 +601,12 @@ An affirmative bounded-slice result does not close F0-V2B. F0-V2B closes only
 after the constructor-complete profile passes or the target explicitly narrows
 its supported semantics.
 
+F0-V2B1 now satisfies this entry contract at bounded resolution. It additionally
+refuses mutation of a retained Core under its old bearer and substitution of a
+different live Core bearer into the Fresh Protocol pair. The target
+implementation contract must therefore make retained admitted state
+intrinsically immutable and preserve exact Protocol/Core bearer pairing.
+
 ## 11. Decision
 
 Retain the F0-V2A generic schema algebra, but do not encode the six current
@@ -606,7 +621,8 @@ generic structural/atomic schema method                   Affirmative/F0-V2A
 consumer-required target leaf granularity                 determinate
 current six displayed bodies as exact canonical schemas  CannotAnswer
 normalized replacement selected for authoring             Affirmative/F0-V2B0
-exact target grammar and complete derivation              open/F0-V2B1-B2
+bounded normalized grammar and derivation                 Affirmative/F0-V2B1
+exact target grammar and complete derivation              open/F0-V2B2
 target profile publication and migration                  open/F0-V2C
 ```
 
