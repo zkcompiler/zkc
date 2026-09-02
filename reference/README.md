@@ -35,8 +35,10 @@ second copy of theorem arithmetic as independent evidence.
 
 No reference module may import compiler/runtime code or exploratory
 `evaluation/` models. The architecture tests enforce the bottom-layer and
-soundness-module dependency directions, while the native lit suite checks the
-declared cross-implementation parity surfaces.
+soundness-module dependency directions. The canonical-law suite adds an
+independently encoded finite grammar, round trips, negative mutations, and
+metamorphic ordering checks, while the native lit suite checks the declared
+cross-implementation parity surfaces.
 
 Run its self-checks from the repository root:
 

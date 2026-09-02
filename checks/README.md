@@ -160,6 +160,25 @@ pinned-upstream replay, formal-reading, policy, static-analysis, or diagnostic
 methods. A declaration says which mechanism is present; it does not grade its
 quality automatically.
 
+[`method_portfolio.py`](method_portfolio.py) groups those mechanisms into six
+review lenses: example, adversarial, relational, generative, governance, and
+external. It enforces a deliberately low floor per classification. For
+example, a blocking implementation regression check must carry both example
+and adversarial evidence, while a research falsifier must carry adversarial
+pressure plus at least one example, relational, or generative lens. Run it
+directly with:
+
+```sh
+python3 -B -m checks.method_portfolio --check \
+  --output target/checks/method-portfolio.json
+```
+
+The emitted report also lists methods that are available in the vocabulary but
+not currently claimed. That absence is honest inventory, not an automatic
+failure: a deterministic generated corpus is recorded as `fuzz`, for example,
+but it is not described as a continuous coverage-guided campaign; likewise no
+sanitizer claim exists until a sanitizer configuration is actually run.
+
 The intended long-term pattern is:
 
 ```text
