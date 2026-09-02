@@ -1192,6 +1192,28 @@
       }
     },
     {
+      "id": "research.owner-view-fresh-run-schema",
+      "title": "Fresh completed-record schema derivation",
+      "subject": "A complete bounded PIR ExecutionView completed-record schema derived from each of five exact admitted D1 Cores and Fresh Protocols, including exact occurrence, Challenge, Oracle, terminal, stopped-partial, and operational-noncompletion lanes.",
+      "claim": "Typed and independently compiled cold byte-derived projectors agree on five exact candidate schema bodies; all receipt branches, arities, visibilities, value types, terminal prefixes, and outcome lanes are fixed, ten schema-valid substitutions fail closed, and the schema form of the second B2D family is answered at bounded research resolution while five target-owner choices and runtime/replay remain CannotAnswer.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-fresh-run-schema-f0v2b2d2/run.py", "evaluation/formal-source-fresh-run-schema-f0v2b2d2/model.py", "evaluation/formal-source-fresh-run-schema-f0v2b2d2/independent.py", "evaluation/formal-source-fresh-run-schema-f0v2b2d2/schema-delta.json", "evaluation/formal-source-fresh-run-schema-f0v2b2d2/README.md", "evaluation/formal-source-fresh-run-schema-f0v2b2d2/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This bounded static schema-derivation result executes no run and no replay; it is not generated-receipt or runtime conformance, general Core coverage, target publication, live implementation correspondence, a mechanized refinement proof, a protocol or cryptographic security theorem, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-fresh-run-schema-f0v2b2d2/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.provider-observable-audit",
       "title": "Provider observable audit",
       "subject": "Whether the exact admitted finite Schnorr Core and Fresh Protocol, as exposed by their six normalized owner views, carry every observable that a VCVio-shaped operational interpretation needs, and exactly which observables are missing.",
