@@ -547,6 +547,78 @@ class ActivationAndPriorResultClosureTest(ErrorAssertions):
             ),
         )
 
+    def test_read_free_launderer_does_not_clear_answer_taint(self):
+        launder = model.DerivedWordProgram(
+            name="launder-word",
+            modulus=17,
+            algebra_profile=model.AlgebraProfile.PRIME_FIELD,
+            arguments=("value",),
+            oracle_ports=(),
+            route_algorithm="always",
+            route_inputs=(),
+            cases=(
+                model.ProgramCase(
+                    "only",
+                    (model.PureStep("copy", "identity", ("value",)),),
+                    result="copy",
+                ),
+            ),
+            output_visibility=model.Visibility.PUBLIC,
+            output_is_boolean=False,
+            maximum_elaboration_depth=1,
+            maximum_leaf_reads=0,
+        )
+        programs = model.validate_programs({**self.programs, launder.name: launder})
+        producer = self.plan.sites[0]
+        laundering_site = model.PlanSite(
+            "laundered-result",
+            launder.name,
+            model.LogicalActivation(),
+            model.plan_input("second-index"),
+            (("value", model.prior_logical_result("first-read")),),
+            (),
+        )
+        adaptive_site = replace(
+            producer,
+            name="adaptive-read",
+            requested_index=model.prior_logical_result("laundered-result"),
+            oracle_bindings=(("source", "second-source"),),
+        )
+        adaptive_plan = replace(
+            self.plan,
+            name="answer-taint-laundering-regression",
+            sites=(producer, laundering_site, adaptive_site),
+        )
+        error = self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_plan(adaptive_plan, programs),
+        )
+        self.assertEqual(error.code, "VDQP-FORM-031")
+
+        boolean_programs = dict(programs)
+        boolean_programs["read-word"] = replace(
+            boolean_programs["read-word"], output_is_boolean=True
+        )
+        boolean_programs[launder.name] = replace(launder, output_is_boolean=True)
+        boolean_programs = model.validate_programs(boolean_programs)
+        activated_site = replace(
+            adaptive_site,
+            requested_index=model.plan_input("second-index"),
+            activation=model.LogicalActivation(
+                model.prior_logical_result("laundered-result")
+            ),
+        )
+        activation_plan = replace(
+            adaptive_plan,
+            name="answer-taint-laundering-activation-regression",
+            sites=(producer, laundering_site, activated_site),
+        )
+        error = self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.validate_plan(activation_plan, boolean_programs),
+        )
+        self.assertEqual(error.code, "VDQP-FORM-053")
+
     def test_future_logical_result_is_refused_not_missing(self):
         future_first = replace(
             self.plan.sites[0],
@@ -628,7 +700,7 @@ class ActivationAndPriorResultClosureTest(ErrorAssertions):
         altered = list(self.events)
         event = altered[-2]
         details = tuple(
-            (key, "plan-input:first-index" if key == "inputs" else value)
+            (key, ("plan-input:first-index",) if key == "inputs" else value)
             for key, value in event.details
         )
         altered[-2] = replace(event, details=details)
@@ -637,6 +709,64 @@ class ActivationAndPriorResultClosureTest(ErrorAssertions):
             model.OutcomeClass.REFUSED,
             lambda: model.elaborate(self.plan, self.programs, foreign),
         )
+
+    def test_occurrence_map_accepts_only_causal_target_reorderings(self):
+        reordered_events = self.events[4:7] + self.events[:4] + self.events[7:]
+        reordered_core = model.admit_flat_core(reordered_events)
+        elaboration = model.elaborate(
+            self.plan,
+            self.programs,
+            reordered_core,
+        )
+        occurrence_map = dict(elaboration.occurrence_map)
+        self.assertEqual(
+            occurrence_map[("first-read", "only", "source-value", "query")],
+            4,
+        )
+        self.assertEqual(
+            occurrence_map[
+                ("second-combination", "only", "source-value", "query")
+            ],
+            1,
+        )
+        self.assertEqual(
+            dict(elaboration.logical_to_source_events),
+            {"first-read": (4,), "second-combination": (1,)},
+        )
+        checked = model.check_elaboration(
+            self.plan,
+            self.programs,
+            reordered_core,
+            elaboration,
+        )
+        self.assertEqual(checked.event_count, 9)
+
+        altered_map = replace(
+            elaboration,
+            occurrence_map=elaboration.occurrence_map[:-1],
+        )
+        error = self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.check_elaboration(
+                self.plan,
+                self.programs,
+                reordered_core,
+                altered_map,
+            ),
+        )
+        self.assertEqual(error.code, "VDQP-CHECK-006")
+
+        misordered_events = (
+            self.events[:2]
+            + (self.events[7],)
+            + self.events[2:7]
+            + self.events[8:]
+        )
+        error = self.assertPlanError(
+            model.OutcomeClass.REFUSED,
+            lambda: model.admit_flat_core(misordered_events),
+        )
+        self.assertEqual(error.code, "VDQP-CORE-007")
 
     def test_operational_outcomes_equal_the_foundation_partition(self):
         self.assertEqual(

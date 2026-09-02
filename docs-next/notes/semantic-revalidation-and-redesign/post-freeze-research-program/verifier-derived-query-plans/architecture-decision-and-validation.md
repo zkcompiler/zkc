@@ -22,7 +22,7 @@ compiler authority.
 ## Bounded executable evidence
 
 The package forms five word programs and a five-site plan. Its static image has
-57 events. Runtime witnesses cover:
+62 events. Runtime witnesses cover:
 
 - two DEEP-ALI-shaped quotient reads;
 - STIR-shaped public-fill/source routing and nested folding;
@@ -32,14 +32,19 @@ The package forms five word programs and a five-site plan. Its static image has
 An independent module imports neither the reference model nor its evaluator.
 It reproduces every output and exact ordered query trace from the fixed
 fixture. Negative controls cover cycles, response-adaptive routing,
+read-free answer-taint laundering through a prior-result argument,
 nonexhaustive cases, false bounds, declassification, missing dependencies,
 quotient collision, absent source entries, event and map mutation,
 multiplicity loss, invented runtime/publication events, immutable snapshots,
-and evaluator exhaustion.
+and evaluator exhaustion. The independently authored nine-event activation
+fixture is compared through a complete path-to-occurrence map: one causally
+valid non-template ordering is admitted and checked, while answer-before-query
+and operand-before-definition orderings are refused under stable codes.
 
 This is finite executable evidence over a deliberately smaller reference
 carrier. It does not instantiate or admit the complete target
-`InteractiveCore`, and it is not a proof or implementation claim.
+`InteractiveCore`, settle one-case route guard normalization for K2 admission,
+or establish a proof or implementation claim.
 
 ## Identity and dependency result
 

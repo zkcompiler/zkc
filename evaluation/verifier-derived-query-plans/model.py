@@ -198,6 +198,7 @@ class Elaboration:
     plan_id: str
     target_core_id: str
     events: tuple[StaticEvent, ...]
+    occurrence_map: tuple[tuple[tuple[str, ...], int], ...]
     logical_to_source_events: tuple[tuple[str, tuple[int, ...]], ...]
 
 
@@ -1078,7 +1079,12 @@ def validate_plan(
     }
     prior: dict[
         str,
-        tuple[PlanSite, DerivedWordProgram, ProgramEffectSummary],
+        tuple[
+            PlanSite,
+            DerivedWordProgram,
+            ProgramEffectSummary,
+            Mapping[str, tuple[Visibility, bool, bool]],
+        ],
     ] = {}
 
     def resolve(reference: PlanValueRef) -> tuple[Visibility, bool, bool]:
@@ -1125,7 +1131,7 @@ def validate_plan(
                 "VDQP-FORM-048",
                 "a prior logical result is absent or not causally earlier",
             )
-        producer_site, producer, summary = resolved
+        producer_site, producer, summary, producer_arguments = resolved
         return_case_count = sum(
             case.result is not None for case in producer.cases
         )
@@ -1144,7 +1150,11 @@ def validate_plan(
         return (
             producer.output_visibility,
             producer.output_is_boolean,
-            bool(summary.result_oracle_ports),
+            bool(summary.result_oracle_ports)
+            or any(
+                producer_arguments[name][2]
+                for name in summary.result_parameters
+            ),
         )
 
     for site in plan.sites:
@@ -1257,7 +1267,12 @@ def validate_plan(
                     "VDQP-FORM-056",
                     "a public logical result transitively declassifies a verifier-only value",
                 )
-        prior[site.name] = (site, program, summary)
+        prior[site.name] = (
+            site,
+            program,
+            summary,
+            MappingProxyType(argument_properties),
+        )
     return replace(plan)
 
 
@@ -1525,6 +1540,10 @@ def admit_flat_core(events: tuple[StaticEvent, ...]) -> AdmittedFlatCore:
         )
     seen_paths: set[tuple[str, ...]] = set()
     query_paths: set[str] = set()
+    route_paths: set[tuple[str, ...]] = set()
+    return_paths: set[tuple[str, ...]] = set()
+    available_values: set[str] = set()
+    stopped_paths: set[tuple[str, ...]] = set()
     for event in events:
         if type(event) is not StaticEvent or event.kind not in _ALLOWED_FLAT_CORE_EVENTS:
             raise _fail(
@@ -1562,11 +1581,73 @@ def admit_flat_core(events: tuple[StaticEvent, ...]) -> AdmittedFlatCore:
                 "VDQP-CORE-005",
                 "flat Core event details repeat a field",
             )
+        details = dict(event.details)
+        value_references: tuple[object, ...] = ()
+        if event.kind in {"DerivedValue", "Route"}:
+            inputs = details.get("inputs")
+            if type(inputs) is not tuple:
+                raise _fail(
+                    OutcomeClass.MALFORMED,
+                    "core-admission:details",
+                    "VDQP-CORE-005",
+                    "flat Core value inputs are malformed",
+                )
+            value_references = inputs
+        elif event.kind == "QueryOracle":
+            value_references = (details.get("index"),)
+        elif event.kind == "ReturnDerivedValue":
+            value_references = (details.get("value"),)
+        if any(type(item) is not str or not item for item in value_references):
+            raise _fail(
+                OutcomeClass.MALFORMED,
+                "core-admission:details",
+                "VDQP-CORE-005",
+                "flat Core value references are malformed",
+            )
+        activation_references = tuple(
+            guard.removeprefix("activation:")
+            for guard in event.guard_path
+            if guard.startswith("activation:")
+        )
+        if any(not item for item in activation_references):
+            raise _fail(
+                OutcomeClass.MALFORMED,
+                "core-admission:guard",
+                "VDQP-CORE-004",
+                "flat Core activation guard is malformed",
+            )
+        route_guard_count = sum(
+            not guard.startswith("activation:") for guard in event.guard_path
+        )
+        available_route_count = sum(
+            len(path) < len(event.path) and event.path[: len(path)] == path
+            for path in route_paths
+        )
+        missing_values = tuple(
+            value
+            for value in (*value_references, *activation_references)
+            if not value.startswith("plan-input:") and value not in available_values
+        )
+        if (
+            missing_values
+            or route_guard_count > available_route_count
+            or any(
+                len(path) < len(event.path) and event.path[: len(path)] == path
+                for path in stopped_paths
+            )
+        ):
+            raise _fail(
+                OutcomeClass.REFUSED,
+                "core-admission:causality",
+                "VDQP-CORE-007",
+                "a flat Core event precedes one of its value, route, or guard "
+                "dependencies",
+            )
         seen_paths.add(event.path)
         if event.kind == "QueryOracle":
             query_paths.add("/".join(event.path))
         elif event.kind == "AnswerOracle":
-            query_path = dict(event.details).get("query_path")
+            query_path = details.get("query_path")
             if type(query_path) is not str or query_path not in query_paths:
                 raise _fail(
                     OutcomeClass.REFUSED,
@@ -1574,6 +1655,40 @@ def admit_flat_core(events: tuple[StaticEvent, ...]) -> AdmittedFlatCore:
                     "VDQP-CORE-006",
                     "an Oracle answer does not follow its exact earlier query",
                 )
+        elif event.kind == "BindNestedResult":
+            child_path = event.path[:-1]
+            if not any(
+                len(child_path) < len(path)
+                and path[: len(child_path)] == child_path
+                for path in return_paths
+            ):
+                raise _fail(
+                    OutcomeClass.REFUSED,
+                    "core-admission:causality",
+                    "VDQP-CORE-007",
+                    "a nested result binding precedes every returning child branch",
+                )
+        if event.kind == "Route":
+            route_paths.add(event.path)
+        if event.kind == "ReturnDerivedValue":
+            return_paths.add(event.path)
+        if event.kind == "ReachSemanticTerminal":
+            stopped_paths.add(event.path[:-1])
+        if event.kind in {"AnswerOracle", "BindNestedResult", "DerivedValue"}:
+            output = details.get("output")
+            if (
+                type(output) is not str
+                or not output
+                or output.startswith("plan-input:")
+                or output in available_values
+            ):
+                raise _fail(
+                    OutcomeClass.MALFORMED,
+                    "core-admission:details",
+                    "VDQP-CORE-005",
+                    "flat Core output is malformed or aliased",
+                )
+            available_values.add(output)
     core_id = hashlib.sha256(
         b"zkc.pir.flattened-query-core\x00"
         + _canonical_bytes([event.body() for event in events])
@@ -1608,18 +1723,39 @@ def elaborate(
             "VDQP-ELAB-004",
             "target Core identity does not authenticate its supplied body",
         )
-    if target_core.events != expected_events:
+    expected_by_path = {event.path: event for event in expected_events}
+    target_ordinals = {
+        event.path: ordinal for ordinal, event in enumerate(target_core.events)
+    }
+    if set(target_ordinals) != set(expected_by_path) or any(
+        target_core.events[target_ordinals[path]] != expected
+        for path, expected in expected_by_path.items()
+    ):
         raise _fail(
             OutcomeClass.REFUSED,
             "elaboration:target-core",
             "VDQP-ELAB-005",
             "the independently admitted target Core is not the complete expected image",
         )
+    occurrence_map = tuple(
+        (event.path, target_ordinals[event.path]) for event in expected_events
+    )
+    mapped_logical_queries = tuple(
+        (
+            site,
+            tuple(
+                target_ordinals[expected_events[ordinal].path]
+                for ordinal in ordinals
+            ),
+        )
+        for site, ordinals in logical_map
+    )
     return Elaboration(
         plan_id=plan_id(plan, programs),
         target_core_id=target_core.core_id,
         events=target_core.events,
-        logical_to_source_events=logical_map,
+        occurrence_map=occurrence_map,
+        logical_to_source_events=mapped_logical_queries,
     )
 
 
@@ -1665,6 +1801,13 @@ def check_elaboration(
             "checking:event-map",
             "VDQP-CHECK-003",
             "candidate static event sequence is incomplete or altered",
+        )
+    if candidate.occurrence_map != expected.occurrence_map:
+        raise _fail(
+            OutcomeClass.REFUSED,
+            "checking:occurrence-map",
+            "VDQP-CHECK-006",
+            "candidate path-to-occurrence map is incomplete, aliased, or altered",
         )
     if candidate.logical_to_source_events != expected.logical_to_source_events:
         raise _fail(
