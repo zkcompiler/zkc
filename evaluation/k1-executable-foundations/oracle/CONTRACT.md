@@ -85,6 +85,13 @@ canonical decimal strings with no leading zero, plus sign, whitespace, or
 negative zero. Bytes are even-length lowercase hexadecimal. JSON is transport,
 not the identity encoding.
 
+`cases/natural-byte-bound.json` is a compact frozen recipe table, not an
+additional value transport. It fixes one positive and one negative natural
+size case by magnitude-octet count so the constitutional `2^20` boundary can
+be checked without committing multi-megabyte decimal and hexadecimal lines.
+The independent oracle and reference lane both expand each recipe to the
+minimal natural `256^(magnitude_octets-1)` before measuring it.
+
 Every request has `case`, `op`, `foundation_profile`, and optional `limits`.
 The operations are:
 

@@ -1,6 +1,7 @@
 import M0.Datum
 import M0.Encode
 import M0.Decode
+import M0.Core
 import M0.PCGraph
 import M0.Theorems
 import M0.Transport

@@ -25,7 +25,8 @@ python3 -B evaluation/k1-executable-foundations/run.py --check
 ```
 
 The final bounded gate runs 105 reference/parity tests and 26
-independent-oracle tests over 24 frozen oracle vectors: 131/131 pass. The
+independent-oracle tests over 24 JSONL vectors plus two compact frozen natural
+byte-bound recipes: 131/131 pass. The
 reference/parity lane contains 103 direct `reference_model` tests, one
 record-by-record cross-check, and one exact durable-law transcription check.
 The record cross-check recomputes exact shared positive
@@ -45,7 +46,8 @@ Its semantic-regime digest is
 The instrument demonstrates, over its frozen cases:
 
 - unique strict encoding and round-trip decode for all nine constitutional
-  constructors;
+  constructors, including acceptance of a natural whose complete encoding is
+  exactly `2^20` octets and refusal one octet beyond that bound;
 - authentication of exact presented typed ID/preimage pairs, including profile,
   hash suite, kind, semantic regime, and body axes;
 - standalone exact semantic-language-profile identities, exact no-extra

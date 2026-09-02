@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Run the M0 mechanized kernel definition feasibility gate.
+"""Run the M1 mechanized kernel edges-and-canonicity gate.
 
-The gate answers one bounded question: can the load-bearing kernel laws that
-`evaluation/k1-executable-foundations` and
-`evaluation/formal-source-integrated-graph-f0v2b2d1` mechanize by hand in
-Python be written as zkc-owned Lean 4 definitions that reproduce the existing
-Python goldens byte for byte, and what does one small mechanically checked
-theorem cost? It is a measurement, not a migration: nothing under `lean/` is
-normative, and agreement is claimed for the exact vectors compared only.
+The gate answers one bounded question: can core decoding, Section 11 graph
+construction, decoder canonicity, topological class-table uniqueness, and the
+natural byte-bound edge be mechanized in core Lean while reproducing the five
+D1 carriers and the retained M0/K1 goldens? It is a measurement, not a
+migration: nothing under `lean/` is normative, and carrier agreement is
+claimed for the exact vectors compared only.
 
 When no Lean toolchain is available the Lean-dependent findings are classified
 `Unsupported/M0-U-LEAN-TOOLCHAIN` and the frozen comparison fails; the gate
@@ -46,17 +45,23 @@ ORACLE_CASES = ROOT / "evaluation/k1-executable-foundations/oracle/cases"
 FOUNDATION = ROOT / "docs-next/foundation/executable-foundations.md"
 TARGET = ROOT / "docs-next/pir/interactive-core.md"
 
-AGGREGATE = "M0-A-KERNEL-DEFINITIONS-REPRODUCE-GOLDENS"
+AGGREGATE = "M1-A-KERNEL-EDGES-AND-CANONICITY"
 TOOLCHAIN = "leanprover/lean4:v4.33.1"
 LEAN_VERSION = "4.33.1"
 D1_AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
 D1_FINDINGS_SHA256 = "6df7aa212836ddd9f4eb4f740167b9183a8e155c853cd3ee7e801f832e75e48a"
 ORACLE_REQUESTS_SHA256 = "43302085a81540e6d7aca57c2ec15338fd2082ddf0b5960517cedac5e6600b8e"
 ORACLE_EXPECTED_SHA256 = "c7c6f87c5cd591f25e604ed157134e5d113449d1fea0c48eaeb9e76a9e7eab42"
+ORACLE_BOUNDARY_SHA256 = "318b98c12f6a5a358885cff8e0dcbc13e7c0f38796a0dc2c036fe6eb6f334d41"
 STANDARD_AXIOMS = frozenset(("propext", "Classical.choice", "Quot.sound"))
-KERNEL_MODULES = ("Datum", "Encode", "Decode", "PCGraph", "Theorems")
+KERNEL_MODULES = ("Datum", "Encode", "Decode", "Core", "PCGraph", "Theorems")
 TRANSPORT_MODULES = ("Transport",)
-PRIMARY_THEOREMS = ("M0.decode_encode", "M0.encode_injective", "M0.encode_prefix_free")
+PRIMARY_THEOREMS = (
+    "M0.decode_encode", "M0.parse_canonical", "M0.decode_canonical",
+    "M0.encode_injective", "M0.encode_prefix_free"
+)
+ORDER_THEOREMS = ("M0.class_fold_topological_order_independent",)
+MAGNITUDE_THEOREMS = ("M0.magnitude_eq_quadratic",)
 LATTICE_THEOREMS = (
     "M0.Join_cons",
     "M0.PCClass.join_assoc",
@@ -281,7 +286,9 @@ def _nat_boundary_probe(k1: ModuleType) -> dict[str, Any]:
             return f"refused: {error}"
         return f"accepted: {len(encoded)} octets"
 
-    nat_raw = b"\x03" + size.to_bytes(8, "big") + b"\xff" * size
+    exact_nat = k1.Nat(1 << (8 * (size - 1)))
+    crossing_nat = k1.Nat(1 << (8 * size))
+    nat_raw = b"\x03" + size.to_bytes(8, "big") + b"\x01" + b"\x00" * (size - 1)
     try:
         k1.decode_datum(nat_raw)
         nat_decode = "accepted"
@@ -290,16 +297,12 @@ def _nat_boundary_probe(k1: ModuleType) -> dict[str, Any]:
     return {
         "byte_bound": limit,
         "nat_magnitude_octets": size,
-        "nat_encode": verdict(k1.Nat((1 << (8 * size)) - 1)),
+        "nat_encode": verdict(exact_nat),
         "nat_decode_of_exact_bound_input": nat_decode,
-        "nat_one_octet_shorter_encode": verdict(k1.Nat((1 << (8 * (size - 1))) - 1)),
+        "nat_crossing_encode": verdict(crossing_nat),
         "symbol_encode": verdict(k1.Symbol("a" * size)),
         "bytes_encode": verdict(k1.BytesValue(b"a" * size)),
-        "int_encode": verdict(k1.IntValue((1 << (8 * (size - 1))) - 1)),
-        "lean_verdict_by_definition": (
-            "encodeChecked accepts: withinLimits requires (encode d).length <= 2^20, "
-            "which 1 + 8 + (2^20 - 9) satisfies; not executed, see the cost ledger"
-        ),
+        "int_encode": verdict(k1.IntValue(1 << (8 * (size - 2)))),
     }
 
 
@@ -323,6 +326,10 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         _sha256(ORACLE_CASES / "requests.jsonl") == ORACLE_REQUESTS_SHA256
         and _sha256(ORACLE_CASES / "expected.jsonl") == ORACLE_EXPECTED_SHA256,
         "K1 oracle case files drifted",
+    )
+    _require(
+        _sha256(ORACLE_CASES / "natural-byte-bound.json") == ORACLE_BOUNDARY_SHA256,
+        "K1 natural byte-bound vectors drifted",
     )
     findings.append(_finding("predecessor-pin", "Affirmative", "M0-A-PREDECESSOR-PIN"))
 
@@ -425,7 +432,7 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         lean_input = {
             "encode": encode_rows,
             "reject": reject_rows,
-            "pcgraph": regenerated["pcgraph-tables.json"]["carriers"],
+            "pcgraph_construction": regenerated["pcgraph-construction.json"]["carriers"],
         }
         input_path = artifacts / "m0-input.json"
         input_path.write_text(json.dumps(lean_input, separators=(",", ":")), encoding="utf-8")
@@ -441,9 +448,9 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         timings["axiom_report_seconds"] = round(seconds, 3)
         _require(axiom_run.returncode == 0, f"axiom report failed:\n{axiom_run.stdout}\n{axiom_run.stderr}")
         axioms = _parse_axioms(axiom_run.stdout)
-    findings.append(lean_finding("lean-build", build_ok, "M0-A-LEAN-BUILD"))
+    findings.append(lean_finding("lean-build", build_ok, "M1-A-LEAN-BUILD"))
 
-    # Stage 1: the encoder reproduces the goldens.
+    # Retained M0 basis: canonical encoder/decoder vectors still agree.
     by_source: dict[str, list[dict[str, Any]]] = {}
     for row in report.get("encode", []):
         by_source.setdefault(row["source"], []).append(row)
@@ -456,19 +463,9 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             for row in rows
         )
 
-    stage1 = {
-        "k1-oracle-encode-vectors": ("k1-oracle", "M0-A-S1-K1-ORACLE-VECTORS"),
-        "d1-core-bodies-encode": ("d1-core-body", "M0-A-S1-CORE-BODIES"),
-        "d1-public-coin-bodies-encode": ("d1-public-coin-body", "M0-A-S1-PUBLIC-COIN-BODIES"),
-    }
-    stage1_ok = True
-    for name, (source, code) in stage1.items():
-        ok = all_encode(source)
-        stage1_ok = stage1_ok and ok
-        findings.append(lean_finding(name, ok, code))
-    findings.append(lean_finding("stage-1-encoder", stage1_ok, "M0-A-S1-ENCODER-REPRODUCES-GOLDENS"))
-
-    # Stage 2: the strict decoder round-trips and rejects.
+    encoding_ok = all(all_encode(source) for source in (
+        "k1-oracle", "d1-core-body", "d1-public-coin-body"
+    ))
     rows = report.get("encode", [])
     roundtrip_ok = bool(rows) and all(row["decode_roundtrips"] and row["decoded_equals_value"] for row in rows)
     rejects = {row["name"]: row["rejected"] for row in report.get("reject", [])}
@@ -476,69 +473,135 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     crafted_rejects = [name for name in rejects if name.startswith("crafted/")]
     oracle_reject_ok = bool(oracle_rejects) and all(rejects[name] for name in oracle_rejects)
     crafted_reject_ok = bool(crafted_rejects) and all(rejects[name] for name in crafted_rejects)
-    t0 = time.perf_counter()
-    boundary_probe = _nat_boundary_probe(k1)
-    timings["python_boundary_probe_seconds"] = round(time.perf_counter() - t0, 3)
-    _require(
-        boundary_probe["nat_encode"].startswith("refused")
-        and boundary_probe["nat_decode_of_exact_bound_input"].startswith("refused")
-        and boundary_probe["symbol_encode"].startswith("accepted")
-        and boundary_probe["bytes_encode"].startswith("accepted")
-        and boundary_probe["int_encode"].startswith("accepted"),
-        f"Python byte-bound behaviour changed: {boundary_probe}",
-    )
-    stage2_ok = roundtrip_ok and oracle_reject_ok and crafted_reject_ok
+    retained_ok = encoding_ok and roundtrip_ok and oracle_reject_ok and crafted_reject_ok
     findings.extend(
         (
-            lean_finding("decode-roundtrip-all-vectors", roundtrip_ok, "M0-A-S2-ROUNDTRIP"),
-            lean_finding("k1-oracle-rejects", oracle_reject_ok, "M0-A-S2-ORACLE-REJECTS"),
-            lean_finding("crafted-noncanonical-rejects", crafted_reject_ok, "M0-A-S2-CRAFTED-REJECTS"),
-            _finding("nat-byte-bound-disagreement", "CannotAnswer", "M0-C-NAT-BYTE-BOUND"),
-            _finding("decoder-canonicity-unproved", "CannotAnswer", "M0-C-DECODER-CANONICITY-UNPROVED"),
-            lean_finding("stage-2-decoder", stage2_ok, "M0-A-S2-DECODER-REPRODUCES-GOLDENS"),
+            lean_finding("retained-m0-encoding-goldens", encoding_ok, "M1-A-RETAINED-ENCODING-GOLDENS"),
+            lean_finding("retained-m0-decoder-vectors", roundtrip_ok and oracle_reject_ok and crafted_reject_ok,
+                         "M1-A-RETAINED-DECODER-VECTORS"),
         )
     )
 
-    # Stage 3: lattice, Kahn order, and class fold over the five carriers.
-    carriers = report.get("pcgraph", [])
-    keys_ok = bool(carriers) and all(row["keys_match_appendix_a"] for row in carriers)
-    order_ok = bool(carriers) and all(row["order_computed"] and row["order_matches"] for row in carriers)
-    classes_ok = bool(carriers) and all(row["classes_computed"] and row["classes_match"] for row in carriers)
+    # Stage 1: derive all graph products from decoded Core and module declarations.
+    carriers = report.get("pcgraph_construction", [])
+    core_ok = len(carriers) == 5 and all(row["core_tables_decoded"] == 14 for row in carriers)
+    modules_ok = bool(carriers) and all(row["module_declarations_decoded"] > 0 for row in carriers)
+    nodes_ok = bool(carriers) and all(row["nodes_match"] for row in carriers)
+    edges_ok = bool(carriers) and all(row["edges_match"] for row in carriers)
+    edge_families_ok = bool(carriers) and all(
+        row["terminal_preemption_edges"] > 0
+        and row["oracle_query_answer_edges"] > 0
+        and row["module_edges"] > 0
+        for row in carriers
+    )
+    order_ok = bool(carriers) and all(row["order_matches"] for row in carriers)
+    classes_ok = bool(carriers) and all(row["classes_match"] for row in carriers)
+    sinks_ok = bool(carriers) and all(
+        row["sinks_match"] and row["acceptance_sinks_match"]
+        and row["private_predecessors_match"] for row in carriers
+    )
+    cones_ok = bool(carriers) and all(
+        row["logical_cones_match"] and row["logical_intersections_match"] for row in carriers
+    )
     readings_agree = bool(carriers) and all(row["challenge_readings_agree"] for row in carriers)
-    stage3_ok = keys_ok and order_ok and classes_ok
+    stage1_ok = all((core_ok, modules_ok, nodes_ok, edges_ok, edge_families_ok,
+                     order_ok, classes_ok, sinks_ok, cones_ok))
     findings.extend(
         (
-            lean_finding("pcnode-keys-are-appendix-a-bodies", keys_ok, "M0-A-S3-PCNODE-KEYS"),
-            lean_finding("kahn-order-five-carriers", order_ok, "M0-A-S3-KAHN-ORDER"),
-            lean_finding("class-fold-five-carriers", classes_ok, "M0-A-S3-CLASS-FOLD"),
-            _finding("challenge-dependency-order-reading", "CannotAnswer", "M0-C-CHALLENGE-DEPENDENCY-ORDER"),
-            _finding("transfer-node-coordinate-reading", "CannotAnswer", "M0-C-TRANSFER-NODE-COORDINATE"),
-            _finding("edge-construction-not-ported", "CannotAnswer", "M0-C-EDGE-CONSTRUCTION-NEXT-INCREMENT"),
-            lean_finding("stage-3-lattice", stage3_ok, "M0-A-S3-LATTICE-REPRODUCES-GOLDENS"),
+            lean_finding("decode-fourteen-core-tables", core_ok, "M1-A-S1-CORE-TABLES-DECODED"),
+            lean_finding("decode-used-module-declarations", modules_ok, "M1-A-S1-MODULE-DECLARATIONS-DECODED"),
+            lean_finding("derived-node-sets-five-carriers", nodes_ok, "M1-A-S1-NODE-SETS"),
+            lean_finding("derived-edge-sets-five-carriers", edges_ok, "M1-A-S1-EDGE-SETS"),
+            lean_finding("terminal-oracle-module-edge-families", edge_families_ok,
+                         "M1-A-S1-EDGE-FAMILIES-EXERCISED"),
+            lean_finding("kahn-order-five-carriers", order_ok, "M1-A-S1-KAHN-ORDER"),
+            lean_finding("class-tables-five-carriers", classes_ok, "M1-A-S1-CLASS-TABLES"),
+            lean_finding("sink-products-five-carriers", sinks_ok, "M1-A-S1-SINK-PRODUCTS"),
+            lean_finding("logical-cones-five-carriers", cones_ok, "M1-A-S1-LOGICAL-CONES"),
+            lean_finding("stage-1-graph-construction", stage1_ok, "M1-A-S1-GRAPH-CONSTRUCTION"),
+            _finding("challenge-dependency-order-wording", "CannotAnswer",
+                     "M1-C-S11-CHALLENGE-DEPENDENCY-ORDER"),
+            _finding("public-query-transfer-coordinate-wording", "CannotAnswer",
+                     "M1-C-S11-PUBLIC-QUERY-COORDINATE"),
+            _finding("verifier-message-transfer-coordinate-wording", "CannotAnswer",
+                     "M1-C-S11-VERIFIER-MESSAGE-COORDINATE"),
+            _finding("logical-publication-transfer-coordinate-wording", "CannotAnswer",
+                     "M1-C-S11-LOGICAL-PUBLICATION-COORDINATE"),
+            _finding("public-query-sink-coordinate-wording", "CannotAnswer",
+                     "M1-C-S11-PUBLIC-QUERY-SINK-COORDINATE"),
         )
     )
 
-    # Stage 4: theorems and their axiom closure.
+    # Stages 2 and 3: decoder canonicity and class-table uniqueness.
     def proved(names: tuple[str, ...]) -> bool:
         return all(name in axioms and set(axioms[name]) <= STANDARD_AXIOMS for name in names)
 
     primary_ok = proved(PRIMARY_THEOREMS)
     lattice_ok = proved(LATTICE_THEOREMS)
+    decoder_canonicity_ok = proved(("M0.parse_canonical", "M0.decode_canonical"))
+    order_independence_ok = proved(ORDER_THEOREMS)
+    magnitude_equivalence_ok = proved(MAGNITUDE_THEOREMS)
     axioms_ok = bool(axioms) and all(set(items) <= STANDARD_AXIOMS for items in axioms.values())
     findings.extend(
         (
-            lean_finding("theorem-decode-encode", proved(("M0.decode_encode",)), "M0-A-S4-DECODE-ENCODE-PROVED"),
-            lean_finding("theorem-encode-injective", proved(("M0.encode_injective",)), "M0-A-S4-INJECTIVITY-PROVED"),
-            lean_finding("theorem-encode-prefix-free", proved(("M0.encode_prefix_free",)), "M0-A-S4-PREFIX-FREEDOM-PROVED"),
-            lean_finding("theorem-join-lattice-laws", lattice_ok, "M0-A-S4-JOIN-LATTICE-LAWS-PROVED"),
-            _finding("theorem-fold-order-independence", "CannotAnswer", "M0-C-S4-ORDER-INDEPENDENCE-NOT-PROVED"),
-            lean_finding("axiom-closure-standard-only", axioms_ok, "M0-A-S4-STANDARD-AXIOMS-ONLY"),
+            lean_finding("decoder-canonicity-proved", decoder_canonicity_ok,
+                         "M1-A-S2-DECODER-CANONICITY"),
+            lean_finding("class-fold-order-independence-proved", order_independence_ok,
+                         "M1-A-S3-ORDER-INDEPENDENCE"),
+            lean_finding("retained-encoding-and-lattice-theorems", primary_ok and lattice_ok,
+                         "M1-A-RETAINED-THEOREMS"),
         )
     )
 
-    # Stage 5: the cost ledger is recorded in the metrics.
+    # Stage 4: linear-list magnitude and an actually executed 2^20-octet natural.
+    lean_boundary = report.get("natural_boundary", {})
+    lean_boundary_ok = (
+        lean_boundary.get("magnitude_octets") == (1 << 20) - 9
+        and lean_boundary.get("encoded_octets") == 1 << 20
+        and lean_boundary.get("reaches_bound") is True
+        and lean_boundary.get("checked_encoder_accepts") is True
+    )
+    findings.extend(
+        (
+            lean_finding("linear-magnitude-equals-m0-reference", magnitude_equivalence_ok,
+                         "M1-A-S4-LINEAR-MAGNITUDE-EQUIVALENT"),
+            lean_finding("lean-natural-exact-byte-bound", lean_boundary_ok,
+                         "M1-A-S4-LEAN-NATURAL-BOUNDARY"),
+        )
+    )
+
+    # Stage 5: apply the K1 owner decision and freeze one positive/negative recipe pair.
+    t0 = time.perf_counter()
+    boundary_probe = _nat_boundary_probe(k1)
+    timings["python_boundary_probe_seconds"] = round(time.perf_counter() - t0, 3)
+    boundary_vectors = regenerated["k1-encoding-vectors.json"]["natural_byte_bound"]["vectors"]
+    k1_boundary_ok = (
+        [item["expected"]["outcome"] for item in boundary_vectors] == ["Completed", "Malformed"]
+        and boundary_probe["nat_encode"] == "accepted: 1048576 octets"
+        and boundary_probe["nat_decode_of_exact_bound_input"] == "accepted"
+        and boundary_probe["nat_crossing_encode"].startswith("refused")
+        and boundary_probe["int_encode"] == "accepted: 1048576 octets"
+    )
+    findings.extend(
+        (
+            _finding("m0-natural-byte-bound-resolved", "Affirmative",
+                     "M1-A-S5-M0-NAT-BYTE-BOUND-RESOLVED") if k1_boundary_ok else
+                _finding("m0-natural-byte-bound-resolved", "Refused",
+                         "M1-R-S5-M0-NAT-BYTE-BOUND-DIVERGES"),
+            _finding("k1-positive-negative-boundary-vectors", "Affirmative",
+                     "M1-A-S5-K1-BOUNDARY-VECTORS") if k1_boundary_ok else
+                _finding("k1-positive-negative-boundary-vectors", "Refused",
+                         "M1-R-S5-K1-BOUNDARY-VECTORS"),
+        )
+    )
+
+    # Stage 6: report the full axiom closure; timings become the cost ledger.
+    findings.append(lean_finding("axiom-closure-standard-only", axioms_ok,
+                                 "M1-A-S6-STANDARD-AXIOMS-ONLY"))
+
+    # Complete the Stage 6 cost ledger.
     timings["total_seconds"] = round(time.perf_counter() - started, 3)
-    findings.append(_finding("cost-ledger-recorded", "Affirmative", "M0-A-S5-COST-LEDGER-RECORDED"))
+    findings.append(_finding("cost-ledger-recorded", "Affirmative", "M1-A-S6-COST-LEDGER-RECORDED"))
 
     # Non-claims and the aggregate.
     findings.extend(
@@ -550,10 +613,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     )
     if not lean_available:
         findings.append(_finding("mechanized-kernel-definitions", "CannotAnswer", "M0-C-LEAN-TOOLCHAIN-UNAVAILABLE"))
-    elif stage1_ok and stage2_ok and stage3_ok and primary_ok:
+    elif all((retained_ok, stage1_ok, decoder_canonicity_ok, order_independence_ok,
+              magnitude_equivalence_ok, lean_boundary_ok, k1_boundary_ok,
+              primary_ok, lattice_ok, axioms_ok)):
         findings.append(_finding("mechanized-kernel-definitions", "Affirmative", AGGREGATE))
     else:
-        findings.append(_finding("mechanized-kernel-definitions", "CannotAnswer", "M0-C-KERNEL-DEFINITIONS-DIVERGE"))
+        findings.append(_finding("mechanized-kernel-definitions", "CannotAnswer",
+                                 "M1-C-KERNEL-EDGES-OR-CANONICITY-DIVERGE"))
 
     payload = [finding.value() for finding in findings]
     checksum = hashlib.sha256(
@@ -577,8 +643,12 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                 row["carrier"]: {
                     key: row[key]
                     for key in (
-                        "node_count", "edge_count", "keys_match_appendix_a", "order_matches",
-                        "classes_match", "challenge_count", "challenge_readings_agree", "class_counts",
+                        "node_count", "edge_count", "nodes_match", "edges_match", "order_matches",
+                        "classes_match", "sinks_match", "acceptance_sinks_match",
+                        "private_predecessors_match", "logical_cones_match",
+                        "logical_intersections_match", "terminal_preemption_edges",
+                        "oracle_query_answer_edges", "module_edges", "challenge_count",
+                        "challenge_readings_agree",
                     )
                 }
                 for row in carriers

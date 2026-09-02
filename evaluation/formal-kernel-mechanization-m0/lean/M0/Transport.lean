@@ -177,6 +177,128 @@ def carrierOfJson (j : Json) : Except String CarrierTable := do
     | _ => throw "expected class is not a string"
   pure { carrier := ← stringField j "carrier", nodes, edges, transfers, expectedOrder, expectedClasses }
 
+/-! M1 transports canonical source bytes separately from D1 expected outputs. -/
+
+def pcNodeOfJson (j : Json) : Except String PCNode := do
+  match ← natArray j with
+  | tag :: args =>
+      match PCNode.ofTagArgs tag args with
+      | some node => pure node
+      | none => throw "PCNode has an unknown tag or arity"
+  | [] => throw "PCNode is empty"
+
+def pcNodesOfJson (j : Json) : Except String (List PCNode) := do
+  match j with
+  | .arr rows => rows.toList.mapM pcNodeOfJson
+  | _ => throw "PCNode table is not an array"
+
+def pcEdgeOfJson (j : Json) : Except String PCEdge := do
+  match j with
+  | .arr rows =>
+      match rows.toList with
+      | [source, target] => pure (← pcNodeOfJson source, ← pcNodeOfJson target)
+      | _ => throw "PC edge is not a pair"
+  | _ => throw "PC edge is not an array"
+
+def pcEdgesOfJson (j : Json) : Except String (List PCEdge) := do
+  match j with
+  | .arr rows => rows.toList.mapM pcEdgeOfJson
+  | _ => throw "PC edge table is not an array"
+
+def classOfOrdinal : Nat → Except String PCClass
+  | 0 => pure .staticPublic
+  | 1 => pure .publicHistory
+  | 2 => pure .verifierPrivate
+  | 3 => pure .invalid
+  | other => throw s!"unknown PCClass ordinal {other}"
+
+def classRowOfJson (j : Json) : Except String (PCNode × PCClass) := do
+  match j with
+  | .arr rows =>
+      match rows.toList with
+      | [node, clsJson] =>
+          pure (← pcNodeOfJson node, ← classOfOrdinal (← clsJson.getNat?.mapError toString))
+      | _ => throw "class row is not a pair"
+  | _ => throw "class row is not an array"
+
+def classRowsOfJson (j : Json) : Except String (List (PCNode × PCClass)) := do
+  match j with
+  | .arr rows => rows.toList.mapM classRowOfJson
+  | _ => throw "class table is not an array"
+
+def coneRowOfJson (j : Json) : Except String (Nat × List PCNode) := do
+  match j with
+  | .arr rows =>
+      match rows.toList with
+      | [oracle, nodes] => pure (← oracle.getNat?.mapError toString, ← pcNodesOfJson nodes)
+      | _ => throw "logical-cone row is not a pair"
+  | _ => throw "logical-cone row is not an array"
+
+def coneRowsOfJson (j : Json) : Except String (List (Nat × List PCNode)) := do
+  match j with
+  | .arr rows => rows.toList.mapM coneRowOfJson
+  | _ => throw "logical-cone table is not an array"
+
+structure ExpectedGraph where
+  nodes : List PCNode
+  edges : List PCEdge
+  order : List PCNode
+  classes : List (PCNode × PCClass)
+  sinks : List PCNode
+  acceptanceSinks : List PCNode
+  privatePredecessors : List PCNode
+  logicalCones : List (Nat × List PCNode)
+  logicalIntersections : List (Nat × List PCNode)
+  deriving Repr
+
+def expectedGraphOfJson (j : Json) : Except String ExpectedGraph := do
+  pure {
+    nodes := ← pcNodesOfJson (← field j "nodes")
+    edges := ← pcEdgesOfJson (← field j "edges")
+    order := ← pcNodesOfJson (← field j "topological")
+    classes := ← classRowsOfJson (← field j "classes")
+    sinks := ← pcNodesOfJson (← field j "sinks")
+    acceptanceSinks := ← pcNodesOfJson (← field j "acceptance_sinks")
+    privatePredecessors := ← pcNodesOfJson (← field j "private_predecessors")
+    logicalCones := ← coneRowsOfJson (← field j "logical_cones")
+    logicalIntersections := ← coneRowsOfJson (← field j "logical_intersections")
+  }
+
+def moduleDeclOfJson (j : Json) : Except String ModuleDecl := do
+  let moduleRef ← octetsOfHex (← stringField j "module_ref_hex")
+  let ordinal ← natField j "ordinal"
+  let body ← octetsOfHex (← stringField j "body_hex")
+  let datum ← match decode body with
+    | some datum => pure datum
+    | none => throw "module declaration bytes do not decode"
+  match M0.moduleDeclOfDatum moduleRef ordinal datum with
+  | some declaration => pure declaration
+  | none => throw "module declaration datum has another shape"
+
+structure ConstructionCarrier where
+  carrier : String
+  core : Core
+  modules : List ModuleDecl
+  expected : ExpectedGraph
+  deriving Repr
+
+def constructionCarrierOfJson (j : Json) : Except String ConstructionCarrier := do
+  let input ← field j "input"
+  let coreBody ← octetsOfHex (← stringField input "core_domain_hex")
+  let coreDatum ← match decode coreBody with
+    | some datum => pure datum
+    | none => throw "Core-domain bytes do not decode"
+  let core ← match coreOfDatum coreDatum with
+    | some core => pure core
+    | none => throw "Core-domain datum has another fourteen-table shape"
+  let modules ← (← arrayField input "module_declarations").toList.mapM moduleDeclOfJson
+  pure {
+    carrier := ← stringField j "carrier"
+    core := core
+    modules := modules
+    expected := ← expectedGraphOfJson (← field j "expected")
+  }
+
 /-- Public readers for the runner's input file. -/
 def readString (j : Json) (name : String) : Except String String := stringField j name
 def readArray (j : Json) (name : String) : Except String (Array Json) := arrayField j name

@@ -304,17 +304,19 @@ Datum: TypeAlias = (
 _SYMBOL_RE = re.compile(r"^[!-~]+$")
 
 
-def _magnitude_size(value: int) -> int:
+def _magnitude_size(value: int, *, overhead: int) -> int:
     if type(value) is not int or value < 0:
         raise CanonicalError("magnitude must be nonnegative")
+    if overhead not in (9, 10):
+        raise CanonicalError("integer encoding overhead must be nine or ten octets")
     size = max(1, (value.bit_length() + 7) // 8)
-    if size > MAX_CANONICAL_BYTES - 10:
+    if size > MAX_CANONICAL_BYTES - overhead:
         raise CanonicalError("integer magnitude exceeds canonical byte bound")
     return size
 
 
-def _minimal_magnitude(value: int) -> bytes:
-    size = _magnitude_size(value)
+def _minimal_magnitude(value: int, *, overhead: int) -> bytes:
+    size = _magnitude_size(value, overhead=overhead)
     return value.to_bytes(size, "big")
 
 
@@ -343,11 +345,11 @@ def _encoded_size(value: Datum) -> int:
         if type(current) is Nat:
             if type(current.value) is not int or current.value < 0:
                 raise CanonicalError("Nat cannot be negative")
-            return 1 + 8 + _magnitude_size(current.value)
+            return 1 + 8 + _magnitude_size(current.value, overhead=9)
         if type(current) is IntValue:
             if type(current.value) is not int:
                 raise CanonicalError("Int must contain an exact integer")
-            return 1 + 1 + 8 + _magnitude_size(abs(current.value))
+            return 1 + 1 + 8 + _magnitude_size(abs(current.value), overhead=10)
         if type(current) is BytesValue:
             if type(current.value) is not bytes:
                 raise CanonicalError("Bytes must contain exact octets")
@@ -474,13 +476,13 @@ def encode_datum(value: Datum) -> bytes:
         elif type(current) is Nat:
             if type(current.value) is not int or current.value < 0:
                 raise CanonicalError("Nat cannot be negative")
-            magnitude = _minimal_magnitude(current.value)
+            magnitude = _minimal_magnitude(current.value, overhead=9)
             result = b"\x03" + _frame(magnitude)
         elif type(current) is IntValue:
             if type(current.value) is not int:
                 raise CanonicalError("Int must contain an exact integer")
             sign = 1 if current.value < 0 else 0
-            magnitude = _minimal_magnitude(abs(current.value))
+            magnitude = _minimal_magnitude(abs(current.value), overhead=10)
             result = b"\x04" + bytes((sign,)) + _frame(magnitude)
         elif type(current) is BytesValue:
             if type(current.value) is not bytes:

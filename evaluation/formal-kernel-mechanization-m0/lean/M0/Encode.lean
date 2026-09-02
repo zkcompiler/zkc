@@ -29,11 +29,32 @@ def beOctets : Nat → Nat → List Octet
 /-- `u64(n)`: unsigned 64-bit big-endian. -/
 def u64 (n : Nat) : List Octet := beOctets 8 n
 
-/-- Minimal unsigned big-endian magnitude; zero is the one octet `0x00`. -/
-def magnitude (n : Nat) : List Octet :=
-  if n < 256 then [n] else magnitude (n / 256) ++ [n % 256]
+/-- The M0 specification-shaped magnitude. Its recursive right append is
+quadratic in the number of octets and is retained only as an equivalence
+reference for the M1 linear implementation. -/
+def magnitudeQuadratic (n : Nat) : List Octet :=
+  if n < 256 then [n] else magnitudeQuadratic (n / 256) ++ [n % 256]
 termination_by n
 decreasing_by omega
+
+/-- Tail-recursive minimal-magnitude worker. Low octets are consed onto the
+front of the accumulator, so the result is already big-endian and performs no
+right append. -/
+def magnitudeCore : Nat → Nat → List Octet → List Octet
+  | 0, _, accumulated => accumulated
+  | fuel + 1, n, accumulated =>
+      let digit := n % 256
+      let next := n / 256
+      if next = 0 then digit :: accumulated
+      else magnitudeCore fuel next (digit :: accumulated)
+
+/-- Linear-list-work minimal unsigned big-endian magnitude; zero is one
+octet `0x00`. Exact powers of `256` use their direct one-followed-by-zeroes
+form; the general path conses each low octet onto an accumulator. -/
+def magnitude (n : Nat) : List Octet :=
+  let exponent := Nat.log2 n / 8
+  if n = 256 ^ exponent then 1 :: List.replicate exponent 0
+  else magnitudeCore (n + 1) n []
 
 /-- `F(x) = u64(length(x)) || x`. -/
 def frame (b : List Octet) : List Octet := u64 b.length ++ b
@@ -78,9 +99,9 @@ def withinLimits (d : Datum) : Bool :=
     && edges d ≤ maxCanonicalEdges
     && depth d ≤ maxRootZeroDepth
 
-/-- The encoder the runner uses for golden comparison: it refuses exactly what
-the Python `encode_datum` refuses, modulo the one boundary finding recorded by
-the package (`M0-C-NAT-BYTE-BOUND`). -/
+/-- The encoder the runner uses for golden comparison. After the M1 K1
+byte-bound decision, both implementations admit a natural whose complete
+encoding reaches the constitutional limit and refuse one that crosses it. -/
 def encodeChecked (d : Datum) : Option (List Octet) :=
   if wellFormed d && withinLimits d then some (encode d) else none
 
@@ -111,12 +132,64 @@ theorem fromBE_u64 (n : Nat) (h : n < 2 ^ 64) : fromBE (u64 n) = n := by
   have : (256 : Nat) ^ 8 = 2 ^ 64 := by decide
   rw [u64, fromBE_beOctets, this, Nat.mod_eq_of_lt h]
 
+theorem magnitudeCore_eq_quadratic (fuel n : Nat) (accumulated : List Octet)
+    (enough : n < fuel) :
+    magnitudeCore fuel n accumulated = magnitudeQuadratic n ++ accumulated := by
+  induction fuel generalizing n accumulated with
+  | zero => omega
+  | succ fuel ih =>
+      rw [magnitudeCore]
+      by_cases nextZero : n / 256 = 0
+      · rw [if_pos nextZero]
+        have small : n < 256 := (Nat.div_eq_zero_iff).mp nextZero |>.resolve_left (by decide)
+        rw [magnitudeQuadratic]
+        simp [small]
+      · rw [if_neg nextZero]
+        have notSmall : ¬ n < 256 := by
+          intro small
+          exact nextZero (Nat.div_eq_zero_iff.mpr (.inr small))
+        rw [magnitudeQuadratic]
+        simp only [notSmall, ↓reduceIte]
+        rw [ih (n / 256) (n % 256 :: accumulated) (by omega)]
+        simp [List.append_assoc]
+
+theorem magnitudeQuadratic_pow_256 (exponent : Nat) :
+    magnitudeQuadratic (256 ^ exponent) = 1 :: List.replicate exponent 0 := by
+  induction exponent with
+  | zero => simp [magnitudeQuadratic]
+  | succ exponent ih =>
+      rw [Nat.pow_succ]
+      have large : ¬ 256 ^ exponent * 256 < 256 := by
+        have positive : 0 < 256 ^ exponent := Nat.pow_pos (by decide)
+        omega
+      rw [magnitudeQuadratic]
+      simp only [large, ↓reduceIte]
+      rw [Nat.mul_comm, Nat.mul_div_right _ (by decide), Nat.mul_mod_right, ih]
+      rw [List.replicate_succ']
+      rfl
+
+/-- The M1 accumulator implementation computes exactly the M0 reference
+magnitude for every natural. -/
+theorem magnitude_eq_quadratic (n : Nat) : magnitude n = magnitudeQuadratic n := by
+  simp only [magnitude]
+  by_cases power : n = 256 ^ (Nat.log2 n / 8)
+  · rw [if_pos power]
+    calc
+      1 :: List.replicate (Nat.log2 n / 8) 0 =
+          magnitudeQuadratic (256 ^ (Nat.log2 n / 8)) :=
+        (magnitudeQuadratic_pow_256 _).symm
+      _ = magnitudeQuadratic n := congrArg magnitudeQuadratic power.symm
+  · rw [if_neg power]
+    simpa using magnitudeCore_eq_quadratic (n + 1) n [] (by omega)
+
 theorem magnitude_eq_of_lt (n : Nat) (h : n < 256) : magnitude n = [n] := by
-  rw [magnitude]; simp [h]
+  rw [magnitude_eq_quadratic, magnitudeQuadratic]; simp [h]
 
 theorem magnitude_eq_of_ge (n : Nat) (h : ¬ n < 256) :
     magnitude n = magnitude (n / 256) ++ [n % 256] := by
-  rw [magnitude]; simp [h]
+  rw [magnitude_eq_quadratic, magnitudeQuadratic]
+  simp only [h, ↓reduceIte]
+  rw [← magnitude_eq_quadratic]
 
 theorem fromBE_magnitude (n : Nat) : fromBE (magnitude n) = n := by
   induction n using Nat.strongRecOn with

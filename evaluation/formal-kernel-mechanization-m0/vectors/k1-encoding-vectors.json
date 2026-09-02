@@ -1352,6 +1352,30 @@
    }
   }
  ],
+ "natural_byte_bound": {
+  "source": "docs-next/foundation/executable-foundations.md Section 2.1",
+  "vectors": [
+   {
+    "case": "natural-exact-canonical-byte-bound",
+    "expected": {
+     "encoded_octets": 1048576,
+     "outcome": "Completed"
+    },
+    "kind": "nat",
+    "magnitude_octets": 1048567
+   },
+   {
+    "case": "natural-crosses-canonical-byte-bound",
+    "expected": {
+     "code": "CanonicalByteBound",
+     "encoded_octets": 1048577,
+     "outcome": "Malformed"
+    },
+    "kind": "nat",
+    "magnitude_octets": 1048568
+   }
+  ]
+ },
  "reject": [
   {
    "hex": "0300000000000000020001",

@@ -119,6 +119,123 @@ def runCarrier (j : Json) : Except String CarrierResult := do
          classesComputed := classes.isSome, classesMatch, challengeCount,
          challengeReadingsAgree := readingsAgree, classCounts := counts }
 
+structure ConstructionResult where
+  carrier : String
+  coreTablesDecoded : Nat
+  moduleDeclarationsDecoded : Nat
+  nodeCount : Nat
+  edgeCount : Nat
+  nodesMatch : Bool
+  edgesMatch : Bool
+  orderMatches : Bool
+  classesMatch : Bool
+  sinksMatch : Bool
+  acceptanceSinksMatch : Bool
+  privatePredecessorsMatch : Bool
+  logicalConesMatch : Bool
+  logicalIntersectionsMatch : Bool
+  terminalPreemptionEdges : Nat
+  oracleQueryAnswerEdges : Nat
+  moduleEdges : Nat
+  challengeCount : Nat
+  challengeReadingsAgree : Bool
+
+def ConstructionResult.toJson (r : ConstructionResult) : Json :=
+  Json.mkObj [
+    ("carrier", r.carrier),
+    ("core_tables_decoded", r.coreTablesDecoded),
+    ("module_declarations_decoded", r.moduleDeclarationsDecoded),
+    ("node_count", r.nodeCount), ("edge_count", r.edgeCount),
+    ("nodes_match", r.nodesMatch), ("edges_match", r.edgesMatch),
+    ("order_matches", r.orderMatches), ("classes_match", r.classesMatch),
+    ("sinks_match", r.sinksMatch),
+    ("acceptance_sinks_match", r.acceptanceSinksMatch),
+    ("private_predecessors_match", r.privatePredecessorsMatch),
+    ("logical_cones_match", r.logicalConesMatch),
+    ("logical_intersections_match", r.logicalIntersectionsMatch),
+    ("terminal_preemption_edges", r.terminalPreemptionEdges),
+    ("oracle_query_answer_edges", r.oracleQueryAnswerEdges),
+    ("module_edges", r.moduleEdges),
+    ("challenge_count", r.challengeCount),
+    ("challenge_readings_agree", r.challengeReadingsAgree)
+  ]
+
+def isTerminalPreemptionEdge : PCEdge → Bool
+  | (.terminalDecision _, .occurrenceActivity _) => true
+  | _ => false
+
+def occurrenceHasQueryOrAnswer (core : Core) (reference : Nat) : Bool :=
+  match core.occurrences[reference]? with
+  | some occurrence => match occurrence.effect with
+    | .oracleQuery .. | .oracleAnswer _ => true
+    | _ => false
+  | none => false
+
+def isOracleQueryAnswerEdge (core : Core) : PCEdge → Bool
+  | (_, .occurrenceEffect reference) => occurrenceHasQueryOrAnswer core reference
+  | _ => false
+
+def isModuleNode : PCNode → Bool
+  | .moduleControl .. | .moduleOutput .. => true
+  | _ => false
+
+def isModuleEdge : PCEdge → Bool
+  | (source, target) => isModuleNode source || isModuleNode target
+
+def runConstruction (j : Json) : Except String ConstructionResult := do
+  let carrier ← constructionCarrierOfJson j
+  let products ← match deriveProducts carrier.core carrier.modules with
+    | some products => pure products
+    | none => throw "Section 11 graph construction or product derivation refused"
+  let edges := products.graph.edges
+  let transfers ← match mapOption
+      (transferForNode carrier.core carrier.modules products.graph) products.graph.nodes with
+    | some transfers => pure transfers
+    | none => throw "Section 11 transfer derivation refused"
+  let classArray := products.classes.map Prod.snd |>.toArray
+  let challengeCount := transfers.countP fun transfer => match transfer with
+    | .challenge .. => true
+    | _ => false
+  pure {
+    carrier := carrier.carrier
+    coreTablesDecoded := 14
+    moduleDeclarationsDecoded := carrier.modules.length
+    nodeCount := products.graph.nodes.length
+    edgeCount := edges.length
+    nodesMatch := products.graph.nodes == carrier.expected.nodes
+    edgesMatch := edges == carrier.expected.edges
+    orderMatches := products.order == carrier.expected.order
+    classesMatch := products.classes == carrier.expected.classes
+    sinksMatch := products.sinks == carrier.expected.sinks
+    acceptanceSinksMatch := products.acceptanceSinks == carrier.expected.acceptanceSinks
+    privatePredecessorsMatch := products.privatePredecessors == carrier.expected.privatePredecessors
+    logicalConesMatch := products.logicalCones == carrier.expected.logicalCones
+    logicalIntersectionsMatch :=
+      products.logicalIntersections == carrier.expected.logicalIntersections
+    terminalPreemptionEdges := edges.countP isTerminalPreemptionEdge
+    oracleQueryAnswerEdges := edges.countP (isOracleQueryAnswerEdge carrier.core)
+    moduleEdges := edges.countP isModuleEdge
+    challengeCount := challengeCount
+    challengeReadingsAgree := challengeReadingsAgree products.graph.nodes.length
+      (fun index => (transfers[index]?).getD (.constant .invalid)) classArray
+  }
+
+def boundaryNaturalMagnitudeOctets : Nat := maxCanonicalBytes - 9
+
+def boundaryNatural : Nat := 256 ^ (boundaryNaturalMagnitudeOctets - 1)
+
+/-- Executed by the compiled Lean runner, not discharged by reduction in a
+theorem: the natural's complete encoding reaches exactly the byte bound. -/
+def naturalBoundaryReport : Json :=
+  let datum := Datum.nat boundaryNatural
+  let body := encode datum
+  Json.mkObj [
+    ("magnitude_octets", boundaryNaturalMagnitudeOctets),
+    ("encoded_octets", body.length),
+    ("reaches_bound", body.length == maxCanonicalBytes),
+    ("checked_encoder_accepts", (encodeChecked datum).isSome)
+  ]
+
 def main (args : List String) : IO UInt32 := do
   let some path := args.head? | do
     IO.eprintln "usage: m0 <input.json>"
@@ -138,12 +255,13 @@ def main (args : List String) : IO UInt32 := do
       | .error e => throw (IO.userError s!"{name}: {e}")
   let encodeRows ← run "encode" runEncodeVector EncodeResult.toJson
   let rejectRows ← run "reject" runRejectVector RejectResult.toJson
-  let carrierRows ← run "pcgraph" runCarrier CarrierResult.toJson
+  let constructionRows ← run "pcgraph_construction" runConstruction ConstructionResult.toJson
   let report := Json.mkObj [
     ("lean_version", Json.str Lean.versionString),
+    ("natural_boundary", naturalBoundaryReport),
     ("encode", Json.arr encodeRows),
     ("reject", Json.arr rejectRows),
-    ("pcgraph", Json.arr carrierRows)
+    ("pcgraph_construction", Json.arr constructionRows)
   ]
   IO.println report.compress
   return 0

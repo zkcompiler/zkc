@@ -13,8 +13,9 @@ Three sources feed the vectors:
 - the five D1 carriers of
   ``evaluation/formal-source-integrated-graph-f0v2b2d1``: their profiled Core
   bodies and ``PublicCoinView`` bodies (pinned by digest and regenerated at
-  check time because they total about 430 KiB), and their ``PCGraph`` node,
-  edge, transfer, class, and topological-order tables.
+  check time because they total about 430 KiB), plus canonical admitted-Core
+  and used semantic-module declaration bytes as construction inputs. Every
+  graph table is a frozen expected output, never a Lean construction input.
 
 The export is deterministic. ``run.py`` regenerates it into a scratch
 directory and compares the result with the committed files, so a drift in
@@ -39,6 +40,7 @@ VECTORS = HERE / "vectors"
 K1_MODEL = ROOT / "evaluation/k1-executable-foundations/reference_model.py"
 ORACLE_CASES = ROOT / "evaluation/k1-executable-foundations/oracle/cases"
 D1_MODEL = ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py"
+D1_M1_EXPORT = ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/export_m1_vectors.py"
 
 CLASS_NAMES = ("StaticPublic", "PublicHistory", "VerifierPrivate", "Invalid")
 
@@ -196,7 +198,13 @@ def k1_oracle_vectors(k1: ModuleType) -> dict[str, Any]:
                     ),
                 }
             )
-    return {"encode": encode, "reject": reject, "skipped": skipped}
+    boundary = json.loads((ORACLE_CASES / "natural-byte-bound.json").read_text(encoding="utf-8"))
+    _require(
+        [item["expected"]["outcome"] for item in boundary["vectors"]]
+        == ["Completed", "Malformed"],
+        "natural byte-bound vectors are not one positive and one negative case",
+    )
+    return {"encode": encode, "reject": reject, "skipped": skipped, "boundary": boundary}
 
 
 # --- crafted noncanonical inputs -------------------------------------------------
@@ -460,13 +468,16 @@ def export() -> dict[str, Any]:
     model = _load("_zkc_m0_d1_model", D1_MODEL)
     oracle = k1_oracle_vectors(k1)
     negatives = structural_negatives(k1)
-    bodies, tables = d1_carriers(model, k1)
+    bodies, _ = d1_carriers(model, k1)
+    d1_export = _load("_zkc_d1_m1_export", D1_M1_EXPORT)
+    construction = d1_export.export()
     return {
         "k1-encoding-vectors.json": {
             "source": "evaluation/k1-executable-foundations/oracle/cases",
             "encode": oracle["encode"],
             "reject": oracle["reject"],
             "skipped": oracle["skipped"],
+            "natural_byte_bound": oracle["boundary"],
         },
         "structural-negatives.json": {
             "source": "docs-next/foundation/executable-foundations.md Section 2.1 malformation list",
@@ -477,10 +488,7 @@ def export() -> dict[str, Any]:
             "note": "Regenerated at check time from the D1 typed model and compared with these digests before use.",
             "bodies": bodies,
         },
-        "pcgraph-tables.json": {
-            "source": "evaluation/formal-source-integrated-graph-f0v2b2d1 derive_graph",
-            "carriers": tables,
-        },
+        "pcgraph-construction.json": construction,
     }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from dataclasses import replace
 import hashlib
+import json
 from pathlib import Path
 import pickle
 import sys
@@ -378,6 +379,25 @@ class FoundationMetaProfileTest(unittest.TestCase):
         self.assertEqual(model.decode_datum(exact_symbol_body), exact_symbol)
         with self.assertRaisesRegex(model.CanonicalError, "byte bound"):
             model.encode_datum(model.Symbol("x" * (model.MAX_CANONICAL_BYTES - 8)))
+
+        boundary_vectors = json.loads(
+            (PACKAGE_ROOT / "oracle" / "cases" / "natural-byte-bound.json").read_text(
+                encoding="utf-8"
+            )
+        )["vectors"]
+        self.assertEqual(len(boundary_vectors), 2)
+        for vector in boundary_vectors:
+            magnitude_octets = vector["magnitude_octets"]
+            natural = model.Nat(1 << (8 * (magnitude_octets - 1)))
+            expected = vector["expected"]
+            with self.subTest(case=vector["case"]):
+                if expected["outcome"] == "Completed":
+                    body = model.encode_datum(natural)
+                    self.assertEqual(len(body), expected["encoded_octets"])
+                    self.assertEqual(model.decode_datum(body), natural)
+                else:
+                    with self.assertRaisesRegex(model.CanonicalError, "byte bound"):
+                        model.encode_datum(natural)
 
         exact_nodes = model.DatumSeq((model.UNIT,) * (model.MAX_CANONICAL_NODES - 1))
         exact_nodes_body = model.encode_datum(exact_nodes)

@@ -9,6 +9,8 @@ and never on `sorryAx`.
 -/
 
 #print axioms M0.decode_encode
+#print axioms M0.parse_canonical
+#print axioms M0.decode_canonical
 #print axioms M0.encode_injective
 #print axioms M0.encode_prefix_free
 #print axioms M0.encodeChecked_injective
@@ -20,3 +22,5 @@ and never on `sorryAx`.
 #print axioms M0.PCClass.join_invalid_right
 #print axioms M0.PCClass.join_staticPublic_left
 #print axioms M0.Publish_idem
+#print axioms M0.class_fold_topological_order_independent
+#print axioms M0.magnitude_eq_quadratic

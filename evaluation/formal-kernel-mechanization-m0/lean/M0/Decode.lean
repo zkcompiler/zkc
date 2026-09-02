@@ -8,15 +8,18 @@ consumes exactly one value and requires byte-for-byte re-encoding equality.
 Unknown tags, trailing bytes, invalid symbols, duplicate or unsorted fields,
 overlong magnitudes, and length disagreement are malformed." The parser below
 consumes exactly one value and returns the remainder; `decode` additionally
-refuses a nonempty remainder, an input above the byte limit, and a value that
-crosses any of the other three constitutional limits.
+refuses a nonempty remainder, an input above the byte limit, a value that
+crosses any of the other three constitutional limits, or bytes unequal to the
+canonical re-encoding.
 
-The parser is structurally recursive on a fuel argument that bounds the
-nesting depth it will follow. `decode` supplies the constitutional root-zero
-depth bound plus one, so fuel exhaustion and the depth limit coincide.
-`M0.Theorems` proves that decoding inverts encoding on every well-formed
-value within the limits; it does not prove the converse (that every accepted
-input re-encodes to itself), which remains a stated next increment.
+The structural parser `parseRaw` is recursive on a fuel argument that bounds
+the nesting depth it will follow. The strict parser `parse` performs the
+required re-encoding comparison on its result. `decode` supplies the
+constitutional root-zero depth bound plus one, so fuel exhaustion and the
+depth limit coincide.
+`M0.Theorems` proves both directions needed here: decoding inverts encoding
+on every well-formed value within the limits, and every accepted input is the
+byte-for-byte canonical re-encoding of its decoded value.
 -/
 
 namespace M0
@@ -92,8 +95,9 @@ def parseFields (p : List Octet → Option (Datum × List Octet)) :
             else none
       else none
 
-/-- Parse one value, returning the remainder. -/
-def parse : Nat → List Octet → Option (Datum × List Octet)
+/-- Structurally parse one value, returning the remainder. The strict
+re-encoding comparison is applied by `parse` below. -/
+def parseRaw : Nat → List Octet → Option (Datum × List Octet)
   | 0, _ => none
   | fuel + 1, bs =>
     match bs with
@@ -129,14 +133,14 @@ def parse : Nat → List Octet → Option (Datum × List Octet)
       match readU64 rest with
       | none => none
       | some (k, rest) =>
-        match parseFramed (parse fuel) k rest with
+        match parseFramed (parseRaw fuel) k rest with
         | none => none
         | some (xs, rest) => some (.seq xs, rest)
     | 0x08 :: rest =>
       match readU64 rest with
       | none => none
       | some (k, rest) =>
-        match parseFields (parse fuel) k none rest with
+        match parseFields (parseRaw fuel) k none rest with
         | none => none
         | some (fs, rest) => some (.record fs, rest)
     | 0x09 :: rest =>
@@ -146,19 +150,33 @@ def parse : Nat → List Octet → Option (Datum × List Octet)
         match readFrame rest with
         | none => none
         | some (body, rest) =>
-          match parse fuel body with
+          match parseRaw fuel body with
           | none => none
           | some (p, tail) => if tail.isEmpty then some (.variant c p, rest) else none
     | _ => none
 
+/-- The strict one-value parser. A successful result is retained only when
+re-encoding the value followed by the unconsumed remainder reproduces the
+input byte for byte. -/
+def parse (fuel : Nat) (bs : List Octet) : Option (Datum × List Octet) :=
+  match parseRaw fuel bs with
+  | none => none
+  | some (d, rest) => if encode d ++ rest == bs then some (d, rest) else none
+
+/-- Finish strict decoding after the strict parser has established canonical
+bytes, requiring an empty remainder and the remaining constitutional limits. -/
+def finishDecode (d : Datum) (rest : List Octet) : Option Datum :=
+  if rest.isEmpty && withinLimits d then some d else none
+
 /-- The strict decoder: exactly one value, no trailing octets, within the
-constitutional limits. The fuel is the depth limit plus one, so a value deeper
-than `maxRootZeroDepth` is refused by fuel exhaustion. -/
+constitutional limits, and byte-for-byte canonical re-encoding equality. The
+fuel is the depth limit plus one, so a value deeper than `maxRootZeroDepth` is
+refused by fuel exhaustion. -/
 def decode (bs : List Octet) : Option Datum :=
   if bs.length ≤ maxCanonicalBytes then
     match parse (maxRootZeroDepth + 1) bs with
     | none => none
-    | some (d, rest) => if rest.isEmpty && withinLimits d then some d else none
+    | some (d, rest) => finishDecode d rest
   else none
 
 end M0

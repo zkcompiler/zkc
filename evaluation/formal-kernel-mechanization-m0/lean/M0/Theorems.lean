@@ -64,22 +64,22 @@ theorem length_frame (b : List Octet) : (frame b).length = 8 + b.length := by
 /-! ## The parser inverts the encoder -/
 
 mutual
-  theorem parse_encode : ∀ (d : Datum) (fuel : Nat) (r : List Octet),
+  theorem parseRaw_encode : ∀ (d : Datum) (fuel : Nat) (r : List Octet),
       wellFormed d = true → (encode d).length < 2 ^ 64 → depth d < fuel →
-      parse fuel (encode d ++ r) = some (d, r)
+      parseRaw fuel (encode d ++ r) = some (d, r)
     | _, 0, _, _, _, hdepth => absurd hdepth (Nat.not_lt_zero _)
-    | .unit, fuel + 1, r, _, _, _ => by simp [encode, parse]
-    | .bool false, fuel + 1, r, _, _, _ => by simp [encode, parse]
-    | .bool true, fuel + 1, r, _, _, _ => by simp [encode, parse]
+    | .unit, fuel + 1, r, _, _, _ => by simp [encode, parseRaw]
+    | .bool false, fuel + 1, r, _, _, _ => by simp [encode, parseRaw]
+    | .bool true, fuel + 1, r, _, _, _ => by simp [encode, parseRaw]
     | .nat n, fuel + 1, r, _, hlen, _ => by
       have hm : (magnitude n).length < 2 ^ 64 := by
         simp only [encode, List.length_cons, length_frame] at hlen; omega
-      simp only [encode, parse, List.cons_append]
+      simp only [encode, parseRaw, List.cons_append]
       simp only [readFrame_append _ _ hm, magnitudeValue_magnitude]
     | .int i, fuel + 1, r, _, hlen, _ => by
       have hm : (magnitude i.natAbs).length < 2 ^ 64 := by
         simp only [encode, List.length_cons, length_frame] at hlen; omega
-      simp only [encode, parse, List.cons_append]
+      simp only [encode, parseRaw, List.cons_append]
       simp only [readFrame_append _ _ hm, magnitudeValue_magnitude]
       by_cases hneg : i < 0
       · have hnz : i.natAbs ≠ 0 := by omega
@@ -90,7 +90,7 @@ mutual
     | .bytes bs, fuel + 1, r, hwf, _, _ => by
       have hb : bs.length < 2 ^ 64 := by
         simp only [wellFormed, Bool.and_eq_true, fitsU64_eq_true] at hwf; exact hwf.2
-      simp only [encode, parse, List.cons_append]
+      simp only [encode, parseRaw, List.cons_append]
       simp only [readFrame_append _ _ hb]
     | .symbol s, fuel + 1, r, hwf, _, _ => by
       have hs : s.length < 2 ^ 64 := by
@@ -98,7 +98,7 @@ mutual
       have hv : validSymbol s = true := by
         simp only [wellFormed, Bool.and_eq_true] at hwf
         simp [validSymbol, hwf.1.1, hwf.1.2]
-      simp only [encode, parse, List.cons_append]
+      simp only [encode, parseRaw, List.cons_append]
       simp [readFrame_append _ _ hs, hv]
     | .seq xs, fuel + 1, r, hwf, hlen, hdepth => by
       simp only [wellFormed, Bool.and_eq_true, fitsU64_eq_true] at hwf
@@ -106,7 +106,7 @@ mutual
         simp only [encode, List.length_cons, List.length_append, length_u64] at hlen; omega
       have hd : depthSeq xs ≤ fuel := by
         simp only [depth] at hdepth; omega
-      simp only [encode, parse, List.cons_append, List.append_assoc]
+      simp only [encode, parseRaw, List.cons_append, List.append_assoc]
       simp only [readU64_append _ _ hwf.1, parseFramed_encodeSeq xs fuel r hwf.2 hl hd]
     | .record fs, fuel + 1, r, hwf, hlen, hdepth => by
       simp only [wellFormed, Bool.and_eq_true, fitsU64_eq_true] at hwf
@@ -114,7 +114,7 @@ mutual
         simp only [encode, List.length_cons, List.length_append, length_u64] at hlen; omega
       have hd : depthFields fs ≤ fuel := by
         simp only [depth] at hdepth; omega
-      simp only [encode, parse, List.cons_append, List.append_assoc]
+      simp only [encode, parseRaw, List.cons_append, List.append_assoc]
       simp only [readU64_append _ _ hwf.1.1,
         parseFields_encodeFields fs fuel none r hwf.2 hwf.1.2 (fun _ _ _ => rfl) hl hd]
     | .variant c p, fuel + 1, r, hwf, hlen, hdepth => by
@@ -124,14 +124,14 @@ mutual
         omega
       have hd : depth p < fuel := by
         simp only [depth] at hdepth; omega
-      have hp := parse_encode p fuel [] hwf.2 hl hd
+      have hp := parseRaw_encode p fuel [] hwf.2 hl hd
       rw [List.append_nil] at hp
-      simp only [encode, parse, List.cons_append, List.append_assoc]
+      simp only [encode, parseRaw, List.cons_append, List.append_assoc]
       simp [readU64_append _ _ hwf.1, readFrame_append _ _ hl, hp]
 
   theorem parseFramed_encodeSeq : ∀ (xs : List Datum) (fuel : Nat) (r : List Octet),
       wellFormedSeq xs = true → (encodeSeq xs).length < 2 ^ 64 → depthSeq xs ≤ fuel →
-      parseFramed (parse fuel) xs.length (encodeSeq xs ++ r) = some (xs, r)
+      parseFramed (parseRaw fuel) xs.length (encodeSeq xs ++ r) = some (xs, r)
     | [], fuel, r, _, _, _ => by simp [encodeSeq, parseFramed]
     | x :: xs, fuel, r, hwf, hlen, hdepth => by
       simp only [wellFormedSeq, Bool.and_eq_true] at hwf
@@ -143,7 +143,7 @@ mutual
         simp only [depthSeq] at hdepth; omega
       have hdxs : depthSeq xs ≤ fuel := by
         simp only [depthSeq] at hdepth; omega
-      have hp := parse_encode x fuel [] hwf.1 hx hdx
+      have hp := parseRaw_encode x fuel [] hwf.1 hx hdx
       rw [List.append_nil] at hp
       simp only [encodeSeq, List.length_cons, parseFramed, List.append_assoc]
       simp only [readFrame_append _ _ hx, hp, List.isEmpty_nil, ite_true,
@@ -154,7 +154,7 @@ mutual
       wellFormedFields fs = true → ordinalsIncreasing fs = true →
       (∀ o x, fs.head? = some (o, x) → previous.all (· < o) = true) →
       (encodeFields fs).length < 2 ^ 64 → depthFields fs ≤ fuel →
-      parseFields (parse fuel) fs.length previous (encodeFields fs ++ r) = some (fs, r)
+      parseFields (parseRaw fuel) fs.length previous (encodeFields fs ++ r) = some (fs, r)
     | [], fuel, previous, r, _, _, _, _, _ => by simp [encodeFields, parseFields]
     | (o, x) :: fs, fuel, previous, r, hwf, hinc, hprev, hlen, hdepth => by
       simp only [wellFormedFields, Bool.and_eq_true, fitsU64_eq_true] at hwf
@@ -166,7 +166,7 @@ mutual
         simp only [depthFields] at hdepth; omega
       have hdfs : depthFields fs ≤ fuel := by
         simp only [depthFields] at hdepth; omega
-      have hp := parse_encode x fuel [] hwf.1.2 hx hdx
+      have hp := parseRaw_encode x fuel [] hwf.1.2 hx hdx
       rw [List.append_nil] at hp
       have hhead : previous.all (· < o) = true := hprev o x rfl
       have hinc' : ordinalsIncreasing fs = true ∧
@@ -189,6 +189,33 @@ end
 
 /-! ## Corollaries about the executable decoder and the encoding -/
 
+/-- The strict parser also reads back every canonical encoding. -/
+theorem parse_encode (d : Datum) (fuel : Nat) (r : List Octet)
+    (hwf : wellFormed d = true) (hlen : (encode d).length < 2 ^ 64)
+    (hdepth : depth d < fuel) : parse fuel (encode d ++ r) = some (d, r) := by
+  unfold parse
+  rw [parseRaw_encode d fuel r hwf hlen hdepth]
+  simp
+
+/-- Parser canonicity in the exact remainder form: re-encoding every
+successful strict parse and appending its remainder reproduces the input. -/
+theorem parse_canonical (fuel : Nat) (bs : List Octet) (d : Datum) (rest : List Octet)
+    (h : parse fuel bs = some (d, rest)) : encode d ++ rest = bs := by
+  unfold parse at h
+  cases rawEq : parseRaw fuel bs with
+  | none => simp [rawEq] at h
+  | some raw =>
+      obtain ⟨rawDatum, rawRest⟩ := raw
+      rw [rawEq] at h
+      change (if encode rawDatum ++ rawRest == bs then some (rawDatum, rawRest) else none) =
+        some (d, rest) at h
+      by_cases canonical : encode rawDatum ++ rawRest == bs
+      · rw [if_pos canonical] at h
+        cases Option.some.inj h
+        simpa only [beq_iff_eq] using canonical
+      · rw [if_neg canonical] at h
+        contradiction
+
 theorem withinLimits_bytes {d : Datum} (h : withinLimits d = true) :
     (encode d).length ≤ maxCanonicalBytes := by
   simp only [withinLimits, Bool.and_eq_true, decide_eq_true_eq] at h; exact h.1.1.1
@@ -196,6 +223,33 @@ theorem withinLimits_bytes {d : Datum} (h : withinLimits d = true) :
 theorem withinLimits_depth {d : Datum} (h : withinLimits d = true) :
     depth d ≤ maxRootZeroDepth := by
   simp only [withinLimits, Bool.and_eq_true, decide_eq_true_eq] at h; exact h.2
+
+/-- Decoder canonicity: every accepted byte string is exactly the canonical
+re-encoding of the returned datum. -/
+theorem decode_canonical (bs : List Octet) (d : Datum) (h : decode bs = some d) :
+    encode d = bs := by
+  unfold decode at h
+  split at h
+  · cases parseEq : parse (maxRootZeroDepth + 1) bs with
+    | none => simp [parseEq] at h
+    | some parsed =>
+        obtain ⟨parsedDatum, rest⟩ := parsed
+        rw [parseEq] at h
+        have canonical := parse_canonical
+          (maxRootZeroDepth + 1) bs parsedDatum rest parseEq
+        unfold finishDecode at h
+        change (if rest.isEmpty && withinLimits parsedDatum then some parsedDatum else none) =
+          some d at h
+        by_cases accepted : rest.isEmpty && withinLimits parsedDatum
+        · rw [if_pos accepted] at h
+          simp only [Bool.and_eq_true] at accepted
+          have empty : rest = [] := by
+            simpa only [List.isEmpty_iff] using accepted.1
+          cases Option.some.inj h
+          simpa [empty] using canonical
+        · rw [if_neg accepted] at h
+          contradiction
+  · contradiction
 
 /-- The strict decoder inverts the checked encoder. -/
 theorem decode_encode (d : Datum) (hwf : wellFormed d = true) (hlim : withinLimits d = true) :
@@ -207,7 +261,7 @@ theorem decode_encode (d : Datum) (hwf : wellFormed d = true) (hlim : withinLimi
   rw [List.append_nil] at hp
   unfold decode
   rw [if_pos hbytes, hp]
-  simp [hlim]
+  simp [finishDecode, hlim]
 
 /-- Every checked encoding decodes back to its datum. -/
 theorem decode_encodeChecked (d : Datum) (b : List Octet) (h : encodeChecked d = some b) :
@@ -248,6 +302,87 @@ theorem encodeChecked_injective (d₁ d₂ : Datum) (b : List Octet)
   have := decode_encodeChecked d₁ b h₁
   rw [decode_encodeChecked d₂ b h₂] at this
   exact (Option.some.inj this).symm
+
+/-! ## Class-fold independence from topological order -/
+
+theorem map_eq_of_pointwise_mem (a b : Nat → PCClass) :
+    ∀ (nodes : List Nat), (∀ node, node ∈ nodes → a node = b node) →
+      nodes.map a = nodes.map b
+  | [], _ => rfl
+  | node :: nodes, h => by
+      simp only [List.map_cons, List.cons.injEq]
+      exact ⟨h node (by simp), map_eq_of_pointwise_mem a b nodes
+        (fun dependency member => h dependency (by simp [member]))⟩
+
+theorem evaluateClass_congr (a b : Nat → PCClass) (preds : Nat → List Nat)
+    (node : Nat) (transfer : Transfer)
+    (h : ∀ dependency, dependency ∈ transfer.dependencies preds node →
+      a dependency = b dependency) :
+    evaluateClass a preds node transfer = evaluateClass b preds node transfer := by
+  cases transfer with
+  | constant value => rfl
+  | joinIncoming =>
+      simp only [evaluateClass]
+      rw [map_eq_of_pointwise_mem a b (preds node) h]
+  | publishJoinIncoming =>
+      simp only [evaluateClass]
+      rw [map_eq_of_pointwise_mem a b (preds node) h]
+  | publishOf source =>
+      simp only [evaluateClass]
+      rw [h source (by simp [Transfer.dependencies])]
+  | joinOf sources =>
+      simp only [evaluateClass]
+      rw [map_eq_of_pointwise_mem a b sources h]
+  | challenge activity conditions priors =>
+      simp only [evaluateClass]
+      have activityEq : a activity = b activity := h activity (by
+        simp [Transfer.dependencies])
+      have conditionEq : conditions.map a = conditions.map b :=
+        map_eq_of_pointwise_mem a b conditions (fun dependency member => h dependency (by
+          simp [Transfer.dependencies, member]))
+      have priorEq : priors.map a = priors.map b :=
+        map_eq_of_pointwise_mem a b priors (fun dependency member => h dependency (by
+          simp [Transfer.dependencies, member]))
+      rw [activityEq, conditionEq, priorEq]
+
+theorem attach_map_value (nodes : List Nat) (classes : Nat → PCClass) :
+    nodes.attach.map (fun node => classes node.1) = nodes.map classes := by
+  simp [List.attach]
+
+theorem classFoldByRank_solves (preds : Nat → List Nat) (transfer : Nat → Transfer)
+    (rank : Nat → Nat) (topological : IsTopologicalRank rank preds transfer) :
+    ClassTableSolves (classFoldByRank preds transfer rank topological) preds transfer := by
+  intro node
+  rw [classFoldByRank]
+  cases selected : transfer node <;>
+    simp [evaluateClass]
+
+theorem class_solution_unique_at (preds : Nat → List Nat) (transfer : Nat → Transfer)
+    (rank : Nat → Nat) (topological : IsTopologicalRank rank preds transfer)
+    (a b : Nat → PCClass) (ha : ClassTableSolves a preds transfer)
+    (hb : ClassTableSolves b preds transfer) (node : Nat) : a node = b node := by
+  rw [ha node, hb node]
+  apply evaluateClass_congr
+  intro dependency member
+  exact class_solution_unique_at preds transfer rank topological a b ha hb dependency
+termination_by rank node
+decreasing_by exact topological node dependency member
+
+/-- Any two class folds over an acyclic dependency graph have the same class
+table, independently of which valid topological orders supplied their ranks. -/
+theorem class_fold_topological_order_independent
+    (preds : Nat → List Nat) (transfer : Nat → Transfer)
+    (rank₁ rank₂ : Nat → Nat)
+    (topological₁ : IsTopologicalRank rank₁ preds transfer)
+    (topological₂ : IsTopologicalRank rank₂ preds transfer) :
+    classFoldByRank preds transfer rank₁ topological₁ =
+      classFoldByRank preds transfer rank₂ topological₂ := by
+  funext node
+  exact class_solution_unique_at preds transfer rank₁ topological₁
+    (classFoldByRank preds transfer rank₁ topological₁)
+    (classFoldByRank preds transfer rank₂ topological₂)
+    (classFoldByRank_solves preds transfer rank₁ topological₁)
+    (classFoldByRank_solves preds transfer rank₂ topological₂) node
 
 /-! ## Lattice laws of `Join` (Section 11) -/
 

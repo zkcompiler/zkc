@@ -770,6 +770,25 @@ class ResourceAndTransportTests(unittest.TestCase):
         cli = [json.loads(line) for line in completed.stdout.splitlines()]
         self.assertEqual(frozen_projection(cli), expected)
 
+        boundary = json.loads(
+            (ORACLE_DIR / "cases" / "natural-byte-bound.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(len(boundary["vectors"]), 2)
+        for vector in boundary["vectors"]:
+            magnitude_octets = vector["magnitude_octets"]
+            natural = 1 << (8 * (magnitude_octets - 1))
+            encoded_octets = 1 + 8 + len(oracle._minimal_magnitude(natural))
+            observed = {
+                "outcome": "Completed" if encoded_octets <= 1 << 20 else "Malformed",
+                "encoded_octets": encoded_octets,
+            }
+            if observed["outcome"] == "Malformed":
+                observed["code"] = "CanonicalByteBound"
+            with self.subTest(case=vector["case"]):
+                self.assertEqual(observed, vector["expected"])
+
     def test_jsonl_runner_has_no_blank_line_escape(self) -> None:
         results = list(oracle.run_json_lines(io.BytesIO(b"\n")))
         self.assertEqual(results[0]["outcome"], "Malformed")
