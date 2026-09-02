@@ -1126,6 +1126,28 @@
       }
     },
     {
+      "id": "research.owner-view-integrated-pcgraph",
+      "title": "Integrated PublicCoin graph closure",
+      "subject": "A complete bounded PIR PublicCoin dependency graph spanning every PCNode and PCClass case, terminal-preemption control, Challenge transfer and order, private-source reachability, and LogicalAccess acceptance exclusion.",
+      "claim": "Typed and independent canonical-byte projectors agree on complete graph evidence and five exact PublicCoin bodies; one carrier is structurally eligible, four directed defect carriers and five schema-valid owner substitutions fail closed, and one of two B2D families is closed at bounded research resolution.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-integrated-graph-f0v2b2d1/run.py", "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py", "evaluation/formal-source-integrated-graph-f0v2b2d1/independent.py", "evaluation/formal-source-integrated-graph-f0v2b2d1/README.md", "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This bounded static graph result is not Fresh runtime or Oracle-receipt replay, target publication, live implementation or host-module correspondence, a mechanized refinement proof, a protocol or cryptographic security theorem, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-integrated-graph-f0v2b2d1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

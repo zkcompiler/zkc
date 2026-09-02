@@ -24,8 +24,11 @@
 > Terminal owner contracts for required-Check truth, required-Reduction
 > application, and Claim disposition. B2C1B5B2 now realizes that selection as
 > exact synthetic candidate bytes and all six owner views, closing 21 of 21
-> B2C isolation families at bounded research resolution. Both B2D integration
-> families and F0-V2C target migration remain open.
+> B2C isolation families at bounded research resolution. F0-V2B2D1 now
+> integrates all fourteen PCNode cases and all four PCClass cases across five
+> exact carriers, closing the static graph family at bounded resolution. The
+> B2D2 Fresh runtime/Oracle-receipt family and F0-V2C target migration remain
+> open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
 > **Authority:** None. This package changes no current or target semantics,
@@ -83,7 +86,9 @@ F0  ideal assurance architecture and current-design falsification
          B2C1B5A compact path algebra                    [complete, CannotAnswer]
          B2C1B5B1 Terminal owner-contract selection      [complete, bounded]
          B2C1B5B2 exact Terminal owner projection        [complete, bounded]
-  -> F0-V2B2D integrated graph and mutation closure      [open]
+  -> F0-V2B2D integrated graph and mutation closure      [active]
+       B2D1 static PCGraph and eligibility closure       [complete, bounded]
+       B2D2 Fresh runtime and Oracle receipt replay       [open]
   -> F0-V2C  target publication and migration            [open]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -200,6 +205,16 @@ typed and independent cold paths agree on all six projected bodies, all eight
 executions, and the 28-node/49-edge graph, while rejecting 17 semantic
 mutations and six encodable owner-view substitutions. This closes all 21 B2C
 families at bounded constructor-isolation resolution; it does not close B2D.
+F0-V2B2D1 then integrates those owner contracts in five exact Core carriers.
+Typed and independent canonical-byte paths agree on complete 91-node graph
+evidence and five `PublicCoinView` bodies totaling 237,299 bytes. The baseline
+passes structural FS eligibility; four neighbors reject private-output,
+invalid module-control, nonstatic Challenge-condition, and LogicalAccess
+terminal-preemption defects. This closes one of two B2D families. It also
+records two target-wording obligations for the zero-output LogicalAccess
+publication-effect transfer and the exact public-Query sink coordinates.
+Fresh execution, Oracle receipts, and replay remain D2 rather than being
+inferred from the static result.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -387,6 +402,14 @@ provider, extraction tool, or durable schema.
   21/21 B2C constructor-isolation families at bounded research resolution,
   while B2D, target migration, live correspondence, proof, security, and Q1
   remain open.
+- [`f0v2b2d1-integrated-pcgraph-closure.md`](f0v2b2d1-integrated-pcgraph-closure.md)
+  records the 42-finding integrated static-graph result. Typed and independent
+  canonical-byte paths agree on every graph evidence table and five exact
+  PublicCoin bodies. The positive carrier inhabits all 14 node and four class
+  cases; four directed neighbors and five schema-valid owner substitutions
+  fail closed. One of two B2D families is complete at bounded resolution;
+  Fresh runtime/Oracle receipts, target migration, live correspondence, proof,
+  security, and Q1 remain open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -471,7 +494,11 @@ explicit required Reductions, and verdict-derived Claim disposition.
 B2C1B5B2 matches 62/62 frozen findings: the typed and cold paths agree on six
 exact owner-view bodies, eight executions, and the expanded graph, and reject
 the selected semantic and owner-view substitutions. B2C is therefore complete
-at bounded 21/21 constructor-isolation resolution. B2D, publication,
+at bounded 21/21 constructor-isolation resolution. F0-V2B2D1 now matches 42/42
+frozen findings over five integrated carriers: the two paths agree on complete
+graph evidence and 237,299 encoded bytes, the baseline is structurally
+eligible, and four defect classes plus five owner-view substitutions refuse.
+This closes one of two B2D families. D2 runtime receipts, publication,
 implementation correspondence, proof, security, and Q1 remain open, and no
 target profile has changed.
 
