@@ -1,0 +1,186 @@
+{
+  "aggregate": {
+    "code": "F0V3-C-FS-VIEW-DETERMINACY",
+    "outcome": "CannotAnswer"
+  },
+  "cases": [
+    {
+      "code": "F0V3-A-FS-SOURCE-PINS",
+      "name": "authenticated-fs-family-source-pins",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-A-EIGHT-VIEW-CENSUS",
+      "name": "eight-view-field-census",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-A-FS-VIEW-GRAMMAR-BOUNDED",
+      "name": "normalized-finite-view-grammar",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-A-DUAL-SCHEMA-COMPILERS",
+      "name": "recursive-iterative-schema-agreement",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-A-K2-TYPED-COLD",
+      "name": "k2-typed-cold-candidate-values",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-A-DUPLEX-TYPED-COLD",
+      "name": "duplex-typed-cold-candidate-values",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-A-DUPLEX-CARRIER-BOUNDARY",
+      "name": "checked-duplex-carrier-boundary",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-A-MUTATION-KILLS",
+      "name": "schema-law-owner-mutation-kills",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3-C-PUBLISHED-SCHEMAS",
+      "name": "published-static-view-schema-catalog",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-CANONICAL-FRAME-SCHEDULE",
+      "name": "canonical-frame-schedule-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-CANONICAL-INFLUENCE",
+      "name": "canonical-influence-view-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-CANONICAL-TRANSITION-ABI",
+      "name": "canonical-transition-abi-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-CANONICAL-RESULT-BODY",
+      "name": "canonical-checked-result-body",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-DUPLEX-STATE-INSTANCE",
+      "name": "duplex-state-instance-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-DUPLEX-MATERIAL-SALT",
+      "name": "duplex-material-salt-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-DUPLEX-CODEC-ARGUMENTS",
+      "name": "duplex-codec-argument-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-DUPLEX-SCHEDULE-COVERAGE",
+      "name": "duplex-schedule-coverage-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-DUPLEX-TRANSITION-ABI",
+      "name": "duplex-transition-abi-bodies",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-C-DUPLEX-RESULT-BODY",
+      "name": "duplex-checked-result-body",
+      "outcome": "CannotAnswer"
+    },
+    {
+      "code": "F0V3-R-WITNESS-SUBSTITUTION",
+      "name": "witness-as-owner-definition",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F0V3-R-INTERACTION-LABEL-SUBSTITUTION",
+      "name": "interaction-body-by-label-substitution",
+      "outcome": "Refused"
+    }
+  ],
+  "evidence_control": {
+    "candidate_schema_counts": {
+      "CanonicalChallengeTransitionView": {"leaf_count": 19, "node_count": 29},
+      "CanonicalFSConstructionView": {"leaf_count": 12, "node_count": 21},
+      "CanonicalRequiredInfluenceView": {"leaf_count": 15, "node_count": 29},
+      "CanonicalTranscriptDeclarationView": {"leaf_count": 18, "node_count": 24},
+      "DuplexChallengeTransitionView": {"leaf_count": 16, "node_count": 27},
+      "DuplexEncodedInputCoverageView": {"leaf_count": 26, "node_count": 42},
+      "DuplexFSConstructionView": {"leaf_count": 35, "node_count": 63},
+      "DuplexTranscriptDeclarationView": {"leaf_count": 42, "node_count": 66}
+    },
+    "candidate_schema_sha256": "0afe8797203334dea54fec67e1c8706ea4af7fae6c4f1a189f66cb6e7b0b1f69",
+    "candidate_values": {
+      "duplex-finite": {
+        "DuplexChallengeTransitionView": {"body_sha256": "aeb30cb40413fc53bee212d127b4816302f79153170edd5300b9b52c69b4d7d3", "leaf_count": 34},
+        "DuplexEncodedInputCoverageView": {"body_sha256": "5faa0e0863682d525c47454271fb418cd989066d7108b98658fe3a97b08d801b", "leaf_count": 31},
+        "DuplexTranscriptDeclarationView": {"body_sha256": "284df7759a92e3866892afde5b27b6853f7e38b584cda2bb74eb0f3652815836", "leaf_count": 86}
+      },
+      "k2-oracle": {
+        "CanonicalChallengeTransitionView": {"body_sha256": "d1d365eab1343a6e25bf1346fa5601bfcf88c73b836a714d4e2b0f0f7b005c4e", "leaf_count": 23},
+        "CanonicalFSConstructionView": {"body_sha256": "cbe51c5da8bdd8de3ad060f6f6114fc77c190aac0ed6f9c1578098a7c884436c", "leaf_count": 38},
+        "CanonicalRequiredInfluenceView": {"body_sha256": "59f990e2445ec1e61cf12560b78e32ccf9344b68e69e1ffc73f71a084580611f", "leaf_count": 26},
+        "CanonicalTranscriptDeclarationView": {"body_sha256": "cb2d7885f40c9280a8ce3f176a117fc889ede4f1d37f09ba34efdb22b5737419", "leaf_count": 36}
+      },
+      "k2-schnorr": {
+        "CanonicalChallengeTransitionView": {"body_sha256": "4b4b02beac5d3d416ef5494a6df2b33db2d921063a7c63b01731bf5e3a36b0ef", "leaf_count": 21},
+        "CanonicalFSConstructionView": {"body_sha256": "ad168e1242fd9a7246888252b88537c59734da48e963190abfa46afd7a2ad0d7", "leaf_count": 36},
+        "CanonicalRequiredInfluenceView": {"body_sha256": "e58f016865e047b90f735ea9694af7f1093a5f8737f216c885504101349b3f77", "leaf_count": 13},
+        "CanonicalTranscriptDeclarationView": {"body_sha256": "4f8da5c9547354bd21a10ab5c5bf8f66a5d2acdd5bd28e5e591cf1d4b3affa15", "leaf_count": 30}
+      }
+    },
+    "duplex_checked_result_witnessed": false,
+    "field_count": 97,
+    "field_node_counts": {"atomic": 44, "structural": 53},
+    "field_status_counts": {"exact-body": 37, "prose-placeholder": 40, "undefined-symbol": 20},
+    "iterative_metrics": {"definition_count": 49, "maximum_source_depth": 4, "source_node_count": 271},
+    "mutation_kills": {
+      "iterative-compiler-substitution": true,
+      "iterative-law-substitution": true,
+      "iterative-owner-substitution": true,
+      "iterative-schema-ordinal": true,
+      "recursive-compiler-substitution": true,
+      "recursive-law-substitution": true,
+      "recursive-owner-substitution": true,
+      "recursive-schema-ordinal": true
+    },
+    "owner_obligations": [
+      "F0V3-O-PUBLISHED-SCHEMAS",
+      "F0V3-O-CANONICAL-FRAME-SCHEDULE",
+      "F0V3-O-CANONICAL-INFLUENCE",
+      "F0V3-O-CANONICAL-TRANSITION-ABI",
+      "F0V3-O-CANONICAL-RESULT-BODY",
+      "F0V3-O-DUPLEX-STATE-INSTANCE",
+      "F0V3-O-DUPLEX-MATERIAL-SALT",
+      "F0V3-O-DUPLEX-CODEC-ARGUMENTS",
+      "F0V3-O-DUPLEX-SCHEDULE-COVERAGE",
+      "F0V3-O-DUPLEX-TRANSITION-ABI",
+      "F0V3-O-DUPLEX-RESULT-BODY"
+    ],
+    "recursive_metrics": {"definition_count": 49, "maximum_source_depth": 12, "source_node_count": 271},
+    "source_sha256": {
+      "docs-next/pir/duplex-sponge-fiat-shamir.md": "7584767bde94693b77d42328884f889f394422596c0328783cc03188bfbd116d",
+      "docs-next/pir/fiat-shamir.md": "b7d26295bbf1d8f51ddf7b2ffd811ce4d2d819c5edf4d6f9b504317e1f5c0bd7",
+      "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "9470fee8cef49674d735a70f3bd7de78201fbef0cf44a195b0b6c33dc8f1c18b",
+      "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "448525f75d21d3f293d4298f76bed9570c2b6483de2719f3f2468368cfb0c4f4",
+      "docs-next/pir/profiles/published-identities.json": "f9ae6791ffaad95ec0c965164bc03e156c9985050b9064684bfe0257780da30a",
+      "evaluation/duplex-sponge-transcript/cases/construction.json": "e057df04559b277d70af6ca4009ac626fa1e56e9e2d1977d45275576111daf1f",
+      "evaluation/duplex-sponge-transcript/duplexmodel/construction.py": "edd9782270fa7e9030ca2389bea57c3a34d92ff73641d526c1df34cf5d766fc4",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json": "8214d1f14b8c18989846d1e544d39070f76d0c843971981b9e2c38ab6291eeb9",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "c7883d1eb77ddf873cb762c7f791d4a4a7ec1aa4dc1356cb7712ed7dbfa94e1c",
+      "evaluation/k2-protocol-fiat-shamir/reference_model.py": "402bd72f24571828b3f76bc3fe7fd103798841e736d3bf672c025843c1b8071a"
+    }
+  }
+}

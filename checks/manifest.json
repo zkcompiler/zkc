@@ -1214,6 +1214,28 @@
       }
     },
     {
+      "id": "research.owner-view-fs-family-determinacy",
+      "title": "Fiat-Shamir family view determinacy",
+      "subject": "Exact source determinacy of all 97 displayed fields in the eight canonical-framed and duplex-sponge PIR family views, plus a bounded normalized candidate grammar and admitted-carrier projections.",
+      "claim": "The audit classifies 37 exact-body, 40 prose-placeholder, and 20 undefined-symbol fields; two independent schema compilers agree on eight bounded candidates, typed and cold paths agree on eight K2 and three duplex candidate values with frozen digests and leaf counts, and schema, law, compiler, and owner substitutions fail closed, while eleven exact publication and owner-body obligations remain CannotAnswer.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-fs-view-determinacy-f0v3/run.py", "evaluation/formal-source-fs-view-determinacy-f0v3/model.py", "evaluation/formal-source-fs-view-determinacy-f0v3/independent.py", "evaluation/formal-source-fs-view-determinacy-f0v3/typed_projection.py", "evaluation/formal-source-fs-view-determinacy-f0v3/cold_projection.py", "evaluation/formal-source-fs-view-determinacy-f0v3/support.py", "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json", "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json", "evaluation/formal-source-fs-view-determinacy-f0v3/README.md", "evaluation/formal-source-fs-view-determinacy-f0v3/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The bounded candidate grammar and witness projections are not published owner definitions, target repairs, compiler or backend support, theorem correspondence or applicability, Fiat-Shamir security, ROM/QROM security, or production evidence."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-fs-view-determinacy-f0v3/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.provider-observable-audit",
       "title": "Provider observable audit",
       "subject": "Whether the exact admitted finite Schnorr Core and Fresh Protocol, as exposed by their six normalized owner views, carry every observable that a VCVio-shaped operational interpretation needs, and exactly which observables are missing.",

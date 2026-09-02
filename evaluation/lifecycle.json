@@ -61,6 +61,7 @@
         "research.owner-view-terminal-owner-contracts",
         "research.owner-view-terminal-projections",
         "research.owner-view-integrated-pcgraph",
+        "research.owner-view-fs-family-determinacy",
         "research.owner-view-fresh-run-schema",
         "research.semantic-migration-candidate"
       ]
