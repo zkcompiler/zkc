@@ -16,10 +16,10 @@
 > immutable owner-admission substrate and exposes the predecessor handle's
 > ordinary mutability. F0-V2B2C1A supplies the exact view-value codec and
 > exposes a target-byte versus diagnostic-JSON ordering inversion.
-> F0-V2B2C1B1 through B2C1B3 now validate owner-derived exact projections for
-> seventeen of the twenty-one B2C isolation families across Foundation,
-> Oracle, Claim, Reduction, publication-order, joint-Challenge, and shared-
-> Challenge surfaces. Four B2C families, both B2D integration families, and
+> F0-V2B2C1B1 through B2C1B4 now validate owner-derived exact projections for
+> twenty of the twenty-one B2C isolation families across Foundation, Oracle,
+> Claim, Reduction, publication-order, joint-Challenge, shared-Challenge, and
+> semantic-module surfaces. One B2C family, both B2D integration families, and
 > F0-V2C target migration remain open.
 > Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
 > feasibility programs, not selected product implementation
@@ -73,7 +73,7 @@ F0  ideal assurance architecture and current-design falsification
        B2C1B1 foundation families 4/21                   [complete, bounded]
        B2C1B2 Oracle families 8/21                       [complete, bounded]
        B2C1B3 claim/reduction/challenge families 5/21    [complete, bounded]
-       B2C1B4 module-effect families 3/21                [open]
+       B2C1B4 module-effect families 3/21                [complete, bounded]
        B2C1B5 expanded-terminal family 1/21              [open]
   -> F0-V2B2D integrated graph and mutation closure      [open]
   -> F0-V2C  target publication and migration            [open]
@@ -164,6 +164,16 @@ closure, retains exact binding/message/terminal-output sink coordinates,
 checks binding availability at the opening boundary, and requires same-
 evaluator Fresh/Core authority. Seventeen B2C families and both B2D families
 remain open.
+F0-V2B2C1B2 and B2C1B3 then extend that substrate across eight Oracle and five
+Claim/Reduction/Challenge families. F0-V2B2C1B4 now covers the three module
+families. Its typed and cold paths agree on eighteen exact bodies only after
+the cold source includes the authenticated used-module preimage closure. The
+module declaration owns decision, output, dependency, reconstruction, and
+publication semantics; the Core owns occurrence coordinates; and the
+evaluator fingerprint owns exact implementation support. All three Cores
+admit, while structural FS eligibility is true for deterministic/publication
+modules and false when a private decision output reaches acceptance. One B2C
+family and both B2D families remain open.
 F1-I then binds the same proposition class to admitted live owner handles and
 authority. No Q1 claim is complete before F1-I.
 
@@ -317,6 +327,16 @@ provider, extraction tool, or durable schema.
   mutations plus four schema-valid owner substitutions. Four B2C and both B2D
   families, path-sensitive liveness, runtime history, target publication,
   live correspondence, proof, security, and Q1 remain open.
+- [`f0v2b2c1b4-module-owner-projections.md`](f0v2b2c1b4-module-owner-projections.md)
+  records the 69-finding semantic-module B2C1B isolation slice. Typed and cold
+  byte-and-source projectors agree on 18 distinct exact bodies over the three
+  module decision classes. The slice requires the exact authenticated used-
+  module preimage closure, derives module decisions, reads, graph edges, and
+  transfers from existing module/Core owners, validates reconstruction and
+  publication authority, and keeps Core admission distinct from structural FS
+  eligibility. One B2C and both B2D families, general module execution,
+  target publication, live correspondence, proof, security, and Q1 remain
+  open.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
@@ -382,12 +402,13 @@ runtime behavior, profile migration, implementation correspondence, and Q1
 remain `CannotAnswer`; no profile has changed.
 F0-V2B2C0 and C1A subsequently establish the immutable canonical-byte owner
 substrate and exact value codec prerequisites. F0-V2B2C1B1 then matches 39/39
-findings for the first four constructor-isolation families, and B2C1B2 matches
-44/44 findings for eight Oracle families. B2C1B3 now matches 61/61 findings for
-five Claim/Reduction/Challenge families: typed and cold paths agree on 30
-distinct bodies, the Last-Challenge and derived-consumer laws are explicit,
-and path-sensitive liveness remains a named open boundary. Together the three
-slices cover seventeen of twenty-one B2C families at bounded research
+findings for the first four constructor-isolation families, B2C1B2 matches
+44/44 findings for eight Oracle families, and B2C1B3 matches 61/61 findings
+for five Claim/Reduction/Challenge families. B2C1B4 now matches 69/69 findings
+for all three semantic-module families: typed and cold byte-and-source paths
+agree on 18 distinct bodies, exact module preimage availability is explicit,
+and Core admission remains distinct from FS structural eligibility. Together
+the four slices cover twenty of twenty-one B2C families at bounded research
 resolution. This is progress within B2C1B, not completion of B2C, B2D, target
 publication, implementation correspondence, or Q1; no profile has changed.
 

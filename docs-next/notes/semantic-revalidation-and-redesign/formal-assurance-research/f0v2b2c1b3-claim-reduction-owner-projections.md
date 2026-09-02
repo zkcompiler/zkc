@@ -230,3 +230,12 @@ This checkpoint does not:
 - establish soundness, a random-oracle theorem, Fiat--Shamir security, or a
   concrete hash/sponge claim; or
 - close F1 Q1 correspondence.
+
+## 7. Successor checkpoint
+
+The planned B2C1B4 module slice is now complete at bounded research resolution:
+[`F0-V2B2C1B4 Module Owner Projections`](f0v2b2c1b4-module-owner-projections.md)
+adds the three semantic-module families without changing this checkpoint's
+historical 17-of-21 accounting. The successor makes exact used-module
+preimage availability part of the projection source contract and leaves only
+the expanded-terminal B2C family open.

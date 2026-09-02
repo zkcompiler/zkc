@@ -1038,6 +1038,28 @@
       }
     },
     {
+      "id": "research.owner-view-module-projections",
+      "title": "Semantic-module owner-view projections",
+      "subject": "Three NoProverDecision, ProverDecision, and ProverPublication semantic-module constructor-isolation families projected from immutable admitted Core and Fresh Protocol owners into the six normalized PIR views.",
+      "claim": "Typed owner projection and a separately structured cold byte-and-source projector agree on all six exact view bodies for three minimal carriers after authenticating the exact used-module preimage closure, while frozen declaration, reconstruction, graph-transfer, eligibility, owner-value, and authority substitutions fail closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic"],
+      "source_paths": ["evaluation/formal-source-module-owner-projections-f0v2b2c1b4/run.py", "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/model.py", "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/independent.py", "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/README.md", "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["Three bounded semantic-module projection families are not the remaining expanded-terminal B2C family, either B2D integration family, general module execution or receipt validation, target publication, live implementation correspondence, formal proof, cryptographic security, or Q1."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",
