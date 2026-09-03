@@ -21,6 +21,17 @@ KINDS = {
     "ProviderOutcomeCarrierMap", "OperationalCompletion", "RelationPredicate", "WitnessType", "ProverPrivateState",
     "HonestCommit", "HonestRespond"
 }
+OWNER_DECLARATIONS = {
+    "FreshPublicCoinDistribution": ("FreshSamplingHypothesis", 2),
+    "FiatShamirSamplerAdequacy": ("FamilySamplerAdequacyHypothesis", 3),
+    "FiatShamirOracleProcess": ("FamilyOracleProcessHypothesis", 2),
+    "OperationalCompletion": ("OperationalCompletionHypothesis", 2),
+    "RelationPredicate": ("RelationPredicateBindingLaw", 2),
+    "WitnessType": ("WitnessTypeBindingLaw", 2),
+    "ProverPrivateState": ("ProverPrivateStateBindingLaw", 2),
+    "HonestCommit": ("HonestCommitHypothesis", 1),
+    "HonestRespond": ("HonestRespondHypothesis", 1),
+}
 LANES = ["Accepted", "Rejected", "Aborted", "InterpretationFailed", "StrategyStopped", "OperationalNoncompletion"]
 FRESH_PARTITION = ["Accepted", "Rejected", "Aborted", "StrategyStopped", "OperationalNoncompletion"]
 
@@ -115,6 +126,32 @@ def _load(path: Path) -> dict[str, Any]:
             raise ValueError("independent premise enum differs")
         if item["bound_model_or_hypothesis"]["form"] not in {"Model", "Hypothesis", "ProviderMap"}:
             raise ValueError("independent bound form differs")
+        if item["kind"] != "ProviderOutcomeCarrierMap":
+            value = item["bound_model_or_hypothesis"]["value"]
+            law_ref, arity = OWNER_DECLARATIONS[item["kind"]]
+            if (
+                not isinstance(value, dict)
+                or set(value) != {"law_ref", "canonical_arguments", "statement"}
+                or value["law_ref"] != law_ref
+                or not isinstance(value["canonical_arguments"], list)
+                or len(value["canonical_arguments"]) != arity
+                or value["canonical_arguments"][0] != "coordinate"
+                or not value["statement"]
+            ):
+                raise ValueError("independent hypothesis declaration differs")
+            arguments = value["canonical_arguments"]
+            if item["kind"] == "FreshPublicCoinDistribution" and arguments[1] != (
+                "proposal:analysis.distribution:fresh-uniform"
+            ):
+                raise ValueError("independent Fresh distribution differs")
+            if item["kind"] in {
+                "FiatShamirSamplerAdequacy", "FiatShamirOracleProcess"
+            } and arguments[1] != scope.get("distribution_profile_id"):
+                raise ValueError("independent oracle distribution differs")
+            if item["kind"] in {
+                "RelationPredicate", "WitnessType", "ProverPrivateState"
+            } and arguments[1] != item["coordinate"]["subject"]:
+                raise ValueError("independent model subject differs")
         if scope["kind"] == "OracleModelOnly" and not scope["distribution_profile_id"]:
             raise ValueError("independent empty oracle-model scope")
         if scope["kind"] == "ExactSubjectsOnly" and (
@@ -130,6 +167,8 @@ def _load(path: Path) -> dict[str, Any]:
             ):
                 raise ValueError("independent operational-completion form differs")
             _provider_declaration(item["source"]["reference"])
+            if item["bound_model_or_hypothesis"]["value"]["canonical_arguments"][1] != item["source"]["reference"]:
+                raise ValueError("independent completion provider argument differs")
         premise_id = "premisev0:" + _hash("analysis.named-premise.v0", _premise_body(item))
         if item["name"] in names or premise_id in ids:
             raise ValueError("independent duplicate premise")
@@ -259,6 +298,25 @@ def evaluate(path: Path) -> dict[str, Any]:
             "outcome": "Affirmative",
             "code": "API-A-UNEXPECTED-PROVIDER-COLLAPSE",
         }
+    absent_declaration = json.loads(json.dumps(data))
+    next(
+        item for item in absent_declaration["premises"]
+        if item["name"] == "honest-commit"
+    )["bound_model_or_hypothesis"]["value"]["law_ref"] = "AbsentOwnerDeclaration"
+    mutated_law = next(
+        item for item in absent_declaration["premises"]
+        if item["name"] == "honest-commit"
+    )["bound_model_or_hypothesis"]["value"]["law_ref"]
+    if mutated_law not in {law for law, _ in OWNER_DECLARATIONS.values()}:
+        missing_owner_declaration = {
+            "outcome": "CannotAnswer",
+            "code": "API-C-HYPOTHESIS-DECLARATION-ABSENT",
+        }
+    else:  # pragma: no cover - required negative control
+        missing_owner_declaration = {
+            "outcome": "Affirmative",
+            "code": "API-A-UNEXPECTED-UNDECLARED-HYPOTHESIS",
+        }
     return {
         "premise_ids": {item["name"]: item["_id"] for item in sorted(data["premises"], key=lambda row: row["name"])},
         "depth_counts": {depth: sum(item["evidence_depth"] == depth for item in data["premises"]) for depth in ("T1", "T2", "T3")},
@@ -273,5 +331,6 @@ def evaluate(path: Path) -> dict[str, Any]:
         "scope_mismatches": scope_results,
         "alternate_provider": _intake(data, "provider-outcome-map", alternate),
         "bool_noncompletion_collapse": bool_noncompletion_collapse,
+        "missing_owner_declaration": missing_owner_declaration,
         "catalog_digest": _hash("analysis.premise-catalog.v0", [{k: v for k, v in item.items() if k != "_id"} for item in data["premises"]]),
     }

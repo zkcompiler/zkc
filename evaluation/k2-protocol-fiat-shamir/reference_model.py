@@ -636,6 +636,51 @@ class ChallengeDomain:
 
 
 @dataclass(frozen=True)
+class ProtocolDeclarationRef:
+    """Bounded local stand-in for one admitted PIR module declaration ref."""
+
+    declaration_kind: str
+    local_name: str
+
+
+@dataclass(frozen=True)
+class IndependentCoin:
+    pass
+
+
+@dataclass(frozen=True)
+class JointCoinMember:
+    group: ProtocolDeclarationRef
+    index: int
+    prior_members: tuple[str, ...]
+
+
+CoinCorrelation: TypeAlias = IndependentCoin | JointCoinMember
+
+
+@dataclass(frozen=True)
+class ExclusiveReductionUse:
+    pass
+
+
+@dataclass(frozen=True)
+class SharedReductionUse:
+    sharing_contract: ProtocolDeclarationRef
+
+
+ReductionUsePolicy: TypeAlias = ExclusiveReductionUse | SharedReductionUse
+
+
+_AUTO_CHALLENGE_DECLARATION = object()
+
+
+def bounded_protocol_declaration_ref(
+    declaration_kind: str, local_name: str
+) -> ProtocolDeclarationRef:
+    return ProtocolDeclarationRef(declaration_kind, local_name)
+
+
+@dataclass(frozen=True)
 class Occurrence:
     name: str
     kind: OccurrenceKind
@@ -647,6 +692,45 @@ class Occurrence:
     oracle_name: str | None = None
     check_predicate: Predicate | None = None
     prover_value_sort: ValueSort = ValueSort.BYTES
+    challenge_domain_ref: ProtocolDeclarationRef | None | object = (
+        _AUTO_CHALLENGE_DECLARATION
+    )
+    fresh_law: ProtocolDeclarationRef | None | object = _AUTO_CHALLENGE_DECLARATION
+    correlation: CoinCorrelation | None | object = _AUTO_CHALLENGE_DECLARATION
+    reduction_use: ReductionUsePolicy | None | object = _AUTO_CHALLENGE_DECLARATION
+
+    def __post_init__(self) -> None:
+        is_challenge = self.kind is OccurrenceKind.CHALLENGE
+        if self.challenge_domain_ref is _AUTO_CHALLENGE_DECLARATION:
+            value = (
+                bounded_protocol_declaration_ref(
+                    "pir.challenge-domain",
+                    f"bounded-natural-domain-{self.challenge_domain.modulus}",
+                )
+                if is_challenge and type(self.challenge_domain) is ChallengeDomain
+                else None
+            )
+            object.__setattr__(self, "challenge_domain_ref", value)
+        if self.fresh_law is _AUTO_CHALLENGE_DECLARATION:
+            object.__setattr__(
+                self,
+                "fresh_law",
+                bounded_protocol_declaration_ref(
+                    "pir.public-coin-law", "bounded-independent-fresh-resolution"
+                )
+                if is_challenge
+                else None,
+            )
+        if self.correlation is _AUTO_CHALLENGE_DECLARATION:
+            object.__setattr__(
+                self, "correlation", IndependentCoin() if is_challenge else None
+            )
+        if self.reduction_use is _AUTO_CHALLENGE_DECLARATION:
+            object.__setattr__(
+                self,
+                "reduction_use",
+                ExclusiveReductionUse() if is_challenge else None,
+            )
 
 
 @dataclass(frozen=True)
@@ -926,6 +1010,69 @@ def _ref_datum(ref: ValueRef) -> object:
     )
 
 
+def _protocol_declaration_ref_datum(
+    reference: ProtocolDeclarationRef, expected_kind: str | None = None
+) -> object:
+    if type(reference) is not ProtocolDeclarationRef:
+        raise AdmissionError("protocol declaration ref has the wrong exact shape")
+    kind = _symbol(reference.declaration_kind, "protocol declaration kind")
+    if expected_kind is not None and reference.declaration_kind != expected_kind:
+        raise AdmissionError("protocol declaration ref has the wrong owner kind")
+    return k1.DatumRecord(
+        ((0, kind), (1, _symbol(reference.local_name, "protocol declaration name")))
+    )
+
+
+def _coin_correlation_datum(correlation: CoinCorrelation) -> object:
+    if type(correlation) is IndependentCoin:
+        return k1.DatumVariant(0, k1.UNIT)
+    if type(correlation) is JointCoinMember:
+        if type(correlation.index) is not int or correlation.index < 0:
+            raise AdmissionError("joint coin index must be one natural")
+        if (
+            type(correlation.prior_members) is not tuple
+            or correlation.prior_members != tuple(dict.fromkeys(correlation.prior_members))
+        ):
+            raise AdmissionError("joint coin prior members must be canonical")
+        return k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _protocol_declaration_ref_datum(
+                            correlation.group, "pir.coin-correlation-group"
+                        ),
+                    ),
+                    (1, k1.Nat(correlation.index)),
+                    (
+                        2,
+                        k1.DatumSeq(
+                            tuple(
+                                _symbol(item, "prior challenge ref")
+                                for item in correlation.prior_members
+                            )
+                        ),
+                    ),
+                )
+            ),
+        )
+    raise AdmissionError("coin correlation has the wrong exact shape")
+
+
+def _reduction_use_datum(policy: ReductionUsePolicy) -> object:
+    if type(policy) is ExclusiveReductionUse:
+        return k1.DatumVariant(0, k1.UNIT)
+    if type(policy) is SharedReductionUse:
+        return k1.DatumVariant(
+            1,
+            _protocol_declaration_ref_datum(
+                policy.sharing_contract, "pir.challenge-sharing-contract"
+            ),
+        )
+    raise AdmissionError("reduction-use policy has the wrong exact shape")
+
+
 def _validate_ref(ref: object) -> ValueRef:
     if type(ref) is not ValueRef or type(ref.kind) is not RefKind:
         raise AdmissionError("value reference has the wrong exact shape")
@@ -950,7 +1097,7 @@ def core_body(core: Core) -> bytes:
     admit_core(core)
     datum = k1.DatumRecord(
         (
-            (0, k1.Symbol("k2.protocol-core.v1")),
+            (0, k1.Symbol("k2.protocol-core.v2-owner-challenge-declarations")),
             (
                 1,
                 k1.DatumSeq(
@@ -1067,6 +1214,45 @@ def core_body(core: Core) -> bytes:
                                     ),
                                 ),
                                 (9, k1.Symbol(item.prover_value_sort.value)),
+                                (
+                                    10,
+                                    k1.DatumVariant(0, k1.UNIT)
+                                    if item.challenge_domain_ref is None
+                                    else k1.DatumVariant(
+                                        1,
+                                        _protocol_declaration_ref_datum(
+                                            item.challenge_domain_ref,
+                                            "pir.challenge-domain",
+                                        ),
+                                    ),
+                                ),
+                                (
+                                    11,
+                                    k1.DatumVariant(0, k1.UNIT)
+                                    if item.fresh_law is None
+                                    else k1.DatumVariant(
+                                        1,
+                                        _protocol_declaration_ref_datum(
+                                            item.fresh_law, "pir.public-coin-law"
+                                        ),
+                                    ),
+                                ),
+                                (
+                                    12,
+                                    k1.DatumVariant(0, k1.UNIT)
+                                    if item.correlation is None
+                                    else k1.DatumVariant(
+                                        1, _coin_correlation_datum(item.correlation)
+                                    ),
+                                ),
+                                (
+                                    13,
+                                    k1.DatumVariant(0, k1.UNIT)
+                                    if item.reduction_use is None
+                                    else k1.DatumVariant(
+                                        1, _reduction_use_datum(item.reduction_use)
+                                    ),
+                                ),
                             )
                         )
                         for item in core.schedule
@@ -1459,8 +1645,26 @@ def admit_core(core: Core) -> None:
                 raise AdmissionError("challenge occurrence needs an exact domain")
             if type(occurrence.challenge_domain.modulus) is not int or occurrence.challenge_domain.modulus <= 1:
                 raise AdmissionError("challenge modulus must be an exact integer above one")
+            _protocol_declaration_ref_datum(
+                occurrence.challenge_domain_ref, "pir.challenge-domain"
+            )
+            _protocol_declaration_ref_datum(
+                occurrence.fresh_law, "pir.public-coin-law"
+            )
+            _coin_correlation_datum(occurrence.correlation)
+            _reduction_use_datum(occurrence.reduction_use)
         elif occurrence.challenge_domain is not None:
             raise AdmissionError("only a challenge may carry a challenge domain")
+        elif any(
+            item is not None
+            for item in (
+                occurrence.challenge_domain_ref,
+                occurrence.fresh_law,
+                occurrence.correlation,
+                occurrence.reduction_use,
+            )
+        ):
+            raise AdmissionError("only a challenge may carry challenge declarations")
 
         if occurrence.kind is OccurrenceKind.VERIFIER_MESSAGE:
             if (
@@ -1793,12 +1997,22 @@ def admit_invocation(core: Core, invocation: Invocation) -> Mapping[str, Value]:
 
 
 @dataclass(frozen=True)
+class ChallengeRule:
+    challenge: str
+    draw_bytes: int
+    maximum_draws: int
+    accept: str
+    decode: str
+
+
+@dataclass(frozen=True)
 class TranscriptConstruction:
     application_domain: bytes
     sample_bytes: int = 8
     max_attempts: int = 16
     state_bytes: int = 32
     version: str = "k2-sha256-duplex-fixture-v1"
+    challenge_rules: tuple[ChallengeRule, ...] = ()
 
     def admit(self) -> None:
         if type(self.application_domain) is not bytes or not self.application_domain:
@@ -1809,6 +2023,63 @@ class TranscriptConstruction:
             raise AdmissionError("sampling attempt bound must be in 1..256")
         if self.state_bytes != 32 or self.version != "k2-sha256-duplex-fixture-v1":
             raise AdmissionError("unsupported exact transcript transition suite")
+        if type(self.challenge_rules) is not tuple:
+            raise AdmissionError("construction challenge rules must be immutable")
+        for rule in self.challenge_rules:
+            if (
+                type(rule) is not ChallengeRule
+                or type(rule.draw_bytes) is not int
+                or not 1 <= rule.draw_bytes <= 32
+                or type(rule.maximum_draws) is not int
+                or not 1 <= rule.maximum_draws <= 256
+            ):
+                raise AdmissionError("construction challenge rule is malformed")
+            _symbol(rule.challenge, "construction challenge ref")
+            _symbol(rule.accept, "construction acceptance algorithm")
+            _symbol(rule.decode, "construction decoder algorithm")
+
+
+def _challenge_rule_datum(rule: ChallengeRule) -> object:
+    return k1.DatumRecord(
+        (
+            (0, _symbol(rule.challenge, "construction challenge ref")),
+            (1, k1.Nat(rule.draw_bytes)),
+            (2, k1.Nat(rule.maximum_draws)),
+            (3, _symbol(rule.accept, "construction acceptance algorithm")),
+            (4, _symbol(rule.decode, "construction decoder algorithm")),
+        )
+    )
+
+
+def admitted_challenge_rules(
+    core: Core, construction: TranscriptConstruction
+) -> tuple[ChallengeRule, ...]:
+    admit_core(core)
+    construction.admit()
+    expected = tuple(
+        item.name for item in core.schedule if item.kind is OccurrenceKind.CHALLENGE
+    )
+    rules = construction.challenge_rules
+    if not rules and expected:
+        rules = tuple(
+            ChallengeRule(
+                challenge,
+                construction.sample_bytes,
+                construction.max_attempts,
+                "bounded-rejection-accept",
+                "bounded-big-endian-decode",
+            )
+            for challenge in expected
+        )
+    if tuple(rule.challenge for rule in rules) != expected:
+        raise AdmissionError(
+            "construction challenge rules must be ordered and total over Core challenges"
+        )
+    if any(rule.draw_bytes != construction.sample_bytes for rule in rules):
+        raise AdmissionError("construction challenge rule draw width disagrees")
+    if any(rule.maximum_draws != construction.max_attempts for rule in rules):
+        raise AdmissionError("legacy runtime bound disagrees with challenge rules")
+    return rules
 
 
 @dataclass(frozen=True)
@@ -1830,6 +2101,7 @@ def construction_body(
 ) -> bytes:
     admit_core(core)
     construction.admit()
+    rules = admitted_challenge_rules(core, construction)
     return k1.encode_datum(
         k1.DatumRecord(
             (
@@ -1851,6 +2123,7 @@ def construction_body(
                 (10, k1.Symbol("squeeze=SHA256(frame(squeeze)||frame(state)||frame(draw-namespace)||frame(requested-bytes))[:requested-bytes]")),
                 (11, k1.Symbol("advance=SHA256(frame(advance)||frame(state)||frame(draw-namespace)||frame(requested-bytes)||frame(block))")),
                 (12, k1.Symbol("decode=big-endian-rejection-into-[0,modulus)")),
+                (13, k1.DatumSeq(tuple(_challenge_rule_datum(rule) for rule in rules))),
             )
         )
     )
@@ -2144,6 +2417,30 @@ class StaticViewAtomicLeaf(str, Enum):
 
     CHALLENGE_OCCURRENCE = "challenge-occurrence"
     CHALLENGE_DOMAIN = "challenge-domain"
+    CHALLENGE_FRESH_LAW = "challenge-fresh-law"
+
+
+@dataclass(frozen=True)
+class PublicCoinReductionConsumer:
+    reduction_ref: str
+    challenge_ref: str
+
+
+@dataclass(frozen=True)
+class PublicCoinChallengeEntry:
+    """The exact eleven-field challenge row of the bounded PublicCoinView."""
+
+    challenge_ref: str
+    occurrence_ref: str
+    scope_ref: str
+    value_type: ValueSort
+    domain: ProtocolDeclarationRef
+    fresh_law: ProtocolDeclarationRef
+    correlation: CoinCorrelation
+    reduction_use: ReductionUsePolicy
+    public_conditions: tuple[ValueRef, ...]
+    public_condition_predecessors: tuple[ValueRef, ...]
+    reduction_consumers: tuple[PublicCoinReductionConsumer, ...]
 
 
 @dataclass(frozen=True)
@@ -2166,11 +2463,15 @@ class PIRStaticViewAtomicCoordinate:
 
 @dataclass(frozen=True)
 class PublicCoinChallengeProjection:
-    """Exact occurrence and nominal-domain leaves for one public coin."""
+    """Exact occurrence, domain, and fresh-law leaves for one public coin."""
 
     challenge_coordinate: PIRStaticViewAtomicCoordinate
     domain_coordinate: PIRStaticViewAtomicCoordinate
+    fresh_law_coordinate: PIRStaticViewAtomicCoordinate
     challenge_domain: ChallengeDomain
+    domain: object
+    fresh_law: object
+    challenge_entry: PublicCoinChallengeEntry
 
 
 class _NonTransferableAuthority:
@@ -3228,6 +3529,45 @@ def _value_producer_graph(core: Core) -> tuple[object, ...]:
     return tuple(result)
 
 
+def _public_coin_challenge_entries(
+    core: Core,
+) -> tuple[PublicCoinChallengeEntry, ...]:
+    """Project every owner-authored challenge declaration without proxies."""
+
+    admit_core(core)
+    challenges = tuple(
+        item for item in core.schedule if item.kind is OccurrenceKind.CHALLENGE
+    )
+    entries = []
+    for challenge in challenges:
+        consumers = tuple(
+            PublicCoinReductionConsumer(reduction.name, challenge.name)
+            for reduction in core.reductions
+            if challenge.name in reduction.required_challenges
+        )
+        entries.append(
+            PublicCoinChallengeEntry(
+                challenge.name,
+                challenge.name,
+                challenge.scope,
+                ValueSort.NAT,
+                challenge.challenge_domain_ref,
+                challenge.fresh_law,
+                challenge.correlation,
+                challenge.reduction_use,
+                challenge.dependencies,
+                tuple(
+                    sorted(
+                        challenge.dependencies,
+                        key=lambda ref: (ref.kind.value, ref.name),
+                    )
+                ),
+                consumers,
+            )
+        )
+    return tuple(entries)
+
+
 def _core_static_payload(
     core: Core,
     kind: StaticViewKind,
@@ -3300,9 +3640,7 @@ def _core_static_payload(
             }
         )
     if kind is StaticViewKind.PUBLIC_COIN:
-        challenges = tuple(
-            item for item in core.schedule if item.kind is OccurrenceKind.CHALLENGE
-        )
+        challenges = _public_coin_challenge_entries(core)
         return MappingProxyType(
             {
                 StaticViewField.PC_CORE_ID: cid,
@@ -3601,27 +3939,28 @@ def resolve_public_coin_challenge_projection(
     if challenge_entry_ordinal >= len(challenges):
         raise ModelError("public-coin challenge entry ordinal is out of range")
     challenge = challenges[challenge_entry_ordinal]
-    if (
-        type(challenge) is not Occurrence
-        or challenge.kind is not OccurrenceKind.CHALLENGE
-        or type(challenge.challenge_domain) is not ChallengeDomain
-    ):
+    if type(challenge) is not PublicCoinChallengeEntry:
         raise ModelError("PublicCoinView entry is not one finite challenge")
     core = issued.capability._source
     if type(core) is not Core:
         raise ModelError("PublicCoinView live source is not its owning Core")
     admit_core(core)
-    expected_challenges = tuple(
+    expected_challenges = _public_coin_challenge_entries(core)
+    if challenges != expected_challenges or core_id(core, profiles=profiles) != coordinate.owner_id:
+        raise ModelError("PublicCoinView challenge field is detached from its owning Core")
+    occurrences = tuple(
         occurrence
         for occurrence in core.schedule
         if occurrence.kind is OccurrenceKind.CHALLENGE
+        and occurrence.name == challenge.occurrence_ref
     )
-    if challenges != expected_challenges or core_id(core, profiles=profiles) != coordinate.owner_id:
-        raise ModelError("PublicCoinView challenge field is detached from its owning Core")
+    if len(occurrences) != 1:
+        raise ModelError("PublicCoinView challenge has no unique owning occurrence")
+    occurrence = occurrences[0]
     schedule_ordinals = tuple(
         ordinal
         for ordinal, occurrence in enumerate(core.schedule)
-        if occurrence is challenge
+        if occurrence is occurrences[0]
     )
     if len(schedule_ordinals) != 1:
         raise ModelError("PublicCoinView challenge has no unique Core schedule position")
@@ -3633,14 +3972,18 @@ def resolve_public_coin_challenge_projection(
             StaticViewField.PC_CHALLENGES,
             challenge_entry_ordinal,
             schedule_ordinal,
-            challenge.name,
+            challenge.occurrence_ref,
             leaf,
         )
 
     return PublicCoinChallengeProjection(
         atomic(StaticViewAtomicLeaf.CHALLENGE_OCCURRENCE),
         atomic(StaticViewAtomicLeaf.CHALLENGE_DOMAIN),
-        challenge.challenge_domain,
+        atomic(StaticViewAtomicLeaf.CHALLENGE_FRESH_LAW),
+        occurrence.challenge_domain,
+        _protocol_declaration_ref_datum(challenge.domain, "pir.challenge-domain"),
+        _protocol_declaration_ref_datum(challenge.fresh_law, "pir.public-coin-law"),
+        challenge,
     )
 
 

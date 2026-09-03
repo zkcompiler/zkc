@@ -78,6 +78,11 @@ def build_report() -> dict[str, Any]:
         "code": "API-M-PROVIDER-LANE-IMAGE",
     }:
         raise RuntimeError("API-R-PROVIDER-LANE-COLLAPSE-ACCEPTED")
+    if typed["missing_owner_declaration"] != {
+        "outcome": "CannotAnswer",
+        "code": "API-C-HYPOTHESIS-DECLARATION-ABSENT",
+    }:
+        raise RuntimeError("API-R-UNDECLARED-HYPOTHESIS-ACCEPTED")
 
     finding_codes = [
         ["closed-named-premise-schema", "Affirmative", "API-A-CLOSED-SCHEMA"],
@@ -92,6 +97,7 @@ def build_report() -> dict[str, Any]:
         ["provider-map-identity-separation", "Affirmative", "API-A-PROVIDER-MAP-IDENTITY"],
         ["provider-lane-image-discipline", "Malformed", "API-M-PROVIDER-LANE-IMAGE"],
         ["operational-completion-kind", "Affirmative", "API-A-OPERATIONAL-COMPLETION"],
+        ["missing-owner-hypothesis-declaration", "CannotAnswer", "API-C-HYPOTHESIS-DECLARATION-ABSENT"],
         ["independent-reconstruction", "Affirmative", "API-A-INDEPENDENT-RECONSTRUCTION"],
         ["profile-qualified-outcome-partition", "Affirmative", "API-A-OUTCOME-PARTITION-TYPED"],
         ["theorem-result", "CannotAnswer", "API-C-NO-THEOREM"],
@@ -118,6 +124,7 @@ def build_report() -> dict[str, Any]:
             "provider_map_judgment_id": provider_map["judgment_id"],
             "provider_completion_judgment_id": provider_completion["judgment_id"],
             "bool_noncompletion_collapse": typed["bool_noncompletion_collapse"],
+            "missing_owner_declaration": typed["missing_owner_declaration"],
             "complete_premises": len(complete["named_premise_ids"]),
             "omission_outcomes": typed["omissions"],
             "wrong_coordinate": typed["wrong_coordinate"],
@@ -143,6 +150,7 @@ def build_report() -> dict[str, Any]:
             "distinct_provider_maps": 3,
             "operational_completion_premises": 1,
             "provider_lane_collapse_mutations": 1,
+            "missing_owner_declaration_mutations": 1,
         },
         "nonclaims": [
             "No theorem is proved.",

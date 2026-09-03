@@ -273,6 +273,138 @@ class NamedPremiseMigrationTest(unittest.TestCase):
             ),
         )
 
+    def test_public_coin_snapshot_carries_owner_fresh_law_and_all_fields(self) -> None:
+        source = model._SCHNORR_PINNED_SOURCE
+        projection = model._source_schnorr_challenge_projection(source)
+        self.assertEqual(
+            tuple(item.name for item in fields(model.k2.PublicCoinChallengeEntry)),
+            (
+                "challenge_ref",
+                "occurrence_ref",
+                "scope_ref",
+                "value_type",
+                "domain",
+                "fresh_law",
+                "correlation",
+                "reduction_use",
+                "public_conditions",
+                "public_condition_predecessors",
+                "reduction_consumers",
+            ),
+        )
+        self.assertEqual(
+            model._schnorr_public_coin_law_coordinate(source),
+            model.PIRPublicCoinLawCoordinate(projection.fresh_law),
+        )
+        self.assertEqual(
+            tuple(
+                rule.maximum_draws
+                for rule in model.k2.admitted_challenge_rules(
+                    source.case.core, source.case.construction
+                )
+            ),
+            (1,),
+        )
+        core_body = model.k2.core_body(source.case.core)
+        construction_body = model.k2.construction_body(
+            source.case.core, source.case.construction
+        )
+        self.assertEqual(
+            model.k1.encode_datum(model.k1.decode_datum(core_body)), core_body
+        )
+        self.assertEqual(
+            model.k1.encode_datum(model.k1.decode_datum(construction_body)),
+            construction_body,
+        )
+        goal_id = model.analysis_goal_id(model._SCHNORR_PINNED_PROPOSITION.goal)
+        goal = model._formed_analysis_body(goal_id, "analysis.goal")
+        self.assertEqual(
+            {
+                "core": source.protocol_source.core_id.carrier(),
+                "construction": source.protocol_source.construction_id.carrier(),
+                "fresh": source.protocol_source.fresh_protocol_id.carrier(),
+                "fiat-shamir": source.protocol_source.fiat_shamir_protocol_id.carrier(),
+                "property-profile": model.ANALYSIS_PROPERTY_PROFILE_ID.carrier(),
+                "question": goal.question_id.carrier(),
+                "goal": goal_id.carrier(),
+                **{
+                    binding.requirement.slot: binding.premise_id.carrier()
+                    for binding in goal.named_premise_bindings
+                },
+            },
+            {
+                "core": "zkcidv0:pir.interactive-core:d74dc7178424914564445da48051ffd48f8b7c0574b8d81d04cecb33b9c69534",
+                "construction": "zkcidv0:pir.transcript-construction:bf65285c752c5ca9c1f393ecb1c4c3720af960bb589affb5e707e6b9303b6f83",
+                "fresh": "zkcidv0:pir.protocol:9a1e7e5de6f11ed64911d498cfc415d39a51c4f9e807a3fdf2b72c3414e31af9",
+                "fiat-shamir": "zkcidv0:pir.protocol:fa7568bfcff8c233ec95dc0d06cbbf907765625ad2f7a533dc43b612d262761a",
+                "property-profile": "zkcidv0:foundation.semantic-language-profile:255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259",
+                "question": "zkcidv0:analysis.question:ccc93a33b3995ff86c4e5fdc2420cb9ce308b2871186b10634c1ce088030e176",
+                "goal": "zkcidv0:analysis.goal:e813415c366ec70eb24e98c1ece3de6303211b481f692abb1cc3b0fe08b67f6d",
+                "commit": "zkcidv0:analysis.named-premise:183762bd56b13dec770c93ebbb236a5880b503260139a58871f44e85e030d4a8",
+                "respond": "zkcidv0:analysis.named-premise:7ac97e0df5a47a47ae167e05e0dbe26c0070f3e63cde9e30e3a51c97e2c7c176",
+                "witness": "zkcidv0:analysis.named-premise:006444791732448fd55646bbe70d5e9b59532a1814d3ef2153456944b882b8d0",
+                "relation": "zkcidv0:analysis.named-premise:00cf7d5a0728e5d7620555dd924ba268131aed93b9598f9e0c228db4044cbb12",
+                "fresh-coin": "zkcidv0:analysis.named-premise:666a06156e8291f46ada3f997c5accacbfc8fedf2786ad9a000569a819cb0338",
+                "prover-state": "zkcidv0:analysis.named-premise:d43c88ab4171fbd90de76f198c48b4dfcdc421e6ce36e6a55933566ba0e6ad45",
+            },
+        )
+        challenge_index = next(
+            index
+            for index, occurrence in enumerate(source.case.core.schedule)
+            if occurrence.name == "challenge"
+        )
+        schedule = list(source.case.core.schedule)
+        schedule[challenge_index] = replace(schedule[challenge_index], fresh_law=None)
+        missing_leaf = model.k2.issue_core_static_view(
+            replace(source.case.core, schedule=tuple(schedule)),
+            model.k2.StaticViewKind.PUBLIC_COIN,
+            model._Analysis_PUBLIC_COIN_VIEW_MANIFEST,
+        )
+        self.assertIs(
+            missing_leaf.kind, model.k2.QualifiedViewOutcomeKind.MALFORMED
+        )
+
+    def test_transport_and_construction_identity_vectors_are_frozen(self) -> None:
+        family = model.SELECTED_AFK_FAMILY
+        role = "target-adaptive-knowledge-q-lt-N"
+        construction_bindings = model.fiat_shamir_construction_premise_bindings(
+            model._SCHNORR_PINNED_SOURCE,
+            model.afk_randomness_law_id(
+                model._SCHNORR_PINNED_PROFILE.challenge_count
+            ),
+            profile=model.ANALYSIS_TRANSPORT_PROFILE,
+        )
+        self.assertEqual(
+            {
+                "transport_profile": model.ANALYSIS_TRANSPORT_PROFILE_ID.carrier(),
+                "family_question": model.family_question_id(
+                    family, role
+                ).carrier(),
+                "family_goal": model.family_goal_id(family, role).carrier(),
+                "family_premises": tuple(
+                    binding.premise_id.carrier()
+                    for binding in model.family_named_premise_bindings(family, role)
+                ),
+                "construction_premises": tuple(
+                    binding.premise_id.carrier()
+                    for binding in construction_bindings
+                ),
+            },
+            {
+                "transport_profile": "zkcidv0:foundation.semantic-language-profile:e7262be0f0d040b5f9bf69165c5d6458f88dbf63723941b1aa4e2e6a81d4f2d7",
+                "family_question": "zkcidv0:analysis.question:c7c1e70be1b805cbfde1a028bdebb57e1f77877f1aabdfee5b11521a08b5d169",
+                "family_goal": "zkcidv0:analysis.goal:cedc9143445b45c483884ddc1d42b6fdd7e3221845a59beef91d652f549aebf0",
+                "family_premises": (
+                    "zkcidv0:analysis.named-premise:813aa76ca03821aeca72208621b0799abee8bf9e82764ff4350c8f13e7ae14d3",
+                    "zkcidv0:analysis.named-premise:4c229b9c2c9965ff1b8ec87f858ed575eaff08e46e8f76ae6d999cee9c7ba816",
+                ),
+                "construction_premises": (
+                    "zkcidv0:analysis.named-premise:8c604841c20b0df79c9a5c2e9a036fd22f16bbf4cf8658ed3b08c8f175148094",
+                    "zkcidv0:analysis.named-premise:fd37c65f8bb943dd2e0e664efcb3156e12b23e3aeac6f6f06cbf56e1b7d16785",
+                ),
+            },
+        )
+
     def test_requirement_and_binding_key_failures_are_partitioned(self) -> None:
         _, _, goal, question, *_ = self.formed_chain()
         bindings = goal.named_premise_bindings
@@ -889,15 +1021,30 @@ class NamedPremiseMigrationTest(unittest.TestCase):
             model.AnalysisNamedPremiseKind.OPERATIONAL_COMPLETION,
             coordinate,
             model.BoundHypothesis(
-                model.AnalysisLawTermV0(
-                    model.k1.Symbol("operational-completion-hypothesis"),
-                    (model._named_premise_coordinate_body(coordinate),),
+                model._premise_law_term(
+                    model.ANALYSIS_PROPERTY_PROFILE,
+                    "operational-completion-hypothesis-v0",
+                    coordinate,
+                    model._provider_declaration_body(provider),
                 )
             ),
             model.ProviderDeclarationSource(provider),
             model.AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
             model.ExactSubjectsOnly((protocol_id,)),
         )
+        undeclared = replace(
+            completion,
+            bound_model_or_hypothesis=model.BoundHypothesis(
+                model.AnalysisLawTermV0(
+                    model.k1.Symbol("not-an-owner-declaration"),
+                    completion.bound_model_or_hypothesis.law_term.canonical_arguments,
+                )
+            ),
+        )
+        with self.assertRaisesRegex(model.PropertyError, "no owner declaration"):
+            model.analysis_named_premise_id(
+                undeclared, profile=model.ANALYSIS_PROPERTY_PROFILE
+            )
         with self.assertRaisesRegex(model.PropertyError, "published"):
             model.analysis_named_premise_id(
                 completion, profile=model.ANALYSIS_PROPERTY_PROFILE
@@ -4213,6 +4360,9 @@ class PointwiseSpecializationTest(unittest.TestCase):
             case.construction,
             application_domain=b"zkc/test/schnorr-n8-bounded-rejection/v0",
             max_attempts=2,
+            challenge_rules=(
+                replace(case.construction.challenge_rules[0], maximum_draws=2),
+            ),
         )
         protocol_id = model.k3.protocol_id(
             case.core,

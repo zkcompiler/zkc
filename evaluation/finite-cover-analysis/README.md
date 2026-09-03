@@ -34,10 +34,9 @@ a same-kind coordinate swap, and an exact-subject scope mismatch all stop at
 premise intake before the finite arithmetic executes.
 
 The pair's executable `ExactSubjectsOnly` scope includes the fixed extractor
-named by the question. That is a candidate repair to an underdetermined owner
-sentence, not a published owner identity: the current text prescribes the
-relation question's shorter scope while the fixed-extractor question appends
-the extractor subject.
+named by the question. Both premise bodies are freshly formed over that exact
+subject sequence, matching the migrated owner scope rather than reusing the
+relation question's shorter-scope premise identities.
 
 The finite stream exhausts the 308 accepted quotient representatives. The raw
 `Nat64` universal is not inferred from a few lifted examples: a separate

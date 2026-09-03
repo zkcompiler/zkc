@@ -1,7 +1,7 @@
 {
   "aggregate": "Affirmative/API-A-FINITE-PREMISE-INTAKE",
   "catalog": {
-    "catalog_digest": "faa1a4c6326036777dca60dfbf3e23452b099fef98d91d01e9fd1fb0e5f7f0e6",
+    "catalog_digest": "388252fb1f3a57cbd4bfebd8263f97ac760fccf28b836b960d1fe3669a999fb3",
     "evidence_depths": {
       "T1": 7,
       "T2": 0,
@@ -10,18 +10,18 @@
     "kinds": 10,
     "outcome_lanes": 6,
     "premise_ids": {
-      "fiat-shamir-oracle-process": "premisev0:f45095bb457cb86736b33115e0fae37aefa92289e348d8c4da63cc4b3105efa6",
-      "fiat-shamir-sampler-adequacy": "premisev0:07101360a61ac1f9453ae7645b1dd684094e2922c3f9bf2df412fed487d0f438",
-      "fresh-public-coin-distribution": "premisev0:dedb0989bfecedcea5dc09890a320bc14f9ba7c68dfaa90595abdd416878aa04",
-      "honest-commit": "premisev0:31b06424004f33ce0fbb577087f598a5ca429a488fbf8baf3722867872542131",
-      "honest-respond": "premisev0:5957d2c592ded13c59748519391779ee6f389dab89c28b8e9954f6b170f6da52",
-      "prover-private-state": "premisev0:0a645fb4425fb1884725bee0d8c50a10a03c3a65b010005c163a43f792975364",
-      "provider-operational-completion": "premisev0:99d93023c84f5754a75b6e62e236ff9e621d30f49c2aeeceb323d290c8464806",
+      "fiat-shamir-oracle-process": "premisev0:db462e749070c161de03bb01c120b4f3f60ea26e7914fd5794dc7d5410f58619",
+      "fiat-shamir-sampler-adequacy": "premisev0:55a2561de5d7a8ca179ddcece473f7416d21e7912759574da4a83174c048671c",
+      "fresh-public-coin-distribution": "premisev0:cb3de1420f0e04099165afee60bbfdb32af3b2118eaea8dc7abfd54a3272fbf3",
+      "honest-commit": "premisev0:05e162391cb5dbaff5071f8ef3c89998d7a159f4026271e28813d4386c6426b3",
+      "honest-respond": "premisev0:75ca78976efa3947b980a7f7f00ef448049492ea3c2f4b2ba7f2f3a958dd3f54",
+      "prover-private-state": "premisev0:e51b18d8b1e9b066ff64b46eb384d1c1c97fd6386f0f206651c76fb67b70cd71",
+      "provider-operational-completion": "premisev0:933299750614e06cd8d5d4908d6a8cb9d92a018c7ecb4f934e4dbab599483637",
       "provider-outcome-bool": "premisev0:9908dd93d773a67170ec9f9e3128f58fae9009a36908e0ec00067db2a592b757",
       "provider-outcome-option-bool": "premisev0:e734479fc8d259dee01c321cfa982d98a2b99786619ae795b56f7a2d27bd6884",
       "provider-outcome-tagged": "premisev0:b524f75243347d329fd8cdcbb656ceda01a39d637f57ae0b231dac7eaba0f4a8",
-      "relation-predicate": "premisev0:fb7821f962cb5541fcad0af5bab29c61ac3cde87a4c2526e798c6b8e8dac6d07",
-      "witness-type": "premisev0:36f4cc1fe265f126e606f8936e06c166ee1fb66582ad160d0a9995ef71bbdf77"
+      "relation-predicate": "premisev0:103c1bd11f22a9e44240298b66635ed400a95c602474b5fa1b1263a74b24200d",
+      "witness-type": "premisev0:a16fa3dd5f06d1fc1e34a780b02c090630961ddf81882dfa9f84c38769e23ce6"
     },
     "premises": 12,
     "subject_outcome_lanes": 5
@@ -88,6 +88,11 @@
       "API-A-OPERATIONAL-COMPLETION"
     ],
     [
+      "missing-owner-hypothesis-declaration",
+      "CannotAnswer",
+      "API-C-HYPOTHESIS-DECLARATION-ABSENT"
+    ],
+    [
       "independent-reconstruction",
       "Affirmative",
       "API-A-INDEPENDENT-RECONSTRUCTION"
@@ -113,14 +118,14 @@
       "API-C-NO-OWNER-ADOPTION"
     ]
   ],
-  "findings_sha256": "1abb7623d494dac6ba8bed5789858c3dcafc029f6f5520b640ef8d22a19e408e",
+  "findings_sha256": "a46e7d6cd36658657b1345e2547e42d2061a97f285446e0faa0a36f03e643fc5",
   "intake": {
     "alternate_provider_judgment_id": "judgmentv0:10278a382c67cca8e177c01addcf713d98932aeda0ca4822ba8fb74b017c77cc",
     "bool_noncompletion_collapse": {
       "code": "API-M-PROVIDER-LANE-IMAGE",
       "outcome": "Malformed"
     },
-    "complete_judgment_id": "judgmentv0:81fdaf420cda9f2bb763f6c28ddf731678dbefc7a3d544c73b391b0f77e103f7",
+    "complete_judgment_id": "judgmentv0:02874a7ab57d1090c68313b0233b9f06894b51fa570ed2e19a685b4d942d8510",
     "complete_premises": 6,
     "extra_key": {
       "code": "API-M-EXTRA-PREMISE",
@@ -130,12 +135,16 @@
       "outcome": "Malformed"
     },
     "fiat_shamir_premise_ids": [
-      "premisev0:07101360a61ac1f9453ae7645b1dd684094e2922c3f9bf2df412fed487d0f438",
-      "premisev0:f45095bb457cb86736b33115e0fae37aefa92289e348d8c4da63cc4b3105efa6"
+      "premisev0:55a2561de5d7a8ca179ddcece473f7416d21e7912759574da4a83174c048671c",
+      "premisev0:db462e749070c161de03bb01c120b4f3f60ea26e7914fd5794dc7d5410f58619"
     ],
     "fresh_premise_ids": [
-      "premisev0:dedb0989bfecedcea5dc09890a320bc14f9ba7c68dfaa90595abdd416878aa04"
+      "premisev0:cb3de1420f0e04099165afee60bbfdb32af3b2118eaea8dc7abfd54a3272fbf3"
     ],
+    "missing_owner_declaration": {
+      "code": "API-C-HYPOTHESIS-DECLARATION-ABSENT",
+      "outcome": "CannotAnswer"
+    },
     "omission_outcomes": {
       "challenge-law": "CannotAnswer/API-C-MISSING-PREMISE",
       "honest-commit": "CannotAnswer/API-C-MISSING-PREMISE",
@@ -144,7 +153,7 @@
       "relation-predicate": "CannotAnswer/API-C-MISSING-PREMISE",
       "witness-type": "CannotAnswer/API-C-MISSING-PREMISE"
     },
-    "provider_completion_judgment_id": "judgmentv0:9475d04b0a86d24c08e8e7b26a7ca493f0f111bea7b2d976c3134bf88e120c0f",
+    "provider_completion_judgment_id": "judgmentv0:13782254daf49a68b7371d2df26e3642cb4922c754307d80f571c5e2d68f7ce9",
     "provider_map_judgment_id": "judgmentv0:83e0d2105e9fda002c42db967b3280a88726894ed362aac75176fcd2f4552ec1",
     "same_core": true,
     "scope_mismatches": {
@@ -184,6 +193,7 @@
     "coordinate_substitutions": 1,
     "distinct_provider_maps": 3,
     "extra_key_mutations": 1,
+    "missing_owner_declaration_mutations": 1,
     "model_scope_variants_refused": 4,
     "operational_completion_premises": 1,
     "provider_lane_collapse_mutations": 1,

@@ -328,6 +328,62 @@ def _analysis_context() -> tuple[object, object]:
 
 
 class AnalysisActivationTest(unittest.TestCase):
+    def test_owner_scoped_extractor_identity_vector_is_frozen(self) -> None:
+        model, checked = _analysis_context()
+        proposition = model._formed_analysis_body(
+            checked.proposition_id, "analysis.proposition"
+        )
+        self.assertEqual(
+            {
+                "property_profile": model.ANALYSIS_PROPERTY_PROFILE_ID.digest.hex(),
+                "proposition": checked.proposition_id.digest.hex(),
+                "goal": proposition.goal_id.digest.hex(),
+                "premises": tuple(
+                    item.digest.hex()
+                    for item in model.premise_ids_of_goal(proposition.goal_id)
+                ),
+                "semantic_basis": checked.semantic_basis_id.digest.hex(),
+                "support": checked.support_id.digest.hex(),
+                "validation": checked.validation_basis_id.digest.hex(),
+                "judgment": checked.judgment_id.digest.hex(),
+                "certificates": tuple(
+                    item.digest.hex() for item in checked.certificate_judgment_ids
+                ),
+            },
+            {
+                "property_profile": (
+                    "255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259"
+                ),
+                "proposition": (
+                    "a0ec8a8659f510534dd9f48dcec8ae1bc753711903a6c2fc83a84b36497d4ace"
+                ),
+                "goal": (
+                    "925d5f664c0726675296928201c1b0bb086a37a8a11eddfdaa1d0f3eff69af3e"
+                ),
+                "premises": (
+                    "1eadaca819c8d95926f577d563b7abc0af8a081a574492d39b9f55ba69a4455c",
+                    "e64b395b325596a0055e71fc67df89b0fb04670a551e67b4e34ba7522be84541",
+                ),
+                "semantic_basis": (
+                    "9fedaf24ba9cb6e1c302db95d896087e882005dc345e110404ff2f13113ac1b3"
+                ),
+                "support": (
+                    "a449e39c7428cea79253768e370505bb3f5fc65523f6521c793a6460d041447d"
+                ),
+                "validation": (
+                    "033159bfa342c874335c57dc56e481355fc9d7a17eb36e519a01a885166b36c8"
+                ),
+                "judgment": (
+                    "1aea236c9f70d87e4c0eccd118ac63d37a92e303a6ed419dbcd4eaa33007e2e4"
+                ),
+                "certificates": (
+                    "57adb780ca7d4ab7146bea89a50545fc37e50a04e6cc5aa73179d5c21c1acfeb",
+                    "b037c969d3a4fe1793463cea16c023c2c5a49b158e0c0aee811d69b71ae903a0",
+                    "f67ef1cba62c49c3215ad20c4248adb7805cf0b62df6bc5d7b240ae12e1f4b35",
+                ),
+            },
+        )
+
     def test_exact_hypothesis_free_judgment_and_certificate_boundary(self) -> None:
         model, checked = _analysis_context()
         proposition = model._formed_analysis_body(

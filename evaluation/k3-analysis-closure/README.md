@@ -23,15 +23,18 @@ sources or binding keys are `CannotAnswer`, malformed key sets are
 `Malformed`, and kind, coordinate, profile, or model-scope substitutions are
 `Refused` before a goal identity forms.
 
-The executable fixed-extractor pair is scoped to that question's complete
-subject sequence. This is a candidate repair, not an owner-determined identity:
-the current owner page appends the extractor to the question subjects while
-also prescribing bindings whose premise bodies are scoped to the shorter
-relation question. The Fresh public-coin premise likewise uses the fixture's
-exact challenge coordinate as a candidate proxy because the fixture does not
-publish the required protocol declaration reference. Neither choice establishes
-owner publication, premise truth, relation satisfaction, Plan honesty, theorem
-truth, or cryptographic security.
+The executable fixed-extractor pair is freshly formed over that question's
+complete subject sequence, as the migrated owner scope requires. The imported
+bounded PublicCoinView now carries the exact eleven-field challenge row,
+including the authenticated `fresh_law` declaration leaf; the Fresh premise
+uses the value of that leaf rather than an occurrence-coordinate proxy. The
+selected construction carries its ordered total challenge rule, and sampler
+adequacy is derived from the identity-bearing per-rule `maximum_draws` value.
+The property profile also publishes the exact operational-completion
+hypothesis declaration and validates every owner-named law reference and
+argument schema before premise formation. A missing Fresh leaf or an unknown
+hypothesis declaration fails closed. None of this establishes premise truth,
+relation satisfaction, Plan honesty, theorem truth, or cryptographic security.
 
 The instrument has three deliberately separate layers.
 

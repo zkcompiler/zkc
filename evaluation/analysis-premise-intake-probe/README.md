@@ -30,6 +30,12 @@ evidence_depth
 model_scope
 ```
 
+Every non-provider-map bound value additionally carries the exact owner law
+reference, its canonical argument vector, and the bounded statement. The three
+model-binding laws, Fresh and operational-completion hypotheses, two honest
+hypotheses, and both family process hypotheses are closed by name and arity in
+both evaluators.
+
 The evidence depths follow the existing research meanings: `T1` is a
 source-grounded boundary mapping, `T2` adds a complete typed constructive
 binding, and `T3` adds frozen executable falsification. A depth labels the
@@ -90,6 +96,8 @@ establishes the intended failure partition:
   different judgment identities;
 - sending operational noncompletion to the Boolean image is
   `Malformed/API-M-PROVIDER-LANE-IMAGE`; and
+- naming no owner hypothesis declaration is
+  `CannotAnswer/API-C-HYPOTHESIS-DECLARATION-ABSENT`; and
 - the operational-completion premise remains identity-distinct from either
   provider map.
 

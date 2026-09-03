@@ -34,6 +34,17 @@ MODEL_SCOPE_KINDS = {
     "FreshChallengeOnly", "OracleModelOnly", "ExactSubjectsOnly", "RebindRequired"
 }
 FORMS = {"Model", "Hypothesis", "ProviderMap"}
+OWNER_DECLARATIONS = {
+    "FreshPublicCoinDistribution": ("FreshSamplingHypothesis", 2),
+    "FiatShamirSamplerAdequacy": ("FamilySamplerAdequacyHypothesis", 3),
+    "FiatShamirOracleProcess": ("FamilyOracleProcessHypothesis", 2),
+    "OperationalCompletion": ("OperationalCompletionHypothesis", 2),
+    "RelationPredicate": ("RelationPredicateBindingLaw", 2),
+    "WitnessType": ("WitnessTypeBindingLaw", 2),
+    "ProverPrivateState": ("ProverPrivateStateBindingLaw", 2),
+    "HonestCommit": ("HonestCommitHypothesis", 1),
+    "HonestRespond": ("HonestRespondHypothesis", 1),
+}
 LANES = (
     "Accepted", "Rejected", "Aborted", "InterpretationFailed",
     "StrategyStopped", "OperationalNoncompletion"
@@ -148,6 +159,34 @@ class NamedPremise:
             raise ProbeError("unknown evidence depth")
         if raw["bound_model_or_hypothesis"]["form"] not in FORMS:
             raise ProbeError("unknown premise bound form")
+        if raw["kind"] != "ProviderOutcomeCarrierMap":
+            value = raw["bound_model_or_hypothesis"]["value"]
+            if not isinstance(value, dict) or set(value) != {
+                "law_ref", "canonical_arguments", "statement"
+            }:
+                raise ProbeError("owner declaration binding fields differ")
+            law_ref, arity = OWNER_DECLARATIONS[raw["kind"]]
+            arguments = value["canonical_arguments"]
+            if (
+                value["law_ref"] != law_ref
+                or not isinstance(arguments, list)
+                or len(arguments) != arity
+                or arguments[0] != "coordinate"
+                or not value["statement"]
+            ):
+                raise ProbeError("hypothesis reference names no owner declaration")
+            if raw["kind"] == "FreshPublicCoinDistribution" and arguments[1] != (
+                "proposal:analysis.distribution:fresh-uniform"
+            ):
+                raise ProbeError("Fresh distribution argument differs")
+            if raw["kind"] in {
+                "FiatShamirSamplerAdequacy", "FiatShamirOracleProcess"
+            } and arguments[1] != raw["model_scope"].get("distribution_profile_id"):
+                raise ProbeError("oracle distribution argument differs")
+            if raw["kind"] in {
+                "RelationPredicate", "WitnessType", "ProverPrivateState"
+            } and arguments[1] != raw["coordinate"]["subject"]:
+                raise ProbeError("model-binding subject argument differs")
         if scope["kind"] == "OracleModelOnly" and not scope["distribution_profile_id"]:
             raise ProbeError("empty oracle-model scope")
         if scope["kind"] == "ExactSubjectsOnly":
@@ -188,7 +227,9 @@ class NamedPremise:
                 raise ProbeError("operational completion has wrong bound form")
             if raw["source"]["kind"] != "ProviderDeclarationSource":
                 raise ProbeError("operational completion has wrong source form")
-            ProviderDeclaration.parse(raw["source"]["reference"])
+            provider = ProviderDeclaration.parse(raw["source"]["reference"])
+            if raw["bound_model_or_hypothesis"]["value"]["canonical_arguments"][1] != provider.body():
+                raise ProbeError("operational completion provider argument differs")
         return cls(**raw)
 
     def body(self) -> dict[str, Any]:
@@ -402,6 +443,23 @@ def evaluate(path: Path) -> dict[str, Any]:
             "outcome": "Affirmative",
             "code": "API-A-UNEXPECTED-PROVIDER-COLLAPSE",
         }
+    absent_declaration = json.loads(json.dumps(catalog.raw))
+    next(
+        item for item in absent_declaration["premises"]
+        if item["name"] == "honest-commit"
+    )["bound_model_or_hypothesis"]["value"]["law_ref"] = "AbsentOwnerDeclaration"
+    try:
+        Catalog.from_raw(absent_declaration)
+    except ProbeError:
+        missing_owner_declaration = {
+            "outcome": "CannotAnswer",
+            "code": "API-C-HYPOTHESIS-DECLARATION-ABSENT",
+        }
+    else:  # pragma: no cover - required negative control
+        missing_owner_declaration = {
+            "outcome": "Affirmative",
+            "code": "API-A-UNEXPECTED-UNDECLARED-HYPOTHESIS",
+        }
 
     return {
         "premise_ids": {name: p.premise_id for name, p in sorted(catalog.premises.items())},
@@ -420,5 +478,6 @@ def evaluate(path: Path) -> dict[str, Any]:
         "scope_mismatches": scope_results,
         "alternate_provider": alternate_provider,
         "bool_noncompletion_collapse": bool_noncompletion_collapse,
+        "missing_owner_declaration": missing_owner_declaration,
         "catalog_digest": digest("analysis.premise-catalog.v0", catalog.raw["premises"]),
     }

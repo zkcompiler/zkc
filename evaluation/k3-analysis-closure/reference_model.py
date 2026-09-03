@@ -882,19 +882,41 @@ ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ),
         ("source-free-premise-reason", "closed-source-free-reason"),
         ("finite-challenge-domain-v0", "owner-bound-cardinality-derivation"),
-        ("fresh-sampling-hypothesis-v0", "exact-named-hypothesis"),
-        ("relation-predicate-binding-v0", "exact-model-binding-law"),
-        ("witness-type-binding-v0", "exact-model-binding-law"),
-        ("prover-private-state-binding-v0", "exact-model-binding-law"),
-        ("honest-commit-hypothesis-v0", "exact-named-hypothesis"),
-        ("honest-respond-hypothesis-v0", "exact-named-hypothesis"),
+        (
+            "fresh-sampling-hypothesis-v0",
+            "exact-named-hypothesis:args=PIRPublicCoinLawCoordinate,AnalysisDistributionProfileId",
+        ),
+        (
+            "operational-completion-hypothesis-v0",
+            "exact-named-hypothesis:args=PIRProtocolOutcomePartitionCoordinate,AnalysisProviderDeclaration",
+        ),
+        (
+            "relation-predicate-binding-v0",
+            "exact-model-binding-law:args=RelationsModelEvaluatorCoordinate,RelationsSemanticModelId",
+        ),
+        (
+            "witness-type-binding-v0",
+            "exact-model-binding-law:args=RelationsWitnessPlanJoinCoordinate,RelationsInterfaceId",
+        ),
+        (
+            "prover-private-state-binding-v0",
+            "exact-model-binding-law:args=PIRPlanStateCoordinate,PIRProverPlanId",
+        ),
+        (
+            "honest-commit-hypothesis-v0",
+            "exact-named-hypothesis:args=PIRPlanRecipeCoordinate",
+        ),
+        (
+            "honest-respond-hypothesis-v0",
+            "exact-named-hypothesis:args=PIRPlanRecipeCoordinate",
+        ),
         (
             "construction-sampler-adequacy-hypothesis-v0",
-            "exact-named-hypothesis",
+            "exact-named-hypothesis:args=PIRConstructionPremiseCoordinate,AnalysisDistributionProfileId,SamplerAdequacyForm",
         ),
         (
             "construction-oracle-process-hypothesis-v0",
-            "exact-named-hypothesis",
+            "exact-named-hypothesis:args=PIRConstructionPremiseCoordinate,AnalysisDistributionProfileId",
         ),
         ("k-out-of-n-conclusion-v0", "exact-family-conclusion-schema"),
         (
@@ -4031,11 +4053,116 @@ def _formed_analysis_body(identifier: object, subject_kind: str) -> object:
     return _ANALYSIS_FORMATION_REGISTRY[key][2]
 
 
+def _validate_owner_named_premise_declaration(
+    body: AnalysisNamedPremiseBodyV0, profile: object
+) -> None:
+    """Require the owner-named declaration and its exact argument schema."""
+
+    bound = body.bound_model_or_hypothesis
+    if type(bound) is BoundProviderOutcomeCarrierMap:
+        return
+    if type(bound) not in (BoundModel, BoundHypothesis):
+        raise PropertyError("named premise has no owner-declared law term")
+    term = bound.law_term
+    coordinate = body.coordinate
+    property_labels = {
+        AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION: (
+            "fresh-sampling-hypothesis-v0", 2
+        ),
+        AnalysisNamedPremiseKind.OPERATIONAL_COMPLETION: (
+            "operational-completion-hypothesis-v0", 2
+        ),
+        AnalysisNamedPremiseKind.RELATION_PREDICATE: (
+            "relation-predicate-binding-v0", 2
+        ),
+        AnalysisNamedPremiseKind.WITNESS_TYPE: ("witness-type-binding-v0", 2),
+        AnalysisNamedPremiseKind.PROVER_PRIVATE_STATE: (
+            "prover-private-state-binding-v0", 2
+        ),
+        AnalysisNamedPremiseKind.HONEST_COMMIT: (
+            "honest-commit-hypothesis-v0", 1
+        ),
+        AnalysisNamedPremiseKind.HONEST_RESPOND: (
+            "honest-respond-hypothesis-v0", 1
+        ),
+    }
+    if body.kind in property_labels:
+        label, arity = property_labels[body.kind]
+        owner_profile = ANALYSIS_PROPERTY_PROFILE
+    elif body.kind is AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY:
+        label = (
+            "family-sampler-adequacy-hypothesis-v0"
+            if type(coordinate) is AnalysisFamilyPremiseCoordinate
+            else "construction-sampler-adequacy-hypothesis-v0"
+        )
+        owner_profile = (
+            ANALYSIS_TRANSPORT_PROFILE
+            if type(coordinate) is AnalysisFamilyPremiseCoordinate
+            else ANALYSIS_PROPERTY_PROFILE
+        )
+        arity = 3
+    elif body.kind is AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS:
+        label = (
+            "family-oracle-process-hypothesis-v0"
+            if type(coordinate) is AnalysisFamilyPremiseCoordinate
+            else "construction-oracle-process-hypothesis-v0"
+        )
+        owner_profile = (
+            ANALYSIS_TRANSPORT_PROFILE
+            if type(coordinate) is AnalysisFamilyPremiseCoordinate
+            else ANALYSIS_PROPERTY_PROFILE
+        )
+        arity = 2
+    else:  # pragma: no cover - closed kind table above
+        raise PropertyError("named premise kind names no owner declaration")
+    expected_ref = _premise_law_ref(profile, label, owner_profile=owner_profile)
+    if term.law_ref != expected_ref:
+        raise PropertyError("hypothesis reference names no owner declaration")
+    if len(term.canonical_arguments) != arity:
+        raise PropertyError("owner hypothesis argument schema differs")
+    if term.canonical_arguments[0] != _named_premise_coordinate_body(coordinate):
+        raise PropertyError("owner hypothesis coordinate argument differs")
+    if type(bound) is BoundModel and term.canonical_arguments[1] != _id_datum(
+        bound.semantic_subject_ref
+    ):
+        raise PropertyError("owner model-binding subject argument differs")
+    if body.kind is AnalysisNamedPremiseKind.OPERATIONAL_COMPLETION:
+        if type(body.source) is not ProviderDeclarationSource or (
+            term.canonical_arguments[1]
+            != _provider_declaration_body(body.source.provider)
+        ):
+            raise PropertyError("operational completion provider argument differs")
+    if body.kind in (
+        AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY,
+        AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS,
+        AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION,
+    ):
+        distribution = term.canonical_arguments[1]
+        if type(distribution) is not k1.BytesValue or not distribution.value:
+            raise PropertyError("owner distribution-model argument differs")
+    if body.kind is AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY:
+        form = term.canonical_arguments[2]
+        if not (
+            type(form) is k1.DatumVariant
+            and (
+                (form.case == 0 and form.payload == k1.UNIT)
+                or (
+                    form.case == 1
+                    and type(form.payload) is k1.Nat
+                    and form.payload.value > 0
+                )
+            )
+        ):
+            raise PropertyError("sampler adequacy form is not owner-declared")
+
+
 def analysis_named_premise_id(
     body: AnalysisNamedPremiseBodyV0, *, profile: object
 ) -> object:
     """Form one premise only under its exact selected direct Analysis profile."""
 
+    _validate_named_premise_kind_law(body)
+    _validate_owner_named_premise_declaration(body, profile)
     provider: AnalysisProviderDeclarationV0 | None = None
     if type(body.bound_model_or_hypothesis) is BoundProviderOutcomeCarrierMap:
         provider = body.bound_model_or_hypothesis.value.provider
@@ -15379,7 +15506,11 @@ def total_uniform_schnorr_case() -> object:
     )
     schedule = list(case.core.schedule)
     schedule[challenge_index] = replace(
-        schedule[challenge_index], challenge_domain=k2.ChallengeDomain(8)
+        schedule[challenge_index],
+        challenge_domain=k2.ChallengeDomain(8),
+        challenge_domain_ref=k2.bounded_protocol_declaration_ref(
+            "pir.challenge-domain", "bounded-natural-domain-8"
+        ),
     )
     core = replace(case.core, schedule=tuple(schedule))
     construction = replace(
@@ -15387,6 +15518,15 @@ def total_uniform_schnorr_case() -> object:
         application_domain=b"zkc/k3-c/schnorr-total-uniform/v0",
         sample_bytes=1,
         max_attempts=1,
+        challenge_rules=(
+            k2.ChallengeRule(
+                "challenge",
+                1,
+                1,
+                "bounded-one-shot-accept",
+                "bounded-big-endian-decode",
+            ),
+        ),
     )
     protocol_id = k3.protocol_id(
         core, construction, k2.ChallengeInterpretation.FIAT_SHAMIR
@@ -15725,6 +15865,7 @@ def derive_schnorr_special_soundness_profile(
     expected_schedule[expected_challenge_index] = replace(
         expected_schedule[expected_challenge_index],
         challenge_domain=challenge.challenge_domain,
+        challenge_domain_ref=challenge.challenge_domain_ref,
     )
     if case.core != replace(expected_core, schedule=tuple(expected_schedule)):
         raise PropertyError(
@@ -15873,9 +16014,7 @@ def _schnorr_public_coin_law_coordinate(
     source: FreshFsRelationSource,
 ) -> PIRPublicCoinLawCoordinate:
     projection = _source_schnorr_challenge_projection(source)
-    return PIRPublicCoinLawCoordinate(
-        _pir_static_atomic_coordinate_body(projection.challenge_coordinate)
-    )
+    return PIRPublicCoinLawCoordinate(projection.fresh_law)
 
 
 def schnorr_named_premise_requirements(
@@ -16125,10 +16264,14 @@ def fiat_shamir_construction_premise_bindings(
     by_slot = {item.slot: item for item in requirements}
     construction_id = source.protocol_source.construction_id
     construction, _ = _checked_case_axes(source.case)
+    challenge_rules = k2.admitted_challenge_rules(source.case.core, construction)
+    if not challenge_rules:
+        raise PropertyError("construction publishes no owner challenge rule")
+    maximum_draws = max(rule.maximum_draws for rule in challenge_rules)
     form = (
         k1.DatumVariant(0, k1.UNIT)
-        if construction.max_attempts == 1
-        else k1.DatumVariant(1, k1.Nat(construction.max_attempts))
+        if all(rule.maximum_draws == 1 for rule in challenge_rules)
+        else k1.DatumVariant(1, k1.Nat(maximum_draws))
     )
     bodies = {
         "sampler": AnalysisNamedPremiseBodyV0(
@@ -16234,6 +16377,12 @@ def _source_schnorr_challenge_projection(
         or projection.challenge_coordinate.schedule_ordinal != challenge_ordinal
         or projection.challenge_coordinate.occurrence_name != challenge.name
         or projection.challenge_domain != challenge.challenge_domain
+        or projection.fresh_law_coordinate.leaf
+        is not k2.StaticViewAtomicLeaf.CHALLENGE_FRESH_LAW
+        or projection.fresh_law
+        != k2._protocol_declaration_ref_datum(
+            challenge.fresh_law, "pir.public-coin-law"
+        )
     ):
         raise PropertyError("Schnorr challenge projection selects another Core leaf")
     return projection
@@ -19159,6 +19308,12 @@ def derive_fs_correspondence(
     witness_map = tuple(
         (edge.slot, edge.witness_surface_key) for edge in fresh_witnesses
     )
+    challenge_rules = {
+        rule.challenge: rule
+        for rule in k2.admitted_challenge_rules(
+            source.case.core, source.case.construction
+        )
+    }
     challenge_namespace_map = tuple(
         (
             occurrence.name,
@@ -19172,7 +19327,9 @@ def derive_fs_correspondence(
         )
         for occurrence_ordinal, occurrence in enumerate(source.case.core.schedule)
         if occurrence.kind is k2.OccurrenceKind.CHALLENGE
-        for draw_ordinal in range(source.case.construction.max_attempts)
+        for draw_ordinal in range(
+            challenge_rules[occurrence.name].maximum_draws
+        )
     )
     challenge_ordinal = next(
         index
@@ -19201,11 +19358,11 @@ def derive_fs_correspondence(
         (
             occurrence.name,
             occurrence.challenge_domain.modulus,
-            source.case.construction.sample_bytes,
-            source.case.construction.max_attempts,
+            challenge_rules[occurrence.name].draw_bytes,
+            challenge_rules[occurrence.name].maximum_draws,
             (
-                source.case.construction.max_attempts == 1
-                and (1 << (8 * source.case.construction.sample_bytes))
+                challenge_rules[occurrence.name].maximum_draws == 1
+                and (1 << (8 * challenge_rules[occurrence.name].draw_bytes))
                 % occurrence.challenge_domain.modulus
                 == 0
             ),

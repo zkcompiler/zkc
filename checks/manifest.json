@@ -644,8 +644,8 @@
     {
       "id": "research.property-analysis",
       "title": "Property Analysis closure",
-      "subject": "The canonical one-process bounded property-analysis suite, including exact named-premise formation, intake, propagation, and identity locality.",
-      "claim": "All discovered finite Analysis cases pass in one process against one reconstructed state, with malformed, missing, mismatched, and cross-profile premise inputs failing closed.",
+      "subject": "The canonical one-process bounded property-analysis suite, including the owner-shaped PublicCoinView, construction challenge rules, and exact named-premise declarations, formation, intake, propagation, and identity locality.",
+      "claim": "All discovered finite Analysis cases pass in one process against one reconstructed state, with missing Fresh leaves and malformed, missing, mismatched, undeclared, and cross-profile premise inputs failing closed.",
       "classification": "research-falsifier",
       "methods": ["unit", "negative", "mutation", "differential", "bounded-exhaustive"],
       "source_paths": ["evaluation/k3-analysis-closure/run.py", "evaluation/k3-analysis-closure/reference_model.py", "evaluation/k3-analysis-closure/tests/test_reference_model.py", "evaluation/k3-analysis-closure/README.md"],
@@ -688,8 +688,8 @@
     {
       "id": "research.joined-semantic-boundary",
       "title": "Joined semantic boundary",
-      "subject": "The finite joined protocol, dependent-surface, named-premise Analysis, and endpoint path.",
-      "claim": "The selected total-uniform Schnorr-shaped path closes under exact shared identities and owner APIs while Analysis premise bodies, local handles, judgments, and capabilities remain absent from OIR.",
+      "subject": "The finite joined protocol, dependent-surface, refreshed named-premise Analysis, and endpoint path.",
+      "claim": "The selected total-uniform Schnorr-shaped path closes under refreshed owner-shaped Analysis identities and exact shared owner APIs while Analysis premise bodies, local handles, judgments, and capabilities remain absent from OIR.",
       "classification": "research-falsifier",
       "methods": ["unit", "negative", "differential"],
       "source_paths": ["evaluation/k3-integrated-closure/run.py", "evaluation/k3-integrated-closure/reference_model.py", "evaluation/k3-integrated-closure/tests/test_reference_model.py", "evaluation/k3-integrated-closure/README.md"],
@@ -754,7 +754,7 @@
     {
       "id": "research.finite-cover",
       "title": "Finite logical-program cover",
-      "subject": "The finite logical-program cover analysis, its exact relation/witness premise pair, and the independent oracle.",
+      "subject": "The finite logical-program cover analysis, its separately formed exact-subject relation/witness premise pair, and the independent oracle.",
       "claim": "The selected finite covers and refusals agree across the primary model and independent arithmetic path, and premise mutations stop before arithmetic.",
       "classification": "research-falsifier",
       "methods": ["differential", "negative", "bounded-exhaustive"],
@@ -1593,8 +1593,8 @@
     {
       "id": "research.analysis-premise-intake",
       "title": "Analysis named-premise intake probe",
-      "subject": "A closed ten-kind finite Analysis premise catalog and exact intake operation for one Schnorr-shaped Fresh subject, its same-Core Fiat-Shamir challenge case, and proposal-only provider carriers.",
-      "claim": "Two independently structured evaluators agree on six complete intakes, fail-closed omission, coordinate, scope, and provider-lane mutations, Fresh and Fiat-Shamir premise separation, provider-map identity separation, and a distinct operational-completion premise.",
+      "subject": "A closed ten-kind finite Analysis premise catalog with owner law references and argument vectors for one Schnorr-shaped Fresh subject, its same-Core Fiat-Shamir challenge case, and proposal-only provider carriers.",
+      "claim": "Two independently structured evaluators agree on six complete intakes, fail-closed omission, unknown-declaration, coordinate, scope, and provider-lane mutations, Fresh and Fiat-Shamir premise separation, provider-map identity separation, and a distinct operational-completion premise.",
       "classification": "research-falsifier",
       "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic", "static-analysis"],
       "source_paths": ["evaluation/analysis-premise-intake-probe/run.py", "evaluation/analysis-premise-intake-probe/model.py", "evaluation/analysis-premise-intake-probe/independent.py", "evaluation/analysis-premise-intake-probe/fixture.json", "evaluation/analysis-premise-intake-probe/README.md", "evaluation/analysis-premise-intake-probe/expected-findings.json"],

@@ -32,6 +32,12 @@ goal. A separate mutation swaps one Analysis premise ID, observes refusal on
 the Analysis side, and confirms that both already formed OIR endpoint and
 projection-proposition identities remain unchanged.
 
+The Analysis branch is rebuilt from the refreshed owner-shaped PublicCoinView
+and identity-bearing construction challenge rule. Its Fresh premise names the
+authenticated `fresh_law` declaration value, and its named-premise bodies must
+resolve to the exact declarations in the selected Analysis profile. These
+rotations remain confined to the Analysis side of the joined boundary.
+
 K3-D's rich endpoint facts that are not yet present in the current K2/K3-B
 reference carriers remain an explicit future-owner supplement. K3-D checks the
 supplement against live owner-issued K2 static views, one affirmative
