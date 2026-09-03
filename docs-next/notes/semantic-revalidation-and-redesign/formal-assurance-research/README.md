@@ -77,7 +77,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
   -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
   -> F2-O3  provider interpretation in ArkLib            [complete, Affirmative; premise unpublished]
-  -> F0-V3C finite canonical-framed subject and executor [contract; lane running]
+  -> F0-V3C finite canonical-framed subject and executor [complete, CannotAnswer; one owner body absent]
   -> F2-O4  Fiat--Shamir provider interpretation         [contract; after F0-V3C]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
@@ -650,6 +650,18 @@ provider, extraction tool, or durable schema.
   the migrated construction's derivation table, so that the claim is the
   equality of oracle points, verdicts, and traces rather than of hash
   outputs; it waits on the executor contract's table.
+- [`f0v3c-fs-runtime.md`](f0v3c-fs-runtime.md)
+  runs the executor contract once: five portable-term transition algorithms
+  and a same-Core candidate construction over the finite Schnorr Core, all
+  27 honest runs and 27 verifier inputs executed, independent replay agreeing
+  on all 54 with three exact-field mutations refused, the six-lane partition
+  measured (24 accepted, 24 rejected, six interpretation failures by
+  exhaustion after two draws), four construction views and the execution view
+  reproduced, nine derivation vectors frozen; aggregate
+  `CannotAnswer/F0V3C-C-FS-RUNTIME` because the canonical-framed page
+  recognizes the `pir.fs-application-domain` declaration kind while no page
+  defines its body, so admission stays candidate-only until the owner
+  supplies it.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
