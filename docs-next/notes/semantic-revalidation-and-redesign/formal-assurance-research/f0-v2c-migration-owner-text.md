@@ -152,7 +152,15 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   authored text in place, 22 of 53 research checks fail: the overlay
   measurement's 21 plus the terminal owner-contracts package, whose rule the
   owner text tightens (Section 6, item 1). The 31 kernel and instrument checks
-  stay green.
+  stay green. The failures fall into three classes: packages that pin page
+  bytes or admitted identities and only need re-pinning under the published
+  identities; packages whose synthetic profile overlays now collide with the
+  real manifests, which must read the published manifests instead; and
+  packages whose models transcribe page text (the constructor census, the
+  family field audit, the terminal owner-contract gap demonstration), which
+  must be updated to the authored text. None of the failures indicates a
+  defect in the text: the publication compiler's own uniqueness and
+  reachability checks pass on the new manifests.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
 - Take the independent freeze review's findings (a verification lane is
