@@ -18,7 +18,7 @@ FIELDS = {
 }
 KINDS = {
     "FreshPublicCoinDistribution", "FiatShamirSamplerAdequacy", "FiatShamirOracleProcess",
-    "ProviderOutcomeCarrierMap", "RelationPredicate", "WitnessType", "ProverPrivateState",
+    "ProviderOutcomeCarrierMap", "OperationalCompletion", "RelationPredicate", "WitnessType", "ProverPrivateState",
     "HonestCommit", "HonestRespond"
 }
 LANES = ["Accepted", "Rejected", "Aborted", "InterpretationFailed", "StrategyStopped", "OperationalNoncompletion"]
@@ -42,6 +42,49 @@ def _premise_body(item: dict[str, Any]) -> dict[str, Any]:
     return {key: item[key] for key in (
         "kind", "coordinate", "bound_model_or_hypothesis", "source", "evidence_depth", "model_scope"
     )}
+
+
+def _provider_declaration(value: dict[str, Any]) -> tuple[str, ...]:
+    if set(value) != {"system", "source_pin", "toolchain", "modelled_lanes"}:
+        raise ValueError("independent provider declaration fields differ")
+    lanes = tuple(value["modelled_lanes"])
+    if (
+        not value["system"]
+        or not value["toolchain"]
+        or len(value["source_pin"]) != 64
+        or any(character not in "0123456789abcdef" for character in value["source_pin"])
+        or lanes != tuple(sorted(set(lanes)))
+        or not set(lanes) <= set(LANES)
+    ):
+        raise ValueError("independent provider declaration is not canonical")
+    return lanes
+
+
+def _validate_provider_map(item: dict[str, Any]) -> None:
+    value = item["bound_model_or_hypothesis"]["value"]
+    if (
+        item["bound_model_or_hypothesis"]["form"] != "ProviderMap"
+        or set(value) != {"provider", "carrier", "map"}
+        or list(value["map"]) != FRESH_PARTITION
+    ):
+        raise ValueError("independent provider map not total")
+    modelled_lanes = _provider_declaration(value["provider"])
+    for lane, image in value["map"].items():
+        if image.get("form") == "Image":
+            if set(image) != {"form", "value"} or lane not in modelled_lanes:
+                raise ValueError("independent provider lane image differs")
+            if value["carrier"] == "Bool" and type(image["value"]) is not bool:
+                raise ValueError("independent Boolean provider image differs")
+        elif image.get("form") == "Unmodelled":
+            if set(image) != {"form"} or lane in modelled_lanes:
+                raise ValueError("independent provider lane image differs")
+        else:
+            raise ValueError("independent provider lane image differs")
+    if (
+        item["source"]["kind"] != "ProviderDeclarationSource"
+        or item["source"]["reference"] != value["provider"]
+    ):
+        raise ValueError("independent provider-map source differs")
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -79,9 +122,14 @@ def _load(path: Path) -> dict[str, Any]:
         ):
             raise ValueError("independent exact-subject scope differs")
         if item["kind"] == "ProviderOutcomeCarrierMap":
-            value = item["bound_model_or_hypothesis"]["value"]
-            if item["bound_model_or_hypothesis"]["form"] != "ProviderMap" or set(value) != {"carrier", "map"} or list(value["map"]) != FRESH_PARTITION:
-                raise ValueError("independent provider map not total")
+            _validate_provider_map(item)
+        if item["kind"] == "OperationalCompletion":
+            if (
+                item["bound_model_or_hypothesis"]["form"] != "Hypothesis"
+                or item["source"]["kind"] != "ProviderDeclarationSource"
+            ):
+                raise ValueError("independent operational-completion form differs")
+            _provider_declaration(item["source"]["reference"])
         premise_id = "premisev0:" + _hash("analysis.named-premise.v0", _premise_body(item))
         if item["name"] in names or premise_id in ids:
             raise ValueError("independent duplicate premise")
@@ -166,7 +214,8 @@ def evaluate(path: Path) -> dict[str, Any]:
         if item["name"] == "fresh-public-coin-distribution":
             item["coordinate"]["path"] = "declarations[pir.public-coin-law][1]"
             item["_id"] = "premisev0:" + _hash("analysis.named-premise.v0", _premise_body(item))
-    alternate = dict(bindings)
+    provider_bindings = dict(data["cases"]["provider-outcome-map"]["bindings"])
+    alternate = dict(provider_bindings)
     alternate["outcome-carrier"] = "provider-outcome-tagged"
     extra = dict(bindings)
     extra["unexpected"] = "fresh-public-coin-distribution"
@@ -190,16 +239,39 @@ def evaluate(path: Path) -> dict[str, Any]:
                     item["model_scope"] = {"kind": "RebindRequired"}
                     item["_id"] = "premisev0:" + _hash("analysis.named-premise.v0", _premise_body(item))
         scope_results[scope_kind] = _intake(changed, case_name)
+    collapsed = json.loads(json.dumps(data))
+    collapsed_premise = next(
+        item for item in collapsed["premises"]
+        if item["name"] == "provider-outcome-bool"
+    )
+    collapsed_premise["bound_model_or_hypothesis"]["value"]["map"][
+        "OperationalNoncompletion"
+    ] = {"form": "Image", "value": False}
+    try:
+        _validate_provider_map(collapsed_premise)
+    except ValueError:
+        bool_noncompletion_collapse = {
+            "outcome": "Malformed",
+            "code": "API-M-PROVIDER-LANE-IMAGE",
+        }
+    else:  # pragma: no cover - required negative control
+        bool_noncompletion_collapse = {
+            "outcome": "Affirmative",
+            "code": "API-A-UNEXPECTED-PROVIDER-COLLAPSE",
+        }
     return {
         "premise_ids": {item["name"]: item["_id"] for item in sorted(data["premises"], key=lambda row: row["name"])},
         "depth_counts": {depth: sum(item["evidence_depth"] == depth for item in data["premises"]) for depth in ("T1", "T2", "T3")},
         "complete": complete,
         "fresh": _intake(data, "fresh-challenge"),
         "fiat_shamir": _intake(data, "fiat-shamir-challenge"),
+        "provider_map": _intake(data, "provider-outcome-map"),
+        "provider_completion": _intake(data, "provider-completeness"),
         "omissions": omissions,
         "wrong_coordinate": _intake(mutated, "schnorr-fresh-property"),
         "extra_key": _intake(data, "schnorr-fresh-property", extra),
         "scope_mismatches": scope_results,
-        "alternate_provider": _intake(data, "schnorr-fresh-property", alternate),
+        "alternate_provider": _intake(data, "provider-outcome-map", alternate),
+        "bool_noncompletion_collapse": bool_noncompletion_collapse,
         "catalog_digest": _hash("analysis.premise-catalog.v0", [{k: v for k, v in item.items() if k != "_id"} for item in data["premises"]]),
     }

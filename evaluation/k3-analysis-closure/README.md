@@ -6,6 +6,33 @@ Protocol IR and Foundation only through the authenticated import chain. It does
 not copy their Protocol, Plan, Relations, execution, or identity semantics into
 an Analysis-owned shadow model.
 
+## Named-premise migration question
+
+This migration asks one exact question: does the bounded Analysis model carry
+the owner text's closed ten-kind, eight-coordinate named-premise algebra from
+question requirements through goal intake and into every reachable hypothesis
+node, context, proposition, support, and judgment identity, while failing
+closed on malformed, missing, mismatched, or cross-profile inputs?
+
+A pass establishes that exact behavior for the finite constructors and
+mutations exercised here. The relation-bound Schnorr question consumes six
+premises; the construction and family Fiat--Shamir questions each consume two;
+the fixed-extractor question consumes the relation/witness pair; and every
+owner-licensed empty family carries explicit empty tuples. Missing premise
+sources or binding keys are `CannotAnswer`, malformed key sets are
+`Malformed`, and kind, coordinate, profile, or model-scope substitutions are
+`Refused` before a goal identity forms.
+
+The executable fixed-extractor pair is scoped to that question's complete
+subject sequence. This is a candidate repair, not an owner-determined identity:
+the current owner page appends the extractor to the question subjects while
+also prescribing bindings whose premise bodies are scoped to the shorter
+relation question. The Fresh public-coin premise likewise uses the fixture's
+exact challenge coordinate as a candidate proxy because the fixture does not
+publish the required protocol declaration reference. Neither choice establishes
+owner publication, premise truth, relation satisfaction, Plan honesty, theorem
+truth, or cryptographic security.
+
 The instrument has three deliberately separate layers.
 
 ## 1. Global theorem schema

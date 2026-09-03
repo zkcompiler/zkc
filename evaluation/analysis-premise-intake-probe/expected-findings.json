@@ -1,13 +1,13 @@
 {
   "aggregate": "Affirmative/API-A-FINITE-PREMISE-INTAKE",
   "catalog": {
-    "catalog_digest": "63a9a0dac9cd2025a322ce5b45228a575fc2ed9ce42b766d3a4f164709c05944",
+    "catalog_digest": "faa1a4c6326036777dca60dfbf3e23452b099fef98d91d01e9fd1fb0e5f7f0e6",
     "evidence_depths": {
-      "T1": 5,
+      "T1": 7,
       "T2": 0,
       "T3": 5
     },
-    "kinds": 9,
+    "kinds": 10,
     "outcome_lanes": 6,
     "premise_ids": {
       "fiat-shamir-oracle-process": "premisev0:f45095bb457cb86736b33115e0fae37aefa92289e348d8c4da63cc4b3105efa6",
@@ -16,12 +16,14 @@
       "honest-commit": "premisev0:31b06424004f33ce0fbb577087f598a5ca429a488fbf8baf3722867872542131",
       "honest-respond": "premisev0:5957d2c592ded13c59748519391779ee6f389dab89c28b8e9954f6b170f6da52",
       "prover-private-state": "premisev0:0a645fb4425fb1884725bee0d8c50a10a03c3a65b010005c163a43f792975364",
-      "provider-outcome-option-bool": "premisev0:f44551db5bce4fd582215f7b6c15abff6690fc17fae4490d590c8fcae61c8995",
-      "provider-outcome-tagged": "premisev0:4baf6fa0b0a47a04b286370f1c187fec7112b5736b55c71d8a63b320eb245aa5",
+      "provider-operational-completion": "premisev0:99d93023c84f5754a75b6e62e236ff9e621d30f49c2aeeceb323d290c8464806",
+      "provider-outcome-bool": "premisev0:9908dd93d773a67170ec9f9e3128f58fae9009a36908e0ec00067db2a592b757",
+      "provider-outcome-option-bool": "premisev0:e734479fc8d259dee01c321cfa982d98a2b99786619ae795b56f7a2d27bd6884",
+      "provider-outcome-tagged": "premisev0:b524f75243347d329fd8cdcbb656ceda01a39d637f57ae0b231dac7eaba0f4a8",
       "relation-predicate": "premisev0:fb7821f962cb5541fcad0af5bab29c61ac3cde87a4c2526e798c6b8e8dac6d07",
       "witness-type": "premisev0:36f4cc1fe265f126e606f8936e06c166ee1fb66582ad160d0a9995ef71bbdf77"
     },
-    "premises": 10,
+    "premises": 12,
     "subject_outcome_lanes": 5
   },
   "finding_codes": [
@@ -76,6 +78,16 @@
       "API-A-PROVIDER-MAP-IDENTITY"
     ],
     [
+      "provider-lane-image-discipline",
+      "Malformed",
+      "API-M-PROVIDER-LANE-IMAGE"
+    ],
+    [
+      "operational-completion-kind",
+      "Affirmative",
+      "API-A-OPERATIONAL-COMPLETION"
+    ],
+    [
       "independent-reconstruction",
       "Affirmative",
       "API-A-INDEPENDENT-RECONSTRUCTION"
@@ -101,11 +113,15 @@
       "API-C-NO-OWNER-ADOPTION"
     ]
   ],
-  "findings_sha256": "4fbbe28daadf32156a2abd24f3caabca6d1565f7cfdbc0e1346e3d287980b0d8",
+  "findings_sha256": "1abb7623d494dac6ba8bed5789858c3dcafc029f6f5520b640ef8d22a19e408e",
   "intake": {
-    "alternate_provider_judgment_id": "judgmentv0:a9724fc0ff8bd53e965f181d9858b6d64462116ed1a3a3ffdc7d7c71e344bded",
-    "complete_judgment_id": "judgmentv0:4e5b1359c43a7f285df5f8004b2984d5382d117e6a2beb05cfba07f73954f88e",
-    "complete_premises": 7,
+    "alternate_provider_judgment_id": "judgmentv0:10278a382c67cca8e177c01addcf713d98932aeda0ca4822ba8fb74b017c77cc",
+    "bool_noncompletion_collapse": {
+      "code": "API-M-PROVIDER-LANE-IMAGE",
+      "outcome": "Malformed"
+    },
+    "complete_judgment_id": "judgmentv0:81fdaf420cda9f2bb763f6c28ddf731678dbefc7a3d544c73b391b0f77e103f7",
+    "complete_premises": 6,
     "extra_key": {
       "code": "API-M-EXTRA-PREMISE",
       "extra": [
@@ -124,11 +140,12 @@
       "challenge-law": "CannotAnswer/API-C-MISSING-PREMISE",
       "honest-commit": "CannotAnswer/API-C-MISSING-PREMISE",
       "honest-respond": "CannotAnswer/API-C-MISSING-PREMISE",
-      "outcome-carrier": "CannotAnswer/API-C-MISSING-PREMISE",
       "prover-private-state": "CannotAnswer/API-C-MISSING-PREMISE",
       "relation-predicate": "CannotAnswer/API-C-MISSING-PREMISE",
       "witness-type": "CannotAnswer/API-C-MISSING-PREMISE"
     },
+    "provider_completion_judgment_id": "judgmentv0:9475d04b0a86d24c08e8e7b26a7ca493f0f111bea7b2d976c3134bf88e120c0f",
+    "provider_map_judgment_id": "judgmentv0:83e0d2105e9fda002c42db967b3280a88726894ed362aac75176fcd2f4552ec1",
     "same_core": true,
     "scope_mismatches": {
       "ExactSubjectsOnly": {
@@ -163,13 +180,15 @@
     }
   },
   "measurements": {
-    "complete_intakes": 4,
+    "complete_intakes": 6,
     "coordinate_substitutions": 1,
-    "distinct_provider_maps": 2,
+    "distinct_provider_maps": 3,
     "extra_key_mutations": 1,
     "model_scope_variants_refused": 4,
+    "operational_completion_premises": 1,
+    "provider_lane_collapse_mutations": 1,
     "reconstruction_paths": 2,
-    "single_premise_omissions": 7
+    "single_premise_omissions": 6
   },
   "nonclaims": [
     "No theorem is proved.",
@@ -180,6 +199,6 @@
     "code": "API-A-OUTCOME-PARTITION-TYPED",
     "coordinate": "ProtocolOutcomeLane(subject.fresh_protocol_id)",
     "outcome": "Affirmative",
-    "reason": "the fixture keys each total provider map by the exact five-lane partition of its selected Fresh Protocol"
+    "reason": "the fixture keys each total provider map by the exact five-lane partition and requires Image exactly for the declaration's modelled lanes"
   }
 }

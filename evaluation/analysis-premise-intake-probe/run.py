@@ -26,6 +26,8 @@ def build_report() -> dict[str, Any]:
         raise RuntimeError("API-R-INDEPENDENT-DISAGREEMENT")
 
     complete = typed["complete"]
+    provider_map = typed["provider_map"]
+    provider_completion = typed["provider_completion"]
     alternate = typed["alternate_provider"]
     fresh = typed["fresh"]
     fiat_shamir = typed["fiat_shamir"]
@@ -54,8 +56,28 @@ def build_report() -> dict[str, Any]:
         raise RuntimeError("API-R-CHALLENGE-INTAKE")
     if set(fresh["named_premise_ids"]) & set(fiat_shamir["named_premise_ids"]):
         raise RuntimeError("API-R-FRESH-FS-PREMISE-ALIAS")
-    if complete["judgment_id"] == alternate["judgment_id"]:
+    if (
+        provider_map["outcome"] != "Affirmative"
+        or provider_completion["outcome"] != "Affirmative"
+    ):
+        raise RuntimeError("API-R-PROVIDER-INTAKE")
+    if provider_map["judgment_id"] == alternate["judgment_id"]:
         raise RuntimeError("API-R-PROVIDER-MAP-IDENTITY-ALIAS")
+    provider_premise_ids = {
+        typed["premise_ids"][name]
+        for name in (
+            "provider-outcome-option-bool",
+            "provider-outcome-bool",
+            "provider-outcome-tagged",
+        )
+    }
+    if len(provider_premise_ids) != 3:
+        raise RuntimeError("API-R-PROVIDER-MAP-IDENTITY-ALIAS")
+    if typed["bool_noncompletion_collapse"] != {
+        "outcome": "Malformed",
+        "code": "API-M-PROVIDER-LANE-IMAGE",
+    }:
+        raise RuntimeError("API-R-PROVIDER-LANE-COLLAPSE-ACCEPTED")
 
     finding_codes = [
         ["closed-named-premise-schema", "Affirmative", "API-A-CLOSED-SCHEMA"],
@@ -68,6 +90,8 @@ def build_report() -> dict[str, Any]:
         ["all-model-scope-mismatches", "Refused", "API-R-MODEL-SCOPE"],
         ["fresh-and-fiat-shamir-premise-separation", "Affirmative", "API-A-REGIME-SEPARATION"],
         ["provider-map-identity-separation", "Affirmative", "API-A-PROVIDER-MAP-IDENTITY"],
+        ["provider-lane-image-discipline", "Malformed", "API-M-PROVIDER-LANE-IMAGE"],
+        ["operational-completion-kind", "Affirmative", "API-A-OPERATIONAL-COMPLETION"],
         ["independent-reconstruction", "Affirmative", "API-A-INDEPENDENT-RECONSTRUCTION"],
         ["profile-qualified-outcome-partition", "Affirmative", "API-A-OUTCOME-PARTITION-TYPED"],
         ["theorem-result", "CannotAnswer", "API-C-NO-THEOREM"],
@@ -84,13 +108,16 @@ def build_report() -> dict[str, Any]:
             "premise_ids": typed["premise_ids"],
             "catalog_digest": typed["catalog_digest"],
             "evidence_depths": typed["depth_counts"],
-            "kinds": 9,
+            "kinds": 10,
             "outcome_lanes": 6,
             "subject_outcome_lanes": 5,
         },
         "intake": {
             "complete_judgment_id": complete["judgment_id"],
             "alternate_provider_judgment_id": alternate["judgment_id"],
+            "provider_map_judgment_id": provider_map["judgment_id"],
+            "provider_completion_judgment_id": provider_completion["judgment_id"],
+            "bool_noncompletion_collapse": typed["bool_noncompletion_collapse"],
             "complete_premises": len(complete["named_premise_ids"]),
             "omission_outcomes": typed["omissions"],
             "wrong_coordinate": typed["wrong_coordinate"],
@@ -104,16 +131,18 @@ def build_report() -> dict[str, Any]:
             "outcome": "Affirmative",
             "code": "API-A-OUTCOME-PARTITION-TYPED",
             "coordinate": "ProtocolOutcomeLane(subject.fresh_protocol_id)",
-            "reason": "the fixture keys each total provider map by the exact five-lane partition of its selected Fresh Protocol"
+            "reason": "the fixture keys each total provider map by the exact five-lane partition and requires Image exactly for the declaration's modelled lanes"
         },
         "measurements": {
             "reconstruction_paths": 2,
-            "complete_intakes": 4,
+            "complete_intakes": 6,
             "single_premise_omissions": len(typed["omissions"]),
             "coordinate_substitutions": 1,
             "extra_key_mutations": 1,
             "model_scope_variants_refused": len(scope_mismatches),
-            "distinct_provider_maps": 2,
+            "distinct_provider_maps": 3,
+            "operational_completion_premises": 1,
+            "provider_lane_collapse_mutations": 1,
         },
         "nonclaims": [
             "No theorem is proved.",

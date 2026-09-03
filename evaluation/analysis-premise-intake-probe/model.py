@@ -25,6 +25,7 @@ REQUIREMENT_FIELDS = {"slot", "kind", "coordinate"}
 KINDS = {
     "FreshPublicCoinDistribution", "FiatShamirSamplerAdequacy",
     "FiatShamirOracleProcess", "ProviderOutcomeCarrierMap",
+    "OperationalCompletion",
     "RelationPredicate", "WitnessType", "ProverPrivateState",
     "HonestCommit", "HonestRespond"
 }
@@ -63,12 +64,65 @@ def _exact_fields(value: Mapping[str, Any], expected: set[str], label: str) -> N
 
 
 @dataclass(frozen=True)
+class ProviderDeclaration:
+    system: str
+    source_pin: str
+    toolchain: str
+    modelled_lanes: tuple[str, ...]
+
+    @classmethod
+    def parse(cls, raw: Mapping[str, Any]) -> "ProviderDeclaration":
+        _exact_fields(
+            raw,
+            {"system", "source_pin", "toolchain", "modelled_lanes"},
+            "provider declaration",
+        )
+        lanes = tuple(raw["modelled_lanes"])
+        if (
+            not raw["system"]
+            or not raw["toolchain"]
+            or len(raw["source_pin"]) != 64
+            or any(character not in "0123456789abcdef" for character in raw["source_pin"])
+            or lanes != tuple(sorted(set(lanes)))
+            or not set(lanes) <= set(LANES)
+        ):
+            raise ProbeError("provider declaration is not canonical")
+        return cls(
+            raw["system"], raw["source_pin"], raw["toolchain"], lanes
+        )
+
+    def body(self) -> dict[str, Any]:
+        return {
+            "system": self.system,
+            "source_pin": self.source_pin,
+            "toolchain": self.toolchain,
+            "modelled_lanes": list(self.modelled_lanes),
+        }
+
+
+@dataclass(frozen=True)
+class ProviderLaneImage:
+    form: str
+    value: Any = None
+
+    @classmethod
+    def parse(cls, raw: Mapping[str, Any]) -> "ProviderLaneImage":
+        if raw.get("form") == "Image":
+            _exact_fields(raw, {"form", "value"}, "provider lane image")
+            return cls("Image", raw["value"])
+        if raw.get("form") == "Unmodelled":
+            _exact_fields(raw, {"form"}, "provider lane image")
+            return cls("Unmodelled")
+        raise ProbeError("unknown provider lane image")
+
+
+@dataclass(frozen=True)
 class NamedPremise:
     name: str
     kind: str
     coordinate: Mapping[str, str]
     bound_model_or_hypothesis: Mapping[str, Any]
-    source: Mapping[str, str]
+    source: Mapping[str, Any]
     evidence_depth: str
     model_scope: Mapping[str, Any]
 
@@ -104,10 +158,37 @@ class NamedPremise:
             bound = raw["bound_model_or_hypothesis"]
             if bound["form"] != "ProviderMap":
                 raise ProbeError("provider map has wrong bound form")
-            if set(bound["value"]) != {"carrier", "map"}:
+            if set(bound["value"]) != {"provider", "carrier", "map"}:
                 raise ProbeError("provider map fields differ")
+            provider = ProviderDeclaration.parse(bound["value"]["provider"])
             if tuple(bound["value"]["map"].keys()) != lanes:
                 raise ProbeError("provider map is not total in lane order")
+            images = {
+                lane: ProviderLaneImage.parse(image)
+                for lane, image in bound["value"]["map"].items()
+            }
+            if any(
+                (images[lane].form == "Image") != (lane in provider.modelled_lanes)
+                for lane in lanes
+            ):
+                raise ProbeError("provider lane image disagrees with modelled lanes")
+            if bound["value"]["carrier"] == "Bool" and any(
+                type(image.value) is not bool
+                for image in images.values()
+                if image.form == "Image"
+            ):
+                raise ProbeError("Boolean provider map has a non-Boolean image")
+            if (
+                raw["source"]["kind"] != "ProviderDeclarationSource"
+                or raw["source"]["reference"] != provider.body()
+            ):
+                raise ProbeError("provider-map source names another declaration")
+        if raw["kind"] == "OperationalCompletion":
+            if raw["bound_model_or_hypothesis"]["form"] != "Hypothesis":
+                raise ProbeError("operational completion has wrong bound form")
+            if raw["source"]["kind"] != "ProviderDeclarationSource":
+                raise ProbeError("operational completion has wrong source form")
+            ProviderDeclaration.parse(raw["source"]["reference"])
         return cls(**raw)
 
     def body(self) -> dict[str, Any]:
@@ -245,6 +326,8 @@ def evaluate(path: Path) -> dict[str, Any]:
     complete = intake(catalog, "schnorr-fresh-property")
     fresh = intake(catalog, "fresh-challenge")
     fiat_shamir = intake(catalog, "fiat-shamir-challenge")
+    provider_map = intake(catalog, "provider-outcome-map")
+    provider_completion = intake(catalog, "provider-completeness")
 
     omission_results: dict[str, str] = {}
     bindings = dict(catalog.raw["cases"]["schnorr-fresh-property"]["bindings"])
@@ -296,9 +379,29 @@ def evaluate(path: Path) -> dict[str, Any]:
                     premise["model_scope"] = {"kind": "RebindRequired"}
         scope_results[scope_kind] = intake(Catalog.from_raw(changed), case_name)
 
-    alternate_bindings = dict(bindings)
+    provider_bindings = dict(catalog.raw["cases"]["provider-outcome-map"]["bindings"])
+    alternate_bindings = dict(provider_bindings)
     alternate_bindings["outcome-carrier"] = "provider-outcome-tagged"
-    alternate_provider = intake(catalog, "schnorr-fresh-property", alternate_bindings)
+    alternate_provider = intake(catalog, "provider-outcome-map", alternate_bindings)
+
+    collapsed = json.loads(json.dumps(catalog.raw))
+    for premise in collapsed["premises"]:
+        if premise["name"] == "provider-outcome-bool":
+            premise["bound_model_or_hypothesis"]["value"]["map"][
+                "OperationalNoncompletion"
+            ] = {"form": "Image", "value": False}
+    try:
+        Catalog.from_raw(collapsed)
+    except ProbeError:
+        bool_noncompletion_collapse = {
+            "outcome": "Malformed",
+            "code": "API-M-PROVIDER-LANE-IMAGE",
+        }
+    else:  # pragma: no cover - required negative control
+        bool_noncompletion_collapse = {
+            "outcome": "Affirmative",
+            "code": "API-A-UNEXPECTED-PROVIDER-COLLAPSE",
+        }
 
     return {
         "premise_ids": {name: p.premise_id for name, p in sorted(catalog.premises.items())},
@@ -309,10 +412,13 @@ def evaluate(path: Path) -> dict[str, Any]:
         "complete": complete,
         "fresh": fresh,
         "fiat_shamir": fiat_shamir,
+        "provider_map": provider_map,
+        "provider_completion": provider_completion,
         "omissions": omission_results,
         "wrong_coordinate": wrong_coordinate,
         "extra_key": extra_key,
         "scope_mismatches": scope_results,
         "alternate_provider": alternate_provider,
+        "bool_noncompletion_collapse": bool_noncompletion_collapse,
         "catalog_digest": digest("analysis.premise-catalog.v0", catalog.raw["premises"]),
     }

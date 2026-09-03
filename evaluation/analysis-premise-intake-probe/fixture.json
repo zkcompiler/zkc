@@ -98,27 +98,97 @@
       "bound_model_or_hypothesis": {
         "form": "ProviderMap",
         "value": {
+          "provider": {
+            "system": "finite-option-bool-provider",
+            "source_pin": "ab928afe69f4d18f071658eec4c617ff46379db7dfb85ccfae7cbbe6f33a9e44",
+            "toolchain": "probe-python-stdlib",
+            "modelled_lanes": [
+              "Aborted",
+              "Accepted",
+              "OperationalNoncompletion",
+              "Rejected",
+              "StrategyStopped"
+            ]
+          },
           "carrier": "Option[Bool]",
           "map": {
-            "Accepted": "Some(true)",
-            "Rejected": "Some(false)",
-            "Aborted": "None",
-            "StrategyStopped": "None",
-            "OperationalNoncompletion": "None"
+            "Accepted": {"form": "Image", "value": "Some(true)"},
+            "Rejected": {"form": "Image", "value": "Some(false)"},
+            "Aborted": {"form": "Image", "value": "None"},
+            "StrategyStopped": {"form": "Image", "value": "None"},
+            "OperationalNoncompletion": {"form": "Image", "value": "None"}
           }
         }
       },
       "source": {
-        "kind": "ProviderDeclaration",
-        "reference": "challenge-verification Boolean with explicit outer failure"
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-option-bool-provider",
+          "source_pin": "ab928afe69f4d18f071658eec4c617ff46379db7dfb85ccfae7cbbe6f33a9e44",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Aborted",
+            "Accepted",
+            "OperationalNoncompletion",
+            "Rejected",
+            "StrategyStopped"
+          ]
+        }
       },
       "evidence_depth": "T1",
       "model_scope": {
         "kind": "ExactSubjectsOnly",
         "exact_subjects": [
-          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
-          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
-          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
+      }
+    },
+    {
+      "name": "provider-outcome-bool",
+      "kind": "ProviderOutcomeCarrierMap",
+      "coordinate": {
+        "owner": "pir",
+        "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
+        "path": "ProtocolOutcomeLane"
+      },
+      "bound_model_or_hypothesis": {
+        "form": "ProviderMap",
+        "value": {
+          "provider": {
+            "system": "finite-bool-provider",
+            "source_pin": "3e16915a2442c5cf9f1bd59ada61375facf0f706c4f792f151b299c84cf61f40",
+            "toolchain": "probe-python-stdlib",
+            "modelled_lanes": [
+              "Accepted",
+              "Rejected"
+            ]
+          },
+          "carrier": "Bool",
+          "map": {
+            "Accepted": {"form": "Image", "value": true},
+            "Rejected": {"form": "Image", "value": false},
+            "Aborted": {"form": "Unmodelled"},
+            "StrategyStopped": {"form": "Unmodelled"},
+            "OperationalNoncompletion": {"form": "Unmodelled"}
+          }
+        }
+      },
+      "source": {
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-bool-provider",
+          "source_pin": "3e16915a2442c5cf9f1bd59ada61375facf0f706c4f792f151b299c84cf61f40",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Accepted",
+            "Rejected"
+          ]
+        }
+      },
+      "evidence_depth": "T1",
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
           "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
         ]
       }
@@ -134,27 +204,79 @@
       "bound_model_or_hypothesis": {
         "form": "ProviderMap",
         "value": {
+          "provider": {
+            "system": "finite-tagged-provider",
+            "source_pin": "9352f672b338519b402802295ee2a85da04fd3d5e4995dd3a732674c6a251332",
+            "toolchain": "probe-python-stdlib",
+            "modelled_lanes": [
+              "Aborted",
+              "Accepted",
+              "OperationalNoncompletion",
+              "Rejected",
+              "StrategyStopped"
+            ]
+          },
           "carrier": "TaggedProviderOutcome",
           "map": {
-            "Accepted": "Accepted",
-            "Rejected": "Rejected",
-            "Aborted": "Aborted",
-            "StrategyStopped": "StrategyStopped",
-            "OperationalNoncompletion": "OperationalNoncompletion"
+            "Accepted": {"form": "Image", "value": "Accepted"},
+            "Rejected": {"form": "Image", "value": "Rejected"},
+            "Aborted": {"form": "Image", "value": "Aborted"},
+            "StrategyStopped": {"form": "Image", "value": "StrategyStopped"},
+            "OperationalNoncompletion": {"form": "Image", "value": "OperationalNoncompletion"}
           }
         }
       },
       "source": {
-        "kind": "ProviderDeclaration",
-        "reference": "fully tagged provider outcome carrier"
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-tagged-provider",
+          "source_pin": "9352f672b338519b402802295ee2a85da04fd3d5e4995dd3a732674c6a251332",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Aborted",
+            "Accepted",
+            "OperationalNoncompletion",
+            "Rejected",
+            "StrategyStopped"
+          ]
+        }
       },
       "evidence_depth": "T1",
       "model_scope": {
         "kind": "ExactSubjectsOnly",
         "exact_subjects": [
-          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
-          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
-          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
+      }
+    },
+    {
+      "name": "provider-operational-completion",
+      "kind": "OperationalCompletion",
+      "coordinate": {
+        "owner": "pir",
+        "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
+        "path": "ProtocolOutcomeLane"
+      },
+      "bound_model_or_hypothesis": {
+        "form": "Hypothesis",
+        "value": "every run in the property environment ends in Accepted or Rejected"
+      },
+      "source": {
+        "kind": "ProviderDeclarationSource",
+        "reference": {
+          "system": "finite-bool-provider",
+          "source_pin": "3e16915a2442c5cf9f1bd59ada61375facf0f706c4f792f151b299c84cf61f40",
+          "toolchain": "probe-python-stdlib",
+          "modelled_lanes": [
+            "Accepted",
+            "Rejected"
+          ]
+        }
+      },
+      "evidence_depth": "T1",
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
           "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
         ]
       }
@@ -307,7 +429,6 @@
       ],
       "requirements": [
         {"slot": "challenge-law", "kind": "FreshPublicCoinDistribution", "coordinate": {"owner": "pir", "subject": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7", "path": "declarations[pir.public-coin-law][0]"}},
-        {"slot": "outcome-carrier", "kind": "ProviderOutcomeCarrierMap", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}},
         {"slot": "relation-predicate", "kind": "RelationPredicate", "coordinate": {"owner": "relations", "subject": "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e", "path": "evaluator"}},
         {"slot": "witness-type", "kind": "WitnessType", "coordinate": {"owner": "relations", "subject": "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22", "path": "private_witness[0].value_type + PlanWitnessBinding.witness_edges[0]"}},
         {"slot": "prover-private-state", "kind": "ProverPrivateState", "coordinate": {"owner": "pir", "subject": "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b", "path": "persistent_state[0] -> PlanExecutionState[0]"}},
@@ -316,12 +437,39 @@
       ],
       "bindings": {
         "challenge-law": "fresh-public-coin-distribution",
-        "outcome-carrier": "provider-outcome-option-bool",
         "relation-predicate": "relation-predicate",
         "witness-type": "witness-type",
         "prover-private-state": "prover-private-state",
         "honest-commit": "honest-commit",
         "honest-respond": "honest-respond"
+      }
+    },
+    "provider-outcome-map": {
+      "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
+      "requirements": [
+        {"slot": "outcome-carrier", "kind": "ProviderOutcomeCarrierMap", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}}
+      ],
+      "bindings": {
+        "outcome-carrier": "provider-outcome-option-bool"
+      }
+    },
+    "provider-completeness": {
+      "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
+      "requirements": [
+        {"slot": "outcome-carrier", "kind": "ProviderOutcomeCarrierMap", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}},
+        {"slot": "operational-completion", "kind": "OperationalCompletion", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}}
+      ],
+      "bindings": {
+        "outcome-carrier": "provider-outcome-bool",
+        "operational-completion": "provider-operational-completion"
       }
     },
     "fresh-challenge": {

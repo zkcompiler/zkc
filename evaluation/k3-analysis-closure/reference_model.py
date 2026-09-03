@@ -599,14 +599,34 @@ ANALYSIS_BODY_SCHEMA_DESCRIPTORS = {
     ),
     "analysis.consumer": ("AnalysisConsumerIntakeBody", ("consumer",)),
     "analysis.use-purpose": ("AnalysisUsePurposeIntakeBody", ("purpose",)),
+    "analysis.named-premise": (
+        "AnalysisNamedPremiseBody",
+        (
+            "kind",
+            "coordinate",
+            "bound-model-or-hypothesis",
+            "source",
+            "evidence-depth",
+            "model-scope",
+        ),
+    ),
     "analysis.question": (
         "AnalysisQuestionBody",
-        ("family", "exact-subjects", "context", "family-payload"),
+        (
+            "family",
+            "exact-subjects",
+            "context",
+            "family-payload",
+            "named-premise-requirements",
+        ),
     ),
-    "analysis.goal": ("AnalysisGoalBody", ("question-id",)),
+    "analysis.goal": (
+        "AnalysisGoalBody",
+        ("question-id", "named-premise-bindings"),
+    ),
     "analysis.hypothesis-context": (
         "AnalysisHypothesisContextBody",
-        ("nodes", "derived-roots"),
+        ("nodes", "derived-roots", "exact-named-premise-ids"),
     ),
     "analysis.proposition": (
         "AnalysisPropositionBody",
@@ -662,6 +682,7 @@ ANALYSIS_BODY_SCHEMA_DESCRIPTORS = {
         (
             "semantic-basis-id",
             "proposition-id",
+            "exact-named-premise-ids",
             "non-hypothesis-premise-bindings",
             "established-hypothesis-node-bindings",
             "assumed-hypothesis-node-bindings",
@@ -697,6 +718,7 @@ ANALYSIS_BODY_SCHEMA_DESCRIPTORS = {
             "polarity",
             "exact-family-conclusion",
             "inherited-hypothesis-context-id",
+            "exact-named-premise-ids",
             "typed-quantitative-result",
             "semantic-basis-id",
             "support-coordinate",
@@ -748,6 +770,7 @@ ANALYSIS_TRANSPORT_SUBJECT_KINDS = tuple(
             "analysis.extractor-profile",
             "analysis.logical-nat-literal",
             "analysis.loss-semantic-import",
+            "analysis.named-premise",
             "analysis.capability-requirement-payload",
             "analysis.native-subject-projection",
             "analysis.operation-policy",
@@ -859,6 +882,20 @@ ANALYSIS_PROPERTY_DECLARATION_CATALOGS = {
         ),
         ("source-free-premise-reason", "closed-source-free-reason"),
         ("finite-challenge-domain-v0", "owner-bound-cardinality-derivation"),
+        ("fresh-sampling-hypothesis-v0", "exact-named-hypothesis"),
+        ("relation-predicate-binding-v0", "exact-model-binding-law"),
+        ("witness-type-binding-v0", "exact-model-binding-law"),
+        ("prover-private-state-binding-v0", "exact-model-binding-law"),
+        ("honest-commit-hypothesis-v0", "exact-named-hypothesis"),
+        ("honest-respond-hypothesis-v0", "exact-named-hypothesis"),
+        (
+            "construction-sampler-adequacy-hypothesis-v0",
+            "exact-named-hypothesis",
+        ),
+        (
+            "construction-oracle-process-hypothesis-v0",
+            "exact-named-hypothesis",
+        ),
         ("k-out-of-n-conclusion-v0", "exact-family-conclusion-schema"),
         (
             "fixed-extractor-universal-conclusion-v0",
@@ -1000,6 +1037,8 @@ ANALYSIS_TRANSPORT_DECLARATION_CATALOGS = {
         ("afk-family-instance-correspondence-result", "conditional-affirmative"),
     ),
     "analysis.semantic-law": (
+        ("family-sampler-adequacy-hypothesis-v0", "exact-named-hypothesis"),
+        ("family-oracle-process-hypothesis-v0", "exact-named-hypothesis"),
         ("theorem-truth-conclusion-v0", "exact-family-conclusion-schema"),
         ("family-applicability-conclusion-v0", "exact-family-conclusion-schema"),
         (
@@ -1674,12 +1713,252 @@ class AnalysisUsePurposeIntakeBodyV0:
     purpose: object
 
 
+class AnalysisNamedPremiseKind(str, Enum):
+    FRESH_PUBLIC_COIN_DISTRIBUTION = "FreshPublicCoinDistribution"
+    FIAT_SHAMIR_SAMPLER_ADEQUACY = "FiatShamirSamplerAdequacy"
+    FIAT_SHAMIR_ORACLE_PROCESS = "FiatShamirOracleProcess"
+    PROVIDER_OUTCOME_CARRIER_MAP = "ProviderOutcomeCarrierMap"
+    OPERATIONAL_COMPLETION = "OperationalCompletion"
+    RELATION_PREDICATE = "RelationPredicate"
+    WITNESS_TYPE = "WitnessType"
+    PROVER_PRIVATE_STATE = "ProverPrivateState"
+    HONEST_COMMIT = "HonestCommit"
+    HONEST_RESPOND = "HonestRespond"
+
+
+class AnalysisPremiseProcessKind(str, Enum):
+    SAMPLER_ADEQUACY = "SamplerAdequacy"
+    ORACLE_PROCESS = "OracleProcess"
+
+
+@dataclass(frozen=True)
+class PIRPublicCoinLawCoordinate:
+    declaration_ref: object
+
+
+@dataclass(frozen=True)
+class AnalysisFamilyPremiseCoordinate:
+    family_definition_id: object
+    process_kind: AnalysisPremiseProcessKind
+
+
+@dataclass(frozen=True)
+class PIRConstructionPremiseCoordinate:
+    transcript_construction_id: object
+    process_kind: AnalysisPremiseProcessKind
+
+
+@dataclass(frozen=True)
+class PIRProtocolOutcomePartitionCoordinate:
+    protocol_id: object
+
+
+@dataclass(frozen=True)
+class RelationsModelEvaluatorCoordinate:
+    relation_semantic_model_id: object
+
+
+@dataclass(frozen=True)
+class RelationsWitnessPlanJoinCoordinate:
+    relation_interface_id: object
+    private_witness_ordinal: int
+    plan_witness_binding_id: object
+    witness_edge_ordinal: int
+
+
+@dataclass(frozen=True)
+class PIRPlanStateCoordinate:
+    prover_plan_id: object
+    strategy_state_slot_ordinal: int
+
+
+@dataclass(frozen=True)
+class PIRPlanRecipeCoordinate:
+    prover_plan_id: object
+    prover_decision_point_ordinal: int
+    recipe_node_ordinal: int
+
+
+AnalysisPremiseCoordinate = (
+    PIRPublicCoinLawCoordinate
+    | AnalysisFamilyPremiseCoordinate
+    | PIRConstructionPremiseCoordinate
+    | PIRProtocolOutcomePartitionCoordinate
+    | RelationsModelEvaluatorCoordinate
+    | RelationsWitnessPlanJoinCoordinate
+    | PIRPlanStateCoordinate
+    | PIRPlanRecipeCoordinate
+)
+
+
+@dataclass(frozen=True)
+class AnalysisLawTermV0:
+    law_ref: object
+    canonical_arguments: tuple[object, ...]
+
+
+@dataclass(frozen=True)
+class BoundModel:
+    semantic_subject_ref: object
+    law_term: AnalysisLawTermV0
+
+
+@dataclass(frozen=True)
+class BoundHypothesis:
+    law_term: AnalysisLawTermV0
+
+
+class AnalysisOutcomeLaneName(str, Enum):
+    ACCEPTED = "Accepted"
+    REJECTED = "Rejected"
+    ABORTED = "Aborted"
+    INTERPRETATION_FAILED = "InterpretationFailed"
+    STRATEGY_STOPPED = "StrategyStopped"
+    OPERATIONAL_NONCOMPLETION = "OperationalNoncompletion"
+
+
+@dataclass(frozen=True)
+class AnalysisProviderDeclarationV0:
+    system: str
+    source_pin: bytes
+    toolchain: str
+    modelled_lanes: tuple[AnalysisOutcomeLaneName, ...]
+
+
+@dataclass(frozen=True)
+class Image:
+    value: object
+
+
+@dataclass(frozen=True)
+class Unmodelled:
+    pass
+
+
+AnalysisProviderLaneImage = Image | Unmodelled
+
+
+@dataclass(frozen=True)
+class AnalysisProviderOutcomeCarrierMapBodyV0:
+    provider: AnalysisProviderDeclarationV0
+    protocol_outcome_partition: PIRProtocolOutcomePartitionCoordinate
+    provider_carrier: object
+    total_lane_map: tuple[tuple[AnalysisOutcomeLaneName, AnalysisProviderLaneImage], ...]
+
+
+@dataclass(frozen=True)
+class BoundProviderOutcomeCarrierMap:
+    value: AnalysisProviderOutcomeCarrierMapBodyV0
+
+
+AnalysisNamedPremiseBoundValue = (
+    BoundModel | BoundHypothesis | BoundProviderOutcomeCarrierMap
+)
+
+
+@dataclass(frozen=True)
+class OwnerSemanticCoordinate:
+    semantic_subject_ref: object
+
+
+@dataclass(frozen=True)
+class CandidateOwnerCoordinate:
+    semantic_subject_ref: object
+
+
+@dataclass(frozen=True)
+class FamilyHypothesisSource:
+    family_coordinate: object
+
+
+@dataclass(frozen=True)
+class ProviderDeclarationSource:
+    provider: AnalysisProviderDeclarationV0
+
+
+AnalysisNamedPremiseSource = (
+    OwnerSemanticCoordinate
+    | CandidateOwnerCoordinate
+    | FamilyHypothesisSource
+    | ProviderDeclarationSource
+)
+
+
+class AnalysisPremiseEvidenceDepth(str, Enum):
+    SOURCE_GROUNDED_MAPPING = "SourceGroundedMapping"
+    TYPED_CONSTRUCTIVE_BINDING = "TypedConstructiveBinding"
+    FROZEN_EXECUTABLE_FALSIFICATION = "FrozenExecutableFalsification"
+
+
+@dataclass(frozen=True)
+class FreshChallengeOnly:
+    pass
+
+
+@dataclass(frozen=True)
+class OracleModelOnly:
+    distribution_profile_id: object
+
+
+@dataclass(frozen=True)
+class ExactSubjectsOnly:
+    exact_subjects: tuple[object, ...]
+
+
+@dataclass(frozen=True)
+class RebindRequired:
+    pass
+
+
+AnalysisPremiseModelScope = (
+    FreshChallengeOnly | OracleModelOnly | ExactSubjectsOnly | RebindRequired
+)
+
+
+@dataclass(frozen=True)
+class AnalysisNamedPremiseRequirementV0:
+    slot: str
+    kind: AnalysisNamedPremiseKind
+    coordinate: AnalysisPremiseCoordinate
+
+
+@dataclass(frozen=True)
+class AnalysisNamedPremiseBindingV0:
+    requirement: AnalysisNamedPremiseRequirementV0
+    premise_id: object
+
+
+@dataclass(frozen=True)
+class AnalysisNamedPremiseBodyV0:
+    kind: AnalysisNamedPremiseKind
+    coordinate: AnalysisPremiseCoordinate
+    bound_model_or_hypothesis: AnalysisNamedPremiseBoundValue
+    source: AnalysisNamedPremiseSource
+    evidence_depth: AnalysisPremiseEvidenceDepth
+    model_scope: AnalysisPremiseModelScope
+
+
+class NamedPremiseIntakeOutcome(str, Enum):
+    AFFIRMATIVE = "Affirmative"
+    CANNOT_ANSWER = "CannotAnswer"
+    REFUSED = "Refused"
+    MALFORMED = "Malformed"
+
+
+@dataclass(frozen=True)
+class NamedPremiseIntakeResult:
+    outcome: NamedPremiseIntakeOutcome
+    code: str
+    bindings: tuple[AnalysisNamedPremiseBindingV0, ...] = ()
+
+
 @dataclass(frozen=True)
 class AnalysisQuestionBodyV0:
     family: object
     exact_subjects: tuple[object, ...]
     context: object
     family_payload: object
+    named_premise_requirements: tuple[AnalysisNamedPremiseRequirementV0, ...]
 
 
 @dataclass(frozen=True)
@@ -1958,6 +2237,7 @@ class AnalysisLossSemanticImportBodyV0:
 @dataclass(frozen=True)
 class AnalysisGoalBodyV0:
     question_id: object
+    named_premise_bindings: tuple[AnalysisNamedPremiseBindingV0, ...]
 
 
 @dataclass(frozen=True)
@@ -1965,12 +2245,14 @@ class AnalysisHypothesisNodeV0:
     local_ordinal: int
     goal_id: object
     dependency_ordinals: tuple[int, ...] = ()
+    exact_named_premise_ids: tuple[object, ...] = ()
 
 
 @dataclass(frozen=True)
 class AnalysisHypothesisContextBodyV0:
     nodes: tuple[AnalysisHypothesisNodeV0, ...]
     roots: tuple[int, ...]
+    exact_named_premise_ids: tuple[object, ...]
 
 
 @dataclass(frozen=True)
@@ -1994,6 +2276,7 @@ class AnalysisSemanticBasisBodyV0:
 class AnalysisSupportInstantiationBodyV0:
     semantic_basis_id: object
     proposition_id: object
+    exact_named_premise_ids: tuple[object, ...]
     non_hypothesis_premise_bindings: object
     established_hypothesis_node_bindings: object
     assumed_hypothesis_node_bindings: object
@@ -2026,6 +2309,7 @@ class AnalysisJudgmentRecordBodyV0:
     polarity: object
     exact_family_conclusion: object
     inherited_hypothesis_context_id: object
+    exact_named_premise_ids: tuple[object, ...]
     typed_quantitative_result: object
     semantic_basis_id: object
     support_coordinate: object
@@ -2084,6 +2368,7 @@ _ANALYSIS_EXACT_BODY_TYPES = {
     "analysis.pointwise-quantitative-normalization": AnalysisPointwiseQuantitativeNormalizationBodyV0,
     "analysis.consumer": AnalysisConsumerIntakeBodyV0,
     "analysis.use-purpose": AnalysisUsePurposeIntakeBodyV0,
+    "analysis.named-premise": AnalysisNamedPremiseBodyV0,
     "analysis.question": AnalysisQuestionBodyV0,
     "analysis.goal": AnalysisGoalBodyV0,
     "analysis.hypothesis-context": AnalysisHypothesisContextBodyV0,
@@ -2097,6 +2382,534 @@ _ANALYSIS_EXACT_BODY_TYPES = {
     "analysis.theorem-schema": AnalysisTheoremSchemaBodyV0,
     "analysis.theorem-source-validation": AnalysisTheoremSourceValidationBodyV0,
 }
+
+
+_NAMED_PREMISE_KIND_ORDINAL = {
+    kind: ordinal for ordinal, kind in enumerate(AnalysisNamedPremiseKind)
+}
+_NAMED_PREMISE_EVIDENCE_ORDINAL = {
+    depth: ordinal for ordinal, depth in enumerate(AnalysisPremiseEvidenceDepth)
+}
+_PREMISE_PROCESS_ORDINAL = {
+    AnalysisPremiseProcessKind.SAMPLER_ADEQUACY: 0,
+    AnalysisPremiseProcessKind.ORACLE_PROCESS: 1,
+}
+_OUTCOME_LANE_ORDINAL = {
+    lane: ordinal for ordinal, lane in enumerate(AnalysisOutcomeLaneName)
+}
+_FRESH_PROTOCOL_REFERENCES: set[bytes] = set()
+
+
+def _named_premise_kind_body(kind: AnalysisNamedPremiseKind) -> object:
+    if type(kind) is not AnalysisNamedPremiseKind:
+        raise PropertyError("named premise kind is not one exact closed case")
+    return k1.DatumVariant(_NAMED_PREMISE_KIND_ORDINAL[kind], k1.UNIT)
+
+
+def _premise_process_body(kind: AnalysisPremiseProcessKind) -> object:
+    if type(kind) is not AnalysisPremiseProcessKind:
+        raise PropertyError("premise process is not one exact closed case")
+    return k1.DatumVariant(_PREMISE_PROCESS_ORDINAL[kind], k1.UNIT)
+
+
+def _named_premise_coordinate_body(coordinate: AnalysisPremiseCoordinate) -> object:
+    if type(coordinate) is PIRPublicCoinLawCoordinate:
+        return k1.DatumVariant(
+            0,
+            k1.DatumRecord(
+                ((0, _analysis_datum(coordinate.declaration_ref, "public-coin law")),)
+            ),
+        )
+    if type(coordinate) is AnalysisFamilyPremiseCoordinate:
+        return k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            coordinate.family_definition_id,
+                            "analysis.asymptotic-protocol-family",
+                        ),
+                    ),
+                    (1, _premise_process_body(coordinate.process_kind)),
+                )
+            ),
+        )
+    if type(coordinate) is PIRConstructionPremiseCoordinate:
+        return k1.DatumVariant(
+            2,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(
+                            coordinate.transcript_construction_id,
+                            "pir.transcript-construction",
+                        ),
+                    ),
+                    (1, _premise_process_body(coordinate.process_kind)),
+                )
+            ),
+        )
+    if type(coordinate) is PIRProtocolOutcomePartitionCoordinate:
+        return k1.DatumVariant(
+            3,
+            k1.DatumRecord(((0, _id_datum(coordinate.protocol_id, "pir.protocol")),)),
+        )
+    if type(coordinate) is RelationsModelEvaluatorCoordinate:
+        return k1.DatumVariant(
+            4,
+            k1.DatumRecord(
+                ((0, _id_datum(coordinate.relation_semantic_model_id)),)
+            ),
+        )
+    if type(coordinate) is RelationsWitnessPlanJoinCoordinate:
+        if any(
+            type(value) is not int or value < 0
+            for value in (
+                coordinate.private_witness_ordinal,
+                coordinate.witness_edge_ordinal,
+            )
+        ):
+            raise PropertyError("witness-plan coordinate has a non-natural ordinal")
+        return k1.DatumVariant(
+            5,
+            k1.DatumRecord(
+                (
+                    (
+                        0,
+                        _id_datum(coordinate.relation_interface_id, "relations.interface"),
+                    ),
+                    (1, k1.Nat(coordinate.private_witness_ordinal)),
+                    (
+                        2,
+                        _id_datum(
+                            coordinate.plan_witness_binding_id,
+                            "relations.plan-witness-binding",
+                        ),
+                    ),
+                    (3, k1.Nat(coordinate.witness_edge_ordinal)),
+                )
+            ),
+        )
+    if type(coordinate) is PIRPlanStateCoordinate:
+        if (
+            type(coordinate.strategy_state_slot_ordinal) is not int
+            or coordinate.strategy_state_slot_ordinal < 0
+        ):
+            raise PropertyError("Plan state coordinate has a non-natural ordinal")
+        return k1.DatumVariant(
+            6,
+            k1.DatumRecord(
+                (
+                    (0, _id_datum(coordinate.prover_plan_id, "pir.prover-plan")),
+                    (1, k1.Nat(coordinate.strategy_state_slot_ordinal)),
+                )
+            ),
+        )
+    if type(coordinate) is PIRPlanRecipeCoordinate:
+        if any(
+            type(value) is not int or value < 0
+            for value in (
+                coordinate.prover_decision_point_ordinal,
+                coordinate.recipe_node_ordinal,
+            )
+        ):
+            raise PropertyError("Plan recipe coordinate has a non-natural ordinal")
+        return k1.DatumVariant(
+            7,
+            k1.DatumRecord(
+                (
+                    (0, _id_datum(coordinate.prover_plan_id, "pir.prover-plan")),
+                    (1, k1.Nat(coordinate.prover_decision_point_ordinal)),
+                    (2, k1.Nat(coordinate.recipe_node_ordinal)),
+                )
+            ),
+        )
+    raise PropertyError("named premise coordinate is not one exact closed case")
+
+
+def _analysis_law_term_body(term: AnalysisLawTermV0) -> object:
+    if type(term) is not AnalysisLawTermV0 or type(term.canonical_arguments) is not tuple:
+        raise PropertyError("named premise law term has the wrong exact shape")
+    return k1.DatumRecord(
+        (
+            (0, _analysis_datum(term.law_ref, "named premise law reference")),
+            (
+                1,
+                k1.DatumSeq(
+                    tuple(
+                        _analysis_datum(argument, "named premise law argument")
+                        for argument in term.canonical_arguments
+                    )
+                ),
+            ),
+        )
+    )
+
+
+def _provider_declaration_body(provider: AnalysisProviderDeclarationV0) -> object:
+    if type(provider) is not AnalysisProviderDeclarationV0:
+        raise PropertyError("provider declaration has the wrong exact shape")
+    _ascii(provider.system, "provider system")
+    _ascii(provider.toolchain, "provider toolchain")
+    if type(provider.source_pin) is not bytes or not provider.source_pin:
+        raise PropertyError("provider declaration needs a nonempty source pin")
+    lanes = provider.modelled_lanes
+    if type(lanes) is not tuple or any(type(lane) is not AnalysisOutcomeLaneName for lane in lanes):
+        raise PropertyError("provider modelled lanes are not one closed sequence")
+    expected = tuple(
+        sorted(set(lanes), key=lambda lane: k1.encode_datum(k1.Symbol(lane.value)))
+    )
+    if lanes != expected:
+        raise PropertyError("provider modelled lanes are not canonical sorted unique")
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol(provider.system)),
+            (1, k1.BytesValue(provider.source_pin)),
+            (2, k1.Symbol(provider.toolchain)),
+            (
+                3,
+                k1.DatumSeq(
+                    tuple(
+                        k1.DatumVariant(_OUTCOME_LANE_ORDINAL[lane], k1.UNIT)
+                        for lane in lanes
+                    )
+                ),
+            ),
+        )
+    )
+
+
+def _provider_lane_image_body(image: AnalysisProviderLaneImage) -> object:
+    if type(image) is Image:
+        return k1.DatumVariant(
+            0, _analysis_datum(image.value, "provider carrier image")
+        )
+    if type(image) is Unmodelled:
+        return k1.DatumVariant(1, k1.UNIT)
+    raise PropertyError("provider lane image is not Image or Unmodelled")
+
+
+def _provider_outcome_carrier_map_body(
+    body: AnalysisProviderOutcomeCarrierMapBodyV0,
+) -> object:
+    if type(body) is not AnalysisProviderOutcomeCarrierMapBodyV0:
+        raise PropertyError("provider outcome map has the wrong exact shape")
+    _named_premise_coordinate_body(body.protocol_outcome_partition)
+    entries = body.total_lane_map
+    if type(entries) is not tuple or not entries:
+        raise PropertyError("provider outcome map must be nonempty and immutable")
+    lanes = tuple(lane for lane, _ in entries)
+    expected_lanes = tuple(
+        sorted(set(lanes), key=lambda lane: k1.encode_datum(k1.Symbol(lane.value)))
+    )
+    if any(type(lane) is not AnalysisOutcomeLaneName for lane in lanes) or lanes != expected_lanes:
+        raise PropertyError("provider outcome map lane domain is not canonical")
+    modelled = set(body.provider.modelled_lanes)
+    for lane, image in entries:
+        if (lane in modelled) != (type(image) is Image):
+            raise PropertyError("provider lane image disagrees with modelled_lanes")
+    return k1.DatumRecord(
+        (
+            (0, _provider_declaration_body(body.provider)),
+            (1, _named_premise_coordinate_body(body.protocol_outcome_partition)),
+            (2, _analysis_datum(body.provider_carrier, "provider carrier law")),
+            (
+                3,
+                k1.DatumSeq(
+                    tuple(
+                        k1.DatumRecord(
+                            (
+                                (
+                                    0,
+                                    k1.DatumVariant(
+                                        _OUTCOME_LANE_ORDINAL[lane], k1.UNIT
+                                    ),
+                                ),
+                                (1, _provider_lane_image_body(image)),
+                            )
+                        )
+                        for lane, image in entries
+                    )
+                ),
+            ),
+        )
+    )
+
+
+def _named_premise_bound_body(bound: AnalysisNamedPremiseBoundValue) -> object:
+    if type(bound) is BoundModel:
+        return k1.DatumVariant(
+            0,
+            k1.DatumRecord(
+                (
+                    (0, _id_datum(bound.semantic_subject_ref)),
+                    (1, _analysis_law_term_body(bound.law_term)),
+                )
+            ),
+        )
+    if type(bound) is BoundHypothesis:
+        return k1.DatumVariant(1, _analysis_law_term_body(bound.law_term))
+    if type(bound) is BoundProviderOutcomeCarrierMap:
+        return k1.DatumVariant(2, _provider_outcome_carrier_map_body(bound.value))
+    raise PropertyError("named premise bound value is not one exact closed case")
+
+
+def _named_premise_source_body(source: AnalysisNamedPremiseSource) -> object:
+    if type(source) is OwnerSemanticCoordinate:
+        return k1.DatumVariant(0, _id_datum(source.semantic_subject_ref))
+    if type(source) is CandidateOwnerCoordinate:
+        return k1.DatumVariant(1, _id_datum(source.semantic_subject_ref))
+    if type(source) is FamilyHypothesisSource:
+        return k1.DatumVariant(
+            2, _analysis_datum(source.family_coordinate, "family hypothesis source")
+        )
+    if type(source) is ProviderDeclarationSource:
+        return k1.DatumVariant(3, _provider_declaration_body(source.provider))
+    raise PropertyError("named premise source is not one exact closed case")
+
+
+def _named_premise_scope_body(scope: AnalysisPremiseModelScope) -> object:
+    if type(scope) is FreshChallengeOnly:
+        return k1.DatumVariant(0, k1.UNIT)
+    if type(scope) is OracleModelOnly:
+        return k1.DatumVariant(
+            1,
+            _id_datum(scope.distribution_profile_id, "analysis.distribution-profile"),
+        )
+    if type(scope) is ExactSubjectsOnly:
+        subjects = scope.exact_subjects
+        if type(subjects) is not tuple or not subjects:
+            raise PropertyError("exact-subject premise scope must be nonempty")
+        canonical = tuple(
+            sorted(set(subjects), key=lambda item: k1.encode_datum(_id_datum(item)))
+        )
+        if subjects != canonical:
+            raise PropertyError("exact-subject premise scope is not canonical")
+        return k1.DatumVariant(
+            2, k1.DatumSeq(tuple(_id_datum(item) for item in subjects))
+        )
+    if type(scope) is RebindRequired:
+        return k1.DatumVariant(3, k1.UNIT)
+    raise PropertyError("named premise scope is not one exact closed case")
+
+
+def _named_premise_requirement_body(
+    requirement: AnalysisNamedPremiseRequirementV0,
+) -> object:
+    if type(requirement) is not AnalysisNamedPremiseRequirementV0:
+        raise PropertyError("named premise requirement has the wrong exact shape")
+    if type(requirement.kind) is not AnalysisNamedPremiseKind:
+        raise PropertyError("named premise requirement has a foreign kind")
+    coordinate_types = {
+        AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION: (
+            PIRPublicCoinLawCoordinate,
+        ),
+        AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY: (
+            AnalysisFamilyPremiseCoordinate,
+            PIRConstructionPremiseCoordinate,
+        ),
+        AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS: (
+            AnalysisFamilyPremiseCoordinate,
+            PIRConstructionPremiseCoordinate,
+        ),
+        AnalysisNamedPremiseKind.PROVIDER_OUTCOME_CARRIER_MAP: (
+            PIRProtocolOutcomePartitionCoordinate,
+        ),
+        AnalysisNamedPremiseKind.OPERATIONAL_COMPLETION: (
+            PIRProtocolOutcomePartitionCoordinate,
+        ),
+        AnalysisNamedPremiseKind.RELATION_PREDICATE: (
+            RelationsModelEvaluatorCoordinate,
+        ),
+        AnalysisNamedPremiseKind.WITNESS_TYPE: (
+            RelationsWitnessPlanJoinCoordinate,
+        ),
+        AnalysisNamedPremiseKind.PROVER_PRIVATE_STATE: (PIRPlanStateCoordinate,),
+        AnalysisNamedPremiseKind.HONEST_COMMIT: (PIRPlanRecipeCoordinate,),
+        AnalysisNamedPremiseKind.HONEST_RESPOND: (PIRPlanRecipeCoordinate,),
+    }
+    if type(requirement.coordinate) not in coordinate_types[requirement.kind]:
+        raise PropertyError("named premise requirement has the wrong coordinate arm")
+    if (
+        requirement.kind
+        is AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY
+        and requirement.coordinate.process_kind
+        is not AnalysisPremiseProcessKind.SAMPLER_ADEQUACY
+    ):
+        raise PropertyError("sampler requirement has an oracle-process coordinate")
+    if (
+        requirement.kind is AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS
+        and requirement.coordinate.process_kind
+        is not AnalysisPremiseProcessKind.ORACLE_PROCESS
+    ):
+        raise PropertyError("oracle-process requirement has a sampler coordinate")
+    return k1.DatumRecord(
+        (
+            (0, k1.Symbol(_ascii(requirement.slot, "named premise slot"))),
+            (1, _named_premise_kind_body(requirement.kind)),
+            (2, _named_premise_coordinate_body(requirement.coordinate)),
+        )
+    )
+
+
+def _named_premise_requirement_key(
+    requirement: AnalysisNamedPremiseRequirementV0,
+) -> bytes:
+    return k1.encode_datum(_named_premise_requirement_body(requirement))
+
+
+def normalize_named_premise_requirements(
+    requirements: Iterable[AnalysisNamedPremiseRequirementV0],
+) -> tuple[AnalysisNamedPremiseRequirementV0, ...]:
+    values = tuple(requirements)
+    if any(type(item) is not AnalysisNamedPremiseRequirementV0 for item in values):
+        raise PropertyError("question carries a foreign named premise requirement")
+    ordered = tuple(sorted(values, key=_named_premise_requirement_key))
+    if len({_named_premise_requirement_key(item) for item in values}) != len(values):
+        raise PropertyError("question repeats a named premise requirement")
+    if values != ordered:
+        raise PropertyError("question premise requirements are caller-ordered")
+    return values
+
+
+def _named_premise_binding_body(binding: AnalysisNamedPremiseBindingV0) -> object:
+    if type(binding) is not AnalysisNamedPremiseBindingV0:
+        raise PropertyError("named premise binding has the wrong exact shape")
+    return k1.DatumRecord(
+        (
+            (0, _named_premise_requirement_body(binding.requirement)),
+            (1, _id_datum(binding.premise_id, "analysis.named-premise")),
+        )
+    )
+
+
+def _validate_named_premise_kind_law(body: AnalysisNamedPremiseBodyV0) -> None:
+    law = {
+        AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION: (
+            (PIRPublicCoinLawCoordinate,), (BoundHypothesis,),
+            (OwnerSemanticCoordinate, CandidateOwnerCoordinate),
+        ),
+        AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY: (
+            (AnalysisFamilyPremiseCoordinate, PIRConstructionPremiseCoordinate),
+            (BoundHypothesis,), (FamilyHypothesisSource, CandidateOwnerCoordinate),
+        ),
+        AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS: (
+            (AnalysisFamilyPremiseCoordinate, PIRConstructionPremiseCoordinate),
+            (BoundHypothesis,), (FamilyHypothesisSource, CandidateOwnerCoordinate),
+        ),
+        AnalysisNamedPremiseKind.PROVIDER_OUTCOME_CARRIER_MAP: (
+            (PIRProtocolOutcomePartitionCoordinate,),
+            (BoundProviderOutcomeCarrierMap,), (ProviderDeclarationSource,),
+        ),
+        AnalysisNamedPremiseKind.OPERATIONAL_COMPLETION: (
+            (PIRProtocolOutcomePartitionCoordinate,), (BoundHypothesis,),
+            (ProviderDeclarationSource,),
+        ),
+        AnalysisNamedPremiseKind.RELATION_PREDICATE: (
+            (RelationsModelEvaluatorCoordinate,), (BoundModel,),
+            (OwnerSemanticCoordinate, CandidateOwnerCoordinate),
+        ),
+        AnalysisNamedPremiseKind.WITNESS_TYPE: (
+            (RelationsWitnessPlanJoinCoordinate,), (BoundModel,),
+            (OwnerSemanticCoordinate, CandidateOwnerCoordinate),
+        ),
+        AnalysisNamedPremiseKind.PROVER_PRIVATE_STATE: (
+            (PIRPlanStateCoordinate,), (BoundModel,),
+            (OwnerSemanticCoordinate, CandidateOwnerCoordinate),
+        ),
+        AnalysisNamedPremiseKind.HONEST_COMMIT: (
+            (PIRPlanRecipeCoordinate,), (BoundHypothesis,),
+            (OwnerSemanticCoordinate, CandidateOwnerCoordinate),
+        ),
+        AnalysisNamedPremiseKind.HONEST_RESPOND: (
+            (PIRPlanRecipeCoordinate,), (BoundHypothesis,),
+            (OwnerSemanticCoordinate, CandidateOwnerCoordinate),
+        ),
+    }
+    if type(body.kind) is not AnalysisNamedPremiseKind:
+        raise PropertyError("named premise kind is not one exact closed case")
+    coordinate_types, bound_types, source_types = law[body.kind]
+    if type(body.coordinate) not in coordinate_types:
+        raise PropertyError("named premise kind has the wrong coordinate arm")
+    if type(body.bound_model_or_hypothesis) not in bound_types:
+        raise PropertyError("named premise kind has the wrong bound-value arm")
+    if type(body.source) not in source_types:
+        raise PropertyError("named premise kind has the wrong source arm")
+    if type(body.evidence_depth) is not AnalysisPremiseEvidenceDepth:
+        raise PropertyError("named premise evidence is not one exact closed case")
+    coordinate = body.coordinate
+    if body.kind is AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY and (
+        coordinate.process_kind is not AnalysisPremiseProcessKind.SAMPLER_ADEQUACY
+    ):
+        raise PropertyError("sampler premise has an oracle-process coordinate")
+    if body.kind is AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS and (
+        coordinate.process_kind is not AnalysisPremiseProcessKind.ORACLE_PROCESS
+    ):
+        raise PropertyError("oracle-process premise has a sampler coordinate")
+    if type(body.bound_model_or_hypothesis) is BoundProviderOutcomeCarrierMap:
+        if body.bound_model_or_hypothesis.value.protocol_outcome_partition != coordinate:
+            raise PropertyError("provider map names another outcome partition")
+    else:
+        term = (
+            body.bound_model_or_hypothesis.law_term
+            if type(body.bound_model_or_hypothesis) in (BoundModel, BoundHypothesis)
+            else None
+        )
+        if term is None or not term.canonical_arguments:
+            raise PropertyError("named premise law term omits its coordinate argument")
+        if term.canonical_arguments[0] != _named_premise_coordinate_body(coordinate):
+            raise PropertyError("named premise law term names another coordinate")
+
+
+def _analysis_named_premise_body(body: AnalysisNamedPremiseBodyV0) -> object:
+    _validate_named_premise_kind_law(body)
+    return k1.DatumRecord(
+        (
+            (0, _named_premise_kind_body(body.kind)),
+            (1, _named_premise_coordinate_body(body.coordinate)),
+            (2, _named_premise_bound_body(body.bound_model_or_hypothesis)),
+            (3, _named_premise_source_body(body.source)),
+            (
+                4,
+                k1.DatumVariant(
+                    _NAMED_PREMISE_EVIDENCE_ORDINAL[body.evidence_depth], k1.UNIT
+                ),
+            ),
+            (5, _named_premise_scope_body(body.model_scope)),
+        )
+    )
+
+
+def _canonical_named_premise_ids(values: Iterable[object]) -> tuple[object, ...]:
+    identifiers = tuple(values)
+    for identifier in identifiers:
+        _id_datum(identifier, "analysis.named-premise")
+    ordered = tuple(
+        sorted(
+            {item.internal_reference(): item for item in identifiers}.values(),
+            key=lambda item: k1.encode_datum(_id_datum(item)),
+        )
+    )
+    if len(ordered) != len(identifiers):
+        raise PropertyError("exact named premise ID sequence repeats an identity")
+    return ordered
+
+
+def _named_premise_id_union(values: Iterable[object]) -> tuple[object, ...]:
+    """Return the canonical set union of already formed premise identities."""
+
+    identifiers = tuple(values)
+    for identifier in identifiers:
+        _id_datum(identifier, "analysis.named-premise")
+    return tuple(
+        sorted(
+            {item.internal_reference(): item for item in identifiers}.values(),
+            key=lambda item: k1.encode_datum(_id_datum(item)),
+        )
+    )
 
 
 def _analysis_hypothesis_context_body(
@@ -2132,6 +2945,11 @@ def _analysis_hypothesis_context_body(
             raise PropertyError(
                 "hypothesis dependencies must be sorted unique earlier ordinals"
             )
+        exact_ids = _canonical_named_premise_ids(node.exact_named_premise_ids)
+        if exact_ids != node.exact_named_premise_ids:
+            raise PropertyError("hypothesis node premise IDs are not canonical")
+        if exact_ids != premise_ids_of_goal(node.goal_id):
+            raise PropertyError("hypothesis node premise IDs differ from its goal")
         depended_on.update(node.dependency_ordinals)
         encoded_nodes.append(
             k1.DatumRecord(
@@ -2143,6 +2961,10 @@ def _analysis_hypothesis_context_body(
                         k1.DatumSeq(
                             tuple(k1.Nat(item) for item in node.dependency_ordinals)
                         ),
+                    ),
+                    (
+                        3,
+                        k1.DatumSeq(tuple(_id_datum(item) for item in exact_ids)),
                     ),
                 )
             )
@@ -2164,10 +2986,23 @@ def _analysis_hypothesis_context_body(
         pending.extend(body.nodes[ordinal].dependency_ordinals)
     if reachable != set(range(len(body.nodes))):
         raise PropertyError("hypothesis DAG contains an unreachable node")
+    derived_premises = _named_premise_id_union(
+        premise_id
+        for ordinal in reachable
+        for premise_id in body.nodes[ordinal].exact_named_premise_ids
+    )
+    if body.exact_named_premise_ids != derived_premises:
+        raise PropertyError(
+            "hypothesis context premise IDs differ from its reachable nodes"
+        )
     return k1.DatumRecord(
         (
             (0, k1.DatumSeq(tuple(encoded_nodes))),
             (1, k1.DatumSeq(tuple(k1.Nat(item) for item in body.roots))),
+            (
+                2,
+                k1.DatumSeq(tuple(_id_datum(item) for item in derived_premises)),
+            ),
         )
     )
 
@@ -2249,7 +3084,9 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
         raise AnalysisError(
             f"{subject_kind} needs exact {expected.__name__}, not a raw host body"
         )
-    if type(body) is AnalysisAdequacyEvaluatorBodyV0:
+    if type(body) is AnalysisNamedPremiseBodyV0:
+        result = _analysis_named_premise_body(body)
+    elif type(body) is AnalysisAdequacyEvaluatorBodyV0:
         if (
             type(body.supported_input_profile_ids) is not tuple
             or not body.supported_input_profile_ids
@@ -2662,17 +3499,40 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
         subjects = body.exact_subjects
         if len(set(subjects)) != len(subjects):
             raise PropertyError("Analysis question subjects must not repeat")
+        requirements = normalize_named_premise_requirements(
+            body.named_premise_requirements
+        )
         result = k1.DatumRecord(
             (
                 (0, analysis_profile_declaration_ref_body(body.family)),
                 (1, k1.DatumSeq(tuple(_id_datum(item) for item in subjects))),
                 (2, _analysis_datum(body.context, "Analysis question context")),
                 (3, _analysis_datum(body.family_payload, "Analysis family payload")),
+                (
+                    4,
+                    k1.DatumSeq(
+                        tuple(
+                            _named_premise_requirement_body(item)
+                            for item in requirements
+                        )
+                    ),
+                ),
             )
         )
     elif type(body) is AnalysisGoalBodyV0:
         result = k1.DatumRecord(
-            ((0, _id_datum(body.question_id, "analysis.question")),)
+            (
+                (0, _id_datum(body.question_id, "analysis.question")),
+                (
+                    1,
+                    k1.DatumSeq(
+                        tuple(
+                            _named_premise_binding_body(item)
+                            for item in body.named_premise_bindings
+                        )
+                    ),
+                ),
+            )
         )
     elif type(body) is AnalysisHypothesisContextBodyV0:
         result = _analysis_hypothesis_context_body(body)
@@ -2702,32 +3562,43 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
             )
         )
     elif type(body) is AnalysisSupportInstantiationBodyV0:
+        expected_premises = premise_ids_of_proposition(body.proposition_id)
+        if body.exact_named_premise_ids != expected_premises:
+            raise PropertyError(
+                "support premise IDs differ from its authenticated proposition"
+            )
         result = k1.DatumRecord(
             (
                 (0, _id_datum(body.semantic_basis_id, "analysis.semantic-basis")),
                 (1, _id_datum(body.proposition_id, "analysis.proposition")),
                 (
                     2,
+                    k1.DatumSeq(
+                        tuple(_id_datum(item) for item in expected_premises)
+                    ),
+                ),
+                (
+                    3,
                     _analysis_datum(
                         body.non_hypothesis_premise_bindings, "non-hypothesis bindings"
                     ),
                 ),
                 (
-                    3,
+                    4,
                     _analysis_datum(
                         body.established_hypothesis_node_bindings,
                         "established hypothesis bindings",
                     ),
                 ),
                 (
-                    4,
+                    5,
                     _analysis_datum(
                         body.assumed_hypothesis_node_bindings,
                         "assumed hypothesis bindings",
                     ),
                 ),
                 (
-                    5,
+                    6,
                     _analysis_datum(
                         body.source_support_bindings, "source support bindings"
                     ),
@@ -2777,6 +3648,11 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
             )
         )
     elif type(body) is AnalysisJudgmentRecordBodyV0:
+        expected_premises = premise_ids_of_proposition(body.proposition_id)
+        if body.exact_named_premise_ids != expected_premises:
+            raise PropertyError(
+                "judgment premise IDs differ from its authenticated proposition"
+            )
         result = k1.DatumRecord(
             tuple(
                 (ordinal, _analysis_datum(value, "judgment-record field"))
@@ -2786,6 +3662,9 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
                         body.polarity,
                         body.exact_family_conclusion,
                         body.inherited_hypothesis_context_id,
+                        k1.DatumSeq(
+                            tuple(_id_datum(item) for item in expected_premises)
+                        ),
                         body.typed_quantitative_result,
                         body.semantic_basis_id,
                         body.support_coordinate,
@@ -2838,6 +3717,9 @@ def analysis_domain_body_v0(subject_kind: str, body: object) -> object:
 
 
 _ANALYSIS_FORMATION_REGISTRY: dict[bytes, tuple[str, object, object, object]] = {}
+_PUBLISHED_ANALYSIS_PROVIDER_DECLARATIONS: dict[
+    tuple[bytes, bytes], AnalysisProviderDeclarationV0
+] = {}
 
 
 def _analysis_profile_rank(profile: object) -> int:
@@ -2886,6 +3768,19 @@ def _registered_profiles_in_value(value: object) -> tuple[object, ...]:
     return tuple(result.values())
 
 
+def _require_named_premise_predecessor_profiles(
+    profile: object, premise_ids: tuple[object, ...]
+) -> None:
+    premise_profiles = tuple(
+        _formed_analysis_profile(premise_id, "analysis.named-premise")
+        for premise_id in premise_ids
+    )
+    if any(premise_profile != profile for premise_profile in premise_profiles):
+        raise AnalysisError(
+            "named-premise predecessors do not share the constructor's direct profile"
+        )
+
+
 def _require_constructor_profile(
     subject_kind: str, body: object, profile: object
 ) -> None:
@@ -2900,6 +3795,27 @@ def _require_constructor_profile(
     required: object | None = None
     if type(body) is AnalysisGoalBodyV0:
         required = _formed_analysis_profile(body.question_id, "analysis.question")
+        intake = intake_analysis_named_premises(
+            body.question_id, body.named_premise_bindings
+        )
+        if intake.outcome is not NamedPremiseIntakeOutcome.AFFIRMATIVE:
+            raise PropertyError(
+                f"named premise intake did not admit the goal: {intake.code}"
+            )
+    elif type(body) is AnalysisHypothesisNodeV0:
+        required = _formed_analysis_profile(body.goal_id, "analysis.goal")
+        _require_named_premise_predecessor_profiles(
+            required, body.exact_named_premise_ids
+        )
+    elif type(body) is AnalysisHypothesisContextBodyV0 and body.nodes:
+        predecessor_profiles = tuple(
+            _formed_analysis_profile(node.goal_id, "analysis.goal")
+            for node in body.nodes
+        )
+        required = max(predecessor_profiles, key=_analysis_profile_rank)
+        _require_named_premise_predecessor_profiles(
+            required, body.exact_named_premise_ids
+        )
     elif type(body) is AnalysisPropositionBodyV0:
         required = _formed_analysis_profile(body.goal_id, "analysis.goal")
         context_profile = _formed_analysis_profile(
@@ -2929,22 +3845,35 @@ def _require_constructor_profile(
             body.adequacy_evaluator_id, "analysis.adequacy-evaluator"
         )
     elif type(body) is AnalysisSupportInstantiationBodyV0:
+        proposition_profile = _formed_analysis_profile(
+            body.proposition_id, "analysis.proposition"
+        )
+        _require_named_premise_predecessor_profiles(
+            proposition_profile, body.exact_named_premise_ids
+        )
         predecessor_profiles = (
             _formed_analysis_profile(body.semantic_basis_id, "analysis.semantic-basis"),
-            _formed_analysis_profile(body.proposition_id, "analysis.proposition"),
+            proposition_profile,
             *_registered_profiles_in_value(
                 (
                     body.non_hypothesis_premise_bindings,
                     body.established_hypothesis_node_bindings,
                     body.assumed_hypothesis_node_bindings,
                     body.source_support_bindings,
+                    body.exact_named_premise_ids,
                 )
             ),
         )
         required = max(predecessor_profiles, key=_analysis_profile_rank)
     elif type(body) is AnalysisJudgmentRecordBodyV0:
+        proposition_profile = _formed_analysis_profile(
+            body.proposition_id, "analysis.proposition"
+        )
+        _require_named_premise_predecessor_profiles(
+            proposition_profile, body.exact_named_premise_ids
+        )
         predecessor_profiles = (
-            _formed_analysis_profile(body.proposition_id, "analysis.proposition"),
+            proposition_profile,
             _formed_analysis_profile(body.semantic_basis_id, "analysis.semantic-basis"),
             _formed_analysis_profile(
                 body.support_coordinate, "analysis.support-instantiation"
@@ -2955,6 +3884,7 @@ def _require_constructor_profile(
             _formed_analysis_profile(
                 body.operation_policy_id, "analysis.operation-policy"
             ),
+            *_registered_profiles_in_value(body.exact_named_premise_ids),
         )
         required = max(predecessor_profiles, key=_analysis_profile_rank)
         if any(
@@ -3099,6 +4029,272 @@ def _formed_analysis_body(identifier: object, subject_kind: str) -> object:
         else identifier.value
     )
     return _ANALYSIS_FORMATION_REGISTRY[key][2]
+
+
+def analysis_named_premise_id(
+    body: AnalysisNamedPremiseBodyV0, *, profile: object
+) -> object:
+    """Form one premise only under its exact selected direct Analysis profile."""
+
+    provider: AnalysisProviderDeclarationV0 | None = None
+    if type(body.bound_model_or_hypothesis) is BoundProviderOutcomeCarrierMap:
+        provider = body.bound_model_or_hypothesis.value.provider
+    if type(body.source) is ProviderDeclarationSource:
+        if provider is not None and provider != body.source.provider:
+            raise PropertyError(
+                "provider premise source names another provider declaration"
+            )
+        provider = body.source.provider
+    if provider is not None:
+        profile_id = _active_analysis_profile_id(profile)
+        declaration_body = _provider_declaration_body(provider)
+        key = (profile_id.internal_reference(), k1.encode_datum(declaration_body))
+        if _PUBLISHED_ANALYSIS_PROVIDER_DECLARATIONS.get(key) != provider:
+            raise PropertyError(
+                "provider premise cannot form without an authenticated published "
+                "provider declaration"
+            )
+
+    return _form_analysis_profiled_content_id("analysis.named-premise", body, profile)
+
+
+def _binding_requirement_keys(
+    bindings: tuple[AnalysisNamedPremiseBindingV0, ...],
+) -> tuple[bytes, ...]:
+    return tuple(_named_premise_requirement_key(item.requirement) for item in bindings)
+
+
+def _datum_contains_reference(value: object, reference: bytes) -> bool:
+    if type(value) is k1.BytesValue:
+        return value.value == reference
+    if type(value) is k1.DatumRecord:
+        return any(
+            _datum_contains_reference(item, reference) for _, item in value.fields
+        )
+    if type(value) is k1.DatumSeq:
+        return any(_datum_contains_reference(item, reference) for item in value.values)
+    if type(value) is k1.DatumVariant:
+        return _datum_contains_reference(value.payload, reference)
+    return False
+
+
+def _question_has_oracle_model(
+    question: AnalysisQuestionBodyV0, distribution_profile_id: object
+) -> bool:
+    _id_datum(distribution_profile_id, "analysis.distribution-profile")
+    reference = distribution_profile_id.internal_reference()
+    if _datum_contains_reference(
+        question.context, reference
+    ) or _datum_contains_reference(question.family_payload, reference):
+        return True
+    pending = [question.context, question.family_payload]
+    visited: set[bytes] = set()
+    while pending:
+        value = pending.pop()
+        references: list[bytes] = []
+
+        def collect(item: object) -> None:
+            if type(item) is k1.BytesValue:
+                references.append(item.value)
+            elif type(item) is k1.DatumRecord:
+                for _, child in item.fields:
+                    collect(child)
+            elif type(item) is k1.DatumSeq:
+                for child in item.values:
+                    collect(child)
+            elif type(item) is k1.DatumVariant:
+                collect(item.payload)
+
+        collect(value)
+        for item_reference in references:
+            if item_reference in visited:
+                continue
+            visited.add(item_reference)
+            entry = _ANALYSIS_FORMATION_REGISTRY.get(item_reference)
+            if entry is None:
+                continue
+            child = analysis_domain_body_v0(entry[0], entry[2])
+            if _datum_contains_reference(child, reference):
+                return True
+            pending.append(child)
+    return False
+
+
+def intake_analysis_named_premises(
+    question_id: object,
+    supplied: tuple[AnalysisNamedPremiseBindingV0, ...],
+) -> NamedPremiseIntakeResult:
+    """Apply the closed owner partition before any goal identity is formed."""
+
+    try:
+        question = _formed_analysis_body(question_id, "analysis.question")
+        profile = _formed_analysis_profile(question_id, "analysis.question")
+    except AnalysisError:
+        return NamedPremiseIntakeResult(
+            NamedPremiseIntakeOutcome.CANNOT_ANSWER,
+            "F0V2D2-C-QUESTION-SOURCE-ABSENT",
+        )
+    if type(supplied) is not tuple or any(
+        type(item) is not AnalysisNamedPremiseBindingV0 for item in supplied
+    ):
+        return NamedPremiseIntakeResult(
+            NamedPremiseIntakeOutcome.MALFORMED,
+            "F0V2D2-M-NONCANONICAL-BINDING-KEY",
+        )
+    try:
+        keys = _binding_requirement_keys(supplied)
+    except AnalysisError:
+        return NamedPremiseIntakeResult(
+            NamedPremiseIntakeOutcome.MALFORMED,
+            "F0V2D2-M-NONCANONICAL-BINDING-KEY",
+        )
+    if len(set(keys)) != len(keys):
+        return NamedPremiseIntakeResult(
+            NamedPremiseIntakeOutcome.MALFORMED,
+            "F0V2D2-M-DUPLICATE-BINDING-KEY",
+        )
+    if keys != tuple(sorted(keys)):
+        return NamedPremiseIntakeResult(
+            NamedPremiseIntakeOutcome.MALFORMED,
+            "F0V2D2-M-CALLER-ORDERED-BINDING-KEY",
+        )
+    required = question.named_premise_requirements
+    required_keys = tuple(_named_premise_requirement_key(item) for item in required)
+    extra = set(keys) - set(required_keys)
+    if extra:
+        return NamedPremiseIntakeResult(
+            NamedPremiseIntakeOutcome.MALFORMED,
+            "F0V2D2-M-EXTRA-BINDING-KEY",
+        )
+    if set(required_keys) - set(keys):
+        return NamedPremiseIntakeResult(
+            NamedPremiseIntakeOutcome.CANNOT_ANSWER,
+            "F0V2D2-C-MISSING-BINDING-KEY",
+        )
+    required_by_key = {
+        _named_premise_requirement_key(item): item for item in required
+    }
+    for binding in supplied:
+        requirement = required_by_key[_named_premise_requirement_key(binding.requirement)]
+        try:
+            premise = _formed_analysis_body(
+                binding.premise_id, "analysis.named-premise"
+            )
+            premise_profile = _formed_analysis_profile(
+                binding.premise_id, "analysis.named-premise"
+            )
+        except AnalysisError:
+            return NamedPremiseIntakeResult(
+                NamedPremiseIntakeOutcome.CANNOT_ANSWER,
+                "F0V2D2-C-PREMISE-SOURCE-ABSENT",
+            )
+        if premise_profile != profile:
+            return NamedPremiseIntakeResult(
+                NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-CROSS-PROFILE-PREMISE",
+            )
+        if premise.kind is not requirement.kind:
+            return NamedPremiseIntakeResult(
+                NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-PREMISE-KIND",
+            )
+        if premise.coordinate != requirement.coordinate:
+            return NamedPremiseIntakeResult(
+                NamedPremiseIntakeOutcome.REFUSED,
+                "F0V2D2-R-PREMISE-COORDINATE",
+            )
+        # Formation has already checked the closed model-scope sum.  Keep the
+        # four owner branches explicit and do not add an intake default.
+        scope = premise.model_scope
+        match scope:
+            case FreshChallengeOnly():
+                if not any(
+                    item.internal_reference() in _FRESH_PROTOCOL_REFERENCES
+                    for item in question.exact_subjects
+                    if type(item) is k1.TypedContentId
+                ):
+                    return NamedPremiseIntakeResult(
+                        NamedPremiseIntakeOutcome.REFUSED,
+                        "F0V2D2-R-FRESH-CHALLENGE-SCOPE",
+                    )
+            case OracleModelOnly(distribution_profile_id=distribution_profile_id):
+                if not _question_has_oracle_model(question, distribution_profile_id):
+                    return NamedPremiseIntakeResult(
+                        NamedPremiseIntakeOutcome.REFUSED,
+                        "F0V2D2-R-ORACLE-MODEL-SCOPE",
+                    )
+            case ExactSubjectsOnly(exact_subjects=exact_subjects):
+                question_subjects = tuple(
+                    sorted(
+                        set(question.exact_subjects),
+                        key=lambda item: k1.encode_datum(_id_datum(item)),
+                    )
+                )
+                if question_subjects != exact_subjects:
+                    return NamedPremiseIntakeResult(
+                        NamedPremiseIntakeOutcome.REFUSED,
+                        "F0V2D2-R-EXACT-SUBJECTS-SCOPE",
+                    )
+            case RebindRequired():
+                return NamedPremiseIntakeResult(
+                    NamedPremiseIntakeOutcome.REFUSED,
+                    "F0V2D2-R-REBIND-REQUIRED-SCOPE",
+                )
+    return NamedPremiseIntakeResult(
+        NamedPremiseIntakeOutcome.AFFIRMATIVE,
+        "F0V2D2-A-NAMED-PREMISE-INTAKE",
+        supplied,
+    )
+
+
+def premise_ids_of_goal(goal_id: object) -> tuple[object, ...]:
+    goal = _formed_analysis_body(goal_id, "analysis.goal")
+    return _canonical_named_premise_ids(
+        binding.premise_id for binding in goal.named_premise_bindings
+    )
+
+
+def premise_ids_of_proposition(proposition_id: object) -> tuple[object, ...]:
+    proposition = _formed_analysis_body(proposition_id, "analysis.proposition")
+    goal_ids = premise_ids_of_goal(proposition.goal_id)
+    context = _formed_analysis_body(
+        proposition.hypothesis_context_id, "analysis.hypothesis-context"
+    )
+    return _named_premise_id_union(
+        (*goal_ids, *context.exact_named_premise_ids)
+    )
+
+
+def _derived_hypothesis_node(
+    local_ordinal: int,
+    goal_id: object,
+    dependency_ordinals: tuple[int, ...] = (),
+) -> AnalysisHypothesisNodeV0:
+    """Attach the exact premise IDs authenticated by one goal."""
+
+    return AnalysisHypothesisNodeV0(
+        local_ordinal,
+        goal_id,
+        dependency_ordinals,
+        premise_ids_of_goal(goal_id),
+    )
+
+
+def _derived_hypothesis_context_body(
+    nodes: tuple[AnalysisHypothesisNodeV0, ...],
+    roots: tuple[int, ...],
+) -> AnalysisHypothesisContextBodyV0:
+    """Attach the canonical premise-ID union of the supplied node frontier."""
+
+    return AnalysisHypothesisContextBodyV0(
+        nodes,
+        roots,
+        _named_premise_id_union(
+            premise_id
+            for node in nodes
+            for premise_id in node.exact_named_premise_ids
+        ),
+    )
 
 
 _ANALYSIS_READ_PURPOSE_ORDINAL = {
@@ -8641,7 +9837,7 @@ def derive_fresh_fs_relation_source(case: object) -> FreshFsRelationSource:
         for read in fresh_manifest.reads + fs_manifest.reads
     }
     pair_manifest = source_manifest(pair_reads.values())
-    return FreshFsRelationSource(
+    result = FreshFsRelationSource(
         case,
         protocol_source,
         fresh_plan,
@@ -8656,6 +9852,10 @@ def derive_fresh_fs_relation_source(case: object) -> FreshFsRelationSource:
         pair_manifest,
         _PAIR_SOURCE_ISSUER,
     )
+    _FRESH_PROTOCOL_REFERENCES.add(
+        protocol_source.fresh_protocol_id.internal_reference()
+    )
+    return result
 
 
 def require_fresh_fs_relation_source(source: FreshFsRelationSource) -> None:
@@ -12881,9 +14081,10 @@ def _exact_premise_goal_id(
             exact_subjects,
             _analysis_datum(context, "premise question context"),
             compiled_payload,
+            (),
         ),
     )
-    return identity("analysis.goal", AnalysisGoalBodyV0(question_id))
+    return identity("analysis.goal", AnalysisGoalBodyV0(question_id, ()))
 
 
 def _semantic_experiment_context(
@@ -13013,13 +14214,31 @@ def analysis_hypothesis_context_id(
     values = canonical_hypotheses(hypotheses)
     identity = _analysis_transport_id if transport else _analysis_id
     nodes = tuple(
-        AnalysisHypothesisNodeV0(index, goal_id, ())
+        _derived_hypothesis_node(index, goal_id)
         for index, goal_id in enumerate(values)
     )
     return identity(
         "analysis.hypothesis-context",
-        AnalysisHypothesisContextBodyV0(nodes, tuple(range(len(nodes)))),
+        _derived_hypothesis_context_body(nodes, tuple(range(len(nodes)))),
     )
+
+
+def _schnorr_source_for_analysis_question(
+    question: AnalysisQuestion,
+) -> tuple[FreshFsRelationSource, SchnorrSpecialSoundnessProfile]:
+    source = derive_fresh_fs_relation_source(total_uniform_schnorr_case())
+    profile = derive_schnorr_special_soundness_profile(source)
+    if (
+        question.protocol_id
+        not in (
+            source.protocol_source.fresh_protocol_id,
+            source.protocol_source.fiat_shamir_protocol_id,
+        )
+        or question.relation_binding_id
+        not in (source.fresh_binding.binding_id, source.fiat_shamir_binding.binding_id)
+    ):
+        raise PropertyError("question is detached from the selected premise source")
+    return source, profile
 
 
 def analysis_question_id(question: AnalysisQuestion) -> object:
@@ -13155,13 +14374,20 @@ def analysis_question_id(question: AnalysisQuestion) -> object:
             ),
         )
     )
+    exact_subjects = (question.protocol_id, question.relation_binding_id)
+    source, profile = _schnorr_source_for_analysis_question(question)
+    if question.family is PropertyFamily.K_OUT_OF_N_SPECIAL_SOUNDNESS:
+        requirements = schnorr_named_premise_requirements(source, profile)
+    else:
+        requirements = fiat_shamir_construction_premise_requirements(source)
     return _analysis_id(
         "analysis.question",
         AnalysisQuestionBodyV0(
             family_profile_id(question.family),
-            (question.protocol_id, question.relation_binding_id),
+            exact_subjects,
             context,
             family_payload,
+            requirements,
         ),
     )
 
@@ -13426,9 +14652,19 @@ def analysis_goal_id(goal: AnalysisGoal) -> object:
             "Analysis goal conclusion was substituted after question formation"
         )
     _property_conclusion_body(expected_conclusion)
+    question_body = _formed_analysis_body(question_id, "analysis.question")
+    source, profile = _schnorr_source_for_analysis_question(goal.question)
+    if goal.question.family is PropertyFamily.K_OUT_OF_N_SPECIAL_SOUNDNESS:
+        bindings = schnorr_named_premise_bindings(
+            source, profile, question_body.exact_subjects
+        )
+    else:
+        bindings = fiat_shamir_construction_premise_bindings(
+            source, afk_randomness_law_id(profile.challenge_count)
+        )
     return _analysis_id(
         "analysis.goal",
-        AnalysisGoalBodyV0(question_id),
+        AnalysisGoalBodyV0(question_id, bindings),
     )
 
 
@@ -13693,6 +14929,7 @@ def _analysis_support_instantiation_id(
     body = AnalysisSupportInstantiationBodyV0(
         semantic_basis_id,
         proposition_id,
+        premise_ids_of_proposition(proposition_id),
         non_hypothesis_premise_bindings or k1.DatumSeq(()),
         established_hypothesis_node_bindings or k1.DatumSeq(()),
         assumed_hypothesis_node_bindings or k1.DatumSeq(tuple(assumed_entries)),
@@ -13731,6 +14968,7 @@ def _analysis_judgment_record_id(
             inherited_hypothesis_context_id,
             "analysis.hypothesis-context",
         ),
+        premise_ids_of_proposition(proposition_id),
         _analysis_datum(typed_quantitative_result, "quantitative result"),
         _id_datum(semantic_basis_id, "analysis.semantic-basis"),
         _id_datum(support_id, "analysis.support-instantiation"),
@@ -14589,6 +15827,355 @@ def require_schnorr_special_soundness_profile(
         raise PropertyError("Schnorr source profile was substituted")
 
 
+def _canonical_requirement_sequence(
+    requirements: Iterable[AnalysisNamedPremiseRequirementV0],
+) -> tuple[AnalysisNamedPremiseRequirementV0, ...]:
+    return tuple(sorted(tuple(requirements), key=_named_premise_requirement_key))
+
+
+def _canonical_scope_subjects(subjects: Iterable[object]) -> tuple[object, ...]:
+    values = tuple(subjects)
+    if not values:
+        raise PropertyError("named premise scope needs a nonempty subject set")
+    return tuple(
+        sorted(
+            {item.internal_reference(): item for item in values}.values(),
+            key=lambda item: k1.encode_datum(_id_datum(item)),
+        )
+    )
+
+
+def _premise_law_ref(
+    profile: object, label: str, *, owner_profile: object | None = None
+) -> object:
+    owner = profile if owner_profile is None else owner_profile
+    return analysis_profile_declaration_ref_body(
+        analysis_profile_declaration_ref(
+            profile,
+            owner,
+            "analysis.semantic-law",
+            label,
+        )
+    )
+
+
+def _schnorr_relation_semantic_model_id(
+    profile: SchnorrSpecialSoundnessProfile,
+) -> object:
+    return fixture_ref(
+        "relations.semantic-model",
+        "bounded-schnorr-relation-model-"
+        + profile.relation_definition_id.internal_reference().hex()[:16],
+    )
+
+
+def _schnorr_public_coin_law_coordinate(
+    source: FreshFsRelationSource,
+) -> PIRPublicCoinLawCoordinate:
+    projection = _source_schnorr_challenge_projection(source)
+    return PIRPublicCoinLawCoordinate(
+        _pir_static_atomic_coordinate_body(projection.challenge_coordinate)
+    )
+
+
+def schnorr_named_premise_requirements(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> tuple[AnalysisNamedPremiseRequirementV0, ...]:
+    require_schnorr_special_soundness_profile(source, profile)
+    plan_id = k3.plan_id(
+        source.case.core,
+        None,
+        k2.ChallengeInterpretation.FRESH,
+        source.fresh_plan,
+    )
+    relation_model = _schnorr_relation_semantic_model_id(profile)
+    requirements = (
+        AnalysisNamedPremiseRequirementV0(
+            "fresh-coin",
+            AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION,
+            _schnorr_public_coin_law_coordinate(source),
+        ),
+        AnalysisNamedPremiseRequirementV0(
+            "relation",
+            AnalysisNamedPremiseKind.RELATION_PREDICATE,
+            RelationsModelEvaluatorCoordinate(relation_model),
+        ),
+        AnalysisNamedPremiseRequirementV0(
+            "witness",
+            AnalysisNamedPremiseKind.WITNESS_TYPE,
+            RelationsWitnessPlanJoinCoordinate(
+                profile.relation_interface_id,
+                0,
+                source.fresh_plan_binding.binding_id,
+                0,
+            ),
+        ),
+        AnalysisNamedPremiseRequirementV0(
+            "prover-state",
+            AnalysisNamedPremiseKind.PROVER_PRIVATE_STATE,
+            PIRPlanStateCoordinate(plan_id, 0),
+        ),
+        AnalysisNamedPremiseRequirementV0(
+            "commit",
+            AnalysisNamedPremiseKind.HONEST_COMMIT,
+            PIRPlanRecipeCoordinate(plan_id, 0, 0),
+        ),
+        AnalysisNamedPremiseRequirementV0(
+            "respond",
+            AnalysisNamedPremiseKind.HONEST_RESPOND,
+            PIRPlanRecipeCoordinate(plan_id, 2, 0),
+        ),
+    )
+    return _canonical_requirement_sequence(requirements)
+
+
+def _premise_law_term(
+    profile: object,
+    label: str,
+    coordinate: AnalysisPremiseCoordinate,
+    *arguments: object,
+    owner_profile: object | None = None,
+) -> AnalysisLawTermV0:
+    return AnalysisLawTermV0(
+        _premise_law_ref(profile, label, owner_profile=owner_profile),
+        (_named_premise_coordinate_body(coordinate), *arguments),
+    )
+
+
+def schnorr_named_premise_bindings(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    exact_subjects: tuple[object, ...],
+) -> tuple[AnalysisNamedPremiseBindingV0, ...]:
+    requirements = schnorr_named_premise_requirements(source, profile)
+    by_slot = {item.slot: item for item in requirements}
+    scope = ExactSubjectsOnly(_canonical_scope_subjects(exact_subjects))
+    relation_model = _schnorr_relation_semantic_model_id(profile)
+    plan_id = k3.plan_id(
+        source.case.core,
+        None,
+        k2.ChallengeInterpretation.FRESH,
+        source.fresh_plan,
+    )
+    distribution_model = fresh_randomness_law_id(profile.challenge_count)
+    bodies = {
+        "fresh-coin": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.FRESH_PUBLIC_COIN_DISTRIBUTION,
+            by_slot["fresh-coin"].coordinate,
+            BoundHypothesis(
+                _premise_law_term(
+                    ANALYSIS_PROPERTY_PROFILE,
+                    "fresh-sampling-hypothesis-v0",
+                    by_slot["fresh-coin"].coordinate,
+                    _id_datum(distribution_model, "analysis.distribution-profile"),
+                )
+            ),
+            CandidateOwnerCoordinate(source.protocol_source.fresh_protocol_id),
+            AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+            FreshChallengeOnly(),
+        ),
+        "relation": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.RELATION_PREDICATE,
+            by_slot["relation"].coordinate,
+            BoundModel(
+                relation_model,
+                _premise_law_term(
+                    ANALYSIS_PROPERTY_PROFILE,
+                    "relation-predicate-binding-v0",
+                    by_slot["relation"].coordinate,
+                    _id_datum(relation_model),
+                ),
+            ),
+            CandidateOwnerCoordinate(relation_model),
+            AnalysisPremiseEvidenceDepth.FROZEN_EXECUTABLE_FALSIFICATION,
+            scope,
+        ),
+        "witness": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.WITNESS_TYPE,
+            by_slot["witness"].coordinate,
+            BoundModel(
+                profile.relation_interface_id,
+                _premise_law_term(
+                    ANALYSIS_PROPERTY_PROFILE,
+                    "witness-type-binding-v0",
+                    by_slot["witness"].coordinate,
+                    _id_datum(profile.relation_interface_id, "relations.interface"),
+                ),
+            ),
+            CandidateOwnerCoordinate(profile.relation_interface_id),
+            AnalysisPremiseEvidenceDepth.FROZEN_EXECUTABLE_FALSIFICATION,
+            scope,
+        ),
+        "prover-state": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.PROVER_PRIVATE_STATE,
+            by_slot["prover-state"].coordinate,
+            BoundModel(
+                plan_id,
+                _premise_law_term(
+                    ANALYSIS_PROPERTY_PROFILE,
+                    "prover-private-state-binding-v0",
+                    by_slot["prover-state"].coordinate,
+                    _id_datum(plan_id, "pir.prover-plan"),
+                ),
+            ),
+            CandidateOwnerCoordinate(plan_id),
+            AnalysisPremiseEvidenceDepth.FROZEN_EXECUTABLE_FALSIFICATION,
+            scope,
+        ),
+        "commit": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.HONEST_COMMIT,
+            by_slot["commit"].coordinate,
+            BoundHypothesis(
+                _premise_law_term(
+                    ANALYSIS_PROPERTY_PROFILE,
+                    "honest-commit-hypothesis-v0",
+                    by_slot["commit"].coordinate,
+                )
+            ),
+            CandidateOwnerCoordinate(plan_id),
+            AnalysisPremiseEvidenceDepth.FROZEN_EXECUTABLE_FALSIFICATION,
+            scope,
+        ),
+        "respond": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.HONEST_RESPOND,
+            by_slot["respond"].coordinate,
+            BoundHypothesis(
+                _premise_law_term(
+                    ANALYSIS_PROPERTY_PROFILE,
+                    "honest-respond-hypothesis-v0",
+                    by_slot["respond"].coordinate,
+                )
+            ),
+            CandidateOwnerCoordinate(plan_id),
+            AnalysisPremiseEvidenceDepth.FROZEN_EXECUTABLE_FALSIFICATION,
+            scope,
+        ),
+    }
+    premise_ids = {
+        slot: analysis_named_premise_id(body, profile=ANALYSIS_PROPERTY_PROFILE)
+        for slot, body in bodies.items()
+    }
+    return tuple(
+        AnalysisNamedPremiseBindingV0(
+            requirement,
+            premise_ids[requirement.slot],
+        )
+        for requirement in requirements
+    )
+
+
+def schnorr_extractor_premise_requirements(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+) -> tuple[AnalysisNamedPremiseRequirementV0, ...]:
+    return tuple(
+        item
+        for item in schnorr_named_premise_requirements(source, profile)
+        if item.slot in ("relation", "witness")
+    )
+
+
+def schnorr_extractor_premise_bindings(
+    source: FreshFsRelationSource,
+    profile: SchnorrSpecialSoundnessProfile,
+    *,
+    premise_scope_subjects: tuple[object, ...],
+) -> tuple[AnalysisNamedPremiseBindingV0, ...]:
+    return tuple(
+        item
+        for item in schnorr_named_premise_bindings(
+            source, profile, premise_scope_subjects
+        )
+        if item.requirement.slot in ("relation", "witness")
+    )
+
+
+def fiat_shamir_construction_premise_requirements(
+    source: FreshFsRelationSource,
+) -> tuple[AnalysisNamedPremiseRequirementV0, ...]:
+    construction_id = source.protocol_source.construction_id
+    return _canonical_requirement_sequence(
+        (
+            AnalysisNamedPremiseRequirementV0(
+                "sampler",
+                AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY,
+                PIRConstructionPremiseCoordinate(
+                    construction_id, AnalysisPremiseProcessKind.SAMPLER_ADEQUACY
+                ),
+            ),
+            AnalysisNamedPremiseRequirementV0(
+                "oracle-process",
+                AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS,
+                PIRConstructionPremiseCoordinate(
+                    construction_id, AnalysisPremiseProcessKind.ORACLE_PROCESS
+                ),
+            ),
+        )
+    )
+
+
+def fiat_shamir_construction_premise_bindings(
+    source: FreshFsRelationSource,
+    oracle_model: object,
+    *,
+    profile: object = ANALYSIS_PROPERTY_PROFILE,
+) -> tuple[AnalysisNamedPremiseBindingV0, ...]:
+    requirements = fiat_shamir_construction_premise_requirements(source)
+    by_slot = {item.slot: item for item in requirements}
+    construction_id = source.protocol_source.construction_id
+    construction, _ = _checked_case_axes(source.case)
+    form = (
+        k1.DatumVariant(0, k1.UNIT)
+        if construction.max_attempts == 1
+        else k1.DatumVariant(1, k1.Nat(construction.max_attempts))
+    )
+    bodies = {
+        "sampler": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY,
+            by_slot["sampler"].coordinate,
+            BoundHypothesis(
+                _premise_law_term(
+                    profile,
+                    "construction-sampler-adequacy-hypothesis-v0",
+                    by_slot["sampler"].coordinate,
+                    _id_datum(oracle_model, "analysis.distribution-profile"),
+                    form,
+                    owner_profile=ANALYSIS_PROPERTY_PROFILE,
+                )
+            ),
+            CandidateOwnerCoordinate(construction_id),
+            AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+            OracleModelOnly(oracle_model),
+        ),
+        "oracle-process": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS,
+            by_slot["oracle-process"].coordinate,
+            BoundHypothesis(
+                _premise_law_term(
+                    profile,
+                    "construction-oracle-process-hypothesis-v0",
+                    by_slot["oracle-process"].coordinate,
+                    _id_datum(oracle_model, "analysis.distribution-profile"),
+                    owner_profile=ANALYSIS_PROPERTY_PROFILE,
+                )
+            ),
+            CandidateOwnerCoordinate(construction_id),
+            AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+            OracleModelOnly(oracle_model),
+        ),
+    }
+    return tuple(
+        AnalysisNamedPremiseBindingV0(
+            requirement,
+            analysis_named_premise_id(
+                bodies[requirement.slot], profile=profile
+            ),
+        )
+        for requirement in requirements
+    )
+
+
 def _bound_schnorr_statement_value(
     source: FreshFsRelationSource,
     profile: SchnorrSpecialSoundnessProfile,
@@ -15121,16 +16708,18 @@ def fixed_extractor_question_id(
     profile: SchnorrSpecialSoundnessProfile,
 ) -> object:
     experiment_id = fixed_extractor_experiment_profile_id(source, profile)
+    exact_subjects = _finite_cover_exact_subjects(source, profile)
     return _analysis_id(
         "analysis.question",
         AnalysisQuestionBodyV0(
             _fixed_extractor_family_ref(),
-            _finite_cover_exact_subjects(source, profile),
+            exact_subjects,
             _semantic_experiment_context(
                 (source_manifest_id(source.fresh_manifest),),
                 (experiment_id,),
             ),
             _fixed_extractor_question_payload(source, profile),
+            schnorr_extractor_premise_requirements(source, profile),
         ),
     )
 
@@ -15140,9 +16729,16 @@ def fixed_extractor_goal_id(
     source: FreshFsRelationSource,
     profile: SchnorrSpecialSoundnessProfile,
 ) -> object:
+    question_id = fixed_extractor_question_id(source, profile)
+    question = _formed_analysis_body(question_id, "analysis.question")
+    bindings = schnorr_extractor_premise_bindings(
+        source,
+        profile,
+        premise_scope_subjects=question.exact_subjects,
+    )
     return _analysis_id(
         "analysis.goal",
-        AnalysisGoalBodyV0(fixed_extractor_question_id(source, profile)),
+        AnalysisGoalBodyV0(question_id, bindings),
     )
 
 
@@ -15212,6 +16808,7 @@ def finite_cover_certificate_question_id(
                 (fixed_extractor_experiment_profile_id(source, profile),),
             ),
             _finite_cover_certificate_question_payload(source, profile, kind),
+            (),
         ),
     )
 
@@ -15225,7 +16822,8 @@ def finite_cover_certificate_goal_id(
     return _analysis_id(
         "analysis.goal",
         AnalysisGoalBodyV0(
-            finite_cover_certificate_question_id(source, profile, kind)
+            finite_cover_certificate_question_id(source, profile, kind),
+            (),
         ),
     )
 
@@ -19726,6 +21324,7 @@ def theorem_truth_question_body(schema: FSTheoremSchema) -> object:
         (schema_id,),
         _source_free_question_context(ANALYSIS_TRANSPORT_PROFILE),
         k1.DatumRecord(((0, k1.Symbol("exact-selected-theorem-truth-question")),)),
+        (),
     )
 
 
@@ -19736,7 +21335,7 @@ def theorem_truth_goal_id(schema: FSTheoremSchema) -> object:
     )
     return _analysis_transport_id(
         "analysis.goal",
-        AnalysisGoalBodyV0(question_id),
+        AnalysisGoalBodyV0(question_id, ()),
     )
 
 
@@ -19936,6 +21535,111 @@ def family_definition_id(family: AFKAsymptoticFamily) -> object:
     )
 
 
+def family_random_oracle_distribution_profile_id(
+    family: AFKAsymptoticFamily,
+) -> object:
+    family_id = family_definition_id(family)
+    return _analysis_transport_id(
+        "analysis.distribution-profile",
+        AnalysisDistributionProfileBodyV0(
+            k1.Symbol("family-indexed-classical-random-oracle-challenge"),
+            k1.Symbol("family-challenge-set-at-logical-index"),
+            k1.Symbol("uniform-at-each-fresh-index"),
+            k1.DatumSeq(
+                (
+                    _id_datum(
+                        family_id, "analysis.asymptotic-protocol-family"
+                    ),
+                )
+            ),
+            k1.Symbol("persistent-table-conditioned-independence"),
+            k1.Symbol("adaptive-lazy-random-function-process"),
+            k1.Symbol("explicit-abort-and-noncompletion"),
+        ),
+    )
+
+
+def family_named_premise_requirements(
+    family: AFKAsymptoticFamily, role: str
+) -> tuple[AnalysisNamedPremiseRequirementV0, ...]:
+    if role == "source-two-special-soundness":
+        return ()
+    if role != "target-adaptive-knowledge-q-lt-N":
+        raise TheoremError("unsupported AFK family premise role")
+    family_id = family_definition_id(family)
+    return _canonical_requirement_sequence(
+        (
+            AnalysisNamedPremiseRequirementV0(
+                "sampler",
+                AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY,
+                AnalysisFamilyPremiseCoordinate(
+                    family_id, AnalysisPremiseProcessKind.SAMPLER_ADEQUACY
+                ),
+            ),
+            AnalysisNamedPremiseRequirementV0(
+                "oracle-process",
+                AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS,
+                AnalysisFamilyPremiseCoordinate(
+                    family_id, AnalysisPremiseProcessKind.ORACLE_PROCESS
+                ),
+            ),
+        )
+    )
+
+
+def family_named_premise_bindings(
+    family: AFKAsymptoticFamily, role: str
+) -> tuple[AnalysisNamedPremiseBindingV0, ...]:
+    requirements = family_named_premise_requirements(family, role)
+    if not requirements:
+        return ()
+    family_id = family_definition_id(family)
+    oracle_model = family_random_oracle_distribution_profile_id(family)
+    by_slot = {item.slot: item for item in requirements}
+    bodies = {
+        "sampler": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.FIAT_SHAMIR_SAMPLER_ADEQUACY,
+            by_slot["sampler"].coordinate,
+            BoundHypothesis(
+                _premise_law_term(
+                    ANALYSIS_TRANSPORT_PROFILE,
+                    "family-sampler-adequacy-hypothesis-v0",
+                    by_slot["sampler"].coordinate,
+                    _id_datum(oracle_model, "analysis.distribution-profile"),
+                    k1.DatumVariant(0, k1.UNIT),
+                )
+            ),
+            FamilyHypothesisSource(_id_datum(family_id)),
+            AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+            OracleModelOnly(oracle_model),
+        ),
+        "oracle-process": AnalysisNamedPremiseBodyV0(
+            AnalysisNamedPremiseKind.FIAT_SHAMIR_ORACLE_PROCESS,
+            by_slot["oracle-process"].coordinate,
+            BoundHypothesis(
+                _premise_law_term(
+                    ANALYSIS_TRANSPORT_PROFILE,
+                    "family-oracle-process-hypothesis-v0",
+                    by_slot["oracle-process"].coordinate,
+                    _id_datum(oracle_model, "analysis.distribution-profile"),
+                )
+            ),
+            FamilyHypothesisSource(_id_datum(family_id)),
+            AnalysisPremiseEvidenceDepth.SOURCE_GROUNDED_MAPPING,
+            OracleModelOnly(oracle_model),
+        ),
+    }
+    return tuple(
+        AnalysisNamedPremiseBindingV0(
+            requirement,
+            analysis_named_premise_id(
+                bodies[requirement.slot], profile=ANALYSIS_TRANSPORT_PROFILE
+            ),
+        )
+        for requirement in requirements
+    )
+
+
 SELECTED_AFK_FAMILY = form_afk_asymptotic_family(
     "selected-prime-order-schnorr-family-N8"
 )
@@ -20105,6 +21809,7 @@ def _form_family_question_id(family: AFKAsymptoticFamily, role: str) -> object:
             (family_id,),
             context,
             k1.DatumRecord(tuple(payload_entries)),
+            family_named_premise_requirements(family, role),
         ),
     )
 
@@ -20121,7 +21826,10 @@ def family_question_id(family: AFKAsymptoticFamily, role: str) -> object:
 def _form_family_goal_id(family: AFKAsymptoticFamily, role: str) -> object:
     return _analysis_transport_id(
         "analysis.goal",
-        AnalysisGoalBodyV0(family_question_id(family, role)),
+        AnalysisGoalBodyV0(
+            family_question_id(family, role),
+            family_named_premise_bindings(family, role),
+        ),
     )
 
 
@@ -20191,6 +21899,15 @@ def _form_family_experiment_profile_id(
                         ),
                     ),
                     (1, _family_ro_index_domain_body(family.ro_index_domain)),
+                    (
+                        2,
+                        _id_datum(
+                            family_random_oracle_distribution_profile_id(family),
+                            "analysis.distribution-profile",
+                        )
+                        if axis == "adaptive-fs-target"
+                        else k1.UNIT,
+                    ),
                 )
             ),
             k1.Symbol("single-session"),
@@ -20931,6 +22648,7 @@ def family_applicability_question_id(
                     (1, k1.Symbol("exact-afk-family-applicability")),
                 )
             ),
+            (),
         ),
     )
 
@@ -20941,7 +22659,9 @@ def family_applicability_goal_id(
 ) -> object:
     return _analysis_transport_id(
         "analysis.goal",
-        AnalysisGoalBodyV0(family_applicability_question_id(family, candidate)),
+        AnalysisGoalBodyV0(
+            family_applicability_question_id(family, candidate), ()
+        ),
     )
 
 
@@ -22022,7 +23742,7 @@ def transport_afk_family_knowledge(
             (theorem_truth.retained_hypothesis_id,),
         )
         target_hypothesis_nodes = tuple(
-            AnalysisHypothesisNodeV0(ordinal, goal_id, ())
+            _derived_hypothesis_node(ordinal, goal_id)
             for ordinal, goal_id in enumerate(retained)
         )
         target_proposition_id = family_target_property_proposition_id(family, retained)
@@ -22189,7 +23909,7 @@ def require_family_knowledge_judgment(
         (expected_truth_hypothesis,),
     )
     expected_hypothesis_nodes = tuple(
-        AnalysisHypothesisNodeV0(ordinal, goal_id, ())
+        _derived_hypothesis_node(ordinal, goal_id)
         for ordinal, goal_id in enumerate(expected_retained)
     )
     expected_target_proposition = family_target_property_proposition_id(
@@ -23938,7 +25658,7 @@ def _fixed_member_hypothesis_nodes(
         (0, 1, 5, 6),
     )
     return tuple(
-        AnalysisHypothesisNodeV0(ordinal, goal_id, dependencies[ordinal])
+        _derived_hypothesis_node(ordinal, goal_id, dependencies[ordinal])
         for ordinal, goal_id in enumerate(goals)
     )
 
@@ -24159,7 +25879,7 @@ def _family_instance_correspondence_coordinates(
         )
     instance_context_id = _analysis_transport_id(
         "analysis.hypothesis-context",
-        AnalysisHypothesisContextBodyV0(hypothesis_nodes, (7, 8)),
+        _derived_hypothesis_context_body(hypothesis_nodes, (7, 8)),
     )
     family_supports = tuple(
         _family_support_schema_binding(
@@ -24389,7 +26109,7 @@ def _family_instance_hypothesis_context_id(
         raise AuthorityError("family-instance hypothesis DAG is incomplete")
     return _analysis_transport_id(
         "analysis.hypothesis-context",
-        AnalysisHypothesisContextBodyV0(coordinates.hypothesis_nodes, (7, 8)),
+        _derived_hypothesis_context_body(coordinates.hypothesis_nodes, (7, 8)),
     )
 
 
@@ -25065,13 +26785,11 @@ def _fixed_member_hypothesis_context_body(
     root_ordinals = tuple(
         ordinal_by_key[key] for key in ordinal_by_key if key not in dependency_keys
     )
-    return AnalysisHypothesisContextBodyV0(
-        tuple(
-            AnalysisHypothesisNodeV0(ordinal, goal, dependencies)
-            for ordinal, (goal, dependencies) in enumerate(ordered)
-        ),
-        tuple(sorted(root_ordinals)),
+    nodes = tuple(
+        _derived_hypothesis_node(ordinal, goal, dependencies)
+        for ordinal, (goal, dependencies) in enumerate(ordered)
     )
+    return _derived_hypothesis_context_body(nodes, tuple(sorted(root_ordinals)))
 
 
 def _fixed_member_hypothesis_context_id(
@@ -25183,6 +26901,9 @@ def _fixed_member_question_id(
                     (1, k1.Symbol("exact-fixed-member-specialization")),
                 )
             ),
+            fiat_shamir_construction_premise_requirements(
+                _SCHNORR_PINNED_SOURCE
+            ),
         ),
     )
 
@@ -25193,7 +26914,14 @@ def _fixed_member_goal_id(
 ) -> object:
     return _analysis_transport_id(
         "analysis.goal",
-        AnalysisGoalBodyV0(_fixed_member_question_id(correspondence, conclusion_id)),
+        AnalysisGoalBodyV0(
+            _fixed_member_question_id(correspondence, conclusion_id),
+            fiat_shamir_construction_premise_bindings(
+                _SCHNORR_PINNED_SOURCE,
+                afk_randomness_law_id(_SCHNORR_PINNED_PROFILE.challenge_count),
+                profile=ANALYSIS_TRANSPORT_PROFILE,
+            ),
+        ),
     )
 
 
