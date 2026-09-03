@@ -100,6 +100,9 @@ F0  ideal assurance architecture and current-design falsification
   -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
   -> F0-V2C  target publication and migration            [refreeze rehearsed; publication held]
   -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
+  -> Analysis premise owner text                        [authored; publication gated]
+  -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
+  -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
   -> F2  zkc-native operational interpretation and one property pilot
@@ -742,6 +745,12 @@ provider, extraction tool, or durable schema.
   `Affirmative/M4-A-FORWARD-STATE-SOUND`; it pins the text before the
   claim-source region repair, so the two boundary helpers await its next
   round.
+- [`analysis-premise-intake-owner-text.md`](analysis-premise-intake-owner-text.md)
+  records the Analysis owner-text pass that adopts the intake design: the
+  named-premise grammar and intake in the kernel, the Fresh distribution,
+  provider outcome-carrier, and Schnorr premise catalog in the property
+  profile, and the family premises in the transport profile; both compilers
+  agree, the six Analysis profiles rotate, and publication stays gated.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
