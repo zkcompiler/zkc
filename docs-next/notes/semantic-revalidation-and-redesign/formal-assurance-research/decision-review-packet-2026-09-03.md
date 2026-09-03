@@ -45,7 +45,7 @@ reader would have to show to reverse them.
 
 | Decision | Evidence | Reverse it by showing |
 |---|---|---|
-| A provider declaration names its `modelled_lanes`; a lane image is `Image(v)` or `Unmodelled`; no lane is collapsed onto another | F2-O2 round two (five clauses, 81 runs), Analysis round four | a provider whose execution realizes a lane the declaration cannot name, or a transport that needs a collapsed image |
+| A provider declaration names its `modelled_lanes`; a lane image is `Image(v)` or `Unmodelled`; no lane is collapsed onto another | F2-O2 round two (VCVio, `Bool`) and F2-O3 (ArkLib, `Option Unit`), five clauses each over 81 runs; Analysis round four | a provider whose execution realizes a lane the declaration cannot name, or a transport that needs a collapsed image |
 | The tenth premise kind `OperationalCompletion` for statements over the whole partition | Analysis round four | a whole-partition statement that transports soundly without it |
 | VCVio's declaration: carrier `Bool`, modelled lanes `Accepted` and `Rejected` (item 3, unpublished) | F2-O2 round two, the VCVio source at the pinned revision | a VCVio execution path that fails to complete inside the oracle computation |
 
