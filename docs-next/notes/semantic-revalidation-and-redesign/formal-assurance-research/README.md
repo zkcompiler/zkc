@@ -104,6 +104,7 @@ F0  ideal assurance architecture and current-design falsification
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
   -> M2     term calculus and Schnorr denotation         [complete, CannotAnswer]
   -> Terminal contract and must-fact mechanization       [complete, CannotAnswer]
+  -> Closed forward state mechanization (M4)             [complete, Affirmative; pins pre-repair text]
   -> B2D2   Fresh completed-record schema               [complete, schema only]
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
@@ -619,6 +620,18 @@ provider, extraction tool, or durable schema.
   are authored unconditionally), and a sound linear extension through
   must-fact exactness, to be adopted only when a selected protocol needs a
   conditional required Reduction.
+- [`m4-mechanized-forward-state.md`](m4-mechanized-forward-state.md)
+  extends the mechanization to the closed Section 10: the amended must-fact
+  rules for the unnamed constructors and non-Boolean inputs, contradiction
+  normalization, the standalone impossible-region clause, and the closed
+  `Region`, `Implies`, `Disjoint`, `ClaimStatus`, and `LiveClaims` laws are
+  transcribed and proved (Region exactness for attemptedness and
+  Live/Dead soundness against the path-enumerating reference), all five of
+  the earlier underdeterminations close, the five integrated carriers keep
+  the reusable-claim refusal, and the aggregate is
+  `Affirmative/M4-A-FORWARD-STATE-SOUND`; it pins the text before the
+  claim-source region repair, so the two boundary helpers await its next
+  round.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
