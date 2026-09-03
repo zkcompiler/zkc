@@ -77,7 +77,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
   -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
   -> F2-O3  provider interpretation in ArkLib            [complete, Affirmative; premise unpublished]
-  -> F0-V3C finite canonical-framed subject and executor [round two; {'code': 'F0V3C-A-FS-RUNTIME', 'outcome': 'Affirmative'}]
+  -> F0-V3C finite canonical-framed subject and executor [round two, Affirmative; one-shot subject added]
   -> F2-O4  Fiat--Shamir provider interpretation         [complete, Affirmative; premise unpublished]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
