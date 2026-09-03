@@ -9,7 +9,10 @@ unresolved in a ledger that has an owner and a closure rule:
   and
 - a reopening record under ``docs-next/notes``, which the v0 design program's
   change control keeps until its decision gate changes an owner page or
-  rejects the reopening.
+  rejects the reopening; and
+- a row of the public gap ledger ``docs/gap-ledger.md``, which records a gap
+  between the specification and the build until the build or the
+  specification closes it.
 
 This module does not decide anything and closes nothing. It emits one JSON
 report and one Markdown index so that the complete open set can be read in
@@ -32,6 +35,7 @@ from checks import run
 ROOT = run.ROOT
 DEFAULT_EVALUATION = ROOT / "evaluation"
 DEFAULT_NOTES = ROOT / "docs-next" / "notes"
+DEFAULT_GAP_LEDGER = ROOT / "docs" / "gap-ledger.md"
 FINDINGS_FILE = "expected-findings.json"
 CODE_PATTERN = re.compile(r"\A[A-Z0-9]+(?:-[A-Z0-9]+)+\Z")
 REOPENING_GLOB = "**/*-reopening-*.md"
@@ -180,6 +184,40 @@ def collect_reopening_records(notes: Path = DEFAULT_NOTES) -> list[dict[str, str
     return items
 
 
+def collect_gap_ledger(ledger: Path = DEFAULT_GAP_LEDGER) -> list[dict[str, str]]:
+    """Return the rows of the gap ledger's table, header and rule excluded."""
+
+    try:
+        lines = ledger.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise OpenItemsError(f"cannot read {ledger}: {error}") from error
+    rows: list[dict[str, str]] = []
+    in_table = False
+    for line in lines:
+        if line.startswith("| Specification |"):
+            in_table = True
+            continue
+        if in_table and line.startswith("|---"):
+            continue
+        if in_table and line.startswith("|"):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) != 4:
+                raise OpenItemsError(f"{ledger}: gap row needs four cells: {line!r}")
+            rows.append(
+                {
+                    "kind": "gap",
+                    "specification": cells[0],
+                    "behaviour": cells[1],
+                    "measured_by": cells[2],
+                    "closes_with": cells[3],
+                    "source": _source(ledger, ledger.parent),
+                }
+            )
+        elif in_table and not line.startswith("|"):
+            in_table = False
+    return rows
+
+
 def audit(
     cannot_answer: Iterable[Mapping[str, str]],
     reopening_records: Iterable[Mapping[str, str]],
@@ -232,10 +270,13 @@ def audit(
 
 
 def build_report(
-    evaluation: Path = DEFAULT_EVALUATION, notes: Path = DEFAULT_NOTES
+    evaluation: Path = DEFAULT_EVALUATION,
+    notes: Path = DEFAULT_NOTES,
+    ledger: Path = DEFAULT_GAP_LEDGER,
 ) -> dict[str, Any]:
     cannot_answer = collect_cannot_answer(evaluation)
     records = collect_reopening_records(notes)
+    gaps = collect_gap_ledger(ledger)
     findings = audit(cannot_answer, records)
     blocking = [finding for finding in findings if finding["blocking"]]
     packages = sorted({item["package"] for item in cannot_answer})
@@ -247,9 +288,11 @@ def build_report(
             "cannot_answer_items": len(cannot_answer),
             "packages_with_cannot_answer": len(packages),
             "reopening_records": len(records),
+            "gap_ledger_rows": len(gaps),
         },
         "cannot_answer": cannot_answer,
         "reopening_records": records,
+        "gap_ledger": gaps,
     }
 
 
@@ -268,6 +311,13 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     ]
     for record in report["reopening_records"]:
         lines.append(f"| {record['title']} | {record['state']} | `{record['source']}` |")
+    lines += ["", "## Gap ledger", "", "| Specification | Current behaviour | Measured by | Closes with |", "|---|---|---|---|"]
+    for gap in report["gap_ledger"]:
+        lines.append(
+            f"| {gap['specification']} | {gap['behaviour']} | {gap['measured_by']} | {gap['closes_with']} |"
+        )
+    if not report["gap_ledger"]:
+        lines.append("| (no entry recorded) | | | |")
     lines += ["", "## `CannotAnswer` findings by package", ""]
     by_package: dict[str, list[Mapping[str, str]]] = {}
     for item in report["cannot_answer"]:
@@ -287,6 +337,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"- `CannotAnswer` findings: {summary['cannot_answer_items']} across "
         f"{summary['packages_with_cannot_answer']} packages",
         f"- reopening records: {summary['reopening_records']}",
+        f"- gap ledger rows: {summary['gap_ledger_rows']}",
         "",
     ]
     return "\n".join(lines)
@@ -315,6 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         f"open items: {summary['cannot_answer_items']} CannotAnswer findings in "
         f"{summary['packages_with_cannot_answer']} packages, "
         f"{summary['reopening_records']} reopening records, "
+        f"{summary['gap_ledger_rows']} gap ledger rows, "
         f"{len(report['findings'])} structural findings "
         f"({sum(1 for f in report['findings'] if f['blocking'])} blocking)"
     )

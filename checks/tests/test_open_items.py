@@ -78,6 +78,19 @@ class SyntheticSourcesTest(unittest.TestCase):
             with self.assertRaises(open_items.OpenItemsError):
                 open_items.collect_cannot_answer(root)
 
+    def test_gap_ledger_rows_are_read_and_malformed_rows_refuse(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "gap-ledger.md"
+            ledger.write_text(
+                "# Gap Ledger\n\n| Specification | Current behaviour | Measured by | Closes with |\n"
+                "|---|---|---|---|\n| spec/x.md 3 | refuses | `research.x` | change y |\n\nNo more.\n"
+            )
+            rows = open_items.collect_gap_ledger(ledger)
+            self.assertEqual([("spec/x.md 3", "change y")], [(r["specification"], r["closes_with"]) for r in rows])
+            ledger.write_text("| Specification | Current behaviour | Measured by | Closes with |\n|---|---|---|---|\n| a | b |\n")
+            with self.assertRaises(open_items.OpenItemsError):
+                open_items.collect_gap_ledger(ledger)
+
     def test_reopening_record_without_state_is_a_finding(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             notes = Path(tmp)

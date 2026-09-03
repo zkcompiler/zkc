@@ -96,11 +96,11 @@
     {
       "id": "checks.open-items",
       "title": "Open items index",
-      "subject": "The complete set of publicly recorded open items: `CannotAnswer` findings in frozen research findings and reopening records under the design notes.",
+      "subject": "The complete set of publicly recorded open items: `CannotAnswer` findings in frozen research findings, reopening records under the design notes, and the rows of the public gap ledger.",
       "claim": "Every frozen findings file parses under strict JSON, every `CannotAnswer` finding carries a well-formed code (a code shared by two findings of one package is reported, not failed), every reopening record states its state, and the regenerated index is emitted.",
       "classification": "control-plane",
       "methods": ["unit", "policy", "static-analysis", "negative"],
-      "source_paths": ["checks/open_items.py", "checks/tests/test_open_items.py", "checks/manifest.json"],
+      "source_paths": ["checks/open_items.py", "checks/tests/test_open_items.py", "checks/manifest.json", "docs/gap-ledger.md"],
       "tiers": ["developer", "pr", "research-checkpoint", "scheduled", "release-freeze"],
       "cost": "instant",
       "environment": "python-stdlib",

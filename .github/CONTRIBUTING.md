@@ -96,7 +96,8 @@ belongs in the pull request body, which is what survives the squash.
   every refusal a change introduces.
 - **Semantics.** Update the owning specification. `docs/spec/` describes the
   intended model and is not weakened to match what is built; a gap between
-  the two belongs in the gap ledger, not in the specification.
+  the two belongs in the [gap ledger](../docs/gap-ledger.md), not in the
+  specification.
 - **Artifact and registry formats.** These may change freely at v0; a break
   is the norm rather than an event. What a change carries is that the
   implementations and their goldens move in the same change set, and that
