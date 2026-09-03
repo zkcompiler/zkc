@@ -60,10 +60,15 @@ endpoint-graph body fragment changes for the Terminal repair (Section 4).
 6. **FS-family view catalogs.** Both family pages gain a catalog of the same
    form as the Interaction catalog, an `ExecutionView` schema and body of their
    own, body-safe result-view coordinates (the owner-local result reference
-   leaves the bodies), and their split envelope compilers. The eleven body
-   normalizations remain to be transcribed from the F0-V3B packets
-   (`evaluation/formal-source-fs-view-determinacy-f0v3/proposed/`); until then
-   those fields stay prose and the F0-V3 obligations stay open.
+   leaves the bodies), their split envelope compilers, and the eight view
+   bodies normalized from the F0-V3B packets
+   (`evaluation/formal-source-fs-view-determinacy-f0v3/proposed/`): every
+   field is an exact identity, value, natural, closed tag, law reference, or
+   record or sequence of those. Where the packets chose an opaque canonical
+   value for a field the page already types as a declaration reference (the
+   application domain), the page's reference is kept; the packets' frozen
+   schema digests therefore describe the candidate and not this text, and
+   the F0-V3 refreeze reads the page.
 7. **Identity pin (P2).** Identity is the prose fragment; no transcription
    pin was added. Discrepancies found while transcribing are recorded in
    Section 6 as named reopenings.
@@ -143,12 +148,11 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
 
 ## 7. What remains before publication
 
-- Transcribe the eleven Fiat--Shamir body families from the F0-V3B packets
-  into owner prose on both family pages.
-- Refreeze the source-pinning packages against the migrated text. The overlay
-  measurement found 21 of 52 research checks pinned to the migrated bytes; the
-  authored text is being measured the same way and its set is recorded in the
-  lane register.
+- Refreeze the source-pinning packages against the migrated text. With the
+  authored text in place, 22 of 53 research checks fail: the overlay
+  measurement's 21 plus the terminal owner-contracts package, whose rule the
+  owner text tightens (Section 6, item 1). The 31 kernel and instrument checks
+  stay green.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
 - Take the independent freeze review's findings (a verification lane is

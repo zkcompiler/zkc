@@ -964,44 +964,102 @@ interpretation-failure schema, and its outcome partition has no
 ### 11.1 Transcript declaration view
 
 ```text
+AlgorithmUse = {
+  algorithm: PortableAlgorithmRef,
+  evaluation_contract: EvaluationContractId
+}
+
+MaterialCoordinate = {
+  site: None | Occurrence(OccurrenceRef) | Challenge(ChallengeRef),
+  ordinal: Natural
+}
+
+MaterialSchema = {
+  coordinate: MaterialCoordinate,
+  value_type: ValueType,
+  length: Natural
+}
+
+CanonicalFrameCoordinate = {
+  position: Natural,
+  occurrence_ref: OccurrenceRef,
+  occurrence_kind: OccurrenceKind
+}
+
 DuplexTranscriptDeclarationViewBody = {
-  transcript_construction_id,
-  core_id,
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
   construction_family: DuplexSponge,
-  alphabet_type,
-  zero_symbol,
-  rate,
-  capacity,
-  state_carrier_and_invariant,
-  binary_instance_carrier_and_bit_convention,
-  exact_instance_binding_projection,
-  hash_to_capacity_algorithm_and_contract,
-  permutation_forward_algorithm_and_contract,
-  fixed_start_absorb_squeeze_laws,
-  exact_edge_case_laws,
-  exact_construction_material_schema,
-  message_encoder_map,
-  semantic_argument_shape,
-  prover_required_schedule,
-  verifier_complete_schedule,
-  exact_operational_resource_projection
+  alphabet_type: ValueType,
+  zero_symbol: CanonicalValue<alphabet_type>,
+  rate: Natural,
+  capacity: Natural,
+  state_carrier: { carrier_type: ValueType, invariant_law: PIRProfileLawReference },
+  instance_carrier: {
+    carrier_type: ValueType,
+    bit_convention_law: PIRProfileLawReference
+  },
+  instance_binding_projection: {
+    bindings: CanonicalSeq<BindingRef>,
+    law: PIRProfileLawReference
+  },
+  hash_to_capacity: AlgorithmUse,
+  permutation_forward: AlgorithmUse,
+  fixed_start_absorb_squeeze_law: PIRProfileLawReference,
+  edge_case_law: PIRProfileLawReference,
+  construction_material_schema: MaterialSchema,
+  message_encoders: CanonicalSeq<{
+    occurrence_ref: OccurrenceRef,
+    codec: AlgorithmUse,
+    encoded_length: Natural
+  }>,
+  semantic_argument_shape: {
+    messages: CanonicalSeq<{ occurrence_ref: OccurrenceRef, value_type: ValueType }>,
+    challenges: CanonicalSeq<{ challenge_ref: ChallengeRef, value_type: ValueType }>
+  },
+  prover_required_schedule: CanonicalSeq<CanonicalFrameCoordinate>,
+  verifier_complete_schedule: CanonicalSeq<CanonicalFrameCoordinate>,
+  operational_resource_projection: {
+    permutations: Natural,
+    absorbed_symbols: Natural,
+    squeezed_symbols: Natural
+  }
 }
 ```
+
+The state-carrier invariant law, the fixed start/absorb/squeeze law, and the
+edge-case law name the fixed state-transition law of Section 5; the
+bit-convention law names the body-grammar law; the binding-projection law
+names the source-views law of this section. `construction_material_schema`
+places the construction's own material (the salt) at an exact coordinate with
+its type and length; `message_encoders` fixes, per encoded Prover message, the
+codec and its encoded length; the two schedules list framed occurrences in
+prefix order; the resource projection counts permutations and absorbed and
+squeezed symbols of one complete run.
 
 ### 11.2 Encoded-input coverage view
 
 ```text
+CoverageAtom =
+    Binding(BindingRef)
+  | Material(MaterialCoordinate)
+  | Message(OccurrenceRef)
+  | Challenge(ChallengeRef)
+
 DuplexEncodedInputCoverageViewBody = {
-  transcript_construction_id,
-  core_id,
-  exact_instance_binding_sequence,
-  salt_coordinate,
-  per_challenge_ordered_encoded_input_coverage,
-  exact_message_coverage,
-  exact_challenge_coverage,
-  prover_required_prefix_law,
-  verifier_complete_schedule_law,
-  prohibited_additions
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
+  instance_binding_sequence: CanonicalSeq<BindingRef>,
+  salt_coordinate: MaterialCoordinate,
+  encoded_input_coverage: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    atoms: CanonicalSeq<CoverageAtom>
+  }>,
+  message_coverage: CanonicalSeq<OccurrenceRef>,
+  challenge_coverage: CanonicalSeq<ChallengeRef>,
+  prover_required_prefix_law: PIRProfileLawReference,
+  verifier_complete_schedule_law: PIRProfileLawReference,
+  prohibited_additions: CanonicalSeq<CoverageAtom>
 }
 ```
 
@@ -1016,41 +1074,77 @@ encoder-injectivity judgments.
 
 ```text
 DuplexChallengeTransitionViewBody = {
-  transcript_construction_id,
-  core_id,
-  per_challenge_squeeze_and_decoder_map,
-  decoder_totality_contracts,
-  decode_after_state_transition_law,
+  transcript_construction_id: TranscriptConstructionId,
+  core_id: CoreId,
+  squeeze_and_decoder_map: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    squeeze_length: Natural,
+    decoder: AlgorithmUse
+  }>,
+  decoder_totality_law: PIRProfileLawReference,
+  decode_after_state_transition_law: PIRProfileLawReference,
   acceptance_rule: AlwaysAccept,
   retry_rule: NoRetry,
   semantic_sampling_failure: None,
-  prover_execution_domain,
-  verifier_execution_domain,
-  exact_squeeze_event_projection
+  prover_execution_domain: CanonicalSeq<ChallengeRef>,
+  verifier_execution_domain: CanonicalSeq<ChallengeRef>,
+  squeeze_event_projection: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    occurrence_ref: OccurrenceRef,
+    squeeze_ordinal: Natural
+  }>
 }
 ```
+
+The decoder-totality law names the lifecycle-and-admission law of Section 7
+and the decode-after-transition law names the state-transition law of Section
+5. The three closed tags are the family's fixed choices and admit no other
+arm.
 
 ### 11.4 Checked result view
 
 ```text
+ScheduleCorrespondence = {
+  source: CanonicalSeq<ChallengeRef>,
+  target: CanonicalSeq<ChallengeRef>,
+  map: CanonicalSeq<{ source: ChallengeRef, target: ChallengeRef }>,
+  law: PIRProfileLawReference
+}
+
 DuplexFSConstructionViewBody = {
-  result_schema: exact CheckedDuplexFSConstruction schema,
-  fresh_protocol_id,
-  fiat_shamir_protocol_id,
-  shared_core_id,
-  transcript_construction_id,
+  result_schema: PIRRuntimeSchema,
+  fresh_protocol_id: ProtocolId,
+  fiat_shamir_protocol_id: ProtocolId,
+  shared_core_id: CoreId,
+  transcript_construction_id: TranscriptConstructionId,
   construction_family: DuplexSponge,
-  occurrence_map: IdentityOnEveryOccurrenceRef,
-  value_map: IdentityOnEveryNonChallengeValueRef,
-  challenge_map: IdentityOnEveryChallengeRef,
-  instance_projection,
-  construction_material_map:
-    UniqueTargetOnlySalt(exact target,exact construction),
-  prover_schedule_correspondence,
-  verifier_schedule_correspondence,
-  structural_conclusion: StructurallyConstructed
+  occurrence_map: CanonicalSeq<{ source: OccurrenceRef, target: OccurrenceRef }>,
+  value_map: CanonicalSeq<{ source: ValueRef, target: ValueRef }>,
+  challenge_map: CanonicalSeq<{ source: ChallengeRef, target: ChallengeRef }>,
+  instance_projection: {
+    bindings: CanonicalSeq<BindingRef>,
+    law: PIRProfileLawReference
+  },
+  construction_material_map: {
+    target: MaterialCoordinate,
+    schema: MaterialSchema
+  },
+  prover_schedule_correspondence: ScheduleCorrespondence,
+  verifier_schedule_correspondence: ScheduleCorrespondence,
+  structural_conclusion: {
+    tag: StructurallyConstructed,
+    law: PIRProfileLawReference
+  }
 }
 ```
+
+The three maps are identity maps written out entry by entry; the
+construction-material map records that the target alone carries the salt at
+its exact coordinate; the two schedule correspondences name the
+downstream-boundary law of Section 13; the conclusion's law names the
+lifecycle-and-admission law of Section 7; `result_schema` is the description
+of the `CheckedDuplexFSConstruction` result, and the owner-local result
+reference is not a body field.
 
 The profile-specific schema prevents Analysis from requesting canonical
 headers, namespaces, retries, or sampling failures from a duplex construction.

@@ -1252,58 +1252,116 @@ CanonicalFramedFSResultViewKind = FSConstructionView
 CanonicalFramedFSResultViewKindRef =
   (PIRCanonicalFramedFSProfileId, written tag of FSConstructionView)
 
+AlgorithmUse = {
+  algorithm: PortableAlgorithmRef,
+  evaluation_contract: EvaluationContractId
+}
+
+CanonicalFrameCoordinate = {
+  position: Natural,
+  occurrence_ref: OccurrenceRef,
+  occurrence_kind: OccurrenceKind
+}
+
 TranscriptDeclarationViewBody = {
   transcript_construction_id: TranscriptConstructionId,
   core_id: CoreId,
-  state_type,
-  absorbed_bytes_type,
-  initial_state,
-  fixed_initial_state_and_derived_initialization_schedule,
-  absorb_algorithm_and_contract,
-  squeeze_bytes_algorithm_and_contract,
-  advance_state_algorithm_and_contract,
-  application_domain,
-  sampling_failure_coordinate,
-  frame_body_law,
-  exact_frame_schedule_coordinates
+  state_type: ValueType,
+  absorbed_bytes_type: ValueType,
+  initial_state: CanonicalValue<state_type>,
+  initialization_schedule_law: PIRProfileLawReference,
+  absorb: AlgorithmUse,
+  squeeze_bytes: AlgorithmUse,
+  advance_state: AlgorithmUse,
+  application_domain: ProtocolDeclarationRef<"pir.fs-application-domain">,
+  sampling_failure_coordinate: SemanticFailureType,
+  frame_body_law: PIRProfileLawReference,
+  frame_schedule: CanonicalSeq<CanonicalFrameCoordinate>
+}
+
+ScopeBindingRequirement = {
+  scope_ref: ScopeRef,
+  parent: None | Some(ScopeRef),
+  opening: None | Some(OccurrenceRef)
+}
+
+InfluenceAtom = {
+  occurrence_ref: OccurrenceRef,
+  kinds: NonEmptyCanonicalSeq<OccurrenceKind>,
+  required: MetaBoolean
 }
 
 RequiredInfluenceViewBody = {
   transcript_construction_id: TranscriptConstructionId,
   core_id: CoreId,
-  influence_atom_algebra,
-  scope_binding_requirements,
-  per_challenge_ordered_required_influence_sets,
-  reduction_and_module_additions,
-  exact_prefix_law
+  influence_atom_kinds: CanonicalSortedUniqueSeq<OccurrenceKind>,
+  scope_bindings: CanonicalSeq<ScopeBindingRequirement>,
+  required_influence: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    atoms: CanonicalSeq<InfluenceAtom>
+  }>,
+  additions: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    values: CanonicalSeq<ValueRef>
+  }>,
+  exact_prefix_law: PIRProfileLawReference
+}
+
+ChallengeABI = {
+  use: AlgorithmUse,
+  input_types: CanonicalSeq<ValueType>,
+  result_type: ValueType
 }
 
 ChallengeTransitionViewBody = {
   transcript_construction_id: TranscriptConstructionId,
   core_id: CoreId,
-  challenge_namespace_derivation,
-  acceptance_abi,
-  decoder_abi,
-  draw_bounds,
-  exact_length_law,
-  state_update_before_decode_law,
-  retry_law,
-  sampling_failure_law,
-  challenge_decoding_coordinates
+  namespace_derivation_law: PIRProfileLawReference,
+  acceptance_abi: ChallengeABI,
+  decoder_abi: ChallengeABI,
+  draw_bounds: { squeeze_length: Natural, maximum_draws: Natural },
+  exact_length_law: PIRProfileLawReference,
+  state_update_before_decode_law: PIRProfileLawReference,
+  retry_law: PIRProfileLawReference,
+  sampling_failure_law: PIRProfileLawReference,
+  challenge_coordinates: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    position: Natural
+  }>
 }
 
 FSConstructionViewBody = {
-  result_schema: exact CheckedFSConstruction schema,
+  result_schema: PIRRuntimeSchema,
   fresh_protocol_id: ProtocolId,
   fiat_shamir_protocol_id: ProtocolId,
   shared_core_id: CoreId,
   transcript_construction_id: TranscriptConstructionId,
-  occurrence_map: IdentityOnEveryOccurrenceRef,
-  value_map: IdentityOnEveryNonChallengeValueRef,
-  challenge_map: IdentityOnEveryChallengeRef,
-  structural_conclusion: StructurallyConstructed
+  occurrence_map: CanonicalSeq<{ source: OccurrenceRef, target: OccurrenceRef }>,
+  value_map: CanonicalSeq<{ source: ValueRef, target: ValueRef }>,
+  challenge_map: CanonicalSeq<{ source: ChallengeRef, target: ChallengeRef }>,
+  structural_conclusion: {
+    tag: StructurallyConstructed,
+    law: PIRProfileLawReference
+  }
 }
 ```
+
+Every `_law` field is a `PIRProfileLawReference` naming one `pir.semantic-law`
+declaration of this profile: `initialization_schedule_law`,
+`frame_body_law`, and `exact_length_law` name the body-grammar law;
+`namespace_derivation_law` and `exact_prefix_law` name the required-influence
+law of Section 5; the state-update, retry, and sampling-failure laws name the
+admission-and-execution law of Section 8; the conclusion's law names the
+checked same-Core construction law of Section 10. `frame_schedule` lists every
+framed occurrence in prefix order with its position; `influence_atom_kinds` is
+the closed set of occurrence kinds that count as influence atoms;
+`required_influence` gives, per challenge and in prefix order, the atoms whose
+presence the construction requires (`required` true) or merely frames;
+`additions` are the Reduction and module values a challenge additionally
+absorbs; the three maps are identity maps written out entry by entry, so a
+consumer reads the correspondence rather than a slogan; `result_schema` is the
+description of the `CheckedFSConstruction` result, and the owner-local result
+reference is not a body field.
 
 The first three coordinates are
 `ConstructionView(TranscriptConstructionId,
