@@ -108,6 +108,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
   -> F0-V2C  migrated owner text                       [authored; publication gated]
   -> F0-V2C1 freeze review of the migrated text         [round one negative; repairs applied]
+  -> F0-V2C2 holdout re-adjudication                    [complete, Affirmative; carrier fix pending]
   -> F0-V2B2D3 six views for the integrated carriers    [complete, Affirmative]
   -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
@@ -512,6 +513,15 @@ provider, extraction tool, or durable schema.
   environment, the admitted module-effect atom) were applied to the page; the
   family-body finding predates the normalized bodies and is re-checked by the
   second review round.
+- [`f0v2c2-holdout-readjudication.md`](f0v2c2-holdout-readjudication.md)
+  re-adjudicates the five cold holdouts against the migrated Terminal
+  contract, views, and outcome partition: five fits, three breaks at the
+  recorded boundaries, no verdict disagreement with the record or the axes
+  matrix; two narrower findings are frozen, the earlier WHIR two-terminal
+  schedule is refused by the exact terminal-claim rule and the axes matrix's
+  interpretation-failure meaning is stale. Its WHIR carrier assumes guarded
+  scope openings, which the page does not provide; the second review round
+  re-authors it with unconditional reductions.
 - [`m1-mechanized-kernel-edges-and-canonicity.md`](m1-mechanized-kernel-edges-and-canonicity.md)
   records the second mechanization increment: PCGraph edge construction
   from an admitted Core in Lean reproduces all five D1 graph tables, decoder
