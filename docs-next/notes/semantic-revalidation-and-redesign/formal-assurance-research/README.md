@@ -101,6 +101,7 @@ F0  ideal assurance architecture and current-design falsification
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
+  -> M2     term calculus and Schnorr denotation         [complete, CannotAnswer]
   -> B2D2   Fresh completed-record schema               [complete, schema only]
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
@@ -497,6 +498,14 @@ provider, extraction tool, or durable schema.
   from an admitted Core in Lean reproduces all five D1 graph tables, decoder
   canonicity is proved, the K1 byte bound is moved to the prose with a new
   oracle case, and five Section 11 wording gaps are recorded.
+- [`m2-mechanized-term-calculus.md`](m2-mechanized-term-calculus.md)
+  transcribes the portable term calculus and its bounded evaluator into core
+  Lean: determinism and limit monotonicity are proved without `sorry`, the two
+  Schnorr algorithm preimages decode from their exact bytes and evaluate to the
+  Python results on all 81 check inputs and both guard inputs, and the check's
+  denotation is proved equal to its closed form; aggregate `CannotAnswer` only
+  because the K1 oracle publishes no term-evaluation vectors (41 Affirmative,
+  13 CannotAnswer findings).
 - [`f2o1-integrated-provider-observable-audit.md`](f2o1-integrated-provider-observable-audit.md)
   repeats the provider-observable audit on the D1 integrated baseline:
   93 constructs, 32 sourced, 56 operational gaps and five premise gaps,
