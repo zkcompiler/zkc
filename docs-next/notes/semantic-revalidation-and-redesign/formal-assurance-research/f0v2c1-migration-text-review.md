@@ -1,9 +1,8 @@
 # Migration Text Freeze Review
 
-> **State:** `CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED` after round
-> five; eight of nine questions close, including the static-view law-field
-> selection, and the one open question, reference-leaf closure, names a
-> family declaration kind the reference atom did not admit
+> **State:** `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED` after round six;
+> all nine questions close, the reference atom's profile closure classifying
+> every one of the 386 reference leaves under exactly one atomic arm
 > **Authority:** None. This verification lane changes no owner page, source
 > profile manifest, or published identity.
 > **Executable evidence:**
