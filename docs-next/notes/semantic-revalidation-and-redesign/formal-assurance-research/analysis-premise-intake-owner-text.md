@@ -117,9 +117,9 @@ its five dependents rotate, on top of the migration's seventeen.
   `TotalUniformChallengeSamplerAdequacy` and
   `ExactClassicalRandomOracleProcess` through
   `AFKTransportPropertyFamilyRef`, and `F` stays the premise coordinate's
-  subject. The same review narrowed the public-setup issuance to
-  invocation-determined bindings; the Schnorr fixed-setup formation now
-  states that both issued views exist only inside that domain. The review's
+  subject. The same review made the public-setup view name its
+  run-established bindings; the Schnorr fixed-setup formation now requires
+  that sequence to be empty in both issued views as its own premise. The review's
   catalog repair (owner field names, `result_ref` removed) landed with the
   migration text. A fifth review round checks these changes.
 - An independent review of this text, as for the migration.

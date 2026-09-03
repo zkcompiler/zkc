@@ -574,11 +574,12 @@ static owner coordinates and the two PIR-issued
 assignments, derived headers, or owner facts. Ordinary
 applicability hypotheses establish its visibility, fixedness, and independence.
 Formation authenticates both entries of `S.public_setup_invocation_views`
-against their exact `PublicSetupInvocationViewBody` values. Both views exist
-only for a Protocol inside the public-setup issuance domain of the Interaction
-page's Section 13.4, every `SessionContext` and `PublicParameter` binding
-invocation-determined; a Protocol outside it has no issued view, the slot is a
-missing dependency, and no assignment is copied in its place. Their Protocol IDs
+against their exact `PublicSetupInvocationViewBody` values. Both views'
+`run_established` sequences must be empty: a fixed setup is one the
+invocation determines entirely, so a view naming a run-established
+`SessionContext` or `PublicParameter` binding (the Interaction page's Section
+13.4) cannot form this fixed-setup ID, and no assignment is copied in its
+place; that emptiness is this formation's own premise, not an owner fact. Their Protocol IDs
 must equal `S.fresh_protocol_id` and `S.fiat_shamir_protocol_id` respectively;
 both Core IDs must equal `S.shared_core_id`; and both entry sequences must be
 byte-identical and contain exactly every `PublicParameter` and `SessionContext`
