@@ -106,6 +106,7 @@ F0  ideal assurance architecture and current-design falsification
   -> B2D2   Fresh completed-record schema               [complete, schema only]
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
+  -> F0-V2C  migrated owner text                       [authored; publication gated]
   -> F0-V2B2D3 six views for the integrated carriers    [complete, Affirmative]
   -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
@@ -495,6 +496,12 @@ provider, extraction tool, or durable schema.
   partition; three sub-decisions compared at equal resolution with
   recommendations; the identity-pin question and the freeze scope stated
   as separate decisions; slots for the five outstanding lanes.
+- [`f0-v2c-migration-owner-text.md`](f0-v2c-migration-owner-text.md)
+  records the owner-text pass that applies the eight decisions on six pages
+  and eight manifests: both publication compilers agree on the migrated tree,
+  seventeen of eighteen profiles rotate, the eleven Fiat--Shamir body families
+  remain to be transcribed, and the identity-rotating publication and the
+  package refreeze remain the user's gate.
 - [`m1-mechanized-kernel-edges-and-canonicity.md`](m1-mechanized-kernel-edges-and-canonicity.md)
   records the second mechanization increment: PCGraph edge construction
   from an admitted Core in Lean reproduces all five D1 graph tables, decoder
