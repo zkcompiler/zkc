@@ -1,9 +1,10 @@
 # F0-V2C: the migrated PIR owner text
 
 > **Kind:** migration record (formal-assurance research, owner-text pass)
-> **State:** Authored 2026-09-03 on the migration branch; both publication
-> compilers agree on the migrated tree; the identity-rotating publication and
-> the package refreeze remain the user's gate.
+> **State:** Authored 2026-09-03 on the migration branch and closed by two
+> independent review rounds; both publication compilers agree on the migrated
+> tree; the identity-rotating publication and the package refreeze remain the
+> user's gate.
 > **Inputs:** the decision packet `f0-v2c-decision-inputs.md` (eight decisions
 > taken as recommended), the Terminal contract reopening record, and the
 > package records named per section below.
@@ -190,10 +191,10 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   set in the first class.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
-- Close the second review round: confirm that the repaired Section 10 laws,
-  the module-effect atom, and the normalized family bodies satisfy the
-  review's name-closure and decision-fidelity checks, and take any remaining
-  finding into this text.
+- The second review round is closed: all seven questions are affirmative on
+  the repaired text, every family-body field is exact, and the five
+  deviations from the candidate packets are upheld. No owner-page delta
+  remains from the review.
 - Publish the identities. Only the user authorizes the identity-rotating
   publication.
 
