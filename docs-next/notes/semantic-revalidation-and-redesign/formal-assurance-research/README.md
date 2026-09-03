@@ -101,7 +101,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2C  target publication and migration            [refreeze rehearsed; publication held]
   -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
   -> Analysis premise owner text                        [authored; publication gated]
-  -> F0-V2D1 review of the Analysis premise text        [round three: owner text closed; two package negatives]
+  -> F0-V2D1 review of the Analysis premise text        [round four: owner text closed; declaration pending]
   -> F0-V2D2 Analysis package migration                 [round two, Affirmative; provider declaration pending]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -768,7 +768,11 @@ provider, extraction tool, or durable schema.
   questions added for it, and two negatives against the migrated closure
   package, which still encodes the relation-bound Fresh identity and the
   construction sampler form through legacy proxies and the completion
-  hypothesis through an arbitrary symbol; a second closure round follows.
+  hypothesis through an arbitrary symbol; round four, after the second
+  closure round, eight questions affirmative with the two package negatives
+  closed and the frozen relation-bound Fresh, fixed-extractor, and family
+  vectors reproduced independently, the one `CannotAnswer` being the VCVio
+  provider and carrier declaration the profile does not yet publish.
 - [`f0v2d2-analysis-package-migration.md`](f0v2d2-analysis-package-migration.md)
   migrates the closure package, the finite cover, the joined boundary, and
   the intake probe to the named-premise fields the owner text now carries,
