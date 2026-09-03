@@ -1283,7 +1283,7 @@
       "id": "research.analysis-premise-text-review",
       "title": "Analysis named-premise owner-text review",
       "subject": "The proposed Analysis named-premise grammar, concrete constructors, intake partition, Schnorr coordinates, profile manifests, identity cone, and existing-package migration surface.",
-      "claim": "A pinned independent source audit reproduces ten findings: publication compilers and the six-profile rotation cone agree, while unresolved law names, incomplete constructors, underdetermined scope disposition, unformable Plan coordinates, manifest defects, predecessor-probe gaps, and incomplete refreeze inputs prevent owner-text closure.",
+      "claim": "A pinned independent source audit reproduces the round-two findings: intake soundness, decision fidelity, the profile manifests, both publication compilers, the rotation cone, and predecessor-probe coverage are affirmative, while name closure, constructor consistency, Schnorr binding formation, and the refreeze inputs remained CannotAnswer at that pin and are answered in the owner text after it.",
       "classification": "research-falsifier",
       "methods": ["known-answer", "negative", "differential", "static-analysis"],
       "source_paths": ["evaluation/formal-source-analysis-premise-review-f0v2d1/run.py", "evaluation/formal-source-analysis-premise-review-f0v2d1/README.md", "evaluation/formal-source-analysis-premise-review-f0v2d1/expected-findings.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2d1-analysis-premise-text-review.md"],
