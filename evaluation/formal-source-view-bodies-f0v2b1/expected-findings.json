@@ -8,45 +8,45 @@
     "views": {
       "PublicBindingView": {
         "schema_digest": "39ccac0902a128f5f80bc2677491ec973d460b44b8a0c99495606cb5d2b91cca",
-        "value_digest": "27239cf06b011b38fd933656459eba68df7df2b0946fad18bd46bc1f7486818f",
+        "value_digest": "5dd6c43a9bd0eb70b9626fb5c96895ccdea97612b4aae792a4a1b34c3bbd1bb9",
         "manifest_digest": "571b5571550576ad112ac2b96abdf5901c6bd6be90392f3e16d4cc5bdcc01a08",
         "leaf_count": 10
       },
       "StrategyDecisionView": {
         "schema_digest": "18ed0f6bf90f0a69603016b28c43a8d27d32e17592ece144adc18831b840aa09",
-        "value_digest": "48d2b7693d88bbe6aa81f01efcc379a82b57a97c70750628a421528b04ccf371",
+        "value_digest": "8ac48ad89c45c0eaf23006ee363060721b20d7cd768967d3284b6075233d95f2",
         "manifest_digest": "69923cb847884fb7589501f07b04fc1ab251a261ee6316963b441008ed2d1785",
         "leaf_count": 38
       },
       "PublicCoinView": {
         "schema_digest": "61f41eb684032443efb1a3fbace7b356eeee5c4ec367b844246c9772d03b8b4a",
-        "value_digest": "92f6e12cca675e516564b56cd7423f1971df8993ee2ce5d01fcce06b31e24d91",
+        "value_digest": "e919b228cf1c4e50e982684a4af2fe1dcb004ecfee7bce1e8988082c75a947b7",
         "manifest_digest": "337744a4db26cfb36cdb354b38df312bba8deb73bc090a53a4ba7030bc7cd5ba",
         "leaf_count": 180
       },
       "EffectView": {
         "schema_digest": "36e783b59f011f0d664fbaef378b17b585c1b50d06126a77d7dbb44d79ce99da",
-        "value_digest": "1f7d26252aadf73e2734bcbd119ee300244740eabcd49aac2243c9e528bcccd8",
+        "value_digest": "d775962fcfc014c2c7de496fd650af083b20739c2919b4c3b0c8157c78711dde",
         "manifest_digest": "30a625ebc9386a57739273a9fbf6104c7416c8fbc308b4ac1197b13e71f56e17",
         "leaf_count": 68
       },
       "ClaimReductionView": {
         "schema_digest": "062e48d2ab34778a37a2aa4e31932aae408e9a732c5f30ab605029df06195b1d",
-        "value_digest": "0c1f822089fc988c18d9f56141dc400fee6e3fe134da3ac8feddf63f35a4d988",
+        "value_digest": "186e4a1767f5b292d0f5cd60ab80eb48f92de271e6a778fd94facdedbf069e7c",
         "manifest_digest": "26fbaf90268be4c85122c25ea127260a1ccd5dcc69a3618207ef96eea5aab3ea",
         "leaf_count": 1
       },
       "ExecutionView": {
         "schema_digest": "98d4d6ae746b0b8fc63d0b9e644f65cbf78eb05045802031ef97a41f3e9f5bd0",
-        "value_digest": "66005011ed32fd04cb56bc708dff0835b6847aaab2f3985ddca110e76ceb43d0",
+        "value_digest": "c1174d8609fbfcf3f94aa535190f1cf15e2112cc8c9a009d177dfd4528c69c93",
         "manifest_digest": "4efcb4e5ab900e77e91b73e99861b40e56d2393de3d9314c058ac4078b8451da",
         "leaf_count": 32
       }
     },
     "total_leaf_count": 329,
     "owner": {
-      "core_digest": "33f9d34abd61e22565b85fbfe03a35b3ca55f1a3980b71c5e9b729b3a93027f5",
-      "protocol_digest": "5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
+      "core_digest": "f11d422776ac28d192cc13a1c276049b0dae211394e344ad9e87008f92c4e2f2",
+      "protocol_digest": "4e11f03b4f5d65e5009b703bc5c78b8c186851888f95f7a52774b7e923a319f9",
       "decision_count": 2,
       "guaranteed_read_count": 7,
       "occurrence_count": 6,
@@ -78,68 +78,320 @@
     }
   },
   "cases": [
-    {"name": "bounded-schema-source", "outcome": "Affirmative", "code": "F0V2B1-A-SOURCE"},
-    {"name": "recursive-iterative-schema-agreement", "outcome": "Affirmative", "code": "F0V2B1-A-SCHEMA-AGREEMENT"},
-    {"name": "independent-owner-identity-agreement", "outcome": "Affirmative", "code": "F0V2B1-A-OWNER-IDENTITY"},
-    {"name": "independent-six-view-derivation", "outcome": "Affirmative", "code": "F0V2B1-A-DERIVATION-AGREEMENT"},
-    {"name": "six-owner-view-bodies", "outcome": "Affirmative", "code": "F0V2B1-A-SIX-VIEWS"},
-    {"name": "exact-complete-manifests", "outcome": "Affirmative", "code": "F0V2B1-A-MANIFESTS"},
-    {"name": "owner-only-view-inputs", "outcome": "Affirmative", "code": "F0V2B1-A-OWNER-ONLY"},
-    {"name": "bounded-decision-read-map", "outcome": "Affirmative", "code": "F0V2B1-A-DECISION-READS"},
-    {"name": "retained-bounded-pcgraph", "outcome": "Affirmative", "code": "F0V2B1-A-PCGRAPH"},
-    {"name": "effect-value-backlinks", "outcome": "Affirmative", "code": "F0V2B1-A-EFFECT-VALUE"},
-    {"name": "fresh-runtime-description", "outcome": "Affirmative", "code": "F0V2B1-A-RUNTIME-SCHEMA"},
-    {"name": "explicit-bounded-empty-families", "outcome": "Affirmative", "code": "F0V2B1-A-EMPTY-FAMILIES"},
-    {"name": "constructor-complete-owner-derivation", "outcome": "CannotAnswer", "code": "F0V2B1-C-CONSTRUCTOR-COVERAGE"},
-    {"name": "general-pcgraph-sink-and-transfer-coverage", "outcome": "CannotAnswer", "code": "F0V2B1-C-PCGRAPH-GENERAL"},
-    {"name": "target-profile-publication-and-migration", "outcome": "CannotAnswer", "code": "F0V2B1-C-TARGET-MIGRATION"},
-    {"name": "live-owner-implementation-correspondence", "outcome": "CannotAnswer", "code": "F0V2B1-C-LIVE-IMPLEMENTATION"},
-    {"name": "proper-subset-read-closure", "outcome": "CannotAnswer", "code": "F0V2B1-C-PARTIAL-CLOSURE"},
-    {"name": "source-digest-substitution", "outcome": "Refused", "code": "F0V2B1-R-SOURCE"},
-    {"name": "schema-field-removal", "outcome": "Refused", "code": "F0V2B1-R-SCHEMA"},
-    {"name": "catalog-schema-substitution", "outcome": "Refused", "code": "F0V2B1-R-CATALOG"},
-    {"name": "manifest-leaf-omission", "outcome": "Refused", "code": "F0V2B1-R-MANIFEST-OMISSION"},
-    {"name": "manifest-coordinate-duplication", "outcome": "Refused", "code": "F0V2B1-R-MANIFEST-DUPLICATE"},
-    {"name": "manifest-cross-view-replay", "outcome": "Refused", "code": "F0V2B1-R-MANIFEST-VIEW"},
-    {"name": "core-id-substitution", "outcome": "Refused", "code": "F0V2B1-R-CORE-ID"},
-    {"name": "scope-path-omission", "outcome": "Refused", "code": "F0V2B1-R-SCOPE-PATH"},
-    {"name": "binding-scope-substitution", "outcome": "Refused", "code": "F0V2B1-R-BINDING-SCOPE"},
-    {"name": "binding-value-type-substitution", "outcome": "Refused", "code": "F0V2B1-R-BINDING-TYPE"},
-    {"name": "decision-occurrence-substitution", "outcome": "Refused", "code": "F0V2B1-R-DECISION-BACKLINK"},
-    {"name": "decision-guard-substitution", "outcome": "Refused", "code": "F0V2B1-R-DECISION-GUARD"},
-    {"name": "decision-prior-omission", "outcome": "Refused", "code": "F0V2B1-R-DECISION-PRIOR"},
-    {"name": "guaranteed-read-omission", "outcome": "Refused", "code": "F0V2B1-R-READ-OMISSION"},
-    {"name": "guaranteed-read-phantom", "outcome": "Refused", "code": "F0V2B1-R-READ-PHANTOM"},
-    {"name": "guaranteed-read-type-substitution", "outcome": "Refused", "code": "F0V2B1-R-READ-TYPE"},
-    {"name": "legal-move-type-substitution", "outcome": "Refused", "code": "F0V2B1-R-MOVE-TYPE"},
-    {"name": "pc-edge-omission", "outcome": "Refused", "code": "F0V2B1-R-PC-EDGE-OMISSION"},
-    {"name": "pc-edge-reversal", "outcome": "Refused", "code": "F0V2B1-R-PC-EDGE-DIRECTION"},
-    {"name": "pc-class-substitution", "outcome": "Refused", "code": "F0V2B1-R-PC-CLASS"},
-    {"name": "pc-topological-reordering", "outcome": "Refused", "code": "F0V2B1-R-PC-TOPOLOGY"},
-    {"name": "pc-sink-omission", "outcome": "Refused", "code": "F0V2B1-R-PC-SINK"},
-    {"name": "pc-acceptance-sink-omission", "outcome": "Refused", "code": "F0V2B1-R-PC-ACCEPTANCE"},
-    {"name": "pc-eligibility-substitution", "outcome": "Refused", "code": "F0V2B1-R-PC-ELIGIBILITY"},
-    {"name": "challenge-backlink-substitution", "outcome": "Refused", "code": "F0V2B1-R-CHALLENGE-BACKLINK"},
-    {"name": "challenge-domain-substitution", "outcome": "Refused", "code": "F0V2B1-R-CHALLENGE-DOMAIN"},
-    {"name": "occurrence-guard-substitution", "outcome": "Refused", "code": "F0V2B1-R-OCCURRENCE-GUARD"},
-    {"name": "occurrence-output-type-substitution", "outcome": "Refused", "code": "F0V2B1-R-OUTPUT-TYPE"},
-    {"name": "value-predecessor-omission", "outcome": "Refused", "code": "F0V2B1-R-VALUE-PREDECESSOR"},
-    {"name": "message-backlink-substitution", "outcome": "Refused", "code": "F0V2B1-R-MESSAGE-BACKLINK"},
-    {"name": "check-algorithm-substitution", "outcome": "Refused", "code": "F0V2B1-R-CHECK-ALGORITHM"},
-    {"name": "check-input-reordering", "outcome": "Refused", "code": "F0V2B1-R-CHECK-INPUTS"},
-    {"name": "terminal-verdict-substitution", "outcome": "Refused", "code": "F0V2B1-R-TERMINAL-VERDICT"},
-    {"name": "terminal-backlink-substitution", "outcome": "Refused", "code": "F0V2B1-R-TERMINAL-BACKLINK"},
-    {"name": "phantom-claim", "outcome": "Refused", "code": "F0V2B1-R-PHANTOM-CLAIM"},
-    {"name": "execution-protocol-id-substitution", "outcome": "Refused", "code": "F0V2B1-R-PROTOCOL-ID"},
-    {"name": "resolver-occurrence-substitution", "outcome": "Refused", "code": "F0V2B1-R-RESOLVER-BACKLINK"},
-    {"name": "resolver-domain-substitution", "outcome": "Refused", "code": "F0V2B1-R-RESOLVER-DOMAIN"},
-    {"name": "runtime-output-arity-substitution", "outcome": "Refused", "code": "F0V2B1-R-RUNTIME-ARITY"},
-    {"name": "runtime-output-type-substitution", "outcome": "Refused", "code": "F0V2B1-R-RUNTIME-TYPE"},
-    {"name": "execution-law-substitution", "outcome": "Refused", "code": "F0V2B1-R-EXECUTION-LAW"},
-    {"name": "run-view-law-substitution", "outcome": "Refused", "code": "F0V2B1-R-RUN-VIEW-LAW"},
-    {"name": "unsupported-oracle-insertion", "outcome": "Refused", "code": "F0V2B1-R-ORACLE-OUTSIDE-SLICE"},
-    {"name": "unsupported-extension-insertion", "outcome": "Refused", "code": "F0V2B1-R-EXTENSION-OUTSIDE-SLICE"},
-    {"name": "retained-core-body-mutation", "outcome": "Refused", "code": "F0V2B1-R-RETAINED-CORE-MUTATION"},
-    {"name": "protocol-core-handle-substitution", "outcome": "Refused", "code": "F0V2B1-R-PROTOCOL-CORE-HANDLE"}
+    {
+      "name": "bounded-schema-source",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-SOURCE"
+    },
+    {
+      "name": "recursive-iterative-schema-agreement",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-SCHEMA-AGREEMENT"
+    },
+    {
+      "name": "independent-owner-identity-agreement",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-OWNER-IDENTITY"
+    },
+    {
+      "name": "independent-six-view-derivation",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-DERIVATION-AGREEMENT"
+    },
+    {
+      "name": "six-owner-view-bodies",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-SIX-VIEWS"
+    },
+    {
+      "name": "exact-complete-manifests",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-MANIFESTS"
+    },
+    {
+      "name": "owner-only-view-inputs",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-OWNER-ONLY"
+    },
+    {
+      "name": "bounded-decision-read-map",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-DECISION-READS"
+    },
+    {
+      "name": "retained-bounded-pcgraph",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-PCGRAPH"
+    },
+    {
+      "name": "effect-value-backlinks",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-EFFECT-VALUE"
+    },
+    {
+      "name": "fresh-runtime-description",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-RUNTIME-SCHEMA"
+    },
+    {
+      "name": "explicit-bounded-empty-families",
+      "outcome": "Affirmative",
+      "code": "F0V2B1-A-EMPTY-FAMILIES"
+    },
+    {
+      "name": "constructor-complete-owner-derivation",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B1-C-CONSTRUCTOR-COVERAGE"
+    },
+    {
+      "name": "general-pcgraph-sink-and-transfer-coverage",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B1-C-PCGRAPH-GENERAL"
+    },
+    {
+      "name": "target-profile-publication-and-migration",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B1-C-TARGET-MIGRATION"
+    },
+    {
+      "name": "live-owner-implementation-correspondence",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B1-C-LIVE-IMPLEMENTATION"
+    },
+    {
+      "name": "proper-subset-read-closure",
+      "outcome": "CannotAnswer",
+      "code": "F0V2B1-C-PARTIAL-CLOSURE"
+    },
+    {
+      "name": "source-digest-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-SOURCE"
+    },
+    {
+      "name": "schema-field-removal",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-SCHEMA"
+    },
+    {
+      "name": "catalog-schema-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-CATALOG"
+    },
+    {
+      "name": "manifest-leaf-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-MANIFEST-OMISSION"
+    },
+    {
+      "name": "manifest-coordinate-duplication",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-MANIFEST-DUPLICATE"
+    },
+    {
+      "name": "manifest-cross-view-replay",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-MANIFEST-VIEW"
+    },
+    {
+      "name": "core-id-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-CORE-ID"
+    },
+    {
+      "name": "scope-path-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-SCOPE-PATH"
+    },
+    {
+      "name": "binding-scope-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-BINDING-SCOPE"
+    },
+    {
+      "name": "binding-value-type-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-BINDING-TYPE"
+    },
+    {
+      "name": "decision-occurrence-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-DECISION-BACKLINK"
+    },
+    {
+      "name": "decision-guard-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-DECISION-GUARD"
+    },
+    {
+      "name": "decision-prior-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-DECISION-PRIOR"
+    },
+    {
+      "name": "guaranteed-read-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-READ-OMISSION"
+    },
+    {
+      "name": "guaranteed-read-phantom",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-READ-PHANTOM"
+    },
+    {
+      "name": "guaranteed-read-type-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-READ-TYPE"
+    },
+    {
+      "name": "legal-move-type-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-MOVE-TYPE"
+    },
+    {
+      "name": "pc-edge-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PC-EDGE-OMISSION"
+    },
+    {
+      "name": "pc-edge-reversal",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PC-EDGE-DIRECTION"
+    },
+    {
+      "name": "pc-class-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PC-CLASS"
+    },
+    {
+      "name": "pc-topological-reordering",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PC-TOPOLOGY"
+    },
+    {
+      "name": "pc-sink-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PC-SINK"
+    },
+    {
+      "name": "pc-acceptance-sink-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PC-ACCEPTANCE"
+    },
+    {
+      "name": "pc-eligibility-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PC-ELIGIBILITY"
+    },
+    {
+      "name": "challenge-backlink-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-CHALLENGE-BACKLINK"
+    },
+    {
+      "name": "challenge-domain-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-CHALLENGE-DOMAIN"
+    },
+    {
+      "name": "occurrence-guard-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-OCCURRENCE-GUARD"
+    },
+    {
+      "name": "occurrence-output-type-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-OUTPUT-TYPE"
+    },
+    {
+      "name": "value-predecessor-omission",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-VALUE-PREDECESSOR"
+    },
+    {
+      "name": "message-backlink-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-MESSAGE-BACKLINK"
+    },
+    {
+      "name": "check-algorithm-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-CHECK-ALGORITHM"
+    },
+    {
+      "name": "check-input-reordering",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-CHECK-INPUTS"
+    },
+    {
+      "name": "terminal-verdict-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-TERMINAL-VERDICT"
+    },
+    {
+      "name": "terminal-backlink-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-TERMINAL-BACKLINK"
+    },
+    {
+      "name": "phantom-claim",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PHANTOM-CLAIM"
+    },
+    {
+      "name": "execution-protocol-id-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PROTOCOL-ID"
+    },
+    {
+      "name": "resolver-occurrence-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-RESOLVER-BACKLINK"
+    },
+    {
+      "name": "resolver-domain-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-RESOLVER-DOMAIN"
+    },
+    {
+      "name": "runtime-output-arity-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-RUNTIME-ARITY"
+    },
+    {
+      "name": "runtime-output-type-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-RUNTIME-TYPE"
+    },
+    {
+      "name": "execution-law-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-EXECUTION-LAW"
+    },
+    {
+      "name": "run-view-law-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-RUN-VIEW-LAW"
+    },
+    {
+      "name": "unsupported-oracle-insertion",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-ORACLE-OUTSIDE-SLICE"
+    },
+    {
+      "name": "unsupported-extension-insertion",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-EXTENSION-OUTSIDE-SLICE"
+    },
+    {
+      "name": "retained-core-body-mutation",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-RETAINED-CORE-MUTATION"
+    },
+    {
+      "name": "protocol-core-handle-substitution",
+      "outcome": "Refused",
+      "code": "F0V2B1-R-PROTOCOL-CORE-HANDLE"
+    }
   ]
 }

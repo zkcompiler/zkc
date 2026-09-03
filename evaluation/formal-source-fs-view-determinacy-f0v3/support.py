@@ -7,8 +7,8 @@ from typing import Any
 
 
 PROFILE_DIGESTS = {
-    "canonical-framed": "38dd578579b115e7d4b17ca4e31f255d6def4027166c831f4dba259fb597607a",
-    "duplex-sponge": "15203c4745d3f4aafd1d6bb45a0e94e0e21461dbe8cc6c5d9d4949df980e761b",
+    "canonical-framed": "fe0cfa79211bf2d8290b749b191ce311306df3321231ed09f9c1ae26269ea43c",
+    "duplex-sponge": "257118b591f2040f4a1e1a243b9069825b97159b521a6640c507ded47ea79736",
 }
 
 

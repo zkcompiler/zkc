@@ -1,39 +1,82 @@
 {
   "cases": [
-    {"name": "baseline-publication-agreement", "outcome": "Affirmative", "code": "MIGRATION-A-BASELINE-COMPILERS"},
-    {"name": "candidate-publication-agreement", "outcome": "Affirmative", "code": "MIGRATION-A-CANDIDATE-COMPILERS"},
-    {"name": "interaction-rotation-cone", "outcome": "Affirmative", "code": "MIGRATION-A-ROTATION-16"},
-    {"name": "stable-independent-roots", "outcome": "Affirmative", "code": "MIGRATION-A-STABLE-2"},
-    {"name": "foundation-common-basis", "outcome": "Affirmative", "code": "MIGRATION-A-FOUNDATION-STABLE"},
-    {"name": "exact-owner-page-changes", "outcome": "Affirmative", "code": "MIGRATION-A-OWNER-PAGES"},
-    {"name": "exact-manifest-changes", "outcome": "Affirmative", "code": "MIGRATION-A-MANIFESTS"},
-    {"name": "old-rotated-profile-refusal", "outcome": "Affirmative", "code": "MIGRATION-R-OLD-PROFILES"},
-    {"name": "old-stable-profile-control", "outcome": "Affirmative", "code": "MIGRATION-A-STABLE-CONTROL"},
-    {"name": "published-table-not-written", "outcome": "Affirmative", "code": "MIGRATION-A-NO-PUBLICATION-WRITE"},
-    {"name": "endpoint-terminal-projection", "outcome": "Affirmative", "code": "MIGRATION-A-ENDPOINT-TERMINAL"},
-    {"name": "migrated-r1a", "outcome": "Affirmative", "code": "MIGRATION-A-R1A"},
-    {"name": "migrated-r1b-core", "outcome": "Affirmative", "code": "MIGRATION-A-R1B-CORE"},
-    {"name": "migrated-r1b-protocol", "outcome": "Affirmative", "code": "MIGRATION-A-R1B-PROTOCOL"},
-    {"name": "old-terminal-carrier-refusal", "outcome": "Affirmative", "code": "MIGRATION-R-OLD-TERMINAL"},
-    {"name": "migrated-r1c0-catalog", "outcome": "Affirmative", "code": "MIGRATION-A-R1C0-CATALOG"},
-    {"name": "migrated-r1c0-authority-routes", "outcome": "Affirmative", "code": "MIGRATION-A-R1C0-ROUTES"},
-    {"name": "owner-alternative-identities", "outcome": "Affirmative", "code": "MIGRATION-A-OWNER-ALTERNATIVES"},
-    {"name": "package-alternatives-preserve-pir", "outcome": "Affirmative", "code": "MIGRATION-A-PACKAGE-ALTERNATIVES"},
-    {"name": "active-lane-slots", "outcome": "Affirmative", "code": "MIGRATION-A-INTEGRATION-SLOTS"},
-    {"name": "foundation-byte-bound-selection", "outcome": "CannotAnswer", "code": "MIGRATION-C-M1-BOUNDARY"},
-    {"name": "provider-observable-ownership", "outcome": "CannotAnswer", "code": "MIGRATION-C-PROVIDER-OWNERSHIP"},
-    {"name": "target-publication", "outcome": "Hold", "code": "MIGRATION-H-NO-PUBLICATION"}
+    {
+      "code": "MIGRATION-A-DIRECT-SOURCES",
+      "name": "direct-owner-source-pins",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-CURRENT-COMPILERS",
+      "name": "current-publication-compiler-agreement",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-ROTATION-17",
+      "name": "seventeen-profile-rotation",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-STABLE-CONTROL",
+      "name": "analysis-kernel-stability-control",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-R-LEGACY-PROFILES",
+      "name": "legacy-profile-refusal-controls",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-NO-PUBLICATION-WRITE",
+      "name": "published-table-not-written",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-TARGET-BASIS",
+      "name": "target-basis-prerequisite",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-TARGET-CORE",
+      "name": "target-core-prerequisite",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-OWNER-VIEW-GATE",
+      "name": "owner-view-prerequisite-executed",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-A-TERMINAL-CONTRACT",
+      "name": "migrated-terminal-contract",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-R-HIDDEN-GATING",
+      "name": "hidden-terminal-gating",
+      "outcome": "Refused"
+    },
+    {
+      "code": "F1R1C-A-SOURCE-DETERMINACY",
+      "name": "exact-owner-view-law-binding",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "MIGRATION-H-NO-PUBLICATION",
+      "name": "identity-publication",
+      "outcome": "Hold"
+    }
   ],
   "metrics": {
-    "findings": 23,
-    "profiles": 18,
-    "rotated_profiles": 16,
-    "stable_profiles": 2,
+    "aggregate": "MIGRATION-H-NO-PUBLICATION",
+    "findings": 13,
+    "interaction_digest": "2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f",
+    "legacy_profile_controls": 6,
     "owner_pages": 6,
-    "manifest_overrides": 7,
-    "open_alternatives": 6,
-    "integration_slots": 5,
-    "endpoint_terminal_controls": 4,
-    "aggregate": "MIGRATION-H-NO-PUBLICATION"
+    "owner_view_cases": 13,
+    "profile_manifests": 8,
+    "profiles": 18,
+    "rotated_profiles": 17,
+    "stable_profiles": 1,
+    "target_core_cases": 27
   }
 }

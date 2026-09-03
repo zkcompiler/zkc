@@ -5,160 +5,160 @@
       "ClaimReductionView": {
         "bytes": 7781,
         "leaves": 93,
-        "sha256": "1d7eb70c819fa72046fdbe44e224ccfb84bc019e1b60a37f4320b3661c5f3f8d"
+        "sha256": "f7efe9bcba8001e522f256526f2e4750280111ff547da18343b7840375370f20"
       },
       "EffectView": {
         "bytes": 47448,
         "leaves": 280,
-        "sha256": "7718628bf43333c57babc19ed75514af6a45e1080cab91a52e94d45cf9df66af"
+        "sha256": "d8c3d3d6876fbf1ebc51058fba4cc8bcfd0a5ef8db8de49fc1d00e7f1451f3c9"
       },
       "ExecutionView": {
         "bytes": 22775,
         "leaves": 117,
-        "sha256": "bd574d3728db425d88299921a3905aa2ceefe85b97f9f9a7e666ebb6e484aea0"
+        "sha256": "3bc1dbf856dc24af617e780bbbdf56a3e538bd2f687936fa65d1388c271357c6"
       },
       "PublicBindingView": {
         "bytes": 3079,
         "leaves": 35,
-        "sha256": "4aea095076a24a01eb576c35ee37e295a3a58656787b1585447c50d109292bac"
+        "sha256": "eec6294f066f17ce2319940961b9f745829b9b6127666b46e4b79f2277097d7f"
       },
       "PublicCoinView": {
         "bytes": 47696,
         "leaves": 912,
-        "sha256": "a3813a65383f9b6a0b5c755e411f404b2ca7c429488bedfd14a2f8a84ea28963"
+        "sha256": "a2c6649e3a0cded238eb90deea60206921327e9ffd17ab873badb922bc1bef40"
       },
       "StrategyDecisionView": {
         "bytes": 39370,
         "leaves": 250,
-        "sha256": "00c69a1098e0ed7e5f93769ffa4f8f683d68b856fc4ea261aa3667646bcd9b34"
+        "sha256": "b92e69313c1fd143dd5e5c9030eae3ee1c6f4d5d9169efca7dce3d47c00b94b4"
       }
     },
     "integrated-baseline": {
       "ClaimReductionView": {
         "bytes": 7781,
         "leaves": 93,
-        "sha256": "763b26052514cd414ee1aace00e8281b3fa27ddce805cc84658fedfdbcf81206"
+        "sha256": "0328c3ecdea7b4a547dcb477b557c7da139566a07b639022a7b503e4eb3364a6"
       },
       "EffectView": {
         "bytes": 47397,
         "leaves": 280,
-        "sha256": "060ac4f10b904850d58c263261992cf29391a6722430870990675d7681dda152"
+        "sha256": "d642e21ec4e21adc5fa3da1e8c4b77a03b1ee671088677319f4131fe4f999bfb"
       },
       "ExecutionView": {
         "bytes": 22724,
         "leaves": 117,
-        "sha256": "2ab1a1dda91cb473d64cf325f54863480e74e50ee0f1663247d9e4022d2da7e6"
+        "sha256": "91c9f84006b706ced1da251358c9750c383f8971726e230ef3b711d3af0a745d"
       },
       "PublicBindingView": {
         "bytes": 3079,
         "leaves": 35,
-        "sha256": "48707b9b9df168aa5df9c01e6e3be8a1524d77029ab4aa4d27d01c5f5d5620ae"
+        "sha256": "048fdd62b98aa7fcfdcbd576c9d90cf70b56c4929d9f15c11c0515368984d5c7"
       },
       "PublicCoinView": {
         "bytes": 47403,
         "leaves": 906,
-        "sha256": "fd976460b00869c5b0b0b7da0e90b7b76bf708299486972da582f0dabda82752"
+        "sha256": "7e7330857c22f084d8c0378582a9a9b95a911a190c9cdb2c70a6acd076107ff1"
       },
       "StrategyDecisionView": {
         "bytes": 39370,
         "leaves": 250,
-        "sha256": "64618f00bf9df4ed06a4e55ffaf983b2b99c7a728679bf540bd92275c700ed34"
+        "sha256": "a22652b8f559987c1004ad0ea861cb14496917ad1004b618a8bfd4d539a59abb"
       }
     },
     "invalid-module-control-sink": {
       "ClaimReductionView": {
         "bytes": 7781,
         "leaves": 93,
-        "sha256": "99927f9dc8f2060b8cde87440e1d071f46380ce155029293543e945c8c60ea5c"
+        "sha256": "8e37c7311f1c1dfc880984077d342aef9ff034e43106cd3820715f1f6357e451"
       },
       "EffectView": {
         "bytes": 47397,
         "leaves": 280,
-        "sha256": "aa1eaa0eaf64dd7b26e2db74642049aa43190b55f2b5eb2c3cabb221cbb93a8f"
+        "sha256": "2b5a065e4a5cb02231fecb5c2294d6ce32e76c84744076d157570f9b43348b2c"
       },
       "ExecutionView": {
         "bytes": 22724,
         "leaves": 117,
-        "sha256": "829ab1eb6eace14be9d773465473f46c2d561bf49e395ff5b30561d43146843b"
+        "sha256": "23277b1785a84f7507cb6dea2a7add483c32f9563e45bb48baa5767220575426"
       },
       "PublicBindingView": {
         "bytes": 3079,
         "leaves": 35,
-        "sha256": "80bb8afe8d02be91e9f34097da05ffeb234e3139fcac55c491cde9b37391b63e"
+        "sha256": "4bbcb343456e871067aaa461fecf46be45630d6029069b40516024ddb2c79665"
       },
       "PublicCoinView": {
         "bytes": 47610,
         "leaves": 911,
-        "sha256": "7e38535cb0f0260b2c8a89f94c2e8b2dd33c5793519c14542a59c9a66e9a7120"
+        "sha256": "468c70b6435ef6a6e27c0375c60751b36e26ad6c36d1b73b07666c8d335a75b1"
       },
       "StrategyDecisionView": {
         "bytes": 39370,
         "leaves": 250,
-        "sha256": "48dfd6a67337545064db3d8618028ce6195237ef9695b64734ec4ba8a7cc5226"
+        "sha256": "c74d957c1a00bebdc6e5730d62fa5016f315900622f260f79fe2d340d286a479"
       }
     },
     "logical-reject-preemption": {
       "ClaimReductionView": {
         "bytes": 7522,
         "leaves": 85,
-        "sha256": "276321a839dd3a1fb8c44f13b0cb3112d83cc5376fe390e3681a101fa6b0645e"
+        "sha256": "547bf9560696b4b2e88201736d2db41d85e3ce6b72fa52d0dfd8e16f2ba03e98"
       },
       "EffectView": {
         "bytes": 47273,
         "leaves": 276,
-        "sha256": "5c0441f18178f4a5d61d26da43883e8c89ac746e86a7691f2a9b68aea803a212"
+        "sha256": "67e9bc7d5978b08fb9cfced30775a5529cfbd54a5b6df57e748c5d33818ee122"
       },
       "ExecutionView": {
         "bytes": 22422,
         "leaves": 116,
-        "sha256": "c20260ee8ad7eee73d12eb6ee861ccb2222858329bb2fc2efe98f1d323c06e17"
+        "sha256": "71493f84f2efff1f7efce390bc81b08f4450238627b5ca89fde5edaaed4349c2"
       },
       "PublicBindingView": {
         "bytes": 3079,
         "leaves": 35,
-        "sha256": "ee4d075361d43f20ff2793f16f8b2337417cf91520a3d3ae7f4f081b342aba8e"
+        "sha256": "8f8385aa254443f4d1174756c046617ee48dee15d839a7e8b00568876377f0b8"
       },
       "PublicCoinView": {
         "bytes": 47152,
         "leaves": 904,
-        "sha256": "3c1b1fc3312972c1014732c61ec70782f2be3509a333a8199f7c80c49557f950"
+        "sha256": "d1e0d0fecbc694eb5d73e6e572546b0041230debe810e41af53a1286d0c508b9"
       },
       "StrategyDecisionView": {
         "bytes": 39370,
         "leaves": 250,
-        "sha256": "580437d3cf2ee3802bec804046e6a85547a99dfcae00c791e3a19fd815d8db2e"
+        "sha256": "97b4c5bb542e8527a75cf13ba56f2664db52008d7f47ffad0b826fdf78af8c71"
       }
     },
     "private-verifier-output-sink": {
       "ClaimReductionView": {
         "bytes": 7781,
         "leaves": 93,
-        "sha256": "9682c0dbb2cdcab5fe29ee65c44ce06b541f4971a39e5235207fe2e96c44c53a"
+        "sha256": "1c1c3017854f6da36f349d37a2cc5114d5f58adc1a6b70d744628fe783d994b2"
       },
       "EffectView": {
         "bytes": 47397,
         "leaves": 280,
-        "sha256": "78621ffc30ef1182faf55c9f4b00a2d89ace78b9d1bf0b28fa3db8d278f5c6ea"
+        "sha256": "3dddffb9b43477ee40349eca0f27ebfe4f41b1c8e1ead5778858befc2d6a6787"
       },
       "ExecutionView": {
         "bytes": 22724,
         "leaves": 117,
-        "sha256": "6907c27d48270eeb8aa744d020fdabd3b7b77ff251c1fbdfead9fbdf4c5d0e38"
+        "sha256": "8e0e514d6dcb39be13c4e81327302efa1aa6c697968b3536578dbb8e8c53d394"
       },
       "PublicBindingView": {
         "bytes": 3079,
         "leaves": 35,
-        "sha256": "1d5ef3a83197a2ec1cff4d0995f5e02aa1a8826d325e09f50f28949d7d4a245d"
+        "sha256": "9a55a1bf7b0b2067aee57ca4bc0a59a810eaa3380bf682fbd5940937432b3fdd"
       },
       "PublicCoinView": {
         "bytes": 47438,
         "leaves": 907,
-        "sha256": "468b340e53a7d1aaf76cd396db7bed87104ea80c4b69c0b08709fcf2eeb3ceb7"
+        "sha256": "e023f88e676f3ada61c87281bceb7538a462a7572ff811c1407ed1025d94f4d6"
       },
       "StrategyDecisionView": {
         "bytes": 39370,
         "leaves": 250,
-        "sha256": "af30c6d3a1d2c03792c2a396e4cb77e4af6ae0be4a310ccd5c242c2773bb194a"
+        "sha256": "c9d544b7cce43ae82f59dc6671265bb9daa672115eabea7a00f8daad5b3d1c10"
       }
     }
   },
@@ -182,7 +182,7 @@
       "property-premise": 5
     }
   },
-  "f2o1_ledger_sha256": "39f454079fecb95daf8fda7d9166421c323ddfa2242c5c23b53361f6268c5a9a",
+  "f2o1_ledger_sha256": "d2957b47758cd6919318490c7bd950623b07dd6959f7bcf1fe1fa348ab577f08",
   "finding_codes": [
     [
       "predecessor-source-pins",
@@ -307,9 +307,9 @@
   ],
   "findings_sha256": "28050d15395e35a4acb7d0240ebd03a0f94fd8f7e1530c94b62d9f41ddf9199d",
   "source_pins": {
-    "evaluation/formal-provider-observables-f2o1/checker.py": "64c67753eb8d65eeba4bcf4b5f88df23e9278947d1833878bdba36b108fca500",
+    "evaluation/formal-provider-observables-f2o1/checker.py": "9387cc01dd6a29a30991e402950d59759a87e8a107347a71e132db7696067616",
     "evaluation/formal-provider-observables-f2o1/expected-findings.json": "e60494a72e2c6c0d95a727138b099400698471a9b31275cdeaab15c806bc8f8c",
-    "evaluation/formal-provider-observables-f2o1/generator.py": "fb7aa86689a6a20a6bfccab528e8fdec3b16dcea305c47ff86ff6c2c93834f98",
+    "evaluation/formal-provider-observables-f2o1/generator.py": "5df54531ace1e731a9b87015a29df672e21cb39c7c60800fd9ceba9ab502f2d3",
     "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/independent.py": "352aa9e15ac3d3734156bc71227fce533bdc871bc4103e84b8df6cac50eb7b17",
     "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/model.py": "9879afcc2a19d9f933cccb204b8cef4102cff1ceb3c7c1f14baa888343e3859a",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/independent.py": "fb2354d5f33720c868dcf8e9cde7af43edeff28a13b31b9c2b31a02455bd4136",
@@ -318,9 +318,9 @@
     "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/model.py": "4fc9e093d8a3a4621ae447af799bbfa98337f463504fe717182e725fa8e5eb8d",
     "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/independent.py": "76a72086b9d47858c9be8e7ab3d8f69641404ff8b15d7ec515817959a9800de8",
     "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/model.py": "3e91a24fb2ed1a57052aa8b7818569752df9a257f10c834229ad16378b1148e3",
-    "evaluation/formal-source-owner-projections-f0v2b2c1b1/independent.py": "cd1a176bfa64d74c72ca1ecf4fb69a744968adacd92520a8da53345c3d071127",
+    "evaluation/formal-source-owner-projections-f0v2b2c1b1/independent.py": "1b5b58a2e27619060dac51755645c8167d6e4e7df6f70a5a864a151156813f3e",
     "evaluation/formal-source-owner-projections-f0v2b2c1b1/model.py": "a0aa623a1bf84b638bb86cd728ae132f99b081b548b106a80e5ba0669a2c49b7",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/independent.py": "77948f411ec0ad6a90ad33cb784f3d67d8d4c5e0a594ea57094dc9eda1882dfa",
-    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9cbe6d51fb1ff5e0c9a7585505a55fe4f34ec9685aa02ed7b1ee872092c3f6cc"
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "91af1399ace370f69493b80a519077a95e9fbeeb79cac1b8d5c8d7f7e9e1e124"
   }
 }

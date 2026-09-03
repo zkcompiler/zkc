@@ -1,107 +1,29 @@
 {
-  "format": "zkc.semantic-migration-candidate.v0",
-  "base_commit": "4ff8358108b6acf4355fa178b9b70529c6fb3778",
-  "scope": [
-    "terminal-contract-repair",
-    "normalized-owner-view-publication",
-    "endpoint-terminal-obligations",
-    "public-coin-transfer-wording"
-  ],
+  "format": "zkc.semantic-refreeze-rehearsal.v0",
+  "baseline_identity_pin": "evaluation/formal-source-owner-view-repair-f0v/baseline-identities.json",
   "publication": "forbidden",
-  "identity_finalization": "forbidden",
-  "foundation_boundary": {
-    "status": "awaiting-m1",
-    "evaluator-aligns-to-published-law": {
-      "semantic_regime_rotation": false,
-      "profile_effect": "the common sixteen-profile Interaction cone remains the complete rotation"
-    },
-    "published-law-changes": {
-      "semantic_regime_rotation": true,
-      "profile_effect": "all eighteen indexed profile identities rotate and every profiled subject must be reconstructed"
-    },
-    "selection": null
-  },
-  "open_alternatives": [
-    {
-      "axis": "algorithm-observable",
-      "selection": null,
-      "options": [
-        {
-          "key": "algorithm-read-in-owner-view",
-          "changes": "Add an authenticated algorithm-preimage observable to the Interaction owner-view schema and required-read closure.",
-          "target_profile_rotation": "computed by the two publication compilers",
-          "identity_note": "The Interaction-rooted cone receives an alternative identity table."
-        },
-        {
-          "key": "algorithm-preimage-in-source-package",
-          "changes": "Keep PIR views unchanged; require the formal-source package to carry and authenticate the exact K1 algorithm and module preimages.",
-          "target_profile_rotation": [],
-          "identity_note": "No additional PIR profile rotation beyond the common candidate."
-        }
-      ]
-    },
-    {
-      "axis": "public-coin-law",
-      "selection": null,
-      "options": [
-        {
-          "key": "public-coin-denotation-in-pir",
-          "changes": "Give pir.public-coin-law and pir.challenge-domain an exact denotational body consumable from the authenticated owner source.",
-          "target_profile_rotation": "computed by the two publication compilers",
-          "identity_note": "The Interaction-rooted cone and affected module/Core identities receive alternative identities."
-        },
-        {
-          "key": "public-coin-binding-in-analysis",
-          "changes": "Keep PIR structural eligibility only; add an Analysis-owned distribution binding from exact domain/law references to a provider kernel.",
-          "target_profile_rotation": [],
-          "identity_note": "No additional PIR rotation; the selected or new Analysis profile rotates instead."
-        }
-      ]
-    },
-    {
-      "axis": "outcome-map-owner",
-      "selection": null,
-      "options": [
-        {
-          "key": "outcome-map-in-owner",
-          "changes": "Publish one PIR-owned total map from verdict and run-outcome lanes to a provider-neutral failure partition.",
-          "target_profile_rotation": "computed by the two publication compilers",
-          "identity_note": "The Interaction-rooted cone receives an alternative identity table."
-        },
-        {
-          "key": "outcome-map-per-analysis-provider",
-          "changes": "Keep PIR outcomes unmapped; require each Analysis provider binding to define and justify its own total result map.",
-          "target_profile_rotation": [],
-          "identity_note": "No additional PIR rotation; each provider Analysis profile owns its map and identity."
-        }
-      ]
-    }
+  "owner_pages": [
+    {"path": "docs-next/pir/interactive-core.md", "sha256": "ca092e1808163c1659035f54e1cf31e6952b2e19ddec84628cce9a3f0d219d70"},
+    {"path": "docs-next/pir/fiat-shamir.md", "sha256": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef"},
+    {"path": "docs-next/pir/duplex-sponge-fiat-shamir.md", "sha256": "54822176a39852d07d72a084d0a56a04f22c1207e16bb2e0196c4f84fa4954c5"},
+    {"path": "docs-next/pir/interfaces-and-plans.md", "sha256": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d"},
+    {"path": "docs-next/pir/endpoint-projection-views.md", "sha256": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4"},
+    {"path": "docs-next/oir/projection-contract.md", "sha256": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6"}
   ],
-  "integration_slots": [
-    {
-      "lane": "D2 schema",
-      "required_input": "Fresh generation, execution, replay, and run-view schema result",
-      "candidate_location": "R1C0 downstream hold and ExecutionView source entry"
-    },
-    {
-      "lane": "F0-V3",
-      "required_input": "canonical-framed and duplex family-local construction/result view determinacy",
-      "candidate_location": "sibling profile-local view catalogs"
-    },
-    {
-      "lane": "F2-O1",
-      "required_input": "integrated provider-observable audit and any new missing coordinate",
-      "candidate_location": "provider-observable alternative decision record"
-    },
-    {
-      "lane": "M1",
-      "required_input": "natural byte-bound owner decision and mechanized edge/canonicity result",
-      "candidate_location": "Foundation boundary branch before identity finalization"
-    },
-    {
-      "lane": "gates-green",
-      "required_input": "answer-taint, independent-Core, and current red-gate reclosure",
-      "candidate_location": "pre-freeze gate replay"
-    }
-  ]
+  "profile_manifests": [
+    {"key": "interaction", "path": "docs-next/pir/profiles/interaction.json", "sha256": "40cc1d388b32cb275cda5c1a8044729e12d8ecd6ccc4d2cf773226bfbaebcc1f"},
+    {"key": "canonical-framed-fiat-shamir", "path": "docs-next/pir/profiles/canonical-framed-fiat-shamir.json", "sha256": "72603361e8ed516214f7b053a08442afc88838828eedae84766e43cf5a013586"},
+    {"key": "duplex-sponge-fiat-shamir", "path": "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json", "sha256": "32cba2933acdf9687bad72cfde02559b777435b12dc67067d9341e6ef3d99f2c"},
+    {"key": "public-setup", "path": "docs-next/pir/profiles/public-setup.json", "sha256": "113b6e4ab7dcdbf8cddcec66cb17da7ded9c5e34e73c31871d8d0e528a22a426"},
+    {"key": "interface-plan", "path": "docs-next/pir/profiles/interface-plan.json", "sha256": "0c68dfc2a3b7e9a604351ad3689b3e03ac30213ce61f7e1b14e3fde03f656af7"},
+    {"key": "endpoint-source-view", "path": "docs-next/pir/profiles/endpoint-source-view.json", "sha256": "47b25cd40f45cc752b96571901aaafd0f980e2d3cc173425d08a7db5ec4f7787"},
+    {"key": "oir-endpoint-graph", "path": "docs-next/oir/profiles/endpoint-graph.json", "sha256": "7758efbcb47ed9c2e58099fa2d62abd204818eaeba4041273531b80eb728590c"},
+    {"key": "oir-projection-relation", "path": "docs-next/oir/profiles/projection-relation.json", "sha256": "c4cf273bd57338ee0efc091a284986b6c55516683444f0be88459493cbecd879"}
+  ],
+  "gate_packages": {
+    "target_basis": "evaluation/formal-source-target-basis-f1r1a/run.py",
+    "target_core": "evaluation/formal-source-target-core-f1r1b/run.py",
+    "owner_views": "evaluation/formal-source-owner-views-f1r1c/run.py",
+    "terminal_contract": "evaluation/formal-source-terminal-owner-contracts-f0v2b2c1b5b1/run.py"
+  }
 }

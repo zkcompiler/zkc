@@ -42,8 +42,8 @@
     {
       "id": "active-source-definition-sequence",
       "disposition": "active-sequence",
-      "purpose": "Successive falsifiers for defining, deriving, publishing, and checking exact owner-view source without promoting an intermediate bounded grammar as authority.",
-      "exit_rule": "Complete constructor coverage and the publication or migration decision, absorb predecessor conclusions into the selected owner and a minimal retained falsifier, verify downstream source correspondence, and then remove superseded predecessor executables.",
+      "purpose": "Successive falsifiers for defining, deriving, and checking exact owner-view source. The migrated owner text is source-closed at bounded research resolution, while publication and downstream correspondence remain separate gates.",
+      "exit_rule": "Authorize and perform identity publication separately, verify downstream source correspondence under the published identities, absorb the durable regression set, and then remove superseded predecessor executables.",
       "checks": [
         "research.formal-source-package",
         "research.formal-source-target-basis",

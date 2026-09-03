@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the F0-V2B2C1B5B2 exact Terminal-owner projection gate."""
+"""Run the exact Terminal-owner projection gate on the migrated text."""
 
 from __future__ import annotations
 
@@ -30,33 +30,12 @@ INVENTORY = ROOT / "evaluation/formal-source-constructor-closure-f0v2b2a/invento
 TARGET_SOURCE = ROOT / "docs-next/pir/interactive-core.md"
 COLD_PUBLICATION = ROOT / "evaluation/semantic-profile-publication/independent.py"
 AGGREGATE = "F0V2B2C1B5B2-A-EXACT-TERMINAL-OWNER-PROJECTIONS"
-PROFILE_DIGEST = "76cf68774060fbe667ce5f1a7d0b67de525449d8fad92b262c7fd4adfd9b6b79"
-PROFILE_BODY_SHA256 = "4272f9bb8285a84481da961c29cdc058aa7e4ce2411c7f73582a0149933d554d"
-GRAMMAR_SHA256 = "725ecb1fa099aa7490bc9c1012d4370c0a6a1b183aff6c11d8129f11e464be9a"
+PROFILE_DIGEST = "2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f"
+PROFILE_BODY_SHA256 = "28fe377ff6cae5799ba243d02b6ccc8b3f84d248c40521960d42b34ec44a1b1f"
+GRAMMAR_SHA256 = "2962bf52a04d2b5b4dcb261e05723a831fc390a6edab2a1833cfef63c0306e91"
 SCHEMA_SOURCE_SHA256 = (
-    "376cefb165ff92f0152856996a96ae02f7e04b9e6c679d01f85e10471c10ca41"
+    "10700e8656ed5c70d83c04a00e853a526ae14e444deb706a4c632fafd021eeea"
 )
-ROTATED_PROFILES = (
-    "analysis-afk-theorem-source-validation",
-    "analysis-afk-transport",
-    "analysis-cryptographic-property",
-    "analysis-incremental-composition",
-    "analysis-incremental-composition-source-validation",
-    "canonical-framed-fiat-shamir",
-    "commitment-opening",
-    "duplex-sponge-fiat-shamir",
-    "endpoint-source-view",
-    "interaction",
-    "interface-plan",
-    "oir-projection-relation",
-    "oracle-commitment",
-    "public-setup",
-    "relations",
-    "verifier-derived-query-plan",
-)
-STABLE_PROFILES = ("analysis-kernel", "oir-endpoint-graph")
-
-
 class GateFailure(RuntimeError):
     """The package detected drift, disagreement, or an accepted mutation."""
 
@@ -355,7 +334,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     _require(
         predecessor["aggregate"] == "F0V2B2C1B5B1-A-TERMINAL-CONTRACT-SELECTION"
         and predecessor["findings_sha256"]
-        == "74ed90a9e5be18752d8eeb86ea4554d205d0689a768e17b85301b33c69cd552a",
+        == "1f89c704a2af3e01b86711858d3d11ae7a20bb394520eb6c7b21b6513a058ba5",
         "B5B1 predecessor result drifted",
     )
     findings.append(
@@ -380,17 +359,25 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     terminal_source = target[terminal_start:terminal_end]
     _require(
         "ClaimDisposition = Consume | Discharge" in target
-        and "required_applied_reductions" not in terminal_source
+        and "required_true_checks" in terminal_source
+        and "required_applied_reductions" in terminal_source
+        and "terminal_claims" in terminal_source
+        and "TerminalContract(t)" in target
+        and "DerivedClaimDisposition(Accept) = Consume" in target
         and "F0V2B2C1B5B2" not in target,
-        "target gap or non-publication boundary drifted",
+        "migrated Terminal owner contract drifted",
     )
     findings.extend(
         (
-            _finding("target-gap-pin", "Affirmative", "F0V2B2C1B5B2-A-TARGET-GAP-PIN"),
             _finding(
-                "target-authority-untouched",
+                "target-contract-pin",
                 "Affirmative",
-                "F0V2B2C1B5B2-A-NONPUBLICATION",
+                "F0V2B2C1B5B2-A-TARGET-CONTRACT-PIN",
+            ),
+            _finding(
+                "authored-owner-profile",
+                "Affirmative",
+                "F0V2B2C1B5B2-A-AUTHORED-OWNER",
             ),
         )
     )
@@ -427,13 +414,9 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         )
     )
 
-    repaired, candidate_publication, grammar_digest = model.candidate_publications()
-    override = model.candidate_override()
-    cold_candidate = cold_publication.compile_repository(
-        manifest_overrides=override.manifests,
-        page_overrides=override.pages,
-    )
-    for key in model.f0v.publication.PROFILE_KEYS:
+    candidate_publication, grammar_digest = model.candidate_publication()
+    cold_candidate = cold_publication.compile_repository()
+    for key in model.publication.PROFILE_KEYS:
         reference = candidate_publication.profiles[key]
         observed = cold_candidate.profiles[key]
         _require(
@@ -443,21 +426,14 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         )
     profile = model.profile_evidence()
     _require(
-        profile["basis_interaction_digest"]
-        == "ab74407099935edb863832b357973071b5c5193d16123d811f8289bbbc9be559"
-        and profile["candidate_interaction_digest"] == PROFILE_DIGEST
+        profile["candidate_interaction_digest"] == PROFILE_DIGEST
         and profile["candidate_interaction_body_sha256"] == PROFILE_BODY_SHA256,
-        "candidate Interaction identity drifted",
+        "migrated Interaction identity drifted",
     )
     _require(
-        tuple(profile["rotated_profiles"]) == ROTATED_PROFILES
-        and tuple(profile["stable_profiles"]) == STABLE_PROFILES,
-        "candidate profile rotation cone drifted",
-    )
-    _require(
-        candidate_publication.profiles["interaction"].manifest["revision"] == 2
-        and repaired.profiles["interaction"].manifest["revision"] == 1,
-        "synthetic Interaction revision transition drifted",
+        profile["profiles_compiled"] == sorted(model.publication.PROFILE_KEYS)
+        and candidate_publication.profiles["interaction"].manifest["revision"] == 2,
+        "migrated profile catalog or Interaction revision drifted",
     )
     findings.extend(
         (
@@ -472,9 +448,9 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
                 "F0V2B2C1B5B2-A-INTERACTION-R2",
             ),
             _finding(
-                "profile-rotation-cone",
+                "complete-profile-catalog",
                 "Affirmative",
-                "F0V2B2C1B5B2-A-ROTATION-CONE",
+                "F0V2B2C1B5B2-A-PROFILE-CATALOG",
             ),
         )
     )
@@ -1035,9 +1011,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     metrics = {
         "findings": len(findings),
         "findings_sha256": checksum,
-        "profiles_compared": len(model.f0v.publication.PROFILE_KEYS),
-        "rotated_profiles": len(ROTATED_PROFILES),
-        "stable_profiles": len(STABLE_PROFILES),
+        "profiles_compared": len(model.publication.PROFILE_KEYS),
         "schema_definitions": model.VIEW_SCHEMA_STATS["definition_count"],
         "schema_source_nodes": model.VIEW_SCHEMA_STATS["source_node_count"],
         "exact_view_bodies": len(owner_bodies),

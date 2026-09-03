@@ -1,10 +1,4 @@
-"""Independent structural audit of the semantic migration report.
-
-This path does not construct candidate profiles. It checks the report against
-the raw manifest graph, current owner bytes, and the explicit candidate
-contract, providing a differently structured control around the two profile
-compilers used by ``model.py``.
-"""
+"""Independent structural audit of the direct refreeze rehearsal report."""
 
 from __future__ import annotations
 
@@ -16,27 +10,34 @@ from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
-INDEX = ROOT / "docs-next/foundation/semantic-profile-manifests.json"
 CONTRACT = HERE / "candidate-contract.json"
+INDEX = ROOT / "docs-next/foundation/semantic-profile-manifests.json"
 
 
 class IndependentError(RuntimeError):
-    """The report differs from the raw source graph or candidate contract."""
+    """The report differs from the direct source graph or its pins."""
 
 
 def _strict_json(path: Path) -> Any:
     def object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-        value: dict[str, Any] = {}
-        for key, item in pairs:
-            if key in value:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
                 raise IndependentError(f"duplicate key {key!r} in {path}")
-            value[key] = item
-        return value
+            result[key] = value
+        return result
 
     try:
         return json.loads(path.read_bytes(), object_pairs_hook=object_pairs)
     except (OSError, json.JSONDecodeError) as error:
         raise IndependentError(f"cannot read {path}: {error}") from error
+
+
+def _sha256(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise IndependentError(f"cannot hash {path}") from error
 
 
 def _manifest_table() -> dict[str, Mapping[str, Any]]:
@@ -47,145 +48,95 @@ def _manifest_table() -> dict[str, Mapping[str, Any]]:
     result: dict[str, Mapping[str, Any]] = {}
     for row in rows:
         key = row["key"]
-        source = ROOT / row["source"]
         if key in result:
             raise IndependentError(f"duplicate profile key {key}")
-        result[key] = _strict_json(source)
+        result[key] = _strict_json(ROOT / row["source"])
     return result
 
 
-def _interaction_cone(manifests: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
-    imports = {
-        key: tuple(str(item) for item in manifest["expected_imports"])
-        for key, manifest in manifests.items()
-    }
+def _interaction_cone(manifests: Mapping[str, Mapping[str, Any]]) -> set[str]:
     reached = {"interaction"}
-    changed = True
-    while changed:
-        changed = False
-        for key, dependencies in imports.items():
-            if key not in reached and any(item in reached for item in dependencies):
-                reached.add(key)
-                changed = True
-    return tuple(key for key in manifests if key in reached)
+    while True:
+        updated = reached | {
+            key
+            for key, manifest in manifests.items()
+            if any(item in reached for item in manifest["expected_imports"])
+        }
+        if updated == reached:
+            return reached
+        reached = updated
 
 
 def verify(report: Mapping[str, Any]) -> dict[str, Any]:
     contract = _strict_json(CONTRACT)
     manifests = _manifest_table()
-    expected_cone = _interaction_cone(manifests)
-    rotation = report["rotation"]
-    if set(rotation["rotated"]) != set(expected_cone):
-        raise IndependentError("reported rotation differs from raw import closure")
-    if len(rotation["rotated"]) != 16 or len(rotation["stable"]) != 2:
-        raise IndependentError("candidate does not expose the expected 16/2 split")
-    if rotation["foundation_changed"]:
-        raise IndependentError("common candidate unexpectedly rotates Foundation")
+    source_inventory = report["source_inventory"]
+    if len(source_inventory["owner_pages"]) != 6:
+        raise IndependentError("report does not carry six owner-page pins")
+    if len(source_inventory["profile_manifests"]) != 8:
+        raise IndependentError("report does not carry eight manifest pins")
+    for key in ("owner_pages", "profile_manifests"):
+        if source_inventory[key] != contract[key]:
+            raise IndependentError(f"reported {key} differ from the contract")
+        for row in source_inventory[key]:
+            if _sha256(ROOT / row["path"]) != row["sha256"]:
+                raise IndependentError(f"direct source pin drifted for {row['path']}")
 
-    pages = report["exact_changes"]["pages"]
-    manifests_changed = report["exact_changes"]["manifests"]
-    expected_pages = {
-        "docs-next/oir/projection-contract.md",
-        "docs-next/pir/duplex-sponge-fiat-shamir.md",
-        "docs-next/pir/endpoint-projection-views.md",
-        "docs-next/pir/fiat-shamir.md",
-        "docs-next/pir/interactive-core.md",
-        "docs-next/pir/interfaces-and-plans.md",
-    }
-    expected_manifests = {
-        "canonical-framed-fiat-shamir",
-        "duplex-sponge-fiat-shamir",
-        "endpoint-source-view",
-        "interaction",
-        "interface-plan",
-        "oir-projection-relation",
-        "public-setup",
-    }
-    if {row["path"] for row in pages} != expected_pages:
-        raise IndependentError("owner-page change set drifted")
-    if {row["key"] for row in manifests_changed} != expected_manifests:
-        raise IndependentError("profile-manifest change set drifted")
-    for row in pages:
-        current = (ROOT / row["path"]).read_bytes()
-        if hashlib.sha256(current).hexdigest() != row["before_sha256"]:
-            raise IndependentError(f"owner baseline drifted for {row['path']}")
-        if row["before_sha256"] == row["after_sha256"] or not row["unified_diff"]:
-            raise IndependentError(f"owner candidate is empty for {row['path']}")
-    for row in manifests_changed:
-        if row["before_sha256"] == row["after_sha256"] or not row["unified_diff"]:
-            raise IndependentError(f"manifest candidate is empty for {row['key']}")
+    publication = report["publication"]
+    table = publication["candidate_identity_table"]["profiles"]
+    if set(table) != set(manifests):
+        raise IndependentError("identity table differs from the indexed manifest graph")
+    if not publication["compiler_agreement"]:
+        raise IndependentError("report does not retain dual-compiler agreement")
+    if len(publication["rotated_profiles"]) != 17:
+        raise IndependentError("reported rotation is not seventeen profiles")
+    if publication["stable_profiles"] != ["analysis-kernel"]:
+        raise IndependentError("analysis-kernel is not the sole stable profile")
+    interaction_cone = _interaction_cone(manifests)
+    if len(interaction_cone) != 16:
+        raise IndependentError("raw import graph does not have a sixteen-profile Interaction cone")
+    if not interaction_cone <= set(publication["rotated_profiles"]):
+        raise IndependentError("one Interaction-dependent profile failed to rotate")
+    if "oir-endpoint-graph" not in publication["rotated_profiles"]:
+        raise IndependentError("the independent endpoint graph did not rotate")
+    if not all(publication["legacy_profile_refusals"].values()):
+        raise IndependentError("one legacy profile refusal control failed")
 
-    refusal = report["old_profile_refusal"]
-    if not all(
-        (
-            refusal["rotated_rows_are_unequal"],
-            refusal["stable_rows_are_equal"],
-            refusal["published_identity_file_unchanged"],
-        )
+    gates = report["prerequisite_gates"]
+    if gates["target_core"]["passed"] != gates["target_core"]["total"]:
+        raise IndependentError("target-core prerequisite did not close")
+    if gates["owner_views"]["passed"] != gates["owner_views"]["total"]:
+        raise IndependentError("owner-view prerequisite did not finish")
+    if gates["owner_views"]["aggregate"] != {
+        "outcome": "Affirmative",
+        "code": "F1R1C-A-SOURCE-DETERMINACY",
+    }:
+        raise IndependentError("owner-view source determinacy did not close")
+    if gates["owner_views"]["law_field_selection"] != {
+        "ExecutionView.generated_execution_law": "execution-and-replay-v0",
+        "ExecutionView.relation_run_view_issuance_law": "run-view-issuance-v0",
+        "ExecutionView.replay_qualification_law": "replay-qualification-v0",
+        "ExecutionView.visible_history_law": "visible-history-v0",
+        "StrategyDecisionView.prover_view_formation_law": "prover-view-formation-v0",
+    }:
+        raise IndependentError("owner-view law-field selection differs")
+    hidden = gates["terminal_contract"]["hidden_gating_counterexample"]
+    if hidden.get("violation") != "linear-claim-consumed-twice":
+        raise IndependentError("hidden-gating refusal witness drifted")
+
+    if (
+        report["published_identity_sha256_before"]
+        != report["published_identity_sha256_after"]
+        or report["identity_finalization"] != "not-performed"
+        or report["publication_disposition"] != "Hold"
     ):
-        raise IndependentError("old-profile refusal control is incomplete")
-
-    fixture = report["endpoint_terminal_fixture"]
-    source = fixture["source"]
-    if source["required_applied_reductions"] != [2, 5]:
-        raise IndependentError("terminal fixture loses the required Reduction set")
-    if source["terminal_claims"] != [4, 8]:
-        raise IndependentError("terminal fixture loses the terminal Claim set")
-    if fixture["derived_dispositions"] != [[4, "Consume"], [8, "Consume"]]:
-        raise IndependentError("terminal fixture does not derive Accept dispositions")
-    if not all(fixture["controls"].values()):
-        raise IndependentError("terminal projection refusal control failed")
-
-    gates = report["f1_gates"]
-    if tuple(gates[key]["outcome"] for key in ("r1a", "r1b", "r1c0")) != (
-        "Affirmative",
-        "Affirmative",
-        "Affirmative",
-    ):
-        raise IndependentError("migrated F1 prerequisite gate did not reclose")
-    if not gates["r1b"]["old_profile_refused"]:
-        raise IndependentError("translated R1B accepts the old profile")
-    if not gates["r1b"]["old_terminal_bytes_refused"]:
-        raise IndependentError("translated R1B accepts the old Terminal bytes")
-    if len(gates["r1c0"]["schema_catalog_entries"]) != 6:
-        raise IndependentError("R1C0 does not publish six owner-view schemas")
-
-    alternatives = report["open_alternatives"]
-    contract_options = {
-        option["key"]
-        for axis in contract["open_alternatives"]
-        for option in axis["options"]
-    }
-    if set(alternatives) != contract_options:
-        raise IndependentError("alternative inventory differs from the contract")
-    if any(row["status"] != "unselected" for row in alternatives.values()):
-        raise IndependentError("an open alternative was silently selected")
-    owner_variants = (
-        "algorithm-read-in-owner-view",
-        "public-coin-denotation-in-pir",
-        "outcome-map-in-owner",
-    )
-    if any(len(alternatives[key]["target_profile_rotation"]) != 16 for key in owner_variants):
-        raise IndependentError("an owner-side alternative has another rotation cone")
-    if len({alternatives[key]["interaction_digest"] for key in owner_variants}) != 3:
-        raise IndependentError("owner-side alternatives collapse to one identity")
-    package_variants = contract_options - set(owner_variants)
-    if any(alternatives[key]["target_profile_rotation"] for key in package_variants):
-        raise IndependentError("an Analysis/package alternative rotates PIR")
-
-    if report["foundation_boundary"]["selection"] is not None:
-        raise IndependentError("the active M1 decision was preselected")
-    if len(report["integration_slots"]) != 5:
-        raise IndependentError("active-lane integration slots drifted")
-    if report["publication"] != "not-performed" or report["identity_finalization"] != "not-performed":
-        raise IndependentError("candidate claims publication or identity finalization")
-
+        raise IndependentError("rehearsal claims or performs publication")
     return {
-        "raw_profiles": len(manifests),
-        "interaction_cone": list(expected_cone),
-        "owner_pages": len(pages),
-        "manifest_overrides": len(manifests_changed),
-        "alternatives": len(alternatives),
-        "integration_slots": len(report["integration_slots"]),
-        "endpoint_terminal_controls": len(fixture["controls"]),
+        "indexed_profiles": len(manifests),
+        "interaction_cone": len(interaction_cone),
+        "rotated_profiles": len(publication["rotated_profiles"]),
+        "stable_profiles": len(publication["stable_profiles"]),
+        "owner_pages": len(source_inventory["owner_pages"]),
+        "profile_manifests": len(source_inventory["profile_manifests"]),
+        "legacy_profile_controls": len(publication["legacy_profile_refusals"]),
     }

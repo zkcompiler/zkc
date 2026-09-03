@@ -121,7 +121,7 @@ def _canonical_values(k2: Any, core: object, construction: object, checked: obje
         algorithm_use(construction.version + ":absorb", "k2-absorb-contract-v1"),
         algorithm_use(construction.version + ":squeeze", "k2-squeeze-contract-v1"),
         algorithm_use(construction.version + ":advance", "k2-advance-contract-v1"),
-        body("canonical-value-body-v0", construction.application_domain.hex()),
+        body("protocol-declaration-ref-body-v0", construction.application_domain.hex()),
         ref("semantic-failure-type-body-v0", "SamplingExhausted"),
         law("canonical-framed", "canonical-framed-source-views-v0"),
         schedule,
@@ -161,6 +161,7 @@ def _canonical_values(k2: Any, core: object, construction: object, checked: obje
     )
     result = checked.result
     result_value = record(
+        body("runtime-schema-body-v0", "CheckedFSConstruction"),
         _identifier(result.source_protocol_id, "protocol-id-body-v0"),
         _identifier(result.target_protocol_id, "protocol-id-body-v0"),
         _identifier(result.shared_core_id, "core-id-body-v0"),
@@ -349,8 +350,8 @@ def _duplex_values(construction: Any, construction_module: Any) -> dict[str, Any
         coverage_entries,
         [ref("occurrence-ref-body-v0", item.name) for item in messages],
         [ref("challenge-ref-body-v0", item.name) for item in challenges],
-        law("duplex-sponge", "duplex-sponge-source-views-v0"),
-        law("duplex-sponge", "duplex-sponge-source-views-v0"),
+        law("duplex-sponge", "duplex-sponge-prover-required-prefix-v0"),
+        law("duplex-sponge", "duplex-sponge-state-transition-v0"),
         [],
     )
     decoder_entries = [

@@ -60,7 +60,6 @@ EXPECTED_CANONICAL_CASES = {
     "ClaimUsageBody": ["Linear", "Reusable"],
     "ClaimSourceBody": ["InitialClaim", "ReductionOutput"],
     "TerminalVerdictBody": ["Accept", "Reject", "Abort"],
-    "ClaimDispositionBody": ["Consume", "Discharge"],
     "GuardBody": ["Always", "EvaluateBoolean"],
     "OracleEffectBody": ["PublishOracle", "QueryOracle", "AnswerOracle"],
     "CoreEffectBody": [
@@ -93,6 +92,7 @@ EXPECTED_CANONICAL_CASES = {
 }
 
 EXPECTED_DERIVED_CASES = {
+    "ClaimDisposition": ["Consume", "Discharge"],
     "OracleQueryVisibility": ["Public", "VerifierOnly"],
     "ModuleDecisionClass": ["NoProverDecision", "ProverDecision", "ProverPublication"],
     "ProverDecisionKind": ["SupplyMessage", "SupplyOracle", "ModuleDecision"],
@@ -365,8 +365,8 @@ def _validate_inventory(inventory: dict[str, Any]) -> dict[str, Any]:
         "profile_body_sha256",
     }:
         raise CensusError("owner-profile pin is malformed")
-    if owner["key"] != "interaction" or owner["revision"] != 0:
-        raise CensusError("constructor census is not pinned to Interaction revision 0")
+    if owner["key"] != "interaction" or owner["revision"] != 2:
+        raise CensusError("constructor census is not pinned to Interaction revision 2")
     for key in ("profile_digest", "profile_body_sha256"):
         if (
             type(owner[key]) is not str
@@ -392,7 +392,7 @@ def _validate_inventory(inventory: dict[str, Any]) -> dict[str, Any]:
         raise CensusError("Core census is not a unique fourteen-field sequence")
 
     tables = inventory["canonical_variant_tables"]
-    if type(tables) is not list or len(tables) != 16:
+    if type(tables) is not list or len(tables) != 15:
         raise CensusError("canonical variant-table census is incomplete")
     table_names: set[str] = set()
     variant_case_count = 0
@@ -431,7 +431,7 @@ def _validate_inventory(inventory: dict[str, Any]) -> dict[str, Any]:
         raise CensusError("canonical variant-table names are incomplete")
 
     algebras = inventory["derived_semantic_algebras"]
-    if type(algebras) is not list or len(algebras) != 5:
+    if type(algebras) is not list or len(algebras) != 6:
         raise CensusError("derived semantic-algebra census is incomplete")
     algebra_names: set[str] = set()
     derived_case_count = 0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the F0-V1 owner-view publication-topology feasibility gate."""
+"""Run the migrated owner-view publication-topology gate."""
 
 from __future__ import annotations
 
@@ -146,9 +146,8 @@ def _load_expected() -> dict[str, Any]:
 
 
 def run_gate() -> dict[str, Any]:
-    candidate = model.build_candidate()
-    reference_evidence = model.observe(candidate)
-    cold_evidence = cold.observe(candidate)
+    reference_evidence = model.observe()
+    cold_evidence = cold.observe()
     if reference_evidence != cold_evidence:
         raise GateFailure(
             "independent publication paths disagree:\n"
@@ -182,13 +181,13 @@ def run_gate() -> dict[str, Any]:
             "exact-rotation-cone",
             "Affirmative",
             "F0V1-A-ROTATION-CONE",
-            "the synthetic repair rotates exactly the sixteen-profile import cone",
+            "the migrated text rotates exactly the seventeen-profile import cone",
         ),
         _finding(
             "outside-cone-stability",
             "Affirmative",
             "F0V1-A-OUTSIDE-STABLE",
-            "Analysis Kernel and the OIR endpoint graph retain exact identities",
+            "Analysis Kernel retains its exact identity",
         ),
         _finding(
             "changed-profile-revisions",
@@ -200,7 +199,7 @@ def run_gate() -> dict[str, Any]:
             "canonical-view-body-grammar",
             "CannotAnswer",
             "F0V1-C-CANONICAL-GRAMMAR",
-            "topology-only body selectors do not define the complete canonical grammar",
+            "this topology gate does not re-derive the complete canonical grammar",
         ),
         _finding(
             "proper-subset-read-closure",

@@ -3,13 +3,13 @@
   "scope": "interaction-r0-normalized-six-view-constructor-grammar",
   "owner_profile": {
     "key": "interaction",
-    "revision": 0,
-    "profile_digest": "f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
-    "profile_body_sha256": "46a4b92b28962ace15009ca2a05ee26e92b0729fb6d7231fd46f3aa6735d1365"
+    "revision": 2,
+    "profile_digest": "2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f",
+    "profile_body_sha256": "28fe377ff6cae5799ba243d02b6ccc8b3f84d248c40521960d42b34ec44a1b1f"
   },
   "predecessor": {
     "census_format": "zkc.formal-source-constructor-closure-f0v2b2a.inventory.v0",
-    "census_sha256": "f258ac5527211f0fc2995fc0a6c2b179646b85d098c6498476e9b7e41ca114d8",
+    "census_sha256": "ed91de9be977c355a3c3867621407378aede9499be22b27bc2106631ef7226be",
     "bounded_source_sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
   },
   "maximum_sequence_length": 16384,

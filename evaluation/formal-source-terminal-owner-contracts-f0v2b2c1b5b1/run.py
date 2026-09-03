@@ -416,7 +416,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     foundation_source = FOUNDATION_SOURCE.read_text(encoding="utf-8")
     target_source = TARGET_SOURCE.read_text(encoding="utf-8")
     terminal_start = target_source.index("TerminalDecl = {")
-    terminal_end = target_source.index("At an active terminal", terminal_start)
+    terminal_end = target_source.index("## 7. Standard immutable-oracle extension", terminal_start)
     terminal_source = target_source[terminal_start:terminal_end]
     _require(
         "Foundation does not define a universal ZK value algebra, protocol evaluator,"
@@ -425,16 +425,29 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         "Foundation owner boundary drifted",
     )
     _require(
-        "ClaimDisposition = Consume | Discharge" in target_source
-        and "required_applied_reductions" not in terminal_source,
-        "the B5A Terminal source gap no longer matches this successor",
+        all(
+            text in terminal_source
+            for text in (
+                "required_true_checks: CanonicalSortedUniqueSeq<CheckRef>",
+                "required_applied_reductions: CanonicalSortedUniqueSeq<ReductionRef>",
+                "terminal_claims: CanonicalSortedUniqueSeq<ClaimRef>",
+                "DerivedClaimDisposition(Accept) = Consume",
+                "DerivedClaimDisposition(Reject) = Discharge",
+                "DerivedClaimDisposition(Abort)  = Discharge",
+                "A terminal is selected by its Guard alone.",
+                "No disposition is authored per claim.",
+            )
+        ),
+        "the migrated Terminal owner contract is incomplete",
     )
     findings.append(
         _finding("owner-source-boundary", "Affirmative", "F0V2B2C1B5B1-A-OWNER-SOURCE")
     )
     findings.append(
         _finding(
-            "target-gap-source-pin", "Affirmative", "F0V2B2C1B5B1-A-TARGET-GAP-PIN"
+            "migrated-terminal-contract-source",
+            "Affirmative",
+            "F0V2B2C1B5B1-A-MIGRATED-OWNER-CONTRACT",
         )
     )
 

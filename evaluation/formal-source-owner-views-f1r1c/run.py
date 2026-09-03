@@ -61,14 +61,18 @@ def run_gate() -> dict[str, object]:
         "extension_catalogs",
         "selected_view_body_declarations",
         "canonical_view_body_grammars",
+        "coordinate_body_grammars",
         "static_fragment_body_functions",
+        "law_field_selection",
+        "static_view_schema_dependencies",
         "source_subject_compilers",
+        "exact_read_manifest",
     ):
         if inventory[key] != evidence[key]:
             raise GateFailure(f"independent raw-source inventory disagrees on {key}")
 
     if evidence["target_profile_digest"] != expected["target_profile_digest"]:
-        raise GateFailure("the frozen target profile digest changed")
+        raise GateFailure("the rehearsed target profile digest changed")
     return {
         "aggregate": evidence["aggregate"],
         "cases": [

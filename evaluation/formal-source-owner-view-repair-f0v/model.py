@@ -1,8 +1,8 @@
-"""Reference construction and inspection for the F0-V1 repair candidate.
+"""Reference inspection of the migrated owner-view publication topology.
 
-The candidate exists only as in-memory manifest and owner-page overrides.  It
-tests whether the selected publication topology is expressible; it does not
-provide the canonical view-body grammar or change the target profiles.
+The positive path reads the authored manifests and owner pages directly.  An
+isolated copy is used only for directed negative controls; no profile overlay
+is needed to establish the positive result.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import Any, Mapping
 
 
 ROOT = Path(__file__).resolve().parents[2]
+HERE = Path(__file__).resolve().parent
 PUBLICATION_MODEL = (
     ROOT / "evaluation" / "semantic-profile-publication" / "reference_model.py"
 )
@@ -59,6 +60,14 @@ DIRECT_REPAIR_PROFILES = (
     "endpoint-source-view",
 )
 DEPENDENT_REPAIR_PROFILES = DIRECT_REPAIR_PROFILES[1:]
+EXPECTED_REVISIONS = {
+    "interaction": 2,
+    "canonical-framed-fiat-shamir": 2,
+    "duplex-sponge-fiat-shamir": 2,
+    "public-setup": 1,
+    "interface-plan": 1,
+    "endpoint-source-view": 1,
+}
 EXPECTED_ROTATION = (
     "analysis-afk-theorem-source-validation",
     "analysis-afk-transport",
@@ -71,13 +80,15 @@ EXPECTED_ROTATION = (
     "endpoint-source-view",
     "interaction",
     "interface-plan",
+    "oir-endpoint-graph",
     "oir-projection-relation",
     "oracle-commitment",
     "public-setup",
     "relations",
     "verifier-derived-query-plan",
 )
-EXPECTED_STABLE = ("analysis-kernel", "oir-endpoint-graph")
+EXPECTED_STABLE = ("analysis-kernel",)
+BASELINE_IDENTITIES = HERE / "baseline-identities.json"
 
 SOURCE_KIND_TO_LOCAL_COMPILER = {
     "pir.source-binding-payload": "source-binding-payload-body-v0",
@@ -117,7 +128,10 @@ SCHEMA_TAGS = {
 }
 SCHEMA_LAWS = {
     "public-binding-view-v0": ("core-admission-v0",),
-    "strategy-decision-view-v0": ("core-admission-v0",),
+    "strategy-decision-view-v0": (
+        "core-admission-v0",
+        "prover-view-formation-v0",
+    ),
     "public-coin-view-v0": (
         "core-admission-v0",
         "public-coin-eligibility-v0",
@@ -127,7 +141,10 @@ SCHEMA_LAWS = {
     "execution-view-v0": (
         "core-admission-v0",
         "execution-and-replay-v0",
+        "protocol-outcome-partition-v0",
         "run-view-issuance-v0",
+        "visible-history-v0",
+        "replay-qualification-v0",
     ),
 }
 
@@ -199,29 +216,30 @@ def _append_to_fragment(
 
 
 def _local_source_selector(profile: str, subject_kind: str) -> str:
-    label = subject_kind.removeprefix("pir.source-").replace("-", "_")
-    return f"F0VLocalSourceBodyV0({profile},{label},x) = ClosedFamilyTaggedBody(x)"
+    prefixes = {
+        "interaction": "PIR",
+        "canonical-framed-fiat-shamir": "CanonicalFramed",
+        "duplex-sponge-fiat-shamir": "Duplex",
+        "public-setup": "PublicSetup",
+        "interface-plan": "InterfacePlan",
+        "endpoint-source-view": "Endpoint",
+    }
+    suffixes = {
+        "pir.source-binding-payload": "SourceBindingPayloadBody(x) =",
+        "pir.source-capability-requirement": "SourceCapabilityRequirementBody(x) =",
+        "pir.source-no-policy": "SourceNoPolicyBody(x) =",
+        "pir.source-policy-closure": "SourcePolicyClosureBody(x) =",
+    }
+    return prefixes[profile] + suffixes[subject_kind]
 
 
 def _schema_selector(name: str) -> str:
-    laws = ",".join(SCHEMA_LAWS[name])
-    return (
-        f"F0VStaticViewSchemaV0({name}) = "
-        f"Owner({SCHEMA_OWNERS[name]});Tag({SCHEMA_TAGS[name]});"
-        f"Body(static-view-body-v0);Derivation({laws});"
-        "Resolver(static-view-schema-resolution-v0);"
-        "Closure(static-view-schema-resolution-v0);"
-        "Authority(local-four-envelope-compilers)"
-    )
+    return f"StaticViewSchema({SCHEMA_TAGS[name]}) = {{"
 
 
 def _schema_dependencies(name: str) -> list[dict[str, str]]:
     dependencies = [
         _ref("self", "pir.body-compiler", "static-view-body-v0"),
-        *(
-            _ref("self", "pir.body-compiler", compiler)
-            for compiler in SOURCE_KIND_TO_LOCAL_COMPILER.values()
-        ),
         _ref(
             "self",
             "pir.semantic-law",
@@ -378,11 +396,15 @@ def _repair_dependent(
 
 
 def build_candidate() -> Candidate:
+    """Copy the authored manifests and pages for mutation-only use."""
+
     manifests = {key: _load_manifest(key) for key in DIRECT_REPAIR_PROFILES}
-    pages: dict[str, bytes] = {}
-    _repair_interaction(manifests[INTERACTION], pages)
-    for key in DEPENDENT_REPAIR_PROFILES:
-        _repair_dependent(manifests[key], pages)
+    page_names = {
+        _owner_page(manifest, fragment)
+        for manifest in manifests.values()
+        for fragment in manifest["fragments"]
+    }
+    pages = {name: (ROOT / name).read_bytes() for name in page_names}
     return Candidate(manifests, pages)
 
 
@@ -423,8 +445,8 @@ def _expected_routes(profile: str) -> dict[str, tuple[str, str]]:
 def validate_topology(profiles: Mapping[str, Any]) -> None:
     for key in DIRECT_REPAIR_PROFILES:
         manifest = profiles[key].manifest
-        if manifest["revision"] != 1:
-            raise TopologyError(f"{key} did not advance its synthetic revision")
+        if manifest["revision"] != EXPECTED_REVISIONS[key]:
+            raise TopologyError(f"{key} has the wrong migrated revision")
         routes = _subject_routes(manifest)
         if routes != _expected_routes(key):
             raise TopologyError(f"{key} has the wrong source-authority routing")
@@ -432,9 +454,7 @@ def validate_topology(profiles: Mapping[str, Any]) -> None:
         for kind, compiler in SOURCE_KIND_TO_LOCAL_COMPILER.items():
             coordinate = ("pir.body-compiler", compiler)
             definition = definitions.get(coordinate)
-            if definition is None or definition["selector"] != _local_source_selector(
-                key, kind
-            ):
+            if definition is None or definition["selector"] != _local_source_selector(key, kind):
                 raise TopologyError(f"{key} omits exact local compiler {compiler}")
         if any(item["name"] == OLD_SHARED_COMPILER for item in manifest["definitions"]):
             raise TopologyError(f"{key} retains the catch-all source compiler")
@@ -454,6 +474,16 @@ def validate_topology(profiles: Mapping[str, Any]) -> None:
             raise TopologyError(f"schema {name} has the wrong owner or selector")
         if row["dependencies"] != _schema_dependencies(name):
             raise TopologyError(f"schema {name} has the wrong exact dependencies")
+    source_body = profiles[INTERACTION].body_bytes
+    for name in SCHEMA_NAMES:
+        tag = SCHEMA_TAGS[name]
+        owner = (
+            f"ProtocolView(ProtocolId, {tag})"
+            if name == "execution-view-v0"
+            else f"CoreView(CoreId, {tag})"
+        )
+        if source_body.count(f"owner: {owner},".encode("ascii")) != 1:
+            raise TopologyError(f"schema {name} has the wrong exact owner")
     issuance = definitions[("pir.semantic-law", "static-view-issuance-v0")]
     expected_schema_refs = [
         _ref("self", "pir.static-view-schema", name) for name in SCHEMA_NAMES
@@ -482,18 +512,22 @@ def _profile_summary(profile: Any, profile_ref: bytes) -> dict[str, Any]:
     }
 
 
-def observe(candidate: Candidate) -> dict[str, Any]:
-    base = publication.compile_repository()
-    repaired = publication.compile_repository(
-        manifest_overrides=candidate.manifests,
-        page_overrides=candidate.pages,
+def observe(candidate: Candidate | None = None) -> dict[str, Any]:
+    repaired = (
+        publication.compile_repository()
+        if candidate is None
+        else publication.compile_repository(
+            manifest_overrides=candidate.manifests,
+            page_overrides=candidate.pages,
+        )
     )
     validate_topology(repaired.profiles)
+    baseline = json.loads(BASELINE_IDENTITIES.read_text(encoding="utf-8"))["profiles"]
     rotated = tuple(
         sorted(
             key
             for key in publication.PROFILE_KEYS
-            if base.profiles[key].profile_id != repaired.profiles[key].profile_id
+            if baseline[key] != repaired.profiles[key].profile_id.digest.hex()
         )
     )
     stable = tuple(sorted(set(publication.PROFILE_KEYS) - set(rotated)))
@@ -531,7 +565,7 @@ def observe(candidate: Candidate) -> dict[str, Any]:
             )
             for key in publication.PROFILE_KEYS
         },
-        "interaction_before": base.profiles[INTERACTION].profile_id.digest.hex(),
+        "interaction_before": baseline[INTERACTION],
         "interaction_after": repaired.profiles[INTERACTION].profile_id.digest.hex(),
     }
 
@@ -586,14 +620,7 @@ def mutated_candidate(name: str) -> Candidate:
             if row["name"] != "claim-reduction-view-v0"
         ]
     elif name == "extra-schema":
-        selector = (
-            "F0VStaticViewSchemaV0(extra-view-v0) = "
-            "Owner(pir.interactive-core);Tag(ExtraView);"
-            "Body(static-view-body-v0);Derivation(core-admission-v0);"
-            "Resolver(static-view-schema-resolution-v0);"
-            "Closure(static-view-schema-resolution-v0);"
-            "Authority(local-four-envelope-compilers)"
-        )
+        selector = "StaticViewSchema(ExtraView) = {"
         interaction["definitions"].append(
             _definition(
                 "pir.static-view-schema",
@@ -616,12 +643,11 @@ def mutated_candidate(name: str) -> Candidate:
             f"```text\n{selector}\n```\n\n",
         )
     elif name == "wrong-owner":
-        row = _find_definition(
-            interaction, "pir.static-view-schema", "public-binding-view-v0"
+        _replace_page_text(
+            candidate,
+            "owner: CoreView(CoreId, PublicBindingView),",
+            "owner: ProtocolView(ProtocolId, PublicBindingView),",
         )
-        old = row["selector"]
-        row["selector"] = old.replace("pir.interactive-core", "pir.protocol")
-        _replace_page_text(candidate, old, row["selector"])
     elif name == "wrong-law":
         row = _find_definition(
             interaction, "pir.static-view-schema", "public-coin-view-v0"

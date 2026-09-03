@@ -2,7 +2,7 @@
   "format": "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-delta.v0",
   "predecessor": {
     "format": "zkc.formal-source-view-schema-f0v2b2b.source.v0",
-    "sha256": "d70587b4459c8d445233f96279205f7fd2ee14ce09093f32a2fbafb46439b179"
+    "sha256": "7a3b5fddd0351e623e5f9929f63f563429bda8a0548fb19176fac09978eb661c"
   },
   "candidate_format": "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-source.v0",
   "candidate_scope": "interaction-r2-expanded-terminal-normalized-six-view-grammar",

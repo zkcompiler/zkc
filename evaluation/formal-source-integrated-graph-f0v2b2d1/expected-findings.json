@@ -1,6 +1,6 @@
 {
   "aggregate": "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE",
-  "findings_sha256": "6df7aa212836ddd9f4eb4f740167b9183a8e155c853cd3ee7e801f832e75e48a",
+  "findings_sha256": "d17ec6ebcd6739ca69227237042447550b73b0096ced2d673987edeeca03b8bb",
   "finding_codes": [
     ["predecessor-pin", "Affirmative", "F0V2B2D1-A-PREDECESSOR-PIN"],
     ["b2d-family-pin", "Affirmative", "F0V2B2D1-A-FAMILY-PIN"],
@@ -36,8 +36,8 @@
     ["cold-contract-closure", "Refused", "F0V2B2D1-R-COLD-CONTRACT"],
     ["process-local-authority", "Refused", "F0V2B2D1-R-AUTHORITY"],
     ["pcgraph-family-closure", "Affirmative", "F0V2B2D1-A-B2D-ONE-OF-TWO"],
-    ["logical-publication-transfer-wording", "CannotAnswer", "F0V2B2D1-C-LOGICAL-TRANSFER-WORDING"],
-    ["public-query-sink-coordinate-wording", "CannotAnswer", "F0V2B2D1-C-QUERY-SINK-WORDING"],
+    ["logical-publication-transfer-wording", "Affirmative", "F0V2B2D1-A-LOGICAL-TRANSFER-WORDING"],
+    ["public-query-sink-coordinate-wording", "Affirmative", "F0V2B2D1-A-QUERY-SINK-WORDING"],
     ["target-profile-publication", "CannotAnswer", "F0V2B2D1-C-TARGET-PUBLICATION"],
     ["live-implementation-correspondence", "CannotAnswer", "F0V2B2D1-C-LIVE-CORRESPONDENCE"],
     ["projection-refinement-proof", "CannotAnswer", "F0V2B2D1-C-REFINEMENT-PROOF"],

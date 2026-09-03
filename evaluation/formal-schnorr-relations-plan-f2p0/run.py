@@ -121,9 +121,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="compare with frozen findings")
     parser.add_argument("--json", action="store_true", help="print the complete report")
+    parser.add_argument("--refresh", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
         current = report()
+        if args.refresh:
+            EXPECTED.write_text(
+                json.dumps(current, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         if args.check:
             expected = json.loads(EXPECTED.read_text(encoding="utf-8"))
             if current != expected:

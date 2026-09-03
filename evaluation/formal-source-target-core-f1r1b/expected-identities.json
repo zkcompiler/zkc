@@ -1,12 +1,12 @@
 {
   "algorithm_body_sha256": "sha256:4a89ff48f38c213b93cacd4f31819804de7f898b7b836b9cf12b3776e219abbd",
-  "core_body_sha256": "sha256:37ff227c7393ce61c8f504f24ba54b83261f4f4eb9d5c2d2fd1f9270b794aa27",
-  "core_id": "zkcidv0:pir.interactive-core:33f9d34abd61e22565b85fbfe03a35b3ca55f1a3980b71c5e9b729b3a93027f5",
+  "core_body_sha256": "sha256:d0de3468542e54ff2de5819701bff9567d223f1ecedc749c17b9d842d904d30d",
+  "core_id": "zkcidv0:pir.interactive-core:f11d422776ac28d192cc13a1c276049b0dae211394e344ad9e87008f92c4e2f2",
   "evaluation_contract_id": "zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63",
-  "fresh_protocol_id": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
+  "fresh_protocol_id": "zkcidv0:pir.protocol:4e11f03b4f5d65e5009b703bc5c78b8c186851888f95f7a52774b7e923a319f9",
   "guard_algorithm_id": "zkcidv0:foundation.portable-algorithm:aa07d7da5eae94db0a943c1c653d2450d18b6d5b9b501bdfeb9cbfe836548be6",
   "module_id": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7",
-  "profile_id": "zkcidv0:foundation.semantic-language-profile:f21774d19ebf5e045b1d5c70f9bd0ee1c7eb1202dc11f948900eb067e102ce87",
-  "protocol_body_sha256": "sha256:fb5b1b69d7dd8bb9055a0ce4fbcf9bcf7e36c9803f2df0763a93d40be28c3fe4",
+  "profile_id": "zkcidv0:foundation.semantic-language-profile:2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f",
+  "protocol_body_sha256": "sha256:e42db068c9288399927465a4c82974e966e8b51cb95b8bd1a198f3eabf19e8ec",
   "schnorr_algorithm_id": "zkcidv0:foundation.portable-algorithm:86a47a88f56ed94a258b1e8215ec9b4f4537265f435bf32f7569d05f725722df"
 }

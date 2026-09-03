@@ -1,9 +1,8 @@
-"""Typed candidate owner for F0-V2B2C1B5B2 expanded Terminals.
+"""Typed projection model for the migrated Terminal owner contract.
 
-The model is a pre-publication falsifier.  It builds a genuine synthetic
-Interaction profile over the selected F0-V1 publication topology, admits one
-bounded exact Core under that profile, and derives the six normalized owner
-views.  It does not edit or impersonate the target PIR profile.
+The model reads the authored profile manifests directly, admits one bounded
+exact Core under the resulting Interaction profile, and derives the six
+normalized owner views.  It never synthesizes or publishes a profile overlay.
 """
 
 from __future__ import annotations
@@ -33,7 +32,9 @@ B5B1_MODEL = (
     / "formal-source-terminal-owner-contracts-f0v2b2c1b5b1"
     / "model.py"
 )
-F0V_MODEL = ROOT / "evaluation" / "formal-source-owner-view-repair-f0v" / "model.py"
+PUBLICATION_MODEL = (
+    ROOT / "evaluation" / "semantic-profile-publication" / "reference_model.py"
+)
 B2B_MODEL = ROOT / "evaluation" / "formal-source-view-schema-f0v2b2b" / "model.py"
 CODEC_MODEL = ROOT / "evaluation" / "formal-source-view-codec-f0v2b2c1a" / "model.py"
 SCHEMA_DELTA = HERE / "schema-delta.json"
@@ -53,7 +54,7 @@ def _load(name: str, path: Path) -> ModuleType:
 
 b3 = _load("_zkc_f0v2b2c1b5b2_b3", B3_MODEL)
 terminal_contracts = _load("_zkc_f0v2b2c1b5b2_b5b1", B5B1_MODEL)
-f0v = _load("_zkc_f0v2b2c1b5b2_f0v", F0V_MODEL)
+publication = _load("_zkc_f0v2b2c1b5b2_publication", PUBLICATION_MODEL)
 b2b = _load("_zkc_f0v2b2c1b5b2_b2b", B2B_MODEL)
 codec = _load("_zkc_f0v2b2c1b5b2_codec", CODEC_MODEL)
 
@@ -225,151 +226,23 @@ def _candidate_schema_template() -> tuple[dict[str, Any], str]:
     return candidate, _digest(grammar)
 
 
-def _definition(manifest: dict[str, Any], kind: str, name: str) -> dict[str, Any]:
-    rows = [
-        row
-        for row in manifest["definitions"]
-        if row["kind"] == kind and row["name"] == name
-    ]
-    if len(rows) != 1:
-        _fail(
-            "Refused",
-            "F0V2B2C1B5B2-R-PROFILE-DEFINITION",
-            f"profile has no unique {kind}/{name}",
-        )
-    return rows[0]
+_PUBLICATION_CACHE: tuple[object, str] | None = None
 
 
-def _source_block(title: str, lines: tuple[str, ...]) -> str:
-    return "\n".join((f"### {title}", "", "```text", *lines, "```", "")) + "\n"
+def candidate_publication() -> tuple[object, str]:
+    """Return the authored migration publication and bound view grammar."""
 
-
-_PUBLICATION_CACHE: tuple[object, object, str] | None = None
-_CANDIDATE_OVERRIDE: object | None = None
-
-
-def candidate_publications() -> tuple[object, object, str]:
-    """Return the F0-V1 basis, B5B2 publication, and bound grammar digest."""
-
-    global _PUBLICATION_CACHE, _CANDIDATE_OVERRIDE
+    global _PUBLICATION_CACHE
     if _PUBLICATION_CACHE is not None:
         return _PUBLICATION_CACHE
     _template, grammar_digest = _candidate_schema_template()
-    repaired_candidate = f0v.build_candidate()
-    repaired = f0v.publication.compile_repository(
-        manifest_overrides=repaired_candidate.manifests,
-        page_overrides=repaired_candidate.pages,
-    )
-    interaction = repaired_candidate.manifests["interaction"]
-    interaction["revision"] = 2
-
-    terminal_body = "terminal-owner-body-v0"
-    terminal_view = "terminal-owner-view-body-v0"
-    terminal_law = "terminal-owner-admission-v0"
-    interaction["definitions"].extend(
-        (
-            f0v._definition(
-                "pir.body-compiler",
-                terminal_body,
-                "interaction-body-grammar",
-                "F0V2B2C1B5B2TerminalBody(x) = R",
-            ),
-            f0v._definition(
-                "pir.body-compiler",
-                terminal_view,
-                "interaction-static-views",
-                f"F0V2B2C1B5B2SchemaGrammarSha256 = {grammar_digest}",
-            ),
-            f0v._definition(
-                "pir.semantic-law",
-                terminal_law,
-                "interaction-kernel",
-                "F0V2B2C1B5B2TerminalAdmission =",
-            ),
-        )
-    )
-    core_body = _definition(
-        interaction, "pir.body-compiler", "interactive-core-body-v0"
-    )
-    core_body["revision"] = 1
-    core_body["dependencies"].append(
-        f0v._ref("self", "pir.body-compiler", terminal_body)
-    )
-    view_body = _definition(interaction, "pir.body-compiler", "static-view-body-v0")
-    view_body["revision"] = 1
-    view_body["dependencies"].append(
-        f0v._ref("self", "pir.body-compiler", terminal_view)
-    )
-    admission = _definition(interaction, "pir.semantic-law", "core-admission-v0")
-    admission["revision"] = 1
-    admission["dependencies"].append(f0v._ref("self", "pir.semantic-law", terminal_law))
-
-    f0v._append_to_fragment(
-        repaired_candidate.pages,
-        interaction,
-        "interaction-body-grammar",
-        _source_block(
-            "F0-V2B2C1B5B2 synthetic Terminal body (non-normative override)",
-            (
-                "F0V2B2C1B5B2TerminalBody(x) = R {",
-                "  0: TerminalVerdictBody(x.verdict),",
-                "  1: S[ ValueRefBody(output) ... ],",
-                "  2: SortUnique(S[ N(required_true_check) ... ]),",
-                "  3: SortUnique(S[ N(required_applied_reduction) ... ]),",
-                "  4: SortUnique(S[ N(terminal_claim) ... ])",
-                "}",
-            ),
-        ),
-    )
-    f0v._append_to_fragment(
-        repaired_candidate.pages,
-        interaction,
-        "interaction-kernel",
-        _source_block(
-            "F0-V2B2C1B5B2 synthetic Terminal admission (non-normative override)",
-            (
-                "F0V2B2C1B5B2TerminalAdmission =",
-                "  FirstActiveGuardSelection",
-                "  and DirectRequiredCheckPositiveMustFact",
-                "  and RequiredReductionRegionImplication",
-                "  and ExactLiveClaimClosure",
-                "  and VerdictDerivedClaimDisposition",
-            ),
-        ),
-    )
-    f0v._append_to_fragment(
-        repaired_candidate.pages,
-        interaction,
-        "interaction-static-views",
-        _source_block(
-            "F0-V2B2C1B5B2 synthetic Terminal view grammar (non-normative override)",
-            (
-                f"F0V2B2C1B5B2SchemaGrammarSha256 = {grammar_digest}",
-                "F0V2B2C1B5B2SchemaBinding = ExactDigestPreimageAndCandidateProfile",
-                "F0V2B2C1B5B2TerminalGraphInputs = Checks+ReductionStates+Claims+PublicOutputs",
-            ),
-        ),
-    )
-    candidate = f0v.publication.compile_repository(
-        manifest_overrides=repaired_candidate.manifests,
-        page_overrides=repaired_candidate.pages,
-    )
-    _CANDIDATE_OVERRIDE = repaired_candidate
-    _PUBLICATION_CACHE = repaired, candidate, grammar_digest
+    candidate = publication.compile_repository()
+    _PUBLICATION_CACHE = candidate, grammar_digest
     return _PUBLICATION_CACHE
 
 
-def candidate_override() -> object:
-    """Return an isolated copy for a separate publication compiler."""
-
-    candidate_publications()
-    if _CANDIDATE_OVERRIDE is None:  # pragma: no cover - cache invariant
-        raise AssertionError("candidate publication override is absent")
-    return copy.deepcopy(_CANDIDATE_OVERRIDE)
-
-
 def candidate_profile_artifact() -> object:
-    return candidate_publications()[1].profiles["interaction"]
+    return candidate_publication()[0].profiles["interaction"]
 
 
 def candidate_schema_source() -> dict[str, Any]:
@@ -411,28 +284,16 @@ _PC_EDGE_SCHEMA = codec.record_field(_PC_GRAPH_SCHEMA, 1)["element"]
 
 
 def profile_evidence() -> dict[str, Any]:
-    repaired, candidate, grammar_digest = candidate_publications()
-    rotated = tuple(
-        sorted(
-            key
-            for key in f0v.publication.PROFILE_KEYS
-            if repaired.profiles[key].profile_id != candidate.profiles[key].profile_id
-        )
-    )
-    stable = tuple(sorted(set(f0v.publication.PROFILE_KEYS) - set(rotated)))
+    candidate, grammar_digest = candidate_publication()
     artifact = candidate.profiles["interaction"]
     return {
-        "basis_interaction_digest": repaired.profiles[
-            "interaction"
-        ].profile_id.digest.hex(),
         "candidate_interaction_digest": artifact.profile_id.digest.hex(),
         "candidate_interaction_body_sha256": hashlib.sha256(
             artifact.body_bytes
         ).hexdigest(),
         "schema_grammar_sha256": grammar_digest,
         "schema_source_sha256": _digest(candidate_schema_source()),
-        "rotated_profiles": list(rotated),
-        "stable_profiles": list(stable),
+        "profiles_compiled": sorted(publication.PROFILE_KEYS),
     }
 
 

@@ -1,4 +1,4 @@
-"""Iterative compiler and validator for the F0-V3 candidate grammar."""
+"""Iterative compiler and validator for the current FS-family grammar."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "schema-source.json"
-FORMAT = "zkc.formal-source-fs-view-determinacy-f0v3.source.v0"
-SCOPE = "fs-family-normalized-eight-view-candidate-grammar"
+FORMAT = "zkc.formal-source-fs-view-determinacy-f0v3.source.v1"
+SCOPE = "fs-family-current-eight-view-grammar"
 OUTER_KEYS = {
     "format",
     "scope",
@@ -250,7 +250,7 @@ def compile_source(
                 "profile_body_sha256",
             }
             or profile["key"] != key
-            or profile["revision"] != 0
+            or profile["revision"] != 2
         ):
             raise IndependentError("cold owner-profile pin is malformed")
     for key, cap in (

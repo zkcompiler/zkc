@@ -1,14 +1,15 @@
-"""Cold inspection of the synthetic F0-V1 publication topology.
+"""Cold inspection of the migrated owner-view publication topology.
 
 This module imports neither the F0-V1 reference model nor the Foundation-backed
-publication compiler.  It repeats the selected inventory and uses the cold
-publication implementation to reconstruct all profile bodies and identities.
+publication compiler. It repeats the selected inventory and uses the cold
+publication implementation to reconstruct the authored profile bodies.
 """
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -46,6 +47,14 @@ REVISED_PROFILES = (
     "interface-plan",
     "endpoint-source-view",
 )
+EXPECTED_REVISIONS = {
+    "interaction": 2,
+    "canonical-framed-fiat-shamir": 2,
+    "duplex-sponge-fiat-shamir": 2,
+    "public-setup": 1,
+    "interface-plan": 1,
+    "endpoint-source-view": 1,
+}
 ROTATED_PROFILES = (
     "analysis-afk-theorem-source-validation",
     "analysis-afk-transport",
@@ -58,13 +67,15 @@ ROTATED_PROFILES = (
     "endpoint-source-view",
     "interaction",
     "interface-plan",
+    "oir-endpoint-graph",
     "oir-projection-relation",
     "oracle-commitment",
     "public-setup",
     "relations",
     "verifier-derived-query-plan",
 )
-STABLE_PROFILES = ("analysis-kernel", "oir-endpoint-graph")
+STABLE_PROFILES = ("analysis-kernel",)
+BASELINE_IDENTITIES = ROOT / "evaluation/formal-source-owner-view-repair-f0v/baseline-identities.json"
 SCHEMA_ORDER = (
     "public-binding-view-v0",
     "strategy-decision-view-v0",
@@ -91,7 +102,10 @@ SCHEMA_TAG = {
 }
 SCHEMA_LAW = {
     "public-binding-view-v0": ("core-admission-v0",),
-    "strategy-decision-view-v0": ("core-admission-v0",),
+    "strategy-decision-view-v0": (
+        "core-admission-v0",
+        "prover-view-formation-v0",
+    ),
     "public-coin-view-v0": (
         "core-admission-v0",
         "public-coin-eligibility-v0",
@@ -101,7 +115,10 @@ SCHEMA_LAW = {
     "execution-view-v0": (
         "core-admission-v0",
         "execution-and-replay-v0",
+        "protocol-outcome-partition-v0",
         "run-view-issuance-v0",
+        "visible-history-v0",
+        "replay-qualification-v0",
     ),
 }
 LOCAL_COMPILER = {
@@ -121,28 +138,30 @@ def _reference(profile: str, kind: str, name: str) -> dict[str, str]:
 
 
 def _local_selector(profile: str, kind: str) -> str:
-    label = kind[11:].replace("-", "_")
-    return f"F0VLocalSourceBodyV0({profile},{label},x) = ClosedFamilyTaggedBody(x)"
+    prefixes = {
+        "interaction": "PIR",
+        "canonical-framed-fiat-shamir": "CanonicalFramed",
+        "duplex-sponge-fiat-shamir": "Duplex",
+        "public-setup": "PublicSetup",
+        "interface-plan": "InterfacePlan",
+        "endpoint-source-view": "Endpoint",
+    }
+    suffixes = {
+        "pir.source-binding-payload": "SourceBindingPayloadBody(x) =",
+        "pir.source-capability-requirement": "SourceCapabilityRequirementBody(x) =",
+        "pir.source-no-policy": "SourceNoPolicyBody(x) =",
+        "pir.source-policy-closure": "SourcePolicyClosureBody(x) =",
+    }
+    return prefixes[profile] + suffixes[kind]
 
 
 def _schema_selector(name: str) -> str:
-    laws = ",".join(SCHEMA_LAW[name])
-    return (
-        f"F0VStaticViewSchemaV0({name}) = Owner({SCHEMA_OWNER[name]});"
-        f"Tag({SCHEMA_TAG[name]});Body(static-view-body-v0);"
-        f"Derivation({laws});Resolver(static-view-schema-resolution-v0);"
-        "Closure(static-view-schema-resolution-v0);"
-        "Authority(local-four-envelope-compilers)"
-    )
+    return f"StaticViewSchema({SCHEMA_TAG[name]}) = {{"
 
 
 def _schema_dependencies(name: str) -> list[dict[str, str]]:
     rows = [
         _reference("self", "pir.body-compiler", "static-view-body-v0"),
-        *(
-            _reference("self", "pir.body-compiler", compiler)
-            for compiler in LOCAL_COMPILER.values()
-        ),
         _reference(
             "self",
             "pir.semantic-law",
@@ -187,8 +206,8 @@ def _wanted_routes(profile: str) -> dict[str, tuple[str, str]]:
 def _validate(profiles: Mapping[str, Any]) -> None:
     for key in REVISED_PROFILES:
         manifest = profiles[key].manifest
-        if manifest["revision"] != 1:
-            raise TopologyError("a changed source profile retained revision zero")
+        if manifest["revision"] != EXPECTED_REVISIONS[key]:
+            raise TopologyError("a changed source profile has the wrong revision")
         if _routes(manifest) != _wanted_routes(key):
             raise TopologyError("a repaired profile has a wrong source route")
         declarations = _definitions(manifest)
@@ -217,6 +236,16 @@ def _validate(profiles: Mapping[str, Any]) -> None:
             raise TopologyError("an owner schema selector changed")
         if row["dependencies"] != _schema_dependencies(name):
             raise TopologyError("an owner schema dependency set changed")
+    source_body = profiles["interaction"].body_bytes
+    for name in SCHEMA_ORDER:
+        tag = SCHEMA_TAG[name]
+        owner = (
+            f"ProtocolView(ProtocolId, {tag})"
+            if name == "execution-view-v0"
+            else f"CoreView(CoreId, {tag})"
+        )
+        if source_body.count(f"owner: {owner},".encode("ascii")) != 1:
+            raise TopologyError("an owner schema owner changed")
     issuance = declarations[("pir.semantic-law", "static-view-issuance-v0")]
     if issuance["dependencies"] != [
         _reference("self", "pir.static-view-schema", name) for name in SCHEMA_ORDER
@@ -244,18 +273,22 @@ def _summary(profile: Any) -> dict[str, Any]:
     }
 
 
-def observe(candidate: Any) -> dict[str, Any]:
-    base = cold.compile_repository()
-    repaired = cold.compile_repository(
-        manifest_overrides=candidate.manifests,
-        page_overrides=candidate.pages,
+def observe(candidate: Any | None = None) -> dict[str, Any]:
+    repaired = (
+        cold.compile_repository()
+        if candidate is None
+        else cold.compile_repository(
+            manifest_overrides=candidate.manifests,
+            page_overrides=candidate.pages,
+        )
     )
     _validate(repaired.profiles)
+    baseline = json.loads(BASELINE_IDENTITIES.read_text(encoding="utf-8"))["profiles"]
     rotated = tuple(
         sorted(
             key
             for key in cold.KEYS
-            if base.profiles[key].identifier != repaired.profiles[key].identifier
+            if baseline[key] != repaired.profiles[key].identifier.digest.hex()
         )
     )
     stable = tuple(sorted(set(cold.KEYS) - set(rotated)))
@@ -286,6 +319,6 @@ def observe(candidate: Any) -> dict[str, Any]:
             for key in REVISED_PROFILES
         },
         "profiles": {key: _summary(repaired.profiles[key]) for key in cold.KEYS},
-        "interaction_before": base.profiles["interaction"].identifier.digest.hex(),
+        "interaction_before": baseline["interaction"],
         "interaction_after": repaired.profiles["interaction"].identifier.digest.hex(),
     }

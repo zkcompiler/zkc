@@ -1,42 +1,19 @@
 # Formal Assurance Architecture Research
 
 > **Kind:** Temporary cross-cutting research-program index
-> **State:** Active; first F0 architecture pass, bounded F1-R0 package/checker
-> pass, bounded F1-R1A target profile/source-basis pass, and one-slice F1-R1B
-> target carrier/admission pass complete at research resolution. F1-R1C0
-> returns `CannotAnswer` on exact owner-view source determinacy. Reopened F0-V1
-> confirms the selected repair topology through both publication compilers;
-> F0-V2A now selects and validates a bounded generic view-schema algebra.
-> F0-V2B0 then finds that the current six displays cannot be compiled
-> verbatim and selects normalized replacement bodies. F0-V2B1 now validates
-> the bounded normalized grammar and owner derivation. F0-V2B2A freezes the
-> 79-case constructor census, exact B1 delta, and four-stage B2 execution
-> topology. F0-V2B2B now supplies a constructor-complete candidate schema and
-> branch-inhabitance result. F0-V2B2C0 now supplies the canonical-byte,
-> immutable owner-admission substrate and exposes the predecessor handle's
-> ordinary mutability. F0-V2B2C1A supplies the exact view-value codec and
-> exposes a target-byte versus diagnostic-JSON ordering inversion.
-> F0-V2B2C1B1 through B2C1B4 validate owner-derived exact projections for
-> twenty of the twenty-one B2C isolation families across Foundation, Oracle,
-> Claim, Reduction, publication-order, joint-Challenge, shared-Challenge, and
-> semantic-module surfaces. F0-V2B2C1B5A selects a compact first-active guard-
-> region method for path-sensitive Claim flow, then B2C1B5B1 selects bounded
-> Terminal owner contracts for required-Check truth, required-Reduction
-> application, and Claim disposition. B2C1B5B2 now realizes that selection as
-> exact synthetic candidate bytes and all six owner views, closing 21 of 21
-> B2C isolation families at bounded research resolution. F0-V2B2D1 now
-> integrates all fourteen PCNode cases and all four PCClass cases across five
-> exact carriers, closing the static graph family at bounded resolution. The
-> B2D2 Fresh runtime/Oracle-receipt family and F0-V2C target migration remain
-> open. A 2026-09-03 program reassessment finds the provider side of the
-> bridge untested, classifies the Terminal repair as a main-design reopening,
-> and proposes an F2-O0 provider-observable audit before F0-V2C; that
-> proposal awaits the design lane's decision. F2-P0 now audits the five
-> missing property premises against the current Relations and Plan contracts:
-> the acyclic attachment grammar exists, but no exact relation, Plan, or
-> provider premise is selected for F1-R1B.
-> Owner-view F1-R1C waits on F0-V2C; F1-R1D, F1-I, and F2 remain dependent
-> feasibility programs, not selected product implementation
+> **State:** Active. The migrated PIR owner pages and manifests now carry the
+> selected Terminal and graph contracts, normalized owner-view bodies,
+> `PIRReference`, completed-record rules, and exact canonical-framed and duplex
+> law-field selections. The current non-publishing rehearsal re-pins the
+> bounded target, projection, graph, Fresh, Fiat--Shamir, provider-observable,
+> and migration regressions against that text. Two publication compilers agree
+> on the candidate identity cone: seventeen of eighteen profiles rotate and
+> `analysis-kernel` remains stable. Exact owner-view source determinacy is now
+> affirmative at bounded research resolution. Identity publication,
+> downstream source and implementation correspondence, general runtime
+> coverage, theorem applicability, and cryptographic claims remain open. A
+> separate review round and the current mechanization increment proceed in
+> their own lanes and are not adjudicated here.
 > **Authority:** None. This package changes no current or target semantics,
 > artifact identity, theorem status, Analysis judgment, implementation claim,
 > or product-roadmap priority.
@@ -110,11 +87,16 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
   -> F0-V2C  migrated owner text                       [authored; publication gated]
   -> F0-V2C1 freeze review of the migrated text         [round six complete, Affirmative]
+  -> B2D2   Fresh completed-record schema               [revalidated against migrated text]
+  -> F0-V3  FS-family view determinacy                  [revalidated, Affirmative]
+  -> F0-V3B FS-family view bodies and cone              [absorbed into owner text]
+  -> F0-V2C  migrated owner text                       [source-closed; publication gated]
+  -> F0-V2C1 freeze review of the migrated text         [round four complete; next review parallel]
   -> F0-V2C2 holdout re-adjudication                    [complete, Affirmative; carrier corrected]
   -> F0-V2B2D3 six views for the integrated carriers    [complete, Affirmative]
   -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
-  -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
-  -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
+  -> F0-V2C  target publication and migration            [refreeze rehearsed; publication held]
+  -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
   -> F1-R1D exact integrated target package             [open]
   -> F1-I   live admitted-owner correspondence          [open]
   -> F2  zkc-native operational interpretation and one property pilot
@@ -503,9 +485,14 @@ provider, extraction tool, or durable schema.
 - [`f0-v2c-migration-owner-text.md`](f0-v2c-migration-owner-text.md)
   records the owner-text pass that applies the eight decisions on six pages
   and eight manifests: both publication compilers agree on the migrated tree,
-  seventeen of eighteen profiles rotate, the eleven Fiat--Shamir body families
-  remain to be transcribed, and the identity-rotating publication and the
-  package refreeze remain the user's gate.
+  seventeen of eighteen profiles rotate, and identity publication remains the
+  user's gate. Subsequent repairs close the forward-state owner vocabulary and
+  `PIRReference`; the current family pages and revision-two manifests also
+  select the exact canonical-framed and duplex law declarations.
+- [`f0-v2c-refreeze-rehearsal.md`](f0-v2c-refreeze-rehearsal.md) records the
+  non-publishing package refreeze rehearsal, its semantic rebase onto the
+  closed owner text, the candidate identity delta, per-package outcomes, and
+  the exact publication-time work that must be repeated.
 - [`f0v2c1-migration-text-review.md`](f0v2c1-migration-text-review.md)
   is the independent freeze review of the migrated text at its first head:
   three of seven questions affirmative (public-coin graph wording, manifest
@@ -555,23 +542,26 @@ provider, extraction tool, or durable schema.
   `CannotAnswer`.
 - [`f0v2b2d2-fresh-run-schema.md`](f0v2b2d2-fresh-run-schema.md) closes
   the second B2D family at schema resolution: the Fresh completed-record
-  schema derives through typed and cold paths for all five D1 carriers, with
-  the fixation-marker placement, the partial-record body, and the
-  `StrategyStopped` lane recorded as target underdeterminations; no run is
-  executed.
+  schema derives through typed and cold paths for all five integrated
+  carriers. The later migrated owner text resolves the recorded fixation,
+  partial-record, strategy-stop, and outcome-shape source questions; the
+  retained package still executes no run or replay.
 - [`f0v3-fs-family-view-determinacy.md`](f0v3-fs-family-view-determinacy.md)
   audits the eight Fiat--Shamir family view bodies field by field: 37
   exact, 40 prose, 20 undefined; a bounded normalized grammar compiles
   through two paths and eleven owner obligations are named; aggregate
-  `CannotAnswer` for determinacy.
+  `CannotAnswer` for determinacy at that historical checkpoint. The migrated
+  family pages and manifests now absorb those obligations, and the retained
+  executable revalidates the current 95-field source plus exact law selection.
 - [`f0v3b-fs-family-view-bodies-and-cone.md`](f0v3b-fs-family-view-bodies-and-cone.md)
   supplies the eleven obligations' candidate bodies as migration input: eight
   family-local schemas compile identically through both schema compilers, the
   K2 and duplex inhabitable values agree byte for byte on typed and cold paths,
   twelve mutations refuse, and both publication compilers reproduce the cone
   (eleven profiles incremental to the common candidate, sixteen combined).
-  The candidate packets are exact proposals, not owner text; the original
-  obligations stay `CannotAnswer` until an owner adopts or rejects them.
+  Those packets remain historical proposal evidence; their selected contents
+  are now carried by the current owner pages and manifests rather than by
+  runtime overlays.
 - [`f0v2b2d3-integrated-six-view-projections.md`](f0v2b2d3-integrated-six-view-projections.md)
   derives all six normalized owner views for the five integrated carriers on
   typed and cold paths: thirty bodies agree and round-trip over a complete
