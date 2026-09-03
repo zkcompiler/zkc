@@ -1,10 +1,14 @@
 # Analysis Named-Premise Owner-Text Review
 
-> **State:** round-two
-> `CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED` for the exact
-> owner-text range `8ae0ee1..cb8f382`. Sections 1--10 retain the round-one
-> record for `7a63432..177cbaa`; the Round two section below is the current
-> disposition.
+> **State:** round three,
+> `Negative/F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`: the seven owner-text
+> questions and the two added in this round are affirmative, and the two
+> negatives name the migrated closure package (legacy proxies for the
+> relation-bound Fresh identity and the construction sampler form; an
+> arbitrary symbol for the completion hypothesis), not the owner text.
+> Sections 1--10 retain the round-one record for `7a63432..177cbaa`, the
+> Round two section the second round, and the Round three section below is
+> the current disposition.
 > **Authority:** None. This review changes no Analysis, Relations, Protocol IR,
 > or Foundation owner page and publishes no profile identity.
 > **Executable evidence:**

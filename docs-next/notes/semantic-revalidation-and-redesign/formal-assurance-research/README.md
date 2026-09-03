@@ -101,7 +101,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2C  target publication and migration            [refreeze rehearsed; publication held]
   -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
   -> Analysis premise owner text                        [authored; publication gated]
-  -> F0-V2D1 review of the Analysis premise text        [round two, CannotAnswer; repairs applied]
+  -> F0-V2D1 review of the Analysis premise text        [round three: owner text closed; two package negatives]
   -> F0-V2D2 Analysis package migration                 [complete, CannotAnswer; checks green]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
@@ -762,8 +762,13 @@ provider, extraction tool, or durable schema.
   negatives, three questions affirmative and four `CannotAnswer` (free
   parameters in the law signatures, seven node displays without their premise
   set, prose Schnorr bindings, refreeze inputs), each with exact locations
-  and replacements, plus the migration plan for the closure package; the
-  round-two repairs are on the pages and a third round follows.
+  and replacements, plus the migration plan for the closure package; round
+  three on the repaired text and the migrated packages, seven owner-text
+  questions affirmative including the argument-schema and lane-image
+  questions added for it, and two negatives against the migrated closure
+  package, which still encodes the relation-bound Fresh identity and the
+  construction sampler form through legacy proxies and the completion
+  hypothesis through an arbitrary symbol; a second closure round follows.
 - [`f0v2d2-analysis-package-migration.md`](f0v2d2-analysis-package-migration.md)
   migrates the closure package, the finite cover, the joined boundary, and
   the intake probe to the named-premise fields the owner text now carries,
