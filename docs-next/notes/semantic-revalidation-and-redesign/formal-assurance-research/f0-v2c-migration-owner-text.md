@@ -216,6 +216,22 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   reachability checks still pass on the manifests.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
+- Two defects the refreeze rehearsal (`f0-v2c-refreeze-rehearsal.md`) reported
+  against an earlier base were still present after round four and are now
+  repaired: `PIRReference`, an arm of the static-view atomic boundary, had no
+  definition and is now the closed union of the Core-local dense-ordinal
+  references, `ValueRef`, and the Section 2 declaration references, with its
+  body by delegation; and the law-valued fields of the static views named no
+  declaration, so each of the three profiles now states a
+  `PIRStaticViewLawFieldSelection` table mapping every such field to one
+  `pir.semantic-law` declaration of its catalog or, through an imported
+  declaration dependency, of the Interaction profile. Nine declarations were
+  added across the three manifests for laws that had no selector of their
+  own (visible history, prover-view formation, replay qualification, the
+  family execution and replay laws, the duplex prover-required prefix and
+  checked same-Core construction); pre-existing catalog ordinals did not
+  move; the profile revisions advanced. A fifth review round checks both
+  repairs; both compilers accept the manifests.
 - The second review round is closed: all seven questions are affirmative on
   the repaired text, every family-body field is exact, and the five
   deviations from the candidate packets are upheld. No owner-page delta
