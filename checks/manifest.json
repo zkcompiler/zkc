@@ -1456,6 +1456,28 @@
       }
     },
     {
+      "id": "research.provider-interpretation",
+      "title": "Finite Schnorr VCVio interpretation",
+      "subject": "Whether one generated VCVio artifact has a total, order-preserving operational correspondence to the admitted finite Schnorr Fresh Protocol under the schedule, value, computation, terminal, and trace clauses of the entry contract.",
+      "claim": "An independent cold-view checker authenticates the subject and certificate, executes the portable Check and guard terms and the pinned VCVio artifact over their complete finite domains, and finds exact agreement for schedule, values, computations, completed terminals, and traces; the aggregate remains CannotAnswer because the Boolean provider carrier has no non-collapsing image for operational noncompletion.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-provider-interpretation-f2o2/run.py", "evaluation/formal-provider-interpretation-f2o2/generator.py", "evaluation/formal-provider-interpretation-f2o2/checker.py", "evaluation/formal-provider-interpretation-f2o2/TermEvaluatorProbe.lean", "evaluation/formal-provider-interpretation-f2o2/README.md", "evaluation/formal-provider-interpretation-f2o2/expected-findings.json", "evaluation/formal-provider-interpretation-f2o2/generated/SchnorrProvider.lean", "evaluation/formal-provider-interpretation-f2o2/generated/certificate.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-interpretation.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "pinned-external-checkout",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["The finite clause findings establish no complete provider correspondence, protocol or cryptographic property, theorem applicability, Fresh distribution premise, provider carrier premise, general evaluator correctness, correspondence for another subject or provider, owner-page change, compiler or backend correctness, or production validity."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-provider-interpretation-f2o2/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.kernel-mechanization-feasibility",
       "title": "Mechanized portable terms and Terminal contract",
       "subject": "Core-only Lean 4 transcription of the portable-term evaluator and the PIR Terminal contract, including universal first-active and must-fact soundness, a proved decision procedure, and finite two-path carrier reconstruction.",

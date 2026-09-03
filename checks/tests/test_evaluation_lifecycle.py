@@ -26,7 +26,7 @@ class EvaluationLifecycleTest(unittest.TestCase):
         dispositions = self.report["summary"]["dispositions"]
         self.assertEqual(
             {
-                "active-sequence": 32,
+                "active-sequence": 33,
                 "promote-then-retire": 10,
                 "retain": 18,
             },
