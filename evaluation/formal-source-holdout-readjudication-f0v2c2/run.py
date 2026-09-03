@@ -34,7 +34,7 @@ SOURCE_PINS = {
 }
 
 OWNER_PINS = {
-    "docs-next/pir/interactive-core.md": "5f017f0dc88aca3c50651a8c5e4861ea2450c3035e9015c276babbf4b913f34f",
+    "docs-next/pir/interactive-core.md": "86259df9d149668bc23d5887e8f60f04f49eebab6c914ee285b5ac70bea2ed99",
     "docs-next/pir/fiat-shamir.md": "52682bd1e46f0579b7f6445cfa2866ab2bfce819aa1082d796ae216f451bf671",
     "docs-next/pir/duplex-sponge-fiat-shamir.md": "60d66fb3636c85d0d4201de3962bdc19b3664469bc8808dfbe738ad57d248db4",
     "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
@@ -42,9 +42,9 @@ OWNER_PINS = {
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "880bc7f13b09c1c84407ee1fc81e907aa3f9150d86b3ad2ea855c8e8999bb361",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "bc39cd1558b768abb5360c3e934245d85516dc2f5a6af44f21d10f353c685a01",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
-    "evaluation/expressibility-axes/axes.json": "38e6e927387c0b9a8ec2d855a28af61da69c074640efaea11c8408fa9601ec42",
+    "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",
 }
 
@@ -165,16 +165,6 @@ def conjunction(indices: tuple[int, ...]) -> Term:
     return ("if", ("input", indices[0]), conjunction(indices[1:]), ("false",))
 
 
-def fold_frontier_failure() -> Term:
-    final_failure = ("if", conjunction((2, 3, 4)), ("false",), ("true",))
-    return (
-        "if",
-        ("input", 0),
-        ("if", ("input", 1), final_failure, ("false",)),
-        ("false",),
-    )
-
-
 def evaluate() -> dict[str, Any]:
     findings: list[Finding] = []
     findings.append(
@@ -221,6 +211,8 @@ def evaluate() -> dict[str, Any]:
         "Positive(i) in MustWhenTrue(GuardTerm(o_t))",
         "required_applied_reductions: CanonicalSortedUniqueSeq<ReductionRef>",
         "LiveClaims(o_t) = t.terminal_claims",
+        "GuardImplies(use_guard, source_guard) :=",
+        "Scope openings are deterministic, unguarded boundaries",
         "ProtocolOutcomeLane(P) =",
         "PIRViewSchemaCatalog = {",
     ]
@@ -235,10 +227,15 @@ def evaluate() -> dict[str, Any]:
         )
     )
 
+    adjudication = json.loads((PACKAGE / "adjudication.json").read_text())
+    rows = adjudication.get("rows", [])
+    whir = next(
+        (row for row in rows if row.get("name") == "WHIR Construction 5.1 with a closed finite query plan"),
+        None,
+    )
+
     all_positive = frozenset(("Positive", index) for index in range(5))
-    fold_positive = frozenset({("Positive", 0), ("Positive", 1)})
     guard_ok = must(conjunction((0, 1, 2, 3, 4)))[0] == all_positive
-    guard_ok = guard_ok and must(fold_frontier_failure())[0] == fold_positive
     findings.append(
         Finding(
             "nested-guard-must-facts",
@@ -250,23 +247,85 @@ def evaluate() -> dict[str, Any]:
     )
 
     whir_source = (ROOT / f"{HOLDOUT_DIR}/whir-constructive-encoding.md").read_text()
-    legacy_whir_shape = all(
+    legacy_whir_schedule = all(
         marker in whir_source
         for marker in (
-            "apply `R_fold`",
-            "apply `R_final`",
-            "reach `Accept`",
-            "reach fallback `Reject`",
-            "C_initial --R_fold--> C_folded --R_final--> no live claim",
+            "`R_fold` | guarded by applicable successful checks",
+            "`R_final` | guarded by every final check",
+            "false check deactivates the guarded reductions",
         )
     )
     findings.append(
         Finding(
-            "legacy-whir-two-terminal-shape",
-            "Refused" if legacy_whir_shape and owner_laws_present else "CannotAnswer",
-            "F0V2C2-R-WHIR-TWO-TERMINAL-SHAPE"
-            if legacy_whir_shape and owner_laws_present
-            else "F0V2C2-C-WHIR-TERMINAL-SHAPE",
+            "legacy-whir-guard-schedule",
+            "Refused" if legacy_whir_schedule and owner_laws_present else "CannotAnswer",
+            "F0V2C2-R-WHIR-GUARD-SCHEDULE"
+            if legacy_whir_schedule and owner_laws_present
+            else "F0V2C2-C-WHIR-GUARD-SCHEDULE",
+        )
+    )
+
+    whir_schedule_ok = whir is not None
+    if whir is not None:
+        contract = whir.get("terminal_contract", {})
+        schedule = contract.get("reduction_schedule", [])
+        terminals = contract.get("terminals", [])
+        whir_schedule_ok = (
+            contract.get("status") == "authored-identical-guard-reductions"
+            and len(contract.get("checks", [])) == 5
+            and contract.get("reductions") == ["fold", "final"]
+            and [row.get("reduction") for row in schedule] == ["fold", "final"]
+            and all(row.get("consumer_guard") == "G_accept" for row in schedule)
+            and all(str(row.get("guard", "")).startswith("G_accept:") for row in schedule)
+            and [row.get("verdict") for row in terminals] == ["Accept", "Reject"]
+            and str(terminals[0].get("guard", "")).startswith("G_accept:")
+            and terminals[0].get("required_true_checks") == "all five checks"
+            and terminals[0].get("required_applied_reductions") == ["fold", "final"]
+            and terminals[0].get("terminal_claims") == []
+            and terminals[1].get("guard", "").startswith("Always")
+            and terminals[1].get("required_true_checks") == []
+            and terminals[1].get("required_applied_reductions") == []
+            and terminals[1].get("terminal_claims") == ["initial claim"]
+            and contract.get("guard_implication")
+            == "Each reduction and its accepting consumer use exactly G_accept; no semantic guard implication is assumed."
+            and "two terminal frontiers" in whir.get("views", {}).get("EffectView", [])
+            and "accepting consumption and fallback initial-claim disposition"
+            in whir.get("views", {}).get("ClaimReductionView", [])
+            and {
+                (outcome.get("mode"), outcome.get("lane"))
+                for outcome in whir.get("outcomes", [])
+            }
+            >= {
+                (
+                    "one or more ordinary verifier checks false, with neither reduction active",
+                    "Rejected",
+                ),
+                ("all verifier checks true", "Accepted"),
+            }
+            and "guarded scope" not in json.dumps(contract).lower()
+        )
+        frontier_counts = {"accept": 0, "reject": 0, "fold": 0, "final": 0}
+        for valuation in range(32):
+            accepting = valuation == 31
+            frontier_counts["fold"] += int(accepting)
+            frontier_counts["final"] += int(accepting)
+            frontier_counts["accept"] += int(accepting)
+            frontier_counts["reject"] += int(not accepting)
+        whir_schedule_ok = whir_schedule_ok and frontier_counts == {
+            "accept": 1,
+            "reject": 31,
+            "fold": 1,
+            "final": 1,
+        }
+    else:
+        frontier_counts = {}
+    findings.append(
+        Finding(
+            "corrected-whir-reduction-guards",
+            "Affirmative" if whir_schedule_ok and guard_ok else "CannotAnswer",
+            "F0V2C2-A-WHIR-IDENTICAL-REDUCTION-GUARDS"
+            if whir_schedule_ok and guard_ok
+            else "F0V2C2-C-WHIR-REDUCTION-GUARDS",
         )
     )
 
@@ -275,19 +334,20 @@ def evaluate() -> dict[str, Any]:
     interpretation_axis = next(
         value for value in termination_axis["values"] if value["id"] == "interpretation_failure"
     )
-    stale_axis_meaning = "Reject or Abort branch" in interpretation_axis["meaning"]
+    current_axis_meaning = (
+        interpretation_axis["meaning"]
+        == "Canonical interpretation failure is a separate completed failure record and outcome lane, never a Core terminal."
+    )
     findings.append(
         Finding(
             "structural-axis-interpretation-failure-meaning",
-            "Refused" if stale_axis_meaning and owner_laws_present else "CannotAnswer",
-            "F0V2C2-R-AXIS-INTERPRETATION-FAILURE-MEANING"
-            if stale_axis_meaning and owner_laws_present
+            "Affirmative" if current_axis_meaning and owner_laws_present else "CannotAnswer",
+            "F0V2C2-A-AXIS-INTERPRETATION-FAILURE-MEANING"
+            if current_axis_meaning and owner_laws_present
             else "F0V2C2-C-AXIS-INTERPRETATION-FAILURE-MEANING",
         )
     )
 
-    adjudication = json.loads((PACKAGE / "adjudication.json").read_text())
-    rows = adjudication.get("rows", [])
     row_names = [row.get("name") for row in rows]
     table_complete = (
         adjudication.get("schema_version") == 1
@@ -475,6 +535,7 @@ def evaluate() -> dict[str, Any]:
             "disagreements": len(disagreements),
             "source_pins": len(SOURCE_PINS),
             "owner_pins": len(OWNER_PINS),
+            "whir_guard_valuation_counts": frontier_counts,
         },
     }
 

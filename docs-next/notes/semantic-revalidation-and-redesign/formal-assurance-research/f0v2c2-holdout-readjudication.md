@@ -20,13 +20,13 @@ owner text leaves five rows fitting and three breaking at already named
 boundaries. No row bends and no verdict changes.
 
 The migration does change one concrete carrier shape. WHIR's earlier schedule
-had an accepting terminal followed by one unconditional rejecting terminal,
-while its fold reduction could already have replaced the initial claim with a
-folded claim. The migrated exact-live-claim rule cannot assign one fixed claim
-set to that fallback on both paths. The source-faithful repair is a rejecting
-terminal at the post-fold frontier, followed by the root fallback. This is a
-guard/terminal restructuring inside an otherwise fitting Core, not a reopened
-owner boundary.
+guarded the fold by a proper subset of the accepting Checks. Scope openings are
+deterministic and unguarded, and the owner admits a guarded producer only when
+its guard is `Always` or textually identical to the consumer guard. The
+corrected carrier therefore delays both Reductions under the exact accepting
+guard and retains one unconditional fallback with the initial Claim. This is a
+schedule restructuring inside an otherwise fitting Core, not a reopened owner
+boundary or an assertion that the source's earlier Reduction timing was exact.
 
 ## 2. Migrated decision law used here
 
@@ -38,7 +38,7 @@ Admission then requires every named Check output to be a direct terminal-guard
 input whose positive literal occurs in `MustWhenTrue`, every named Reduction to
 be attempted whenever the terminal is attempted, and one invariant live-Claim
 set at every activation
-([Interaction Core Section 10, lines 1427-1491](../../../pir/interactive-core.md#10-core-admission-and-consistency)).
+([Interaction Core Section 10, lines 1427-1509](../../../pir/interactive-core.md#10-core-admission-and-consistency)).
 
 For direct Check outputs `c0 ... cn`, this note uses the closed term shape:
 
@@ -58,9 +58,10 @@ MustWhenTrue(And(c0,...,cn)) =
 
 A semantic `and` primitive would contribute no literal and would not admit a
 required Check. A final `Always` terminal can therefore name no required Check.
-When reductions can apply at different frontiers, either all claim-changing
-reductions must move under the complete accepting guard, or each distinct live
-Claim set needs an authored terminal branch.
+Each Reduction is unconditional or has a guard textually identical to every
+consumer of its output. A semantically valid implication between different
+guards is not inferred; Section 10 expressly leaves checked guard implication
+outside this regime. Scope declarations cannot supply a guard.
 
 The six normalized view bodies are exact owner projections, not consumer-made
 tuples
@@ -120,41 +121,31 @@ Let `c0,c1` be the initial and main-loop Sumcheck Checks and `c2,c3,c4` the two
 final-consistency Checks and final weighted-sum Check. Define:
 
 ```text
-G_fold   = And(c0,c1)
-G_final  = And(c2,c3,c4)
 G_accept = And(c0,c1,c2,c3,c4)
-
-G_post_fold_reject =
-  if c0 then
-    if c1 then
-      if G_final then false else true
-    else false
-  else false
 ```
 
-The source-preserving schedule is:
+The corrected schedule is:
 
-| Position | Guard and scope | Required true Checks | Required Reductions | Terminal Claims |
+| Position | Guard | Required true Checks | Required Reductions | Terminal Claims |
 |---|---|---|---|---|
-| fold Reduction | `Always` inside a scope opened by `G_fold` | n/a | n/a | replaces initial with folded Claim |
-| final Reduction | `G_accept` inside the fold scope | n/a | n/a | consumes folded Claim |
-| Accept | `G_accept` inside the fold scope | all five | fold and final | empty |
-| post-fold Reject | `G_post_fold_reject` inside the fold scope | `c0,c1` | fold | folded Claim |
-| root Reject | `Always`, after the fold scope | empty | empty | initial Claim |
+| fold Reduction | `G_accept` | n/a | n/a | replaces initial with folded Claim |
+| final Reduction | `G_accept` | n/a | n/a | consumes folded Claim |
+| Accept | `G_accept` | all five | fold and final | empty |
+| fallback Reject | `Always`, after the accepting terminal | empty | empty | initial Claim |
 
-`MustWhenTrue(G_accept)` contains all five positive literals.
-`MustWhenTrue(G_post_fold_reject)` contains exactly the positive literals for
-`c0,c1`; failure of the three final Checks has no single must-negative literal,
-which is harmless because no negative literal is required. The fold scope is
-an attempt guard shared by its Reduction and post-fold terminal. The final
-Reduction and Accept share `G_accept`, so each required Reduction satisfies
-`AttemptedWhenever`.
+`MustWhenTrue(G_accept)` contains all five positive literals. Both Reductions
+and their accepting consumer have the same guard, so `GuardImplies` and
+`AttemptedWhenever` hold syntactically. If any Check is false, neither
+Reduction is active and the fallback sees exactly the initial Claim. Exhausting
+all 32 Check valuations yields one accepting valuation, 31 fallback valuations,
+and one activation of each Reduction.
 
-The prior two-terminal form is not admitted as authored: its root fallback can
-see either the initial or folded Claim. Adding the post-fold branch is the more
-source-faithful choice; guarding both Reductions by `G_accept` would also make
-the old two-terminal topology admissible but would delay the source's fold
-Claim transition.
+The legacy source schedule is refused because its fold and final guards differ
+from their consumers; an unguarded scope cannot mediate that difference. The
+corrected carrier delays the fold relative to the source prose. Proving that
+this delay preserves a chosen source semantics would require an exact
+source-correspondence argument or a future checked guard-implication regime;
+this package establishes neither.
 
 ### 4.2 Views
 
@@ -163,8 +154,8 @@ Claim transition.
 | `PublicBindingView` | finite member descriptor, initial Claim input binding, scopes, binding classes, exact types |
 | `StrategyDecisionView` | logical folded-Oracle publication, Sumcheck messages, out-of-domain reply, final polynomial, guards, legal move types, exact prior reads |
 | `PublicCoinView` | all challenge refs, types, domains and laws, joint shift/final-sample correlations, public conditions, reduction consumers, complete public-coin graph |
-| `EffectView` | ordered messages, logical-Oracle fixation/query/answer occurrences, derived values, five Checks, two Reductions, and the three repaired terminal frontiers |
-| `ClaimReductionView` | initial/folded Claims, fold/final Reductions, creation and consumers, challenge/publication requirements, verdict-derived dispositions |
+| `EffectView` | ordered messages, logical-Oracle fixation/query/answer occurrences, derived values, five Checks, two Reductions under `G_accept`, and two terminal frontiers |
+| `ClaimReductionView` | initial/folded Claims, fold/final Reductions under `G_accept`, creation and consumers, accepting consumption, and fallback initial-Claim disposition |
 | `ExecutionView` | Fresh or selected transformed Protocol identity, resolver coordinates, receipts, complete record schema, outcome partition |
 | canonical family views | transcript declaration, required influence, challenge transition, and checked construction result after the logical Oracles first receive the separately checked commitment route |
 
@@ -176,8 +167,8 @@ closures preserve that separation.
 
 ### 4.3 Outcome partition and verdict
 
-All Checks true reaches `Accepted`; an ordinary false Check reaches one of the
-two `Rejected` terminals. A source-authored malformed-value or unavailable-
+All Checks true reaches `Accepted`; an ordinary false Check reaches the
+fallback `Rejected` terminal without activating either Reduction. A source-authored malformed-value or unavailable-
 access event may reach `Aborted`. Canonical sampling exhaustion, if that exact
 construction is selected, is `InterpretationFailed`; prover refusal is
 `StrategyStopped`; unsupported evaluation or resource exhaustion is
@@ -202,9 +193,9 @@ and final Checks; let `R_circle` be its selected AIR, quotient, DEEP, and Circle
 FRI Reductions; and let `L0` and `L_accept` be the exact initial and accepting
 live-Claim sets.
 
-An admissible all-or-nothing carrier opens a scope with
-`And(outputs(Q_circle))`, applies every member of `R_circle` in dependency
-order, then reaches Accept under the same nested conjunction with
+An admissible all-or-nothing carrier guards every member of `R_circle` with
+`And(outputs(Q_circle))`, applies them in dependency order, then reaches Accept
+under that textually identical nested conjunction with
 `required_true_checks = Q_circle`,
 `required_applied_reductions = R_circle`, and
 `terminal_claims = L_accept`. A following root Reject has `Always`, empty
@@ -261,8 +252,9 @@ Reduction, Accept guarded directly by `c_const` with that one required Check,
 and a final `Always` Reject. Both terminal Claim sets and both required
 Reduction sets are empty. `MustWhenTrue(c_const) = {Positive(c_const)}`.
 An exact selected profile may instead introduce a fold Claim/Reduction; if so,
-it uses the all-check scope pattern above. A selected typed-failure source event
-needs an earlier Abort branch with no invented positive Check requirement.
+each Reduction is unconditional or uses the exact guard of each consumer. A
+selected typed-failure source event needs an earlier Abort branch with no
+invented positive Check requirement.
 
 The boundary analysis does not enumerate exact refs or choose that failure
 guard, so the complete carrier remains `CannotAnswer` pending source
@@ -320,9 +312,9 @@ verify locally, hold shares, use correlated randomness, and reason about abort
 
 Let `Q_virtual` contain every selected commitment/opening, recurrence, and final
 evaluation Check; let `R_virtual` be the selected Sumcheck Claim chain; and let
-`L0` and `L_accept` be its exact live-Claim sets. The all-check guarded scope,
-Accept under the same nested conjunction, and root fallback Reject have the
-same required-set shape as Circle. `MustWhenTrue` proves every member of
+`L0` and `L_accept` be its exact live-Claim sets. Reductions and Accept use the
+same all-check nested conjunction, followed by the root fallback Reject, with
+the same required-set shape as Circle. `MustWhenTrue` proves every member of
 `Q_virtual`; the fallback names no required Check. A source-authored malformed
 opening may instead take an earlier Abort frontier.
 
@@ -386,9 +378,10 @@ compiler
 For any selected explicit component, let `Q_ring` contain its exact Merkle,
 encoding, linear-combination, Sumcheck, ZeroCheck, and final Checks;
 `R_ring` its exact commitment and polynomial-interactive-oracle Claim
-transforms; and `L0`, `L_accept` its live-Claim sets. The all-check guarded
-scope, accepting conjunction, and root fallback have the same structure as the
-other fitting boundary analyses. The accepting `MustWhenTrue` proves all
+transforms; and `L0`, `L_accept` its live-Claim sets. Reductions and the
+accepting terminal use the same all-check conjunction, followed by the root
+fallback, as in the other fitting boundary analyses. The accepting
+`MustWhenTrue` proves all
 required direct Check literals. A selected partial ring operation may use an
 earlier Abort frontier; otherwise failure remains qualified noncompletion.
 
@@ -441,19 +434,19 @@ comparison finding for each of the eight rows and would emit a row-specific
 `CannotAnswer` finding and a nonaffirmative aggregate if any record or matrix
 verdict changed.
 
-Two narrower disagreements are frozen:
+Two narrower corrections are frozen:
 
-1. The earlier WHIR two-terminal schedule is refused by the migrated exact
-   terminal-Claim rule after the partial fold Reduction. The three-frontier
-   carrier above repairs it without changing the verdict.
-2. The structural-axis definition says an “interpretation failure” reaches an
-   explicit Reject or Abort branch
+1. The legacy WHIR schedule is refused because its Reduction guards differ
+   from their consumers and deterministic scope openings cannot supply another
+   guard. The two-terminal carrier above gives both Reductions and Accept the
+   exact `G_accept` guard and retains an `Always` fallback. The verdict remains
+   fits, while correspondence to the source's earlier fold timing is not
+   claimed.
+2. The termination-axis meaning now states that canonical interpretation
+   failure is a separate completed failure record and outcome lane, never a
+   Core terminal
    ([`axes.json`, termination axis](../../../../evaluation/expressibility-axes/axes.json)).
-   The migrated owner says the opposite: canonical interpretation failure is a
-   separate completed failure record and is not a Core terminal. This stale
-   axis meaning is refused. The affected holdout predictions remain unchanged
-   after mapping Fresh typed failures to Abort or qualified noncompletion and
-   canonical sampling exhaustion to `InterpretationFailed`.
+   No case vector, destination, matrix prediction, or holdout verdict changes.
 
 ## 10. No owner-page delta
 
@@ -461,12 +454,12 @@ No migrated target section is underdetermined or wrong for this question, so
 this note proposes no owner-page change. The four boundary analyses' missing
 exact Check, Reduction, Claim, and failure-guard refs are source-profile gaps.
 The cross-system, physical multiparty, and complete noninteractive gaps are the
-same named boundaries already recorded. The stale structural-axis wording is a
-research-instrument mismatch, not owner authority.
+same named boundaries already recorded. The structural-axis correction was a
+research-instrument repair, not an owner-page change.
 
 ## 11. Nonclaims
 
-The 24-finding result is finite executable evidence over exact document bytes.
+The 25-finding result is finite executable evidence over exact document bytes.
 It does not establish an admitted Circle, WARPfold, multiparty, or Galois-ring
 Core; live implementation correspondence; Plan or Relations correctness;
 relation satisfaction; endpoint, OIR, backend, or deployment validity; theorem
@@ -474,7 +467,7 @@ truth or applicability; soundness, knowledge soundness, zero knowledge,
 Fiat--Shamir security, multiparty security, or production readiness. No passing
 row publishes a source profile, changes an owner page, or rotates an identity.
 
-## Handoff
+## Round-one handoff (historical)
 
 Files changed:
 
@@ -532,3 +525,75 @@ Surprises and brief corrections:
 - the structural-axis description of interpretation failure still reflects
   the pre-migration terminal model, although its holdout verdict predictions
   remain correct.
+
+
+## Handoff
+
+Main should commit this working tree with subject:
+
+```text
+test: rerun the migration text review and correct the holdout carrier
+```
+
+Files changed:
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py`,
+  `expected-findings.json`, and `README.md`;
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py`,
+  `adjudication.json`, `expected-findings.json`, and `README.md`;
+- `evaluation/expressibility-axes/axes.json`, `run.py`, and `README.md`;
+- `docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2c1-migration-text-review.md`;
+- `docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2c2-holdout-readjudication.md`;
+- `checks/manifest.json`; and
+- `evaluation/README.md`.
+
+No owner page, profile manifest, publication table, directory README,
+lifecycle entry, lifecycle count pin, real Git index, or private ledger was edited.
+No lifecycle count moves because this lane adds no package.
+
+Validation and evidence:
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| `git log --oneline -12` and the migration commit diffs | 0 | under 0.1 s each | migration and repair history inspected before editing |
+| `python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check` | 0 | 0.64 s | seven affirmative findings, no blocker |
+| `python3 -B evaluation/formal-source-holdout-readjudication-f0v2c2/run.py --check` | 0 | 0.04 s | 25 findings, five fits, three breaks, no verdict disagreement |
+| `python3 -B evaluation/expressibility-axes/run.py --check` | 0 | 0.12 s | 18 frozen findings; aggregate unchanged |
+| `python3 -B evaluation/semantic-profile-publication/run.py --print-identities` | 0 | 0.31 s | both compilers reconstructed 18 identities; the review derives the 17-profile cone |
+| `python3 -B checks/run.py validate` with the alternate index | 0 | 0.04 s | 74-check manifest valid |
+| `python3 -B checks/run.py run --tier developer` with the alternate index and clone-local offline cache | 0 | 1.11 s | eight of eight developer checks passed |
+| `python3 -B checks/run.py run --check research.migration-text-review` with the same environment | 0 | 0.69 s | focused review check passed |
+| `python3 -B checks/run.py run --check research.holdout-readjudication` with the same environment | 0 | 0.10 s | focused holdout check passed |
+| `python3 -B checks/run.py run --check research.expressibility-axes` with the same environment | 0 | 0.19 s | focused axis check passed |
+| `git diff --check` | 0 | 0.06 s | no whitespace errors |
+
+The temporary alternate index, object store, and clone-local cache were removed
+after validation; the real index was never changed.
+
+Aggregate outcome: the migration review is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`; all four former negatives close.
+The holdout aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`; the WHIR and axis corrections
+change no verdict. Four source-specialized fitting carriers remain
+`CannotAnswer` for exact references.
+
+Nonclaims: these passes establish bounded, byte-pinned source-text and
+instrument consistency only. They do not publish identities, establish
+implementation or backend correspondence, prove relation satisfaction or
+theorem truth, establish any security property, validate endpoints or
+deployment, or show that delaying the WHIR fold preserves a selected source
+semantics.
+
+Surprises: the first developer-tier attempt exited 1 in 0.35 s because listing
+the candidate packet files as manifest sources made one check route to two
+evaluation packages. Removing those cross-package manifest routes preserved
+the runner's direct byte pins and the rerun passed. The alternate index also
+needed a clone-local object directory and explicit removal of its transient
+lockfile from the index inventory.
+
+Where the brief was wrong: `AGENTS.md` and `.claude/CLAUDE.md` are absent
+from this clone, so their read-only primary-checkout copies were used. The
+workflow's private status-ledger append conflicts with this lane's express
+outside-clone write prohibition and the read-only mount, so status is recorded
+here. The example alternate-index command also needs a writable object store
+under this mount.

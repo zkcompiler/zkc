@@ -11,24 +11,26 @@ Run from the repository root:
 python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check
 ```
 
-The frozen answer is
-`Negative/F0V2C1-N-MIGRATION-TEXT-NOT-CLOSED`. Four of the seven answers are
-negative. The public-coin transfer/sink and manifest-closure answers are
-affirmative, and the two independent publication compilers agree on the
-complete reconstructed table.
+The round-two frozen answer is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`. All seven answers are
+affirmative. The four former negatives close after the owner repairs to the
+Terminal contract, admitted-module atomic boundary, and eight family-view body
+displays.
 
-The checker pins the six migrated owner pages and eight migrated manifests. It
-then checks all sixteen `StaticViewSchema` body references, the split source
-envelope compilers and no-policy arm counts, every manifest declaration and
-subject reference, the declaration dependency graph, the selected revision
-transitions from the migration base, and the eight displayed family bodies.
-It also exhausts the corrected opaque-guard inclusion implication and the
-positive predecessor terminal-region shapes.
+The checker pins the six migrated owner pages, eight migrated manifests, and
+the two earlier candidate packet sources. It checks all sixteen
+`StaticViewSchema` body references, the split source-envelope compilers and
+no-policy arm counts, every manifest declaration and subject reference, the
+dependency graph, selected revision transitions, and all 95 fields in the
+eight family bodies. Every field must be an exact identity, value, natural,
+closed tag, law reference, record, or sequence of those. It also exhausts the
+opaque-guard implication fixture, checks the strict impossible-region refusal,
+and reconstructs the exact seventeen-profile rotation cone with two
+independent publication compilers.
 
-A pass establishes that these exact negative and affirmative observations are
-reproducible from the pinned source. It does not establish that the owner text
-is closed, publish or bless any semantic identity, repair an owner page or
-manifest, prove the Terminal law for arbitrary Core values, validate a live
+A pass establishes only that the seven source-text questions close for these
+pinned bytes and bounded checks. It does not publish or bless an identity,
+prove the Terminal law for arbitrary Core values, validate a live
 compiler/runtime/backend, establish relation satisfaction or theorem truth, or
 make a Fiat--Shamir, random-oracle, concrete-sponge, QROM, protocol-security,
 endpoint-validity, deployment, or production-readiness claim.

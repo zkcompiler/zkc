@@ -2,7 +2,7 @@
   "schema_version": 1,
   "question": "Do the migrated PIR terminal, owner-view, and outcome contracts represent every cold protocol holdout at its recorded boundary, with the same verdict as both the adjudication record and the structural-axes matrix?",
   "owner_citations": {
-    "terminal_shape": "docs-next/pir/interactive-core.md Sections 6.4 and 10, lines 896-945 and 1427-1491",
+    "terminal_shape": "docs-next/pir/interactive-core.md Sections 6.4 and 10, lines 896-945 and 1427-1509",
     "outcome_partition": "docs-next/pir/interactive-core.md Sections 12.3 and 12.4, lines 1828-1854 and 1954-1985",
     "normalized_views": "docs-next/pir/interactive-core.md Sections 13.1 and 13.2, lines 2088-2537",
     "view_read_closure": "docs-next/pir/interactive-core.md Section 13.2, lines 2583-2619",
@@ -20,7 +20,7 @@
       "boundaries": [],
       "reopening_conditions": [],
       "terminal_contract": {
-        "status": "authored-nonaccepting-frontier-required",
+        "status": "authored-identical-guard-reductions",
         "checks": [
           "initial Sumcheck",
           "main-loop Sumcheck",
@@ -29,44 +29,50 @@
           "final weighted sum"
         ],
         "reductions": ["fold", "final"],
+        "reduction_schedule": [
+          {
+            "reduction": "fold",
+            "guard": "G_accept: the nested conjunction of all five direct Check outputs",
+            "consumer_guard": "G_accept"
+          },
+          {
+            "reduction": "final",
+            "guard": "G_accept: the nested conjunction of all five direct Check outputs",
+            "consumer_guard": "G_accept"
+          }
+        ],
         "terminals": [
           {
             "verdict": "Accept",
-            "guard": "nested conjunction of all five direct Check outputs",
+            "guard": "G_accept: the nested conjunction of all five direct Check outputs",
             "required_true_checks": "all five checks",
             "required_applied_reductions": ["fold", "final"],
             "terminal_claims": []
           },
           {
             "verdict": "Reject",
-            "guard": "initial and main-loop checks true, with at least one final check false",
-            "required_true_checks": ["initial Sumcheck", "main-loop Sumcheck"],
-            "required_applied_reductions": ["fold"],
-            "terminal_claims": ["folded claim"]
-          },
-          {
-            "verdict": "Reject",
-            "guard": "Always after the guarded fold scope",
+            "guard": "Always after the identically guarded reductions and accepting terminal",
             "required_true_checks": [],
             "required_applied_reductions": [],
             "terminal_claims": ["initial claim"]
           }
         ],
-        "must_when_true": "The accepting guard proves all five Positive literals; the post-fold rejecting guard proves the initial and main-loop Positive literals."
+        "must_when_true": "The accepting guard proves all five Positive literals; the fallback terminal names no required Check.",
+        "guard_implication": "Each reduction and its accepting consumer use exactly G_accept; no semantic guard implication is assumed."
       },
       "views": {
         "PublicBindingView": ["member descriptor", "initial claim input binding", "scope and value types"],
         "StrategyDecisionView": ["logical Oracle publication", "Sumcheck messages", "out-of-domain reply", "final polynomial", "allowed prior reads"],
         "PublicCoinView": ["all challenge occurrences", "domains and laws", "joint shift and final-sample correlations", "reduction consumers", "public-coin graph"],
-        "EffectView": ["ordered messages", "logical Oracle lifecycle", "grouped queries and answers", "five checks", "two reductions", "three terminal frontiers"],
-        "ClaimReductionView": ["initial and folded claims", "fold and final reductions", "creation, consumption, and terminal disposition"],
+        "EffectView": ["ordered messages", "logical Oracle lifecycle", "grouped queries and answers", "five checks", "two reductions under G_accept", "two terminal frontiers"],
+        "ClaimReductionView": ["initial and folded claims", "fold and final reductions under G_accept", "accepting consumption and fallback initial-claim disposition"],
         "ExecutionView": ["selected challenge interpretation", "receipts", "record schema", "outcome partition"],
         "family_views": ["canonical transcript declaration", "required influence", "challenge transition", "checked construction result when a separately checked transform is selected"]
       },
       "missing_coordinates": [],
       "outcomes": [
         {"mode": "all verifier checks true", "lane": "Accepted"},
-        {"mode": "ordinary verifier check false before or after the fold reduction", "lane": "Rejected"},
+        {"mode": "one or more ordinary verifier checks false, with neither reduction active", "lane": "Rejected"},
         {"mode": "authored malformed-value or unavailable-access event", "lane": "Aborted"},
         {"mode": "canonical transcript sampling exhaustion", "lane": "InterpretationFailed"},
         {"mode": "prover strategy stop", "lane": "StrategyStopped"},
@@ -86,7 +92,7 @@
         "reductions": ["the exact source-selected AIR, quotient, DEEP, and Circle FRI claim transforms"],
         "terminals": [
           {"verdict": "Accept", "guard": "nested conjunction of every required direct Check output", "required_true_checks": "all selected checks", "required_applied_reductions": "all selected reductions", "terminal_claims": "the exact accepting live-claim set"},
-          {"verdict": "Reject", "guard": "Always after an all-check guarded reduction scope", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial live-claim set"},
+          {"verdict": "Reject", "guard": "Always after reductions and an accepting terminal that share the exact nested-conjunction guard", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial live-claim set"},
           {"verdict": "Abort", "guard": "an authored typed-failure branch, if the selected construction makes field-membership failure a protocol event", "required_true_checks": [], "required_applied_reductions": "the reductions common to that frontier", "terminal_claims": "the exact live-claim set at that frontier"}
         ],
         "must_when_true": "The nested accepting conjunction proves every required Positive literal; a primitive conjunction would prove none."
@@ -209,7 +215,7 @@
         "reductions": ["the selected Sumcheck claim chain"],
         "terminals": [
           {"verdict": "Accept", "guard": "nested conjunction of every direct required Check output", "required_true_checks": "all selected checks", "required_applied_reductions": "all selected reductions", "terminal_claims": "the exact accepting live-claim set"},
-          {"verdict": "Reject", "guard": "Always after an all-check guarded reduction scope", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial committed-polynomial claim set"}
+          {"verdict": "Reject", "guard": "Always after reductions and an accepting terminal that share the exact nested-conjunction guard", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial committed-polynomial claim set"}
         ],
         "must_when_true": "The nested accepting conjunction proves every required Positive literal."
       },
@@ -267,7 +273,7 @@
         "reductions": ["the selected commitment, Sumcheck, ZeroCheck, Libra, or HyperPlonk claim transforms"],
         "terminals": [
           {"verdict": "Accept", "guard": "nested conjunction of every direct required Check output", "required_true_checks": "all selected checks", "required_applied_reductions": "all selected reductions", "terminal_claims": "the exact accepting live-claim set"},
-          {"verdict": "Reject", "guard": "Always after an all-check guarded reduction scope", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial live-claim set"},
+          {"verdict": "Reject", "guard": "Always after reductions and an accepting terminal that share the exact nested-conjunction guard", "required_true_checks": [], "required_applied_reductions": [], "terminal_claims": "the initial live-claim set"},
           {"verdict": "Abort", "guard": "an authored typed-failure branch when selected", "required_true_checks": [], "required_applied_reductions": "the reductions common to that frontier", "terminal_claims": "the exact live-claim set at that frontier"}
         ],
         "must_when_true": "The nested accepting conjunction proves every required Positive literal."

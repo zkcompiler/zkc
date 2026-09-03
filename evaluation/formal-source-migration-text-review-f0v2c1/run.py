@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Iterable
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +41,10 @@ MIGRATED_MANIFESTS = (
 FOUNDATION = "docs-next/foundation/executable-foundations.md"
 PROFILE_INDEX = "docs-next/foundation/semantic-profile-manifests.json"
 PUBLISHED_IDENTITIES = "docs-next/pir/profiles/published-identities.json"
+PACKET_SOURCES = (
+    "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/fiat-shamir-section-13.md",
+    "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/duplex-section-11.md",
+)
 
 
 class ReviewError(RuntimeError):
@@ -79,7 +83,7 @@ def _json(relative: str) -> Any:
 def _source_hashes() -> dict[str, str]:
     return {
         relative: hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
-        for relative in (*PAGES, *MIGRATED_MANIFESTS)
+        for relative in (*PAGES, *MIGRATED_MANIFESTS, *PACKET_SOURCES)
     }
 
 
@@ -93,23 +97,23 @@ def _definition_count(text: str, symbol: str) -> int:
     )
 
 
-def _record_fields(text: str, body: str) -> tuple[str, ...]:
+def _record_field_types(text: str, body: str) -> dict[str, str]:
     match = re.search(rf"^{re.escape(body)} = \{{\n", text, flags=re.MULTILINE)
     _require(match is not None, f"body {body} is absent")
     assert match is not None
     lines = text[match.end() :].splitlines()
-    fields: list[str] = []
+    fields: dict[str, str] = {}
     depth = 1
     for line in lines:
+        field = re.match(r"^  ([a-z][a-z0-9_]*): (.*?)(?:,)?$", line)
+        if depth == 1 and field:
+            _require(field.group(1) not in fields, f"body {body} repeats a field")
+            fields[field.group(1)] = field.group(2)
         depth += line.count("{") - line.count("}")
-        field = re.match(r"^  ([a-z][a-z0-9_]*)(?::|,|$)", line)
-        if depth >= 1 and field:
-            fields.append(field.group(1))
         if depth == 0:
             break
     _require(depth == 0, f"body {body} is not closed")
-    _require(len(fields) == len(set(fields)), f"body {body} repeats a field")
-    return tuple(fields)
+    return fields
 
 
 VIEW_SCHEMAS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -138,74 +142,157 @@ VIEW_SCHEMAS: dict[str, tuple[tuple[str, str], ...]] = {
 }
 
 
-FS_PROSE_FIELDS: dict[str, tuple[str, ...]] = {
-    "TranscriptDeclarationViewBody": (
-        "fixed_initial_state_and_derived_initialization_schedule",
-        "exact_frame_schedule_coordinates",
-    ),
-    "RequiredInfluenceViewBody": (
-        "scope_binding_requirements",
-        "per_challenge_ordered_required_influence_sets",
-        "reduction_and_module_additions",
-        "exact_prefix_law",
-    ),
-    "ChallengeTransitionViewBody": (
-        "challenge_namespace_derivation",
-        "acceptance_abi",
-        "decoder_abi",
-        "draw_bounds",
-        "exact_length_law",
-        "state_update_before_decode_law",
-        "retry_law",
-        "sampling_failure_law",
-        "challenge_decoding_coordinates",
-    ),
-    "FSConstructionViewBody": ("result_schema",),
-    "DuplexTranscriptDeclarationViewBody": (
-        "state_carrier_and_invariant",
-        "binary_instance_carrier_and_bit_convention",
-        "exact_instance_binding_projection",
-        "fixed_start_absorb_squeeze_laws",
-        "exact_edge_case_laws",
-        "exact_construction_material_schema",
-        "prover_required_schedule",
-        "verifier_complete_schedule",
-    ),
-    "DuplexEncodedInputCoverageViewBody": (
-        "exact_instance_binding_sequence",
-        "salt_coordinate",
-        "per_challenge_ordered_encoded_input_coverage",
-        "exact_message_coverage",
-        "exact_challenge_coverage",
-        "prover_required_prefix_law",
-        "verifier_complete_schedule_law",
-    ),
-    "DuplexChallengeTransitionViewBody": (
-        "per_challenge_squeeze_and_decoder_map",
-        "decode_after_state_transition_law",
-        "prover_execution_domain",
-        "verifier_execution_domain",
-    ),
-    "DuplexFSConstructionViewBody": (
-        "result_schema",
-        "instance_projection",
-        "construction_material_map",
-        "prover_schedule_correspondence",
-        "verifier_schedule_correspondence",
-    ),
+FS_BODY_PAGES: dict[str, str] = {
+    "TranscriptDeclarationViewBody": "docs-next/pir/fiat-shamir.md",
+    "RequiredInfluenceViewBody": "docs-next/pir/fiat-shamir.md",
+    "ChallengeTransitionViewBody": "docs-next/pir/fiat-shamir.md",
+    "FSConstructionViewBody": "docs-next/pir/fiat-shamir.md",
+    "DuplexTranscriptDeclarationViewBody": "docs-next/pir/duplex-sponge-fiat-shamir.md",
+    "DuplexEncodedInputCoverageViewBody": "docs-next/pir/duplex-sponge-fiat-shamir.md",
+    "DuplexChallengeTransitionViewBody": "docs-next/pir/duplex-sponge-fiat-shamir.md",
+    "DuplexFSConstructionViewBody": "docs-next/pir/duplex-sponge-fiat-shamir.md",
 }
 
-FS_UNDEFINED_FIELDS: dict[str, tuple[str, ...]] = {
-    "DuplexTranscriptDeclarationViewBody": (
-        "semantic_argument_shape",
-        "exact_operational_resource_projection",
-    ),
-    "DuplexEncodedInputCoverageViewBody": ("prohibited_additions",),
-    "DuplexChallengeTransitionViewBody": (
-        "decoder_totality_contracts",
-        "exact_squeeze_event_projection",
-    ),
-}
+FS_PROSE_FIELDS: dict[str, tuple[str, ...]] = {body: () for body in FS_BODY_PAGES}
+FS_UNDEFINED_FIELDS: dict[str, tuple[str, ...]] = {body: () for body in FS_BODY_PAGES}
+
+
+def _field_form(field_type: str) -> str:
+    if field_type == "Natural":
+        return "natural"
+    if field_type == "CanonicalValue" or field_type.startswith("CanonicalValue<"):
+        return "value"
+    if field_type == "PIRProfileLawReference":
+        return "law-reference"
+    if field_type.startswith(("CanonicalSeq<", "CanonicalSortedUniqueSeq<", "NonEmptyCanonicalSeq<")):
+        return "sequence"
+    if field_type in {"AlwaysAccept", "DuplexSponge", "NoRetry", "None", "StructurallyConstructed"}:
+        return "closed-tag"
+    if field_type.startswith("{") or field_type in {
+        "AlgorithmUse",
+        "ChallengeABI",
+        "MaterialCoordinate",
+        "MaterialSchema",
+        "PIRRuntimeSchema",
+        "ScheduleCorrespondence",
+    }:
+        return "record"
+    if any(token in field_type for token in ("Id", "Ref", "ValueType", "SemanticFailureType")):
+        return "identity"
+    raise ReviewError(f"family body field has a non-exact form: {field_type}")
+
+
+def _packet_schema(relative: str) -> dict[str, Any]:
+    text = _read(relative)
+    try:
+        block = text.split("<!-- f0v3b-schema-json:start -->", 1)[1]
+        block = block.split("<!-- f0v3b-schema-json:end -->", 1)[0]
+        block = block.split("```json", 1)[1].split("```", 1)[0]
+        value = json.loads(block)
+    except (IndexError, json.JSONDecodeError) as error:
+        raise ReviewError(f"cannot recover the candidate schema packet from {relative}") from error
+    _require(type(value) is dict, f"candidate schema packet in {relative} has another carrier")
+    return value
+
+
+def _packet_review(pages: dict[str, str]) -> dict[str, Any]:
+    canonical = _packet_schema(PACKET_SOURCES[0])["definitions"]
+    duplex = _packet_schema(PACKET_SOURCES[1])["definitions"]
+    transcript = canonical["CanonicalTranscriptDeclarationViewBody"]["record"]
+    transition = canonical["CanonicalChallengeTransitionViewBody"]["record"]
+    canonical_result = canonical["CanonicalFSConstructionViewBody"]["record"]
+    duplex_result = duplex["DuplexFSConstructionViewBody"]["record"]
+    _require(transcript[9][1] == {"ref": "CanonicalValue"}, "candidate application-domain field drifted")
+    _require(
+        transcript[11][1]["atom"]["law"]
+        == "canonical-framed:canonical-framed-source-views-v0",
+        "candidate frame-body law drifted",
+    )
+    _require([row[0] for row in transition[5][1]["record"]] == [0, 1], "candidate draw record drifted")
+    _require(len(canonical_result) == 8 and len(duplex_result) == 13, "candidate result records drifted")
+
+    packet_bodies = {
+        "TranscriptDeclarationViewBody": transcript,
+        "RequiredInfluenceViewBody": canonical["CanonicalRequiredInfluenceViewBody"]["record"],
+        "ChallengeTransitionViewBody": transition,
+        "FSConstructionViewBody": canonical_result,
+        "DuplexTranscriptDeclarationViewBody": duplex["DuplexTranscriptDeclarationViewBody"]["record"],
+        "DuplexEncodedInputCoverageViewBody": duplex["DuplexEncodedInputCoverageViewBody"]["record"],
+        "DuplexChallengeTransitionViewBody": duplex["DuplexChallengeTransitionViewBody"]["record"],
+        "DuplexFSConstructionViewBody": duplex_result,
+    }
+    packet_counts = {body: len(record) for body, record in packet_bodies.items()}
+    _require(
+        packet_counts
+        == {
+            "TranscriptDeclarationViewBody": 13,
+            "RequiredInfluenceViewBody": 7,
+            "ChallengeTransitionViewBody": 11,
+            "FSConstructionViewBody": 8,
+            "DuplexTranscriptDeclarationViewBody": 20,
+            "DuplexEncodedInputCoverageViewBody": 10,
+            "DuplexChallengeTransitionViewBody": 11,
+            "DuplexFSConstructionViewBody": 13,
+        }
+        and all(
+            [row[0] for row in record] == list(range(len(record)))
+            for record in packet_bodies.values()
+        ),
+        "candidate body cardinality or ordinal sequence drifted",
+    )
+
+    canonical_page = pages["docs-next/pir/fiat-shamir.md"]
+    duplex_page = pages["docs-next/pir/duplex-sponge-fiat-shamir.md"]
+    for snippet, text in (
+        ('application_domain: ProtocolDeclarationRef<"pir.fs-application-domain">', canonical_page),
+        ("frame_body_law: PIRProfileLawReference", canonical_page),
+        ("draw_bounds: { squeeze_length: Natural, maximum_draws: Natural }", canonical_page),
+        ("result_schema: PIRRuntimeSchema", canonical_page),
+        ("result_schema: PIRRuntimeSchema", duplex_page),
+    ):
+        _require(snippet in text, f"normalized owner body drifted at {snippet}")
+
+    deviations = [
+        {
+            "body": "TranscriptDeclarationViewBody",
+            "field": "application_domain",
+            "packet": "CanonicalValue",
+            "owner": 'ProtocolDeclarationRef<"pir.fs-application-domain">',
+            "judgment": "owner",
+        },
+        {
+            "body": "TranscriptDeclarationViewBody",
+            "field": "frame_body_law",
+            "packet": "canonical-framed-source-views-v0",
+            "owner": "body-grammar law reference",
+            "judgment": "owner",
+        },
+        {
+            "body": "ChallengeTransitionViewBody",
+            "field": "draw_bounds",
+            "packet": "record ordinals 0 and 1",
+            "owner": "record fields squeeze_length and maximum_draws",
+            "judgment": "owner",
+        },
+        {
+            "body": "FSConstructionViewBody",
+            "field": "result_schema",
+            "packet": "omitted",
+            "owner": "PIRRuntimeSchema",
+            "judgment": "owner",
+        },
+        {
+            "body": "DuplexFSConstructionViewBody",
+            "field": "result_schema",
+            "packet": "omitted",
+            "owner": "PIRRuntimeSchema",
+            "judgment": "owner",
+        },
+    ]
+    return {
+        "body_field_counts": packet_counts,
+        "deviations": deviations,
+    }
 
 
 def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
@@ -232,48 +319,47 @@ def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
     foundation = _read(FOUNDATION)
     definition_surface = "\n".join((*pages.values(), foundation))
     unresolved = {
-        symbol: _definition_count(definition_surface, symbol)
-        for symbol in (
-            "AdmittedModuleEffectAtom",
-            "GuardInputs",
-            "GuardTerm",
-        )
+        "AdmittedModuleEffectAtom": _definition_count(
+            definition_surface, "AdmittedModuleEffectAtom"
+        ),
+        "GuardInputs": definition_surface.count("GuardInputs(o) ="),
+        "GuardTerm": definition_surface.count("GuardTerm(o) ="),
     }
     _require(
         unresolved == {
-            "AdmittedModuleEffectAtom": 0,
-            "GuardInputs": 0,
-            "GuardTerm": 0,
+            "AdmittedModuleEffectAtom": 1,
+            "GuardInputs": 2,
+            "GuardTerm": 2,
         },
-        "the frozen unresolved-name set drifted",
+        "the repaired owner-name definition census drifted",
     )
     _require(
-        "{ Guard(s) | s a scope opening on o's scope path }" in interaction,
-        "the scope-opening guard expression drifted",
+        "AttemptGuards(o) := { Guard(o) } minus { Always }" in interaction,
+        "the unguarded-scope attempt law drifted",
     )
     scope = interaction.split("ScopeDecl = {", 1)[1].split("\n}", 1)[0]
     _require("guard" not in scope.lower(), "ScopeDecl unexpectedly acquired a guard")
+    _require(
+        "| PIRReference | PIRProfileLawReference | AdmittedModuleEffect" in interaction
+        and interaction.count("AdmittedModuleEffectAtom(x) :=") == 1
+        and "V(9,AdmittedModuleEffectAtom(effect))" in interaction,
+        "the module-effect atomic boundary closure drifted",
+    )
 
-    fs_pages = {
-        **{body: pages["docs-next/pir/fiat-shamir.md"] for body in tuple(FS_PROSE_FIELDS)[:4]},
-        **{body: pages["docs-next/pir/duplex-sponge-fiat-shamir.md"] for body in tuple(FS_PROSE_FIELDS)[4:]},
-    }
-    all_fields: dict[str, tuple[str, ...]] = {}
-    for body, text in fs_pages.items():
-        all_fields[body] = _record_fields(text, body)
-        expected_special = set(FS_PROSE_FIELDS.get(body, ())) | set(
-            FS_UNDEFINED_FIELDS.get(body, ())
-        )
-        _require(
-            expected_special <= set(all_fields[body]),
-            f"the field classification for {body} no longer selects source fields",
-        )
+    all_fields: dict[str, dict[str, str]] = {}
+    forms: dict[str, dict[str, int]] = {}
+    for body, relative in FS_BODY_PAGES.items():
+        all_fields[body] = _record_field_types(pages[relative], body)
+        forms[body] = {}
+        for field_type in all_fields[body].values():
+            form = _field_form(field_type)
+            forms[body][form] = forms[body].get(form, 0) + 1
     field_count = sum(map(len, all_fields.values()))
     prose_count = sum(map(len, FS_PROSE_FIELDS.values()))
     undefined_count = sum(map(len, FS_UNDEFINED_FIELDS.values()))
     _require(field_count == 95, "the eight family body displays no longer contain 95 fields")
-    _require(prose_count == 40, "the prose-only field census drifted")
-    _require(undefined_count == 5, "the undefined field census drifted")
+    _require(prose_count == 0, "a prose-only family field remains")
+    _require(undefined_count == 0, "an undefined family field remains")
     _require(
         "names such as `IdentityOnEveryOccurrenceRef` are nullary variant tags"
         in interaction,
@@ -282,27 +368,27 @@ def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
     return {
         "static_view_schemas": schema_count,
         "resolved_schema_body_displays": body_count,
-        "owner_unresolved_expressions": [
-            "AdmittedModuleEffectAtom",
-            "Guard(s) for a scope opening",
-            "GuardInputs",
-            "GuardTerm",
-            "Must let substitution",
-        ],
+        "owner_unresolved_expressions": [],
+        "owner_atomic_boundary_arms": 10,
+        "owner_module_effect_body_arm": 9,
         "fs_body_fields": field_count,
-        "fs_exact_fields": field_count - prose_count - undefined_count,
+        "fs_exact_fields": field_count,
         "fs_prose_fields": prose_count,
         "fs_undefined_fields": undefined_count,
-        "fs_unclosed_families": 11,
+        "fs_unclosed_families": 0,
+        "fs_field_form_counts": forms,
+        "packet_review": _packet_review(pages),
     }
 
 
 def _terminal_review(interaction: str) -> dict[str, Any]:
     required = (
-        "AttemptGuards(o) :=",
-        "{ Guard(o) } union { Guard(s) | s a scope opening on o's scope path }",
-        "Must(let x = e1 in e2)   = Must(e2), every reference to x contributing",
+        "AttemptGuards(o) := { Guard(o) } minus { Always }",
+        "GuardInputs(o) = [] and GuardTerm(o) = None",
+        "MustEnv(let x = e1 in e2, environment) =",
+        "MustEnv(e2, [MustEnv(e1, environment)] ++ environment)",
         "Positive(i) in MustWhenTrue(GuardTerm(o_t))",
+        "An impossible `MustWhenTrue` region is refused\nrather than discharged vacuously",
     )
     for snippet in required:
         _require(snippet in interaction, "the frozen Terminal-law source drifted")
@@ -359,7 +445,7 @@ def _terminal_review(interaction: str) -> dict[str, Any]:
         "baseline_terminal_region_counts": baseline,
         "logical_terminal_region_counts": logical,
         "positive_impossible_terminal_regions": 0,
-        "impossible_region_exemption_present": False,
+        "impossible_region_refusal_present": True,
     }
 
 
@@ -393,6 +479,31 @@ def _load_module(name: str, path: Path) -> Any:
     return module
 
 
+def _git_bytes(revision: str, relative: str) -> bytes:
+    try:
+        return subprocess.run(
+            ["git", "show", f"{revision}:{relative}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ReviewError(f"cannot reconstruct {relative} at {revision}") from error
+
+
+def _source_page_paths(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {value} if value.endswith(".md") else set()
+    result: set[str] = set()
+    if isinstance(value, list):
+        for item in value:
+            result.update(_source_page_paths(item))
+    elif isinstance(value, dict):
+        for item in value.values():
+            result.update(_source_page_paths(item))
+    return result
+
+
 def _publication_review() -> dict[str, Any]:
     directory = ROOT / "evaluation" / "semantic-profile-publication"
     reference = _load_module("_migration_review_publication_reference", directory / "reference_model.py")
@@ -421,9 +532,68 @@ def _publication_review() -> dict[str, Any]:
         ],
         "the expected unpublished legacy identity mismatch set drifted",
     )
+
+    baseline_manifests: dict[str, dict[str, Any]] = {}
+    baseline_pages: dict[str, bytes] = {}
+    for key, (relative, _manifest) in _all_manifests().items():
+        try:
+            baseline = json.loads(_git_bytes(BASE_COMMIT, relative))
+        except json.JSONDecodeError as error:
+            raise ReviewError(f"cannot decode {relative} at {BASE_COMMIT}") from error
+        baseline_manifests[key] = baseline
+        for page in _source_page_paths(baseline):
+            baseline_pages[page] = _git_bytes(BASE_COMMIT, page)
+    reference_baseline = reference.identity_table(
+        reference.compile_repository(
+            manifest_overrides=baseline_manifests,
+            page_overrides=baseline_pages,
+        )
+    )
+    cold_baseline = cold.identity_table(
+        cold.compile_repository(
+            manifest_overrides=baseline_manifests,
+            page_overrides=baseline_pages,
+        )
+    )
+    _require(reference_baseline == cold_baseline, "publication compilers disagree at the migration base")
+    rotated = [
+        key
+        for key in reference.PROFILE_KEYS
+        if reference_table["profiles"][key] != reference_baseline["profiles"][key]
+    ]
+    stable = [key for key in reference.PROFILE_KEYS if key not in rotated]
+    _require(
+        rotated
+        == [
+            "interaction",
+            "canonical-framed-fiat-shamir",
+            "duplex-sponge-fiat-shamir",
+            "public-setup",
+            "commitment-opening",
+            "oracle-commitment",
+            "verifier-derived-query-plan",
+            "interface-plan",
+            "oir-endpoint-graph",
+            "endpoint-source-view",
+            "oir-projection-relation",
+            "relations",
+            "analysis-cryptographic-property",
+            "analysis-afk-transport",
+            "analysis-afk-theorem-source-validation",
+            "analysis-incremental-composition",
+            "analysis-incremental-composition-source-validation",
+        ]
+        and stable == ["analysis-kernel"],
+        "the migration rotation cone drifted",
+    )
     return {
         "compiler_agreement": True,
+        "baseline_compiler_agreement": True,
         "compiled_profiles": len(reference_table["profiles"]),
+        "rotated_profiles": rotated,
+        "rotation_count": len(rotated),
+        "stable_profiles": stable,
+        "foundation_changed": reference_table["foundation"] != reference_baseline["foundation"],
         "published_legacy_mismatches": mismatches,
         "publication_table_written": False,
     }
@@ -646,7 +816,9 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
     }
 
 
-def _decision_review(pages: dict[str, str], manifest: dict[str, Any]) -> dict[str, Any]:
+def _decision_review(
+    pages: dict[str, str], manifest: dict[str, Any], view: dict[str, Any]
+) -> dict[str, Any]:
     interaction = pages["docs-next/pir/interactive-core.md"]
     canonical = pages["docs-next/pir/fiat-shamir.md"]
     duplex = pages["docs-next/pir/duplex-sponge-fiat-shamir.md"]
@@ -666,17 +838,18 @@ def _decision_review(pages: dict[str, str], manifest: dict[str, Any]) -> dict[st
         ),
         manifest["local_reference_components"] == 2
         and _pcgraph_review(interaction)["named_transfer_clauses"] == 5,
-        False,  # Catalog entries exist, but the selected exact family bodies do not.
+        view["fs_body_fields"] == view["fs_exact_fields"]
+        and view["fs_unclosed_families"] == 0,
         all(_json(path)["revision"] == 1 for path in MIGRATED_MANIFESTS),
         not any(path.startswith("docs-next/analysis/") or path.startswith("docs-next/relations/") or path.startswith("docs-next/foundation/") for path in (*PAGES, *MIGRATED_MANIFESTS)),
     ]
-    _require(applied == [True, True, True, True, True, False, True, True], "decision-fidelity census drifted")
+    _require(applied == [True] * 8, "decision-fidelity census drifted")
     _require("CanonicalFramedViewSchemaCatalog = {" in canonical, "canonical catalog is absent")
     _require("DuplexViewSchemaCatalog = {" in duplex, "duplex catalog is absent")
     return {
         "recorded_decisions": len(applied),
         "fully_applied_decisions": sum(applied),
-        "incomplete_decisions": ["exact family view bodies"],
+        "incomplete_decisions": [],
     }
 
 
@@ -687,16 +860,16 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     pcgraph = _pcgraph_review(pages["docs-next/pir/interactive-core.md"])
     manifests = _manifest_review(pages)
     publication = _publication_review()
-    decisions = _decision_review(pages, manifests)
+    decisions = _decision_review(pages, manifests, view)
 
     findings = [
-        Finding("decision-fidelity", "Negative", "F0V2C1-N-DECISION-FIDELITY"),
-        Finding("terminal-contract", "Negative", "F0V2C1-N-TERMINAL-CONTRACT"),
+        Finding("decision-fidelity", "Affirmative", "F0V2C1-A-DECISION-FIDELITY"),
+        Finding("terminal-contract", "Affirmative", "F0V2C1-A-TERMINAL-CONTRACT"),
         Finding("public-coin-graph", "Affirmative", "F0V2C1-A-PCGRAPH-TRANSFER"),
-        Finding("owner-name-closure", "Negative", "F0V2C1-N-OWNER-CLOSURE"),
+        Finding("owner-name-closure", "Affirmative", "F0V2C1-A-OWNER-CLOSURE"),
         Finding("manifest-closure", "Affirmative", "F0V2C1-A-MANIFEST-CLOSURE"),
         Finding("publication-compilers", "Affirmative", "F0V2C1-A-PUBLICATION-COMPILERS"),
-        Finding("family-body-closure", "Negative", "F0V2C1-N-FS-BODY-CLOSURE"),
+        Finding("family-body-closure", "Affirmative", "F0V2C1-A-FS-BODY-CLOSURE"),
     ]
     metrics = {
         "source_sha256": _source_hashes(),
@@ -724,14 +897,9 @@ def check() -> tuple[list[Finding], dict[str, Any]]:
     _require(
         expected["aggregate"]
         == {
-            "outcome": "Negative",
-            "code": "F0V2C1-N-MIGRATION-TEXT-NOT-CLOSED",
-            "blocking_findings": [
-                "F0V2C1-N-DECISION-FIDELITY",
-                "F0V2C1-N-TERMINAL-CONTRACT",
-                "F0V2C1-N-OWNER-CLOSURE",
-                "F0V2C1-N-FS-BODY-CLOSURE",
-            ],
+            "outcome": "Affirmative",
+            "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
+            "blocking_findings": [],
         },
         "aggregate finding drifted",
     )
@@ -753,8 +921,8 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "aggregate": {
-                        "outcome": "Negative",
-                        "code": "F0V2C1-N-MIGRATION-TEXT-NOT-CLOSED",
+                        "outcome": "Affirmative",
+                        "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
                     },
                     "finding_codes": [item.value() for item in findings],
                     "metrics": metrics,
@@ -764,11 +932,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     else:
-        negatives = sum(item.outcome == "Negative" for item in findings)
+        blockers = sum(item.outcome != "Affirmative" for item in findings)
         print(
             "Migration text freeze review: "
             f"{len(findings)}/{len(findings)} findings reproduced; "
-            f"{negatives} blocking findings; aggregate Negative"
+            f"{blockers} blocking findings; aggregate Affirmative"
         )
     return 0
 

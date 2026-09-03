@@ -1,6 +1,6 @@
 # Migration Text Freeze Review
 
-> **State:** `Negative/F0V2C1-N-MIGRATION-TEXT-NOT-CLOSED`
+> **State:** `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED` after round two
 > **Authority:** None. This verification lane changes no owner page, source
 > profile manifest, or published identity.
 > **Executable evidence:**
@@ -13,17 +13,17 @@ questions for decision fidelity, the Terminal contract, public-coin graph
 transfer and sinks, owner-view definition closure, manifest closure,
 publication reconstruction, and family-view body closure?
 
-No. Three answers are affirmative and four are negative. The aggregate is
-`Negative/F0V2C1-N-MIGRATION-TEXT-NOT-CLOSED`, with these blockers:
-
-- `F0V2C1-N-DECISION-FIDELITY`;
-- `F0V2C1-N-TERMINAL-CONTRACT`;
-- `F0V2C1-N-OWNER-CLOSURE`;
-- `F0V2C1-N-FS-BODY-CLOSURE`.
+Yes after the round-two repairs. All seven answers are affirmative and the
+aggregate is `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`, with no blocking
+finding.
 
 The audit pins the six migrated owner pages and eight migrated manifests. It
 does not treat a resolved selector, a passing source compiler, or a finite
 oracle as proof that the represented semantics are correct.
+
+Sections 2 through 10 preserve the first-round evidence and proposed repairs
+as history. The `Round two` section below supersedes their negative aggregate
+against the current owner bytes.
 
 ## 2. Answer one: decision fidelity
 
@@ -462,7 +462,85 @@ runtime result, backend or host-module correspondence, relation satisfaction,
 theorem truth, protocol soundness, random-oracle or concrete-sponge evidence,
 endpoint validity, deployment authorization, or production readiness.
 
-## Handoff
+## Round two
+
+Round two reruns the same seven questions against the repaired migration head.
+All four former negatives close; none remains.
+
+| Question | Round one | Round two | Current evidence location |
+|---|---|---|---|
+| decision fidelity | `Negative/F0V2C1-N-DECISION-FIDELITY` | `Affirmative/F0V2C1-A-DECISION-FIDELITY` | the Terminal, owner-boundary, and family-body repairs below complete all eight recorded selections |
+| Terminal contract | `Negative/F0V2C1-N-TERMINAL-CONTRACT` | `Affirmative/F0V2C1-A-TERMINAL-CONTRACT` | `interactive-core.md` Section 10, lines 1427-1509 |
+| public-coin graph | `Affirmative/F0V2C1-A-PCGRAPH-TRANSFER` | unchanged | `interactive-core.md` Section 11, lines 1582-1662 |
+| owner-name closure | `Negative/F0V2C1-N-OWNER-CLOSURE` | `Affirmative/F0V2C1-A-OWNER-CLOSURE` | `interactive-core.md` lines 2191-2202 and 2752-2755 |
+| manifest closure | `Affirmative/F0V2C1-A-MANIFEST-CLOSURE` | unchanged | eight migrated manifests, 107 definitions and 55 subjects |
+| publication compilers | `Affirmative/F0V2C1-A-PUBLICATION-COMPILERS` | unchanged | both compilers agree at the migration base and current source |
+| family-body closure | `Negative/F0V2C1-N-FS-BODY-CLOSURE` | `Affirmative/F0V2C1-A-FS-BODY-CLOSURE` | `fiat-shamir.md` lines 1255-1364 and `duplex-sponge-fiat-shamir.md` lines 967-1147 |
+
+The Terminal repair removes scope-opening guards, defines `GuardInputs` and
+`GuardTerm`, gives `MustEnv` its de Bruijn environment and exact `let`
+operation, corrects the later-occurrence explanation, and explicitly refuses
+an impossible `MustWhenTrue` region. The same 16-case finite implication
+fixture has zero counterexamples. The atomic-boundary repair adds
+`AdmittedModuleEffect`, defines its opaque atom, and gives it body arm 9; the
+boundary now has ten arms.
+
+### Family-body census
+
+Every top-level field is now an exact identity, value, natural, closed tag, law
+reference, record, or sequence of those. No prose-only or undefined field
+remains:
+
+| Body | Fields | Non-exact fields |
+|---|---:|---|
+| `TranscriptDeclarationViewBody` | 13 | none |
+| `RequiredInfluenceViewBody` | 7 | none |
+| `ChallengeTransitionViewBody` | 11 | none |
+| `FSConstructionViewBody` | 9 | none |
+| `DuplexTranscriptDeclarationViewBody` | 20 | none |
+| `DuplexEncodedInputCoverageViewBody` | 10 | none |
+| `DuplexChallengeTransitionViewBody` | 11 | none |
+| `DuplexFSConstructionViewBody` | 14 | none |
+
+The normalized owner bodies have exactly five semantic deviations from the
+earlier candidate packet descriptions:
+
+| Body and field | Candidate packet | Current owner | Judgment |
+|---|---|---|---|
+| transcript declaration, `application_domain` | opaque canonical value | declaration reference to `pir.fs-application-domain` | current owner is right: the source field is declaration authority, not an untyped value |
+| transcript declaration, `frame_body_law` | source-view law | body-grammar law | current owner is right: frame-body encoding is fixed by the body grammar |
+| challenge transition, `draw_bounds` | anonymous ordinal-0/ordinal-1 natural record | named `squeeze_length` and `maximum_draws` naturals | current owner is right: the same finite pair gains stable owner-native names |
+| canonical checked result, `result_schema` | omitted | `PIRRuntimeSchema` | current owner is right: the result description is an exact PIR field while the owner-local result reference remains outside the body |
+| duplex checked result, `result_schema` | omitted | `PIRRuntimeSchema` | current owner is right for the same reason |
+
+Named record fields versus numeric packet ordinals, `PortableAlgorithmRef`
+versus the packet-local `AlgorithmRef` alias, and named helper records versus
+their packet-local inline encodings are presentation differences in the
+pages' own finite grammar, not further semantic deviations. The checker pins
+both packet files and asserts the five differences above.
+
+### Publication cone
+
+Direct identity printing and an independent baseline/current reconstruction
+agree. Relative to the pre-migration base, seventeen profiles rotate:
+`interaction`, `canonical-framed-fiat-shamir`,
+`duplex-sponge-fiat-shamir`, `public-setup`, `commitment-opening`,
+`oracle-commitment`, `verifier-derived-query-plan`, `interface-plan`,
+`oir-endpoint-graph`, `endpoint-source-view`, `oir-projection-relation`,
+`relations`, `analysis-cryptographic-property`, `analysis-afk-transport`,
+`analysis-afk-theorem-source-validation`,
+`analysis-incremental-composition`, and
+`analysis-incremental-composition-source-validation`. Only
+`analysis-kernel` is stable, and the Foundation identity is unchanged.
+
+### Current owner-page disposition
+
+No repaired owner section is underdetermined or wrong for these seven
+questions, so round two proposes no owner-page delta. The affirmative aggregate
+is a bounded source-text closure result, not publication, implementation
+correspondence, theorem evidence, or a security claim.
+
+## Round-one handoff (historical)
 
 Main should commit this working tree with subject:
 
@@ -532,3 +610,75 @@ the read-only primary-copy file was used; `.claude/CLAUDE.md` is absent from
 both the clone and the read-only primary checkout; and the example alternate
 index command is insufficient under the read-only object mount without a
 clone-local writable object directory.
+
+
+## Handoff
+
+Main should commit this working tree with subject:
+
+```text
+test: rerun the migration text review and correct the holdout carrier
+```
+
+Files changed:
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py`,
+  `expected-findings.json`, and `README.md`;
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py`,
+  `adjudication.json`, `expected-findings.json`, and `README.md`;
+- `evaluation/expressibility-axes/axes.json`, `run.py`, and `README.md`;
+- `docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2c1-migration-text-review.md`;
+- `docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2c2-holdout-readjudication.md`;
+- `checks/manifest.json`; and
+- `evaluation/README.md`.
+
+No owner page, profile manifest, publication table, directory README,
+lifecycle entry, lifecycle count pin, real Git index, or private ledger was edited.
+No lifecycle count moves because this lane adds no package.
+
+Validation and evidence:
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| `git log --oneline -12` and the migration commit diffs | 0 | under 0.1 s each | migration and repair history inspected before editing |
+| `python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check` | 0 | 0.64 s | seven affirmative findings, no blocker |
+| `python3 -B evaluation/formal-source-holdout-readjudication-f0v2c2/run.py --check` | 0 | 0.04 s | 25 findings, five fits, three breaks, no verdict disagreement |
+| `python3 -B evaluation/expressibility-axes/run.py --check` | 0 | 0.12 s | 18 frozen findings; aggregate unchanged |
+| `python3 -B evaluation/semantic-profile-publication/run.py --print-identities` | 0 | 0.31 s | both compilers reconstructed 18 identities; the review derives the 17-profile cone |
+| `python3 -B checks/run.py validate` with the alternate index | 0 | 0.04 s | 74-check manifest valid |
+| `python3 -B checks/run.py run --tier developer` with the alternate index and clone-local offline cache | 0 | 1.11 s | eight of eight developer checks passed |
+| `python3 -B checks/run.py run --check research.migration-text-review` with the same environment | 0 | 0.69 s | focused review check passed |
+| `python3 -B checks/run.py run --check research.holdout-readjudication` with the same environment | 0 | 0.10 s | focused holdout check passed |
+| `python3 -B checks/run.py run --check research.expressibility-axes` with the same environment | 0 | 0.19 s | focused axis check passed |
+| `git diff --check` | 0 | 0.06 s | no whitespace errors |
+
+The temporary alternate index, object store, and clone-local cache were removed
+after validation; the real index was never changed.
+
+Aggregate outcome: the migration review is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`; all four former negatives close.
+The holdout aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`; the WHIR and axis corrections
+change no verdict. Four source-specialized fitting carriers remain
+`CannotAnswer` for exact references.
+
+Nonclaims: these passes establish bounded, byte-pinned source-text and
+instrument consistency only. They do not publish identities, establish
+implementation or backend correspondence, prove relation satisfaction or
+theorem truth, establish any security property, validate endpoints or
+deployment, or show that delaying the WHIR fold preserves a selected source
+semantics.
+
+Surprises: the first developer-tier attempt exited 1 in 0.35 s because listing
+the candidate packet files as manifest sources made one check route to two
+evaluation packages. Removing those cross-package manifest routes preserved
+the runner's direct byte pins and the rerun passed. The alternate index also
+needed a clone-local object directory and explicit removal of its transient
+lockfile from the index inventory.
+
+Where the brief was wrong: `AGENTS.md` and `.claude/CLAUDE.md` are absent
+from this clone, so their read-only primary-checkout copies were used. The
+workflow's private status-ledger append conflicts with this lane's express
+outside-clone write prohibition and the read-only mount, so status is recorded
+here. The example alternate-index command also needs a writable object store
+under this mount.

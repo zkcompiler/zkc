@@ -1,103 +1,119 @@
 {
   "aggregate": {
-    "outcome": "Negative",
-    "code": "F0V2C1-N-MIGRATION-TEXT-NOT-CLOSED",
-    "blocking_findings": [
-      "F0V2C1-N-DECISION-FIDELITY",
-      "F0V2C1-N-TERMINAL-CONTRACT",
-      "F0V2C1-N-OWNER-CLOSURE",
-      "F0V2C1-N-FS-BODY-CLOSURE"
-    ]
+    "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
+    "outcome": "Affirmative",
+    "blocking_findings": []
   },
   "finding_codes": [
-    ["decision-fidelity", "Negative", "F0V2C1-N-DECISION-FIDELITY"],
-    ["terminal-contract", "Negative", "F0V2C1-N-TERMINAL-CONTRACT"],
-    ["public-coin-graph", "Affirmative", "F0V2C1-A-PCGRAPH-TRANSFER"],
-    ["owner-name-closure", "Negative", "F0V2C1-N-OWNER-CLOSURE"],
-    ["manifest-closure", "Affirmative", "F0V2C1-A-MANIFEST-CLOSURE"],
-    ["publication-compilers", "Affirmative", "F0V2C1-A-PUBLICATION-COMPILERS"],
-    ["family-body-closure", "Negative", "F0V2C1-N-FS-BODY-CLOSURE"]
+    [
+      "decision-fidelity",
+      "Affirmative",
+      "F0V2C1-A-DECISION-FIDELITY"
+    ],
+    [
+      "terminal-contract",
+      "Affirmative",
+      "F0V2C1-A-TERMINAL-CONTRACT"
+    ],
+    [
+      "public-coin-graph",
+      "Affirmative",
+      "F0V2C1-A-PCGRAPH-TRANSFER"
+    ],
+    [
+      "owner-name-closure",
+      "Affirmative",
+      "F0V2C1-A-OWNER-CLOSURE"
+    ],
+    [
+      "manifest-closure",
+      "Affirmative",
+      "F0V2C1-A-MANIFEST-CLOSURE"
+    ],
+    [
+      "publication-compilers",
+      "Affirmative",
+      "F0V2C1-A-PUBLICATION-COMPILERS"
+    ],
+    [
+      "family-body-closure",
+      "Affirmative",
+      "F0V2C1-A-FS-BODY-CLOSURE"
+    ]
   ],
   "metrics": {
-    "source_sha256": {
-      "docs-next/oir/profiles/endpoint-graph.json": "7758efbcb47ed9c2e58099fa2d62abd204818eaeba4041273531b80eb728590c",
-      "docs-next/oir/profiles/projection-relation.json": "c4cf273bd57338ee0efc091a284986b6c55516683444f0be88459493cbecd879",
-      "docs-next/oir/projection-contract.md": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6",
-      "docs-next/pir/duplex-sponge-fiat-shamir.md": "44c7f5ffff252554ba5f486f12a546df068549d0c4df6050a3c4db502bf82243",
-      "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
-      "docs-next/pir/fiat-shamir.md": "5a48f71c6015ad1b4da5a31bc5f75fbc8de75b5cc7930d7b4ef3abb52e11ebe6",
-      "docs-next/pir/interactive-core.md": "5f017f0dc88aca3c50651a8c5e4861ea2450c3035e9015c276babbf4b913f34f",
-      "docs-next/pir/interfaces-and-plans.md": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d",
-      "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "1bc99ab9c78d11cf3c49009bec501e526acdc429a41b35a21814035a63ba8511",
-      "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "b42fa85df8f3222646c253b2174cc9f80c763e8525e4abc5e0d25d202664d4b5",
-      "docs-next/pir/profiles/endpoint-source-view.json": "47b25cd40f45cc752b96571901aaafd0f980e2d3cc173425d08a7db5ec4f7787",
-      "docs-next/pir/profiles/interaction.json": "598c23a9beb9aec8d1521e2fff0996a289dbc0c0fd77c93b6178a13fec1b5f7a",
-      "docs-next/pir/profiles/interface-plan.json": "0c68dfc2a3b7e9a604351ad3689b3e03ac30213ce61f7e1b14e3fde03f656af7",
-      "docs-next/pir/profiles/public-setup.json": "113b6e4ab7dcdbf8cddcec66cb17da7ded9c5e34e73c31871d8d0e528a22a426"
-    },
     "decisions": {
-      "recorded_decisions": 8,
-      "fully_applied_decisions": 7,
-      "incomplete_decisions": ["exact family view bodies"]
-    },
-    "terminal": {
-      "corrected_guard_inclusion_cases": 16,
-      "corrected_guard_inclusion_counterexamples": 0,
-      "baseline_terminal_region_counts": [2, 3, 3],
-      "logical_terminal_region_counts": [2, 1, 1],
-      "positive_impossible_terminal_regions": 0,
-      "impossible_region_exemption_present": false
-    },
-    "pcgraph": {
-      "named_transfer_clauses": 5,
-      "challenge_precedence": "Invalid then VerifierPrivate then semantic validity",
-      "public_query_sink_coordinates": 3,
-      "acceptance_sink_families": 5
-    },
-    "views": {
-      "static_view_schemas": 16,
-      "resolved_schema_body_displays": 16,
-      "fs_body_fields": 95,
-      "fs_exact_fields": 50,
-      "fs_prose_fields": 40,
-      "fs_undefined_fields": 5,
-      "fs_unclosed_families": 11,
-      "owner_unresolved_expressions": [
-        "AdmittedModuleEffectAtom",
-        "Guard(s) for a scope opening",
-        "GuardInputs",
-        "GuardTerm",
-        "Must let substitution"
-      ]
+      "fully_applied_decisions": 8,
+      "incomplete_decisions": [],
+      "recorded_decisions": 8
     },
     "manifests": {
-      "migrated_manifests": 8,
-      "migrated_definitions": 107,
-      "migrated_subjects": 55,
-      "resolved_definition_dependencies": true,
-      "resolved_subject_compilers": true,
-      "local_reference_components": 2,
-      "local_reference_component_nodes": 12,
+      "definition_revision_bumps": 14,
       "local_reference_component_edges": 20,
+      "local_reference_component_nodes": 12,
       "local_reference_component_profiles": [
         "canonical-framed-fiat-shamir",
         "duplex-sponge-fiat-shamir"
       ],
-      "profile_revision_bumps": 8,
-      "definition_revision_bumps": 14,
+      "local_reference_components": 2,
+      "migrated_definitions": 107,
+      "migrated_manifests": 8,
+      "migrated_subjects": 55,
       "new_revision_zero_definitions": 47,
+      "profile_revision_bumps": 8,
+      "resolved_definition_dependencies": true,
+      "resolved_subject_compilers": true,
       "source_envelope_arm_counts": {
-        "interaction": [2, 2, 1, 2],
-        "public-setup": [1, 1, 1, 1],
-        "canonical-framed-fiat-shamir": [2, 2, 2, 2],
-        "duplex-sponge-fiat-shamir": [2, 2, 2, 2],
-        "interface-plan": [2, 2, 1, 2],
-        "endpoint-source-view": [1, 1, 1, 1]
+        "canonical-framed-fiat-shamir": [
+          2,
+          2,
+          2,
+          2
+        ],
+        "duplex-sponge-fiat-shamir": [
+          2,
+          2,
+          2,
+          2
+        ],
+        "endpoint-source-view": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "interaction": [
+          2,
+          2,
+          1,
+          2
+        ],
+        "interface-plan": [
+          2,
+          2,
+          1,
+          2
+        ],
+        "public-setup": [
+          1,
+          1,
+          1,
+          1
+        ]
       }
     },
+    "pcgraph": {
+      "acceptance_sink_families": 5,
+      "challenge_precedence": "Invalid then VerifierPrivate then semantic validity",
+      "named_transfer_clauses": 5,
+      "public_query_sink_coordinates": 3
+    },
     "publication": {
-      "compiler_agreement": true,
+      "baseline_compiler_agreement": true,
       "compiled_profiles": 18,
+      "compiler_agreement": true,
+      "foundation_changed": false,
+      "publication_table_written": false,
       "published_legacy_mismatches": [
         "interaction",
         "canonical-framed-fiat-shamir",
@@ -106,7 +122,176 @@
         "commitment-opening",
         "oracle-commitment"
       ],
-      "publication_table_written": false
+      "rotated_profiles": [
+        "interaction",
+        "canonical-framed-fiat-shamir",
+        "duplex-sponge-fiat-shamir",
+        "public-setup",
+        "commitment-opening",
+        "oracle-commitment",
+        "verifier-derived-query-plan",
+        "interface-plan",
+        "oir-endpoint-graph",
+        "endpoint-source-view",
+        "oir-projection-relation",
+        "relations",
+        "analysis-cryptographic-property",
+        "analysis-afk-transport",
+        "analysis-afk-theorem-source-validation",
+        "analysis-incremental-composition",
+        "analysis-incremental-composition-source-validation"
+      ],
+      "rotation_count": 17,
+      "stable_profiles": [
+        "analysis-kernel"
+      ]
+    },
+    "source_sha256": {
+      "docs-next/oir/profiles/endpoint-graph.json": "7758efbcb47ed9c2e58099fa2d62abd204818eaeba4041273531b80eb728590c",
+      "docs-next/oir/profiles/projection-relation.json": "c4cf273bd57338ee0efc091a284986b6c55516683444f0be88459493cbecd879",
+      "docs-next/oir/projection-contract.md": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6",
+      "docs-next/pir/duplex-sponge-fiat-shamir.md": "60d66fb3636c85d0d4201de3962bdc19b3664469bc8808dfbe738ad57d248db4",
+      "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
+      "docs-next/pir/fiat-shamir.md": "52682bd1e46f0579b7f6445cfa2866ab2bfce819aa1082d796ae216f451bf671",
+      "docs-next/pir/interactive-core.md": "86259df9d149668bc23d5887e8f60f04f49eebab6c914ee285b5ac70bea2ed99",
+      "docs-next/pir/interfaces-and-plans.md": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d",
+      "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "1bc99ab9c78d11cf3c49009bec501e526acdc429a41b35a21814035a63ba8511",
+      "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "b42fa85df8f3222646c253b2174cc9f80c763e8525e4abc5e0d25d202664d4b5",
+      "docs-next/pir/profiles/endpoint-source-view.json": "47b25cd40f45cc752b96571901aaafd0f980e2d3cc173425d08a7db5ec4f7787",
+      "docs-next/pir/profiles/interaction.json": "598c23a9beb9aec8d1521e2fff0996a289dbc0c0fd77c93b6178a13fec1b5f7a",
+      "docs-next/pir/profiles/interface-plan.json": "0c68dfc2a3b7e9a604351ad3689b3e03ac30213ce61f7e1b14e3fde03f656af7",
+      "docs-next/pir/profiles/public-setup.json": "113b6e4ab7dcdbf8cddcec66cb17da7ded9c5e34e73c31871d8d0e528a22a426",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/duplex-section-11.md": "372460721e1176def0a0e17da5c4bc20f3bbfa1e12b6b9e77653f878575c6897",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/fiat-shamir-section-13.md": "53eeadb5fe8e6eb29dc7115001adbfde80a7565c212f3d2832b32cc5b68a1f17"
+    },
+    "terminal": {
+      "baseline_terminal_region_counts": [
+        2,
+        3,
+        3
+      ],
+      "corrected_guard_inclusion_cases": 16,
+      "corrected_guard_inclusion_counterexamples": 0,
+      "impossible_region_refusal_present": true,
+      "logical_terminal_region_counts": [
+        2,
+        1,
+        1
+      ],
+      "positive_impossible_terminal_regions": 0
+    },
+    "views": {
+      "fs_body_fields": 95,
+      "fs_exact_fields": 95,
+      "fs_field_form_counts": {
+        "ChallengeTransitionViewBody": {
+          "identity": 2,
+          "law-reference": 5,
+          "record": 3,
+          "sequence": 1
+        },
+        "DuplexChallengeTransitionViewBody": {
+          "closed-tag": 3,
+          "identity": 2,
+          "law-reference": 2,
+          "sequence": 4
+        },
+        "DuplexEncodedInputCoverageViewBody": {
+          "identity": 2,
+          "law-reference": 2,
+          "record": 1,
+          "sequence": 5
+        },
+        "DuplexFSConstructionViewBody": {
+          "closed-tag": 1,
+          "identity": 4,
+          "record": 6,
+          "sequence": 3
+        },
+        "DuplexTranscriptDeclarationViewBody": {
+          "closed-tag": 1,
+          "identity": 3,
+          "law-reference": 2,
+          "natural": 2,
+          "record": 8,
+          "sequence": 3,
+          "value": 1
+        },
+        "FSConstructionViewBody": {
+          "identity": 4,
+          "record": 2,
+          "sequence": 3
+        },
+        "RequiredInfluenceViewBody": {
+          "identity": 2,
+          "law-reference": 1,
+          "sequence": 4
+        },
+        "TranscriptDeclarationViewBody": {
+          "identity": 6,
+          "law-reference": 2,
+          "record": 3,
+          "sequence": 1,
+          "value": 1
+        }
+      },
+      "fs_prose_fields": 0,
+      "fs_unclosed_families": 0,
+      "fs_undefined_fields": 0,
+      "owner_atomic_boundary_arms": 10,
+      "owner_module_effect_body_arm": 9,
+      "owner_unresolved_expressions": [],
+      "packet_review": {
+        "body_field_counts": {
+          "ChallengeTransitionViewBody": 11,
+          "DuplexChallengeTransitionViewBody": 11,
+          "DuplexEncodedInputCoverageViewBody": 10,
+          "DuplexFSConstructionViewBody": 13,
+          "DuplexTranscriptDeclarationViewBody": 20,
+          "FSConstructionViewBody": 8,
+          "RequiredInfluenceViewBody": 7,
+          "TranscriptDeclarationViewBody": 13
+        },
+        "deviations": [
+          {
+            "body": "TranscriptDeclarationViewBody",
+            "field": "application_domain",
+            "judgment": "owner",
+            "owner": "ProtocolDeclarationRef<\"pir.fs-application-domain\">",
+            "packet": "CanonicalValue"
+          },
+          {
+            "body": "TranscriptDeclarationViewBody",
+            "field": "frame_body_law",
+            "judgment": "owner",
+            "owner": "body-grammar law reference",
+            "packet": "canonical-framed-source-views-v0"
+          },
+          {
+            "body": "ChallengeTransitionViewBody",
+            "field": "draw_bounds",
+            "judgment": "owner",
+            "owner": "record fields squeeze_length and maximum_draws",
+            "packet": "record ordinals 0 and 1"
+          },
+          {
+            "body": "FSConstructionViewBody",
+            "field": "result_schema",
+            "judgment": "owner",
+            "owner": "PIRRuntimeSchema",
+            "packet": "omitted"
+          },
+          {
+            "body": "DuplexFSConstructionViewBody",
+            "field": "result_schema",
+            "judgment": "owner",
+            "owner": "PIRRuntimeSchema",
+            "packet": "omitted"
+          }
+        ]
+      },
+      "resolved_schema_body_displays": 16,
+      "static_view_schemas": 16
     }
   }
 }

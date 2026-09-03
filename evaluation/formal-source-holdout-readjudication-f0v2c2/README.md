@@ -17,7 +17,7 @@ and no bends.
 
 | Source form | Verdict | Exact limit |
 |---|---|---|
-| WHIR finite constructive member | fits | the old two-terminal sketch needs a post-fold rejecting frontier or equivalent guard restructuring |
+| WHIR finite constructive member | fits | both Reductions are delayed under the exact accepting guard; the unconditional fallback therefore retains the initial Claim |
 | Circle STARK finite instance | fits | exact Check, Reduction, Claim, and typed-failure references require a selected source profile |
 | WARPfold finite fold | fits | exact typed-failure guard and carrier references require a selected source profile |
 | WARPfold broad cross-system application | breaks | cross-execution state and imported challenge authority are absent |
@@ -46,9 +46,9 @@ The checker:
 - compares every row with both the matrix prediction and its embedded
   projection of the adjudication record, emitting a distinct finding if any
   comparison disagrees;
-- evaluates the migrated structural `Must` rules on nested guards, proving all
-  five positive WHIR literals on acceptance and the two pre-fold positives on
-  the post-fold rejecting frontier;
+- evaluates the migrated structural `Must` rule on the accepting nested guard,
+  proving all five positive WHIR literals, and exhausts all 32 Check valuations
+  for the identically guarded Reduction schedule and two terminal frontiers;
 - requires every fitting row to map its Analysis observables through all six
   normalized views with no missing PIR coordinate;
 - requires every breaking row to name both a boundary and an observable or
@@ -56,19 +56,21 @@ The checker:
 - freezes the finding sequence and adjudication bytes in
   [`expected-findings.json`](expected-findings.json).
 
-Two negative observations are deliberate. The old WHIR two-terminal carrier is
-refused by exact terminal-claim liveness after a partial reduction. The
-structural-axes description of interpretation failure as a rejecting or
-aborting terminal is also refused by the migrated partition: canonical
-interpretation failure is a separate completed failure lane and is not a Core
-terminal. Neither changes a holdout verdict.
+The source's legacy partial-guard Reduction schedule is deliberately refused:
+scope openings are deterministic and unguarded, and checked semantic guard
+implication is outside this regime. The corrected carrier gives both
+Reductions and their accepting consumer exactly the same guard, followed by an
+unconditional fallback. The structural-axis meaning for interpretation failure
+is also corrected to the separate completed failure lane. Neither correction
+changes a holdout verdict.
 
 ## What a pass establishes
 
 A pass establishes only that these exact source bytes admit the frozen terminal
 shapes, view-coordinate mapping, outcome partition, and eight verdict
-comparisons. It also establishes that the selected nested guards have the
-required positive literals under the migrated syntactic `Must` calculation.
+comparisons. It also establishes that the selected accepting guard has the
+required positive literals and that the corrected WHIR carrier satisfies the
+owner's syntactic guard-identity rule over the bounded valuation census.
 
 The four boundary analyses do not publish exact Core tables. Their finite or
 virtual fitting shapes therefore retain `CannotAnswer` for exact CheckRef,

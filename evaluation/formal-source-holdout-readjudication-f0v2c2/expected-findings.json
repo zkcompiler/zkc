@@ -1,31 +1,132 @@
 {
   "aggregate": "F0V2C2-A-HOLDOUTS-READJUDICATED",
-  "adjudication_sha256": "55eb21050c6a193c8254bb3100fa99024f044f038c97993d0e7ebdfba9c9411f",
-  "findings_sha256": "5d764b4f16b124916bdcd74d30580a327569d404891e112ce30c8de8f05a26c4",
+  "adjudication_sha256": "db842dcba66f72d05f0ba7e97aefeb73b6cee210a6aff7f13923811159eaf1c0",
+  "findings_sha256": "f531c037d0d624ac8c0b89d2baba668a444c3aa76074b41f8c2b62de32d2b0ab",
   "finding_codes": [
-    ["holdout-source-bytes", "Affirmative", "F0V2C2-A-HOLDOUT-SOURCE-BYTES"],
-    ["holdout-file-inventory", "Affirmative", "F0V2C2-A-HOLDOUT-FILE-INVENTORY"],
-    ["migrated-owner-page-bytes", "Affirmative", "F0V2C2-A-MIGRATED-OWNER-BYTES"],
-    ["migration-and-axis-source-bytes", "Affirmative", "F0V2C2-A-MIGRATION-AXIS-BYTES"],
-    ["migrated-terminal-view-and-outcome-laws", "Affirmative", "F0V2C2-A-MIGRATED-OWNER-LAWS"],
-    ["nested-guard-must-facts", "Affirmative", "F0V2C2-A-NESTED-GUARD-MUST-FACTS"],
-    ["legacy-whir-two-terminal-shape", "Refused", "F0V2C2-R-WHIR-TWO-TERMINAL-SHAPE"],
-    ["structural-axis-interpretation-failure-meaning", "Refused", "F0V2C2-R-AXIS-INTERPRETATION-FAILURE-MEANING"],
-    ["five-holdout-eight-row-table", "Affirmative", "F0V2C2-A-COMPLETE-VERDICT-TABLE"],
-    ["WHIR Construction 5.1 with a closed finite query plan verdict comparison", "Affirmative", "F0V2C2-A-WHIR-AGREES"],
-    ["Circle STARK boundary analysis at one finite instance verdict comparison", "Affirmative", "F0V2C2-A-CIRCLE-AGREES"],
-    ["WARPfold finite fold verdict comparison", "Affirmative", "F0V2C2-A-WARPFOLD-FOLD-AGREES"],
-    ["WARPfold broad cross-system application verdict comparison", "Affirmative", "F0V2C2-A-WARPFOLD-CROSS-SYSTEM-AGREES"],
-    ["Physical multiparty Sumcheck verdict comparison", "Affirmative", "F0V2C2-A-PHYSICAL-MULTIPARTY-AGREES"],
-    ["Commitment-anchored virtual two-role Sumcheck proof verdict comparison", "Affirmative", "F0V2C2-A-VIRTUAL-SUMCHECK-AGREES"],
-    ["Complete noninteractive transparent SNARK over Galois rings with an omitted transform verdict comparison", "Affirmative", "F0V2C2-A-GALOIS-NONINTERACTIVE-AGREES"],
-    ["Explicit interactive Galois-ring components verdict comparison", "Affirmative", "F0V2C2-A-GALOIS-INTERACTIVE-AGREES"],
-    ["fitting-holdout-six-view-coverage", "Affirmative", "F0V2C2-A-FIT-VIEW-COVERAGE"],
-    ["breaking-holdout-missing-coordinate-census", "Affirmative", "F0V2C2-A-BREAK-COORDINATE-CENSUS"],
-    ["fitting-holdout-outcome-partition", "Affirmative", "F0V2C2-A-FIT-OUTCOME-PARTITION"],
-    ["breaking-holdout-outcome-gaps", "Affirmative", "F0V2C2-A-BREAK-OUTCOME-GAPS"],
-    ["boundary-analysis-terminal-carrier-exactness", "CannotAnswer", "F0V2C2-C-EXACT-TERMINAL-CARRIERS"],
-    ["owner-page-reopening", "Affirmative", "F0V2C2-A-NO-OWNER-PAGE-REOPENING"],
-    ["holdout-readjudication", "Affirmative", "F0V2C2-A-HOLDOUTS-READJUDICATED"]
+    [
+      "holdout-source-bytes",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUT-SOURCE-BYTES"
+    ],
+    [
+      "holdout-file-inventory",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUT-FILE-INVENTORY"
+    ],
+    [
+      "migrated-owner-page-bytes",
+      "Affirmative",
+      "F0V2C2-A-MIGRATED-OWNER-BYTES"
+    ],
+    [
+      "migration-and-axis-source-bytes",
+      "Affirmative",
+      "F0V2C2-A-MIGRATION-AXIS-BYTES"
+    ],
+    [
+      "migrated-terminal-view-and-outcome-laws",
+      "Affirmative",
+      "F0V2C2-A-MIGRATED-OWNER-LAWS"
+    ],
+    [
+      "nested-guard-must-facts",
+      "Affirmative",
+      "F0V2C2-A-NESTED-GUARD-MUST-FACTS"
+    ],
+    [
+      "legacy-whir-guard-schedule",
+      "Refused",
+      "F0V2C2-R-WHIR-GUARD-SCHEDULE"
+    ],
+    [
+      "corrected-whir-reduction-guards",
+      "Affirmative",
+      "F0V2C2-A-WHIR-IDENTICAL-REDUCTION-GUARDS"
+    ],
+    [
+      "structural-axis-interpretation-failure-meaning",
+      "Affirmative",
+      "F0V2C2-A-AXIS-INTERPRETATION-FAILURE-MEANING"
+    ],
+    [
+      "five-holdout-eight-row-table",
+      "Affirmative",
+      "F0V2C2-A-COMPLETE-VERDICT-TABLE"
+    ],
+    [
+      "WHIR Construction 5.1 with a closed finite query plan verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-WHIR-AGREES"
+    ],
+    [
+      "Circle STARK boundary analysis at one finite instance verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-CIRCLE-AGREES"
+    ],
+    [
+      "WARPfold finite fold verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-WARPFOLD-FOLD-AGREES"
+    ],
+    [
+      "WARPfold broad cross-system application verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-WARPFOLD-CROSS-SYSTEM-AGREES"
+    ],
+    [
+      "Physical multiparty Sumcheck verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-PHYSICAL-MULTIPARTY-AGREES"
+    ],
+    [
+      "Commitment-anchored virtual two-role Sumcheck proof verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-VIRTUAL-SUMCHECK-AGREES"
+    ],
+    [
+      "Complete noninteractive transparent SNARK over Galois rings with an omitted transform verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-GALOIS-NONINTERACTIVE-AGREES"
+    ],
+    [
+      "Explicit interactive Galois-ring components verdict comparison",
+      "Affirmative",
+      "F0V2C2-A-GALOIS-INTERACTIVE-AGREES"
+    ],
+    [
+      "fitting-holdout-six-view-coverage",
+      "Affirmative",
+      "F0V2C2-A-FIT-VIEW-COVERAGE"
+    ],
+    [
+      "breaking-holdout-missing-coordinate-census",
+      "Affirmative",
+      "F0V2C2-A-BREAK-COORDINATE-CENSUS"
+    ],
+    [
+      "fitting-holdout-outcome-partition",
+      "Affirmative",
+      "F0V2C2-A-FIT-OUTCOME-PARTITION"
+    ],
+    [
+      "breaking-holdout-outcome-gaps",
+      "Affirmative",
+      "F0V2C2-A-BREAK-OUTCOME-GAPS"
+    ],
+    [
+      "boundary-analysis-terminal-carrier-exactness",
+      "CannotAnswer",
+      "F0V2C2-C-EXACT-TERMINAL-CARRIERS"
+    ],
+    [
+      "owner-page-reopening",
+      "Affirmative",
+      "F0V2C2-A-NO-OWNER-PAGE-REOPENING"
+    ],
+    [
+      "holdout-readjudication",
+      "Affirmative",
+      "F0V2C2-A-HOLDOUTS-READJUDICATED"
+    ]
   ]
 }
