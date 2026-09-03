@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Finite canonical-framed Fiat--Shamir candidate and portable algorithms.
+"""Finite canonical-framed Fiat--Shamir subjects and portable algorithms.
 
-The candidate is deliberately bounded to the finite Schnorr Core.  It uses the
+Both subjects are deliberately bounded to the finite Schnorr Core and use the
 K1 canonical terms and evaluator from the executable-foundations package.  The
-current owner text does not define the nominal application-domain declaration
-body that it requires, so this module keeps that body as one explicit proposal
-and never upgrades the candidate to an admitted owner subject.
+canonical-framed owner page fixes the nominal application-domain declaration
+body, so both exact constructions are owner-determined admitted subjects.
 """
 
 from __future__ import annotations
@@ -39,7 +38,9 @@ k1 = target.k1
 
 TRANSCRIPT_CAPACITY = 4096
 DRAW_BYTES = 8
-MAXIMUM_DRAWS = 2
+RETRYING_MAXIMUM_DRAWS = 2
+ONE_SHOT_MAXIMUM_DRAWS = 1
+MAXIMUM_DRAWS = RETRYING_MAXIMUM_DRAWS
 STATE_TYPE = k1.BYTES_32
 TRANSCRIPT_BYTES_TYPE = k1.ValueType(
     k1.BYTES_DOMAIN, k1.BytesSchema(0, TRANSCRIPT_CAPACITY)
@@ -109,6 +110,7 @@ class CheckedConstruction:
 
 @dataclass(frozen=True)
 class Subject:
+    name: str
     fixture: Any
     admitted_core: Any
     admitted_fresh_protocol: Any
@@ -175,7 +177,7 @@ def _quartile(term: Any, branches: tuple[Any, Any, Any, Any]) -> Any:
     )
 
 
-def portable_algorithms() -> tuple[Any, Any, Any, Any, Any]:
+def portable_algorithms(*, always_accept: bool = False) -> tuple[Any, Any, Any, Any, Any]:
     """Return the exact toy transition suite as K1 portable terms.
 
     SHA-256 here is only an admitted deterministic primitive.  No security or
@@ -244,12 +246,19 @@ def portable_algorithms() -> tuple[Any, Any, Any, Any, Any]:
         _call("sha2-256", advance_preimage),
     )
 
-    accepted_number = _first_u64(k1.Variable(0, TRANSCRIPT_BYTES_TYPE))
-    accept = k1.CanonicalAlgorithm(
-        k1.Symbol("CanonicalFramedAccept"),
-        (TRANSCRIPT_BYTES_TYPE,),
-        _call("nat.lt", accepted_number, _nat(3 * (1 << 62))),
-    )
+    if always_accept:
+        accept = k1.CanonicalAlgorithm(
+            k1.Symbol("CanonicalFramedAlwaysAccept"),
+            (TRANSCRIPT_BYTES_TYPE,),
+            _literal(k1.BOOL, True),
+        )
+    else:
+        accepted_number = _first_u64(k1.Variable(0, TRANSCRIPT_BYTES_TYPE))
+        accept = k1.CanonicalAlgorithm(
+            k1.Symbol("CanonicalFramedAccept"),
+            (TRANSCRIPT_BYTES_TYPE,),
+            _call("nat.lt", accepted_number, _nat(3 * (1 << 62))),
+        )
 
     decode_number = _first_u64(k1.Variable(0, TRANSCRIPT_BYTES_TYPE))
     decode = k1.CanonicalAlgorithm(
@@ -292,11 +301,7 @@ def _sampling_payload_declaration_type() -> Any:
 
 
 def application_module() -> Any:
-    """Build the one explicit proposed declaration module.
-
-    The application-domain body is not selected by the current owner text.  Its
-    presence here is therefore candidate evidence, never owner admission.
-    """
+    """Build the exact nominal declaration module selected by the owner page."""
 
     application_catalog = _record(
         k1.Symbol("pir.fs-application-domain"),
@@ -440,7 +445,9 @@ def evaluate(use: AlgorithmUse, inputs: tuple[Any, ...]) -> Any:
     return _require_completed_value(result, use.algorithm.algorithm_kind.value)
 
 
-def make_subject() -> Subject:
+def make_subject(name: str = "retrying") -> Subject:
+    if name not in {"retrying", "one-shot"}:
+        raise SubjectError(f"unknown finite subject: {name}")
     fixture = target.make_fixture()
     core_result = target.admit_core(fixture.core_candidate, fixture.environment)
     if core_result.outcome != "Affirmative" or core_result.handle is None:
@@ -455,7 +462,10 @@ def make_subject() -> Subject:
             f"Fresh protocol did not admit: {fresh_result.outcome}/{fresh_result.code}"
         )
 
-    absorb, squeeze, advance, accept, decode = portable_algorithms()
+    one_shot = name == "one-shot"
+    absorb, squeeze, advance, accept, decode = portable_algorithms(
+        always_accept=one_shot
+    )
     algorithms = (absorb, squeeze, advance, accept, decode)
     expected_types = (
         (STATE_TYPE, ()),
@@ -516,7 +526,7 @@ def make_subject() -> Subject:
             ChallengeRule(
                 0,
                 DRAW_BYTES,
-                MAXIMUM_DRAWS,
+                ONE_SHOT_MAXIMUM_DRAWS if one_shot else RETRYING_MAXIMUM_DRAWS,
                 AlgorithmUse(accept, contract),
                 AlgorithmUse(decode, contract),
             ),
@@ -562,6 +572,7 @@ def make_subject() -> Subject:
         "StructurallyConstructed",
     )
     return Subject(
+        name,
         fixture,
         core_result.handle,
         fresh_result.handle,
@@ -570,12 +581,10 @@ def make_subject() -> Subject:
         checked,
         module,
         algorithms,
-        "CannotAnswer",
-        "F0V3C-C-APPLICATION-DOMAIN-BODY",
+        "Affirmative",
+        "F0V3C-A-OWNER-ADMISSION",
         (
-            "docs-next/pir/fiat-shamir.md Section 2 lines 68-71 requires an "
-            "exact nominal application-domain declaration body from the companion "
-            "page, but docs-next/pir/interactive-core.md lines 2256-2259 only "
-            "recognizes the reference kind and defines no body"
+            "docs-next/pir/fiat-shamir.md Section 2 fixes the application-domain "
+            "declaration as the companion page's NominalProtocolDeclarationBody"
         ),
     )

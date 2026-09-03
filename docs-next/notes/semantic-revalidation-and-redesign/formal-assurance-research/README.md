@@ -77,8 +77,8 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
   -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
   -> F2-O3  provider interpretation in ArkLib            [complete, Affirmative; premise unpublished]
-  -> F0-V3C finite canonical-framed subject and executor [complete, CannotAnswer; one owner body absent]
-  -> F2-O4  Fiat--Shamir provider interpretation         [contract; after F0-V3C]
+  -> F0-V3C finite canonical-framed subject and executor [round two; {'code': 'F0V3C-A-FS-RUNTIME', 'outcome': 'Affirmative'}]
+  -> F2-O4  Fiat--Shamir provider interpretation         [complete, Affirmative; premise unpublished]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -660,8 +660,21 @@ provider, extraction tool, or durable schema.
   reproduced, nine derivation vectors frozen; aggregate
   `CannotAnswer/F0V3C-C-FS-RUNTIME` because the canonical-framed page
   recognizes the `pir.fs-application-domain` declaration kind while no page
-  defines its body, so admission stays candidate-only until the owner
-  supplies it.
+  defined its body; after the owner defined it as the companion page's
+  nominal declaration body, the package's second round re-admits the
+  construction as owner-determined and adds a one-shot construction (a
+  single always-accepted draw, 22 accepted and 32 rejected runs) beside the
+  retrying one, whose six exhaustion runs stay measured.
+- [`f2o4-fs-provider-interpretation.md`](f2o4-fs-provider-interpretation.md)
+  runs the Fiat--Shamir provider contract once: ArkLib's transform of the
+  generated Schnorr reduction with its abstract challenge oracle backed by the
+  executor's derivation table, all five clauses affirmative on the 54 runs of
+  the one-shot subject (`Affirmative/F2O4-A-FS-FINITE-CORRESPONDENCE`),
+  including the oracle-point clause, with superfluous, missing, and
+  differently framed queries refused as negatives and any point outside the
+  finite table refused; the retrying construction's six exhaustion runs are
+  reported as the unmodelled lane's occurrences; the provider-map premise
+  waits on the owner's declaration.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions

@@ -268,7 +268,10 @@ def _failure_payload(subject: model.Subject) -> Any:
     failure = subject.construction.sampling_exhausted_failure
     return k1.admit_value(
         failure.payload_type,
-        _record(k1.Nat(0), k1.Nat(model.MAXIMUM_DRAWS)),
+        _record(
+            k1.Nat(0),
+            k1.Nat(subject.construction.challenge_rules[0].maximum_draws),
+        ),
     )
 
 

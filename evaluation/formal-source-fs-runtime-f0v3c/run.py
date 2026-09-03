@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the finite migrated canonical-framed execution candidate."""
+"""Check the admitted finite canonical-framed execution subjects."""
 
 from __future__ import annotations
 
@@ -23,6 +23,8 @@ HERE = Path(__file__).resolve().parent
 EXPECTED_FINDINGS = HERE / "expected-findings.json"
 EXPECTED_RUNS = HERE / "expected-runs.json"
 EXPECTED_VECTORS = HERE / "derivation-vectors.json"
+EXPECTED_ONE_SHOT_RUNS = HERE / "expected-runs-one-shot.json"
+EXPECTED_ONE_SHOT_VECTORS = HERE / "derivation-vectors-one-shot.json"
 FS_PAGE = ROOT / "docs-next/pir/fiat-shamir.md"
 CORE_PAGE = ROOT / "docs-next/pir/interactive-core.md"
 
@@ -60,7 +62,9 @@ def _source_gate() -> dict[str, Any]:
     fs = FS_PAGE.read_text(encoding="utf-8")
     core = CORE_PAGE.read_text(encoding="utf-8")
     required = (
-        "the exact nominal\ndeclaration body defined by the companion page",
+        "this profile fixes\nits declaration body: exactly the companion page's",
+        "one nonempty semantic symbol and no other",
+        "a declaration with any other shape is `Malformed`",
         'ProtocolDeclarationRef<"pir.fs-application-domain">',
         "ChallengeNamespaceOctets(T, c, i)",
         "FSSamplingFailureReceipt = {",
@@ -69,24 +73,15 @@ def _source_gate() -> dict[str, Any]:
     )
     if any(token not in fs for token in required):
         raise CheckFailure("a required canonical-framed owner clause drifted")
-    companion_clause = (
-        'the canonical-framed profile adds "pir.fs-application-domain"'
-    )
+    companion_clause = "NominalProtocolDeclarationBody = MetaRecord {"
     if companion_clause not in core:
-        raise CheckFailure("the companion reference-kind clause drifted")
-    if (
-        'LocalSemanticDeclarationBody("pir.fs-application-domain"' in core
-        or "FSApplicationDomainDeclarationBody" in core
-    ):
-        raise CheckFailure(
-            "the application-domain body now appears defined; readjudication is required"
-        )
+        raise CheckFailure("the companion nominal declaration body drifted")
     return {
         "fiat_shamir_sha256": hashlib.sha256(FS_PAGE.read_bytes()).hexdigest(),
         "interactive_core_sha256": hashlib.sha256(CORE_PAGE.read_bytes()).hexdigest(),
-        "underdetermined_owner_coordinate": (
-            "docs-next/pir/fiat-shamir.md:68-71 and "
-            "docs-next/pir/interactive-core.md:2256-2259"
+        "owner_coordinate": (
+            "docs-next/pir/fiat-shamir.md Section 2 and "
+            "docs-next/pir/interactive-core.md Section 2"
         ),
     }
 
@@ -154,7 +149,7 @@ def _vectors(subject: model.Subject, results: list[executor.ExecutionResult]) ->
         "transcript_construction_id": model.identifier_text(
             subject.construction.identifier
         ),
-        "application_domain_status": "proposed-body-owner-underdetermined",
+        "application_domain_status": "owner-determined",
         "prefix_encoding": {
             "ordered_parts": [
                 "fixed_frames",
@@ -179,7 +174,12 @@ def _vectors(subject: model.Subject, results: list[executor.ExecutionResult]) ->
                 model.k1.DatumRecord(
                     (
                         (0, model.k1.Nat(0)),
-                        (1, model.k1.Nat(model.MAXIMUM_DRAWS)),
+                        (
+                            1,
+                            model.k1.Nat(
+                                subject.construction.challenge_rules[0].maximum_draws
+                            ),
+                        ),
                     )
                 ),
             )
@@ -243,14 +243,16 @@ def _expected_runs(results: list[executor.ExecutionResult]) -> dict[str, Any]:
     }
 
 
-def evaluate() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    source = _source_gate()
-    subject = model.make_subject()
+def _subject_evidence(
+    subject: model.Subject,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    if subject.admission_outcome != "Affirmative":
+        raise CheckFailure(f"{subject.name} subject is not owner-admitted")
     view_digests = views.validate_against_predecessor(subject)
     execution_view = views.execution_view(subject)
     results, replay_matches = _run_corpus(subject)
     if len(results) != 54 or replay_matches != 54:
-        raise CheckFailure("the exhaustive corpus or replay count drifted")
+        raise CheckFailure(f"the {subject.name} corpus or replay count drifted")
 
     lanes = Counter(result.lane for result in results)
     lane_counts = {
@@ -265,10 +267,7 @@ def evaluate() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         )
     }
     if sum(lane_counts.values()) != 54:
-        raise CheckFailure("the six-lane partition is not total and exclusive")
-    sampling_exhaustions = lane_counts["InterpretationFailed"]
-    if sampling_exhaustions == 0:
-        raise CheckFailure("the measured finite corpus no longer reaches exhaustion")
+        raise CheckFailure(f"the {subject.name} lane partition is not total")
 
     mutation_kills = _mutation_gate(subject, results[0])
     vectors = _vectors(subject, results)
@@ -286,17 +285,15 @@ def evaluate() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         for algorithm in subject.algorithms
     }
     controls = {
-        **source,
+        "name": subject.name,
         "core_id": model.identifier_text(subject.construction.core_id),
         "fresh_protocol_id": model.identifier_text(
             subject.admitted_fresh_protocol.protocol_id
         ),
-        "candidate_transcript_construction_id": model.identifier_text(
+        "transcript_construction_id": model.identifier_text(
             subject.construction.identifier
         ),
-        "candidate_fs_protocol_id": model.identifier_text(
-            subject.fs_protocol.identifier
-        ),
+        "fs_protocol_id": model.identifier_text(subject.fs_protocol.identifier),
         "canonical_framed_profile_digest": subject.construction.profile_id.digest.hex(),
         "application_module_id": model.identifier_text(
             subject.application_module.identity
@@ -306,90 +303,158 @@ def evaluate() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         "occurrence_map_count": len(subject.checked.occurrence_map),
         "value_map_count": len(subject.checked.value_map),
         "challenge_map_count": len(subject.checked.challenge_map),
+        "maximum_draws": subject.construction.challenge_rules[0].maximum_draws,
         "run_count": len(results),
         "honest_run_count": len(executor.honest_cases()),
         "verifier_input_count": len(executor.verifier_cases()),
         "replay_match_count": replay_matches,
         "replay_mutation_kills": mutation_kills,
         "lane_counts": lane_counts,
-        "sampling_exhaustions": sampling_exhaustions,
+        "sampling_exhaustions": lane_counts["InterpretationFailed"],
         "derivation_vector_count": len(vectors["entries"]),
         "expected_runs_sha256": _digest(runs),
         "derivation_vectors_sha256": _digest(vectors),
         "construction_view_sha256": view_digests,
         "execution_view_sha256": _digest(execution_view),
     }
+    return controls, runs, vectors
+
+
+def evaluate() -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]:
+    source = _source_gate()
+    retrying = model.make_subject("retrying")
+    one_shot = model.make_subject("one-shot")
+    retrying_controls, retrying_runs, retrying_vectors = _subject_evidence(
+        retrying
+    )
+    one_shot_controls, one_shot_runs, one_shot_vectors = _subject_evidence(
+        one_shot
+    )
+    if retrying_controls["sampling_exhaustions"] != 6:
+        raise CheckFailure("the retrying construction no longer measures six exhaustions")
+    if one_shot_controls["sampling_exhaustions"] != 0:
+        raise CheckFailure("the always-accept one-shot construction exhausted")
+    controls = {
+        **source,
+        "subjects": {
+            "retrying": retrying_controls,
+            "one_shot": one_shot_controls,
+        },
+    }
 
     findings = [
         Finding(
             "admission",
-            "CannotAnswer",
-            "F0V3C-C-APPLICATION-DOMAIN-BODY",
-            subject.admission_detail,
+            "Affirmative",
+            "F0V3C-A-OWNER-ADMISSION",
+            one_shot.admission_detail,
         ),
         Finding(
-            "execution",
+            "retrying-execution",
             "Affirmative",
             "F0V3C-A-FINITE-EXECUTION",
-            "all 27 strategy runs and all 27 finite verifier inputs completed in the six-lane partition under the explicit candidate body",
+            "all 54 retrying runs completed in the six-lane partition, including six measured sampling exhaustions",
+        ),
+        Finding(
+            "one-shot-execution",
+            "Affirmative",
+            "F0V3C-A-ONE-SHOT-EXECUTION",
+            "all 54 always-accept one-shot runs completed without sampling exhaustion",
         ),
         Finding(
             "replay",
             "Affirmative",
             "F0V3C-A-INDEPENDENT-REPLAY",
-            "the independent path matched all 54 records and transitions and rejected three exact-field mutations",
+            "the independent path matched 108 records and transitions and rejected three exact-field mutations for each subject",
         ),
         Finding(
             "views",
             "Affirmative",
             "F0V3C-A-VIEW-REPRODUCTION",
-            "four construction values validate under both predecessor family-view schema compilers and the execution view is derived from the candidate",
+            "both subjects' four construction values validate under both predecessor family-view schema compilers and both execution views are derived",
         ),
         Finding(
             "outcome-partition",
             "Affirmative",
             "F0V3C-A-SIX-LANE-PARTITION",
-            f"the measured lane counts are {lane_counts}",
+            "both measured six-lane partitions are total and exclusive",
         ),
         Finding(
             "derivation-function",
             "Affirmative",
             "F0V3C-A-DERIVATION-VECTORS",
-            "nine exact finite transcript prefixes map to one challenge value or exact sampling exhaustion",
+            "each subject exports nine exact finite transcript-prefix derivations, with the one-shot table total on values",
         ),
         Finding(
             "aggregate",
-            "CannotAnswer",
-            "F0V3C-C-FS-RUNTIME",
-            "entry-contract Section 5 forbids an affirmative aggregate while the application-domain body remains underdetermined",
+            "Affirmative",
+            "F0V3C-A-FS-RUNTIME",
+            "owner admission and every bounded execution, replay, view, partition, and derivation obligation hold for both subjects",
         ),
     ]
     frozen_findings = {
-        "aggregate": {"outcome": "CannotAnswer", "code": "F0V3C-C-FS-RUNTIME"},
+        "aggregate": {"outcome": "Affirmative", "code": "F0V3C-A-FS-RUNTIME"},
         "cases": [
             {"name": item.name, "outcome": item.outcome, "code": item.code}
             for item in findings
         ],
         "evidence_control": controls,
     }
-    return frozen_findings, runs, vectors
+    return (
+        frozen_findings,
+        retrying_runs,
+        retrying_vectors,
+        one_shot_runs,
+        one_shot_vectors,
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     parser.add_argument(
-        "--emit", choices=("findings", "runs", "vectors", "all")
+        "--emit",
+        choices=(
+            "findings",
+            "retrying-runs",
+            "retrying-vectors",
+            "one-shot-runs",
+            "one-shot-vectors",
+            "all",
+        ),
     )
+    parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
-    findings, runs, vectors = evaluate()
+    findings, runs, vectors, one_shot_runs, one_shot_vectors = evaluate()
+    outputs = {
+        "findings": findings,
+        "retrying-runs": runs,
+        "retrying-vectors": vectors,
+        "one-shot-runs": one_shot_runs,
+        "one-shot-vectors": one_shot_vectors,
+    }
+    if args.write:
+        for path, value in (
+            (EXPECTED_FINDINGS, findings),
+            (EXPECTED_RUNS, runs),
+            (EXPECTED_VECTORS, vectors),
+            (EXPECTED_ONE_SHOT_RUNS, one_shot_runs),
+            (EXPECTED_ONE_SHOT_VECTORS, one_shot_vectors),
+        ):
+            path.write_text(
+                json.dumps(value, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     if args.emit:
-        selected: Any = {
-            "findings": findings,
-            "runs": runs,
-            "vectors": vectors,
-            "all": {"findings": findings, "runs": runs, "vectors": vectors},
-        }[args.emit]
+        selected: Any = (
+            outputs if args.emit == "all" else outputs[args.emit]
+        )
         print(json.dumps(selected, indent=2, sort_keys=True))
         return 0
     if args.check:
@@ -397,13 +462,24 @@ def main() -> int:
             (_read_json(EXPECTED_FINDINGS), findings, "expected findings"),
             (_read_json(EXPECTED_RUNS), runs, "expected runs"),
             (_read_json(EXPECTED_VECTORS), vectors, "derivation vectors"),
+            (
+                _read_json(EXPECTED_ONE_SHOT_RUNS),
+                one_shot_runs,
+                "one-shot expected runs",
+            ),
+            (
+                _read_json(EXPECTED_ONE_SHOT_VECTORS),
+                one_shot_vectors,
+                "one-shot derivation vectors",
+            ),
         )
         for frozen, observed, label in expected:
             if frozen != observed:
                 raise CheckFailure(f"{label} drifted")
     print(
-        "CannotAnswer/F0V3C-C-FS-RUNTIME "
-        f"runs={len(runs['records'])} vectors={len(vectors['entries'])}"
+        "Affirmative/F0V3C-A-FS-RUNTIME "
+        f"runs={len(runs['records']) + len(one_shot_runs['records'])} "
+        f"vectors={len(vectors['entries']) + len(one_shot_vectors['entries'])}"
     )
     return 0
 
