@@ -2184,13 +2184,37 @@ that candidate, never the existential family.
 The [Analysis model](analysis-model.md#41-one-identity-algebra) gives every
 assumption a question consumes a named, identity-bearing body. This profile
 owns the concrete bodies below: what a Fresh challenge is drawn from, how a
-provider's outcome carrier maps the PIR outcome partition, and the relation
-and Plan premises of the finite Schnorr question.
+provider's outcome carrier maps the PIR outcome partition and which of its
+lanes the provider does not model, the completion premise a statement over
+the whole partition then needs, and the relation and Plan premises of the
+finite Schnorr question.
 
 ```text
+NamedHypothesisArgumentSchema<AnalysisCryptographicPropertyLanguageProfileId, K> =
+    [ coordinate: PIRPublicCoinLawCoordinate,
+      distribution_model: AnalysisDistributionProfileId ]
+        when K = FreshPublicCoinDistribution
+  | [ coordinate: PIRConstructionPremiseCoordinate(_, SamplerAdequacy),
+      oracle_model: AnalysisDistributionProfileId,
+      form: SamplerAdequacyForm ]
+        when K = FiatShamirSamplerAdequacy
+  | [ coordinate: PIRConstructionPremiseCoordinate(_, OracleProcess),
+      oracle_model: AnalysisDistributionProfileId ]
+        when K = FiatShamirOracleProcess
+  | [ coordinate: PIRProtocolOutcomePartitionCoordinate,
+      provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId> ]
+        when K = OperationalCompletion
+  | [ coordinate: PIRPlanRecipeCoordinate ]
+        when K = HonestCommit or K = HonestRespond
+
+PremiseIdOf(body: AnalysisNamedPremiseBody<P,K>) =
+  AnalysisNamedPremiseId<P,K>(B, body)
+
 FreshSamplingHypothesis =
-  ExactNamedHypothesis<FreshPublicCoinDistribution> whose canonical
-  arguments are [ law_coordinate: ProtocolDeclarationRef<"pir.public-coin-law">,
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       FreshPublicCoinDistribution> whose canonical
+  arguments are [ coordinate: PIRPublicCoinLawCoordinate(
+  ProtocolDeclarationRef<"pir.public-coin-law">),
   distribution_model: AnalysisDistributionProfileId ]: the challenge at that
   coordinate is drawn from that model, fresh at each occurrence and
   independent of the prior prover view
@@ -2206,7 +2230,8 @@ FreshPublicCoinDistributionPremise(
     coordinate: PIRPublicCoinLawCoordinate(law_coordinate),
     bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
       law_ref: the profile's FreshSamplingHypothesis declaration,
-      canonical_arguments: [law_coordinate, distribution_model]
+      canonical_arguments: [PIRPublicCoinLawCoordinate(law_coordinate),
+                            distribution_model]
     }),
     source,
     evidence_depth,
@@ -2218,7 +2243,8 @@ ProviderOutcomeCarrierPremise(
     provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId>,
     carrier: AnalysisProfileLawRef<AnalysisCryptographicPropertyLanguageProfileId,
                                    ClosedProviderCarrier>,
-    total_map: CanonicalMap<ProtocolOutcomeLane(P), CanonicalValue<carrier>>,
+    total_map: CanonicalMap<ProtocolOutcomeLane(P),
+                            AnalysisProviderLaneImage<carrier>>,
     source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
     evidence_depth: AnalysisPremiseEvidenceDepth) =
   AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId,
@@ -2231,6 +2257,32 @@ ProviderOutcomeCarrierPremise(
       provider_carrier: carrier,
       total_lane_map: total_map
     },
+    source,
+    evidence_depth,
+    model_scope: ExactSubjectsOnly([P])
+  }
+
+OperationalCompletionHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       OperationalCompletion> whose canonical arguments are
+  [ coordinate: PIRProtocolOutcomePartitionCoordinate(P),
+    provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId> ]:
+  every run of P in the environment of the question ends in a lane of
+  provider.modelled_lanes
+
+OperationalCompletionPremise(
+    P: ProtocolId,
+    provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId>,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId,
+                           OperationalCompletion> {
+    kind: exactly OperationalCompletion,
+    coordinate: PIRProtocolOutcomePartitionCoordinate(P),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's OperationalCompletionHypothesis declaration,
+      canonical_arguments: [PIRProtocolOutcomePartitionCoordinate(P), provider]
+    }),
     source,
     evidence_depth,
     model_scope: ExactSubjectsOnly([P])
@@ -2269,17 +2321,152 @@ ProviderJudgmentRequirements(P: ProtocolId) =
 SchnorrExtractorPremiseRequirements(S: AnalysisSubjectTuple) =
   the "relation" and "witness" entries of SchnorrNamedPremiseRequirements(S)
 
+RelationPredicateBindingLaw =
+  ExactModelBindingLaw<AnalysisCryptographicPropertyLanguageProfileId, RelationPredicate>:
+  the relation semantic model at the coordinate is the predicate the named
+  subject evaluates
+
+WitnessTypeBindingLaw =
+  ExactModelBindingLaw<AnalysisCryptographicPropertyLanguageProfileId, WitnessType>:
+  the witness type at the join coordinate is the named subject's private
+  witness type
+
+ProverPrivateStateBindingLaw =
+  ExactModelBindingLaw<AnalysisCryptographicPropertyLanguageProfileId, ProverPrivateState>:
+  the Plan's persistent state slot at the coordinate is the named subject's
+  private state
+
+HonestCommitHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId, HonestCommit> whose
+  canonical arguments are [ coordinate: PIRPlanRecipeCoordinate ]: the honest
+  prover's commitment is computed by the recipe node at that coordinate
+
+HonestRespondHypothesis =
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId, HonestRespond> whose
+  canonical arguments are [ coordinate: PIRPlanRecipeCoordinate ]: the honest
+  prover's response is computed by the recipe node at that coordinate
+
+SchnorrPremiseScope(S: AnalysisSubjectTuple) =
+  ExactSubjectsOnly(SchnorrSpecialSoundnessQuestion(S).exact_subjects)
+
+RelationPredicatePremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, RelationPredicate> {
+    kind: exactly RelationPredicate,
+    coordinate: RelationsModelEvaluatorCoordinate(S.relation_semantic_model_id),
+    bound_model_or_hypothesis: BoundModel(S.relation_semantic_model_id,
+      AnalysisLawTerm {
+        law_ref: the profile's RelationPredicateBindingLaw declaration,
+        canonical_arguments:
+          [RelationsModelEvaluatorCoordinate(S.relation_semantic_model_id),
+           S.relation_semantic_model_id]
+      }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
+WitnessJoinCoordinate(S: AnalysisSubjectTuple) =
+  RelationsWitnessPlanJoinCoordinate(
+    S.relation_interface_id, 0,
+    S.relation_axis_ingress.fresh.plan_witness_binding_id, 0)
+
+WitnessTypePremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, WitnessType> {
+    kind: exactly WitnessType,
+    coordinate: WitnessJoinCoordinate(S),
+    bound_model_or_hypothesis: BoundModel(S.relation_interface_id,
+      AnalysisLawTerm {
+        law_ref: the profile's WitnessTypeBindingLaw declaration,
+        canonical_arguments: [WitnessJoinCoordinate(S), S.relation_interface_id]
+      }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
+ProverPrivateStatePremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, ProverPrivateState> {
+    kind: exactly ProverPrivateState,
+    coordinate: PIRPlanStateCoordinate(PlanOf(S), StrategyStateSlotRef 0),
+    bound_model_or_hypothesis: BoundModel(PlanOf(S),
+      AnalysisLawTerm {
+        law_ref: the profile's ProverPrivateStateBindingLaw declaration,
+        canonical_arguments:
+          [PIRPlanStateCoordinate(PlanOf(S), StrategyStateSlotRef 0), PlanOf(S)]
+      }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
+HonestCommitPremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, HonestCommit> {
+    kind: exactly HonestCommit,
+    coordinate: PIRPlanRecipeCoordinate(
+      PlanOf(S), ProverDecisionPointRef 0, RecipeNodeRef 0),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's HonestCommitHypothesis declaration,
+      canonical_arguments: [PIRPlanRecipeCoordinate(
+        PlanOf(S), ProverDecisionPointRef 0, RecipeNodeRef 0)]
+    }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
+HonestRespondPremise(
+    S: AnalysisSubjectTuple,
+    source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
+    evidence_depth: AnalysisPremiseEvidenceDepth) =
+  AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, HonestRespond> {
+    kind: exactly HonestRespond,
+    coordinate: PIRPlanRecipeCoordinate(
+      PlanOf(S), ProverDecisionPointRef 2, RecipeNodeRef 0),
+    bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
+      law_ref: the profile's HonestRespondHypothesis declaration,
+      canonical_arguments: [PIRPlanRecipeCoordinate(
+        PlanOf(S), ProverDecisionPointRef 2, RecipeNodeRef 0)]
+    }),
+    source,
+    evidence_depth,
+    model_scope: SchnorrPremiseScope(S)
+  }
+
 ConstructionSamplerAdequacyHypothesis =
-  ExactNamedHypothesis<FiatShamirSamplerAdequacy> whose canonical arguments
-  are [ T: TranscriptConstructionId, oracle_model: AnalysisDistributionProfileId,
-  form: SamplerAdequacyForm ]: the construction's challenge sampler over that
-  oracle model is adequate in the named form
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       FiatShamirSamplerAdequacy> whose canonical arguments
+  are [ coordinate: PIRConstructionPremiseCoordinate(T, SamplerAdequacy),
+  oracle_model: AnalysisDistributionProfileId, form: SamplerAdequacyForm ]:
+  the construction's challenge sampler over that oracle model is adequate in
+  the named form
 
 ConstructionOracleProcessHypothesis =
-  ExactNamedHypothesis<FiatShamirOracleProcess> whose canonical arguments are
-  [ T: TranscriptConstructionId, oracle_model: AnalysisDistributionProfileId ]:
-  the oracle process the experiment assumes over that model is the one the
-  construction realizes
+  ExactNamedHypothesis<AnalysisCryptographicPropertyLanguageProfileId,
+                       FiatShamirOracleProcess> whose canonical arguments are
+  [ coordinate: PIRConstructionPremiseCoordinate(T, OracleProcess),
+  oracle_model: AnalysisDistributionProfileId ]: the oracle process the
+  experiment assumes over that model is the one the construction realizes
+
+SamplerAdequacyFormOf(T: TranscriptConstructionId) =
+    ExactTotal
+      when every rule in T's challenge_rules has maximum_draws = 1
+  | RetryWithExhaustion(the maximum of maximum_draws over T's challenge_rules)
+      otherwise;
+  the form is read from the construction's identity-bearing challenge rules
+  (docs-next/pir/fiat-shamir.md), and under ExactTotal the hypothesis asserts
+  that every one-shot rule's acceptance holds on its single draw
 
 SamplerAdequacyForm =
     ExactTotal
@@ -2297,7 +2484,8 @@ FiatShamirConstructionSamplerPremise(
     coordinate: PIRConstructionPremiseCoordinate(T, SamplerAdequacy),
     bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
       law_ref: the profile's ConstructionSamplerAdequacyHypothesis declaration,
-      canonical_arguments: [T, oracle_model, form]
+      canonical_arguments: [PIRConstructionPremiseCoordinate(T, SamplerAdequacy),
+                            oracle_model, form]
     }),
     source,
     evidence_depth,
@@ -2315,7 +2503,8 @@ FiatShamirConstructionOracleProcessPremise(
     coordinate: PIRConstructionPremiseCoordinate(T, OracleProcess),
     bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
       law_ref: the profile's ConstructionOracleProcessHypothesis declaration,
-      canonical_arguments: [T, oracle_model]
+      canonical_arguments: [PIRConstructionPremiseCoordinate(T, OracleProcess),
+                            oracle_model]
     }),
     source,
     evidence_depth,
@@ -2333,39 +2522,42 @@ FiatShamirConstructionPremiseRequirements(T, oracle_model) =
 SchnorrNamedPremiseBindings(S: AnalysisSubjectTuple) =
   the binding map IntakeAnalysisNamedPremises(
     SchnorrSpecialSoundnessQuestion(S), supplied) forms, where supplied
-  binds each slot to the identity of the premise the profile admits for S:
+  binds each slot to PremiseIdOf of the exact body below:
     "fresh-coin"   -> FreshPublicCoinDistributionPremise(
                         the pir.public-coin-law declaration named by
                         S.challenge_ref, AnalysisChallengeDomainId(S)'s
                         exact finite uniform model,
                         CandidateOwnerCoordinate(S.fresh_protocol_id),
                         SourceGroundedMapping),
-    "relation"     -> BoundModel(S.relation_semantic_model_id, the evaluator
-                        binding law) at
-                        RelationsModelEvaluatorCoordinate(
-                          S.relation_semantic_model_id),
-    "witness"      -> BoundModel(S.relation_interface_id, the witness-type
-                        binding law) at the join coordinate,
-    "prover-state" -> BoundModel(PlanOf(S), the state-slot binding law) at
-                        PIRPlanStateCoordinate(PlanOf(S), StrategyStateSlotRef 0),
-    "commit"       -> BoundHypothesis(the honest-commit hypothesis for
-                        PlanOf(S)'s decision 0 recipe node 0),
-    "respond"      -> BoundHypothesis(the honest-respond hypothesis for
-                        PlanOf(S)'s decision 2 recipe node 0),
-  each with source CandidateOwnerCoordinate of the named subject and
-  evidence depth FrozenExecutableFalsification for the five relation and
-  Plan premises
+    "relation"     -> RelationPredicatePremise(S,
+                        CandidateOwnerCoordinate(S.relation_semantic_model_id),
+                        FrozenExecutableFalsification),
+    "witness"      -> WitnessTypePremise(S,
+                        CandidateOwnerCoordinate(S.relation_interface_id),
+                        FrozenExecutableFalsification),
+    "prover-state" -> ProverPrivateStatePremise(S,
+                        CandidateOwnerCoordinate(PlanOf(S)),
+                        FrozenExecutableFalsification),
+    "commit"       -> HonestCommitPremise(S,
+                        CandidateOwnerCoordinate(PlanOf(S)),
+                        FrozenExecutableFalsification),
+    "respond"      -> HonestRespondPremise(S,
+                        CandidateOwnerCoordinate(PlanOf(S)),
+                        FrozenExecutableFalsification)
 
 SchnorrExtractorPremiseBindings(S) =
   the "relation" and "witness" entries of SchnorrNamedPremiseBindings(S)
 
-FiatShamirConstructionPremiseBindings(S: AnalysisSubjectTuple) =
+FiatShamirConstructionPremiseBindings(
+    S: AnalysisSubjectTuple,
+    ell0: StatementLength(AnalysisStatementType(S))) =
   the binding map IntakeAnalysisNamedPremises(
     AFKMemberKnowledgeQuestion(S, ell0), supplied) forms, where supplied binds
+    each slot to PremiseIdOf of the exact body below:
     "sampler"        -> FiatShamirConstructionSamplerPremise(
                           S.transcript_construction_id,
                           AFKClassicalRandomOracleProfileId(S),
-                          the form the construction declares,
+                          SamplerAdequacyFormOf(S.transcript_construction_id),
                           CandidateOwnerCoordinate(S.transcript_construction_id),
                           SourceGroundedMapping),
     "oracle-process" -> FiatShamirConstructionOracleProcessPremise(
@@ -2384,11 +2576,22 @@ construction, and what it consumes are the family premises of
 [Section 7.3](#73-family-premises). A `ProviderOutcomeCarrierMap` premise
 requires `total_map` to have exactly the profile-qualified partition of `P` as
 its domain: five lanes for a Fresh or duplex-sponge Protocol, six for a
-canonical-framed one; a missing image is `CannotAnswer`, never a collapse to
-`false`, `None`, or `Rejected`. The provider is an exact profile law
-declaration naming one external formal system at one pinned source, published
-by this profile's declaration catalog; until one is published no
-provider-map premise can be formed.
+canonical-framed one. Its value at a lane is `Image(v)` exactly when the
+provider declaration lists the lane in `modelled_lanes` and `Unmodelled`
+otherwise; a lane absent from the map, an `Image` at a lane the provider
+does not model, or `Unmodelled` at one it does is `Malformed`. A lane is
+never collapsed onto the image of another: a provider whose verifier returns
+a Boolean and whose execution cannot fail to complete models `Accepted` and
+`Rejected` and no other lane, and its map says so rather than sending
+noncompletion to `false`. The provider is an exact profile law declaration
+naming one external formal system at one pinned source, published by this
+profile's declaration catalog; until one is published no provider-map
+premise can be formed. A provider statement transports to the PIR event that
+is the union of the lanes whose images lie in the statement's event, and to
+nothing outside `modelled_lanes`; a question whose stated PIR event is not
+such a union, one that says every run is accepted, for instance, carries an
+`OperationalCompletion` requirement in its family's requirement sequence,
+and forms without it only as `CannotAnswer`.
 
 `SchnorrNamedPremiseRequirements(S)` is the exact premise requirement
 sequence of the relation-bound Fresh question over `S`, fixed by
@@ -2875,7 +3078,7 @@ AFKMemberKnowledgeGoal(
     S: AnalysisSubjectTuple,
     ell0: StatementLength(AnalysisStatementType(S))) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(B, AFKMemberKnowledgeQuestion(S,ell0)),
-  named_premise_bindings: FiatShamirConstructionPremiseBindings(S)
+  named_premise_bindings: FiatShamirConstructionPremiseBindings(S, ell0)
 }
 ```
 
@@ -5195,7 +5398,7 @@ GammaAFKApplicabilityBody(F) = AnalysisHypothesisContextBody {
     {7,AnalysisGoalId(B,AFKFamilySamplerAdequacyGoal(F)),[0,1,2,4,5], premises(goal)},
     {8,AnalysisGoalId(
          B,AFKFamilyExperimentObservationCorrespondenceGoal(F)),
-       [0,1,2,3,4,5,6,7]}
+       [0,1,2,3,4,5,6,7], premises(goal)}
   ],
   roots: [8],
   exact_named_premise_ids: ContextPremiseIds(nodes, roots)
@@ -5362,7 +5565,7 @@ premises:
 ```text
 GammaAFKTheoremTruthBody = AnalysisHypothesisContextBody {
   nodes: [{0,AnalysisGoalId(
-    B,TheoremTruthGoal(AFKV2TheoremSchemaId)),[]}],
+    B,TheoremTruthGoal(AFKV2TheoremSchemaId)),[], premises(goal)}],
   roots: [0],
   exact_named_premise_ids: ContextPremiseIds(nodes, roots)
 }
@@ -5618,19 +5821,36 @@ realizes. Both are stated for one exact oracle model, the distribution profile
 the experiment uses.
 
 ```text
+NamedHypothesisArgumentSchema<AnalysisAFKTransportLanguageProfileId, K> =
+    [ coordinate: AnalysisFamilyPremiseCoordinate(_, SamplerAdequacy),
+      oracle_model: AnalysisDistributionProfileId,
+      form: SamplerAdequacyForm ]
+        when K = FiatShamirSamplerAdequacy
+  | [ coordinate: AnalysisFamilyPremiseCoordinate(_, OracleProcess),
+      oracle_model: AnalysisDistributionProfileId ]
+        when K = FiatShamirOracleProcess
+
 SamplerAdequacyHypothesis =
-  ExactNamedHypothesis<FiatShamirSamplerAdequacy> whose canonical arguments
-  are [ F: AnalysisAsymptoticProtocolFamilyDefinitionId,
+  ExactNamedHypothesis<AnalysisAFKTransportLanguageProfileId,
+                       FiatShamirSamplerAdequacy> whose canonical arguments
+  are [ coordinate: AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy),
   oracle_model: AnalysisDistributionProfileId, form: SamplerAdequacyForm ]:
   the family's challenge sampler over that oracle model is adequate in the
   named form, with the exhaustion term explicit when the form retries
 
 OracleProcessHypothesis =
-  ExactNamedHypothesis<FiatShamirOracleProcess> whose canonical arguments are
-  [ F: AnalysisAsymptoticProtocolFamilyDefinitionId,
+  ExactNamedHypothesis<AnalysisAFKTransportLanguageProfileId,
+                       FiatShamirOracleProcess> whose canonical arguments are
+  [ coordinate: AnalysisFamilyPremiseCoordinate(F, OracleProcess),
   oracle_model: AnalysisDistributionProfileId ]: the oracle process the
   experiment assumes over that model is the one the family's construction
   realizes, including adaptive queries and answers
+
+SamplerAdequacyFormOf(F: AnalysisAsymptoticProtocolFamilyDefinitionId) =
+  ExactTotal, the form named by the family's sampler-adequacy applicability
+  premise TotalUniformChallengeSamplerAdequacy
+  (AFKFamilySamplerAdequacyGoal(F)); this profile declares no retrying
+  family sampler
 
 FiatShamirFamilySamplerPremise(
     F: AnalysisAsymptoticProtocolFamilyDefinitionId,
@@ -5644,7 +5864,8 @@ FiatShamirFamilySamplerPremise(
     coordinate: AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy),
     bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
       law_ref: the profile's SamplerAdequacyHypothesis declaration,
-      canonical_arguments: [F, oracle_model, form]
+      canonical_arguments: [AnalysisFamilyPremiseCoordinate(F, SamplerAdequacy),
+                            oracle_model, form]
     }),
     source,
     evidence_depth,
@@ -5662,7 +5883,8 @@ FiatShamirFamilyOracleProcessPremise(
     coordinate: AnalysisFamilyPremiseCoordinate(F, OracleProcess),
     bound_model_or_hypothesis: BoundHypothesis(AnalysisLawTerm {
       law_ref: the profile's OracleProcessHypothesis declaration,
-      canonical_arguments: [F, oracle_model]
+      canonical_arguments: [AnalysisFamilyPremiseCoordinate(F, OracleProcess),
+                            oracle_model]
     }),
     source,
     evidence_depth,
@@ -5680,11 +5902,14 @@ FiatShamirNamedPremiseRequirements(F, oracle_model) =
 FiatShamirFamilyPremiseBindings(F) =
   the binding map IntakeAnalysisNamedPremises(
     AFKFamilyAdaptiveKnowledgeQuestion(F), supplied) forms, where supplied
-  binds "sampler" to FiatShamirFamilySamplerPremise(F,
-  AFKFamilyRandomOracleProfileId(F), the form the family declares,
-  FamilyHypothesisSource(F), SourceGroundedMapping) and "oracle-process" to
-  FiatShamirFamilyOracleProcessPremise(F, AFKFamilyRandomOracleProfileId(F),
-  FamilyHypothesisSource(F), SourceGroundedMapping)
+  binds
+    "sampler"        -> PremiseIdOf(FiatShamirFamilySamplerPremise(F,
+                          AFKFamilyRandomOracleProfileId(F),
+                          SamplerAdequacyFormOf(F),
+                          FamilyHypothesisSource(F), SourceGroundedMapping)),
+    "oracle-process" -> PremiseIdOf(FiatShamirFamilyOracleProcessPremise(F,
+                          AFKFamilyRandomOracleProfileId(F),
+                          FamilyHypothesisSource(F), SourceGroundedMapping))
 ```
 
 For the classical adaptive experiment of Section 4 the oracle model is
@@ -6098,23 +6323,24 @@ GammaFamilyInstanceBody(F,n0_literal,S,ell0) =
   AnalysisHypothesisContextBody {
     nodes: [
       {0,AnalysisGoalId(
-          B,FamilyInstanceDenotationAtIndexGoal(F,n0_literal,S,ell0)),[]},
+          B,FamilyInstanceDenotationAtIndexGoal(F,n0_literal,S,ell0)),[],
+          premises(goal)},
       {1,AnalysisGoalId(
           B,FamilyInstanceProjectionAtIndexGoal(
-            F,n0_literal,S,ell0)),[0]},
+            F,n0_literal,S,ell0)),[0], premises(goal)},
       {2,AnalysisGoalId(B,SchnorrChallengeModelGoal(S)),[], premises(goal)},
       {3,AnalysisGoalId(B,SchnorrAcceptanceRelationGoal(S)),[], premises(goal)},
       {4,AnalysisGoalId(B,AFKFamilyFixedChallengeCardinalityGoal(F)),[0,1], premises(goal)},
       {5,AnalysisGoalId(B,AFKFamilyFiniteIndexAndOperationsGoal(F)),[0,1], premises(goal)},
       {6,AnalysisGoalId(
           B,FamilyInstanceRoleMapAdequacyGoal(F,n0_literal,S,ell0)),
-          [0,1,2,3,4,5]},
+          [0,1,2,3,4,5], premises(goal)},
       {7,AnalysisGoalId(
           B,FamilyInstanceQuantitativeNormalizationGoal(
-            F,n0_literal,S,ell0)),[0,1,2,4,6]},
+            F,n0_literal,S,ell0)),[0,1,2,4,6], premises(goal)},
       {8,AnalysisGoalId(
           B,FamilyInstanceProcessCorrespondenceGoal(F,n0_literal,S,ell0)),
-          [0,1,5,6]}
+          [0,1,5,6], premises(goal)}
     ],
     roots: [7,8]
   ,

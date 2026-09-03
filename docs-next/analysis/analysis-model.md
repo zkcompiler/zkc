@@ -2087,6 +2087,7 @@ AnalysisNamedPremiseKind =
   | FiatShamirSamplerAdequacy
   | FiatShamirOracleProcess
   | ProviderOutcomeCarrierMap
+  | OperationalCompletion
   | RelationPredicate
   | WitnessType
   | ProverPrivateState
@@ -2115,21 +2116,42 @@ AnalysisAcceptanceCarrier = MetaBoolean
 ProviderDeclaration =
   closed schema law family; a declaration under it fixes one external formal
   system by { system: ExactAsciiSymbol, source_pin: Bytes, toolchain:
-  ExactAsciiSymbol }, where source_pin is the content digest of the exact
-  provider checkout
+  ExactAsciiSymbol, modelled_lanes: CanonicalSortedUniqueSeq<AnalysisOutcomeLaneName> },
+  where source_pin is the content digest of the exact provider checkout and
+  modelled_lanes names exactly the lanes the provider's execution model can
+  end in; a lane outside modelled_lanes has no outcome in that provider, and
+  the declaration never lists a lane the provider only imitates through the
+  outcome of another
+
+AnalysisOutcomeLaneName =
+  closed vocabulary: exactly the constructor names of the PIR outcome
+  partition ProtocolOutcomeLane(P) (docs-next/pir/interactive-core.md,
+  Section 12.4), the same six names for every P; a lane of a Protocol's
+  partition is in a name sequence exactly when its constructor name is
+
+AnalysisProviderLaneImage<carrier> =
+    Image(CanonicalValue<carrier>)
+  | Unmodelled
 
 ClosedProviderCarrier =
   closed schema law family; a declaration under it fixes one exact closed
   value schema, and CanonicalValue<carrier> ranges over that schema
 
-ExactModelBindingLaw<K> =
+ExactModelBindingLaw<P,K> =
   TotalAnalysisLawSignature<P,
     [AnalysisPremiseCoordinate admitted for K, TypedSemanticSubjectRef],
     AnalysisAcceptanceCarrier>
 
-ExactNamedHypothesis<K> =
+NamedHypothesisArgumentSchema<P,K> =
+  the closed canonical argument sequence type that the direct profile P
+  declares for the hypotheses of kind K: its first element is the
+  AnalysisPremiseCoordinate admitted for K, every later element is one exact
+  closed value type of P's authenticated import closure, and a kind for
+  which P declares no schema forms no hypothesis under P
+
+ExactNamedHypothesis<P,K> =
   TotalAnalysisLawSignature<P,
-    [AnalysisPremiseCoordinate admitted for K],
+    NamedHypothesisArgumentSchema<P,K>,
     AnalysisAcceptanceCarrier>
 
 AnalysisProviderDeclaration<P> = AnalysisProfileLawRef<P,ProviderDeclaration>
@@ -2139,15 +2161,21 @@ AnalysisProviderOutcomeCarrierMapBody<P,Protocol> = {
   protocol_outcome_partition: PIRProtocolOutcomePartitionCoordinate(Protocol),
   provider_carrier: AnalysisProfileLawRef<P,ClosedProviderCarrier>,
   total_lane_map:
-    CanonicalMap<ProtocolOutcomeLane(Protocol), CanonicalValue<provider_carrier>>
+    CanonicalMap<ProtocolOutcomeLane(Protocol),
+                 AnalysisProviderLaneImage<provider_carrier>>
+      whose domain is exactly the partition of Protocol and whose value at a
+      lane is Image(_) exactly when the lane's constructor name is in
+      provider.modelled_lanes
 }
 
 AnalysisNamedPremiseBoundValue<P,K> =
     BoundModel(TypedSemanticSubjectRef,
-               AnalysisLawTerm<P,ExactModelBindingLaw<K>>)
-  | BoundHypothesis(AnalysisLawTerm<P,ExactNamedHypothesis<K>>)
-  | BoundProviderOutcomeCarrierMap(
+               AnalysisLawTerm<P,ExactModelBindingLaw<P,K>>)
+  | BoundHypothesis(AnalysisLawTerm<P,ExactNamedHypothesis<P,K>>)
+  | BoundProviderOutcomeCarrierMap<Protocol: ProtocolId>(
       AnalysisProviderOutcomeCarrierMapBody<P,Protocol>)
+      admitted only for K = ProviderOutcomeCarrierMap, with Protocol the
+      Protocol of the premise's coordinate
 
 AnalysisNamedPremiseSource<P> =
     OwnerSemanticCoordinate(TypedSemanticSubjectRef)
@@ -2195,6 +2223,10 @@ AnalysisNamedPremiseKindLaw = CanonicalSeq [
     coordinate: PIRProtocolOutcomePartitionCoordinate,
     bound_value: BoundProviderOutcomeCarrierMap,
     sources: ProviderDeclarationSource },
+  { kind: OperationalCompletion,
+    coordinate: PIRProtocolOutcomePartitionCoordinate,
+    bound_value: BoundHypothesis,
+    sources: ProviderDeclarationSource },
   { kind: RelationPredicate,
     coordinate: RelationsModelEvaluatorCoordinate,
     bound_value: BoundModel,
@@ -2241,8 +2273,15 @@ AnalysisQuestionBody = {
 AnalysisGoalBody = {
   question_id: AnalysisQuestionId,
   named_premise_bindings:
-    CanonicalMap<AnalysisNamedPremiseRequirement, AnalysisNamedPremiseId>
+    CanonicalMap<AnalysisNamedPremiseRequirement,
+                 AnalysisNamedPremiseBindingValue>
 }
+
+AnalysisNamedPremiseBindingValue =
+  at requirement r of a goal whose question has direct profile P, exactly an
+  AnalysisNamedPremiseId<P,r.kind>: a premise identity under that profile
+  whose body has the requirement's kind; the kind is checked against the key
+  at intake and never inferred from the body
 
 GoalFamily(goal_body) =
   Authenticate(goal_body.question_id).family
@@ -2515,7 +2554,7 @@ CompleteReadPurposeRequirements(concrete_manifest_ids,
   reordered, or extra atom at rule formation
 
 ExactPremiseBinding =
-    ExactNamedPremiseBinding(AnalysisNamedPremiseId)
+    ExactNamedPremiseBinding(AnalysisNamedPremiseBindingValue)
   | PortableAffirmativeJudgmentBinding(PortableAnalysisJudgmentRecordId)
   | OwnerLocalAffirmativeJudgmentBinding(
       LocalAnalysisHandle<"analysis.judgment-record",owner,generation>)
@@ -3091,7 +3130,7 @@ PortableAnalysisJudgmentRecordId =
 IntakeAnalysisNamedPremises(
     exact question,
     supplied: CanonicalMap<AnalysisNamedPremiseRequirement,
-                           AnalysisNamedPremiseId>) =
+                           AnalysisNamedPremiseBindingValue>) =
   1. authenticate the question and every supplied premise under the
      question's exact direct Analysis profile;
   2. derive the required key set from question.named_premise_requirements;
@@ -3132,8 +3171,10 @@ judgment identities, because every one of those bodies carries the exact
 premise identities it uses. The concrete premise bodies are owned by the
 profile whose authenticated import closure can name their coordinates: the
 [cryptographic-property profile](cryptographic-properties.md#32-named-premises-of-the-relation-bound-fresh-question)
-owns Fresh public-coin distributions, provider outcome-carrier maps, and the
-relation and Plan premises, and the
+owns Fresh public-coin distributions, provider outcome-carrier maps, the
+completion premise a statement over the whole outcome partition needs when
+its provider models only part of it, and the relation and Plan premises, and
+the
 [semantic-transport profile](cryptographic-properties.md#73-family-premises)
 owns the Fiat--Shamir family premises. The kernel owns the grammar and the
 intake and no concrete premise.
