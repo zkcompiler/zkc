@@ -1,10 +1,13 @@
 # F2-O4: entry contract for the first Fiat--Shamir provider interpretation
 
 > **Kind:** entry contract (formal-assurance research, provider correspondence)
-> **State:** Proposed 2026-09-04; it starts when
-> [`f0v3c-fs-runtime-entry-contract.md`](f0v3c-fs-runtime-entry-contract.md)
-> has delivered the finite canonical-framed subject, its frozen runs, and
-> its challenge derivation table.
+> **State:** Proposed 2026-09-04; the executor contract
+> ([`f0v3c-fs-runtime-entry-contract.md`](f0v3c-fs-runtime-entry-contract.md))
+> has delivered the finite subject, its frozen runs, and its derivation
+> table, with one owner gap (the application-domain declaration body) since
+> closed on the canonical-framed page; the lane re-admits that subject as
+> owner-determined and adds the one-shot construction before the
+> correspondence.
 > **Authority:** None. A contract fixes what a lane must deliver and what a
 > result may claim; it changes no owner page.
 
@@ -52,9 +55,15 @@ recomputed by the provider side.
   `Reduction.fiatShamir`, with `fsChallengeOracle` implemented by a total
   table lookup over `D` restricted to the finite domain and refusing any
   point outside it.
-- Subject: the FS Protocol of F0-V3C, sharing the finite Schnorr Core with
-  the Fresh Protocol of the earlier rounds; its runs and verifier decisions
-  as frozen there.
+- Subject: an FS Protocol of the F0-V3C executor over the finite Schnorr
+  Core with a one-shot challenge rule (`maximum_draws` one and an acceptance
+  algorithm that always returns true), added to that package as a second
+  admitted construction, so that sampling exhaustion is unreachable and every
+  run ends in a lane the provider models. The executor's first construction
+  retries and measured six exhaustion runs on the domain; those runs are
+  reported by count as occurrences of the unmodelled interpretation-failure
+  lane and are outside the affirmative claim, which is the honest reading of
+  the carrier packet's rule for a provider whose oracle is total.
 - Carrier: the transformed reduction's verdict, `Option Unit` once the
   option layer is run, with the declaration derived from the execution
   model as the ArkLib round did (`modelled_lanes` at least `Accepted` and

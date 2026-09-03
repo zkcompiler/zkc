@@ -66,9 +66,14 @@ occurrence order, values, scope tree, public bindings, challenges, messages,
 oracles, reductions, extensions, and public-coin result are immutable.
 
 The exact-used PIR owner-module closure additionally recognizes
-`ProtocolDeclarationRef<"pir.fs-application-domain">` with the exact nominal
-declaration body defined by the companion page. It is an authenticated static
-application-purpose coordinate, not a display string or a freshness claim.
+`ProtocolDeclarationRef<"pir.fs-application-domain">`, and this profile fixes
+its declaration body: exactly the companion page's
+`NominalProtocolDeclarationBody`, one nonempty semantic symbol and no other
+field, so that a declaration of this kind is `MetaRecord { 0: MetaSymbol(s) }`
+and a declaration with any other shape is `Malformed`. The reference keeps
+the companion page's `ModuleDeclarationRefBody`. It is an authenticated
+static application-purpose coordinate, not a display string or a freshness
+claim; the symbol separates applications and carries no other meaning.
 
 This page selects one standalone `PIRCanonicalFramedFSProfile`. Its required exact
 profile imports are `{PIRInteractionProfileId}`; its supported subject kinds are
