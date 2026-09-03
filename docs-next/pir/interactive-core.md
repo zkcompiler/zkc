@@ -1425,49 +1425,60 @@ implication satellite would require its own exact proposition, validator,
 bounds, and admission integration.
 
 The Terminal contract is decided by two further closed laws of the same kind.
-`AttemptGuards(o)` is the set of structurally identified `EvaluateGuard`
-bodies of occurrence `o` and of every scope opening on its scope path;
-`Always` contributes nothing. Two occurrences with structurally identical
-guard bodies read the same values and evaluate alike on every path. An
-occurrence that comes later in the total order and whose attempt guards
-include another occurrence's is therefore attempted only on paths on which
-that other occurrence was attempted: its guards held, and every earlier
-terminal that could have stopped the run before the later occurrence could
-also have stopped it before the earlier one.
+Scope openings are deterministic, unguarded boundaries, so `AttemptGuards(o)`
+contains only the structurally identified `EvaluateBoolean` body of occurrence
+`o`; `Always` contributes nothing. Two occurrences with structurally identical
+guard bodies read the same values and evaluate alike on every path. If a later
+occurrence is attempted, no earlier terminal stopped the run; if its attempt
+guards include an earlier occurrence's guard, that guard was true after the
+earlier occurrence's deterministic scope boundary had been processed, so the
+earlier occurrence was attempted.
 
 ```text
-AttemptGuards(o) :=
-  { Guard(o) } union { Guard(s) | s a scope opening on o's scope path }
-  minus { Always }
+AttemptGuards(o) := { Guard(o) } minus { Always }
 
 AttemptedWhenever(o_later, o_earlier) :=
   o_earlier < o_later
   and AttemptGuards(o_earlier) subset AttemptGuards(o_later)
 
-Must(term) = { when_true, when_false }, each Impossible or a finite set of
-signed input literals, by structure of the guard term:
-  Must(input variable i)   = { when_true: {Positive(i)},
-                               when_false: {Negative(i)} }
-  Must(constant true)      = { when_true: {}, when_false: Impossible }
-  Must(constant false)     = { when_true: Impossible, when_false: {} }
-  Must(let x = e1 in e2)   = Must(e2), a reference to x contributing
-                             Must(e1) when e1 is Boolean and no literal
-                             otherwise
-  Must(if c then a else b) = {
-      when_true:  Meet(c.when_true union a.when_true,
-                       c.when_false union b.when_true),
-      when_false: Meet(c.when_true union a.when_false,
-                       c.when_false union b.when_false) }
-  Must(primitive call)     = { when_true: {}, when_false: {} }
-  a union with Impossible is Impossible;
-  Meet(X, Y) = X when Y is Impossible, Y when X is Impossible,
-               X intersect Y otherwise
+GuardInputs(o) = [] and GuardTerm(o) = None
+  when Guard(o) is Always;
+GuardInputs(o) = inputs and GuardTerm(o) = the authenticated term of algorithm
+  when Guard(o) is EvaluateBoolean { algorithm, evaluation_contract, inputs }
+
+InputMust(i) = { when_true: {Positive(i)}, when_false: {Negative(i)} }
+
+Must(term with n inputs) :=
+  MustEnv(term, [InputMust(0), ..., InputMust(n - 1)])
+
+MustEnv(variable i, environment) = environment[i]
+MustEnv(constant true, environment) =
+  { when_true: {}, when_false: Impossible }
+MustEnv(constant false, environment) =
+  { when_true: Impossible, when_false: {} }
+MustEnv(let x = e1 in e2, environment) =
+  MustEnv(e2, [MustEnv(e1, environment)] ++ environment)
+MustEnv(if c then a else b, environment) =
+  let C = MustEnv(c, environment),
+      A = MustEnv(a, environment),
+      B = MustEnv(b, environment) in {
+    when_true:  Meet(C.when_true union A.when_true,
+                     C.when_false union B.when_true),
+    when_false: Meet(C.when_true union A.when_false,
+                     C.when_false union B.when_false) }
+MustEnv(primitive call, environment) =
+  { when_true: {}, when_false: {} }
+a union with Impossible is Impossible;
+Meet(X, Y) = X when Y is Impossible, Y when X is Impossible,
+             X intersect Y otherwise
 MustWhenTrue(term) := Must(term).when_true
 
 TerminalContract(t), with o_t the occurrence of ReachTerminal(t) :=
   for every c in t.required_true_checks,
       with o_c the occurrence of InvokeCheck(c):
     AttemptedWhenever(o_t, o_c)
+    and GuardTerm(o_t) is not None
+    and MustWhenTrue(GuardTerm(o_t)) is not Impossible
     and there is an input ordinal i of Guard(o_t) with
           GuardInputs(o_t)[i] = OccurrenceOutput(o_c, 0)
           and Positive(i) in MustWhenTrue(GuardTerm(o_t));
@@ -1478,18 +1489,24 @@ TerminalContract(t), with o_t the occurrence of ReachTerminal(t) :=
     LiveClaims(o_t) = t.terminal_claims
 ```
 
-A literal in `when_true` holds on every evaluation on which the term returns
-true. The analysis drops information but never invents it, so it may refuse a
-valid implication and never admits an invalid one. The exact Check output must
-appear directly among the Guard inputs: no chain of derived values is
-followed, and a Guard that needs a Boolean combination expresses it in its own
-term. A primitive call contributes no literal, so an implication that holds
-only through a primitive's meaning is outside this regime exactly as a
-non-syntactic guard implication is. An `Always` Guard has no term and no
-inputs, so a terminal with an `Always` Guard cannot name a required Check. A
-claim whose liveness at `o_t` the forward abstract state leaves undetermined
-refuses admission; an authored terminal claim set cannot adapt to a path on
-which its claim does not exist.
+The environment is the term's de Bruijn environment: the inputs occupy it in
+ordinal order and a `let` prepends the bound term's facts, so a variable that
+names a non-Boolean binding carries no literal. A literal in `when_true`
+holds on every evaluation on which the term returns true. The analysis drops
+information but never invents it, so it may refuse a valid implication and
+never admits an invalid one. An impossible `MustWhenTrue` region is refused
+rather than discharged vacuously: a terminal whose Guard can never return true
+does not satisfy the contract, and this strictness is not a claim that any
+authored terminal is reachable. The exact Check output must appear directly
+among the Guard inputs: no chain of derived values is followed, and a Guard
+that needs a Boolean combination expresses it in its own term. A primitive
+call contributes no literal, so an implication that holds only through a
+primitive's meaning is outside this regime exactly as a non-syntactic guard
+implication is. An `Always` Guard has no term and no inputs, so a terminal
+with an `Always` Guard cannot name a required Check. `LiveClaims(o_t)` is the
+live claim set of step 9's forward abstract state at `o_t`; a claim whose
+liveness that state leaves undetermined refuses admission, because an authored
+terminal claim set cannot adapt to a path on which its claim does not exist.
 
 Admission is deterministic and bounded by the K1 body limits plus linear scans,
 sorted-set operations, algorithm checks, and the finite abstract-state
@@ -2174,7 +2191,15 @@ PIRProfileLawReferenceBody(x) = ProfileDeclarationRefBody(x)
 PIRViewAtomicBoundary =
     Unit | Natural | MetaBoolean | MetaSymbol | Bytes
   | ValueType | CanonicalValue(ValueType)
-  | PIRReference | PIRProfileLawReference
+  | PIRReference | PIRProfileLawReference | AdmittedModuleEffect
+
+AdmittedModuleEffectAtom(x) :=
+  x is the complete ModuleEffectRef admitted under Section 8;
+  x.module and x.declaration agree exactly;
+  x.declaration resolves in the authenticated module closure;
+  the evaluator supports that exact effect declaration;
+  x.payload validates strictly under the declaration's owner schema;
+  the atom's body is ModuleEffectRefBody(x), one opaque leaf
 
 PIRStaticViewFieldCoordinate = {
   view_coordinate: PIRStaticViewCoordinate,
@@ -2727,6 +2752,7 @@ PIRViewPathStepBody =
 PIRViewAtomicBoundaryBody =
   V(0,Unit) | V(1,Unit) | V(2,Unit) | V(3,Unit) | V(4,Unit)
 | V(5,Unit) | V(6,ValueTypeBody(value_type)) | V(7,Unit) | V(8,Unit)
+| V(9,AdmittedModuleEffectAtom(effect))
 
 PIRStaticViewFieldCoordinateBody(x) = R {
   0: PIRStaticViewCoordinateBody(x.view_coordinate),
