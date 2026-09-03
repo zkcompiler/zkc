@@ -319,8 +319,16 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   after round seven. Its repairs rotate sixteen of eighteen profiles again
   and put the family field audit, the migration review's page pins, the
   executor's view projection, and the Analysis review's Fiat--Shamir digest
-  into the first re-pinning class; an eighth review round checks the repaired
-  text against the review's reversal conditions.
+  into the first re-pinning class. The eighth review round
+  (`f0v2c1-migration-text-review.md`, "Round eight") closed thirteen of the
+  sixteen questions and left three: the Interface's claim that the draws
+  are derivable from the completion coordinates alone omitted the public
+  condition values and prior joint-member challenge values that acceptance
+  and decoding consume; the setup view's uniqueness was stated per Protocol
+  where the body carries invocation values; and the executable closure model
+  forms source-authority payloads as an untagged record instead of through
+  the owner compilers. The first two are repaired in the text after the
+  round; the third is a package repair with its own lane.
 - Publish the identities. Only the user authorizes the identity-rotating
   publication.
 

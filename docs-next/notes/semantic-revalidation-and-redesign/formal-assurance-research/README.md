@@ -505,7 +505,11 @@ provider, extraction tool, or durable schema.
   environment, the admitted module-effect atom) were applied to the page, and
   the second round closes all seven questions: every family-body field is
   exact, the five deviations from the candidate packets are upheld, and the
-  aggregate is `Affirmative`.
+  aggregate is `Affirmative`. Round eight judges the cross-contract repairs
+  by the deep review's own reversal conditions: thirteen of sixteen
+  questions close, and three blockers remain at that head, completion
+  derivability, the executable model's source-authority preimage, and
+  setup-view uniqueness.
 - [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
   is the independent cross-contract review of the stacked tree before its
   first freeze, written on the closed heads: eight findings, seven of them

@@ -3059,8 +3059,10 @@ run_established = every SessionContext or PublicParameter binding b of P
                   without it, by BindingRef
 ```
 
-Both sequences are decided by the Protocol alone, so every admitted Protocol
-has exactly one setup view, and the view states what it does not fix: a
+Membership in both sequences is decided by the Protocol alone, and the
+entries' values by the invocation, so every admitted Protocol has a setup
+view and has exactly one per invocation up to the covered-value equivalence
+the quotient below defines. The view states what it does not fix: a
 run-established public binding keeps its Section 4.3 meaning and is visible
 only through an execution-issued view under its own authority (Section 13.5).
 No entry is ever filled from a run, a strategy, a default, or an omitted

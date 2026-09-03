@@ -535,16 +535,29 @@ Protocol the failure coordinates select, without omission or reordering:
 5. `final_state` at `TranscriptStateType`.
 
 The receipt's `draws` sequence is not a completion coordinate, because it is
-a derivation and not a fact of its own: every draw is the construction's
-squeeze, length check, state advancement, and acceptance evaluated from the
-transcript state before it, so the exact draw sequence and `final_state` are
-determined by the construction that `ProtocolId` fixes, the challenge,
-`prefix_receipt_count`, and `prefix_state`, and the Fiat--Shamir owner
-derives and replays every draw from exactly those under its execution and
-replay laws (its Sections 8 and 9). The presentation carries the determining
-coordinates and the derived boundary state; a consumer that needs the draws
-replays them under the owner's law instead of trusting a restatement. No K1
-root type could carry the sequence in any case: its admitted length is the
+a derivation of values this interface presents and not a fact of its own.
+Each draw's squeeze output and the state after it follow from the
+construction that `ProtocolId` fixes, the challenge, and the state before it;
+its acceptance result and decoded value consume that output together with
+the values of the challenge's `public_conditions` and the accepted values of
+its `correlation.prior_members`, the operands of the owner's
+`SamplingInputTypes(c)` (its Section 3.2, evaluated by its Section 7
+transition). Each such operand is a constant that `ProtocolId` fixes, a public
+input that Section 3.2 binds to a slot, a derived value of those, or an
+occurrence value with a transport entry of Section 3.4. Admission of an
+Interface for a canonical-framed Protocol therefore requires, for every
+challenge, a transport entry whose destination is `ExternalApplication` for
+every occurrence whose value is an operand of that challenge's
+`SamplingInputTypes`, including the occurrence of every prior joint member;
+an Interface that presents an interpretation failure without the values that
+determine it is refused. With that, the draws, their acceptance results, and
+`final_state` are functions of presented values and `prefix_state`, and a
+consumer replays them under the owner's execution and replay laws (its
+Sections 8 and 9) instead of trusting a restatement. The transcript states
+do not determine those operands, since the owner does not require its absorb
+and advance algorithms to be injective, which is why they are presented in
+their own right and never recovered from a state. No K1 root type could
+carry the sequence in any case: its admitted length is the
 rule's `maximum_draws`, up to `2^20`, each draw receipt holds two transcript
 byte strings and two transcript states, and the constitutional bounds of the
 Foundation's Appendix A.2 cap a sequence schema at `2^14` elements and one
@@ -595,7 +608,8 @@ After generic K1 authentication, admission checks in order:
 4. `StatementCoverage` and flow laws;
 5. transport target, type, role, visibility, uniform semantic-presence, and
    FS/Fresh laws;
-6. total completion variants, tags, and payloads;
+6. total completion variants, tags, and payloads, and for a canonical-framed
+   Protocol the replay-input transport of Section 3.5;
 7. exact slot-use closure; and
 8. noninterference with all K2-owned meaning.
 
