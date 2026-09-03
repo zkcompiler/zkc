@@ -1,0 +1,170 @@
+{
+  "format": "zkc.formal-schnorr-relations-plan-f2p1.source-pins.v0",
+  "cutoff": "1464c8be0fac7d3dd63909f41e7d5051ddd91f98",
+  "question": "Do exact finite-additive Schnorr relation, model, instance, Protocol binding, ProverPlan, PlanRealizes, witness-surface, and witness-binding candidates form for the admitted F1-R1B Fresh Protocol, and can the requested initial-claim meaning also form without changing that Protocol?",
+  "sources": [
+    {
+      "path": "docs-next/relations/relation-model.md",
+      "sha256": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
+      "ranges": [
+        {
+          "id": "RELATION-SUBJECTS",
+          "start": 562,
+          "end": 810,
+          "anchors": [
+            "RelationDefinition = {",
+            "RelationInterface = {",
+            "RelationInstance = {",
+            "Four non-collapsible Interface roles"
+          ]
+        },
+        {
+          "id": "RELATION-MODEL",
+          "start": 847,
+          "end": 1070,
+          "anchors": [
+            "RelationSemanticModel = {",
+            "CheckedRelationSatisfaction<C> =",
+            "exact deterministic partial decision procedure"
+          ]
+        },
+        {
+          "id": "PROTOCOL-BINDING",
+          "start": 1607,
+          "end": 1733,
+          "anchors": [
+            "ProtocolRelationBinding = {",
+            "It cannot create a second transcript declaration",
+            "These are structural type, scope, occurrence, mode, and access-shape"
+          ]
+        },
+        {
+          "id": "INITIAL-CLAIM-MEANING",
+          "start": 1735,
+          "end": 1915,
+          "anchors": [
+            "ClaimMeaningBinding = {",
+            "For an initial claim, K2 requires",
+            "InitialClaim(BindingRef)"
+          ]
+        },
+        {
+          "id": "PLAN-WITNESS-BINDING",
+          "start": 1917,
+          "end": 1962,
+          "anchors": [
+            "PlanWitnessBinding = {",
+            "nonce/randomness, search state, and mutable state are absent",
+            "The Plan never cites a relation Interface"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs-next/pir/interfaces-and-plans.md",
+      "sha256": "bb359aa65a9037c8202a08bd8b62947566ce762a9708cf3cf7f6022953fea5a0",
+      "ranges": [
+        {
+          "id": "PROVER-PLAN",
+          "start": 687,
+          "end": 965,
+          "anchors": [
+            "ProverPlan = {",
+            "DecisionRecipe = {",
+            "DerivedWitnessExport = {"
+          ]
+        },
+        {
+          "id": "PLAN-REALIZES",
+          "start": 966,
+          "end": 1189,
+          "anchors": [
+            "PlanLifecycleReadBasis = {",
+            "PlanRealizes(",
+            "Affirmative `CheckedPlanRealizes` proves structural decision coverage"
+          ]
+        },
+        {
+          "id": "PLAN-STRATEGY-STEP",
+          "start": 1267,
+          "end": 1378,
+          "anchors": [
+            "PlanStrategyStep(",
+            "private state contains the exact Plan state vector",
+            "There is no fallback to another strategy"
+          ]
+        },
+        {
+          "id": "PLAN-WITNESS-SURFACE",
+          "start": 1623,
+          "end": 1688,
+          "anchors": [
+            "PlanWitnessSurfaceBody = {",
+            "SuppliedForGeneration",
+            "Neither the surface nor its extraction claims correspondence"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "evaluation/formal-source-target-core-f1r1b/reference_model.py",
+      "sha256": "f9b43c9c83f067a448502a83abc6d07af1eb8f508ec58502e09a80c51fdf2d53",
+      "ranges": [
+        {
+          "id": "F1R1B-FIXTURE",
+          "start": 721,
+          "end": 818,
+          "anchors": [
+            "def make_fixture()",
+            "claims=()",
+            "OccurrenceDecl(0, AlwaysGuard(), ChallengeEffect(0))"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "evaluation/formal-source-target-core-f1r1b/independent.py",
+      "sha256": "6cf53062bd1f1cf6413fa4887c9e5fdfd861e8c18ad01a79111f303b10447049"
+    },
+    {
+      "path": "evaluation/formal-source-target-core-f1r1b/expected-identities.json",
+      "sha256": "e5534e317ca67e54a3d40b43d79564a7f7ff4cd14ff3b1463ce26ec2509a81c3"
+    },
+    {
+      "path": "evaluation/formal-schnorr-relations-plan-f2p0/expected-findings.json",
+      "sha256": "e8f2d3b03b8c688605b1b2ddd24ba0f85e8dfe469b99177db96297b73cd4c743"
+    },
+    {
+      "path": "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o0-provider-observable-audit.md",
+      "sha256": "83f2cb1a9d727b5fd9c6747e0b5de4756c54d38282a16244e0adc5f4913d26fc",
+      "ranges": [
+        {
+          "id": "F2O0-PREMISES",
+          "start": 108,
+          "end": 118,
+          "anchors": [
+            "relation predicate `rel : Stmt → Wit → Bool`",
+            "Prover private state type",
+            "honest commit and respond"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-provisional-architecture-and-entry-contracts.md",
+      "sha256": "715604fc23abc0cfceced06e77ec5eff5f59ed23d690f4da8e2c60c29f8cd9fb",
+      "ranges": [
+        {
+          "id": "F2-P-ENTRY",
+          "start": 317,
+          "end": 357,
+          "anchors": [
+            "Schnorr.sigma_complete",
+            "PerfectlyComplete",
+            "Q5 must bind the"
+          ]
+        }
+      ]
+    }
+  ]
+}

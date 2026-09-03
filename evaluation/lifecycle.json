@@ -75,7 +75,8 @@
       "checks": [
         "research.provider-observable-audit",
         "research.provider-observable-audit-integrated",
-        "research.schnorr-relations-plan-coupling"
+        "research.schnorr-relations-plan-coupling",
+        "research.schnorr-relations-plan-candidates"
       ]
     },
     {

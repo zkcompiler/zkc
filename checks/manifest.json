@@ -1324,6 +1324,28 @@
       }
     },
     {
+      "id": "research.schnorr-relations-plan-candidates",
+      "title": "Exact Schnorr relation and ProverPlan candidate binding",
+      "subject": "Whether one exact finite-additive Schnorr relation definition, semantic model, instance family, ProtocolRelationBinding, ProverPlan, PlanRealizes result, PlanWitnessSurface, and PlanWitnessBinding can be authored as candidates for the admitted F1-R1B Fresh Protocol, including an initial-claim meaning.",
+      "claim": "Forward typed-candidate and reverse cold-dictionary paths independently construct and check the exact additive Z/3Z relation Y=x.G with G=1, bind Y, c, and z to the F1-R1B statement and phase coordinates, bind x to an honest nonce-carrying Plan, agree on all bodies and fifteen package-local identities, accept all 27 valid-pair Plan runs, reject all 27 plus-one controls, and preserve five directed mutation boundaries; the candidate bundle remains incomplete because the exact Protocol has no ClaimRef from which the requested initial claim meaning could form.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "property", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-schnorr-relations-plan-f2p1/run.py", "evaluation/formal-schnorr-relations-plan-f2p1/model.py", "evaluation/formal-schnorr-relations-plan-f2p1/independent.py", "evaluation/formal-schnorr-relations-plan-f2p1/README.md", "evaluation/formal-schnorr-relations-plan-f2p1/expected-findings.json", "evaluation/formal-schnorr-relations-plan-f2p1/source-pins.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2p1-schnorr-relations-plan-candidates.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The package-local candidate bodies and identities are not published owner semantics or canonical zkc identities and establish no theorem applicability, completeness or other property, cryptographic security, provider correspondence, compiler or backend correctness, or production validity."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-schnorr-relations-plan-f2p1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.provider-observable-audit-integrated",
       "title": "Integrated carrier provider observable audit",
       "subject": "Whether the exact D1 integrated-baseline Core and Fresh Protocol, as exposed by normalized owner-view bodies actually issued for that authority, carry every observable needed by a generic VCVio OracleComp/ProbComp interpretation of all 23 occurrences.",
