@@ -682,6 +682,49 @@ requirement identities use those nominal roles, while the live capability
 retains and exactly compares the original coordinates. No downstream kind
 union is imported into PIR, and swapping the two roles changes authority.
 
+The Interface/Plan profile compiles its own source-authority subjects over
+exactly the two families it issues: the interface-correspondence view above
+(arm 0, under an explicit no-policy declaration) and the confidential Plan
+witness view of Section 4 (arm 1, under a bound disclosure policy, so it has
+no no-policy arm). The path-step and atomic-boundary bodies are those of the
+Interaction page.
+
+```text
+ProtocolInterfaceViewBindingPayloadBody(x) = R {
+  0: ContentRef(x.protocol_interface_id),
+  1: S[ R{0:S[PIRViewPathStepBody(step)...],
+          1:PIRViewAtomicBoundaryBody(boundary)} ... ascending, no repeat ]
+}
+ProtocolInterfaceViewCapabilityRequirementBody(x) = R {
+  0: ContentRef(x.consumer_role_id), 1: ContentRef(x.purpose_role_id)
+}
+ProtocolInterfaceViewNoPolicyBody(x) = R {
+  0: ContentRef(x.owner_profile_id)
+}
+ProtocolInterfaceViewPolicyClosureBody(x) = R {
+  0: ContentRef(x.binding_payload_id), 1: ContentRef(x.no_policy_id),
+  2: ContentRef(x.capability_requirement_id)
+}
+
+InterfacePlanSourceBindingPayloadBody(x) =
+    V(0, ProtocolInterfaceViewBindingPayloadBody(x))
+  | V(1, ConfidentialPlanWitnessBindingPayloadBody(x))
+InterfacePlanSourceCapabilityRequirementBody(x) =
+    V(0, ProtocolInterfaceViewCapabilityRequirementBody(x))
+  | V(1, ConfidentialPlanWitnessCapabilityRequirementBody(x))
+InterfacePlanSourceNoPolicyBody(x) =
+    V(0, ProtocolInterfaceViewNoPolicyBody(x))
+InterfacePlanSourcePolicyClosureBody(x) =
+    V(0, ProtocolInterfaceViewPolicyClosureBody(x))
+  | V(1, ConfidentialPlanWitnessPolicyClosureBody(x))
+```
+
+The interface-view payload commits to the exact `ProtocolInterfaceId` and the
+complete read manifest; its closure commits to the payload, the no-policy
+declaration, and the requirement. The `ExactProtocolInterfaceViewAuthorityBinding`
+above is formed from these four identities with family
+`"interface-correspondence-view"`.
+
 ## 4. `ProverPlan`
 
 ### 4.1 Boundary and complete subject

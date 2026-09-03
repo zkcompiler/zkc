@@ -1293,7 +1293,6 @@ ChallengeTransitionViewBody = {
 }
 
 FSConstructionViewBody = {
-  result_ref: CheckedFSConstructionResultRef,
   result_schema: exact CheckedFSConstruction schema,
   fresh_protocol_id: ProtocolId,
   fiat_shamir_protocol_id: ProtocolId,
@@ -1333,7 +1332,110 @@ and the exact checked-result schema; a map field additionally closes to both
 its source and target coordinate domains. Missing capability is
 `MissingDependency`; wrong result origin or stale/equal-looking authority is
 `Refused`; malformed, duplicate, extra, or nonclosed reads are `Malformed`.
-No nonaffirmative check result can issue a view or partial projection.
+No nonaffirmative check result can issue a view or partial projection. The
+`CheckedFSConstructionResultRef` is live authority outside the body: it
+selects the result and is compared exactly at issuance, but it is not a body
+field, because it has no serialization. The body carries the identities the
+reference commits to, and the coordinate's body-safe form below carries the
+same identities with the result schema.
+
+This profile's view catalog has the same form as the Interaction catalog:
+
+```text
+CanonicalFramedViewSchemaCatalog = {
+  TranscriptDeclarationView: StaticViewSchema(TranscriptDeclarationView),
+  RequiredInfluenceView:     StaticViewSchema(RequiredInfluenceView),
+  ChallengeTransitionView:   StaticViewSchema(ChallengeTransitionView),
+  FSConstructionView:        StaticViewSchema(FSConstructionView),
+  ExecutionView:             StaticViewSchema(ExecutionView)
+}
+
+StaticViewSchema(TranscriptDeclarationView) = {
+  owner: ConstructionView(TranscriptConstructionId, TranscriptDeclarationView),
+  body: TranscriptDeclarationViewBody,
+  derivation: construction admission (Section 8),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: CanonicalFramedStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(RequiredInfluenceView) = {
+  owner: ConstructionView(TranscriptConstructionId, RequiredInfluenceView),
+  body: RequiredInfluenceViewBody,
+  derivation: required influence and construction admission (Sections 5 and 8),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: CanonicalFramedStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(ChallengeTransitionView) = {
+  owner: ConstructionView(TranscriptConstructionId, ChallengeTransitionView),
+  body: ChallengeTransitionViewBody,
+  derivation: challenge transition and construction admission
+              (Sections 7 and 8),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: CanonicalFramedStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(FSConstructionView) = {
+  owner: FSResultView(CheckedFSConstructionResultRef, FSConstructionView),
+  body: FSConstructionViewBody,
+  derivation: checked same-Core construction (Section 10),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: CanonicalFramedStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(ExecutionView) = {
+  owner: ProtocolView(ProtocolId, ExecutionView) of a canonical-framed Protocol,
+  body: CanonicalFramedExecutionViewBody,
+  derivation: construction admission and execution (Sections 8 and 9) over
+              challenge-parameterized execution of the Interaction page,
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: CanonicalFramedStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+CanonicalFramedExecutionViewBody = {
+  protocol_id: ProtocolId,
+  core_id: CoreId,
+  transcript_construction_id: TranscriptConstructionId,
+  challenge_interpretation: ChallengeInterpretation,
+    exactly FiatShamir(transcript_construction_id),
+  visible_history_law: PIRProfileLawReference,
+  resolver_coordinates: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    occurrence_ref: OccurrenceRef,
+    value_type: ValueType,
+    frame_schedule_coordinate: the challenge's entry of
+      exact_frame_schedule_coordinates,
+    decoding_coordinate: the challenge's entry of
+      challenge_decoding_coordinates
+  }>,
+  generated_execution_law: PIRProfileLawReference,
+  run_record_schema: PIRRuntimeSchema,
+    exactly the description of CompletedProtocolRecord(P) with
+    FSChallengeReceipt and FSInterpretationFailureReceipt,
+  interpretation_failure_schema: None | PIRRuntimeSchema,
+    exactly the description of FSSamplingFailureReceipt,
+  outcome_partition: PIRRuntimeSchema,
+    exactly the description of ProtocolOutcomeLane(P), six lanes,
+  replay_qualification_law: PIRProfileLawReference,
+  relation_run_view_issuance_law: PIRProfileLawReference
+}
+```
+
+A canonical-framed Protocol's `ExecutionView` is owned by this profile and
+never by the Interaction profile: its interpretation names the construction,
+its record schema carries the framed draw/retry receipt and the sampling
+failure receipt, and its outcome partition has the `InterpretationFailed`
+lane.
 
 The construction-view closure is likewise exact: a frame field closes to its
 algorithm/contract, source occurrence and prefix position; an influence field
@@ -1353,6 +1455,81 @@ OIR may later read the same occurrence and framing coordinates to project proof
 serialization and challenge execution, but endpoint correctness cannot change
 this construction's meaning. Evidence binds concrete observations to exact
 algorithm and construction IDs.
+
+This profile compiles its own source-authority subjects over exactly the two
+families it issues: the static views of this section (arm 0, family
+`"static-view"`, under an explicit no-policy declaration) and the checked
+construction result of Section 10 (arm 1, family `"checked-fs-construction"`,
+likewise under a no-policy declaration). The consumer and purpose roles are
+the common Interaction role bodies applied with `PIRCanonicalFramedFSProfileId`;
+the path-step, atomic-boundary, and description bodies are those of the
+Interaction page.
+
+```text
+CanonicalFramedConstructionViewKindBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
+
+CanonicalFramedViewCoordinateBody(x) = R {
+  0: V(0, R{0:ContentRef(protocol_id)})
+   | V(1, R{0:ContentRef(transcript_construction_id),
+            1:CanonicalFramedConstructionViewKindBody(kind)})
+   | V(2, R{0:ContentRef(fresh_protocol_id),
+            1:ContentRef(fiat_shamir_protocol_id),
+            2:ContentRef(shared_core_id),
+            3:ContentRef(transcript_construction_id),
+            4:PIRDescriptionBody(result_schema)}),
+  1: ContentRef(x.semantic_language_profile_id)
+}
+
+CanonicalFramedFieldCoordinateBody(x) = R {
+  0: CanonicalFramedViewCoordinateBody(x.view_coordinate),
+  1: S[ PIRViewPathStepBody(step) ... ],
+  2: PIRViewAtomicBoundaryBody(x.boundary)
+}
+
+CanonicalFramedStaticViewBindingPayloadBody(x) = R {
+  0: CanonicalFramedViewCoordinateBody(x.coordinate),
+  1: S[ CanonicalFramedFieldCoordinateBody(c) ... ascending, no repeat ]
+}
+CheckedFSConstructionBindingPayloadBody(x) = R {
+  0: ContentRef(x.fresh_protocol_id),
+  1: ContentRef(x.fiat_shamir_protocol_id),
+  2: ContentRef(x.shared_core_id),
+  3: ContentRef(x.transcript_construction_id),
+  4: PIRDescriptionBody(x.result_schema),
+  5: ContentRef(x.checker_contract)
+}
+CanonicalFramedRequirementBody(x) = R {
+  0: ContentRef(x.consumer_role_id), 1: ContentRef(x.purpose_role_id)
+}
+CanonicalFramedNoPolicyBody(x) = R {
+  0: ContentRef(x.owner_profile_id)
+}
+CanonicalFramedClosureBody(x) = R {
+  0: ContentRef(x.binding_payload_id), 1: ContentRef(x.no_policy_id),
+  2: ContentRef(x.capability_requirement_id)
+}
+
+CanonicalFramedSourceBindingPayloadBody(x) =
+    V(0, CanonicalFramedStaticViewBindingPayloadBody(x))
+  | V(1, CheckedFSConstructionBindingPayloadBody(x))
+CanonicalFramedSourceCapabilityRequirementBody(x) =
+    V(0, CanonicalFramedRequirementBody(x))
+  | V(1, CanonicalFramedRequirementBody(x))
+CanonicalFramedSourceNoPolicyBody(x) =
+    V(0, CanonicalFramedNoPolicyBody(x))
+  | V(1, CanonicalFramedNoPolicyBody(x))
+CanonicalFramedSourcePolicyClosureBody(x) =
+    V(0, CanonicalFramedClosureBody(x))
+  | V(1, CanonicalFramedClosureBody(x))
+```
+
+The result-view coordinate is body-safe: arm 2 of
+`CanonicalFramedViewCoordinateBody` carries the four identities and the result
+schema that the owner-local result reference commits to, and never the
+reference itself. `CanonicalFramedStaticViewSourceBinding` and the
+`ExactCheckedFSConstructionAuthorityBinding` of Section 10 are the
+`OwnerLocalSourceAuthorityBinding` values formed from these identities under
+their families.
 
 ## 14. Admission failures and nonclaims
 

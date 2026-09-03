@@ -491,7 +491,21 @@ EndpointSupplementPolicyClosureId(x) =
   ProfiledSemanticId<"pir.source-policy-closure">(
     B,PirEndpointSourceViewProfileId,
     EndpointSupplementPolicyClosureBody(x))
+
+EndpointSourceBindingPayloadBody(x) =
+  V(0, EndpointSupplementBindingPayloadBody(x))
+EndpointSourceCapabilityRequirementBody(x) =
+  V(0, EndpointSupplementCapabilityRequirementBody(x))
+EndpointSourceNoPolicyBody(x) =
+  V(0, EndpointSupplementNoPolicyBody(x))
+EndpointSourcePolicyClosureBody(x) =
+  V(0, EndpointSupplementPolicyClosureBody(x))
 ```
+
+The four `EndpointSource*Body` compilers are this profile's `pir.source-*`
+subject bodies: one closed variant per kind over exactly the source families
+the profile issues, which today is the supplement family alone. A payload of
+another profile's family has no arm here.
 
 The residual sequence is exactly the subset of Appendix B owner coordinates
 assigned to the supplement path set, with no overlap, omission, or additional
@@ -888,9 +902,10 @@ Reduction side inputs, and Terminal public outputs); the endpoint-value side
 of every retained reachable Plan view read; and every endpoint-value-rooted
 local presentation production or consumption. Runtime-only FS-failure
 payloads, state versions, and decoder results are not endpoint-value seeds.
-Earlier joint-Challenge-member refs and Terminal required-Check refs name
-already admitted semantic rows rather than values; they add no independent
-availability seed or requirement.
+Earlier joint-Challenge-member refs and Terminal required-Check,
+required-Reduction, and terminal-claim refs name already admitted semantic
+rows rather than values; they add no independent availability seed or
+requirement.
 
 The worklist visits `EndpointValueRefBody` in full-body byte order and resolves
 each demanded value exactly once. An invocation target uses its unique
@@ -1086,8 +1101,9 @@ EndpointAnchoredObligation = {
       terminal_spine_event,
       verdict,
       ordered public outputs,
-      ordered required-true check spine events,
-      ordered (claim ref, Consume | Discharge)
+      sorted-unique required-true check spine events,
+      sorted-unique required-reduction spine events,
+      sorted-unique terminal claim refs
     }
 }
 ```
@@ -1098,8 +1114,10 @@ spine is the cross-kind tie breaker. Every reduction output row retains all
 and only matching claim refs and may therefore contain zero, one, or several.
 A required publication points to the existing message/publication spine event
 and retains its optional next-challenge law. Terminal closure retains every
-required Check and claim disposition. K2 liveness, Last-Challenge, saturation,
-stopping, and linear-closure laws can therefore be rerun from the graph.
+required Check, every required Reduction, and every terminal claim; the claim
+disposition is derived from the verdict and is not a stored field. K2
+liveness, Last-Challenge, saturation, stopping, and linear-closure laws can
+therefore be rerun from the graph.
 
 The role split is fixed:
 

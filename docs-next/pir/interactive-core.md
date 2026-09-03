@@ -2704,7 +2704,11 @@ The four remaining envelope identities of a static-view binding have these
 exact bodies. Their coordinates and manifests are serializable because a Core
 or Protocol view is named by exact identities; a profile whose view coordinate
 contains an owner-local reference defines its own family-local payload from
-the identities that reference commits to.
+the identities that reference commits to. `PIRDescriptionBody` is the
+canonical body of a `PIRRuntimeSchema` or of any other finite description in
+the view universe: a record is arm 0 over its named fields in written order, a
+variant is arm 1 over its named arms in written order, a sequence is arm 2
+over its element description, and an atom is arm 3 over its boundary.
 
 ```text
 CoreStaticViewKindBody =
@@ -2731,6 +2735,12 @@ PIRStaticViewFieldCoordinateBody(x) = R {
 
 PIRStaticViewReadManifestBody(x) =
   S[ PIRStaticViewFieldCoordinateBody(c) ... ascending, no repeat ]
+
+PIRDescriptionBody =
+    V(0, S[ R{0:Q(field_name), 1:PIRDescriptionBody(field)} ... ])
+  | V(1, S[ R{0:Q(arm_name), 1:PIRDescriptionBody(arm)} ... ])
+  | V(2, PIRDescriptionBody(element))
+  | V(3, PIRViewAtomicBoundaryBody(atom))
 
 PIRStaticViewBindingPayloadBody(x) = R {
   0: PIRStaticViewCoordinateBody(x.coordinate),
@@ -2875,6 +2885,42 @@ the exact full invocation; substituting an equal or copied portable binding
 does not move the live capability. Cold use must reauthenticate the Protocol
 and invocation and rerun issuance; the portable body or binding alone grants
 nothing.
+
+The public-setup profile compiles its own source-authority subjects. It issues
+exactly one family, so each `pir.source-*` subject kind is a one-arm variant
+over that family; the consumer and purpose roles are the common Interaction
+role bodies applied with `PIRPublicSetupProfileId`.
+
+```text
+PublicSetupInvocationBindingPayloadBody(x) = R{
+  0:ContentRef(x.view_id),
+  1:ContentRef(x.protocol_id)
+}
+PublicSetupInvocationCapabilityRequirementBody(x) = R{
+  0:ContentRef(x.consumer_role_id),1:ContentRef(x.purpose_role_id)
+}
+PublicSetupInvocationNoPolicyBody(x) = R{
+  0:ContentRef(x.owner_profile_id)
+}
+PublicSetupInvocationPolicyClosureBody(x) = R{
+  0:ContentRef(x.binding_payload_id),1:ContentRef(x.no_policy_id),
+  2:ContentRef(x.capability_requirement_id)
+}
+
+PublicSetupSourceBindingPayloadBody(x) =
+  V(0, PublicSetupInvocationBindingPayloadBody(x))
+PublicSetupSourceCapabilityRequirementBody(x) =
+  V(0, PublicSetupInvocationCapabilityRequirementBody(x))
+PublicSetupSourceNoPolicyBody(x) =
+  V(0, PublicSetupInvocationNoPolicyBody(x))
+PublicSetupSourcePolicyClosureBody(x) =
+  V(0, PublicSetupInvocationPolicyClosureBody(x))
+```
+
+The payload commits to the exact portable view ID and the Protocol it was
+issued for; the closure commits to the payload, the no-policy declaration, and
+the requirement, so the `PortableSourceAuthorityBinding` of this view can be
+reauthenticated from identities alone.
 
 <!-- zkc-profile-source:public-setup:end -->
 

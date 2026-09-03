@@ -859,7 +859,107 @@ DuplexFSResultViewKindRef =
 
 Each local kind maps to exactly the like-named closed body below. View issuance
 uses the common owner-coordinate and capability mechanics with these exact
-profile-local references; no canonical-framed kind is accepted here.
+profile-local references; no canonical-framed kind is accepted here. The
+profile's view catalog has the same form as the Interaction catalog:
+
+```text
+DuplexViewSchemaCatalog = {
+  DuplexTranscriptDeclarationView:
+    StaticViewSchema(DuplexTranscriptDeclarationView),
+  DuplexEncodedInputCoverageView:
+    StaticViewSchema(DuplexEncodedInputCoverageView),
+  DuplexChallengeTransitionView:
+    StaticViewSchema(DuplexChallengeTransitionView),
+  DuplexFSConstructionView: StaticViewSchema(DuplexFSConstructionView),
+  ExecutionView:            StaticViewSchema(ExecutionView)
+}
+
+StaticViewSchema(DuplexTranscriptDeclarationView) = {
+  owner: ConstructionView(TranscriptConstructionId,
+                          DuplexTranscriptDeclarationView),
+  body: DuplexTranscriptDeclarationViewBody,
+  derivation: lifecycle and admission (Section 7),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(DuplexEncodedInputCoverageView) = {
+  owner: ConstructionView(TranscriptConstructionId,
+                          DuplexEncodedInputCoverageView),
+  body: DuplexEncodedInputCoverageViewBody,
+  derivation: lifecycle and admission (Section 7),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(DuplexChallengeTransitionView) = {
+  owner: ConstructionView(TranscriptConstructionId,
+                          DuplexChallengeTransitionView),
+  body: DuplexChallengeTransitionViewBody,
+  derivation: the fixed state-transition law and admission (Sections 5 and 7),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(DuplexFSConstructionView) = {
+  owner: FSResultView(CheckedDuplexFSConstructionResultRef,
+                      DuplexFSConstructionView),
+  body: DuplexFSConstructionViewBody,
+  derivation: the checked duplex construction (Section 10),
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+StaticViewSchema(ExecutionView) = {
+  owner: ProtocolView(ProtocolId, ExecutionView) of a duplex-sponge Protocol,
+  body: DuplexExecutionViewBody,
+  derivation: lifecycle and admission (Section 7) over challenge-parameterized
+              execution of the Interaction page,
+  resolver: PIRStaticViewFieldResolution,
+  closure: RequiredPIRViewReadClosure,
+  binding: DuplexStaticViewSourceBinding,
+  capability: PIRStaticViewCapability
+}
+
+DuplexExecutionViewBody = {
+  protocol_id: ProtocolId,
+  core_id: CoreId,
+  transcript_construction_id: TranscriptConstructionId,
+  challenge_interpretation: ChallengeInterpretation,
+    exactly FiatShamir(transcript_construction_id),
+  visible_history_law: PIRProfileLawReference,
+  resolver_coordinates: CanonicalSeq<{
+    challenge_ref: ChallengeRef,
+    occurrence_ref: OccurrenceRef,
+    value_type: ValueType,
+    squeeze_and_decoder_coordinate: the challenge's entry of
+      per_challenge_squeeze_and_decoder_map
+  }>,
+  generated_execution_law: PIRProfileLawReference,
+  run_record_schema: PIRRuntimeSchema,
+    exactly the description of CompletedProtocolRecord(P) with
+    DuplexInitializationReceipt and DuplexChallengeReceipt,
+  interpretation_failure_schema: None | PIRRuntimeSchema, exactly None,
+  outcome_partition: PIRRuntimeSchema,
+    exactly the description of ProtocolOutcomeLane(P), five lanes,
+  replay_qualification_law: PIRProfileLawReference,
+  relation_run_view_issuance_law: PIRProfileLawReference
+}
+```
+
+A duplex-sponge Protocol's `ExecutionView` is owned by this profile: its
+interpretation names the construction, its record schema carries the
+initialization and atomic-transition receipts, it declares no
+interpretation-failure schema, and its outcome partition has no
+`InterpretationFailed` lane.
 
 ### 11.1 Transcript declaration view
 
@@ -934,7 +1034,6 @@ DuplexChallengeTransitionViewBody = {
 
 ```text
 DuplexFSConstructionViewBody = {
-  result_ref,
   result_schema: exact CheckedDuplexFSConstruction schema,
   fresh_protocol_id,
   fiat_shamir_protocol_id,
@@ -956,7 +1055,80 @@ DuplexFSConstructionViewBody = {
 The profile-specific schema prevents Analysis from requesting canonical
 headers, namespaces, retries, or sampling failures from a duplex construction.
 It likewise prevents a canonical consumer from treating absent duplex fields
-as empty values.
+as empty values. The `CheckedDuplexFSConstructionResultRef` is live authority
+outside the body: it selects the result and is compared exactly at issuance,
+and the body-safe coordinate below carries the identities it commits to.
+
+This profile compiles its own source-authority subjects over exactly the two
+families it issues: the static views of this section (arm 0, family
+`"static-view"`) and the checked duplex construction result of Section 10 (arm
+1, family `"checked-duplex-fs-construction"`), both under an explicit
+no-policy declaration. The consumer and purpose roles are the common
+Interaction role bodies applied with `PIRDuplexSpongeFSProfileId`; the
+path-step, atomic-boundary, and description bodies are those of the
+Interaction page.
+
+```text
+DuplexConstructionViewKindBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
+
+DuplexViewCoordinateBody(x) = R {
+  0: V(0, R{0:ContentRef(protocol_id)})
+   | V(1, R{0:ContentRef(transcript_construction_id),
+            1:DuplexConstructionViewKindBody(kind)})
+   | V(2, R{0:ContentRef(fresh_protocol_id),
+            1:ContentRef(fiat_shamir_protocol_id),
+            2:ContentRef(shared_core_id),
+            3:ContentRef(transcript_construction_id),
+            4:PIRDescriptionBody(result_schema)}),
+  1: ContentRef(x.semantic_language_profile_id)
+}
+
+DuplexFieldCoordinateBody(x) = R {
+  0: DuplexViewCoordinateBody(x.view_coordinate),
+  1: S[ PIRViewPathStepBody(step) ... ],
+  2: PIRViewAtomicBoundaryBody(x.boundary)
+}
+
+DuplexStaticViewBindingPayloadBody(x) = R {
+  0: DuplexViewCoordinateBody(x.coordinate),
+  1: S[ DuplexFieldCoordinateBody(c) ... ascending, no repeat ]
+}
+CheckedDuplexFSConstructionBindingPayloadBody(x) = R {
+  0: ContentRef(x.fresh_protocol_id),
+  1: ContentRef(x.fiat_shamir_protocol_id),
+  2: ContentRef(x.shared_core_id),
+  3: ContentRef(x.transcript_construction_id),
+  4: PIRDescriptionBody(x.result_schema),
+  5: ContentRef(x.checker_contract)
+}
+DuplexRequirementBody(x) = R {
+  0: ContentRef(x.consumer_role_id), 1: ContentRef(x.purpose_role_id)
+}
+DuplexNoPolicyBody(x) = R {
+  0: ContentRef(x.owner_profile_id)
+}
+DuplexClosureBody(x) = R {
+  0: ContentRef(x.binding_payload_id), 1: ContentRef(x.no_policy_id),
+  2: ContentRef(x.capability_requirement_id)
+}
+
+DuplexSourceBindingPayloadBody(x) =
+    V(0, DuplexStaticViewBindingPayloadBody(x))
+  | V(1, CheckedDuplexFSConstructionBindingPayloadBody(x))
+DuplexSourceCapabilityRequirementBody(x) =
+    V(0, DuplexRequirementBody(x))
+  | V(1, DuplexRequirementBody(x))
+DuplexSourceNoPolicyBody(x) =
+    V(0, DuplexNoPolicyBody(x))
+  | V(1, DuplexNoPolicyBody(x))
+DuplexSourcePolicyClosureBody(x) =
+    V(0, DuplexClosureBody(x))
+  | V(1, DuplexClosureBody(x))
+```
+
+`DuplexStaticViewSourceBinding` and the checked-construction binding of
+Section 10 are the `OwnerLocalSourceAuthorityBinding` values formed from
+these identities under their families.
 
 <!-- zkc-profile-source:duplex-sponge-fs-semantics:end -->
 
