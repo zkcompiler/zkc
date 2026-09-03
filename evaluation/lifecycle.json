@@ -87,7 +87,8 @@
         "research.schnorr-relations-plan-coupling",
         "research.schnorr-relations-plan-candidates",
         "research.provider-interpretation",
-        "research.provider-interpretation-arklib"
+        "research.provider-interpretation-arklib",
+        "research.provider-interpretation-fs-arklib"
       ]
     },
     {

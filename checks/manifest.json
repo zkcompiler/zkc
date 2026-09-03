@@ -1396,16 +1396,13 @@
       "claim": "The repaired owner text fixes the application-domain declaration body. For each construction, all 54 finite strategy and verifier cases execute and independently replay with exact completed-record fields; four construction views validate through both current schema compilers, the execution view is derived, the six lanes are measured, and nine transcript prefixes form an authenticated derivation table. The retrying corpus retains six measured sampling exhaustions, while the one-shot corpus is total and has none.",
       "classification": "research-falsifier",
       "methods": ["known-answer", "negative", "differential", "mutation", "bounded-exhaustive", "static-analysis"],
-      "source_paths": ["evaluation/formal-source-fs-runtime-f0v3c/run.py", "evaluation/formal-source-fs-runtime-f0v3c/model.py", "evaluation/formal-source-fs-runtime-f0v3c/executor.py", "evaluation/formal-source-fs-runtime-f0v3c/replay.py", "evaluation/formal-source-fs-runtime-f0v3c/views.py", "evaluation/formal-source-fs-runtime-f0v3c/README.md", "evaluation/formal-source-fs-runtime-f0v3c/expected-findings.json", "evaluation/formal-source-fs-runtime-f0v3c/expected-runs.json", "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v3c-fs-runtime.md",
-"evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors-one-shot.json",
-"evaluation/formal-source-fs-runtime-f0v3c/expected-runs-one-shot.json"
-],
+      "source_paths": ["evaluation/formal-source-fs-runtime-f0v3c/run.py", "evaluation/formal-source-fs-runtime-f0v3c/model.py", "evaluation/formal-source-fs-runtime-f0v3c/executor.py", "evaluation/formal-source-fs-runtime-f0v3c/replay.py", "evaluation/formal-source-fs-runtime-f0v3c/views.py", "evaluation/formal-source-fs-runtime-f0v3c/README.md", "evaluation/formal-source-fs-runtime-f0v3c/expected-findings.json", "evaluation/formal-source-fs-runtime-f0v3c/expected-runs.json", "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors.json", "evaluation/formal-source-fs-runtime-f0v3c/expected-runs-one-shot.json", "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors-one-shot.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v3c-fs-runtime.md"],
       "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
       "cost": "long",
       "environment": "python-stdlib",
       "shardability": "case",
       "blocking": true,
-      "nonclaims": ["This finite candidate does not establish owner admission or publication, arbitrary-Core behavior, general evaluator correctness, compiler or backend correspondence, provider correspondence, theorem applicability, a protocol or cryptographic security property, duplex-sponge behavior, or production readiness."],
+      "nonclaims": ["This finite result does not establish publication, arbitrary-Core behavior, general evaluator correctness, compiler, backend, or provider correspondence, theorem applicability, a protocol or cryptographic security property, duplex-sponge behavior, or production readiness."],
       "execution": {
         "kind": "command",
         "argv": ["{python}", "-B", "evaluation/formal-source-fs-runtime-f0v3c/run.py", "--check"],
@@ -1563,6 +1560,28 @@
       "execution": {
         "kind": "command",
         "argv": ["{python}", "-B", "evaluation/formal-provider-interpretation-arklib-f2o3/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
+      "id": "research.provider-interpretation-fs-arklib",
+      "title": "Finite Fiat-Shamir Schnorr ArkLib interpretation",
+      "subject": "Whether ArkLib's Fiat-Shamir transform of the generated finite Schnorr reduction operationally corresponds run for run to the admitted one-shot canonical-framed Protocol under its exact finite table-backed challenge oracle, and how the six source lanes map to ArkLib's execution carrier.",
+      "claim": "An independent checker authenticates the source run set, derivation table, generated certificate, owner sources, provider sources, and package inputs; cold-admits the Core and one-shot Protocol; executes the term denotations and the transformed ArkLib module; and finds exact schedule, value, oracle-point, check-and-terminal, and trace agreement across all 54 source runs. The determinate Option Unit carrier models Accepted and Rejected, the four remaining lanes are Unmodelled, and six separately authenticated retrying-construction exhaustions are reported outside the affirmative one-shot correspondence claim. Superfluous, missing, and differently framed oracle-query controls fail closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-provider-interpretation-fs-arklib-f2o4/run.py", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/generator.py", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/checker.py", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/TermEvaluatorProbe.lean", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/template.lean", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/README.md", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/expected-findings.json", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/generated/FiatShamirSchnorrArkLib.lean", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/generated/certificate.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o4-fs-provider-interpretation.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "long",
+      "environment": "pinned-external-checkout",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["The finite clause findings establish no correspondence outside the nine-point oracle domain, provider construct for sampling exhaustion, arbitrary-protocol result, owner publication, theorem applicability, protocol or cryptographic security property, general compiler or evaluator correctness, duplex-sponge correspondence, or production validity."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-provider-interpretation-fs-arklib-f2o4/run.py", "--check"],
         "cwd": "{repo}",
         "requires": ["{python}"],
         "artifacts": []
