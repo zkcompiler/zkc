@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Run the M1 mechanized kernel edges-and-canonicity gate.
+"""Run the M2 mechanized portable-term and Schnorr-denotation gate.
 
-The gate answers one bounded question: can core decoding, Section 11 graph
-construction, decoder canonicity, topological class-table uniqueness, and the
-natural byte-bound edge be mechanized in core Lean while reproducing the five
-D1 carriers and the retained M0/K1 goldens? It is a measurement, not a
-migration: nothing under `lean/` is normative, and carrier agreement is
-claimed for the exact vectors compared only.
+The gate answers one bounded question: can the K1 portable-term calculus and
+the R1B finite Schnorr check denotation be mechanized in core Lean, while
+retaining M0/M1 and reproducing every available predecessor golden?  The K1
+independent oracle currently contains no term-evaluation operation, so that
+required evidence remains CannotAnswer even when the Lean/R1B comparisons
+pass.  Nothing under `lean/` is normative.
 
 When no Lean toolchain is available the Lean-dependent findings are classified
 `Unsupported/M0-U-LEAN-TOOLCHAIN` and the frozen comparison fails; the gate
@@ -38,6 +38,8 @@ LEAN = HERE / "lean"
 VECTORS = HERE / "vectors"
 EXPECTED = HERE / "expected-findings.json"
 EXPORT = HERE / "export_vectors.py"
+M2_EXPORT = HERE / "export_m2_vectors.py"
+M2_VECTORS = VECTORS / "m2-term-calculus.json"
 D1_EXPECTED = (
     ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json"
 )
@@ -45,7 +47,8 @@ ORACLE_CASES = ROOT / "evaluation/k1-executable-foundations/oracle/cases"
 FOUNDATION = ROOT / "docs-next/foundation/executable-foundations.md"
 TARGET = ROOT / "docs-next/pir/interactive-core.md"
 
-AGGREGATE = "M1-A-KERNEL-EDGES-AND-CANONICITY"
+AFFIRMATIVE_AGGREGATE = "M2-A-TERM-CALCULUS-REPRODUCES-GOLDENS"
+CANNOT_ANSWER_AGGREGATE = "M2-C-TERM-EVALUATION-ORACLE-ABSENT"
 TOOLCHAIN = "leanprover/lean4:v4.33.1"
 LEAN_VERSION = "4.33.1"
 D1_AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
@@ -54,7 +57,9 @@ ORACLE_REQUESTS_SHA256 = "43302085a81540e6d7aca57c2ec15338fd2082ddf0b5960517ceda
 ORACLE_EXPECTED_SHA256 = "c7c6f87c5cd591f25e604ed157134e5d113449d1fea0c48eaeb9e76a9e7eab42"
 ORACLE_BOUNDARY_SHA256 = "318b98c12f6a5a358885cff8e0dcbc13e7c0f38796a0dc2c036fe6eb6f334d41"
 STANDARD_AXIOMS = frozenset(("propext", "Classical.choice", "Quot.sound"))
-KERNEL_MODULES = ("Datum", "Encode", "Decode", "Core", "PCGraph", "Theorems")
+KERNEL_MODULES = (
+    "Datum", "Encode", "Decode", "Core", "PCGraph", "Theorems", "Term", "Eval"
+)
 TRANSPORT_MODULES = ("Transport",)
 PRIMARY_THEOREMS = (
     "M0.decode_encode", "M0.parse_canonical", "M0.decode_canonical",
@@ -62,6 +67,11 @@ PRIMARY_THEOREMS = (
 )
 ORDER_THEOREMS = ("M0.class_fold_topological_order_independent",)
 MAGNITUDE_THEOREMS = ("M0.magnitude_eq_quadratic",)
+M2_THEOREMS = (
+    "M0.evaluation_deterministic",
+    "M0.evaluation_completed_mono",
+    "M0.schnorr_denotation_eq_closed_form",
+)
 LATTICE_THEOREMS = (
     "M0.Join_cons",
     "M0.PCClass.join_assoc",
@@ -314,6 +324,7 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     timings: dict[str, float] = {}
     findings: list[Finding] = []
     export = _load("_zkc_m0_export", EXPORT)
+    m2_export = _load("_zkc_m2_export", M2_EXPORT)
     k1 = export._load("_zkc_m0_k1", export.K1_MODEL)
 
     # Predecessor pins.
@@ -365,11 +376,18 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     # The committed vectors are exactly what the predecessors export today.
     t0 = time.perf_counter()
     regenerated = export.export()
+    t1 = time.perf_counter()
+    regenerated_m2 = m2_export.export()
+    timings["m2_vector_export_seconds"] = round(time.perf_counter() - t1, 3)
     timings["vector_export_seconds"] = round(time.perf_counter() - t0, 3)
     committed = {name: (VECTORS / name).read_text(encoding="utf-8") for name in regenerated}
     _require(
         all(committed[name] == export._dump(value) for name, value in regenerated.items()),
         "committed vectors differ from the regenerated export",
+    )
+    _require(
+        M2_VECTORS.read_text(encoding="utf-8") == m2_export._dump(regenerated_m2),
+        "committed M2 vectors differ from the regenerated export",
     )
     findings.append(_finding("vector-export-stable", "Affirmative", "M0-A-VECTOR-EXPORT-STABLE"))
 
@@ -433,6 +451,7 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             "encode": encode_rows,
             "reject": reject_rows,
             "pcgraph_construction": regenerated["pcgraph-construction.json"]["carriers"],
+            "m2": regenerated_m2,
         }
         input_path = artifacts / "m0-input.json"
         input_path.write_text(json.dumps(lean_input, separators=(",", ":")), encoding="utf-8")
@@ -595,7 +614,133 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         )
     )
 
-    # Stage 6: report the full axiom closure; timings become the cost ledger.
+    # M2 Stage 1: exact portable-term carrier and relational typing text.
+    term_text = (LEAN / "M0" / "Term.lean").read_text(encoding="utf-8")
+    eval_text = (LEAN / "M0" / "Eval.lean").read_text(encoding="utf-8")
+    term_constructors = (
+        "| literal", "| variable", "| letE", "| recordConstruct", "| project",
+        "| inject", "| caseE", "| sequenceConstruct", "| sequenceLength", "| fail",
+        "| strictIndex", "| boundedAppend", "| primitiveCall", "| boundedIterate",
+        "| conditional",
+    )
+    stage1_term_ok = all(constructor in term_text for constructor in term_constructors)
+    stage1_typing_ok = (
+        "inductive HasType" in term_text
+        and "inductive TermsHaveType" in term_text
+        and "inductive FieldsHaveType" in term_text
+        and "inductive BranchesHaveType" in term_text
+    )
+    stage1_abis_ok = (
+        "def declaredPrimitiveABIs" in term_text
+        and all(name in term_text for name in (
+            "sha2-256", "bytes.concat", "u64.to-be", "bytes.first-u64-be", "nat.lt",
+            "nat.mod-positive", "bytes.take", "fixture.bytes.reverse",
+            "fixture.bytes.prefix-27",
+        ))
+    )
+    findings.extend(
+        (
+            lean_finding("m2-portable-term-carrier", stage1_term_ok,
+                         "M2-A-S1-PORTABLE-TERM-CARRIER"),
+            lean_finding("m2-relational-typing", stage1_typing_ok,
+                         "M2-A-S1-RELATIONAL-TYPING"),
+            lean_finding("m2-k1-primitive-abi-families", stage1_abis_ok,
+                         "M2-A-S1-PRIMITIVE-ABI-FAMILIES"),
+        )
+    )
+    m2_stage1_ok = all((stage1_term_ok, stage1_typing_ok, stage1_abis_ok))
+
+    # M2 Stage 2: evaluator and exact evidence availability.
+    outcome_names = (
+        "unsupported", "missingDependency", "cannotAnswer", "kindMismatch",
+        "malformed", "refused", "deterministicLimitExceeded", "checkerFailure",
+    )
+    stage2_definition_ok = (
+        "def evalCore" in eval_text and "def evaluate" in eval_text
+        and "structure Limits" in eval_text and "structure Charge" in eval_text
+    )
+    stage2_partition_ok = all(f"| {name}" in eval_text for name in outcome_names)
+    oracle_inventory = regenerated_m2["oracle_inventory"]
+    oracle_term_rows = oracle_inventory["term_evaluation_requests"]
+    _require(
+        oracle_term_rows == 0
+        and oracle_inventory["operations"]
+        == ["content_id", "decode", "encode", "prior_meta_id", "verify_id"],
+        "the frozen K1 oracle inventory changed",
+    )
+    findings.extend(
+        (
+            lean_finding("m2-evaluator-definition", stage2_definition_ok,
+                         "M2-A-S2-EVALUATOR-DEFINITION"),
+            lean_finding("m2-noncompletion-partition", stage2_partition_ok,
+                         "M2-A-S2-NONCOMPLETION-PARTITION"),
+            _finding("m2-k1-term-evaluation-oracle-vectors", "CannotAnswer",
+                     "M2-C-S2-K1-TERM-EVALUATION-ORACLE-ABSENT"),
+            _finding("m2-noncompletion-byte-encoding", "CannotAnswer",
+                     "M2-C-S2-NONCOMPLETION-BYTES-UNDEFINED"),
+        )
+    )
+    m2_stage2_ok = stage2_definition_ok and stage2_partition_ok and oracle_term_rows > 0
+
+    # M2 Stage 3: exact preimages, elaborated terms, and all finite inputs.
+    m2_report = report.get("m2", {})
+    m2_preimages_ok = all(m2_report.get(key) is True for key in (
+        "check_preimage_decodes", "guard_preimage_decodes",
+        "check_preimage_roundtrips", "guard_preimage_roundtrips",
+    ))
+    m2_elaboration_ok = all(m2_report.get(key) is True for key in (
+        "check_term_elaborates_exactly", "guard_term_elaborates_exactly",
+    ))
+    m2_check_cases_ok = (
+        m2_report.get("check_cases") == 81 and m2_report.get("check_cases_agree") is True
+    )
+    m2_guard_cases_ok = (
+        m2_report.get("guard_cases") == 2 and m2_report.get("guard_cases_agree") is True
+    )
+    findings.extend(
+        (
+            lean_finding("m2-r1b-preimages-strictly-decoded", m2_preimages_ok,
+                         "M2-A-S3-R1B-PREIMAGES-DECODED"),
+            lean_finding("m2-r1b-terms-elaborate-exactly", m2_elaboration_ok,
+                         "M2-A-S3-R1B-TERMS-ELABORATED"),
+            lean_finding("m2-schnorr-check-81-inputs", m2_check_cases_ok,
+                         "M2-A-S3-SCHNORR-81-INPUTS"),
+            lean_finding("m2-guard-two-inputs", m2_guard_cases_ok,
+                         "M2-A-S3-GUARD-TWO-INPUTS"),
+        )
+    )
+    m2_stage3_ok = all((m2_preimages_ok, m2_elaboration_ok,
+                        m2_check_cases_ok, m2_guard_cases_ok))
+
+    # M2 Stages 4 and 5: proof closure and the closed finite equation.
+    m2_determinism_ok = proved(("M0.evaluation_deterministic",))
+    m2_monotonicity_ok = proved(("M0.evaluation_completed_mono",))
+    m2_equation_ok = proved(("M0.schnorr_denotation_eq_closed_form",))
+    m2_axioms_ok = proved(M2_THEOREMS)
+    findings.extend(
+        (
+            lean_finding("m2-evaluation-deterministic", m2_determinism_ok,
+                         "M2-A-S4-EVALUATION-DETERMINISTIC"),
+            lean_finding("m2-completion-monotone-in-limits", m2_monotonicity_ok,
+                         "M2-A-S4-COMPLETION-MONOTONE"),
+            lean_finding("m2-theorems-standard-axioms-only", m2_axioms_ok,
+                         "M2-A-S4-STANDARD-AXIOMS-ONLY"),
+            lean_finding("m2-schnorr-term-denotation-defined",
+                         "def schnorrDenotation" in eval_text,
+                         "M2-A-S5-SCHNORR-DENOTATION"),
+            lean_finding("m2-schnorr-closed-form-equation", m2_equation_ok,
+                         "M2-A-S5-SCHNORR-CLOSED-FORM"),
+        )
+    )
+    m2_stage4_ok = all((m2_determinism_ok, m2_monotonicity_ok, m2_axioms_ok))
+
+    # M2 Stage 6: bounded cost and exact owner-text underdetermination.
+    findings.append(
+        _finding("m2-section-8-no-universal-result-bytes", "CannotAnswer",
+                 "M2-C-S6-SECTION8-NO-UNIVERSAL-RESULT-BYTES")
+    )
+
+    # Report the full axiom closure; timings become the cost ledger.
     findings.append(lean_finding("axiom-closure-standard-only", axioms_ok,
                                  "M1-A-S6-STANDARD-AXIOMS-ONLY"))
 
@@ -609,17 +754,21 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             _finding("lean-definitions-not-normative", "CannotAnswer", "M0-C-NOT-NORMATIVE"),
             _finding("implementation-correspondence", "CannotAnswer", "M0-C-NO-IMPLEMENTATION-CORRESPONDENCE"),
             _finding("security-and-applicability", "CannotAnswer", "M0-C-NO-SECURITY-OR-APPLICABILITY-CLAIM"),
+            _finding("general-k1-evaluator-conformance", "CannotAnswer",
+                     "M2-C-NO-GENERAL-K1-EVALUATOR-CONFORMANCE"),
         )
     )
     if not lean_available:
         findings.append(_finding("mechanized-kernel-definitions", "CannotAnswer", "M0-C-LEAN-TOOLCHAIN-UNAVAILABLE"))
     elif all((retained_ok, stage1_ok, decoder_canonicity_ok, order_independence_ok,
               magnitude_equivalence_ok, lean_boundary_ok, k1_boundary_ok,
-              primary_ok, lattice_ok, axioms_ok)):
-        findings.append(_finding("mechanized-kernel-definitions", "Affirmative", AGGREGATE))
+              primary_ok, lattice_ok, axioms_ok, m2_stage1_ok, m2_stage2_ok,
+              m2_stage3_ok, m2_stage4_ok, m2_equation_ok)):
+        findings.append(_finding("mechanized-kernel-definitions", "Affirmative",
+                                 AFFIRMATIVE_AGGREGATE))
     else:
         findings.append(_finding("mechanized-kernel-definitions", "CannotAnswer",
-                                 "M1-C-KERNEL-EDGES-OR-CANONICITY-DIVERGE"))
+                                 CANNOT_ANSWER_AGGREGATE))
 
     payload = [finding.value() for finding in findings]
     checksum = hashlib.sha256(
@@ -657,6 +806,14 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             "axioms": axioms,
             "lean_version": report.get("lean_version"),
             "nat_byte_bound_probe": boundary_probe,
+            "m2": {
+                "stage_1_passed": m2_stage1_ok,
+                "stage_2_passed": m2_stage2_ok,
+                "stage_3_passed": m2_stage3_ok,
+                "stage_4_passed": m2_stage4_ok,
+                "k1_term_evaluation_oracle_vectors": oracle_term_rows,
+                "lean_report": m2_report,
+            },
         }
     )
     return findings, metrics

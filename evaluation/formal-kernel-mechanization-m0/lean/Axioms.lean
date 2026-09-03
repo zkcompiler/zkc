@@ -24,3 +24,6 @@ and never on `sorryAx`.
 #print axioms M0.Publish_idem
 #print axioms M0.class_fold_topological_order_independent
 #print axioms M0.magnitude_eq_quadratic
+#print axioms M0.evaluation_deterministic
+#print axioms M0.evaluation_completed_mono
+#print axioms M0.schnorr_denotation_eq_closed_form

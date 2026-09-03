@@ -1,13 +1,14 @@
-# M1 mechanized kernel edges and canonicity
+# M2 mechanized portable-term calculus and Schnorr denotation
 
-This package extends the M0 spike in place and answers one exact question:
+This package extends M0 and M1 in place and answers one exact question:
 
-> Can the admitted D1 Core bytes and used semantic-module declarations be
-> decoded into all fourteen Core tables and used by core-only Lean 4 to derive
-> the complete Section 11 PCGraph products for all five D1 carriers, while
-> also proving decoder canonicity, topological-order independence of the class
-> fold, and equivalence of a linear minimal-magnitude implementation, and while
-> executing the exact `2^20`-octet natural boundary?
+> Can core-only Lean 4 transcribe the K1 portable-term carrier, typing and
+> deterministic evaluation boundary; strictly decode and exactly elaborate
+> the R1B finite-Schnorr check and Boolean guard preimages; reproduce every
+> available independent K1 term-evaluation oracle vector plus the Python K1
+> evaluator's 81 check and two guard results byte-for-byte; and prove
+> evaluation determinism, completion monotonicity, and equality of the decoded
+> check denotation with `z = a + c*y (mod 3)`?
 
 Run from the repository root:
 
@@ -15,166 +16,137 @@ Run from the repository root:
 python3 -B evaluation/formal-kernel-mechanization-m0/run.py --check
 ```
 
-The frozen result is
-`Affirmative/M1-A-KERNEL-EDGES-AND-CANONICITY`. The aggregate passes only if
-every retained M0 vector, every M1 graph product, all named theorems and axiom
-closures, the compiled-Lean boundary execution, and the K1 boundary decision
-agree with their frozen expectations. The Section 11 wording gaps remain
-explicit `CannotAnswer` findings and do not make the aggregate negative,
-because the experiment implements the already selected D1 readings and does
-not claim that those readings are uniquely determined by the owner text.
+The frozen aggregate is
+`CannotAnswer/M2-C-TERM-EVALUATION-ORACLE-ABSENT`. Stages 1, 3, 4, and 5 pass,
+but Stage 2 cannot pass: the K1 independent oracle's 24 requests have only
+`content_id`, `decode`, `encode`, `prior_meta_id`, and `verify_id` operations.
+There is no `evaluate` or `evaluate_encoded` vector to reproduce. K1's own
+README also states that term evaluation has one Python implementation. Missing
+independent evidence is not converted into an affirmative aggregate.
 
 ## Authority and toolchain
 
-Nothing in this package is normative. The owner texts remain
-`docs-next/foundation/executable-foundations.md` Section 2.1 and
-`docs-next/pir/interactive-core.md` Section 11 and Appendix A. The Lean text is
-definition and proof text under measurement, and D1 is a bounded comparison
-oracle. No target owner page is edited by M1.
+Nothing in this package is normative. The owner text is
+`docs-next/foundation/executable-foundations.md` Sections 5, 7, 8 and Appendix
+A.3. The R1B source term comes from
+`evaluation/formal-source-target-core-f1r1b/reference_model.py`. No owner page
+is edited by M2.
 
 `lean/lean-toolchain` pins `leanprover/lean4:v4.33.1`. Kernel modules import
 only package modules and Lean core; there is no Mathlib, Batteries, Std,
 VCVio, ArkLib, `sorry`, declared axiom, or Lake dependency. JSON transport is
-isolated in `Transport.lean`. If the pinned installed toolchain is unavailable,
+isolated in `Transport.lean`. If that installed toolchain is unavailable,
 Lean-dependent findings become `Unsupported/M0-U-LEAN-TOOLCHAIN` and the
 frozen gate fails.
 
-## Construction trust boundary
+## M2 stages
 
-`evaluation/formal-source-integrated-graph-f0v2b2d1/export_m1_vectors.py`
-exports, for each D1 carrier, only these construction inputs:
-
-- canonical admitted Core-domain bytes;
-- canonical bodies for the semantic-module declarations actually referenced
-  by that Core, keyed by exact module reference and local ordinal.
-
-Nodes, edges, Kahn order, class table, sinks, acceptance sinks, private
-predecessors, LogicalAccess cones, and acceptance intersections are expected
-outputs. They are never supplied to Lean as construction inputs. The committed
-`vectors/pcgraph-construction.json` is regenerated and compared byte-for-byte
-on every run.
-
-`Core.lean` decodes the fourteen Core tables and the selected module
-declarations using the M0 datum decoder. `PCGraph.lean` then constructs items
-1--6 of Section 11: producer, scope, binding, guard and activity dependencies;
-terminal-preemption control edges; constructor operands; Oracle
-publication/Query/Answer edges; occurrence outputs; claim/reduction/terminal
-states; and declaration-owned module control/output edges. It derives every
-requested downstream product independently before comparing it with D1.
-
-## Stages
-
-| Stage | Checked result |
+| Stage | Frozen result |
 |---|---|
-| Retained M0 basis | 22 canonical bodies still encode and round-trip byte-for-byte; two oracle and 23 crafted noncanonical inputs still refuse. |
-| 1. Graph construction | All five carriers decode fourteen Core tables and three used module declarations. Their 91-node sets, 151 or 146 edges, Kahn order, class tables, sinks, acceptance sinks, private predecessors, LogicalAccess cones, and intersections equal D1 exactly. Every carrier exercises terminal-preemption, Oracle Query/Answer, and module edges. |
-| 2. Decoder canonicity | `parse_canonical`: `parse fuel b = some (d,r) -> encode d ++ r = b`, and its complete-input corollary `decode_canonical`, both with no `sorry`. The strict parser performs the byte-for-byte re-encoding check required by Foundation Section 2.1 lines 94--97. |
-| 3. Order independence | `class_fold_topological_order_independent`: for any two rank functions whose dependencies are strictly earlier, the recursively defined class folds are equal. `classFoldByRank_solves` connects each fold to the exact transfer equations, and uniqueness follows by well-founded induction. |
-| 4. Magnitude and boundary | The accumulator-based magnitude performs linear list work. `magnitude_eq_quadratic` proves equality with the retained M0 recursive-right-append reference. The compiled Lean executable constructs a natural with a `1,048,567`-octet magnitude, obtains a complete `1,048,576`-octet encoding, and observes `encodeChecked` acceptance. |
-| 5. K1 decision | `_magnitude_size` charges nine octets for naturals and ten for signed integers. The compact frozen oracle recipes contain one natural exactly at the bound (`Completed`) and one crossing by one octet (`Malformed`); reference and independent-oracle tests expand and check both. `M0-C-NAT-BYTE-BOUND` is therefore resolved as `M1-A-S5-M0-NAT-BYTE-BOUND-RESOLVED`. |
-| 6. Cost and axioms | `Axioms.lean` prints every relied-on theorem. The gate permits only `propext`, `Classical.choice`, and `Quot.sound`, and records build, execution, export, proof-report, and total timings plus per-file line counts. |
+| 1. Term and typing | `Term.lean` carries all fifteen Appendix A.3 tags, exact value-type/domain carriers, typed failures, algorithm bodies, all nine K1 fixture primitive ABI families, and a relational success/failure typing judgment. |
+| 2. Evaluation and K1 oracle | `Eval.lean` carries strict deterministic evaluation, four limits/charges, result preflight, completed ABI envelopes, and all eight noncompletion classes. `CannotAnswer`: the independent oracle has zero term-evaluation vectors, and Section 8 defines no universal noncompletion byte encoding. |
+| 3. R1B terms and finite inputs | The M0 decoder accepts the 179,147-byte check preimage and guard preimage; re-encoding is exact. Independently built Lean terms equal both decoded terms. Completion bytes and all four charge coordinates equal the Python evaluator on 81 check and two guard inputs. |
+| 4. Proofs | `evaluation_deterministic` proves functional uniqueness. `evaluation_completed_mono` proves that a completion under limits `L` is unchanged under any componentwise larger limits. Both are `sorry`-free. |
+| 5. Schnorr equation | `schnorrDenotation` evaluates the finite term. Exhaustion of the four `Fin 3` inputs proves it equals `response = (commitment + challenge*y) % 3`. |
+| 6. Cost and underdetermination | The runner records export, build, executable, axiom-report, and total wall time plus line counts. Section 8 lines 1615--1619 deliberately leave domain result payloads and diagnostics to their owners, so refusal bytes cannot be invented here. |
 
-## Mechanized statements
+## Exact R1B transport
 
-The retained encoder-side theorem is `parse_encode`: strict parsing of a
-well-formed encoding with enough fuel returns the same datum and exact
-remainder. Its corollaries retain decoder round-trip, injectivity, and prefix
-freedom.
+`export_m2_vectors.py` imports the F1R1B source model and regenerates:
 
-M1 names the structural recursion `parseRaw` and makes `parse` the
-specification's strict parse-plus-re-encoding check. `parse_canonical` extracts
-the exact requested remainder law from every successful strict parse;
-`decode_canonical` adds the empty-remainder and constitutional-limit boundary
-and concludes `encode d = b` for every accepted complete input.
+- the complete check and guard `PortableAlgorithmBody` bytes and digests;
+- the check's exact `nat.lt` `SemanticPrimitiveRef` carrier;
+- 81 check inputs and two guard inputs;
+- each Python K1 completion in JSON datum transport and canonical hexadecimal;
+- each exact `steps`, `iteration_items`, `primitive_work`, and `result_bytes`
+  record; and
+- the independent-oracle request inventory proving the absence of term
+  evaluation vectors.
 
-For classes, `Transfer.dependencies` enumerates every coordinate read by each
-transfer. `classFoldByRank` recursively evaluates those dependencies under an
-arbitrary topological rank. `classFoldByRank_solves` proves that the resulting
-function satisfies every transfer equation. A well-founded induction shows
-that two complete solutions agree at each node, yielding equality of folds
-for any two topological ranks. This theorem is general over the abstract
-finite-index transfer graph; the five D1 comparisons separately establish
-that the executable array fold and graph construction reproduce those exact
-carriers.
+The committed `vectors/m2-term-calculus.json` is compared byte-for-byte with a
+fresh export on every run. Lean starts from each complete preimage's exact
+octets, invokes the retained M0 strict decoder, elaborates the resulting datum
+as `Algorithm`/`Term`, and re-encodes it. The source algorithm's diagnostic
+name is never used to select denotation.
 
-For magnitudes, `magnitudeQuadratic` retains the M0 reference. `magnitudeCore`
-conses low octets into an accumulator, and exact powers of 256 use the direct
-one-followed-by-zeroes form so the constitutional edge is executable.
-`magnitude_eq_quadratic` proves that both paths produce the same bytes.
+## Mechanized boundary
+
+`Term.lean` retains exact domain coordinates while exposing the nine finite
+schema constructors. `HasType` is parameterized by an exact-reference
+primitive ABI relation. This reflects the Foundation split: primitive names
+and versions are diagnostic; an authenticated exact reference selects its
+type rule and denotation.
+
+`Eval.lean` takes an exact-reference-qualified deterministic primitive
+function. M2 instantiates only `nat.lt`, the sole primitive reachable from the
+R1B term. This is enough to evaluate the check without pretending that core
+Lean supplies SHA-256 or every module-owned primitive provider. The theorem
+about larger limits is over a fixed admitted term, environment, primitive
+denotation, failure-ordinal map, completion bound, and fuel.
+
+The exact theorem closures printed by `Axioms.lean` are:
+
+- `evaluation_deterministic`: `propext`;
+- `evaluation_completed_mono`: `propext`; and
+- `schnorr_denotation_eq_closed_form`: `propext`, `Quot.sound`.
+
+These are within the package's pre-existing standard Lean allowance of
+`propext`, `Classical.choice`, and `Quot.sound`; there is no `sorryAx` or
+native-decision axiom.
 
 ## Frozen vectors
 
 | File | Role |
 |---|---|
-| `k1-encoding-vectors.json` | Twelve canonical K1 oracle bodies, two malformed oracle bodies, skipped-case accounting, and the compact positive/negative natural-bound recipes. |
-| `structural-negatives.json` | Twenty-three Foundation Section 2.1 malformed encodings, each also refused by K1 during export. |
-| `body-digests.json` | Digests for five D1 profiled Core and five `PublicCoinView` bodies regenerated before use. |
-| `pcgraph-construction.json` | Canonical Core/module input bytes and frozen D1 expected graph products for five carriers; edge tables are outputs only. |
+| `m2-term-calculus.json` | Exact R1B preimages, direct primitive carrier, 83 Python K1 evaluation rows, charge records, and K1 oracle inventory. |
+| `k1-encoding-vectors.json` | Retained M0 canonical K1 oracle bodies and malformed cases. |
+| `structural-negatives.json` | Retained M0 malformed encodings. |
+| `body-digests.json` | Retained M1 D1 body digests. |
+| `pcgraph-construction.json` | Retained M1 Core/module inputs and finite graph outputs. |
 
-The K1 compact recipe file is
-`evaluation/k1-executable-foundations/oracle/cases/natural-byte-bound.json`.
-It avoids committing multi-megabyte decimal and hexadecimal lines while still
-freezing the input magnitude size and complete expected outcome.
+## CannotAnswer findings
 
-## Section 11 `CannotAnswer` findings
+- `M2-C-S2-K1-TERM-EVALUATION-ORACLE-ABSENT`: there are zero independent K1
+  term-evaluation requests. The 83 R1B rows are exported from the same Python
+  K1 implementation whose result is being compared, so they are bounded
+  cross-language differential evidence, not independent oracle evidence.
+- `M2-C-S2-NONCOMPLETION-BYTES-UNDEFINED` and
+  `M2-C-S6-SECTION8-NO-UNIVERSAL-RESULT-BYTES`: Foundation Section 8 lines
+  1615--1619 explicitly declines to define one universal Result payload,
+  diagnostic vocabulary, or domain-wide precedence. M2 represents all eight
+  classes but does not invent canonical refusal bytes.
+- `M2-C-NO-GENERAL-K1-EVALUATOR-CONFORMANCE`: the R1B term uses only variables,
+  literals, conditionals, and `nat.lt`. Its 83 rows do not validate all term
+  constructors, primitive formulas, typed failures, or limit-refusal charge
+  prefixes.
 
-M1 implements the D1 reading but cannot derive the following coordinates or
-precedence uniquely from the current owner prose:
-
-- `M1-C-S11-CHALLENGE-DEPENDENCY-ORDER`: lines 1490--1493 say "first failed
-  dependency" without fixing positional order versus lattice priority. D1
-  gives `Invalid` global priority. The fifteen carrier Challenges do not
-  distinguish the readings.
-- `M1-C-S11-PUBLIC-QUERY-COORDINATE`: lines 1486--1489 say a Public Query uses
-  `Join(activity,index)` but do not state explicitly that this transfer is on
-  the Query effect node and intentionally ignores the publication-effect
-  incoming edge. M1 uses the D1 effect-node reading.
-- `M1-C-S11-VERIFIER-MESSAGE-COORDINATE`: the same lines name a deterministic
-  Verifier message but do not explicitly place `Join(activity,inputs)` on its
-  output node, whose inputs are incoming to the effect node. M1 uses D1's
-  output-node placement and named-coordinate read.
-- `M1-C-S11-LOGICAL-PUBLICATION-COORDINATE`: line 1486 names an "Oracle
-  publication output", but a LogicalAccess publication has no occurrence
-  output. M1 applies `Publish(activity)` to the publication-effect node, as D1
-  does.
-- `M1-C-S11-PUBLIC-QUERY-SINK-COORDINATE`: lines 1508--1511 name a "public
-  Query index" without enumerating whether the Query activity/effect is also a
-  public-observation sink. M1 retains activity, effect, and index producer as
-  D1 does.
-
-These are wording findings against exact sections and line numbers, not owner
-page edits. Missing wording evidence is not converted into an affirmative
-claim.
+The retained five M1 Section 11 wording findings and three M0 non-claims remain
+frozen. M2 found no basis for a Foundation owner-page change, so it proposes no
+owner delta.
 
 ## Cost ledger
 
-The machine-readable ledger is emitted under `metrics.timings`,
-`metrics.lean_line_counts`, and `metrics.axioms` on every run. A warm local M1
-run builds, executes all five large carriers plus the million-octet Lean
-boundary, and prints axioms in roughly ten seconds; the exact measured values
-in the current run artifacts are authoritative for that run. K1's complete
-131-test gate is recorded separately because it exercises the full K1 package,
-not just M1's boundary probe.
+Every run emits machine-readable values under `metrics.timings`,
+`metrics.lean_line_counts`, `metrics.axioms`, and `metrics.m2`. In the first
+warm M2 run, the complete gate took 83.656 seconds: 74.305 seconds regenerated
+the 83 Python rows, 0.412 seconds built Lean, 4.948 seconds ran the compiled
+executable, and 0.506 seconds printed axioms. These are measurements from that
+run, not stable performance claims.
 
-The material implementation cost is one Core/module decoder, the complete
-graph/product derivation, a proof-oriented rank fold, a canonicity guard and
-proof, and the linear magnitude path. Per-file code and comment line counts
-remain in the gate output instead of being copied into a drifting prose total.
+## What the frozen check does and does not establish
 
-## What a pass does and does not establish
+The frozen check establishes only that, under the pinned toolchain:
 
-A pass establishes only that, under the pinned Lean toolchain:
+- all retained M0/M1 checks still pass;
+- the exact R1B preimages decode, elaborate, and re-encode in Lean;
+- the 83 exact R1B rows agree with the current Python K1 evaluator in
+  completion bytes and abstract charges; and
+- the three named M2 statements elaborate without `sorry` and with only the
+  reported standard axioms.
 
-- the named definitions and proofs elaborate without `sorry` or nonstandard
-  axioms;
-- the exact five D1 carriers produce equal finite graph products from canonical
-  Core/module bytes; and
-- the exact K1 and Lean boundary vectors have the frozen outcomes.
-
-A pass does not establish normative owner semantics, uniqueness of the D1
-reading where the wording findings remain, arbitrary-Core correctness,
-correspondence with compiler/C++/backend behavior, semantic-module host
-conformance, relation satisfaction, theorem applicability, protocol
-soundness, Fiat--Shamir security, random-oracle or concrete-sponge security,
-QROM applicability, constant-time behavior, production readiness, or a
+It does not establish the affirmative M2 aggregate, independent K1
+term-evaluation conformance, universal evaluator correctness, owner-page
+normativity, compiler/backend correspondence, arbitrary primitive-provider
+conformance, constant-time behavior, protocol soundness, Fiat--Shamir or
+random-oracle security, QROM applicability, production readiness, or a
 decision to adopt Lean as a durable reference twin.

@@ -1,6 +1,6 @@
 {
-  "aggregate": "M1-A-KERNEL-EDGES-AND-CANONICITY",
-  "findings_sha256": "f88031a6096f95a7d6b8eb6e5c2af44645c6f537b26ffb6d0d4865991fe63cd4",
+  "aggregate": "M2-C-TERM-EVALUATION-ORACLE-ABSENT",
+  "findings_sha256": "db8ae92f1ba74c9383cc4b6425355fc74670e69873b03a3fe8d3edb7440beb16",
   "finding_codes": [
     ["predecessor-pin", "Affirmative", "M0-A-PREDECESSOR-PIN"],
     ["target-law-pin", "Affirmative", "M0-A-TARGET-LAW-PIN"],
@@ -32,11 +32,29 @@
     ["lean-natural-exact-byte-bound", "Affirmative", "M1-A-S4-LEAN-NATURAL-BOUNDARY"],
     ["m0-natural-byte-bound-resolved", "Affirmative", "M1-A-S5-M0-NAT-BYTE-BOUND-RESOLVED"],
     ["k1-positive-negative-boundary-vectors", "Affirmative", "M1-A-S5-K1-BOUNDARY-VECTORS"],
+    ["m2-portable-term-carrier", "Affirmative", "M2-A-S1-PORTABLE-TERM-CARRIER"],
+    ["m2-relational-typing", "Affirmative", "M2-A-S1-RELATIONAL-TYPING"],
+    ["m2-k1-primitive-abi-families", "Affirmative", "M2-A-S1-PRIMITIVE-ABI-FAMILIES"],
+    ["m2-evaluator-definition", "Affirmative", "M2-A-S2-EVALUATOR-DEFINITION"],
+    ["m2-noncompletion-partition", "Affirmative", "M2-A-S2-NONCOMPLETION-PARTITION"],
+    ["m2-k1-term-evaluation-oracle-vectors", "CannotAnswer", "M2-C-S2-K1-TERM-EVALUATION-ORACLE-ABSENT"],
+    ["m2-noncompletion-byte-encoding", "CannotAnswer", "M2-C-S2-NONCOMPLETION-BYTES-UNDEFINED"],
+    ["m2-r1b-preimages-strictly-decoded", "Affirmative", "M2-A-S3-R1B-PREIMAGES-DECODED"],
+    ["m2-r1b-terms-elaborate-exactly", "Affirmative", "M2-A-S3-R1B-TERMS-ELABORATED"],
+    ["m2-schnorr-check-81-inputs", "Affirmative", "M2-A-S3-SCHNORR-81-INPUTS"],
+    ["m2-guard-two-inputs", "Affirmative", "M2-A-S3-GUARD-TWO-INPUTS"],
+    ["m2-evaluation-deterministic", "Affirmative", "M2-A-S4-EVALUATION-DETERMINISTIC"],
+    ["m2-completion-monotone-in-limits", "Affirmative", "M2-A-S4-COMPLETION-MONOTONE"],
+    ["m2-theorems-standard-axioms-only", "Affirmative", "M2-A-S4-STANDARD-AXIOMS-ONLY"],
+    ["m2-schnorr-term-denotation-defined", "Affirmative", "M2-A-S5-SCHNORR-DENOTATION"],
+    ["m2-schnorr-closed-form-equation", "Affirmative", "M2-A-S5-SCHNORR-CLOSED-FORM"],
+    ["m2-section-8-no-universal-result-bytes", "CannotAnswer", "M2-C-S6-SECTION8-NO-UNIVERSAL-RESULT-BYTES"],
     ["axiom-closure-standard-only", "Affirmative", "M1-A-S6-STANDARD-AXIOMS-ONLY"],
     ["cost-ledger-recorded", "Affirmative", "M1-A-S6-COST-LEDGER-RECORDED"],
     ["lean-definitions-not-normative", "CannotAnswer", "M0-C-NOT-NORMATIVE"],
     ["implementation-correspondence", "CannotAnswer", "M0-C-NO-IMPLEMENTATION-CORRESPONDENCE"],
     ["security-and-applicability", "CannotAnswer", "M0-C-NO-SECURITY-OR-APPLICABILITY-CLAIM"],
-    ["mechanized-kernel-definitions", "Affirmative", "M1-A-KERNEL-EDGES-AND-CANONICITY"]
+    ["general-k1-evaluator-conformance", "CannotAnswer", "M2-C-NO-GENERAL-K1-EVALUATOR-CONFORMANCE"],
+    ["mechanized-kernel-definitions", "CannotAnswer", "M2-C-TERM-EVALUATION-ORACLE-ABSENT"]
   ]
 }

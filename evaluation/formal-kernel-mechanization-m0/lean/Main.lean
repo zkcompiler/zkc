@@ -236,6 +236,106 @@ def naturalBoundaryReport : Json :=
     ("checked_encoder_accepts", (encodeChecked datum).isSome)
   ]
 
+structure M2AlgorithmRow where
+  algorithm : Algorithm
+  preimage : List Octet
+  maximumCompletionBytes : Nat
+
+def m2AlgorithmOfJson (j : Json) : Except String M2AlgorithmRow := do
+  let preimage ← octetsOfHex (← readString j "preimage_hex")
+  let datum ← match decode preimage with
+    | some datum => pure datum
+    | none => throw "M2 algorithm preimage failed the M0 strict decoder"
+  let algorithm ← match algorithmOfDatum datum with
+    | some algorithm => pure algorithm
+    | none => throw "M2 algorithm preimage did not elaborate as a K1 algorithm"
+  let maximumCompletionBytes ← readNat j "maximum_completion_bytes"
+  pure { algorithm, preimage, maximumCompletionBytes }
+
+def m2ChargeOfJson (j : Json) : Except String Charge := do
+  let steps ← readNat j "steps"
+  let iterationItems ← readNat j "iteration_items"
+  let primitiveWork ← readNat j "primitive_work"
+  let resultBytes ← readNat j "result_bytes"
+  pure { steps, iterationItems, primitiveWork, resultBytes }
+
+def zipTypedValues : List ValueType → List Datum → Option (List TypedValue)
+  | [], [] => some []
+  | ty :: types, datum :: data => do
+      pure (⟨ty, datum⟩ :: (← zipTypedValues types data))
+  | _, _ => none
+
+def m2CaseAgrees (algorithm : Algorithm) (primitive : PrimitiveDenotation)
+    (maximumCompletionBytes : Nat) (j : Json) : Except String Bool := do
+  let inputsJson ← readArray j "inputs"
+  let inputData ← inputsJson.toList.mapM datumOfJson
+  let inputs ← match zipTypedValues algorithm.inputs inputData with
+    | some inputs => pure inputs
+    | none => throw "M2 case input arity differs from the decoded algorithm"
+  let expected ← datumOfJson (← readField j "expected_completion")
+  let expectedHex ← octetsOfHex (← readString j "expected_completion_hex")
+  let expectedCharge ← m2ChargeOfJson (← readField j "expected_charge")
+  let limits : Limits := ⟨100000, 100000, 2 ^ 22, 2 ^ 20⟩
+  pure <| match evaluate primitive noFailureOrdinal 64 algorithm.term inputs
+      maximumCompletionBytes limits with
+    | .completed completion charge =>
+        beq completion expected && encode completion == expectedHex && charge == expectedCharge
+    | _ => false
+
+structure M2Report where
+  checkPreimageDecodes : Bool
+  guardPreimageDecodes : Bool
+  checkPreimageRoundTrips : Bool
+  guardPreimageRoundTrips : Bool
+  checkTermElaboratesExactly : Bool
+  guardTermElaboratesExactly : Bool
+  checkCases : Nat
+  checkCasesAgree : Bool
+  guardCases : Nat
+  guardCasesAgree : Bool
+
+def M2Report.toJson (r : M2Report) : Json := Json.mkObj [
+  ("check_preimage_decodes", r.checkPreimageDecodes),
+  ("guard_preimage_decodes", r.guardPreimageDecodes),
+  ("check_preimage_roundtrips", r.checkPreimageRoundTrips),
+  ("guard_preimage_roundtrips", r.guardPreimageRoundTrips),
+  ("check_term_elaborates_exactly", r.checkTermElaboratesExactly),
+  ("guard_term_elaborates_exactly", r.guardTermElaboratesExactly),
+  ("check_cases", r.checkCases), ("check_cases_agree", r.checkCasesAgree),
+  ("guard_cases", r.guardCases), ("guard_cases_agree", r.guardCasesAgree)
+]
+
+def runM2 (j : Json) : Except String M2Report := do
+  let algorithms ← readField j "algorithms"
+  let check ← m2AlgorithmOfJson (← readField algorithms "check")
+  let guard ← m2AlgorithmOfJson (← readField algorithms "guard")
+  let primitiveReferences ← readArray (← readField algorithms "check") "primitive_references"
+  let some primitiveJson := primitiveReferences[0]? | throw "R1B check has no nat.lt reference"
+  let natLtReference ← datumOfJson (← readField primitiveJson "value")
+  let some z3 := check.algorithm.inputs[0]? | throw "R1B check has no first input type"
+  let some boolean := guard.algorithm.inputs[0]? | throw "R1B guard has no Boolean input type"
+  let expectedCheck := finiteSchnorrTerm z3 boolean natLtReference
+  let expectedGuard := Term.variable 0 boolean
+  let primitive := natLtPrimitive natLtReference boolean
+  let checkCases ← readArray j "check_cases"
+  let guardCases ← readArray j "guard_cases"
+  let checked ← checkCases.mapM fun row =>
+    m2CaseAgrees check.algorithm primitive check.maximumCompletionBytes row
+  let guarded ← guardCases.mapM fun row =>
+    m2CaseAgrees guard.algorithm primitive guard.maximumCompletionBytes row
+  pure {
+    checkPreimageDecodes := true
+    guardPreimageDecodes := true
+    checkPreimageRoundTrips := encode (algorithmDatum check.algorithm) == check.preimage
+    guardPreimageRoundTrips := encode (algorithmDatum guard.algorithm) == guard.preimage
+    checkTermElaboratesExactly := beq (termDatum check.algorithm.term) (termDatum expectedCheck)
+    guardTermElaboratesExactly := beq (termDatum guard.algorithm.term) (termDatum expectedGuard)
+    checkCases := checked.size
+    checkCasesAgree := checked.all id
+    guardCases := guarded.size
+    guardCasesAgree := guarded.all id
+  }
+
 def main (args : List String) : IO UInt32 := do
   let some path := args.head? | do
     IO.eprintln "usage: m0 <input.json>"
@@ -256,12 +356,18 @@ def main (args : List String) : IO UInt32 := do
   let encodeRows ← run "encode" runEncodeVector EncodeResult.toJson
   let rejectRows ← run "reject" runRejectVector RejectResult.toJson
   let constructionRows ← run "pcgraph_construction" runConstruction ConstructionResult.toJson
+  let m2 ← match runM2 (← match readField input "m2" with
+      | .ok value => pure value
+      | .error e => throw (IO.userError e)) with
+    | .ok report => pure report
+    | .error e => throw (IO.userError s!"m2: {e}")
   let report := Json.mkObj [
     ("lean_version", Json.str Lean.versionString),
     ("natural_boundary", naturalBoundaryReport),
     ("encode", Json.arr encodeRows),
     ("reject", Json.arr rejectRows),
-    ("pcgraph_construction", Json.arr constructionRows)
+    ("pcgraph_construction", Json.arr constructionRows),
+    ("m2", m2.toJson)
   ]
   IO.println report.compress
   return 0

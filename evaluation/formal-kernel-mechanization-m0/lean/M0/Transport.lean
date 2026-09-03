@@ -303,5 +303,6 @@ def constructionCarrierOfJson (j : Json) : Except String ConstructionCarrier := 
 def readString (j : Json) (name : String) : Except String String := stringField j name
 def readArray (j : Json) (name : String) : Except String (Array Json) := arrayField j name
 def readField (j : Json) (name : String) : Except String Json := field j name
+def readNat (j : Json) (name : String) : Except String Nat := natField j name
 
 end M0.Transport

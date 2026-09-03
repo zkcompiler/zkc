@@ -83,8 +83,8 @@
     {
       "id": "kernel-mechanization-sequence",
       "disposition": "active-sequence",
-      "purpose": "Bounded measurement of whether core-only Lean can decode admitted Core and used semantic-module bytes, derive every Section 11 graph product for the five D1 carriers without edge-table inputs, prove decoder canonicity and topological class-fold independence, and execute the natural byte-bound decision while retaining the M0 encoding results.",
-      "exit_rule": "Either the Foundation and PIR owners adopt selected mechanized definitions and proofs as durable owner-checked legs with the Section 11 wording findings resolved and the package evidence migrated, or the measurement is recorded as sufficient and the package is removed; until then D1 and K1 remain bounded comparison targets, no Lean text is authority, and no arbitrary-Core, implementation-correspondence, theorem-applicability, or security claim follows.",
+      "purpose": "Bounded measurement of whether core-only Lean can transcribe the K1 portable-term and evaluation boundary, exactly decode and elaborate the R1B finite-Schnorr check and guard, reproduce all available finite results, and prove determinism, completion monotonicity, and the closed finite equation while retaining M0 and M1.",
+      "exit_rule": "Either the Foundation owner adopts selected mechanized definitions and proofs as a durable owner-checked leg after independent K1 term-evaluation vectors exist and the Section 8 result-carrier boundary is respected, or the measurement is recorded as sufficient and the package is removed; until then the Python R1B rows remain bounded single-implementation comparison targets, no Lean text is authority, and no general evaluator, implementation-correspondence, theorem-applicability, or security claim follows.",
       "checks": [
         "research.kernel-mechanization-feasibility"
       ]
