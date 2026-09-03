@@ -1258,6 +1258,28 @@
       }
     },
     {
+      "id": "research.migration-text-review",
+      "title": "Migrated owner-text freeze review",
+      "subject": "The migrated PIR owner text and source manifests, reviewed for decision fidelity, Terminal contract closure, public-coin graph transfer and sinks, owner-view body closure, declaration-graph closure, publication reconstruction, and family-view body closure.",
+      "claim": "A pinned independent source audit reproduces seven freeze-review answers: public-coin graph transfer and sink wording, manifest closure, and independent publication-compiler agreement are affirmative, while decision fidelity, Terminal contract closure, owner-name closure, and family-view body closure are negative.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-migration-text-review-f0v2c1/run.py", "evaluation/formal-source-migration-text-review-f0v2c1/README.md", "evaluation/formal-source-migration-text-review-f0v2c1/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["This pinned source review does not close the migrated owner text, publish or bless a semantic identity, repair an owner page or manifest, prove the Terminal law for arbitrary Core values, establish implementation correspondence, prove a protocol or cryptographic property, or authorize deployment."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-migration-text-review-f0v2c1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}", "git"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.owner-view-fresh-run-schema",
       "title": "Fresh completed-record schema derivation",
       "subject": "A complete bounded PIR ExecutionView completed-record schema derived from each of five exact admitted D1 Cores and Fresh Protocols, including exact occurrence, Challenge, Oracle, terminal, stopped-partial, and operational-noncompletion lanes.",
