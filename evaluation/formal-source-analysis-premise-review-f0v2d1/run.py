@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independently review the Analysis named-premise owner text."""
+"""Independently rerun the Analysis named-premise owner-text review."""
 
 from __future__ import annotations
 
@@ -19,7 +19,8 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 EXPECTED = HERE / "expected-findings.json"
-BASE_COMMIT = "7a63432"
+BASE_COMMIT = "8ae0ee1"
+FENCE_END = "\n" + chr(96) * 3 + "\n"
 
 ANALYSIS_PAGES = (
     "docs-next/analysis/README.md",
@@ -34,6 +35,7 @@ CHANGED_PAGES = (
     "docs-next/analysis/analysis-model.md",
     "docs-next/analysis/cryptographic-properties.md",
     "docs-next/analysis/profile-publication.md",
+    "docs-next/analysis/transport-composition-and-replay.md",
 )
 MIGRATED_MANIFESTS = (
     "docs-next/analysis/profiles/kernel.json",
@@ -51,25 +53,31 @@ SOURCE_PINS = (
     *MIGRATED_MANIFESTS,
     "docs-next/relations/relation-model.md",
     "docs-next/pir/interfaces-and-plans.md",
+    "docs-next/pir/interactive-core.md",
+    "evaluation/analysis-premise-intake-probe/run.py",
     "evaluation/analysis-premise-intake-probe/model.py",
     "evaluation/analysis-premise-intake-probe/independent.py",
+    "evaluation/analysis-premise-intake-probe/fixture.json",
+    "evaluation/analysis-premise-intake-probe/expected-findings.json",
     "evaluation/k3-analysis-closure/reference_model.py",
     "evaluation/k3-analysis-closure/tests/test_reference_model.py",
 )
 
-UNRESOLVED_LAW_NAMES = (
+LAW_FAMILY_NAMES = (
     "ProviderDeclaration",
     "ClosedProviderCarrier",
     "ExactModelBindingLaw",
     "ExactNamedHypothesis",
     "FreshSamplingHypothesis",
+    "ConstructionSamplerAdequacyHypothesis",
+    "ConstructionOracleProcessHypothesis",
     "SamplerAdequacyHypothesis",
     "OracleProcessHypothesis",
 )
 
 
 class ReviewError(RuntimeError):
-    """The frozen source or one of the review observations drifted."""
+    """The reviewed source or a frozen observation drifted."""
 
 
 @dataclass(frozen=True)
@@ -141,83 +149,95 @@ def _record_block(text: str, selector: str) -> str:
     raise ReviewError(f"selector has an unclosed record body: {selector}")
 
 
+def _definition_block(text: str, start_selector: str, end_selector: str) -> str:
+    start = text.find(start_selector)
+    _require(start >= 0, f"definition is absent: {start_selector}")
+    end = text.find(end_selector, start + len(start_selector))
+    _require(end > start, f"definition terminator is absent: {end_selector}")
+    return text[start:end]
+
+
 def _name_review(pages: dict[str, str]) -> dict[str, Any]:
     surface = _definition_surface()
-    unresolved = {
-        name: _definition_count(surface, name) for name in UNRESOLVED_LAW_NAMES
-    }
-    _require(
-        unresolved == {name: 0 for name in UNRESOLVED_LAW_NAMES},
-        "the frozen unresolved law-name set drifted",
-    )
-
-    resolved = (
-        "AnalysisProfileLawRef",
-        "AnalysisDistributionProfileId",
-        "AnalysisAsymptoticProtocolFamilyDefinitionId",
-        "RelationSemanticModelId",
-        "RelationInterfaceId",
-        "PlanWitnessBindingId",
-        "ProverPlanId",
-        "ProtocolOutcomeLane",
-        "AFKClassicalRandomOracleProfileId",
-    )
-    counts = {name: _definition_count(surface, name) for name in resolved}
-    _require(all(count > 0 for count in counts.values()), "a frozen resolved name disappeared")
+    counts = {name: _definition_count(surface, name) for name in LAW_FAMILY_NAMES}
+    _require(all(count == 1 for count in counts.values()), "a named law family is not defined exactly once")
 
     model = pages["docs-next/analysis/analysis-model.md"]
-    coordinate_names = (
-        "PIRPublicCoinLawCoordinate",
-        "AnalysisFamilyPremiseCoordinate",
-        "PIRProtocolOutcomePartitionCoordinate",
-        "RelationsModelEvaluatorCoordinate",
-        "RelationsWitnessPlanJoinCoordinate",
-        "PIRPlanStateCoordinate",
-        "PIRPlanRecipeCoordinate",
-    )
-    coordinate_block = _record_block(model, "AnalysisPremiseCoordinate =")
+    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
     _require(
-        all(name in coordinate_block for name in coordinate_names),
-        "the premise-coordinate constructor set drifted",
+        "ProviderDeclaration =\n  closed schema law family" in model
+        and "ClosedProviderCarrier =\n  closed schema law family" in model,
+        "a provider family lost its closed-schema statement",
+    )
+    _require(
+        "ExactModelBindingLaw<K> =\n  TotalAnalysisLawSignature<P," in model
+        and "ExactNamedHypothesis<K> =\n  TotalAnalysisLawSignature<P," in model,
+        "a generic law family lost its displayed signature",
     )
 
-    property_page = pages["docs-next/analysis/cryptographic-properties.md"]
-    subject = _record_block(property_page, "AnalysisSubjectTuple S =")
-    subject_fields = (
-        "fresh_protocol_id",
-        "challenge_ref",
-        "relation_semantic_model_id",
-        "relation_interface_id",
-        "plan_witness_binding_id",
+    concrete_signatures = {
+        "FreshSamplingHypothesis": 2,
+        "ConstructionSamplerAdequacyHypothesis": 3,
+        "ConstructionOracleProcessHypothesis": 2,
+        "SamplerAdequacyHypothesis": 3,
+        "OracleProcessHypothesis": 2,
+    }
+    for name in concrete_signatures:
+        _require(
+            f"{name} =" in crypto and f"the profile's {name} declaration" in crypto,
+            f"{name} no longer has a declaration and law-term use",
+        )
+
+    generic_profile_free = (
+        "ExactModelBindingLaw<K> =\n  TotalAnalysisLawSignature<P," in model
+        and "ExactNamedHypothesis<K> =\n  TotalAnalysisLawSignature<P," in model
+    )
+    bound_value = _definition_block(
+        model, "AnalysisNamedPremiseBoundValue<P,K> =", "\n\nAnalysisNamedPremiseSource<P>"
+    )
+    free_protocol_parameter = (
+        "AnalysisProviderOutcomeCarrierMapBody<P,Protocol>" in bound_value
+        and "<Protocol>" not in bound_value.split("=", 1)[0]
+    )
+    goal = _record_block(model, "AnalysisGoalBody =")
+    bare_named_premise_id = (
+        "CanonicalMap<AnalysisNamedPremiseRequirement, AnalysisNamedPremiseId>" in goal
+    )
+    construction_bindings = _definition_block(
+        crypto,
+        "FiatShamirConstructionPremiseBindings(S: AnalysisSubjectTuple) =",
+        FENCE_END,
+    )
+    unbound_construction_length = (
+        "AFKMemberKnowledgeQuestion(S, ell0)" in construction_bindings
+        and "ell0" not in construction_bindings.split("=", 1)[0]
     )
     _require(
-        all(field in subject for field in subject_fields),
-        "a named-premise subject-tuple field disappeared",
+        generic_profile_free
+        and free_protocol_parameter
+        and bare_named_premise_id
+        and unbound_construction_length,
+        "the frozen round-two name-closure gaps drifted",
     )
 
-    unqualified = (
-        "AnalysisProfileLawRef<ProviderDeclaration>",
-        "AnalysisProfileLawRef<ClosedProviderCarrier>",
-        "AnalysisLawTerm<ExactModelBindingLaw<K>>",
-        "AnalysisLawTerm<ExactNamedHypothesis<K>>",
-    )
-    _require(
-        all(item in model for item in unqualified),
-        "the frozen profile-parameter omission set drifted",
-    )
     return {
-        "resolved_requested_names": len(resolved),
-        "resolved_coordinate_constructors": len(coordinate_names),
-        "resolved_subject_tuple_fields": len(subject_fields),
-        "unresolved_law_names": list(UNRESOLVED_LAW_NAMES),
-        "unqualified_profile_law_uses": len(unqualified),
+        "named_law_families": counts,
+        "closed_schema_families": 2,
+        "displayed_signature_families": 7,
+        "concrete_hypothesis_argument_arities": concrete_signatures,
+        "remaining_gaps": [
+            "analysis-model.md:2125-2133 leaves P free in both generic law-family names",
+            "analysis-model.md:2145-2150 leaves Protocol free in the provider bound-value arm",
+            "analysis-model.md:2241-2245 and 3091-3094 use an unparameterized AnalysisNamedPremiseId carrier",
+            "cryptographic-properties.md:2362-2365 uses ell0 without binding it",
+            "the five concrete hypothesis declarations carry more canonical arguments than ExactNamedHypothesis<K> admits",
+        ],
     }
 
 
 def _constructor_blocks(text: str, expression: str) -> list[tuple[int, str]]:
-    pattern = re.compile(expression)
     result: list[tuple[int, str]] = []
-    for match in pattern.finditer(text):
+    for match in re.finditer(expression, text):
         brace = text.find("{", match.start(), match.end() + 1)
         _require(brace >= 0, "constructor match has no opening brace")
         depth = 0
@@ -227,11 +247,30 @@ def _constructor_blocks(text: str, expression: str) -> list[tuple[int, str]]:
             elif text[index] == "}":
                 depth -= 1
                 if depth == 0:
-                    result.append((text.count("\n", 0, match.start()) + 1, text[match.start() : index + 1]))
+                    result.append(
+                        (
+                            text.count("\n", 0, match.start()) + 1,
+                            text[match.start() : index + 1],
+                        )
+                    )
                     break
         else:
             raise ReviewError("constructor display has an unclosed body")
     return result
+
+
+def _anonymous_nodes(relative: str, text: str) -> list[tuple[str, int, bool]]:
+    rows: list[tuple[str, int, bool]] = []
+    for _context_line, block in _constructor_blocks(
+        text, r"(?<![A-Za-z0-9_])AnalysisHypothesisContextBody\s*\{"
+    ):
+        for match in re.finditer(r"\{\s*\d+\s*,\s*AnalysisGoalId\(", block):
+            end = block.find("}", match.start())
+            _require(end >= 0, "hypothesis node has no closing brace")
+            body = block[match.start() : end + 1]
+            absolute = text.find(block) + match.start()
+            rows.append((relative, text.count("\n", 0, absolute) + 1, "premises(goal)" in body))
+    return rows
 
 
 def _constructor_review(pages: dict[str, str]) -> dict[str, Any]:
@@ -241,57 +280,69 @@ def _constructor_review(pages: dict[str, str]) -> dict[str, Any]:
         ("AnalysisHypothesisContextBody", r"(?<![A-Za-z0-9_])AnalysisHypothesisContextBody\s*\{", "exact_named_premise_ids", 6),
         ("AnalysisSupportInstantiationBody", r"(?<![A-Za-z0-9_])AnalysisSupportInstantiationBody\s*\{", "exact_named_premise_ids", 5),
         ("AnalysisJudgmentRecordBody", r"(?<![A-Za-z0-9_])AnalysisJudgmentRecordBody\s*\{", "exact_named_premise_ids", 1),
-        ("AnalysisNamedPremiseBody", r"AnalysisNamedPremiseBody<[^>]+>\s*\{", "kind", 4),
+        ("AnalysisNamedPremiseBody", r"AnalysisNamedPremiseBody<[^>]+>\s*\{", "kind", 6),
     )
     metrics: dict[str, Any] = {}
-    missing_total = 0
     for name, expression, field, expected_count in specifications:
         rows: list[tuple[str, int, bool]] = []
         for relative, text in pages.items():
-            for line, block in _constructor_blocks(text, expression):
-                rows.append((relative, line, field in block))
+            rows.extend(
+                (relative, line, field in block)
+                for line, block in _constructor_blocks(text, expression)
+            )
         _require(len(rows) == expected_count, f"the {name} constructor census drifted")
-        _require(not any(row[2] for row in rows), f"a frozen incomplete {name} constructor became complete")
-        missing_total += len(rows)
+        _require(all(row[2] for row in rows), f"an affected {name} display is incomplete")
         metrics[name] = {
             "constructors": len(rows),
-            "field_complete": 0,
-            "locations": [f"{relative}:{line}" for relative, line, _complete in rows],
+            "field_complete": len(rows),
         }
 
-    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
-    context_blocks = _constructor_blocks(
-        crypto, r"(?<![A-Za-z0-9_])AnalysisHypothesisContextBody\s*\{"
-    )
-    node_count = sum(
-        len(re.findall(r"^\s*\{\s*\d+\s*,", block, flags=re.MULTILINE))
-        for _line, block in context_blocks
-    )
-    _require(node_count == 30, "the anonymous hypothesis-node census drifted")
+    nodes: list[tuple[str, int, bool]] = []
+    for relative, text in pages.items():
+        nodes.extend(_anonymous_nodes(relative, text))
+    _require(len(nodes) == 31, "the anonymous hypothesis-node census drifted")
+    missing = [f"{relative}:{line}" for relative, line, complete in nodes if not complete]
     _require(
-        "An `AnalysisGoalBody` contains only `question_id`." in pages["docs-next/analysis/analysis-model.md"],
-        "the stale goal-body sentence drifted",
+        missing
+        == [
+            "docs-next/analysis/cryptographic-properties.md:5196",
+            "docs-next/analysis/cryptographic-properties.md:5364",
+            "docs-next/analysis/cryptographic-properties.md:6100",
+            "docs-next/analysis/cryptographic-properties.md:6102",
+            "docs-next/analysis/cryptographic-properties.md:6109",
+            "docs-next/analysis/cryptographic-properties.md:6112",
+            "docs-next/analysis/cryptographic-properties.md:6115",
+        ],
+        "the round-two incomplete-node set drifted",
+    )
+
+    model = pages["docs-next/analysis/analysis-model.md"]
+    _require(
+        "exact_named_premise_ids: PremiseIdsOfProposition(proposition_id)" in model
+        and "carrying\n     each node's exact_named_premise_ids" in model
+        and "exact_named_premise_ids to the canonical union" in model,
+        "a repaired derivation helper regressed",
     )
     _require(
-        "set roots to OutwardFrontier(the rewritten nodes)" in pages["docs-next/analysis/analysis-model.md"]
-        and "set each rewritten node's exact_named_premise_ids" not in pages["docs-next/analysis/analysis-model.md"],
-        "the frozen DAG-union omission drifted",
+        "premises(goal)" in model
+        and "denotes exactly PremiseIdsOfGoal" in model
+        and "ContextPremiseIds(nodes, roots) =" in model,
+        "the node/context notation law drifted",
     )
     return {
         "body_constructors": metrics,
-        "incomplete_body_constructors": missing_total,
-        "anonymous_hypothesis_nodes_without_new_field": node_count,
-        "derived_helper_omissions": [
-            "affirmative judgment constructor",
-            "canonical goal DAG union",
-        ],
-        "stale_goal_body_sentence": True,
+        "anonymous_hypothesis_nodes": len(nodes),
+        "nodes_with_premises_goal": len(nodes) - len(missing),
+        "nodes_missing_premises_goal": missing,
+        "judgment_helper_complete": True,
+        "dag_union_helper_complete": True,
+        "context_premise_ids_matches_schema": True,
     }
 
 
 def _intake_review(pages: dict[str, str]) -> dict[str, Any]:
     model = pages["docs-next/analysis/analysis-model.md"]
-    block = model.split("IntakeAnalysisNamedPremises(", 1)[1].split("```", 1)[0]
+    block = _definition_block(model, "IntakeAnalysisNamedPremises(", FENCE_END)
     required = (
         "return CannotAnswer for a missing key or an absent premise source",
         "return Refused when a supplied premise is well formed but its kind or\n     coordinate differs",
@@ -300,91 +351,124 @@ def _intake_review(pages: dict[str, str]) -> dict[str, Any]:
         "OracleModelOnly premise only for a question whose experiment uses\n     exactly that distribution profile",
         "ExactSubjectsOnly premise only for\n     a question over exactly those subjects",
         "RebindRequired admits no\n     question",
+        "failure of any of these four checks returns Refused, before\n     any goal is formed",
         "binding map has the required\n     key set and no other key",
     )
-    _require(all(snippet in block for snippet in required), "the intake disposition or scope text drifted")
+    _require(all(snippet in block for snippet in required), "the intake partition drifted")
 
-    cases: dict[str, str | None] = {
-        "missing-key": "CannotAnswer",
-        "absent-source": "CannotAnswer",
-        "kind-mismatch": "Refused",
-        "coordinate-mismatch": "Refused",
-        "extra-key": "Malformed",
-        "duplicate-key": "Malformed",
-        "noncanonical-key": "Malformed",
-        "caller-ordered-key": "Malformed",
-        "fresh-scope-mismatch": None,
-        "oracle-model-mismatch": "Refused",
-        "subject-scope-mismatch": None,
-        "rebind-required": None,
-    }
-    _require(len(cases) == 12, "the intake branch census drifted")
+    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
+    generic_uses = crypto.count(
+        "named_premise_requirements: NamedPremiseRequirementsOf(family, exact_subjects)"
+    )
+    empty_license = (
+        "every other family of this profile and of the transport profile, the source\n"
+        "premise families, asymptotic special soundness, theorem truth, theorem\n"
+        "applicability, and family-instance correspondence, fixes the empty\n"
+        "requirement sequence" in crypto
+    )
+    _require(generic_uses == 3 and empty_license, "the empty-family requirement license drifted")
     return {
-        "classified_branches": cases,
-        "cannot_answer_branches": 2,
-        "refused_branches": 3,
-        "malformed_branches": 4,
-        "unclassified_scope_branches": 3,
+        "classified_branches": {
+            "CannotAnswer": ["missing-key", "absent-source"],
+            "Refused": [
+                "kind-mismatch",
+                "coordinate-mismatch",
+                "fresh-scope-mismatch",
+                "oracle-model-mismatch",
+                "subject-scope-mismatch",
+                "rebind-required",
+            ],
+            "Malformed": [
+                "extra-key",
+                "duplicate-key",
+                "noncanonical-key",
+                "caller-ordered-key",
+            ],
+        },
         "default_branches": 0,
+        "generic_requirement_constructors": generic_uses,
+        "empty_family_sentence_licenses_all_generic_uses": True,
     }
 
 
 def _decision_review(pages: dict[str, str]) -> dict[str, Any]:
     model = pages["docs-next/analysis/analysis-model.md"]
     crypto = pages["docs-next/analysis/cryptographic-properties.md"]
-    positive_intent = (
-        "FreshChallengeOnly" in model,
-        "OracleModelOnly(AnalysisDistributionProfileId)" in model,
-        "five lanes for a Fresh or duplex-sponge Protocol, six for a\ncanonical-framed one" in crypto,
+    required = (
+        "PIRConstructionPremiseCoordinate(" in model,
+        "BoundProviderOutcomeCarrierMap(" in model,
+        "CanonicalMap<ProtocolOutcomeLane(Protocol), CanonicalValue<provider_carrier>>" in model,
+        "model_scope: FreshChallengeOnly" in crypto,
+        crypto.count("model_scope: OracleModelOnly(oracle_model)") == 4,
         "A question over a Fiat--Shamir Protocol\nselects no such premise" in crypto,
-        "AFKClassicalRandomOracleProfileId(S)" in crypto,
+        "ProviderJudgmentRequirements(P: ProtocolId)" in crypto,
+        "SchnorrNamedPremiseRequirements(S: AnalysisSubjectTuple)" in crypto,
+        "FiatShamirConstructionPremiseRequirements(T, oracle_model)" in crypto,
+        "FiatShamirNamedPremiseRequirements(F, oracle_model)" in crypto,
     )
-    _require(all(positive_intent), "the selected decision-intent clauses drifted")
-    defects = (
-        "CanonicalMap<ProtocolOutcomeLane, CanonicalValue<provider_carrier>>" in model,
-        "BoundHypothesis(sampling_hypothesis, which binds law_coordinate" in crypto,
-        "BoundHypothesis(adequacy_hypothesis, which names one adequacy form" in crypto,
-    )
-    _require(all(defects), "the frozen decision-fidelity defects drifted")
+    _require(all(required), "a selected decision representation drifted")
     return {
-        "intent_clauses_present": len(positive_intent),
-        "unclosed_exactness_points": [
-            "outcome-lane family is used without its Protocol parameter",
-            "Fresh sampling binding is prose rather than law-term arguments",
-            "sampler adequacy form is prose rather than law-term arguments",
+        "selected_decisions": [
+            "Fresh distribution is a FreshChallengeOnly named premise",
+            "Fiat-Shamir uses separate construction or family sampler and oracle premises",
+            "provider outcome maps use the exact Protocol-qualified lane partition",
+            "provider requirements are separate from the relation-bound Fresh question",
+            "scope failure is Refused before goal formation",
         ],
+        "selected_decisions_represented": True,
     }
 
 
 def _schnorr_review(pages: dict[str, str]) -> dict[str, Any]:
     crypto = pages["docs-next/analysis/cryptographic-properties.md"]
-    requirements = crypto.split("SchnorrNamedPremiseRequirements(", 1)[1].split("```", 1)[0]
+    subject = _record_block(crypto, "AnalysisSubjectTuple S =")
+    _require(
+        "fresh_prover_plan_id: ProverPlanId" in subject
+        and "S.fresh_prover_plan_id names the Plan whose checked\n  realization and checked witness-surface extraction produced the surface" in crypto,
+        "the Plan subject coordinate or adequacy clause drifted",
+    )
+
+    requirements = _definition_block(
+        crypto,
+        "SchnorrNamedPremiseRequirements(S: AnalysisSubjectTuple) =",
+        "\n\nProviderJudgmentRequirements",
+    )
     slots = re.findall(r'slot: "([a-z-]+)"', requirements)
     _require(
-        slots
-        == [
-            "fresh-coin",
-            "provider-outcome",
-            "relation",
-            "witness",
-            "prover-state",
-            "commit",
-            "respond",
-        ],
-        "the seven-premise slot sequence drifted",
+        slots == ["fresh-coin", "relation", "witness", "prover-state", "commit", "respond"],
+        "the repaired Schnorr requirement sequence drifted",
     )
-
-    relation_model = _read("docs-next/relations/relation-model.md")
-    binding = _record_block(relation_model, "PlanWitnessBinding =")
-    _require("ProverPlanId" not in binding, "PlanWitnessBinding unexpectedly names a ProverPlan")
     _require(
-        "the ProverPlanId named by\n  S.relation_axis_ingress.fresh.plan_witness_binding_id" in crypto,
-        "the frozen PlanOf derivation drifted",
+        "PIRPlanStateCoordinate(PlanOf(S), StrategyStateSlotRef 0)" in requirements
+        and "PlanOf(S), ProverDecisionPointRef 0, RecipeNodeRef 0" in requirements
+        and "PlanOf(S), ProverDecisionPointRef 2, RecipeNodeRef 0" in requirements,
+        "a typed Plan coordinate drifted",
     )
 
-    plan_page = _read("docs-next/pir/interfaces-and-plans.md")
-    _require("CanonicalMap<ProverDecisionPointRef, DecisionRecipe>" in plan_page, "Plan decision-key type drifted")
-    _require("persistent_state: CanonicalSeq<StrategyStateSlot>" in plan_page, "Plan state carrier drifted")
+    bindings = _definition_block(
+        crypto, "SchnorrNamedPremiseBindings(S: AnalysisSubjectTuple) =", "\n\nSchnorrExtractorPremiseBindings"
+    )
+    incomplete_slots = [
+        slot
+        for slot in ("relation", "witness", "prover-state", "commit", "respond")
+        if f'"{slot}"' in bindings
+    ]
+    _require(
+        incomplete_slots == ["relation", "witness", "prover-state", "commit", "respond"]
+        and "model_scope" not in bindings
+        and "AnalysisLawTerm {" not in bindings,
+        "the residual Schnorr helper shape drifted",
+    )
+    construction_bindings = _definition_block(
+        crypto,
+        "FiatShamirConstructionPremiseBindings(S: AnalysisSubjectTuple) =",
+        FENCE_END,
+    )
+    _require(
+        "AFKMemberKnowledgeQuestion(S, ell0)" in construction_bindings,
+        "the residual construction helper closure gap drifted",
+    )
+
     candidate_expected = _json(
         "evaluation/formal-schnorr-relations-plan-f2p1/expected-findings.json"
     )
@@ -395,11 +479,14 @@ def _schnorr_review(pages: dict[str, str]) -> dict[str, Any]:
         ").persistent_state[0]",
         ").private_witness[0].value_type + PlanWitnessBinding.witness_edges[0]",
     ):
-        _require(coordinate in encoded, "a selected Schnorr candidate coordinate drifted")
+        _require(coordinate in encoded, "a selected finite coordinate drifted")
     return {
-        "requirements": len(slots),
-        "subject_tuple_fields_resolve": True,
-        "candidate_ordinals": {
+        "relation_bound_requirements": len(slots),
+        "provider_requirements": 1,
+        "subject_plan_id_present": True,
+        "subject_plan_adequacy_present": True,
+        "typed_plan_coordinates": 3,
+        "finite_candidate_ordinals": {
             "private_witness": 0,
             "witness_edge": 0,
             "persistent_state": 0,
@@ -408,8 +495,9 @@ def _schnorr_review(pages: dict[str, str]) -> dict[str, Any]:
             "respond_decision": 2,
             "respond_recipe_node": 0,
         },
-        "plan_id_recoverable_from_plan_witness_binding": False,
-        "coordinate_key_type_mismatches": 2,
+        "bindings_without_exact_premise_bodies": incomplete_slots,
+        "construction_helper_binds_length_parameter": False,
+        "goal_identities_form_exactly": False,
     }
 
 
@@ -446,62 +534,54 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
         "analysis-cryptographic-property": "AnalysisCryptographicPropertySupportedKinds",
         "analysis-afk-transport": "AnalysisAFKTransportSupportedKinds",
     }
-    manifest_paths = {
-        _json(path)["key"]: path for path in MIGRATED_MANIFESTS
-    }
+    manifest_paths = {_json(path)["key"]: path for path in MIGRATED_MANIFESTS}
     sequence_equal: dict[str, bool] = {}
-    set_equal: dict[str, bool] = {}
     model = pages["docs-next/analysis/analysis-model.md"]
     for key, name in catalog_names.items():
-        owner = _catalog(model, name)
-        manifest = _json(manifest_paths[key])["supported_subject_kinds"]
-        sequence_equal[key] = owner == manifest
-        set_equal[key] = set(owner) == set(manifest)
-    _require(
-        sequence_equal
-        == {
-            "analysis-kernel": True,
-            "analysis-cryptographic-property": True,
-            "analysis-afk-transport": False,
-        },
-        "the literal supported-kind comparison drifted",
-    )
-    _require(all(set_equal.values()), "a supported-kind set no longer matches")
-
-    old_model = _old_bytes("docs-next/analysis/analysis-model.md").decode("utf-8")
-    old_transport = json.loads(_old_bytes("docs-next/analysis/profiles/afk-transport.json"))
-    preexisting_transport_mismatch = (
-        _catalog(old_model, "AnalysisAFKTransportSupportedKinds")
-        != old_transport["supported_subject_kinds"]
-    )
-    _require(preexisting_transport_mismatch, "the preexisting sequence defect disappeared from the review base")
+        sequence_equal[key] = (
+            _catalog(model, name)
+            == _json(manifest_paths[key])["supported_subject_kinds"]
+        )
+    _require(all(sequence_equal.values()), "an owner catalog and manifest sequence differ")
 
     observed_definition_bumps: dict[str, list[str]] = {}
     for relative in MIGRATED_MANIFESTS:
         old = json.loads(_old_bytes(relative))
         current = _json(relative)
-        _require(old["revision"] == 0 and current["revision"] == 1, "a profile revision transition drifted")
+        _require(
+            old["revision"] == 0 and current["revision"] == 1,
+            "a profile revision transition drifted",
+        )
         old_definitions = {(row["kind"], row["name"]): row for row in old["definitions"]}
-        bumps = [
+        observed_definition_bumps[current["key"]] = [
             row["name"]
             for row in current["definitions"]
-            if (row["kind"], row["name"]) in old_definitions
-            and row["revision"] != old_definitions[(row["kind"], row["name"])]["revision"]
+            if row["revision"]
+            != old_definitions[(row["kind"], row["name"])]["revision"]
         ]
-        observed_definition_bumps[current["key"]] = bumps
     _require(
         observed_definition_bumps
         == {
             "analysis-kernel": ["common-analysis-domain-v0"],
-            "analysis-cryptographic-property": ["cryptographic-property-body-v0"],
-            "analysis-afk-transport": ["afk-transport-body-v0"],
+            "analysis-cryptographic-property": [
+                "cryptographic-property-body-v0",
+                "property-core-v0",
+            ],
+            "analysis-afk-transport": [
+                "afk-transport-body-v0",
+                "afk-application-v0",
+            ],
         },
-        "the declaration revision set drifted",
+        "the profile-law revision set drifted",
     )
 
     publication = ROOT / "evaluation" / "semantic-profile-publication"
-    reference = _load_module("_analysis_premise_review_reference", publication / "reference_model.py")
-    cold = _load_module("_analysis_premise_review_cold", publication / "independent.py")
+    reference = _load_module(
+        "_analysis_premise_round2_reference", publication / "reference_model.py"
+    )
+    cold = _load_module(
+        "_analysis_premise_round2_cold", publication / "independent.py"
+    )
     current_reference = reference.identity_table(reference.compile_repository())
     current_cold = cold.identity_table(cold.compile_repository())
     _require(current_reference == current_cold, "publication compilers disagree on current source")
@@ -540,11 +620,8 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
     _require(cone == expected_cone, "the Analysis identity-rotation cone drifted")
     return {
         "catalog_sequence_equal": sequence_equal,
-        "catalog_set_equal": set_equal,
-        "transport_sequence_mismatch_preexisting": preexisting_transport_mismatch,
         "profile_revision_bumps": 3,
         "observed_definition_bumps": observed_definition_bumps,
-        "missing_meaning_revision_bumps": ["property-core-v0", "afk-application-v0"],
         "compiler_agreement_current": True,
         "compiler_agreement_base": True,
         "compiled_profiles": len(current_reference["profiles"]),
@@ -559,11 +636,12 @@ def _call_counts(path: Path, selected: Iterable[str]) -> dict[str, int]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        name = ""
         if isinstance(node.func, ast.Name):
             name = node.func.id
         elif isinstance(node.func, ast.Attribute):
             name = node.func.attr
+        else:
+            name = ""
         if name in result:
             result[name] += 1
     return result
@@ -575,11 +653,12 @@ def _class_fields(tree: ast.Module, selected: Iterable[str]) -> dict[str, list[s
     for node in tree.body:
         if not isinstance(node, ast.ClassDef) or node.name not in wanted:
             continue
-        fields: list[str] = []
-        for statement in node.body:
-            if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
-                fields.append(statement.target.id)
-        result[node.name] = fields
+        result[node.name] = [
+            statement.target.id
+            for statement in node.body
+            if isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+        ]
     return result
 
 
@@ -594,8 +673,7 @@ def _package_impact_review() -> dict[str, Any]:
         "AnalysisSupportInstantiationBodyV0",
         "AnalysisJudgmentRecordBodyV0",
     )
-    tree = ast.parse(model_path.read_text(encoding="utf-8"))
-    fields = _class_fields(tree, selected)
+    fields = _class_fields(ast.parse(model_path.read_text(encoding="utf-8")), selected)
     required = {
         "AnalysisQuestionBodyV0": "named_premise_requirements",
         "AnalysisGoalBodyV0": "named_premise_bindings",
@@ -604,7 +682,7 @@ def _package_impact_review() -> dict[str, Any]:
         "AnalysisSupportInstantiationBodyV0": "exact_named_premise_ids",
         "AnalysisJudgmentRecordBodyV0": "exact_named_premise_ids",
     }
-    _require(set(fields) == set(selected), "the selected Analysis reference classes drifted")
+    _require(set(fields) == set(selected), "the selected Analysis body classes drifted")
     missing = {
         name: field for name, field in required.items() if field not in fields[name]
     }
@@ -612,6 +690,7 @@ def _package_impact_review() -> dict[str, Any]:
 
     model_calls = _call_counts(model_path, selected)
     test_calls = _call_counts(tests_path, selected)
+    combined = {name: model_calls[name] + test_calls[name] for name in selected}
     expected_calls = {
         "AnalysisQuestionBodyV0": 8,
         "AnalysisGoalBodyV0": 14,
@@ -620,35 +699,36 @@ def _package_impact_review() -> dict[str, Any]:
         "AnalysisSupportInstantiationBodyV0": 1,
         "AnalysisJudgmentRecordBodyV0": 1,
     }
-    combined = {name: model_calls[name] + test_calls[name] for name in selected}
-    _require(combined == expected_calls, "the affected reference-model call census drifted")
+    _require(combined == expected_calls, "the affected constructor-call census drifted")
 
     finite = _read("evaluation/finite-cover-analysis/tests/test_finite_cover.py")
     joined = _read("evaluation/k3-integrated-closure/reference_model.py")
-    _require("k3-analysis-closure" in finite and "k3-analysis-closure" in joined, "an Analysis dependent stopped importing the shared model")
-
     recursive = _read("evaluation/recursive-composition-boundary/reference_model.py")
+    publication = _read("evaluation/semantic-profile-publication/tests/test_publication.py")
     _require(
-        '"analysis.support-instantiation"' in recursive
-        and '"analysis.judgment-record"' in recursive,
-        "the incremental-composition surrogate identity path drifted",
+        "k3-analysis-closure" in finite
+        and "k3-analysis-closure" in joined
+        and '"analysis.support-instantiation"' in recursive
+        and '"analysis.judgment-record"' in recursive
+        and "published-identities.json" in publication,
+        "a dependent migration surface drifted",
     )
     return {
         "reference_body_classes_missing_fields": missing,
         "affected_reference_constructor_calls": combined,
-        "direct_model_package": "evaluation/k3-analysis-closure",
-        "dependent_model_packages": [
-            "evaluation/finite-cover-analysis",
-            "evaluation/k3-integrated-closure",
-        ],
-        "incremental_surrogate_package": "evaluation/recursive-composition-boundary",
-        "checks_requiring_refreeze_or_revalidation": [
-            "research.property-analysis",
+        "direct_check": "research.property-analysis",
+        "dependent_checks": [
             "research.finite-cover",
             "research.joined-semantic-boundary",
             "research.recursive-composition-boundary",
             "research.profile-publication",
-            "research.analysis-premise-intake",
+        ],
+        "encoding_surfaces": [
+            "analysis schema descriptors and dispatch",
+            "Analysis exact-body dataclasses and encoders",
+            "hypothesis node/context premise-ID derivation",
+            "constructor-profile predecessor extraction",
+            "question, goal, support, and judgment helpers",
         ],
         "exact_binding_values_determined": False,
     }
@@ -657,16 +737,32 @@ def _package_impact_review() -> dict[str, Any]:
 def _probe_review() -> dict[str, Any]:
     typed = _read("evaluation/analysis-premise-intake-probe/model.py")
     cold = _read("evaluation/analysis-premise-intake-probe/independent.py")
+    run = _read("evaluation/analysis-premise-intake-probe/run.py")
+    expected = _json("evaluation/analysis-premise-intake-probe/expected-findings.json")
+    encoded = json.dumps(expected, sort_keys=True)
     _require(
-        '"outcome": "Refused", "code": "API-R-EXTRA-PREMISE"' in typed
-        and '"outcome": "Refused", "code": "API-R-EXTRA-PREMISE"' in cold,
-        "the predecessor probe extra-key behavior drifted",
+        '"outcome": "Malformed", "code": "API-M-EXTRA-PREMISE"' in typed
+        and '"outcome": "Malformed", "code": "API-M-EXTRA-PREMISE"' in cold,
+        "the two intake evaluators do not classify an extra key as Malformed",
     )
-    _require("model_scope" not in typed and "model_scope" not in cold, "the predecessor probe acquired model-scope checks")
+    _require(
+        "model_scope" in typed
+        and "model_scope" in cold
+        and "API-R-MODEL-SCOPE" in typed
+        and "API-R-MODEL-SCOPE" in cold,
+        "the two intake evaluators do not cover model scope",
+    )
+    _require(
+        "all-model-scope-mismatches" in run
+        and "API-M-EXTRA-PREMISE" in encoded
+        and "API-R-MODEL-SCOPE" in encoded,
+        "the predecessor probe did not freeze the new controls",
+    )
     return {
-        "extra_key_matches_owner_text": False,
-        "model_scope_checked": False,
-        "frozen_expected_finding_for_extra_key": False,
+        "extra_key_matches_owner_text": True,
+        "model_scope_variants_checked": 4,
+        "scope_mismatch_disposition": "Refused",
+        "frozen_expected_findings": True,
     }
 
 
@@ -683,42 +779,87 @@ def evaluate() -> dict[str, Any]:
         "package_impact": _package_impact_review(),
         "predecessor_probe": _probe_review(),
     }
-    findings = [
-        Finding("name-closure", "Negative", "F0V2D1-N-NAME-CLOSURE"),
-        Finding("constructor-consistency", "Negative", "F0V2D1-N-CONSTRUCTOR-CONSISTENCY"),
-        Finding("intake-soundness", "CannotAnswer", "F0V2D1-C-INTAKE-SCOPE-DISPOSITION"),
-        Finding("decision-fidelity", "Negative", "F0V2D1-N-DECISION-FIDELITY"),
-        Finding("schnorr-coordinate-formation", "Negative", "F0V2D1-N-SCHNORR-COORDINATES"),
-        Finding("profile-manifest-closure", "Negative", "F0V2D1-N-PROFILE-MANIFESTS"),
-        Finding("existing-package-refreeze", "CannotAnswer", "F0V2D1-C-REFREEZE-INPUTS"),
-        Finding("publication-compiler-agreement", "Affirmative", "F0V2D1-A-PUBLICATION-COMPILERS"),
-        Finding("identity-rotation-cone", "Affirmative", "F0V2D1-A-ROTATION-CONE"),
-        Finding("predecessor-probe-coverage", "Negative", "F0V2D1-N-PROBE-COVERAGE"),
+    review_findings = [
+        Finding("name-closure", "CannotAnswer", "F0V2D1-C-NAME-CLOSURE"),
+        Finding(
+            "constructor-consistency",
+            "CannotAnswer",
+            "F0V2D1-C-CONSTRUCTOR-CONSISTENCY",
+        ),
+        Finding("intake-soundness", "Affirmative", "F0V2D1-A-INTAKE-SOUNDNESS"),
+        Finding("decision-fidelity", "Affirmative", "F0V2D1-A-DECISION-FIDELITY"),
+        Finding(
+            "schnorr-coordinate-formation",
+            "CannotAnswer",
+            "F0V2D1-C-SCHNORR-BINDINGS",
+        ),
+        Finding(
+            "profile-manifest-closure",
+            "Affirmative",
+            "F0V2D1-A-PROFILE-MANIFESTS",
+        ),
+        Finding(
+            "existing-package-refreeze",
+            "CannotAnswer",
+            "F0V2D1-C-REFREEZE-INPUTS",
+        ),
     ]
-    return {
-        "aggregate": {
+    supporting = [
+        Finding(
+            "publication-compiler-agreement",
+            "Affirmative",
+            "F0V2D1-A-PUBLICATION-COMPILERS",
+        ),
+        Finding(
+            "identity-rotation-cone",
+            "Affirmative",
+            "F0V2D1-A-ROTATION-CONE",
+        ),
+        Finding(
+            "predecessor-probe-coverage",
+            "Affirmative",
+            "F0V2D1-A-PROBE-COVERAGE",
+        ),
+    ]
+    unanswered = [
+        finding.code for finding in review_findings if finding.outcome == "CannotAnswer"
+    ]
+    negatives = [
+        finding.code for finding in review_findings if finding.outcome == "Negative"
+    ]
+    if all(finding.outcome == "Affirmative" for finding in review_findings):
+        aggregate = {
+            "outcome": "Affirmative",
+            "code": "F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED",
+            "blocking_findings": [],
+            "cannot_answer_findings": [],
+        }
+    elif negatives:
+        aggregate = {
             "outcome": "Negative",
             "code": "F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
-            "blocking_findings": [
-                "F0V2D1-N-NAME-CLOSURE",
-                "F0V2D1-N-CONSTRUCTOR-CONSISTENCY",
-                "F0V2D1-N-DECISION-FIDELITY",
-                "F0V2D1-N-SCHNORR-COORDINATES",
-                "F0V2D1-N-PROFILE-MANIFESTS",
-                "F0V2D1-N-PROBE-COVERAGE",
-            ],
-            "cannot_answer_findings": [
-                "F0V2D1-C-INTAKE-SCOPE-DISPOSITION",
-                "F0V2D1-C-REFREEZE-INPUTS",
-            ],
-        },
-        "finding_codes": [finding.value() for finding in findings],
+            "blocking_findings": negatives,
+            "cannot_answer_findings": unanswered,
+        }
+    else:
+        aggregate = {
+            "outcome": "CannotAnswer",
+            "code": "F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
+            "blocking_findings": [],
+            "cannot_answer_findings": unanswered,
+        }
+    return {
+        "aggregate": aggregate,
+        "finding_codes": [
+            finding.value() for finding in (*review_findings, *supporting)
+        ],
         "metrics": metrics,
         "nonclaims": [
             "The review does not edit or publish Analysis owner semantics.",
             "Static name and constructor checks are not an Analysis implementation or mechanized proof.",
             "Publication compiler agreement is not evidence that the owner text is semantically closed.",
-            "The finite Schnorr candidate coordinates establish no relation truth, Plan honesty, theorem, or cryptographic property.",
+            "The finite Schnorr coordinates establish no relation truth, Plan honesty, theorem, or cryptographic property.",
+            "The migration inventory does not implement or validate the required Analysis identity rotation.",
         ],
     }
 
@@ -753,10 +894,12 @@ def main(argv: list[str] | None = None) -> int:
         findings = result["finding_codes"]
         negatives = sum(item[1] == "Negative" for item in findings)
         unanswered = sum(item[1] == "CannotAnswer" for item in findings)
+        aggregate = result["aggregate"]
         print(
             "Analysis named-premise owner-text review: "
             f"{len(findings)}/{len(findings)} findings reproduced; "
-            f"{negatives} negative, {unanswered} cannot answer; aggregate Negative"
+            f"{negatives} negative, {unanswered} cannot answer; "
+            f"aggregate {aggregate['outcome']}/{aggregate['code']}"
         )
     return 0
 

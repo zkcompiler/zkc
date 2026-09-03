@@ -4,7 +4,8 @@ This package asks one exact question:
 
 > Can a closed Analysis-owned named-premise catalog and intake operation make
 > every required assumption explicit and identity-bearing for the finite
-> Schnorr subject while failing closed on omission or coordinate substitution?
+> Schnorr subject while failing closed on omission, extra keys, coordinate
+> substitution, or any model-scope mismatch?
 
 The frozen answer is
 `Affirmative/API-A-FINITE-PREMISE-INTAKE` for the proposal-local finite model.
@@ -26,7 +27,7 @@ coordinate
 bound_model_or_hypothesis
 source
 evidence_depth
-regime_transport
+model_scope
 ```
 
 The evidence depths follow the existing research meanings: `T1` is a
@@ -47,12 +48,14 @@ The concrete catalog contains:
 - the relation predicate and witness-type coordinates; and
 - the Prover private-state, honest-commit, and honest-respond coordinates.
 
-The complete lane vocabulary has six cases. The selected Fresh Protocol's
+The `model_scope` carrier has the four owner cases `FreshChallengeOnly`,
+`OracleModelOnly`, `ExactSubjectsOnly`, and `RebindRequired`. The complete lane
+vocabulary has six cases. The selected Fresh Protocol's
 partition has five because `InterpretationFailed` is profile-qualified and is
-not available for this Fresh subject. The current PIR page lists the run
-branches but does not yet publish the named `ProtocolOutcomeLane` coordinate;
-the fixture therefore marks that coordinate proposal-local and the report
-retains `CannotAnswer/API-C-OUTCOME-PARTITION-UNPUBLISHED`.
+not available for this Fresh subject. The fixture represents that partition as
+`ProtocolOutcomeLane(subject.fresh_protocol_id)` and requires each provider map
+to be total in exact lane order. The round-two owner-text review, rather than
+this self-contained probe, checks the current PIR definition.
 
 ## Intake law exercised
 
@@ -70,6 +73,10 @@ partition:
   `CannotAnswer/API-C-MISSING-PREMISE`;
 - replacing the public-coin premise by one bound to declaration ordinal one
   returns `Refused/API-R-PREMISE-COORDINATE`;
+- adding one unrequested binding returns
+  `Malformed/API-M-EXTRA-PREMISE`;
+- mismatching each of the four model-scope variants returns
+  `Refused/API-R-MODEL-SCOPE` before a judgment identity forms;
 - Fresh names one distribution premise while Fiat--Shamir names sampler and
   oracle-process premises over the identical Core; and
 - the two provider maps over the same partition produce different premise and
@@ -91,7 +98,8 @@ frozen outcomes.
 ## What a pass does not establish
 
 A pass proves no theorem and establishes no protocol or cryptographic
-property. It does not authenticate the proposal-local outcome-partition name,
-prove any named premise, transport a premise to another regime, validate a
-provider implementation, or publish/adopt any Analysis or PIR owner text or
-profile. The finite IDs are comparison keys, not owner authority.
+property. It does not prove any named premise, transport a premise to another
+model or subject set, validate a provider implementation, or publish/adopt any
+Analysis or PIR owner text or profile. The finite IDs are comparison keys, not
+owner authority; the fixture's profile-qualified partition is not a runtime or
+provider validation.

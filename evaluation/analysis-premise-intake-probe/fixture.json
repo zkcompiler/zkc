@@ -1,6 +1,6 @@
 {
   "format": "zkc.analysis-premise-intake-probe.v0",
-  "question": "Can a closed Analysis-owned named-premise catalog and intake operation make every required assumption explicit and identity-bearing for the finite Schnorr subject while failing closed on omission or coordinate substitution?",
+  "question": "Can a closed Analysis-owned named-premise catalog and intake operation make every required assumption explicit and identity-bearing for the finite Schnorr subject while failing closed on omission, extra keys, coordinate substitution, or any model-scope mismatch?",
   "subject": {
     "core_id": "zkcidv0:pir.interactive-core:33f9d34abd61e22565b85fbfe03a35b3ca55f1a3980b71c5e9b729b3a93027f5",
     "fresh_protocol_id": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94",
@@ -39,9 +39,8 @@
         "reference": "Schnorr completeness provider uniform challenge hypothesis"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactRegimeOnly",
-        "regimes": ["Fresh"]
+      "model_scope": {
+        "kind": "FreshChallengeOnly"
       }
     },
     {
@@ -61,9 +60,9 @@
         "reference": "TotalUniformChallengeSamplerAdequacy"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactRegimeOnly",
-        "regimes": ["FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "OracleModelOnly",
+        "distribution_profile_id": "proposal:analysis.distribution:classical-random-oracle"
       }
     },
     {
@@ -83,9 +82,9 @@
         "reference": "ExactClassicalRandomOracleProcess"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactRegimeOnly",
-        "regimes": ["FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "OracleModelOnly",
+        "distribution_profile_id": "proposal:analysis.distribution:classical-random-oracle"
       }
     },
     {
@@ -114,9 +113,14 @@
         "reference": "challenge-verification Boolean with explicit outer failure"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactCoordinateOnly",
-        "regimes": ["Fresh"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -145,9 +149,14 @@
         "reference": "fully tagged provider outcome carrier"
       },
       "evidence_depth": "T1",
-      "regime_transport": {
-        "mode": "ExactCoordinateOnly",
-        "regimes": ["Fresh"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -167,9 +176,14 @@
         "reference": "finite Schnorr relation semantic model"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -189,9 +203,14 @@
         "reference": "finite Schnorr relation interface and Plan witness binding"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -211,9 +230,14 @@
         "reference": "finite Schnorr ProverPlan state"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -233,9 +257,14 @@
         "reference": "finite Schnorr decision-zero recipe"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     },
     {
@@ -255,15 +284,27 @@
         "reference": "finite Schnorr decision-two recipe"
       },
       "evidence_depth": "T3",
-      "regime_transport": {
-        "mode": "RebindRequired",
-        "regimes": ["Fresh", "FiatShamirClassicalRandomOracle"]
+      "model_scope": {
+        "kind": "ExactSubjectsOnly",
+        "exact_subjects": [
+          "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+          "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+          "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+          "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+        ]
       }
     }
   ],
   "cases": {
     "schnorr-fresh-property": {
       "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "candidatev0:pir.prover-plan:73a9c4f87c4496bff57e20101caf0776717938dd43e2488855c8d63956b7c20b",
+        "candidatev0:relations.interface:37fffea2c04dab2a8459361ff47ca045be9377858159c0c5de4e1f91db49ad22",
+        "candidatev0:relations.semantic-model:0838d6ad198a3d76c58a62827d9a041e8df716558fee1904c85f41b45b6c7d4e",
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
       "requirements": [
         {"slot": "challenge-law", "kind": "FreshPublicCoinDistribution", "coordinate": {"owner": "pir", "subject": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7", "path": "declarations[pir.public-coin-law][0]"}},
         {"slot": "outcome-carrier", "kind": "ProviderOutcomeCarrierMap", "coordinate": {"owner": "pir", "subject": "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94", "path": "ProtocolOutcomeLane"}},
@@ -285,6 +326,10 @@
     },
     "fresh-challenge": {
       "regime": "Fresh",
+      "oracle_model_id": "proposal:analysis.distribution:fresh-uniform",
+      "exact_subjects": [
+        "zkcidv0:pir.protocol:5ef61d48cca624e042b89fdd56935c3e9137a0790a2625ce2dd4f7da9ca92f94"
+      ],
       "requirements": [
         {"slot": "challenge-law", "kind": "FreshPublicCoinDistribution", "coordinate": {"owner": "pir", "subject": "zkcidv0:foundation.semantic-module:de7f837dc849ff52fb045259839dfb9efde015a65781ad064feb5a91b0ae29b7", "path": "declarations[pir.public-coin-law][0]"}}
       ],
@@ -292,6 +337,10 @@
     },
     "fiat-shamir-challenge": {
       "regime": "FiatShamirClassicalRandomOracle",
+      "oracle_model_id": "proposal:analysis.distribution:classical-random-oracle",
+      "exact_subjects": [
+        "proposal:analysis.family:prime-order-schnorr"
+      ],
       "requirements": [
         {"slot": "sampler-adequacy", "kind": "FiatShamirSamplerAdequacy", "coordinate": {"owner": "analysis", "subject": "proposal:analysis.family:prime-order-schnorr", "path": "premise-catalog.sampler-adequacy"}},
         {"slot": "oracle-process", "kind": "FiatShamirOracleProcess", "coordinate": {"owner": "analysis", "subject": "proposal:analysis.family:prime-order-schnorr", "path": "premise-catalog.oracle-process"}}

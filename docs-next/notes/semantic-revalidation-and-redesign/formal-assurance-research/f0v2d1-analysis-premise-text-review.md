@@ -1,7 +1,10 @@
 # Analysis Named-Premise Owner-Text Review
 
-> **State:** `Negative/F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`
-> for the exact owner-text range `7a63432..177cbaa`
+> **State:** round-two
+> `CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED` for the exact
+> owner-text range `8ae0ee1..cb8f382`. Sections 1--10 retain the round-one
+> record for `7a63432..177cbaa`; the Round two section below is the current
+> disposition.
 > **Authority:** None. This review changes no Analysis, Relations, Protocol IR,
 > or Foundation owner page and publishes no profile identity.
 > **Executable evidence:**
@@ -396,7 +399,7 @@ relation or Plan premise, prove theorem applicability or truth, establish a
 cryptographic property, verify a compiler or backend, publish target profiles,
 or claim production readiness.
 
-## Handoff
+## Round-one handoff
 
 - **Files changed:** added the review package `README.md`, `run.py`, and frozen
   `expected-findings.json`; added this note; registered
@@ -434,3 +437,376 @@ or claim production readiness.
   index and exited 1 because Git could not see the untracked package; this
   reproduces the brief's inventory warning rather than a package defect. The
   required developer-tier lifecycle check passed with the alternate index.
+
+## Round two
+
+### Scope and aggregate
+
+Round two reviews `8ae0ee1..cb8f382`, including the commits `de6f9e7`
+(`repair the analysis premise grammar after review`) and `cb8f382`
+(`complete the analysis displays under the requirement law`). The checker no
+longer freezes any assertion that a round-one defect persists.
+
+The aggregate is
+`CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`:
+
+| Review question | Round two | Stable finding |
+|---|---|---|
+| Name closure | CannotAnswer | `F0V2D1-C-NAME-CLOSURE` |
+| Constructor consistency | CannotAnswer | `F0V2D1-C-CONSTRUCTOR-CONSISTENCY` |
+| Intake soundness | Affirmative | `F0V2D1-A-INTAKE-SOUNDNESS` |
+| Decision fidelity | Affirmative | `F0V2D1-A-DECISION-FIDELITY` |
+| Schnorr coordinate and binding formation | CannotAnswer | `F0V2D1-C-SCHNORR-BINDINGS` |
+| Profile and manifest closure | Affirmative | `F0V2D1-A-PROFILE-MANIFESTS` |
+| Existing-package refreeze inputs | CannotAnswer | `F0V2D1-C-REFREEZE-INPUTS` |
+
+The affirmative aggregate
+`Affirmative/F0V2D1-A-ANALYSIS-PREMISE-TEXT-CLOSED` is deliberately not
+returned because four of the seven questions do not close.
+
+### Findings closed since round one
+
+The old `F0V2D1-C-INTAKE-SCOPE-DISPOSITION` closes. `analysis-model.md`
+Section 4.1, lines 3098--3113 now assigns missing source to `CannotAnswer`,
+kind or coordinate mismatch and each of the four scope failures to `Refused`,
+and malformed key sets to `Malformed`, before goal formation. Section 3.2 of
+`cryptographic-properties.md`, lines 2393--2401, explicitly fixes the empty
+requirement sequence for every category reached by the three parametric
+`NamedPremiseRequirementsOf(family, exact_subjects)` question constructors:
+source premise families, asymptotic special soundness, theorem applicability,
+and the other property/transport families. No ambient empty default is needed.
+
+The old `F0V2D1-N-DECISION-FIDELITY` closes. Fresh distribution, construction
+and family Fiat--Shamir sampler/oracle premises, exact model scopes, the
+Protocol-qualified provider lane map, and the separate provider-judgment
+requirement are all represented. This is syntactic decision fidelity, not
+evidence that any premise is true or any provider exists.
+
+The old `F0V2D1-N-PROFILE-MANIFESTS` closes. All three owner supported-kind
+catalogs now equal their manifest sequences, including the transport catalog.
+The three profile revisions move from zero to one; the five corresponding
+definition bumps are `common-analysis-domain-v0`,
+`cryptographic-property-body-v0`, `property-core-v0`,
+`afk-transport-body-v0`, and `afk-application-v0`. Both independent
+publication compilers agree on current and reconstructed `8ae0ee1` source and
+reproduce the same six-profile rotation cone.
+
+The old `F0V2D1-N-PROBE-COVERAGE` closes. The typed and independent predecessor
+evaluators now classify an extra key as
+`Malformed/API-M-EXTRA-PREMISE` and freeze one
+`Refused/API-R-MODEL-SCOPE` mismatch for each of `FreshChallengeOnly`,
+`OracleModelOnly`, `ExactSubjectsOnly`, and `RebindRequired`. The probe keeps
+the Fresh outcome partition exact and profile-qualified; this round-two review
+separately confirms the now-published PIR `ProtocolOutcomeLane(P)` coordinate.
+
+The old broad name, constructor, and coordinate negatives are not carried
+forward. Their stated defects were repaired: the requested family names are
+now defined, top-level body displays have the new fields, the goal sentence
+and two derivation helpers are current, `fresh_prover_plan_id` and its adequacy
+clause exist, and Plan coordinates are typed. The narrower successor findings
+below concern different residual gaps.
+
+### Findings that remain
+
+`F0V2D1-C-NAME-CLOSURE` remains. Every law family named by this change now has
+either a displayed closed-schema statement or a displayed signature, but the
+signatures do not all form:
+
+- `analysis-model.md` Section 4.1, lines 2125--2133 defines
+  `ExactModelBindingLaw<K>` and `ExactNamedHypothesis<K>` using a free `P` in
+  `TotalAnalysisLawSignature<P,...>`.
+- Lines 2145--2150 put
+  `AnalysisProviderOutcomeCarrierMapBody<P,Protocol>` in a sum whose binders
+  are only `<P,K>`, leaving `Protocol` free.
+- Lines 2241--2245 and 3091--3094 use bare `AnalysisNamedPremiseId` as the
+  binding-map value although lines 3071--3072 define only
+  `AnalysisNamedPremiseId<P,K>`.
+- `cryptographic-properties.md` Section 3.2, lines 2191--2210 and 2272--2322,
+  and Section 7.3, lines 5621--5669 give the five concrete hypothesis
+  declarations two or three canonical arguments, while the generic
+  `ExactNamedHypothesis<K>` signature admits only one coordinate argument.
+- Section 3.2, lines 2362--2365 uses `ell0` in
+  `AFKMemberKnowledgeQuestion(S,ell0)` although
+  `FiatShamirConstructionPremiseBindings` binds only `S`.
+
+`F0V2D1-C-CONSTRUCTOR-CONSISTENCY` remains. All eleven question, twelve goal,
+six context, five support, one derived judgment, and six concrete named-premise
+body displays carry their required fields. `ContextPremiseIds` at
+`analysis-model.md` lines 2281--2287 agrees with the context schema and defines
+`premises(goal)` as exactly `PremiseIdsOfGoal`. The two helper derivations also
+carry the IDs. However, only 24 of the actual 31 anonymous nodes use that
+fourth component. Add `, premises(goal)` to the nodes beginning at
+`cryptographic-properties.md:5196`, `:5364`, `:6100`, `:6102`, `:6109`,
+`:6112`, and `:6115`. Because the node schema has no omission default, the
+surrounding context-level union cannot make those seven node bodies complete.
+
+`F0V2D1-C-SCHNORR-BINDINGS` remains. The six relation-bound requirements and
+the separate provider requirement have formable coordinates. The selected
+Plan references are `StrategyStateSlotRef 0`, decision/node `0/0`, and
+decision/node `2/0`, and the finite candidate still witnesses those ordinals.
+But `SchnorrNamedPremiseBindings` at
+`cryptographic-properties.md` lines 2333--2357 constructs only the fresh-coin
+premise. The relation, witness, state, commit, and respond entries are prose
+`BoundModel`/`BoundHypothesis` descriptions, not complete
+`AnalysisNamedPremiseBody` values: they do not fix the exact law reference,
+canonical arguments, source, evidence depth per entry, or `model_scope`.
+`SchnorrExtractorPremiseBindings` at lines 2359--2360 merely subsets that
+underdetermined map. `FiatShamirConstructionPremiseBindings` has the unbound
+`ell0` above. `FiatShamirFamilyPremiseBindings` at lines 5680--5687 constructs
+both premise bodies but still uses the prose `the form the family declares`
+instead of a named, exact profile-law derivation. Consequently the helpers are
+not exact enough to form all goal identities.
+
+`F0V2D1-C-REFREEZE-INPUTS` remains. The empty-family sentence determines the
+empty cases, but the nonempty binding IDs cannot be frozen until the law
+signature and helper gaps above are resolved. The current
+`evaluation/k3-analysis-closure` model also lacks
+all six new body fields and the named-premise body itself. This review records
+the exact migration below but does not implement it.
+
+### Proposed delta
+
+These are owner-page proposals only; this lane did not edit an owner page.
+
+#### Close the dependent law and ID carriers
+
+- **Owner page and section:** `docs-next/analysis/analysis-model.md`, Section
+  4.1, lines 2125--2150, 2241--2245, and 3091--3094.
+- **Exact change:** bind the direct profile in the family names as
+  `ExactModelBindingLaw<P,K>` and `ExactNamedHypothesis<P,K>`. Define a closed
+  `NamedHypothesisArgumentSchema<K>` with Fresh arguments
+  `[PIRPublicCoinLawCoordinate, AnalysisDistributionProfileId]`, sampler
+  arguments `[the admitted family-or-construction coordinate,
+  AnalysisDistributionProfileId, SamplerAdequacyForm]`, and oracle arguments
+  `[the admitted family-or-construction coordinate,
+  AnalysisDistributionProfileId]`; use that schema in
+  `ExactNamedHypothesis<P,K>`. Make the provider arm an explicitly dependent
+  variant
+  `BoundProviderOutcomeCarrierMap<Protocol: ProtocolId>(AnalysisProviderOutcomeCarrierMapBody<P,Protocol>)`.
+  Introduce
+  `AnalysisNamedPremiseBindingValue<P>(requirement) =
+  AnalysisNamedPremiseId<P,requirement.kind>` and use it in both goal and intake
+  maps.
+- **Identity effect:** the kernel law source changes, so its direct profile and
+  every dependent Analysis profile rotate; every question, goal, context,
+  proposition, support, and judgment that reaches a changed premise also
+  rotates. The direct profile and changed law-declaration revisions must
+  advance before publication.
+- **Evidence with gate IDs:** `research.analysis-premise-text-review`,
+  `research.profile-publication`, and `research.analysis-premise-intake`.
+- **Reversal condition:** withdraw only if the owner publishes another closed
+  dependent carrier that binds the same profile, kind, Protocol, and canonical
+  argument schemas with no body-to-profile inference.
+- **Non-claims:** a well-typed law term remains an assumption and proves no
+  sampling, relation, Plan, or provider fact.
+
+#### Complete exact premise constructors and binding helpers
+
+- **Owner page and section:**
+  `docs-next/analysis/cryptographic-properties.md`, Sections 3.2 and 7.3.
+- **Exact change:** change each concrete hypothesis term's first argument to
+  its complete admitted premise coordinate and match the closed argument schema
+  above. Add concrete six-field constructors for relation predicate, witness
+  type, prover state, honest commit, and honest respond. Each must name its
+  exact `AnalysisLawTerm` reference and canonical arguments, its exact owner or
+  candidate source, its evidence depth, and
+  `ExactSubjectsOnly(SchnorrSpecialSoundnessQuestion(S).exact_subjects)`.
+  Make `SchnorrNamedPremiseBindings` and
+  `SchnorrExtractorPremiseBindings` call intake with IDs of those exact bodies.
+  Change `FiatShamirConstructionPremiseBindings` to take `(S,ell0)` and update
+  every caller. Replace `the form the family declares` with a named
+  `SamplerAdequacyFormOf(F)` profile-law derivation, and spell both family
+  premise IDs in the supplied map.
+- **Identity effect:** the property and transport semantic laws and direct
+  profiles rotate, as do their validation children and every nonempty
+  premise-bearing goal/support/judgment. Advance the affected profile, body
+  compiler, and semantic-law revisions.
+- **Evidence with gate IDs:** `research.analysis-premise-text-review`,
+  `research.schnorr-relations-plan-candidates`,
+  `research.analysis-premise-intake`, and `research.property-analysis`.
+- **Reversal condition:** withdraw only if the owner chooses a different
+  complete constructor set whose intake deterministically yields the same
+  requirement-keyed premise IDs and whose source/scope rules are explicit.
+- **Non-claims:** exact bindings do not establish their hypotheses, relation
+  truth, Plan honesty, extractor success, or cryptographic security.
+
+#### Complete the seven node displays
+
+- **Owner page and section:**
+  `docs-next/analysis/cryptographic-properties.md`, Sections 7.1, 7.2, and 8.
+- **Exact change:** append `premises(goal)` as the fourth component of the
+  seven nodes at lines 5196, 5364, 6100, 6102, 6109, 6112, and 6115. Make no
+  authored ID choice; the notation already derives exactly
+  `PremiseIdsOfGoal`.
+- **Identity effect:** each corrected node body and enclosing context rotates,
+  followed by every dependent proposition, support, judgment, and transport
+  result under the transport profile.
+- **Evidence with gate IDs:** `research.analysis-premise-text-review`,
+  `research.property-analysis`, and `research.joined-semantic-boundary`.
+- **Reversal condition:** withdraw only if the owner removes the fourth node
+  field from the schema and replaces it everywhere with an equally exact
+  derived, identity-bearing rule.
+- **Non-claims:** copying derived IDs into a node does not discharge or prove a
+  premise.
+
+### Migration plan: `evaluation/k3-analysis-closure` and four dependent checks
+
+This plan starts only after the proposed owner deltas above determine the exact
+nonempty premise IDs. Implementing it in this review would invent inputs, so no
+code below was changed.
+
+#### `research.property-analysis` — `evaluation/k3-analysis-closure`
+
+1. **Dataclasses and closed sums.** Add
+   `AnalysisNamedPremiseRequirementV0(slot, kind, coordinate)`,
+   `AnalysisNamedPremiseBindingV0(requirement, premise_id)`, and
+   `AnalysisNamedPremiseBodyV0(kind, coordinate,
+   bound_model_or_hypothesis, source, evidence_depth, model_scope)`. Add exact
+   variant dataclasses for all nine kinds, seven coordinate arms, three bound
+   value arms, four source arms, three evidence depths, and the four model
+   scopes. Add `named_premise_requirements` to
+   `AnalysisQuestionBodyV0`; `named_premise_bindings` to
+   `AnalysisGoalBodyV0`; and `exact_named_premise_ids` to
+   `AnalysisHypothesisNodeV0`, `AnalysisHypothesisContextBodyV0`,
+   `AnalysisSupportInstantiationBodyV0`, and
+   `AnalysisJudgmentRecordBodyV0`. Preserve immutable tuples and canonical
+   Foundation byte ordering rather than host string ordering.
+2. **Schema tables and encodings.** At
+   `reference_model.py:602--709` add the `analysis.named-premise` descriptor
+   and append `named-premise-requirements` to question and
+   `named-premise-bindings` to goal. Add `exact-named-premise-ids` to node,
+   context, support, and judgment descriptors. Register the new body type in
+   `_ANALYSIS_EXACT_BODY_TYPES` and the property/transport subject sets.
+   Encode the premise body at ordinals 0--5; question requirements at ordinal
+   4; goal bindings at ordinal 1; node IDs at ordinal 3; context IDs at ordinal
+   2; support IDs at ordinal 2 while shifting existing support ordinals 2--5
+   to 3--6; and judgment IDs at ordinal 4 while shifting existing judgment
+   ordinals 4--10 to 5--11.
+3. **Formation and intake calls.** Implement
+   `normalize_named_premise_requirements` and
+   `intake_analysis_named_premises` with the exact twelve-branch partition:
+   missing source/key `CannotAnswer`, kind/coordinate and all four scope
+   mismatches `Refused`, malformed key sets `Malformed`, and no default.
+   Authenticate each premise under the question's direct profile before
+   `analysis_goal_id` forms. Extend `_require_constructor_profile` to inspect
+   named-premise predecessors and reject mixed profiles. Derive
+   `PremiseIdsOfGoal`, node equality, reachable `ContextPremiseIds`, and
+   `PremiseIdsOfProposition` rather than accepting caller summaries.
+4. **Exact constructor calls.** Update all eight
+   `AnalysisQuestionBodyV0` calls, fourteen `AnalysisGoalBodyV0` calls, five
+   `AnalysisHypothesisNodeV0` calls, four
+   `AnalysisHypothesisContextBodyV0` calls, the one support call, and the one
+   judgment call. The named surfaces include `_exact_premise_goal_id`,
+   `analysis_question_id`, `analysis_goal_id`,
+   `analysis_hypothesis_context_id`,
+   `_analysis_support_instantiation_id`, and
+   `_analysis_judgment_record_id`, plus fixed-extractor, finite-cover
+   certificate, theorem-truth, family source/target, applicability, adaptive
+   Fiat--Shamir, and family-instance builders. Use explicit empty requirement
+   and binding tuples only for the families licensed as empty at
+   `cryptographic-properties.md:2393--2401`. The relation-bound Fresh,
+   fixed-extractor, construction Fiat--Shamir, and family Fiat--Shamir calls
+   receive the exact owner-defined nonempty vectors.
+5. **Vectors and negative tests.** Refreeze every inline question, goal,
+   context, proposition, support, judgment, checked-result, authority-binding,
+   and profile-cone identity vector. Rename the tests at
+   `test_reference_model.py:1957`, `:2069`, and `:2743` so they assert
+   question-plus-binding-map goal identity, not question-only identity. Add
+   independent mutations for omitted/extra/duplicate/reordered requirements
+   and bindings; absent source; wrong kind and coordinate; every model-scope
+   mismatch; cross-profile premise IDs; noncanonical argument bytes; changed
+   premise source/evidence/scope; node/context/support/judgment premise-ID
+   omission, surplus, or mismatch; and binding changes that rotate every
+   downstream identity without rotating the authenticated question.
+
+#### `research.finite-cover` — `evaluation/finite-cover-analysis`
+
+Rebuild `establish_checked_fixed_extractor()` through the migrated shared model
+with the owner-required relation and witness premise pair. Keep the hypothesis
+context empty—the named premises are not hypothesis nodes—but change
+`test_finite_cover.py:330--440` to require the exact two premise IDs in the
+goal, support, and judgment. Refreeze the resulting support, judgment,
+checked-result, and authority-binding identities while retaining the existing
+308-representative stream and `1d9472...a3dd` stream digest. Add missing,
+extra, swapped-coordinate, and scope-mismatch controls; none may fall through
+to the finite-cover arithmetic.
+
+#### `research.joined-semantic-boundary` — `evaluation/k3-integrated-closure`
+
+Keep the canonical shared-module load at `reference_model.py:26--75`. Rebuild
+every Analysis-side source and family judgment after the shared Analysis-model
+identity rotation,
+then refreeze the joined result vectors that contain those IDs. Assert that
+the OIR branch receives no named-premise body, local source handle, or Analysis
+capability—only the already declared inert owner-ID correspondence. Add a
+negative cross-consumer mutation showing that swapping an Analysis premise ID
+changes/refuses the Analysis judgment without changing the independently
+formed OIR projection.
+
+#### `research.recursive-composition-boundary` —
+`evaluation/recursive-composition-boundary`
+
+The package currently hashes simplified support and judgment dictionaries at
+`reference_model.py:1411--1445` rather than exact Analysis bodies. Keep it explicitly
+a surrogate, but add an `exact_named_premise_ids` field to both payloads,
+derived as the canonical union of premise IDs of their actual goals. The
+current incremental families are empty only if their owner family contracts
+say so; encode an explicit empty tuple in that case. Add negative tests for an
+omitted, extra, duplicate, reordered, or caller-authored premise-ID summary and
+refreeze all derived composition judgment IDs. Do not import
+`evaluation/k3-analysis-closure`
+unless this check is deliberately promoted from surrogate to exact Analysis
+consumer.
+
+#### `research.profile-publication` —
+`evaluation/semantic-profile-publication`
+
+After the owner deltas and Analysis reference-model migration settle, advance
+the directly changed
+profile/declaration revisions, run both publication compilers, and regenerate
+`docs-next/pir/profiles/published-identities.json` from the agreed table.
+Refreeze tests at `tests/test_publication.py:122--153` and the expected
+property/transport/validation rotation cone. Add a mutation for the new
+`analysis.named-premise` schema and each appended body field so a missing
+descriptor, wrong ordinal, or stale semantic-law revision is rejected. This
+step publishes identity metadata only; it does not validate any premise.
+
+## Handoff
+
+- **Files changed:** round-two rewrites of the review package `README.md`,
+  `run.py`, and `expected-findings.json`; the Round two section and this
+  handoff in the existing note; `model.py`, `independent.py`, `run.py`,
+  `fixture.json`, `README.md`, and `expected-findings.json` in the predecessor
+  intake probe; and the probe's existing row in `evaluation/README.md`. No
+  owner page, profile manifest, checks manifest, lifecycle registry, directory
+  README, or Analysis migration target was edited.
+- **Commands:** clone-local alternate-index staging exited 0 in 0.47 seconds.
+  With that index, `python3 -B checks/run.py validate` exited 0 in 0.04
+  seconds; `python3 -B checks/run.py run --tier developer` exited 0 in 1.08
+  seconds with 8/8 checks passing; and `python3 -B checks/run.py run --check
+  research.analysis-premise-text-review` exited 0 in 1.06 seconds with 1/1
+  passing. The direct intake probe exited 0 in 0.03 seconds, and the direct
+  review package exited 0 in 1.00 seconds. JSON decoding, Python compilation,
+  and `git diff --check` also exited 0. The alternate index, clone-local object
+  directory, and clone-local UV cache were removed after the run.
+- **Aggregate outcome:**
+  `CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED` with three
+  affirmative and four `CannotAnswer` review questions. The four listed
+  `cannot_answer_findings` are the complete non-closure list.
+- **Non-claims:** this is static source review, two-path finite intake evidence,
+  publication reconstruction, and a migration inventory. It does not implement
+  the Analysis reference-model migration, publish semantics, prove a
+  premise/property/theorem,
+  establish relation satisfaction or Plan honesty, validate a provider,
+  verify a compiler/backend, or claim production security.
+- **Surprises and where the brief was wrong:** the owner text contains 31
+  anonymous hypothesis nodes, not the stated 30; seven nodes still lack the
+  required fourth component, so the assertion that every node was completed is
+  false. The clone still has no local `AGENTS.md` or `.claude/CLAUDE.md`, so
+  their read-only primary-checkout copies were used. The workflow's private
+  status append cannot be performed because this lane must not write outside
+  the clone and the private ledgers are read-only. The existing
+  `checks/manifest.json` descriptions remain round-one metadata because the
+  brief expressly prohibited manifest edits; the executable packages and the
+  existing evaluation index row carry the round-two state. The command details
+  above come from the required alternate-index checks.

@@ -9,12 +9,11 @@ from typing import Any
 FIELDS = {
     "root": {"format", "question", "subject", "protocol_outcome_lanes", "subject_outcome_partition", "premises", "cases"},
     "subject": {"core_id", "fresh_protocol_id", "family_id"},
-    "premise": {"name", "kind", "coordinate", "bound_model_or_hypothesis", "source", "evidence_depth", "regime_transport"},
+    "premise": {"name", "kind", "coordinate", "bound_model_or_hypothesis", "source", "evidence_depth", "model_scope"},
     "coordinate": {"owner", "subject", "path"},
     "bound": {"form", "value"},
     "source": {"kind", "reference"},
-    "transport": {"mode", "regimes"},
-    "case": {"regime", "requirements", "bindings"},
+    "case": {"regime", "oracle_model_id", "exact_subjects", "requirements", "bindings"},
     "requirement": {"slot", "kind", "coordinate"},
 }
 KINDS = {
@@ -41,7 +40,7 @@ def _require_fields(value: dict[str, Any], label: str) -> None:
 
 def _premise_body(item: dict[str, Any]) -> dict[str, Any]:
     return {key: item[key] for key in (
-        "kind", "coordinate", "bound_model_or_hypothesis", "source", "evidence_depth", "regime_transport"
+        "kind", "coordinate", "bound_model_or_hypothesis", "source", "evidence_depth", "model_scope"
     )}
 
 
@@ -60,15 +59,25 @@ def _load(path: Path) -> dict[str, Any]:
         _require_fields(item["coordinate"], "coordinate")
         _require_fields(item["bound_model_or_hypothesis"], "bound")
         _require_fields(item["source"], "source")
-        _require_fields(item["regime_transport"], "transport")
+        scope = item["model_scope"]
+        scope_fields = {
+            "FreshChallengeOnly": {"kind"},
+            "OracleModelOnly": {"kind", "distribution_profile_id"},
+            "ExactSubjectsOnly": {"kind", "exact_subjects"},
+            "RebindRequired": {"kind"},
+        }
+        if not isinstance(scope, dict) or scope.get("kind") not in scope_fields or set(scope) != scope_fields[scope["kind"]]:
+            raise ValueError("independent model scope differs")
         if item["kind"] not in KINDS or item["evidence_depth"] not in {"T1", "T2", "T3"}:
             raise ValueError("independent premise enum differs")
         if item["bound_model_or_hypothesis"]["form"] not in {"Model", "Hypothesis", "ProviderMap"}:
             raise ValueError("independent bound form differs")
-        if item["regime_transport"]["mode"] not in {"ExactRegimeOnly", "ExactCoordinateOnly", "RebindRequired"}:
-            raise ValueError("independent transport mode differs")
-        if not item["regime_transport"]["regimes"]:
-            raise ValueError("independent empty transport regimes")
+        if scope["kind"] == "OracleModelOnly" and not scope["distribution_profile_id"]:
+            raise ValueError("independent empty oracle-model scope")
+        if scope["kind"] == "ExactSubjectsOnly" and (
+            not scope["exact_subjects"] or scope["exact_subjects"] != sorted(set(scope["exact_subjects"]))
+        ):
+            raise ValueError("independent exact-subject scope differs")
         if item["kind"] == "ProviderOutcomeCarrierMap":
             value = item["bound_model_or_hypothesis"]["value"]
             if item["bound_model_or_hypothesis"]["form"] != "ProviderMap" or set(value) != {"carrier", "map"} or list(value["map"]) != FRESH_PARTITION:
@@ -81,6 +90,8 @@ def _load(path: Path) -> dict[str, Any]:
         ids.add(premise_id)
     for case in data["cases"].values():
         _require_fields(case, "case")
+        if not case["oracle_model_id"] or not case["exact_subjects"] or case["exact_subjects"] != sorted(set(case["exact_subjects"])):
+            raise ValueError("independent case scope differs")
         slots = []
         for requirement in case["requirements"]:
             _require_fields(requirement, "requirement")
@@ -93,6 +104,17 @@ def _load(path: Path) -> dict[str, Any]:
     return data
 
 
+def _scope_admits(item: dict[str, Any], case: dict[str, Any]) -> bool:
+    scope = item["model_scope"]
+    if scope["kind"] == "FreshChallengeOnly":
+        return case["regime"] == "Fresh"
+    if scope["kind"] == "OracleModelOnly":
+        return case["oracle_model_id"] == scope["distribution_profile_id"]
+    if scope["kind"] == "ExactSubjectsOnly":
+        return case["exact_subjects"] == scope["exact_subjects"]
+    return False
+
+
 def _intake(data: dict[str, Any], case_name: str, supplied: dict[str, str] | None = None) -> dict[str, Any]:
     case = data["cases"][case_name]
     bindings = dict(case["bindings"] if supplied is None else supplied)
@@ -102,7 +124,7 @@ def _intake(data: dict[str, Any], case_name: str, supplied: dict[str, str] | Non
         return {"outcome": "CannotAnswer", "code": "API-C-MISSING-PREMISE", "missing": missing}
     extra = sorted(set(bindings) - set(requirements))
     if extra:
-        return {"outcome": "Refused", "code": "API-R-EXTRA-PREMISE", "extra": extra}
+        return {"outcome": "Malformed", "code": "API-M-EXTRA-PREMISE", "extra": extra}
     by_name = {item["name"]: item for item in data["premises"]}
     selected = []
     for slot in sorted(requirements):
@@ -112,6 +134,11 @@ def _intake(data: dict[str, Any], case_name: str, supplied: dict[str, str] | Non
         wanted = requirements[slot]
         if item["kind"] != wanted["kind"] or item["coordinate"] != wanted["coordinate"]:
             return {"outcome": "Refused", "code": "API-R-PREMISE-COORDINATE", "slot": slot}
+        if not _scope_admits(item, case):
+            return {
+                "outcome": "Refused", "code": "API-R-MODEL-SCOPE",
+                "slot": slot, "scope": item["model_scope"]["kind"],
+            }
         selected.append(item["_id"])
     selected.sort()
     identity = {
@@ -141,6 +168,28 @@ def evaluate(path: Path) -> dict[str, Any]:
             item["_id"] = "premisev0:" + _hash("analysis.named-premise.v0", _premise_body(item))
     alternate = dict(bindings)
     alternate["outcome-carrier"] = "provider-outcome-tagged"
+    extra = dict(bindings)
+    extra["unexpected"] = "fresh-public-coin-distribution"
+    scope_results = {}
+    for scope_kind, case_name, mutation in (
+        ("FreshChallengeOnly", "fresh-challenge", "case-regime"),
+        ("OracleModelOnly", "fiat-shamir-challenge", "case-oracle"),
+        ("ExactSubjectsOnly", "schnorr-fresh-property", "case-subjects"),
+        ("RebindRequired", "fresh-challenge", "premise-rebind"),
+    ):
+        changed = json.loads(json.dumps(data))
+        if mutation == "case-regime":
+            changed["cases"][case_name]["regime"] = "FiatShamirClassicalRandomOracle"
+        elif mutation == "case-oracle":
+            changed["cases"][case_name]["oracle_model_id"] = "proposal:analysis.distribution:different"
+        elif mutation == "case-subjects":
+            changed["cases"][case_name]["exact_subjects"] = ["proposal:analysis.subject:different"]
+        else:
+            for item in changed["premises"]:
+                if item["name"] == "fresh-public-coin-distribution":
+                    item["model_scope"] = {"kind": "RebindRequired"}
+                    item["_id"] = "premisev0:" + _hash("analysis.named-premise.v0", _premise_body(item))
+        scope_results[scope_kind] = _intake(changed, case_name)
     return {
         "premise_ids": {item["name"]: item["_id"] for item in sorted(data["premises"], key=lambda row: row["name"])},
         "depth_counts": {depth: sum(item["evidence_depth"] == depth for item in data["premises"]) for depth in ("T1", "T2", "T3")},
@@ -149,6 +198,8 @@ def evaluate(path: Path) -> dict[str, Any]:
         "fiat_shamir": _intake(data, "fiat-shamir-challenge"),
         "omissions": omissions,
         "wrong_coordinate": _intake(mutated, "schnorr-fresh-property"),
+        "extra_key": _intake(data, "schnorr-fresh-property", extra),
+        "scope_mismatches": scope_results,
         "alternate_provider": _intake(data, "schnorr-fresh-property", alternate),
         "catalog_digest": _hash("analysis.premise-catalog.v0", [{k: v for k, v in item.items() if k != "_id"} for item in data["premises"]]),
     }

@@ -29,6 +29,8 @@ def build_report() -> dict[str, Any]:
     alternate = typed["alternate_provider"]
     fresh = typed["fresh"]
     fiat_shamir = typed["fiat_shamir"]
+    extra_key = typed["extra_key"]
+    scope_mismatches = typed["scope_mismatches"]
     if complete["outcome"] != "Affirmative" or complete["named_premise_ids"] != complete["hypothesis_set"]:
         raise RuntimeError("API-R-HYPOTHESIS-SET")
     if any(value != "CannotAnswer/API-C-MISSING-PREMISE" for value in typed["omissions"].values()):
@@ -37,6 +39,17 @@ def build_report() -> dict[str, Any]:
         "outcome": "Refused", "code": "API-R-PREMISE-COORDINATE", "slot": "challenge-law"
     }:
         raise RuntimeError("API-R-WRONG-COORDINATE-ACCEPTED")
+    if extra_key != {
+        "outcome": "Malformed", "code": "API-M-EXTRA-PREMISE", "extra": ["unexpected"]
+    }:
+        raise RuntimeError("API-R-EXTRA-PREMISE-NOT-MALFORMED")
+    if set(scope_mismatches) != {
+        "FreshChallengeOnly", "OracleModelOnly", "ExactSubjectsOnly", "RebindRequired"
+    } or any(
+        result["outcome"] != "Refused" or result["code"] != "API-R-MODEL-SCOPE"
+        for result in scope_mismatches.values()
+    ):
+        raise RuntimeError("API-R-MODEL-SCOPE-DID-NOT-REFUSE")
     if fresh["outcome"] != "Affirmative" or fiat_shamir["outcome"] != "Affirmative":
         raise RuntimeError("API-R-CHALLENGE-INTAKE")
     if set(fresh["named_premise_ids"]) & set(fiat_shamir["named_premise_ids"]):
@@ -51,10 +64,12 @@ def build_report() -> dict[str, Any]:
         ["premises-retained-in-hypothesis-set", "Affirmative", "API-A-HYPOTHESIS-SET"],
         ["every-single-premise-omission", "CannotAnswer", "API-C-MISSING-PREMISE"],
         ["different-coordinate-substitution", "Refused", "API-R-PREMISE-COORDINATE"],
+        ["extra-premise-key", "Malformed", "API-M-EXTRA-PREMISE"],
+        ["all-model-scope-mismatches", "Refused", "API-R-MODEL-SCOPE"],
         ["fresh-and-fiat-shamir-premise-separation", "Affirmative", "API-A-REGIME-SEPARATION"],
         ["provider-map-identity-separation", "Affirmative", "API-A-PROVIDER-MAP-IDENTITY"],
         ["independent-reconstruction", "Affirmative", "API-A-INDEPENDENT-RECONSTRUCTION"],
-        ["current-pir-outcome-partition-coordinate", "CannotAnswer", "API-C-OUTCOME-PARTITION-UNPUBLISHED"],
+        ["profile-qualified-outcome-partition", "Affirmative", "API-A-OUTCOME-PARTITION-TYPED"],
         ["theorem-result", "CannotAnswer", "API-C-NO-THEOREM"],
         ["property-result", "CannotAnswer", "API-C-NO-PROPERTY"],
         ["owner-adoption", "CannotAnswer", "API-C-NO-OWNER-ADOPTION"],
@@ -79,21 +94,25 @@ def build_report() -> dict[str, Any]:
             "complete_premises": len(complete["named_premise_ids"]),
             "omission_outcomes": typed["omissions"],
             "wrong_coordinate": typed["wrong_coordinate"],
+            "extra_key": extra_key,
+            "scope_mismatches": scope_mismatches,
             "fresh_premise_ids": fresh["named_premise_ids"],
             "fiat_shamir_premise_ids": fiat_shamir["named_premise_ids"],
             "same_core": True,
         },
-        "current_owner_gap": {
-            "outcome": "CannotAnswer",
-            "code": "API-C-OUTCOME-PARTITION-UNPUBLISHED",
-            "coordinate": "docs-next/pir/interactive-core.md Section 12.3 lines 1688-1710",
-            "reason": "the current page lists generated-run lanes but does not publish the named ProtocolOutcomeLane partition used by this proposal-local fixture"
+        "outcome_partition_coordinate": {
+            "outcome": "Affirmative",
+            "code": "API-A-OUTCOME-PARTITION-TYPED",
+            "coordinate": "ProtocolOutcomeLane(subject.fresh_protocol_id)",
+            "reason": "the fixture keys each total provider map by the exact five-lane partition of its selected Fresh Protocol"
         },
         "measurements": {
             "reconstruction_paths": 2,
             "complete_intakes": 4,
             "single_premise_omissions": len(typed["omissions"]),
             "coordinate_substitutions": 1,
+            "extra_key_mutations": 1,
+            "model_scope_variants_refused": len(scope_mismatches),
             "distinct_provider_maps": 2,
         },
         "nonclaims": [
