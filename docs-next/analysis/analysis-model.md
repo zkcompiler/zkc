@@ -399,20 +399,20 @@ AnalysisCryptographicPropertySupportedKinds = {
 AnalysisAFKTransportSupportedKinds = {
   "analysis.adequacy-evaluator",
   "analysis.asymptotic-protocol-family",
+  "analysis.capability-requirement-payload",
   "analysis.checked-result-coordinate",
   "analysis.consumer",
   "analysis.distribution-profile",
   "analysis.experiment-profile",
   "analysis.extractor-profile",
-  "analysis.family-read-manifest-schema",
   "analysis.family-instance-role-map",
+  "analysis.family-read-manifest-schema",
   "analysis.goal",
   "analysis.hypothesis-context",
   "analysis.judgment-record",
   "analysis.logical-nat-literal",
   "analysis.loss-semantic-import",
   "analysis.named-premise",
-  "analysis.capability-requirement-payload",
   "analysis.operation-policy",
   "analysis.owner-policy-closure",
   "analysis.pointwise-quantitative-normalization",
@@ -2104,31 +2104,54 @@ AnalysisPremiseCoordinate =
   | RelationsWitnessPlanJoinCoordinate(
       RelationInterfaceId, private_witness_ordinal: Natural,
       PlanWitnessBindingId, witness_edge_ordinal: Natural)
-  | PIRPlanStateCoordinate(ProverPlanId, persistent_state_ordinal: Natural)
+  | PIRPlanStateCoordinate(ProverPlanId, StrategyStateSlotRef)
   | PIRPlanRecipeCoordinate(
-      ProverPlanId, decision_ordinal: Natural, recipe_node_ordinal: Natural)
+      ProverPlanId, ProverDecisionPointRef, RecipeNodeRef)
 
-AnalysisProviderDeclaration = AnalysisProfileLawRef<ProviderDeclaration>
+AnalysisAcceptanceCarrier = MetaBoolean
 
-AnalysisProviderOutcomeCarrierMapBody = {
-  provider: AnalysisProviderDeclaration,
-  protocol_outcome_partition: PIRProtocolOutcomePartitionCoordinate,
-  provider_carrier: AnalysisProfileLawRef<ClosedProviderCarrier>,
+ProviderDeclaration =
+  closed schema law family; a declaration under it fixes one external formal
+  system by { system: ExactAsciiSymbol, source_pin: Bytes, toolchain:
+  ExactAsciiSymbol }, where source_pin is the content digest of the exact
+  provider checkout
+
+ClosedProviderCarrier =
+  closed schema law family; a declaration under it fixes one exact closed
+  value schema, and CanonicalValue<carrier> ranges over that schema
+
+ExactModelBindingLaw<K> =
+  TotalAnalysisLawSignature<P,
+    [AnalysisPremiseCoordinate admitted for K, TypedSemanticSubjectRef],
+    AnalysisAcceptanceCarrier>
+
+ExactNamedHypothesis<K> =
+  TotalAnalysisLawSignature<P,
+    [AnalysisPremiseCoordinate admitted for K],
+    AnalysisAcceptanceCarrier>
+
+AnalysisProviderDeclaration<P> = AnalysisProfileLawRef<P,ProviderDeclaration>
+
+AnalysisProviderOutcomeCarrierMapBody<P,Protocol> = {
+  provider: AnalysisProviderDeclaration<P>,
+  protocol_outcome_partition: PIRProtocolOutcomePartitionCoordinate(Protocol),
+  provider_carrier: AnalysisProfileLawRef<P,ClosedProviderCarrier>,
   total_lane_map:
-    CanonicalMap<ProtocolOutcomeLane, CanonicalValue<provider_carrier>>
+    CanonicalMap<ProtocolOutcomeLane(Protocol), CanonicalValue<provider_carrier>>
 }
 
-AnalysisNamedPremiseBoundValue<K> =
+AnalysisNamedPremiseBoundValue<P,K> =
     BoundModel(TypedSemanticSubjectRef,
-               AnalysisLawTerm<ExactModelBindingLaw<K>>)
-  | BoundHypothesis(AnalysisLawTerm<ExactNamedHypothesis<K>>)
-  | BoundProviderOutcomeCarrierMap(AnalysisProviderOutcomeCarrierMapBody)
+               AnalysisLawTerm<P,ExactModelBindingLaw<K>>)
+  | BoundHypothesis(AnalysisLawTerm<P,ExactNamedHypothesis<K>>)
+  | BoundProviderOutcomeCarrierMap(
+      AnalysisProviderOutcomeCarrierMapBody<P,Protocol>)
 
-AnalysisNamedPremiseSource =
+AnalysisNamedPremiseSource<P> =
     OwnerSemanticCoordinate(TypedSemanticSubjectRef)
   | CandidateOwnerCoordinate(TypedSemanticSubjectRef)
   | FamilyHypothesisSource(AnalysisFamilyCoordinate)
-  | ProviderDeclarationSource(AnalysisProviderDeclaration)
+  | ProviderDeclarationSource(AnalysisProviderDeclaration<P>)
 
 AnalysisPremiseEvidenceDepth =
     SourceGroundedMapping
@@ -2142,20 +2165,65 @@ AnalysisPremiseModelScope =
       CanonicalNonEmptySortedUniqueSeq<TypedSemanticSubjectRef>)
   | RebindRequired
 
-AnalysisNamedPremiseBody<K> = {
+AnalysisNamedPremiseBody<P,K> = {
   kind: exactly K,
   coordinate: AnalysisPremiseCoordinate admitted for K,
-  bound_model_or_hypothesis: AnalysisNamedPremiseBoundValue<K>,
-  source: AnalysisNamedPremiseSource admitted for K,
+  bound_model_or_hypothesis: AnalysisNamedPremiseBoundValue<P,K>,
+  source: AnalysisNamedPremiseSource<P> admitted for K,
   evidence_depth: AnalysisPremiseEvidenceDepth,
   model_scope: AnalysisPremiseModelScope
 }
+
+AnalysisNamedPremiseKindLaw = CanonicalSeq [
+  { kind: FreshPublicCoinDistribution,
+    coordinate: PIRPublicCoinLawCoordinate,
+    bound_value: BoundHypothesis,
+    sources: OwnerSemanticCoordinate | CandidateOwnerCoordinate },
+  { kind: FiatShamirSamplerAdequacy,
+    coordinate: AnalysisFamilyPremiseCoordinate(_, SamplerAdequacy),
+    bound_value: BoundHypothesis,
+    sources: FamilyHypothesisSource },
+  { kind: FiatShamirOracleProcess,
+    coordinate: AnalysisFamilyPremiseCoordinate(_, OracleProcess),
+    bound_value: BoundHypothesis,
+    sources: FamilyHypothesisSource },
+  { kind: ProviderOutcomeCarrierMap,
+    coordinate: PIRProtocolOutcomePartitionCoordinate,
+    bound_value: BoundProviderOutcomeCarrierMap,
+    sources: ProviderDeclarationSource },
+  { kind: RelationPredicate,
+    coordinate: RelationsModelEvaluatorCoordinate,
+    bound_value: BoundModel,
+    sources: OwnerSemanticCoordinate | CandidateOwnerCoordinate },
+  { kind: WitnessType,
+    coordinate: RelationsWitnessPlanJoinCoordinate,
+    bound_value: BoundModel,
+    sources: OwnerSemanticCoordinate | CandidateOwnerCoordinate },
+  { kind: ProverPrivateState,
+    coordinate: PIRPlanStateCoordinate,
+    bound_value: BoundModel,
+    sources: OwnerSemanticCoordinate | CandidateOwnerCoordinate },
+  { kind: HonestCommit,
+    coordinate: PIRPlanRecipeCoordinate,
+    bound_value: BoundHypothesis,
+    sources: OwnerSemanticCoordinate | CandidateOwnerCoordinate },
+  { kind: HonestRespond,
+    coordinate: PIRPlanRecipeCoordinate,
+    bound_value: BoundHypothesis,
+    sources: OwnerSemanticCoordinate | CandidateOwnerCoordinate }
+]
 
 AnalysisNamedPremiseRequirement = {
   slot: ExactAsciiSymbol,
   kind: AnalysisNamedPremiseKind,
   coordinate: AnalysisPremiseCoordinate admitted for kind
 }
+
+NamedPremiseRequirementsOf(family, exact_subjects) =
+  the exact requirement sequence the selected profile's family contract
+  fixes for that family over those subjects; it is a closed profile law, and
+  a family whose contract fixes the empty sequence carries an empty
+  requirement field explicitly rather than omitting it
 
 AnalysisQuestionBody = {
   family: AnalysisFamilyCoordinate,
@@ -2988,8 +3056,8 @@ AnalysisHypothesisContextId =
 AnalysisPropositionId =
   AnalysisId<"analysis.proposition">(B, AnalysisPropositionBody)
 
-AnalysisNamedPremiseId =
-  AnalysisId<"analysis.named-premise">(B, AnalysisNamedPremiseBody)
+AnalysisNamedPremiseId<P,K> =
+  AnalysisId<"analysis.named-premise",P>(B, AnalysisNamedPremiseBody<P,K>)
 
 AnalysisQuantitativeFormulaId<S> =
   AnalysisId<"analysis.quantitative-formula">(
@@ -3025,7 +3093,8 @@ IntakeAnalysisNamedPremises(
      OracleModelOnly premise only for a question whose experiment uses
      exactly that distribution profile, an ExactSubjectsOnly premise only for
      a question over exactly those subjects; RebindRequired admits no
-     question;
+     question; failure of any of these four checks returns Refused, before
+     any goal is formed;
   7. form exactly one AnalysisGoalBody whose binding map has the required
      key set and no other key; and
   8. expose PremiseIdsOfGoal to every hypothesis node, hypothesis context,
@@ -3035,8 +3104,12 @@ IntakeAnalysisNamedPremises(
 A named premise is the identity-bearing body of one assumption a question
 consumes: what it binds, the coordinate it binds to, where it came from, what
 evidence accompanies it, and where it may be used. The kind-to-coordinate,
-kind-to-bound-value, and kind-to-source relations are closed profile laws; an
-unknown case is `Unsupported` and a disallowed pairing is `Malformed`. The
+kind-to-bound-value, and kind-to-source relations are the rows of
+`AnalysisNamedPremiseKindLaw`; an unknown case is `Unsupported` and a
+disallowed pairing is `Malformed`. Every question's requirement sequence is
+fixed by `NamedPremiseRequirementsOf` for its family, so a family whose
+contract carries no named premise still shows an empty requirement field,
+and an omitted field is `Malformed`. The
 evidence depth records only what evidence accompanies the premise identity:
 a source-grounded mapping, a complete typed constructive binding, or a frozen
 executable falsification. It never turns an assumption into an established
@@ -3137,9 +3210,11 @@ manifest and experiment profile in that context. A family-instance context must
 add the exact concrete side selected by the family contract; it cannot use an
 abstract family carrier as a portable subject reference.
 
-An `AnalysisGoalBody` contains only `question_id`. Admission resolves that exact
-question body and derives both `GoalFamily` and `HypothesisFreeConclusion`
-through the selected profile's unique reconstruction law. Neither value is a
+An `AnalysisGoalBody` contains `question_id` and the exact named-premise
+binding map that `IntakeAnalysisNamedPremises` formed for it, and nothing
+else. Admission resolves that exact question body and derives both
+`GoalFamily` and `HypothesisFreeConclusion` through the selected profile's
+unique reconstruction law. Neither value is a
 caller-authored goal field. Thus a caller cannot pair one family's question
 with another family's conclusion, choose a second conclusion admitted by the
 same carrier schema, or change an encoded duplicate while retaining the same
@@ -3359,6 +3434,7 @@ ExactAffirmativeAnalysisJudgmentBody(
         Authenticate(proposition_id).goal_id)),
     inherited_hypothesis_context_id:
       Authenticate(proposition_id).hypothesis_context_id,
+    exact_named_premise_ids: PremiseIdsOfProposition(proposition_id),
     typed_quantitative_result: typed_quantitative_result,
     semantic_basis_id: semantic_basis_id,
     support_coordinate: support_coordinate,
@@ -3441,8 +3517,11 @@ CanonicalGoalDagUnion(
   4. assign fresh local ordinals by the unique canonical topological order that
      repeatedly selects the least complete goal ID among nodes whose dependency
      goal IDs have already been assigned;
-  5. rewrite dependency goal IDs to those fresh earlier ordinals; and
-  6. set roots to OutwardFrontier(the rewritten nodes).
+  5. rewrite dependency goal IDs to those fresh earlier ordinals, carrying
+     each node's exact_named_premise_ids, which equal PremiseIdsOfGoal of its
+     goal and therefore agree for grouped nodes; and
+  6. set roots to OutwardFrontier(the rewritten nodes) and
+     exact_named_premise_ids to the canonical union over the rewritten nodes.
 ```
 
 `AllReachableHypothesisNodeRequirements`, `ReachableHypothesisGoalIds`, and
@@ -3524,7 +3603,12 @@ applicability/correspondence identity cycle.
 
 Changing any semantic subject, read manifest, quantifier order, strategy
 class, model, outcome law, theorem schema, property conclusion, parameter map,
-or typed transform changes the appropriate ID. Changing a checker
+or typed transform changes the appropriate ID. A named premise's kind,
+coordinate, bound model or hypothesis, source, evidence depth, or model scope
+is identity-bearing, and so are a question's requirement sequence and a goal's
+binding map; changing any of them rotates the premise and every goal,
+hypothesis context, proposition, support, and judgment that carries its
+identity. Changing a checker
 implementation, proof search tactic, timeout, cache, request priority, or
 observation receipt does not change proposition meaning; it may change the
 validation basis or operational attempt.
@@ -3548,9 +3632,12 @@ The canonical hypothesis DAG retains:
 - group, field, sampler, termination, and resource side conditions; and
 - occurrence-local loss premises.
 
-An assumption is represented once, in the canonical hypothesis context. A
-support ledger records how that proposition was treated; it does not duplicate
-the proposition in judgment identity.
+A proposition-shaped assumption is represented once, in the canonical
+hypothesis context; a model-binding assumption is represented once, as a
+named premise whose identity the goal carries and the context, support, and
+judgment repeat exactly. A support ledger records how a hypothesis was
+treated; it does not duplicate the proposition in judgment identity, and a
+named premise is never also a hypothesis node.
 
 Model coordinates are not removable hypotheses. Checker correctness,
 canonical decoding correctness, provider conformance, and runtime integrity are

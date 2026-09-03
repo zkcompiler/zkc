@@ -74,7 +74,7 @@
     {
       "kind": "analysis.semantic-law",
       "name": "afk-application-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "transport-application-semantics",
       "selector": "## 7. Exact AFK applicability and family transport",
       "dependencies": []
