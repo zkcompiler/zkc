@@ -101,6 +101,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V2C  target publication and migration            [refreeze rehearsed; publication held]
   -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
   -> Analysis premise owner text                        [authored; publication gated]
+  -> F0-V2D1 review of the Analysis premise text        [round one negative; repairs applied]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -751,6 +752,14 @@ provider, extraction tool, or durable schema.
   provider outcome-carrier, and Schnorr premise catalog in the property
   profile, and the family premises in the transport profile; both compilers
   agree, the six Analysis profiles rotate, and publication stays gated.
+- [`f0v2d1-analysis-premise-text-review.md`](f0v2d1-analysis-premise-text-review.md)
+  is the independent review of the Analysis named-premise text at its first
+  head: negative on six of seven questions (unparameterized law references,
+  undefined law families, prose arguments in hypothesis bindings, a Plan
+  identity the subject tuple could not derive, displays without the new
+  fields, catalog order and revisions), with exact proposed replacements; the
+  grammar-level repairs are applied on the page and the display completion
+  and second round follow.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
