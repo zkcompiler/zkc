@@ -7,6 +7,13 @@
 > Section 8.1) by naming the inputs that now exist.
 > **Authority:** None. A contract fixes what a lane must deliver and what a
 > result may claim; it changes no owner page.
+> **First attempt:** run 2026-09-03 as
+> [`f2o2-provider-interpretation.md`](f2o2-provider-interpretation.md);
+> aggregate `CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4`, with the schedule,
+> value, check-and-guard, and trace clauses affirmative on their complete
+> finite domains. The attempt found that this contract's carrier sentence
+> contradicted its own terminal clause; Sections 3 and 4 now say what the
+> declared carrier is and that reachable lanes need distinct images.
 
 ## 1. The question
 
@@ -48,8 +55,11 @@ that defines the Schnorr Fresh Protocol as a VCVio interactive protocol:
 - the verifier from the Check's term, whose denotation M2 has proved equal to
   `z = a + c . y` in the field of three elements;
 - the terminal verdict mapped into the provider carrier by the provider
-  outcome-carrier premise, which for VCVio's sigma protocol is the Boolean
-  the verifier returns.
+  outcome-carrier premise. The completed payload is the Boolean the verifier
+  returns; the carrier the premise declares is the provider's outer execution
+  carrier, which also carries the outcomes of runs that do not complete. A
+  payload type alone is not that carrier: the first attempt showed that a
+  Boolean forces `OperationalNoncompletion` onto the image of `Rejected`.
 
 The generator may be any program. Nothing it emits is trusted.
 
@@ -72,7 +82,11 @@ artifact and checks it independently of the generator:
    provider's accept or reject agree on every run of the finite domain, and
    every lane of the outcome partition that the Schnorr Protocol can reach
    (`Accepted`, `Rejected`, and `OperationalNoncompletion`) has an image
-   under the carrier premise; a lane with no image is `CannotAnswer`.
+   under the carrier premise, and the images of reachable lanes are pairwise
+   distinct, so that the provider's outcome identifies the lane. Lanes the
+   Protocol cannot reach still have images, because the premise's map is
+   total, but they may share one. A reachable lane with no image of its own
+   is `CannotAnswer`.
 5. **Traces.** For every run of the finite domain, the `ExecutionView`'s
    completed record and the provider's transcript agree step by step under
    the maps above.

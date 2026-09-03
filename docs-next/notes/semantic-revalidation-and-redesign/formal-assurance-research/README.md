@@ -98,7 +98,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
-  -> F2-O2  provider interpretation, first attempt      [contract; after M3]
+  -> F2-O2  provider interpretation, first attempt      [complete, CannotAnswer]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -595,6 +595,17 @@ provider, extraction tool, or durable schema.
   traces, the untrusted generator and independent checker, the residual trust
   list, and the acceptance rule; it follows the Terminal-contract
   mechanization and precedes applicability.
+- [`f2o2-provider-interpretation.md`](f2o2-provider-interpretation.md)
+  runs that contract once against the migrated Schnorr source: an untrusted
+  generator emits a VCVio sigma-protocol module whose commit and respond
+  fields are tied to the Plan's recipes by kernel-checked equations, and an
+  independent checker evaluates the five clauses on the complete finite
+  domain of 81 runs. Schedule, values, checks and guards, and traces are
+  affirmative; the terminal clause is `CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4`
+  because a Boolean carrier gives only two of the three reachable outcome
+  lanes an image of their own. The proposed delta asks the Analysis owner to
+  declare VCVio's outer execution carrier rather than its completed payload;
+  the entry contract's carrier sentence was repaired on the same finding.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
