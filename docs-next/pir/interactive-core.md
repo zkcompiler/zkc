@@ -1450,8 +1450,9 @@ signed input literals, by structure of the guard term:
                                when_false: {Negative(i)} }
   Must(constant true)      = { when_true: {}, when_false: Impossible }
   Must(constant false)     = { when_true: Impossible, when_false: {} }
-  Must(let x = e1 in e2)   = Must(e2), every reference to x contributing
-                             Must(e1)
+  Must(let x = e1 in e2)   = Must(e2), a reference to x contributing
+                             Must(e1) when e1 is Boolean and no literal
+                             otherwise
   Must(if c then a else b) = {
       when_true:  Meet(c.when_true union a.when_true,
                        c.when_false union b.when_true),
