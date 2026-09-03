@@ -4,7 +4,7 @@
     "code": "F0V2B0-C-OWNER-BODY-DETERMINACY"
   },
   "evidence_control": {
-    "static_fragment_digest": "2ca7ae6578b4adff4041e02e0e94737c591e1cc4e37f2e78966a2a5aad880c32",
+    "static_fragment_digest": "de7ea1fb7ca26d9ef2c8bb0f5b5dc628e3c17e28bfa08bcdcffbe4d85fcbf919",
     "body_fragment_digest": "1f3be8065905baf3517614303f4146ddb11400d0cf2885b2eb370ed17944c54f",
     "view_display_digest": "40148679f97a58f37549f0992f42adb25e0a7c60f6228e519a02f0d46ec5aad9",
     "consumer_pressure_digest": "d75f370cd02658e529d32deea7097fa01285a367ebb49241a1931a84590737ad",

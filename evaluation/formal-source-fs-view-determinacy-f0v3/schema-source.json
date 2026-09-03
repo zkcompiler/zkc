@@ -5,14 +5,14 @@
     "canonical-framed": {
       "key": "canonical-framed",
       "revision": 2,
-      "profile_digest": "fe0cfa79211bf2d8290b749b191ce311306df3321231ed09f9c1ae26269ea43c",
-      "profile_body_sha256": "88df327777e60fc79aa6045cb73b9051eda161a490cb6ad74b6b67fcb1f24542"
+      "profile_digest": "abda53a335ab143b97c15b3fc411425fc42ef815ac4aab2f920dade44d90c4df",
+      "profile_body_sha256": "895a7a26ae8b865b4c77b96b63b20ff41fafa2b58cd9011be728543058a75c8b"
     },
     "duplex-sponge": {
       "key": "duplex-sponge",
       "revision": 2,
-      "profile_digest": "257118b591f2040f4a1e1a243b9069825b97159b521a6640c507ded47ea79736",
-      "profile_body_sha256": "32743f93481421fa66687fae3a777c07b938031b25b31c38ae74d1ef4d7e0aae"
+      "profile_digest": "9a3e3309b15b073ab72dbffb135e4dfdcd77b6da1d09a71ff20edf9f33f5fe67",
+      "profile_body_sha256": "be4837e901c59f154f397f1025a0eb8680d9831cbf0f4c94a8a153206b9f499d"
     }
   },
   "maximum_sequence_length": 512,

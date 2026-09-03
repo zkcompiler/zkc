@@ -112,19 +112,19 @@
       "duplex-finite": {
         "DuplexChallengeTransitionView": {
           "body_bytes": 2721,
-          "body_sha256": "b739e4e52b22376b369bd43d5fa9c8958ae0dde57082d6ccdc621300f908b1fb",
+          "body_sha256": "3e5ca8e943980e7d9afe7e91debc1431e8493f72d331eedcb9d133ebae0f05d8",
           "leaf_count": 34,
           "typed_cold_byte_equal": true
         },
         "DuplexEncodedInputCoverageView": {
           "body_bytes": 2491,
-          "body_sha256": "1349e2d943c37f5cd901078b0ac57e1da5dff24f1599833d21dd77dab07d9427",
+          "body_sha256": "88bbc83e2e1fc0aa10ead031fce196529f38b5341a10ec054da14b2309efd075",
           "leaf_count": 31,
           "typed_cold_byte_equal": true
         },
         "DuplexTranscriptDeclarationView": {
           "body_bytes": 6130,
-          "body_sha256": "46fb2c74a53c518fd22b94f5b0e80f556dec2b98933253cdf38086994dddb57f",
+          "body_sha256": "de72e6fee68f3e0fd7f8d914ed1855ca24bfc0b656f51c2019f3dbfb8b5c0b77",
           "leaf_count": 86,
           "typed_cold_byte_equal": true
         }
@@ -132,25 +132,25 @@
       "k2-oracle": {
         "CanonicalChallengeTransitionView": {
           "body_bytes": 3549,
-          "body_sha256": "d5e18b4a7de8310d6a79754555a138d360fe65bf54cd520a0d336b25305971b4",
+          "body_sha256": "3918825070ed3089280bb86ced9071ec21dddaa2814e046a94c326c21ae558a6",
           "leaf_count": 23,
           "typed_cold_byte_equal": true
         },
         "CanonicalFSConstructionView": {
           "body_bytes": 5971,
-          "body_sha256": "558f8ba36d8d10cb07483917f5fee89398b44721a7dac4021c5c6d472b522094",
+          "body_sha256": "6aefcc568b7f67de4609f8ad098affb3db6c8bf5d56fbac4df65759c351e40fe",
           "leaf_count": 39,
           "typed_cold_byte_equal": true
         },
         "CanonicalRequiredInfluenceView": {
           "body_bytes": 3298,
-          "body_sha256": "4fa2ca23fac3ef7dffc73d056aa6beb2de5dffb8c90faab84681ad318bc8957c",
+          "body_sha256": "f09a6f2523bff5f1cab8fe1c8320edf5736484c8c7747fc8d5cd062614470c53",
           "leaf_count": 26,
           "typed_cold_byte_equal": true
         },
         "CanonicalTranscriptDeclarationView": {
           "body_bytes": 4389,
-          "body_sha256": "ca466315076e9103ad819dc2e9a399acbdf5b11ccfefeff1381c11a01c3f686f",
+          "body_sha256": "c671db4b49dbbc37b614b7654c7dee9a65dac63878c3cac88dfed6455de4e506",
           "leaf_count": 36,
           "typed_cold_byte_equal": true
         }
@@ -158,25 +158,25 @@
       "k2-schnorr": {
         "CanonicalChallengeTransitionView": {
           "body_bytes": 3466,
-          "body_sha256": "9115d07e9ca872c97fcbf1a0d644083e668186649a6ead3beb1ef44d731fc0b1",
+          "body_sha256": "e64e1c899a3a7b42e6ac04eac258269a1304e9898d3c40b3c83ad9551b78a236",
           "leaf_count": 21,
           "typed_cold_byte_equal": true
         },
         "CanonicalFSConstructionView": {
           "body_bytes": 5707,
-          "body_sha256": "4b98360b865013622b82ac8c6854533ab9069c6991deced0238d69a2e0929d6a",
+          "body_sha256": "7fa97b8efe4e96c79fef097e5e901b31bc467126b737e826645c04167d508efe",
           "leaf_count": 37,
           "typed_cold_byte_equal": true
         },
         "CanonicalRequiredInfluenceView": {
           "body_bytes": 2498,
-          "body_sha256": "57b8ac649e701fa8e1bc6f1b0f4cbed095136d3935cf42d291264c6a6511300b",
+          "body_sha256": "3cc2ddb970dd6882bd87db1b4b3b0aba1f68e2c49d0aa322acc7f276bd88f8a3",
           "leaf_count": 13,
           "typed_cold_byte_equal": true
         },
         "CanonicalTranscriptDeclarationView": {
           "body_bytes": 4075,
-          "body_sha256": "7c2d6ff54e3437e6c1f46a6496ae796711741cb33338b1a5f11dfa3ba8f846fa",
+          "body_sha256": "10a95f70521cd34976763f964877e787f2fdc178889776c0806eff55fbb20157",
           "leaf_count": 30,
           "typed_cold_byte_equal": true
         }
@@ -218,8 +218,8 @@
       "families": {
         "canonical-framed": {
           "manifest_revision": 2,
-          "profile_body_sha256": "88df327777e60fc79aa6045cb73b9051eda161a490cb6ad74b6b67fcb1f24542",
-          "profile_digest": "fe0cfa79211bf2d8290b749b191ce311306df3321231ed09f9c1ae26269ea43c",
+          "profile_body_sha256": "895a7a26ae8b865b4c77b96b63b20ff41fafa2b58cd9011be728543058a75c8b",
+          "profile_digest": "abda53a335ab143b97c15b3fc411425fc42ef815ac4aab2f920dade44d90c4df",
           "static_view_schemas": [
             "challenge-transition-view-v0",
             "execution-view-v0",
@@ -230,8 +230,8 @@
         },
         "duplex-sponge": {
           "manifest_revision": 2,
-          "profile_body_sha256": "32743f93481421fa66687fae3a777c07b938031b25b31c38ae74d1ef4d7e0aae",
-          "profile_digest": "257118b591f2040f4a1e1a243b9069825b97159b521a6640c507ded47ea79736",
+          "profile_body_sha256": "be4837e901c59f154f397f1025a0eb8680d9831cbf0f4c94a8a153206b9f499d",
+          "profile_digest": "9a3e3309b15b073ab72dbffb135e4dfdcd77b6da1d09a71ff20edf9f33f5fe67",
           "static_view_schemas": [
             "duplex-challenge-transition-view-v0",
             "duplex-encoded-input-coverage-view-v0",
@@ -298,7 +298,7 @@
       "evaluation/duplex-sponge-transcript/cases/construction.json": "e057df04559b277d70af6ca4009ac626fa1e56e9e2d1977d45275576111daf1f",
       "evaluation/duplex-sponge-transcript/duplexmodel/construction.py": "edd9782270fa7e9030ca2389bea57c3a34d92ff73641d526c1df34cf5d766fc4",
       "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json": "145a4a16b20bced9327d114f879c935a8ee62eb7c6b139f23739fa8686de772f",
-      "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "37eaf47a84534171a3d098f46a03f53bbeb04560c4895b59b0e6df426191d507",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "cdb188b45688672451d5eebdd993a6469a52f0c919044f8f2ac78cb7644d38d8",
       "evaluation/formal-source-owner-view-repair-f0v/baseline-identities.json": "da3c8387828c61b1f5f0558c8cfd44f1fb8a94fa9dc0f3eb4b97f278b9b7f818",
       "evaluation/k2-protocol-fiat-shamir/reference_model.py": "402bd72f24571828b3f76bc3fe7fd103798841e736d3bf672c025843c1b8071a"
     }

@@ -8,15 +8,15 @@
     "lake",
     "env",
     "lean",
-    "/home/wonjae/code/zkc-lanes/v2c-refreeze-rehearsal-2/evaluation/formal-provider-observables-f2o0/generated/Schnorr.lean"
+    "/home/wonjae/code/zkc-lanes/v2c-rehearsal-repin/evaluation/formal-provider-observables-f2o0/generated/Schnorr.lean"
   ],
   "exit_status": 0,
   "format": "zkc.formal-provider-observables-f2o0.elaboration-receipt.v0",
   "generated_file": "generated/Schnorr.lean",
-  "generated_sha256": "f7836f00ab9b5c48d42164b439e82ab06c661b4284d8b95b9f5445d0ae29b931",
+  "generated_sha256": "60c0e71fdd1ba189d8ffb4df6443ec6b5b8276d954b57ab966a126ea39964eb5",
   "ledger_file": "generated/ledger.json",
-  "ledger_sha256": "bdd140c46a7fdf7ccdb521ed98ed066ddf113e06b6f7d5bf1fb9eabb469116d2",
-  "observed_at": "2026-09-03T11:02:37+00:00",
+  "ledger_sha256": "bd5bcb9caf790afe17a427412144c9c6b66e2626c10442913fe9bdef000488b3",
+  "observed_at": "2026-09-03T12:07:45+00:00",
   "provider": {
     "checkout": "/tmp/zkc-f0-sources.b66lUO/VCVio",
     "imported_module": "VCVio.CryptoFoundations.SigmaProtocol",
@@ -28,5 +28,5 @@
   },
   "stderr": "",
   "stdout": "'ZkcF2O0.interaction' does not depend on any axioms\n'ZkcF2O0.providerShape' does not depend on any axioms\n",
-  "wall_seconds": 2.426
+  "wall_seconds": 2.42
 }

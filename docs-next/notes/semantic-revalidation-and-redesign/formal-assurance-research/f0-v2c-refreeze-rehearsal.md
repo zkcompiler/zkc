@@ -255,3 +255,225 @@ bounded evidence for their exact sources, fixtures, and mutations.
 - Main should inspect the dirty tree, integrate later owned-lane results at
   entry granularity, and commit with subject:
   `test: rebase the refreeze rehearsal onto the closed owner text`.
+
+## Re-pin at the closed head
+
+### Exact question and source coordinate
+
+At `c1f7d457c65ab93ea81a21d68df5e06723b079b5`, after the reference atom was
+generalized to the profile's recognized declaration kinds and the independently
+owned verification packages were re-pinned, can every package carried by this
+rehearsal consume the closed owner bytes and newly derived candidate identities
+without changing any finding in substance, leaving only the unpublished
+candidate table red in the research checkpoint?
+
+- Source branch: `docs/pir-migration-v2c`.
+- Research branch: `lane/v2c-rehearsal-repin`.
+- Exact closed head: `c1f7d457c65ab93ea81a21d68df5e06723b079b5`.
+- Prior rehearsal coordinate: `8346f68b03194736fae94b09f3c4cced96f6d7a3`.
+
+### Candidate reconstruction
+
+The publication checker was run in non-writing mode and redirected outside the
+tree:
+
+```sh
+python3 -B evaluation/semantic-profile-publication/run.py \
+  --print-identities \
+  > /tmp/zkc-v2c-repin.n9SEAq/candidate-identities.json
+```
+
+It exited zero in 0.35 seconds. Its direct and independent compilers agreed.
+The scratch JSON has SHA-256
+`9c133372d80e8f3956c26919b3b589180dc091c8a5566b2ed01099fe3cb5e44b`.
+No publication write was requested or performed.
+
+| Coordinate | Rebased rehearsal | Closed head |
+|---|---|---|
+| Candidate table SHA-256 | `9a59aa4511a8888803a52fadcd9531e3db917b25925140d1507b9cd80c13473e` | `9c133372d80e8f3956c26919b3b589180dc091c8a5566b2ed01099fe3cb5e44b` |
+| Interaction profile digest | `2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f` | `9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f` |
+| Interaction profile body SHA-256 | `28fe377ff6cae5799ba243d02b6ccc8b3f84d248c40521960d42b34ec44a1b1f` | `fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70` |
+| Finite target Core ID | `zkcidv0:pir.interactive-core:f11d422776ac28d192cc13a1c276049b0dae211394e344ad9e87008f92c4e2f2` | `zkcidv0:pir.interactive-core:dcb652fdca792d8664c51f2b98dca17d530607ff994c1eab15a59ed5c61cf2b8` |
+| Finite target Core body SHA-256 | `d0de3468542e54ff2de5819701bff9567d223f1ecedc749c17b9d842d904d30d` | `c885c2325c600fbfe498a813f548d7f4e3deacc5da29f4e695f588b632a8264d` |
+| Finite Fresh Protocol ID | `zkcidv0:pir.protocol:4e11f03b4f5d65e5009b703bc5c78b8c186851888f95f7a52774b7e923a319f9` | `zkcidv0:pir.protocol:cc2fee36c903072621553a98fdb0d7bf3b84d13a18b0a51b04b7235367b7324f` |
+| Finite Fresh Protocol body SHA-256 | `e42db068c9288399927465a4c82974e966e8b51cb95b8bd1a198f3eabf19e8ec` | `28694eb30e04e3d5c9ecadf81b9de4e3376422008cc5344be52fc281bd82390d` |
+
+### Identity delta from the rebase table
+
+Sixteen of eighteen candidate profile digests rotate from the table recorded
+under `## Rebase`. `oir-endpoint-graph` and `analysis-kernel` remain stable.
+All profile revisions are unchanged in this re-pin.
+
+| Profile | Rebased rehearsal digest | Closed-head candidate digest | Delta | Revision |
+|---|---|---|---|---|
+| `interaction` | `2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f` | `9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f` | Rotated | 2 |
+| `canonical-framed-fiat-shamir` | `fe0cfa79211bf2d8290b749b191ce311306df3321231ed09f9c1ae26269ea43c` | `abda53a335ab143b97c15b3fc411425fc42ef815ac4aab2f920dade44d90c4df` | Rotated | 2 |
+| `duplex-sponge-fiat-shamir` | `257118b591f2040f4a1e1a243b9069825b97159b521a6640c507ded47ea79736` | `9a3e3309b15b073ab72dbffb135e4dfdcd77b6da1d09a71ff20edf9f33f5fe67` | Rotated | 2 |
+| `public-setup` | `e913ccd3f093237f209a75ae3a8feb46822a9129df1a85a045f977957b56b123` | `0ddcb73c027efcb7edd2a38b32824ee0e4a24c3ff0321e7505b0d29be358576a` | Rotated | 1 |
+| `commitment-opening` | `12b4c64055b494037f928ae961c41f3f8fe035078d01b173b78d4fcdd8c845c6` | `1b89b6206eb8bc9288373948dce0849c0e3c2ad59443788bb923f1eb4eea3538` | Rotated | 0 |
+| `oracle-commitment` | `2318fde703e4e106cef175b69e9f2d484b62cb15eb5ce60f01a3f89def857db6` | `4dad1bc82ffb9dea9092ace9e827b0148b845dce8b51b42992d9b02a24e4a3d5` | Rotated | 0 |
+| `verifier-derived-query-plan` | `25a5b8875e04d35fa7e68eea644fb18eeed6a095cf4c025efe74c626b5f5552c` | `920ce462ec794610a2fb97aa71869d56bd7b43a05ea5ec4ccf0aa108c70b7f34` | Rotated | 0 |
+| `interface-plan` | `49b8ff1008ed87fa4e46a7120bbb7afedccf76e0f4fa1757478b537c6f58b1a1` | `bd25eddcae4945b39082f4f93eefdf233c093d9fa2c2863ca700a7ec4ab5e545` | Rotated | 1 |
+| `oir-endpoint-graph` | `6ae3d69a557442ca34b889326c09513bee9545ba78c6a49e0c0d99a9c823b4b7` | `6ae3d69a557442ca34b889326c09513bee9545ba78c6a49e0c0d99a9c823b4b7` | Stable | 1 |
+| `endpoint-source-view` | `19b9711f40a8e31a47d2216bae936c0a8f95739215e80894c8406897c638031b` | `c653f69bc3f880876a4ee678befe995b3e22b17a4db85cb7bf0ee49812a70106` | Rotated | 1 |
+| `oir-projection-relation` | `1f02f55301705c0e4c78b2399460c329364d82691408cb47c083b9352a68fd2c` | `7281ab028eeb29a6844ad674040b40408802a0a711e2e2cdb510f14683cbbe83` | Rotated | 1 |
+| `relations` | `41f8c2cee3076fd95bfde1a58fd243db3b640e3f73454f97dfd7281287d90cb8` | `f55a2977d84d18f33ea5d596501974396bc82eca92923971a1f7e943b0529937` | Rotated | 0 |
+| `analysis-kernel` | `aa5c64e33adf55fa3b7ae770a05e7f32d60240c12f0010394a469f6fa1076166` | `aa5c64e33adf55fa3b7ae770a05e7f32d60240c12f0010394a469f6fa1076166` | Stable | 0 |
+| `analysis-cryptographic-property` | `cf6755e18efba8ff90caca2dc875bc51a0f4ddcca55994d30e652655010fab49` | `ec9e249baf04b21643733ec60902f6cfb739d603fe81c299e3ac96dcbe2733d8` | Rotated | 0 |
+| `analysis-afk-transport` | `337f354219a12c6b4d350bd276e682e2d2eaa4dcd21e18256b72870a7ee9dd3f` | `3e23617fa7f9ccd0f75ed6a917d2c97b70c8a85f3c85e9c95ee7c543891e1b39` | Rotated | 0 |
+| `analysis-afk-theorem-source-validation` | `45f947fae288f672a0abeb0ccb5d816820629522334b54b9674e920c4a27bd14` | `d57ae4f86c66b2c11bbf3fee135c1a8054382a5850f71bf32ae070343b093822` | Rotated | 0 |
+| `analysis-incremental-composition` | `a77ea73c92b62561dafbe87db572c3c0334c4d59c4d50fea4854a8c9ec751081` | `fe875f1a152a4f56ec480d45dcba0bf8b8a9b6927cad1863fc0089a5997d4061` | Rotated | 0 |
+| `analysis-incremental-composition-source-validation` | `5e056064ef920b4fa9cf163f67a7c3f8697a29c46730971b31bdf2203b1cc9f2` | `3107b1b9d6e0248453ec524d8e6264f3a8dbee610d7089c723a2bd1fbc76670e` | Rotated | 0 |
+
+### Package-by-package re-pin
+
+Each row compares the closed-head result with the frozen result already carried
+by the rebased rehearsal. “Preserved” means the finding names, outcomes, stable
+codes, and aggregate are unchanged; only owner-source pins, candidate
+identities, derived body digests, or receipts moved.
+
+| Check | Closed-head re-pin | Frozen findings | Focused result |
+|---|---|---|---|
+| `research.expressibility-axes` | Current Interaction owner-source digest. | Preserved. | Pass. |
+| `research.family-instance-probe` | Current Interaction source observation. | Preserved. | Pass. |
+| `research.formal-source-target-basis` | Current Interaction candidate digest, body, and length. | Preserved. | Pass. |
+| `research.formal-source-target-core` | Rotated finite Core and Fresh Protocol identities and bodies. | Preserved. | Pass. |
+| `research.formal-source-owner-views` | Current Interaction profile digest. | Preserved. | Pass. |
+| `research.owner-view-publication-topology` | Current eighteen-row candidate table. | Preserved. | Pass. |
+| `research.owner-view-body-determinacy` | Current static-fragment source digest. | Preserved. | Pass. |
+| `research.owner-view-bounded-derivation` | Rotated Core, Protocol, and six owner-view body digests. | Preserved. | Pass. |
+| `research.owner-view-constructor-census` | Current profile and static-fragment digests. | Preserved. | Pass. |
+| `research.owner-view-constructor-schema` | Current profile, constructor-census, schema-source, and inhabitant identities. | Preserved. | Pass. |
+| `research.owner-view-foundation-projections` | Current independently reconstructed profile digest. | Preserved. | Pass. |
+| `research.owner-view-terminal-owner-contracts` | No relevant pin changed; package bytes remain untouched. | Preserved. | Pass. |
+| `research.owner-view-terminal-projections` | Current profile plus predecessor grammar and schema identities. | Preserved. | Pass. |
+| `research.owner-view-integrated-pcgraph` | Current profile plus predecessor grammar and schema identities. | Preserved. | Pass. |
+| `research.owner-view-fresh-run-schema` | Current profile, predecessor schema identity, and shifted owner-source line pin. | Preserved. | Pass. |
+| `research.owner-view-integrated-projections` | Re-derived 30 body identities and the adapted provider ledger; 8,402 leaves and zero remaining structural gaps are unchanged. | Preserved. | Pass. |
+| `research.owner-view-fs-family-determinacy` | Current profile cone and eleven available owner-view body identities. | Preserved. | Pass. |
+| `research.provider-observable-audit` | Regenerated finite provider artifact, ledger, and elaboration receipt. | Preserved, including its existing `CannotAnswer` aggregate. | Pass. |
+| `research.provider-observable-audit-integrated` | Regenerated integrated provider ledger, checker pins, and elaboration receipt. | Preserved, including its existing `CannotAnswer` aggregate. | Pass. |
+| `research.schnorr-relations-plan-coupling` | Current finite subject and provider-ledger pins; rotated agreement identity. | Preserved, including its existing `CannotAnswer` aggregate. | Pass. |
+| `research.schnorr-relations-plan-candidates` | Current finite subject and upstream coupling-result pins; rotated agreement identity. | Preserved, including its existing `CannotAnswer` aggregate. | Pass. |
+| `research.semantic-migration-candidate` | Current owner-source digest and current eighteen-row candidate table. | Preserved, including the publication `Hold`. | Pass. |
+
+The rehearsal note's explicit table and check procedure contain twenty-two
+carried packages, although the earlier prose and this task brief call them
+twenty-one. This re-pin follows the explicit twenty-two-row inventory. No
+finding changed in substance, so no new `CannotAnswer` finding was needed.
+
+### Excluded ownership and protected files
+
+The three verification-owned packages, the provider-interpretation package,
+and the mechanization package remain byte-for-byte untouched. No owner page,
+profile manifest, published-identity table, lifecycle inventory, checks
+manifest, lifecycle count pin, or directory README was edited. There is no
+owner-page proposed delta: the generalized reference-atom text is sufficient
+for every carried finding at this head.
+
+### Validation and exact red set
+
+The final package-focused run passed all twenty-two carried checks. The
+alternate-index validation results are recorded in the handoff below.
+
+The full research checkpoint result is
+`target/checks/20260903T121911Z/result.json`. It completed all 62 checks in
+773.269 seconds: 59 passed and three failed. Its exact red set is:
+
+- `research.profile-publication`: the intended publication hold. The two
+  compilers reconstruct the candidate table, but the checked-in publication
+  table remains intentionally unchanged.
+- `research.provider-interpretation`: the excluded provider certificate is
+  stale after the required carried re-pins. Non-writing regeneration changes
+  its Core and Protocol identities, six view-body digests, candidate-body
+  digest, and integrated-view expected-file digest. The package cannot become
+  green without an owner re-pin.
+- `research.kernel-mechanization-feasibility`: the excluded mechanization
+  package pins the terminal projection model at
+  `9cbe6d51fb1ff5e0c9a7585505a55fe4f34ec9685aa02ed7b1ee872092c3f6cc`,
+  while the unchanged file at this task's `HEAD` is
+  `91af1399ace370f69493b80a519077a95e9fbeeb79cac1b8d5c8d7f7e9e1e124`.
+  Commit `25c452a8` re-pinned mechanization before the rehearsal commit
+  `c1f7d457` replaced that projection model with the direct-owner version.
+
+No carried package is red. The requested sole-red state is not present at this
+exact head and cannot be produced without editing an explicitly excluded owner
+package or reverting a carried package away from its direct-owner procedure.
+
+### Handoff
+
+- Files changed: forty package files under the twenty-one package directories
+  that required new pins or generated receipts, plus this note. The terminal
+  owner-contract package needed no file change. The exact grouped paths are:
+  `evaluation/expressibility-axes/run.py`;
+  `evaluation/family-instance-probe/expected-findings.json`;
+  `evaluation/formal-provider-observables-f2o0/{elaboration-receipt.json,generated/Schnorr.lean,generated/ledger.json}`;
+  `evaluation/formal-provider-observables-f2o1/{checker.py,elaboration-receipt.json,generated/ledger.json,generator.py}`;
+  `evaluation/formal-schnorr-relations-plan-f2p0/{contract-ledger.json,expected-findings.json}`;
+  `evaluation/formal-schnorr-relations-plan-f2p1/{expected-findings.json,source-pins.json}`;
+  `evaluation/formal-source-constructor-closure-f0v2b2a/{expected-findings.json,inventory.json}`;
+  `evaluation/formal-source-fresh-run-schema-f0v2b2d2/{independent.py,model.py,run.py,schema-delta.json}`;
+  `evaluation/formal-source-fs-view-determinacy-f0v3/{expected-findings.json,schema-source.json,support.py}`;
+  `evaluation/formal-source-integrated-graph-f0v2b2d1/run.py`;
+  `evaluation/formal-source-integrated-views-f0v2b2d3/{expected-findings.json,f2o1-six-view-ledger.json}`;
+  `evaluation/formal-source-owner-projections-f0v2b2c1b1/independent.py`;
+  `evaluation/formal-source-owner-view-repair-f0v/expected-findings.json`;
+  `evaluation/formal-source-owner-views-f1r1c/expected-findings.json`;
+  `evaluation/formal-source-target-basis-f1r1a/candidate-interaction.json`;
+  `evaluation/formal-source-target-core-f1r1b/expected-identities.json`;
+  `evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/{run.py,schema-delta.json}`;
+  `evaluation/formal-source-view-bodies-f0v2b1/expected-findings.json`;
+  `evaluation/formal-source-view-body-audit-f0v2b0/expected-findings.json`;
+  `evaluation/formal-source-view-schema-f0v2b2b/{expected-findings.json,independent.py,model.py,schema-source.json}`;
+  `evaluation/semantic-migration-candidate/{candidate-contract.json,expected-findings.json}`;
+  and this note. No excluded or protected path appears in `git diff --name-only`.
+- Candidate reconstruction: exit 0, 0.35 seconds; both compilers agreed on the
+  scratch table above.
+- Generated provider artifacts and live elaboration: both generators exited 0
+  in 0.88 and 0.71 seconds; both elaborations exited 0 in 4.25 and 4.28
+  seconds, with Lean itself taking 2.42 and 2.507 seconds.
+- Integrated six-view refresh: exit 0, 4.65 seconds. The finding checksum,
+  30-body count, 8,402-leaf count, and 40-to-zero structural-gap result are
+  unchanged.
+- Fiat--Shamir view refresh: exit 0, 0.57 seconds. All thirteen frozen finding
+  triples are unchanged.
+- Relation/Plan coupling refresh: exit 0, 4.14 seconds; all thirty frozen
+  finding triples are unchanged.
+- Exact relation/Plan candidate refresh and check: exit 0, 2.29 seconds; all
+  thirty-nine frozen finding triples are unchanged.
+- Pre-checkpoint twenty-two-check run: exit 0, 68.99 seconds; result
+  `target/checks/20260903T121320Z/result.json`.
+- Alternate-index validation: exit 0, 0.04 seconds; 76 checks and six tiers in
+  the manifest are valid.
+- Alternate-index developer tier: exit 0, 1.69 seconds; 9 of 9 passed; result
+  `target/checks/20260903T123645Z/result.json`.
+- Alternate-index twenty-two-check run: exit 0, 65.70 seconds; 22 of 22
+  passed; result `target/checks/20260903T123655Z/result.json`.
+- Alternate-index research checkpoint: exit 1, 773.32 seconds by wall clock;
+  59 of 62 passed in 773.269 controller seconds; result
+  `target/checks/20260903T121911Z/result.json`.
+- Aggregate outcome: every carried package is re-pinned and green with its
+  finding projection preserved. The complete checkpoint has the three-red set
+  above, rather than the requested sole publication red, because two excluded
+  packages require owner synchronization.
+- Non-claims: this re-pin does not publish identities and does not establish
+  semantic equivalence, arbitrary-Protocol coverage, source correspondence
+  beyond the pinned owner bytes, implementation or backend conformance,
+  theorem applicability or truth, protocol soundness, zero knowledge,
+  Fiat--Shamir security, random-oracle security, quantum-random-oracle
+  security, or deployment readiness.
+- Surprises and brief corrections: the carried inventory is twenty-two rather
+  than twenty-one packages. The assertion that mechanization was re-pinned at
+  this head is false in commit order: its re-pin is the parent of the rehearsal
+  commit that changed the pinned model. The intended sole-red checkpoint also
+  omits the downstream provider-certificate rotation forced by the carried
+  package re-pins. The first scratch-wrapper attempt encountered zsh's
+  read-only `status` parameter after the publication command had already
+  completed; rerunning with an ordinary result variable produced the recorded
+  zero exit and did not affect the tree.
+- The actual Git metadata is read-only. The final inventory is validated only
+  through a clone-local alternate index and object directory, which are removed
+  after validation. Nothing is staged in the ordinary index, committed, pushed,
+  published, or submitted as a pull request.
+- Main should inspect the dirty tree and commit it with subject:
+  `test: re-pin the refreeze rehearsal to the closed owner text`.

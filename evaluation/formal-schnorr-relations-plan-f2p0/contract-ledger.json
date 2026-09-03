@@ -159,7 +159,7 @@
     },
     {
       "path": "evaluation/formal-source-target-core-f1r1b/expected-identities.json",
-      "sha256": "71537e6defbe523cb19e6ff7aef663af09580ff1cece4f4acb049ddb01265dc3"
+      "sha256": "fddd4a44a9bffc21868b2134ab6a5844cb4d518744aa2e5c2b3e8ee7d41f7904"
     },
     {
       "path": "evaluation/formal-source-view-bodies-f0v2b1/independent.py",
@@ -171,7 +171,7 @@
     },
     {
       "path": "evaluation/formal-provider-observables-f2o0/generated/ledger.json",
-      "sha256": "bdd140c46a7fdf7ccdb521ed98ed066ddf113e06b6f7d5bf1fb9eabb469116d2"
+      "sha256": "bd5bcb9caf790afe17a427412144c9c6b66e2626c10442913fe9bdef000488b3"
     },
     {
       "path": "evaluation/formal-provider-observables-f2o0/expected-findings.json",

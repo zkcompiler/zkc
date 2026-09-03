@@ -239,12 +239,12 @@
     "fragments": {
       "interaction_body_grammar_sha256": "4b2988a8069ddc2b6316feb813955de5678ee5cc74fc31ba725b0233a9b7347c",
       "interaction_kernel_sha256": "776b959942a0fa2d13c467e822a6ff270da062919b7b37c6931f0a000c716a86",
-      "interaction_static_views_sha256": "b43de3ed875ee1f75364a48a4f3c567fc775322ff944fc58f06309eede526cbb"
+      "interaction_static_views_sha256": "657fbbf33b5a333650a1ec369486100427be1351b34439b52b4129efaf043eae"
     },
     "pressure_family_count": 23,
     "profile": {
-      "body_sha256": "28fe377ff6cae5799ba243d02b6ccc8b3f84d248c40521960d42b34ec44a1b1f",
-      "profile_digest": "2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f",
+      "body_sha256": "fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70",
+      "profile_digest": "9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f",
       "revision": 2
     },
     "prohibited_shortcut_count": 8,

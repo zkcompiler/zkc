@@ -3,7 +3,7 @@
   "baseline_identity_pin": "evaluation/formal-source-owner-view-repair-f0v/baseline-identities.json",
   "publication": "forbidden",
   "owner_pages": [
-    {"path": "docs-next/pir/interactive-core.md", "sha256": "ca092e1808163c1659035f54e1cf31e6952b2e19ddec84628cce9a3f0d219d70"},
+    {"path": "docs-next/pir/interactive-core.md", "sha256": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c"},
     {"path": "docs-next/pir/fiat-shamir.md", "sha256": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef"},
     {"path": "docs-next/pir/duplex-sponge-fiat-shamir.md", "sha256": "54822176a39852d07d72a084d0a56a04f22c1207e16bb2e0196c4f84fa4954c5"},
     {"path": "docs-next/pir/interfaces-and-plans.md", "sha256": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d"},

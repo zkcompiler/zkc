@@ -23,8 +23,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 D1_MODEL = ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py"
 D1_COLD = ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/independent.py"
-PROFILE_DIGEST = "2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f"
-PROFILE_BODY_SHA256 = "28fe377ff6cae5799ba243d02b6ccc8b3f84d248c40521960d42b34ec44a1b1f"
+PROFILE_DIGEST = "9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f"
+PROFILE_BODY_SHA256 = "fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70"
 LEDGER_FORMAT = "zkc.formal-provider-observables-f2o1.ledger.v0"
 MARKER = re.compile(r"-- \[f2o1:([A-Za-z0-9_.\-]+)\]")
 

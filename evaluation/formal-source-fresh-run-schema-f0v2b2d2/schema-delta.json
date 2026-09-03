@@ -2,7 +2,7 @@
   "format": "zkc.formal-source-fresh-run-schema-f0v2b2d2.schema-delta.v0",
   "predecessor": {
     "format": "zkc.formal-source-terminal-owner-projections-f0v2b2c1b5b2.schema-source.v0",
-    "sha256": "10700e8656ed5c70d83c04a00e853a526ae14e444deb706a4c632fafd021eeea"
+    "sha256": "c06c9e13e1c10d33943325c5b234f1f7178b3aec3502df874284451ac0195ee7"
   },
   "candidate_format": "zkc.formal-source-fresh-run-schema-f0v2b2d2.schema-source.v0",
   "candidate_scope": "fresh-completed-record-schema-over-five-d1-carriers",

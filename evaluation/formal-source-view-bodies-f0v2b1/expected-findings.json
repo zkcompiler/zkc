@@ -8,45 +8,45 @@
     "views": {
       "PublicBindingView": {
         "schema_digest": "39ccac0902a128f5f80bc2677491ec973d460b44b8a0c99495606cb5d2b91cca",
-        "value_digest": "5dd6c43a9bd0eb70b9626fb5c96895ccdea97612b4aae792a4a1b34c3bbd1bb9",
+        "value_digest": "99e57e4034005f176ef11d3f7a8a56df8d19a4db7a84f66c4c58061f7ce82677",
         "manifest_digest": "571b5571550576ad112ac2b96abdf5901c6bd6be90392f3e16d4cc5bdcc01a08",
         "leaf_count": 10
       },
       "StrategyDecisionView": {
         "schema_digest": "18ed0f6bf90f0a69603016b28c43a8d27d32e17592ece144adc18831b840aa09",
-        "value_digest": "8ac48ad89c45c0eaf23006ee363060721b20d7cd768967d3284b6075233d95f2",
+        "value_digest": "7d3911d2d587ec0bfdc6c1ccad713f3ae3fb153481ad35707048962d5600d7f6",
         "manifest_digest": "69923cb847884fb7589501f07b04fc1ab251a261ee6316963b441008ed2d1785",
         "leaf_count": 38
       },
       "PublicCoinView": {
         "schema_digest": "61f41eb684032443efb1a3fbace7b356eeee5c4ec367b844246c9772d03b8b4a",
-        "value_digest": "e919b228cf1c4e50e982684a4af2fe1dcb004ecfee7bce1e8988082c75a947b7",
+        "value_digest": "f09f2b7807ba757866fa695c3dd9c005c68acc4b5d4371108b643c8f348fd960",
         "manifest_digest": "337744a4db26cfb36cdb354b38df312bba8deb73bc090a53a4ba7030bc7cd5ba",
         "leaf_count": 180
       },
       "EffectView": {
         "schema_digest": "36e783b59f011f0d664fbaef378b17b585c1b50d06126a77d7dbb44d79ce99da",
-        "value_digest": "d775962fcfc014c2c7de496fd650af083b20739c2919b4c3b0c8157c78711dde",
+        "value_digest": "b625d3f685ef64e6f498b967ea3c587a64f0f5ee4016b384a25d8a4d2fa4492e",
         "manifest_digest": "30a625ebc9386a57739273a9fbf6104c7416c8fbc308b4ac1197b13e71f56e17",
         "leaf_count": 68
       },
       "ClaimReductionView": {
         "schema_digest": "062e48d2ab34778a37a2aa4e31932aae408e9a732c5f30ab605029df06195b1d",
-        "value_digest": "186e4a1767f5b292d0f5cd60ab80eb48f92de271e6a778fd94facdedbf069e7c",
+        "value_digest": "f22f9d687788fcda6da9cd93d282eb1eab3e5ba2a572caf311b447f360da1364",
         "manifest_digest": "26fbaf90268be4c85122c25ea127260a1ccd5dcc69a3618207ef96eea5aab3ea",
         "leaf_count": 1
       },
       "ExecutionView": {
         "schema_digest": "98d4d6ae746b0b8fc63d0b9e644f65cbf78eb05045802031ef97a41f3e9f5bd0",
-        "value_digest": "c1174d8609fbfcf3f94aa535190f1cf15e2112cc8c9a009d177dfd4528c69c93",
+        "value_digest": "96f1a1c5c3727733a79d1ae3a4506f8e4d04418b9c465e85237a880723329bd1",
         "manifest_digest": "4efcb4e5ab900e77e91b73e99861b40e56d2393de3d9314c058ac4078b8451da",
         "leaf_count": 32
       }
     },
     "total_leaf_count": 329,
     "owner": {
-      "core_digest": "f11d422776ac28d192cc13a1c276049b0dae211394e344ad9e87008f92c4e2f2",
-      "protocol_digest": "4e11f03b4f5d65e5009b703bc5c78b8c186851888f95f7a52774b7e923a319f9",
+      "core_digest": "dcb652fdca792d8664c51f2b98dca17d530607ff994c1eab15a59ed5c61cf2b8",
+      "protocol_digest": "cc2fee36c903072621553a98fdb0d7bf3b84d13a18b0a51b04b7235367b7324f",
       "decision_count": 2,
       "guaranteed_read_count": 7,
       "occurrence_count": 6,

@@ -7,15 +7,15 @@
     "lake",
     "env",
     "lean",
-    "/home/wonjae/code/zkc-lanes/v2c-refreeze-rehearsal-2/evaluation/formal-provider-observables-f2o1/generated/Integrated.lean"
+    "/home/wonjae/code/zkc-lanes/v2c-rehearsal-repin/evaluation/formal-provider-observables-f2o1/generated/Integrated.lean"
   ],
   "exit_status": 0,
   "format": "zkc.formal-provider-observables-f2o1.elaboration-receipt.v0",
   "generated_file": "generated/Integrated.lean",
   "generated_sha256": "711f3c7883ab342d6b38bfffe58f0771486e323d9f51faa9c36f0ae755e06de1",
   "ledger_file": "generated/ledger.json",
-  "ledger_sha256": "18f94ccd582553af26541aa1811bf8123ad4c2804ca0b2d25fb3b5077d7d68a0",
-  "observed_at": "2026-09-03T11:02:42+00:00",
+  "ledger_sha256": "3727a35ec8506bdbee068cbb7adcd64a02ae61b3a09128f19bbbbe71252d3049",
+  "observed_at": "2026-09-03T12:07:50+00:00",
   "provider": {
     "checkout": "/tmp/zkc-f0-sources.b66lUO/VCVio",
     "imported_module": "VCVio.OracleComp.ProbComp",
@@ -27,5 +27,5 @@
   },
   "stderr": "",
   "stdout": "'ZkcF2O1.interaction' does not depend on any axioms\n",
-  "wall_seconds": 2.487
+  "wall_seconds": 2.507
 }

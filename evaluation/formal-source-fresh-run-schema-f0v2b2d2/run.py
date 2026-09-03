@@ -35,10 +35,10 @@ F2O0_NOTE = (
 )
 
 AGGREGATE = "F0V2B2D2-A-FRESH-RUN-SCHEMA"
-PROFILE_DIGEST = "2a1d4f1429b25fcd315072b654f6f0a6816e167d3c06a3a0f29b8028a023349f"
-PROFILE_BODY_SHA256 = "28fe377ff6cae5799ba243d02b6ccc8b3f84d248c40521960d42b34ec44a1b1f"
-SCHEMA_GRAMMAR_SHA256 = "8128a0fdc51ae850ff461dc7d3ad7311a25591f333a12a3f81560f9bacd140f9"
-SCHEMA_SOURCE_SHA256 = "ab7787e546d330dd35a289d5db1966653a3b91b38214bff1fb5a27f5a86afb08"
+PROFILE_DIGEST = "9a971206c68eab0b5b5e8124787bfce2f5335467a576b242190750e773941d2f"
+PROFILE_BODY_SHA256 = "fbba36f4b0e15dcc55ef60d4d251b0286c9627726c1bf6f827c95784fcd00f70"
+SCHEMA_GRAMMAR_SHA256 = "c67a8036fe80f8e2d7c44c574f77126d47ed53081ee53ba04ff3d96e0417b130"
+SCHEMA_SOURCE_SHA256 = "05f2c69e20ae2fce05f2a73505adb21ae5d3f03de89834890b43b2aaf774ff72"
 
 
 class GateFailure(RuntimeError):
@@ -217,7 +217,7 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         2004: "PartialRunRecord(P) = {",
         2028: "CompletedProtocolRecord(P) =",
         2083: "PartialRunRecord(P)` is diagnostic execution data",
-        2628: "run_record_schema",
+        2632: "run_record_schema",
     }
     _require(
         all(text in target_lines[line - 1] for line, text in required_lines.items()),

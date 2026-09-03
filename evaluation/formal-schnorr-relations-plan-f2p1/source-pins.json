@@ -128,11 +128,11 @@
     },
     {
       "path": "evaluation/formal-source-target-core-f1r1b/expected-identities.json",
-      "sha256": "71537e6defbe523cb19e6ff7aef663af09580ff1cece4f4acb049ddb01265dc3"
+      "sha256": "fddd4a44a9bffc21868b2134ab6a5844cb4d518744aa2e5c2b3e8ee7d41f7904"
     },
     {
       "path": "evaluation/formal-schnorr-relations-plan-f2p0/expected-findings.json",
-      "sha256": "3f196715d66411aaa1afd55195236519a1095afbae7ddb848cb7da0b88a542be"
+      "sha256": "6cfe3dd1b8c727c07a1b3b84a369e4108d6b595035070d20ba4cca5ee072884a"
     },
     {
       "path": "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o0-provider-observable-audit.md",
