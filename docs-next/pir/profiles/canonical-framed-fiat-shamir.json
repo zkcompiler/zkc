@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "canonical-framed-fiat-shamir",
   "profile_family": "pir.canonical-framed-fiat-shamir",
-  "revision": 1,
+  "revision": 2,
   "owner_page": "docs-next/pir/fiat-shamir.md",
   "expected_imports": ["interaction"],
   "supported_subject_kinds": [
@@ -205,7 +205,7 @@
     {
       "kind": "pir.static-view-schema",
       "name": "execution-view-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "canonical-framed-fs-semantics",
       "selector": "StaticViewSchema(ExecutionView) = {",
       "dependencies": [
@@ -213,8 +213,28 @@
         {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
         {"profile": "self", "kind": "pir.semantic-law", "name": "canonical-framed-source-views-v0"},
         {"profile": "self", "kind": "pir.semantic-law", "name": "canonical-framed-admission-and-execution-v0"},
-        {"profile": "interaction", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"}
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "canonical-framed-protocol-execution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "canonical-framed-replay-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "visible-history-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "run-view-issuance-v0"}
       ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "canonical-framed-protocol-execution-v0",
+      "revision": 0,
+      "fragment": "canonical-framed-fs-semantics",
+      "selector": "### 9.2 Transcript state and resolver",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "canonical-framed-replay-v0",
+      "revision": 0,
+      "fragment": "canonical-framed-fs-semantics",
+      "selector": "### 9.3 Replay",
+      "dependencies": []
     }
   ],
   "subjects": [

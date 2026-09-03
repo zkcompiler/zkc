@@ -1361,7 +1361,48 @@ presence the construction requires (`required` true) or merely frames;
 absorbs; the three maps are identity maps written out entry by entry, so a
 consumer reads the correspondence rather than a slogan; `result_schema` is the
 description of the `CheckedFSConstruction` result, and the owner-local result
-reference is not a body field.
+reference is not a body field. The execution view's `visible_history_law` and
+`relation_run_view_issuance_law` name the Interaction profile's visible-history
+and run-view-issuance laws through imported declaration dependencies,
+`generated_execution_law` names the protocol-execution law of Section 9.2, and
+`replay_qualification_law` names the replay law of Section 9.3. The complete
+selection, which the field resolver and `StaticViewBody` consume exactly as
+the Interaction page states for its own table, is:
+
+```text
+PIRStaticViewLawFieldSelection(CanonicalFramedFiatShamir) = CanonicalMap [
+  (TranscriptDeclarationView, initialization_schedule_law)
+      -> canonical-framed-body-grammar-v0,
+  (TranscriptDeclarationView, frame_body_law)
+      -> canonical-framed-body-grammar-v0,
+  (RequiredInfluenceView, exact_prefix_law)
+      -> canonical-framed-prefix-and-domain-v0,
+  (ChallengeTransitionView, namespace_derivation_law)
+      -> canonical-framed-prefix-and-domain-v0,
+  (ChallengeTransitionView, exact_length_law)
+      -> canonical-framed-body-grammar-v0,
+  (ChallengeTransitionView, state_update_before_decode_law)
+      -> canonical-framed-admission-and-execution-v0,
+  (ChallengeTransitionView, retry_law)
+      -> canonical-framed-admission-and-execution-v0,
+  (ChallengeTransitionView, sampling_failure_law)
+      -> canonical-framed-admission-and-execution-v0,
+  (FSConstructionView, structural_conclusion.law)
+      -> canonical-framed-same-core-construction-v0,
+  (ExecutionView, visible_history_law)
+      -> interaction visible-history-v0, imported,
+  (ExecutionView, generated_execution_law)
+      -> canonical-framed-protocol-execution-v0,
+  (ExecutionView, replay_qualification_law)
+      -> canonical-framed-replay-v0,
+  (ExecutionView, relation_run_view_issuance_law)
+      -> interaction run-view-issuance-v0, imported
+]
+```
+
+Every right-hand side is a `pir.semantic-law` declaration of this profile's
+catalog, or of the Interaction profile where marked imported, at its catalog
+ordinal.
 
 The first three coordinates are
 `ConstructionView(TranscriptConstructionId,

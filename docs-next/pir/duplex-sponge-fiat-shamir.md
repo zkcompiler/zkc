@@ -1144,7 +1144,61 @@ its exact coordinate; the two schedule correspondences name the
 downstream-boundary law of Section 13; the conclusion's law names the
 lifecycle-and-admission law of Section 7; `result_schema` is the description
 of the `CheckedDuplexFSConstruction` result, and the owner-local result
-reference is not a body field.
+reference is not a body field. The instance projection's law names the
+checked same-Core construction law of Section 10. The coverage view's
+`prover_required_prefix_law` names the prover-required prefix law of Section
+9 and its `verifier_complete_schedule_law` the fixed state-transition law of
+Section 5, whose exact source schedule the verifier executes in full. The
+execution view's `visible_history_law` and `relation_run_view_issuance_law`
+name the Interaction profile's visible-history and run-view-issuance laws
+through imported declaration dependencies, `generated_execution_law` names
+the execution law of Section 8.3, and `replay_qualification_law` the replay
+law of Section 8.4. The complete selection, which the field resolver and
+`StaticViewBody` consume exactly as the Interaction page states for its own
+table, is:
+
+```text
+PIRStaticViewLawFieldSelection(DuplexSpongeFiatShamir) = CanonicalMap [
+  (DuplexTranscriptDeclarationView, state_carrier.invariant_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexTranscriptDeclarationView, instance_carrier.bit_convention_law)
+      -> duplex-sponge-body-grammar-v0,
+  (DuplexTranscriptDeclarationView, instance_binding_projection.law)
+      -> duplex-sponge-source-views-v0,
+  (DuplexTranscriptDeclarationView, fixed_start_absorb_squeeze_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexTranscriptDeclarationView, edge_case_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexEncodedInputCoverageView, prover_required_prefix_law)
+      -> duplex-sponge-prover-required-prefix-v0,
+  (DuplexEncodedInputCoverageView, verifier_complete_schedule_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexChallengeTransitionView, decoder_totality_law)
+      -> duplex-sponge-admission-and-execution-v0,
+  (DuplexChallengeTransitionView, decode_after_state_transition_law)
+      -> duplex-sponge-state-transition-v0,
+  (DuplexFSConstructionView, prover_schedule_correspondence.law)
+      -> duplex-sponge-downstream-boundary-v0,
+  (DuplexFSConstructionView, verifier_schedule_correspondence.law)
+      -> duplex-sponge-downstream-boundary-v0,
+  (DuplexFSConstructionView, instance_projection.law)
+      -> duplex-sponge-same-core-construction-v0,
+  (DuplexFSConstructionView, structural_conclusion.law)
+      -> duplex-sponge-admission-and-execution-v0,
+  (ExecutionView, visible_history_law)
+      -> interaction visible-history-v0, imported,
+  (ExecutionView, generated_execution_law)
+      -> duplex-sponge-protocol-execution-v0,
+  (ExecutionView, replay_qualification_law)
+      -> duplex-sponge-replay-v0,
+  (ExecutionView, relation_run_view_issuance_law)
+      -> interaction run-view-issuance-v0, imported
+]
+```
+
+Every right-hand side is a `pir.semantic-law` declaration of this profile's
+catalog, or of the Interaction profile where marked imported, at its catalog
+ordinal.
 
 The profile-specific schema prevents Analysis from requesting canonical
 headers, namespaces, retries, or sampling failures from a duplex construction.

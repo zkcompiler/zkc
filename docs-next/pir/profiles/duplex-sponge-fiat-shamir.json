@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "duplex-sponge-fiat-shamir",
   "profile_family": "pir.duplex-sponge-fiat-shamir",
-  "revision": 1,
+  "revision": 2,
   "owner_page": "docs-next/pir/duplex-sponge-fiat-shamir.md",
   "expected_imports": ["interaction"],
   "supported_subject_kinds": [
@@ -174,13 +174,14 @@
     {
       "kind": "pir.static-view-schema",
       "name": "duplex-encoded-input-coverage-view-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "StaticViewSchema(DuplexEncodedInputCoverageView) = {",
       "dependencies": [
         {"profile": "interaction", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
         {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
-        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"}
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-prover-required-prefix-v0"}
       ]
     },
     {
@@ -198,19 +199,20 @@
     {
       "kind": "pir.static-view-schema",
       "name": "duplex-fs-construction-view-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "StaticViewSchema(DuplexFSConstructionView) = {",
       "dependencies": [
         {"profile": "interaction", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
         {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
-        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"}
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-same-core-construction-v0"}
       ]
     },
     {
       "kind": "pir.static-view-schema",
       "name": "execution-view-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "StaticViewSchema(ExecutionView) = {",
       "dependencies": [
@@ -218,8 +220,44 @@
         {"profile": "interaction", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
         {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-source-views-v0"},
         {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-admission-and-execution-v0"},
-        {"profile": "interaction", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"}
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-protocol-execution-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "duplex-sponge-replay-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "visible-history-v0"},
+        {"profile": "interaction", "kind": "pir.semantic-law", "name": "run-view-issuance-v0"}
       ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "duplex-sponge-prover-required-prefix-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "## 9. Prover-required prefix",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "duplex-sponge-same-core-construction-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "## 10. Checked same-Core construction",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "duplex-sponge-protocol-execution-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "### 8.3 Execution",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "duplex-sponge-replay-v0",
+      "revision": 0,
+      "fragment": "duplex-sponge-fs-semantics",
+      "selector": "### 8.4 Replay",
+      "dependencies": []
     }
   ],
   "subjects": [
