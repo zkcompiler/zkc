@@ -498,7 +498,7 @@
       "values": [
         {"id": "first_active_terminal", "destination": "C-TERMINAL", "meaning": "The first active Accept, Reject, or Abort terminal stops the path."},
         {"id": "abort", "destination": "C-TERMINAL", "meaning": "Abort is an explicit terminal verdict."},
-        {"id": "interpretation_failure", "destination": "C-TERMINAL", "meaning": "A declared interpretation failure reaches an explicit Reject or Abort branch."},
+        {"id": "interpretation_failure", "destination": "C-TERMINAL", "meaning": "Canonical interpretation failure is a separate completed failure record and outcome lane, never a Core terminal."},
         {"id": "accepted_continuation", "destination": "C-PLAN-CONTINUATION", "meaning": "Acceptance authorizes one named finite continuation recipe."},
         {"id": "source_omits_terminal_semantics", "destination": "B-SOURCE-INCOMPLETE", "meaning": "The source omits the acceptance or interpretation-failure terminal needed for the construction."},
         {"id": "nonterminating", "destination": "B-UNBOUNDED-LOOP", "meaning": "The required behavior has no finite terminal bound."}

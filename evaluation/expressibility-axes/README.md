@@ -20,6 +20,12 @@ records name their owner page and section. The checker pins the four referenced
 PIR pages and the post-freeze program README; this package does not edit or
 supersede them.
 
+The termination-axis meaning for canonical interpretation failure is corrected
+to match the migrated owner contract: it is a separate completed failure
+record and outcome lane, never a Core terminal. This wording-only correction
+does not change any case vector, destination, derived verdict, or frozen
+finding; the owner-page pins now name the migrated page bytes.
+
 [`cases.json`](cases.json) is a 63-row matrix with exactly one cell for every
 axis in every row. It covers all `P01`--`P10`, `V01`--`V05`, and `H01`--`H05`
 portfolio identifiers, including separate rows where a portfolio cluster or
