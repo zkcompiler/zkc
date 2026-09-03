@@ -77,6 +77,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
   -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
   -> F2-O3  provider interpretation in ArkLib            [complete, Affirmative; premise unpublished]
+  -> F0-V3C finite canonical-framed subject and executor [contract; lane running]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -634,6 +635,14 @@ provider, extraction tool, or durable schema.
   contract's two-producer premise is refused as a source correction, and the
   provider-map premise stays `CannotAnswer` until the owner publishes a
   declaration.
+- [`f0v3c-fs-runtime-entry-contract.md`](f0v3c-fs-runtime-entry-contract.md)
+  fixes the prerequisite of the first Fiat--Shamir provider interpretation:
+  one admitted transcript construction over the finite Schnorr Core with a
+  toy portable transition suite, the FS Protocol and its checked same-Core
+  construction, an executor and an independent replay of Sections 4, 6, 7,
+  and 9 over the whole finite domain with the six-lane partition and the
+  receipts, the execution view reproduced, and the challenge derivation
+  function exported as a table for the provider round that follows.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
