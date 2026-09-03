@@ -609,6 +609,11 @@ provider, extraction tool, or durable schema.
   `Unmodelled` lane image and a completion premise kind for the Analysis
   owner text, and drafts the VCVio provider declaration; three items await
   the owner's decision.
+- [`decision-review-packet-2026-09-03.md`](decision-review-packet-2026-09-03.md)
+  lists every decision now in owner text on the migration and Analysis
+  branches with the evidence it rests on and the counterexample that would
+  reverse it, grouped for an adversarial human pass, and restates the five
+  open decisions with their recommended answers.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
