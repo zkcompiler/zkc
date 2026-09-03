@@ -2099,6 +2099,8 @@ AnalysisPremiseCoordinate =
   | AnalysisFamilyPremiseCoordinate(
       AnalysisAsymptoticProtocolFamilyDefinitionId,
       SamplerAdequacy | OracleProcess)
+  | PIRConstructionPremiseCoordinate(
+      TranscriptConstructionId, SamplerAdequacy | OracleProcess)
   | PIRProtocolOutcomePartitionCoordinate(ProtocolId)
   | RelationsModelEvaluatorCoordinate(RelationSemanticModelId)
   | RelationsWitnessPlanJoinCoordinate(
@@ -2180,13 +2182,15 @@ AnalysisNamedPremiseKindLaw = CanonicalSeq [
     bound_value: BoundHypothesis,
     sources: OwnerSemanticCoordinate | CandidateOwnerCoordinate },
   { kind: FiatShamirSamplerAdequacy,
-    coordinate: AnalysisFamilyPremiseCoordinate(_, SamplerAdequacy),
+    coordinate: AnalysisFamilyPremiseCoordinate(_, SamplerAdequacy)
+              | PIRConstructionPremiseCoordinate(_, SamplerAdequacy),
     bound_value: BoundHypothesis,
-    sources: FamilyHypothesisSource },
+    sources: FamilyHypothesisSource | CandidateOwnerCoordinate },
   { kind: FiatShamirOracleProcess,
-    coordinate: AnalysisFamilyPremiseCoordinate(_, OracleProcess),
+    coordinate: AnalysisFamilyPremiseCoordinate(_, OracleProcess)
+              | PIRConstructionPremiseCoordinate(_, OracleProcess),
     bound_value: BoundHypothesis,
-    sources: FamilyHypothesisSource },
+    sources: FamilyHypothesisSource | CandidateOwnerCoordinate },
   { kind: ProviderOutcomeCarrierMap,
     coordinate: PIRProtocolOutcomePartitionCoordinate,
     bound_value: BoundProviderOutcomeCarrierMap,
@@ -2273,6 +2277,14 @@ PremiseIdsOfProposition(proposition_id) =
   PremiseIdsOfGoal(Authenticate(proposition_id).goal_id) and
   Authenticate(Authenticate(proposition_id).hypothesis_context_id)
     .exact_named_premise_ids
+
+ContextPremiseIds(nodes, roots) =
+  the canonical sorted-unique union of node.exact_named_premise_ids over
+  every node reachable from roots
+
+In a hypothesis-node display the fourth component is written
+`premises(goal)`; it denotes exactly PremiseIdsOfGoal of that node's goal
+and is not an authored value.
 
 AnalysisPropositionBody = {
   goal_id: AnalysisGoalId,
