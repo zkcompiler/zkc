@@ -118,6 +118,12 @@ below are reader cross-references rather than inventory edges.
   keep the Core instance-only and place generation in a front end or a
   Compiler transition; exact target graph counts and template necessity stay
   `CannotAnswer`.
+- [Families and Instances: Decision Inputs](family-and-instance/decision-inputs.md)
+  turns the probe into a decision packet: three designs with their identity,
+  theorem-binding, and reopening consequences, a recommendation to keep the
+  Core instance-only with an untrusted generator as a Compiler transition
+  and pointwise theorem binding through the transport profile, three
+  decisions requested, and the reversal condition.
 - [Native FRI/IOR Final Classification and Retention](r2-protocol-witnesses/native-fri-ior-final-classification-and-retention.md)
   retains the two finite FRI/IOR lanes, classifies the case as a conservative
   extension, fixes the deterministic source-correspondence boundary, and
