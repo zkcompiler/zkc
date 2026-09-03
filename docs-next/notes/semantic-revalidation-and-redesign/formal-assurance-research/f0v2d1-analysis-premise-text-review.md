@@ -810,3 +810,257 @@ step publishes identity metadata only; it does not validate any premise.
   brief expressly prohibited manifest edits; the executable packages and the
   existing evaluation index row carry the round-two state. The command details
   above come from the required alternate-index checks.
+
+## Round three
+
+This verification round reviews `27871e7..e950263`. It reruns the original
+seven questions and adds the profile-specific hypothesis argument-schema
+question and the cross-surface provider lane/completion question. The owner
+text closes every previously open text question. The aggregate nevertheless
+remains `Negative/F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED` because two
+requirements fail in the migrated Analysis closure package, not because an
+owner-page signature remains underdetermined.
+
+| Review question | Outcome | Stable finding |
+|---|---|---|
+| Name closure | Affirmative | `F0V2D1-A-NAME-CLOSURE` |
+| Constructor consistency | Affirmative | `F0V2D1-A-CONSTRUCTOR-CONSISTENCY` |
+| Intake soundness | Affirmative | `F0V2D1-A-INTAKE-SOUNDNESS` |
+| Decision fidelity | Affirmative | `F0V2D1-A-DECISION-FIDELITY` |
+| Schnorr coordinate and binding formation | Affirmative | `F0V2D1-A-SCHNORR-BINDINGS` |
+| Profile and manifest closure | Affirmative | `F0V2D1-A-PROFILE-MANIFESTS` |
+| Existing-package refreeze | Negative | `F0V2D1-N-MIGRATED-IDENTITY-INPUTS` |
+| Hypothesis argument-schema closure | Affirmative | `F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS` |
+| Provider lane and completion consistency | Negative | `F0V2D1-N-MIGRATED-COMPLETION-LAW` |
+
+### Closed owner-text questions
+
+`F0V2D1-A-NAME-CLOSURE` is affirmative. In
+`docs-next/analysis/analysis-model.md` Section 4.1, lines 2150--2165 bind both
+the direct profile and premise kind and route hypotheses through the
+profile-specific `NamedHypothesisArgumentSchema<P,K>`. Lines 2181--2188 make
+the provider arm dependent on its Protocol. Lines 2283--2294 define the goal
+map through `AnalysisNamedPremiseBindingValue`, and lines 3120--3121 retain the
+profile-and-kind-indexed premise identity. In
+`docs-next/analysis/cryptographic-properties.md`, lines 2578--2594 bind
+`ell0` in the construction helper and lines 3104--3109 pass it from the goal.
+Lines 477--486 now derive `SchnorrFreshLawRef(S)` from the value of the exact
+authenticated `fresh_law` leaf.
+
+`F0V2D1-A-CONSTRUCTOR-CONSISTENCY` is affirmative. The current census is
+eleven question, twelve goal, six context, five support, one judgment, and
+twelve concrete premise-body displays. All carry their schema-required fields.
+All thirty-one anonymous hypothesis nodes now carry `premises(goal)`; the seven
+formerly incomplete displays are complete. The notation remains derived as
+exactly `PremiseIdsOfGoal` by `analysis-model.md` lines 2305--2336.
+
+`F0V2D1-A-INTAKE-SOUNDNESS` and `F0V2D1-A-DECISION-FIDELITY` remain
+affirmative. `analysis-model.md` lines 3140--3162 still classify missing source
+or key as `CannotAnswer`, kind, coordinate, and all four scope mismatches as
+`Refused`, and malformed key sets as `Malformed`, with no default. The
+construction and family premise lanes remain separate, provider requirements
+remain outside the relation-bound Fresh question, and a whole-partition
+provider statement adds operational completion when the provider models only
+part of the partition.
+
+`F0V2D1-A-SCHNORR-BINDINGS` is affirmative for the owner text.
+`cryptographic-properties.md` lines 2302--2323 fix the six requirements.
+Lines 2334--2357 fix the three exact model-binding laws and two honest
+hypotheses. Lines 2365--2460 define the relation, witness, state, commit, and
+respond bodies with all six premise fields. Lines 2537--2560 spell all six
+relation-question bindings. Lines 2562--2576 form new relation and witness
+premise identities over the extractor question's own exact subjects rather
+than reusing the relation-question identities. Lines 2578--2594 spell both
+construction bindings. Lines 5921--5939 spell both family bindings and use
+`SamplerAdequacyFormOf(F)`.
+
+`F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS` is affirmative. The property schema at
+`cryptographic-properties.md` lines 2204--2219 has five closed rows covering
+six declarations: Fresh, construction sampler, construction oracle,
+operational completion, honest commit, and honest respond. The transport
+schema at lines 5851--5858 has two rows covering family sampler and family
+oracle. Every declaration's first and only first-class coordinate argument is
+the coordinate admitted for its kind; every later argument is named by its
+row. The observed arities are respectively 2, 3, 2, 2, 1, 1, 3, and 2. No
+declaration has a free or extra argument.
+
+`F0V2D1-A-PROFILE-MANIFESTS` is affirmative. The three supported-kind
+sequences equal their manifests. Both publication compilers agree on the
+current source and the review-base source and independently reproduce the same
+six-profile Analysis rotation cone. The three profile revisions and their
+definition revisions were already at revision 1 at both endpoints of this
+review range; this round observes no additional manifest revision transition.
+
+### Independent premise-bearing identity reconstruction
+
+The review implements its own encoders for premise kind, coordinate, law term,
+bound value, source, evidence depth, scope, requirement, binding, question, and
+goal bodies. It calls the Foundation profiled-content identity primitive
+directly and does not call the migrated package's Analysis body encoder or
+identity former. The family constructor is invoked only to obtain the lazy
+observed comparison body; the independent path then recomputes every premise,
+question, and goal identity from that body data.
+
+For the migrated relation-bound Fresh Schnorr goal, the independent path
+reproduces:
+
+- direct profile digest
+  `9d894e73918111ecc4e68e652a759cceb321fc7f4747132f182957975f8b3e13`;
+- question digest
+  `93caf8913796aa3433a922d57867925987ca291a9b69d83e3f304eb92d2a8f7e`;
+- goal digest
+  `79dcc80fff8307a7d2ab79ba523220ce0e17337bef2af0f6ba19fbe6cb17ccb4`;
+  and
+- six premise digests: commit `85eba04d...e5d3`, respond
+  `9ce08ab5...0b4c`, witness `ec4ac4e9...179b`, relation
+  `8c5fa7a9...4287`, Fresh coin `6fbcb132...64fb`, and prover state
+  `8b0945b2...90ea`.
+
+That exact migrated goal is not owner-determined. The reconstruction proves
+what the migrated bytes say, not that the bytes use the owner-prescribed
+coordinate. `evaluation/k3-analysis-closure/reference_model.py` lines
+15872--15878 puts the encoded challenge occurrence coordinate in
+`PIRPublicCoinLawCoordinate`. The owner instead requires the value of the
+authenticated `fresh_law` leaf. The imported
+`evaluation/k2-protocol-fiat-shamir/reference_model.py`
+`PublicCoinChallengeProjection` at lines 2115--2122 contains only
+`challenge_coordinate`, `domain_coordinate`, and `challenge_domain`; it has no
+fresh-law coordinate or value. This is a concrete package mismatch, not a
+remaining owner-text ambiguity.
+
+For the migrated target family goal, the independent path reproduces:
+
+- direct profile digest
+  `9a251526a43529fe73899b81bf5241ee850e12c088c80629461aecd2926e886f`;
+- question digest
+  `ee652f7c36a086c67db3d075aeb8a93c2caec0b1007d457b7fcab0fb24281fc5`;
+- sampler premise digest
+  `7e0126095e8b31bde80e07c0b6043204ad10e3adba3a3714e9bea5559cec0fbb`;
+- oracle-process premise digest
+  `358db81101d8038121451a98c95de2f9e8be37d6aa3821fec48b5aeff3dd8ed8`;
+  and
+- goal digest
+  `9c49308e1e89c5da7f01b783dd323428fb71470fe3acfd9a31d021d47ca1b2f2`.
+
+The family identity is owner-determined: its coordinate, exact-total sampler
+form, oracle model, family source, evidence depth, scope, and two law
+declaration references all match the transport-profile rows. The migrated
+premise identities as a whole are nevertheless not owner-determined because
+the relation-bound goal above and the construction sampler below still use
+proxy inputs. The fixed-extractor relation/witness pair now uses the consuming
+question's exact subjects and matches the repaired owner rule. No provider
+premise identity forms because no provider declaration is published.
+
+### Remaining negative findings and proposed replacements
+
+`F0V2D1-N-MIGRATED-IDENTITY-INPUTS` records two exact replacements:
+
+1. At `evaluation/k3-analysis-closure/reference_model.py` lines 15872--15878,
+   replace the challenge-coordinate proxy with the exact
+   `ProtocolDeclarationRef<"pir.public-coin-law">` value selected by
+   `challenges[S.challenge_ref].fresh_law` in the authenticated
+   `PublicCoinView`. The imported source must first expose that leaf; adding a
+   locally inferred declaration or converting the challenge occurrence
+   coordinate is not an admissible replacement.
+2. At the same file's lines 16127--16132, replace the legacy
+   `construction.max_attempts` branch with `SamplerAdequacyFormOf(T)` derived
+   from T's identity-bearing `challenge_rules`: `ExactTotal` exactly when every
+   rule has `maximum_draws = 1`, otherwise `RetryWithExhaustion` of the maximum
+   per-rule value. The imported legacy construction at
+   `evaluation/k2-protocol-fiat-shamir/reference_model.py` lines 1743--1749 has
+   no `challenge_rules`, so this requires an authenticated current
+   construction carrier rather than a field rename.
+
+`F0V2D1-N-MIGRATED-COMPLETION-LAW` records one further replacement. The six
+lane names and `Image | Unmodelled` law agree across the PIR partition,
+Analysis kernel/property text, intake probe, and migrated model. The tenth kind
+also exists in every surface. However,
+`evaluation/k3-analysis-closure/reference_model.py` lines 869--898 has no
+`operational-completion-hypothesis-v0` declaration row, while its test at
+lines 888--900 supplies the arbitrary symbol
+`operational-completion-hypothesis`. Add the exact property-profile semantic-law
+declaration with classification `exact-named-hypothesis`, obtain its profile
+declaration reference through the same exact resolver used by the other
+hypotheses, and use canonical arguments
+`[PIRProtocolOutcomePartitionCoordinate(P), provider]`. The unpublished
+provider test may still fail closed before premise formation; it must not use
+that earlier failure to mask an arbitrary law reference.
+
+The exact remaining refreeze inputs are therefore:
+
+1. the authenticated `fresh_law` declaration leaf for the migrated Schnorr
+   Protocol;
+2. identity-bearing construction `challenge_rules` and every rule's
+   `maximum_draws` value;
+3. a published property-profile provider declaration and closed provider
+   carrier before either provider-bound premise may form; and
+4. the exact property-profile operational-completion hypothesis declaration
+   reference.
+
+There is no owner-page `Proposed delta` in this round. The owner pages already
+state each required replacement exactly; the defects are in the migrated
+instrument and its legacy imported carrier. No owner page, profile manifest,
+intake probe, or migrated package was edited by this verification lane.
+
+## Handoff
+
+Files changed:
+
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/run.py` now asks the
+  nine round-three questions, reconstructs the relation-bound and family goals
+  with independently written encoders, and freezes the two migrated-package
+  mismatches instead of treating missing inputs as affirmative evidence.
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/expected-findings.json`
+  freezes the twelve findings and the `Negative` aggregate.
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/README.md` states the
+  exact question, result, owner-determined identities, remaining refreeze
+  inputs, and pass/non-claim boundary.
+- `checks/manifest.json` and `evaluation/README.md` describe the rerun without
+  adding a new package or lifecycle object.
+- This note adds `Round three` and this handoff. No owner page, migrated
+  package, directory README, lifecycle entry, or lifecycle count pin changed.
+
+Commands run before this handoff, with observed exit status and wall time:
+
+- Python AST compilation plus JSON decoding of the changed executable and
+  frozen findings: exit 0; this preflight was not separately timed.
+- `git diff --check`: exit 0, 0.06 s.
+- `python3 -B evaluation/formal-source-analysis-premise-review-f0v2d1/run.py`
+  for the machine-readable result: exit 0, 13.13 s.
+- `python3 -B evaluation/formal-source-analysis-premise-review-f0v2d1/run.py --check`:
+  exit 0, 12.99 s; 12/12 frozen findings matched, including 2 `Negative`, 0
+  `CannotAnswer`, and aggregate `Negative`.
+- Alternate-index initialization with a clone-local object directory:
+  `git read-tree HEAD` exited 0 in 0.00 s and `git add -u` exited 0 in 0.47 s.
+- `python3 -B checks/run.py validate` under the alternate index: exit 0,
+  0.04 s; 77 checks and 6 tiers validated.
+- `python3 -B checks/run.py run --tier developer` under the alternate index and
+  clone-local offline uv cache: exit 0, 1.78 s; 9/9 checks passed.
+- `python3 -B checks/run.py run --check research.analysis-premise-text-review`
+  under the same environment: exit 0, 12.96 s; 1/1 check passed.
+
+Aggregate outcome: all nine review questions close. Seven are affirmative and
+two are negative; none is `CannotAnswer`. The Analysis owner text is closed,
+but the migrated executable package is not yet owner-determined because its
+Fresh premise and construction sampler form use legacy proxies, and its
+operational-completion test supplies an arbitrary hypothesis symbol. The check
+passes because those negative results exactly match the frozen expectation.
+
+Non-claims: this rerun does not repair or refreeze the migrated package, publish
+a provider, authenticate a missing source declaration, prove the Analysis
+laws, establish backend correctness, or establish protocol security. Passing
+tests show only that the bounded review instrument reproduces its frozen
+findings from this source snapshot.
+
+Surprises and corrections to the brief: the factual owner-repair description
+was accurate, including the seven completed displays. What did not follow from
+those repairs was migrated-package closure: the imported public-coin carrier
+still lacks `fresh_law`, the construction carrier still lacks identity-bearing
+challenge rules, and the migrated declaration catalog still lacks the exact
+operational-completion hypothesis. Both endpoint profile revisions remain 1
+even though all six profile identifiers rotate through the changed source
+page. This clone has no local `AGENTS.md` or `.claude/CLAUDE.md`, so the
+read-only primary-checkout copies named by the workflow were used. The private
+register was not appended because it is outside this clone and read-only to
+this lane. No lifecycle count pin moved because this round updates an existing
+package rather than adding one.

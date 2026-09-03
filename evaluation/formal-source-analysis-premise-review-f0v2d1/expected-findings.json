@@ -1,23 +1,23 @@
 {
   "aggregate": {
-    "outcome": "CannotAnswer",
-    "code": "F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
-    "blocking_findings": [],
-    "cannot_answer_findings": [
-      "F0V2D1-C-NAME-CLOSURE",
-      "F0V2D1-C-CONSTRUCTOR-CONSISTENCY",
-      "F0V2D1-C-SCHNORR-BINDINGS",
-      "F0V2D1-C-REFREEZE-INPUTS"
-    ]
+    "outcome": "Negative",
+    "code": "F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
+    "blocking_findings": [
+      "F0V2D1-N-MIGRATED-IDENTITY-INPUTS",
+      "F0V2D1-N-MIGRATED-COMPLETION-LAW"
+    ],
+    "cannot_answer_findings": []
   },
   "finding_codes": [
-    ["name-closure", "CannotAnswer", "F0V2D1-C-NAME-CLOSURE"],
-    ["constructor-consistency", "CannotAnswer", "F0V2D1-C-CONSTRUCTOR-CONSISTENCY"],
+    ["name-closure", "Affirmative", "F0V2D1-A-NAME-CLOSURE"],
+    ["constructor-consistency", "Affirmative", "F0V2D1-A-CONSTRUCTOR-CONSISTENCY"],
     ["intake-soundness", "Affirmative", "F0V2D1-A-INTAKE-SOUNDNESS"],
     ["decision-fidelity", "Affirmative", "F0V2D1-A-DECISION-FIDELITY"],
-    ["schnorr-coordinate-formation", "CannotAnswer", "F0V2D1-C-SCHNORR-BINDINGS"],
+    ["schnorr-coordinate-formation", "Affirmative", "F0V2D1-A-SCHNORR-BINDINGS"],
     ["profile-manifest-closure", "Affirmative", "F0V2D1-A-PROFILE-MANIFESTS"],
-    ["existing-package-refreeze", "CannotAnswer", "F0V2D1-C-REFREEZE-INPUTS"],
+    ["existing-package-refreeze", "Negative", "F0V2D1-N-MIGRATED-IDENTITY-INPUTS"],
+    ["hypothesis-argument-schema-closure", "Affirmative", "F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS"],
+    ["provider-lane-and-completion-consistency", "Negative", "F0V2D1-N-MIGRATED-COMPLETION-LAW"],
     ["publication-compiler-agreement", "Affirmative", "F0V2D1-A-PUBLICATION-COMPILERS"],
     ["identity-rotation-cone", "Affirmative", "F0V2D1-A-ROTATION-CONE"],
     ["predecessor-probe-coverage", "Affirmative", "F0V2D1-A-PROBE-COVERAGE"]

@@ -19,7 +19,7 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 EXPECTED = HERE / "expected-findings.json"
-BASE_COMMIT = "8ae0ee1"
+BASE_COMMIT = "27871e7"
 FENCE_END = "\n" + chr(96) * 3 + "\n"
 
 ANALYSIS_PAGES = (
@@ -52,6 +52,7 @@ SOURCE_PINS = (
     *ANALYSIS_PAGES,
     *MIGRATED_MANIFESTS,
     "docs-next/relations/relation-model.md",
+    "docs-next/pir/fiat-shamir.md",
     "docs-next/pir/interfaces-and-plans.md",
     "docs-next/pir/interactive-core.md",
     "evaluation/analysis-premise-intake-probe/run.py",
@@ -61,6 +62,10 @@ SOURCE_PINS = (
     "evaluation/analysis-premise-intake-probe/expected-findings.json",
     "evaluation/k3-analysis-closure/reference_model.py",
     "evaluation/k3-analysis-closure/tests/test_reference_model.py",
+    "evaluation/k3-analysis-closure/README.md",
+    "evaluation/k2-protocol-fiat-shamir/reference_model.py",
+    "evaluation/finite-cover-analysis/tests/test_finite_cover.py",
+    "evaluation/k3-integrated-closure/tests/test_reference_model.py",
 )
 
 LAW_FAMILY_NAMES = (
@@ -73,6 +78,9 @@ LAW_FAMILY_NAMES = (
     "ConstructionOracleProcessHypothesis",
     "SamplerAdequacyHypothesis",
     "OracleProcessHypothesis",
+    "OperationalCompletionHypothesis",
+    "HonestCommitHypothesis",
+    "HonestRespondHypothesis",
 )
 
 
@@ -170,68 +178,53 @@ def _name_review(pages: dict[str, str]) -> dict[str, Any]:
         "a provider family lost its closed-schema statement",
     )
     _require(
-        "ExactModelBindingLaw<K> =\n  TotalAnalysisLawSignature<P," in model
-        and "ExactNamedHypothesis<K> =\n  TotalAnalysisLawSignature<P," in model,
+        "ExactModelBindingLaw<P,K> =\n  TotalAnalysisLawSignature<P," in model
+        and "ExactNamedHypothesis<P,K> =\n  TotalAnalysisLawSignature<P," in model
+        and "NamedHypothesisArgumentSchema<P,K>" in model,
         "a generic law family lost its displayed signature",
-    )
-
-    concrete_signatures = {
-        "FreshSamplingHypothesis": 2,
-        "ConstructionSamplerAdequacyHypothesis": 3,
-        "ConstructionOracleProcessHypothesis": 2,
-        "SamplerAdequacyHypothesis": 3,
-        "OracleProcessHypothesis": 2,
-    }
-    for name in concrete_signatures:
-        _require(
-            f"{name} =" in crypto and f"the profile's {name} declaration" in crypto,
-            f"{name} no longer has a declaration and law-term use",
-        )
-
-    generic_profile_free = (
-        "ExactModelBindingLaw<K> =\n  TotalAnalysisLawSignature<P," in model
-        and "ExactNamedHypothesis<K> =\n  TotalAnalysisLawSignature<P," in model
     )
     bound_value = _definition_block(
         model, "AnalysisNamedPremiseBoundValue<P,K> =", "\n\nAnalysisNamedPremiseSource<P>"
     )
-    free_protocol_parameter = (
-        "AnalysisProviderOutcomeCarrierMapBody<P,Protocol>" in bound_value
-        and "<Protocol>" not in bound_value.split("=", 1)[0]
+    _require(
+        "BoundProviderOutcomeCarrierMap<Protocol: ProtocolId>(" in bound_value
+        and "AnalysisProviderOutcomeCarrierMapBody<P,Protocol>" in bound_value,
+        "the provider bound-value arm is not an explicit dependent variant",
     )
     goal = _record_block(model, "AnalysisGoalBody =")
-    bare_named_premise_id = (
-        "CanonicalMap<AnalysisNamedPremiseRequirement, AnalysisNamedPremiseId>" in goal
+    _require(
+        "AnalysisNamedPremiseBindingValue" in goal
+        and "AnalysisNamedPremiseBindingValue =" in model
+        and "AnalysisNamedPremiseId<P,r.kind>" in model,
+        "the goal binding carrier no longer fixes the direct profile and requirement kind",
     )
     construction_bindings = _definition_block(
         crypto,
-        "FiatShamirConstructionPremiseBindings(S: AnalysisSubjectTuple) =",
+        "FiatShamirConstructionPremiseBindings(\n    S: AnalysisSubjectTuple,",
         FENCE_END,
     )
-    unbound_construction_length = (
-        "AFKMemberKnowledgeQuestion(S, ell0)" in construction_bindings
-        and "ell0" not in construction_bindings.split("=", 1)[0]
+    _require(
+        "ell0: StatementLength(AnalysisStatementType(S))" in construction_bindings
+        and "AFKMemberKnowledgeQuestion(S, ell0)" in construction_bindings
+        and "FiatShamirConstructionPremiseBindings(S, ell0)" in crypto,
+        "the construction binding helper or its caller lost the statement-length binder",
     )
     _require(
-        generic_profile_free
-        and free_protocol_parameter
-        and bare_named_premise_id
-        and unbound_construction_length,
-        "the frozen round-two name-closure gaps drifted",
+        "AnalysisChallengeFreshLawCoordinate(S) =" in crypto
+        and "[challenges[S.challenge_ref].fresh_law]" in crypto
+        and "SchnorrFreshLawRef(S) =\n  the value of the leaf" in crypto,
+        "the fresh-law reference is no longer derived from the authenticated public-coin view",
     )
 
     return {
         "named_law_families": counts,
         "closed_schema_families": 2,
-        "displayed_signature_families": 7,
-        "concrete_hypothesis_argument_arities": concrete_signatures,
-        "remaining_gaps": [
-            "analysis-model.md:2125-2133 leaves P free in both generic law-family names",
-            "analysis-model.md:2145-2150 leaves Protocol free in the provider bound-value arm",
-            "analysis-model.md:2241-2245 and 3091-3094 use an unparameterized AnalysisNamedPremiseId carrier",
-            "cryptographic-properties.md:2362-2365 uses ell0 without binding it",
-            "the five concrete hypothesis declarations carry more canonical arguments than ExactNamedHypothesis<K> admits",
-        ],
+        "profile_and_kind_binders_closed": True,
+        "provider_arm_protocol_binder_closed": True,
+        "goal_binding_value_profile_and_kind_closed": True,
+        "construction_length_binder_closed": True,
+        "fresh_law_owner_leaf_closed": True,
+        "remaining_owner_name_gaps": [],
     }
 
 
@@ -280,7 +273,7 @@ def _constructor_review(pages: dict[str, str]) -> dict[str, Any]:
         ("AnalysisHypothesisContextBody", r"(?<![A-Za-z0-9_])AnalysisHypothesisContextBody\s*\{", "exact_named_premise_ids", 6),
         ("AnalysisSupportInstantiationBody", r"(?<![A-Za-z0-9_])AnalysisSupportInstantiationBody\s*\{", "exact_named_premise_ids", 5),
         ("AnalysisJudgmentRecordBody", r"(?<![A-Za-z0-9_])AnalysisJudgmentRecordBody\s*\{", "exact_named_premise_ids", 1),
-        ("AnalysisNamedPremiseBody", r"AnalysisNamedPremiseBody<[^>]+>\s*\{", "kind", 6),
+        ("AnalysisNamedPremiseBody", r"AnalysisNamedPremiseBody<[^>]+>\s*\{", "kind", 12),
     )
     metrics: dict[str, Any] = {}
     for name, expression, field, expected_count in specifications:
@@ -302,19 +295,7 @@ def _constructor_review(pages: dict[str, str]) -> dict[str, Any]:
         nodes.extend(_anonymous_nodes(relative, text))
     _require(len(nodes) == 31, "the anonymous hypothesis-node census drifted")
     missing = [f"{relative}:{line}" for relative, line, complete in nodes if not complete]
-    _require(
-        missing
-        == [
-            "docs-next/analysis/cryptographic-properties.md:5196",
-            "docs-next/analysis/cryptographic-properties.md:5364",
-            "docs-next/analysis/cryptographic-properties.md:6100",
-            "docs-next/analysis/cryptographic-properties.md:6102",
-            "docs-next/analysis/cryptographic-properties.md:6109",
-            "docs-next/analysis/cryptographic-properties.md:6112",
-            "docs-next/analysis/cryptographic-properties.md:6115",
-        ],
-        "the round-two incomplete-node set drifted",
-    )
+    _require(not missing, "an anonymous hypothesis-node display omits premises(goal)")
 
     model = pages["docs-next/analysis/analysis-model.md"]
     _require(
@@ -332,7 +313,7 @@ def _constructor_review(pages: dict[str, str]) -> dict[str, Any]:
     return {
         "body_constructors": metrics,
         "anonymous_hypothesis_nodes": len(nodes),
-        "nodes_with_premises_goal": len(nodes) - len(missing),
+        "nodes_with_premises_goal": len(nodes),
         "nodes_missing_premises_goal": missing,
         "judgment_helper_complete": True,
         "dag_union_helper_complete": True,
@@ -396,8 +377,10 @@ def _decision_review(pages: dict[str, str]) -> dict[str, Any]:
     crypto = pages["docs-next/analysis/cryptographic-properties.md"]
     required = (
         "PIRConstructionPremiseCoordinate(" in model,
-        "BoundProviderOutcomeCarrierMap(" in model,
-        "CanonicalMap<ProtocolOutcomeLane(Protocol), CanonicalValue<provider_carrier>>" in model,
+        "BoundProviderOutcomeCarrierMap<Protocol: ProtocolId>(" in model,
+        "CanonicalMap<ProtocolOutcomeLane(Protocol),\n                 AnalysisProviderLaneImage<provider_carrier>>" in model,
+        "whose value at a\n      lane is Image(_) exactly when" in model,
+        "OperationalCompletion" in model,
         "model_scope: FreshChallengeOnly" in crypto,
         crypto.count("model_scope: OracleModelOnly(oracle_model)") == 4,
         "A question over a Fiat--Shamir Protocol\nselects no such premise" in crypto,
@@ -411,7 +394,8 @@ def _decision_review(pages: dict[str, str]) -> dict[str, Any]:
         "selected_decisions": [
             "Fresh distribution is a FreshChallengeOnly named premise",
             "Fiat-Shamir uses separate construction or family sampler and oracle premises",
-            "provider outcome maps use the exact Protocol-qualified lane partition",
+            "provider outcome maps use Image or Unmodelled over the exact Protocol partition",
+            "whole-partition provider statements add operational completion",
             "provider requirements are separate from the relation-bound Fresh question",
             "scope failure is Refused before goal formation",
         ],
@@ -448,25 +432,60 @@ def _schnorr_review(pages: dict[str, str]) -> dict[str, Any]:
     bindings = _definition_block(
         crypto, "SchnorrNamedPremiseBindings(S: AnalysisSubjectTuple) =", "\n\nSchnorrExtractorPremiseBindings"
     )
-    incomplete_slots = [
-        slot
-        for slot in ("relation", "witness", "prover-state", "commit", "respond")
-        if f'"{slot}"' in bindings
-    ]
+    expected_constructors = (
+        "FreshPublicCoinDistributionPremise(",
+        "RelationPredicatePremise(S, SchnorrPremiseScope(S),",
+        "WitnessTypePremise(S, SchnorrPremiseScope(S),",
+        "ProverPrivateStatePremise(S,",
+        "HonestCommitPremise(S,",
+        "HonestRespondPremise(S,",
+    )
     _require(
-        incomplete_slots == ["relation", "witness", "prover-state", "commit", "respond"]
-        and "model_scope" not in bindings
-        and "AnalysisLawTerm {" not in bindings,
-        "the residual Schnorr helper shape drifted",
+        all(snippet in bindings for snippet in expected_constructors)
+        and bindings.count('"') >= 12,
+        "the relation-bound Schnorr helper no longer spells all six exact premise constructors",
+    )
+
+    extractor_bindings = _definition_block(
+        crypto,
+        "SchnorrExtractorPremiseBindings(S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) =",
+        "\n\nFiatShamirConstructionPremiseBindings",
+    )
+    _require(
+        extractor_bindings.count("SchnorrExtractorPremiseScope(S, Ext)") == 2
+        and "RelationPredicatePremise" in extractor_bindings
+        and "WitnessTypePremise" in extractor_bindings,
+        "the extractor question no longer forms its own two exact-subject premise identities",
+    )
+    extractor_scope = _definition_block(
+        crypto,
+        "SchnorrExtractorPremiseScope(S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) =",
+        "\n\nRelationPredicatePremise",
+    )
+    _require(
+        "SchnorrFixedExtractorWorksQuestion(S, Ext).exact_subjects" in extractor_scope,
+        "the extractor premise scope is detached from the consuming question",
     )
     construction_bindings = _definition_block(
         crypto,
-        "FiatShamirConstructionPremiseBindings(S: AnalysisSubjectTuple) =",
+        "FiatShamirConstructionPremiseBindings(\n    S: AnalysisSubjectTuple,",
         FENCE_END,
     )
     _require(
-        "AFKMemberKnowledgeQuestion(S, ell0)" in construction_bindings,
-        "the residual construction helper closure gap drifted",
+        "ell0: StatementLength(AnalysisStatementType(S))" in construction_bindings
+        and "AFKMemberKnowledgeQuestion(S, ell0)" in construction_bindings
+        and "SamplerAdequacyFormOf(S.transcript_construction_id)" in construction_bindings,
+        "the construction helper no longer binds length or derives its sampler form",
+    )
+
+    family_bindings = _definition_block(
+        crypto, "FiatShamirFamilyPremiseBindings(F) =", FENCE_END
+    )
+    _require(
+        "SamplerAdequacyFormOf(F)" in family_bindings
+        and "FiatShamirFamilySamplerPremise" in family_bindings
+        and "FiatShamirFamilyOracleProcessPremise" in family_bindings,
+        "the family helper no longer spells both exact premise identities",
     )
 
     candidate_expected = _json(
@@ -495,9 +514,126 @@ def _schnorr_review(pages: dict[str, str]) -> dict[str, Any]:
             "respond_decision": 2,
             "respond_recipe_node": 0,
         },
-        "bindings_without_exact_premise_bodies": incomplete_slots,
-        "construction_helper_binds_length_parameter": False,
-        "goal_identities_form_exactly": False,
+        "exact_relation_bound_constructors": len(expected_constructors),
+        "extractor_question_owns_scope": True,
+        "extractor_exact_premises": 2,
+        "construction_helper_binds_length_parameter": True,
+        "construction_sampler_form_derived": True,
+        "family_sampler_form_derived": True,
+        "owner_text_goal_identities_form_exactly": True,
+    }
+
+
+def _hypothesis_schema_review(pages: dict[str, str]) -> dict[str, Any]:
+    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
+    property_schema = _definition_block(
+        crypto,
+        "NamedHypothesisArgumentSchema<AnalysisCryptographicPropertyLanguageProfileId, K> =",
+        "\n\nPremiseIdOf",
+    )
+    transport_schema = _definition_block(
+        crypto,
+        "NamedHypothesisArgumentSchema<AnalysisAFKTransportLanguageProfileId, K> =",
+        "\n\nSamplerAdequacyHypothesis",
+    )
+    property_rows = {
+        "FreshPublicCoinDistribution": (
+            "coordinate: PIRPublicCoinLawCoordinate",
+            "distribution_model: AnalysisDistributionProfileId",
+        ),
+        "FiatShamirSamplerAdequacy": (
+            "coordinate: PIRConstructionPremiseCoordinate(_, SamplerAdequacy)",
+            "oracle_model: AnalysisDistributionProfileId",
+            "form: SamplerAdequacyForm",
+        ),
+        "FiatShamirOracleProcess": (
+            "coordinate: PIRConstructionPremiseCoordinate(_, OracleProcess)",
+            "oracle_model: AnalysisDistributionProfileId",
+        ),
+        "OperationalCompletion": (
+            "coordinate: PIRProtocolOutcomePartitionCoordinate",
+            "provider: AnalysisProviderDeclaration<AnalysisCryptographicPropertyLanguageProfileId>",
+        ),
+        "HonestCommit or K = HonestRespond": (
+            "coordinate: PIRPlanRecipeCoordinate",
+        ),
+    }
+    for kind, fields in property_rows.items():
+        marker = property_schema.find(f"when K = {kind}")
+        _require(marker >= 0, f"property schema lost its {kind} row")
+        row = property_schema[property_schema.rfind("[", 0, marker) : marker]
+        positions = [row.find(field) for field in fields]
+        _require(
+            all(position >= 0 for position in positions)
+            and positions == sorted(positions)
+            and fields[0].startswith("coordinate:"),
+            f"property schema {kind} no longer has coordinate-first exact arguments",
+        )
+    _require(
+        property_schema.count("when K =") == 5,
+        "the property hypothesis schema gained an unreviewed row",
+    )
+
+    transport_rows = {
+        "FiatShamirSamplerAdequacy": (
+            "coordinate: AnalysisFamilyPremiseCoordinate(_, SamplerAdequacy)",
+            "oracle_model: AnalysisDistributionProfileId",
+            "form: SamplerAdequacyForm",
+        ),
+        "FiatShamirOracleProcess": (
+            "coordinate: AnalysisFamilyPremiseCoordinate(_, OracleProcess)",
+            "oracle_model: AnalysisDistributionProfileId",
+        ),
+    }
+    for kind, fields in transport_rows.items():
+        marker = transport_schema.find(f"when K = {kind}")
+        _require(marker >= 0, f"transport schema lost its {kind} row")
+        row = transport_schema[transport_schema.rfind("[", 0, marker) : marker]
+        positions = [row.find(field) for field in fields]
+        _require(
+            all(position >= 0 for position in positions)
+            and positions == sorted(positions)
+            and fields[0].startswith("coordinate:"),
+            f"transport schema {kind} no longer has coordinate-first exact arguments",
+        )
+    _require(
+        transport_schema.count("when K =") == 2,
+        "the transport hypothesis schema gained an unreviewed row",
+    )
+
+    declaration_arities = {
+        "FreshSamplingHypothesis": 2,
+        "ConstructionSamplerAdequacyHypothesis": 3,
+        "ConstructionOracleProcessHypothesis": 2,
+        "OperationalCompletionHypothesis": 2,
+        "HonestCommitHypothesis": 1,
+        "HonestRespondHypothesis": 1,
+        "SamplerAdequacyHypothesis": 3,
+        "OracleProcessHypothesis": 2,
+    }
+    declaration_order = tuple(declaration_arities)
+    for index, name in enumerate(declaration_order):
+        start = crypto.find(f"{name} =")
+        _require(start >= 0, f"hypothesis declaration is absent: {name}")
+        end = crypto.find("\n\n", start)
+        _require(end > start, f"hypothesis declaration is not closed: {name}")
+        block = re.sub(r"\s+", " ", crypto[start:end])
+        _require(
+            "ExactNamedHypothesis<" in block
+            and "canonical arguments are [ coordinate:" in block,
+            f"{name} is not an exact coordinate-first hypothesis declaration",
+        )
+    _require(
+        crypto.count("ExactNamedHypothesis<Analysis") == len(declaration_arities),
+        "the concrete hypothesis declaration census drifted",
+    )
+    return {
+        "property_schema_rows": len(property_rows),
+        "transport_schema_rows": len(transport_rows),
+        "hypothesis_declarations": len(declaration_arities),
+        "argument_arities": declaration_arities,
+        "all_coordinate_first": True,
+        "free_or_extra_arguments": [],
     }
 
 
@@ -549,7 +685,7 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
         old = json.loads(_old_bytes(relative))
         current = _json(relative)
         _require(
-            old["revision"] == 0 and current["revision"] == 1,
+            old["revision"] == 1 and current["revision"] == 1,
             "a profile revision transition drifted",
         )
         old_definitions = {(row["kind"], row["name"]): row for row in old["definitions"]}
@@ -562,15 +698,9 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
     _require(
         observed_definition_bumps
         == {
-            "analysis-kernel": ["common-analysis-domain-v0"],
-            "analysis-cryptographic-property": [
-                "cryptographic-property-body-v0",
-                "property-core-v0",
-            ],
-            "analysis-afk-transport": [
-                "afk-transport-body-v0",
-                "afk-application-v0",
-            ],
+            "analysis-kernel": [],
+            "analysis-cryptographic-property": [],
+            "analysis-afk-transport": [],
         },
         "the profile-law revision set drifted",
     )
@@ -620,7 +750,7 @@ def _publication_review(pages: dict[str, str]) -> dict[str, Any]:
     _require(cone == expected_cone, "the Analysis identity-rotation cone drifted")
     return {
         "catalog_sequence_equal": sequence_equal,
-        "profile_revision_bumps": 3,
+        "profile_revision_bumps_in_review_range": 0,
         "observed_definition_bumps": observed_definition_bumps,
         "compiler_agreement_current": True,
         "compiler_agreement_base": True,
@@ -662,9 +792,300 @@ def _class_fields(tree: ast.Module, selected: Iterable[str]) -> dict[str, list[s
     return result
 
 
+RELATION_GOAL_DIGEST = "79dcc80fff8307a7d2ab79ba523220ce0e17337bef2af0f6ba19fbe6cb17ccb4"
+FAMILY_GOAL_DIGEST = "9c49308e1e89c5da7f01b783dd323428fb71470fe3acfd9a31d021d47ca1b2f2"
+
+
+def _load_migrated_analysis() -> Any:
+    package = ROOT / "evaluation/k3-analysis-closure"
+    path = package / "reference_model.py"
+    sys.path.insert(0, str(package))
+    try:
+        return _load_module("_analysis_premise_round3_migrated", path)
+    finally:
+        sys.path.pop(0)
+
+
+def _independent_id_datum(module: Any, identifier: Any) -> Any:
+    return module.k1.BytesValue(identifier.internal_reference())
+
+
+def _independent_kind_body(module: Any, kind: Any) -> Any:
+    ordinal = tuple(module.AnalysisNamedPremiseKind).index(kind)
+    return module.k1.DatumVariant(ordinal, module.k1.UNIT)
+
+
+def _independent_process_body(module: Any, process: Any) -> Any:
+    ordinal = tuple(module.AnalysisPremiseProcessKind).index(process)
+    return module.k1.DatumVariant(ordinal, module.k1.UNIT)
+
+
+def _independent_coordinate_body(module: Any, coordinate: Any) -> Any:
+    k1 = module.k1
+    name = type(coordinate).__name__
+    if name == "PIRPublicCoinLawCoordinate":
+        return k1.DatumVariant(0, k1.DatumRecord(((0, coordinate.declaration_ref),)))
+    if name == "AnalysisFamilyPremiseCoordinate":
+        return k1.DatumVariant(
+            1,
+            k1.DatumRecord(
+                (
+                    (0, _independent_id_datum(module, coordinate.family_definition_id)),
+                    (1, _independent_process_body(module, coordinate.process_kind)),
+                )
+            ),
+        )
+    if name == "PIRConstructionPremiseCoordinate":
+        return k1.DatumVariant(
+            2,
+            k1.DatumRecord(
+                (
+                    (0, _independent_id_datum(module, coordinate.transcript_construction_id)),
+                    (1, _independent_process_body(module, coordinate.process_kind)),
+                )
+            ),
+        )
+    if name == "PIRProtocolOutcomePartitionCoordinate":
+        return k1.DatumVariant(
+            3,
+            k1.DatumRecord(((0, _independent_id_datum(module, coordinate.protocol_id)),)),
+        )
+    if name == "RelationsModelEvaluatorCoordinate":
+        return k1.DatumVariant(
+            4,
+            k1.DatumRecord(
+                ((0, _independent_id_datum(module, coordinate.relation_semantic_model_id)),)
+            ),
+        )
+    if name == "RelationsWitnessPlanJoinCoordinate":
+        return k1.DatumVariant(
+            5,
+            k1.DatumRecord(
+                (
+                    (0, _independent_id_datum(module, coordinate.relation_interface_id)),
+                    (1, k1.Nat(coordinate.private_witness_ordinal)),
+                    (2, _independent_id_datum(module, coordinate.plan_witness_binding_id)),
+                    (3, k1.Nat(coordinate.witness_edge_ordinal)),
+                )
+            ),
+        )
+    if name == "PIRPlanStateCoordinate":
+        return k1.DatumVariant(
+            6,
+            k1.DatumRecord(
+                (
+                    (0, _independent_id_datum(module, coordinate.prover_plan_id)),
+                    (1, k1.Nat(coordinate.strategy_state_slot_ordinal)),
+                )
+            ),
+        )
+    if name == "PIRPlanRecipeCoordinate":
+        return k1.DatumVariant(
+            7,
+            k1.DatumRecord(
+                (
+                    (0, _independent_id_datum(module, coordinate.prover_plan_id)),
+                    (1, k1.Nat(coordinate.prover_decision_point_ordinal)),
+                    (2, k1.Nat(coordinate.recipe_node_ordinal)),
+                )
+            ),
+        )
+    raise ReviewError(f"independent premise encoder does not know {name}")
+
+
+def _independent_law_term_body(module: Any, term: Any) -> Any:
+    return module.k1.DatumRecord(
+        (
+            (0, term.law_ref),
+            (1, module.k1.DatumSeq(tuple(term.canonical_arguments))),
+        )
+    )
+
+
+def _independent_bound_body(module: Any, bound: Any) -> Any:
+    k1 = module.k1
+    name = type(bound).__name__
+    if name == "BoundModel":
+        return k1.DatumVariant(
+            0,
+            k1.DatumRecord(
+                (
+                    (0, _independent_id_datum(module, bound.semantic_subject_ref)),
+                    (1, _independent_law_term_body(module, bound.law_term)),
+                )
+            ),
+        )
+    if name == "BoundHypothesis":
+        return k1.DatumVariant(1, _independent_law_term_body(module, bound.law_term))
+    raise ReviewError(f"independent premise encoder does not know {name}")
+
+
+def _independent_source_body(module: Any, source: Any) -> Any:
+    k1 = module.k1
+    name = type(source).__name__
+    if name == "OwnerSemanticCoordinate":
+        return k1.DatumVariant(
+            0, _independent_id_datum(module, source.semantic_subject_ref)
+        )
+    if name == "CandidateOwnerCoordinate":
+        return k1.DatumVariant(
+            1, _independent_id_datum(module, source.semantic_subject_ref)
+        )
+    if name == "FamilyHypothesisSource":
+        return k1.DatumVariant(2, source.family_coordinate)
+    raise ReviewError(f"independent premise encoder does not know {name}")
+
+
+def _independent_scope_body(module: Any, scope: Any) -> Any:
+    k1 = module.k1
+    name = type(scope).__name__
+    if name == "FreshChallengeOnly":
+        return k1.DatumVariant(0, k1.UNIT)
+    if name == "OracleModelOnly":
+        return k1.DatumVariant(
+            1, _independent_id_datum(module, scope.distribution_profile_id)
+        )
+    if name == "ExactSubjectsOnly":
+        return k1.DatumVariant(
+            2,
+            k1.DatumSeq(
+                tuple(_independent_id_datum(module, item) for item in scope.exact_subjects)
+            ),
+        )
+    if name == "RebindRequired":
+        return k1.DatumVariant(3, k1.UNIT)
+    raise ReviewError(f"independent premise encoder does not know {name}")
+
+
+def _independent_premise_body(module: Any, body: Any) -> Any:
+    k1 = module.k1
+    evidence = tuple(module.AnalysisPremiseEvidenceDepth).index(body.evidence_depth)
+    return k1.DatumRecord(
+        (
+            (0, _independent_kind_body(module, body.kind)),
+            (1, _independent_coordinate_body(module, body.coordinate)),
+            (2, _independent_bound_body(module, body.bound_model_or_hypothesis)),
+            (3, _independent_source_body(module, body.source)),
+            (4, k1.DatumVariant(evidence, k1.UNIT)),
+            (5, _independent_scope_body(module, body.model_scope)),
+        )
+    )
+
+
+def _independent_requirement_body(module: Any, requirement: Any) -> Any:
+    return module.k1.DatumRecord(
+        (
+            (0, module.k1.Symbol(requirement.slot)),
+            (1, _independent_kind_body(module, requirement.kind)),
+            (2, _independent_coordinate_body(module, requirement.coordinate)),
+        )
+    )
+
+
+def _independent_profiled_id(
+    module: Any, subject_kind: str, profile_id: Any, body: Any
+) -> Any:
+    return module.k1.profiled_content_id(
+        subject_kind,
+        profile_id,
+        body,
+        semantic_regime=module.k1.SEMANTIC_REGIME_ID,
+    )
+
+
+def _registry_body(module: Any, identifier: Any, subject_kind: str) -> Any:
+    entry = module._ANALYSIS_FORMATION_REGISTRY.get(identifier.internal_reference())
+    _require(entry is not None and entry[0] == subject_kind, f"missing formed {subject_kind} body")
+    return entry[2]
+
+
+def _registry_identifier(module: Any, subject_kind: str, digest: str) -> Any:
+    matches = [
+        entry[3]
+        for entry in module._ANALYSIS_FORMATION_REGISTRY.values()
+        if entry[0] == subject_kind and entry[3].digest.hex() == digest
+    ]
+    _require(len(matches) == 1, f"the frozen {subject_kind} identity is absent or ambiguous")
+    return matches[0]
+
+
+def _independent_goal_reconstruction(
+    module: Any, observed_goal_id: Any, profile_id: Any
+) -> dict[str, Any]:
+    k1 = module.k1
+    goal = _registry_body(module, observed_goal_id, "analysis.goal")
+    question = _registry_body(module, goal.question_id, "analysis.question")
+    question_datum = k1.DatumRecord(
+        (
+            (0, k1.profile_declaration_ref_datum(question.family)),
+            (
+                1,
+                k1.DatumSeq(
+                    tuple(_independent_id_datum(module, item) for item in question.exact_subjects)
+                ),
+            ),
+            (2, question.context),
+            (3, question.family_payload),
+            (
+                4,
+                k1.DatumSeq(
+                    tuple(
+                        _independent_requirement_body(module, item)
+                        for item in question.named_premise_requirements
+                    )
+                ),
+            ),
+        )
+    )
+    question_id = _independent_profiled_id(
+        module, "analysis.question", profile_id, question_datum
+    )
+    _require(question_id == goal.question_id, "independent question identity disagrees")
+
+    rebuilt_bindings = []
+    premise_digests: dict[str, str] = {}
+    for binding in goal.named_premise_bindings:
+        premise = _registry_body(module, binding.premise_id, "analysis.named-premise")
+        premise_id = _independent_profiled_id(
+            module,
+            "analysis.named-premise",
+            profile_id,
+            _independent_premise_body(module, premise),
+        )
+        _require(premise_id == binding.premise_id, "independent premise identity disagrees")
+        premise_digests[binding.requirement.slot] = premise_id.digest.hex()
+        rebuilt_bindings.append(
+            k1.DatumRecord(
+                (
+                    (0, _independent_requirement_body(module, binding.requirement)),
+                    (1, _independent_id_datum(module, premise_id)),
+                )
+            )
+        )
+    goal_datum = k1.DatumRecord(
+        (
+            (0, _independent_id_datum(module, question_id)),
+            (1, k1.DatumSeq(tuple(rebuilt_bindings))),
+        )
+    )
+    rebuilt_goal_id = _independent_profiled_id(
+        module, "analysis.goal", profile_id, goal_datum
+    )
+    _require(rebuilt_goal_id == observed_goal_id, "independent goal identity disagrees")
+    return {
+        "question_digest": question_id.digest.hex(),
+        "goal_digest": rebuilt_goal_id.digest.hex(),
+        "premise_digests": premise_digests,
+        "used_migrated_identity_former": False,
+        "used_migrated_body_encoder": False,
+    }
+
+
 def _package_impact_review() -> dict[str, Any]:
     model_path = ROOT / "evaluation/k3-analysis-closure/reference_model.py"
     tests_path = ROOT / "evaluation/k3-analysis-closure/tests/test_reference_model.py"
+    model_text = model_path.read_text(encoding="utf-8")
+    tests_text = tests_path.read_text(encoding="utf-8")
     selected = (
         "AnalysisQuestionBodyV0",
         "AnalysisGoalBodyV0",
@@ -673,7 +1094,7 @@ def _package_impact_review() -> dict[str, Any]:
         "AnalysisSupportInstantiationBodyV0",
         "AnalysisJudgmentRecordBodyV0",
     )
-    fields = _class_fields(ast.parse(model_path.read_text(encoding="utf-8")), selected)
+    fields = _class_fields(ast.parse(model_text), selected)
     required = {
         "AnalysisQuestionBodyV0": "named_premise_requirements",
         "AnalysisGoalBodyV0": "named_premise_bindings",
@@ -686,51 +1107,159 @@ def _package_impact_review() -> dict[str, Any]:
     missing = {
         name: field for name, field in required.items() if field not in fields[name]
     }
-    _require(missing == required, "the frozen reference-model field omissions drifted")
+    _require(not missing, "a migrated Analysis body class is missing its premise field")
 
     model_calls = _call_counts(model_path, selected)
     test_calls = _call_counts(tests_path, selected)
     combined = {name: model_calls[name] + test_calls[name] for name in selected}
-    expected_calls = {
-        "AnalysisQuestionBodyV0": 8,
-        "AnalysisGoalBodyV0": 14,
-        "AnalysisHypothesisNodeV0": 5,
-        "AnalysisHypothesisContextBodyV0": 4,
-        "AnalysisSupportInstantiationBodyV0": 1,
-        "AnalysisJudgmentRecordBodyV0": 1,
-    }
-    _require(combined == expected_calls, "the affected constructor-call census drifted")
+    _require(
+        combined
+        == {
+            "AnalysisQuestionBodyV0": 8,
+            "AnalysisGoalBodyV0": 14,
+            "AnalysisHypothesisNodeV0": 1,
+            "AnalysisHypothesisContextBodyV0": 1,
+            "AnalysisSupportInstantiationBodyV0": 1,
+            "AnalysisJudgmentRecordBodyV0": 1,
+        },
+        "the migrated constructor-call census drifted",
+    )
+
+    module = _load_migrated_analysis()
+    relation_goal = _registry_identifier(module, "analysis.goal", RELATION_GOAL_DIGEST)
+    # The family goal is lazy in the migrated instrument.  Invoke its public
+    # constructor only to obtain the observed comparison value and populate
+    # the body registry; the reconstruction below uses neither that constructor
+    # nor the migrated body encoders or identity former.
+    family_goal = module.family_goal_id(
+        module.SELECTED_AFK_FAMILY, "target-adaptive-knowledge-q-lt-N"
+    )
+    _require(
+        family_goal.digest.hex() == FAMILY_GOAL_DIGEST,
+        "the frozen migrated family goal identity drifted",
+    )
+    relation_reconstruction = _independent_goal_reconstruction(
+        module, relation_goal, module.ANALYSIS_PROPERTY_PROFILE_ID
+    )
+    family_reconstruction = _independent_goal_reconstruction(
+        module, family_goal, module.ANALYSIS_TRANSPORT_PROFILE_ID
+    )
+
+    k2_tree = ast.parse(_read("evaluation/k2-protocol-fiat-shamir/reference_model.py"))
+    k2_fields = _class_fields(
+        k2_tree, ("PublicCoinChallengeProjection", "TranscriptConstruction")
+    )
+    _require(
+        k2_fields["PublicCoinChallengeProjection"]
+        == ["challenge_coordinate", "domain_coordinate", "challenge_domain"],
+        "the imported public-coin projection field set drifted",
+    )
+    fresh_helper = _definition_block(
+        model_text,
+        "def _schnorr_public_coin_law_coordinate(",
+        "\n\ndef schnorr_named_premise_requirements",
+    )
+    _require(
+        "projection.challenge_coordinate" in fresh_helper
+        and "fresh_law" not in fresh_helper,
+        "the frozen Fresh coordinate proxy drifted",
+    )
+    _require(
+        "max_attempts" in k2_fields["TranscriptConstruction"]
+        and "challenge_rules" not in k2_fields["TranscriptConstruction"]
+        and "construction.max_attempts == 1" in model_text,
+        "the frozen construction sampler-form proxy drifted",
+    )
+
+    property_catalog = _definition_block(
+        model_text,
+        "ANALYSIS_PROPERTY_DECLARATION_CATALOGS =",
+        "\n\nANALYSIS_TRANSPORT_DECLARATION_CATALOGS =",
+    )
+    _require(
+        "operational-completion-hypothesis-v0" not in property_catalog
+        and 'k1.Symbol("operational-completion-hypothesis")' in tests_text,
+        "the frozen operational-completion declaration gap drifted",
+    )
 
     finite = _read("evaluation/finite-cover-analysis/tests/test_finite_cover.py")
-    joined = _read("evaluation/k3-integrated-closure/reference_model.py")
-    recursive = _read("evaluation/recursive-composition-boundary/reference_model.py")
-    publication = _read("evaluation/semantic-profile-publication/tests/test_publication.py")
+    joined = _read("evaluation/k3-integrated-closure/tests/test_reference_model.py")
     _require(
-        "k3-analysis-closure" in finite
-        and "k3-analysis-closure" in joined
-        and '"analysis.support-instantiation"' in recursive
-        and '"analysis.judgment-record"' in recursive
-        and "published-identities.json" in publication,
-        "a dependent migration surface drifted",
+        "exact_named_premise_ids" in finite
+        and "named_premise_bindings" in finite
+        and "named_premise_bindings" in joined
+        and "intake_analysis_named_premises" in joined
+        and "intake_analysis_named_premises" in finite,
+        "a dependent migrated premise surface drifted",
     )
     return {
         "reference_body_classes_missing_fields": missing,
         "affected_reference_constructor_calls": combined,
-        "direct_check": "research.property-analysis",
-        "dependent_checks": [
-            "research.finite-cover",
-            "research.joined-semantic-boundary",
-            "research.recursive-composition-boundary",
-            "research.profile-publication",
+        "independent_relation_goal": relation_reconstruction,
+        "independent_family_goal": family_reconstruction,
+        "owner_determined_premise_identities": False,
+        "owner_determined_family_goal": True,
+        "owner_determined_relation_fresh_goal": False,
+        "remaining_refreeze_inputs": [
+            "the authenticated PublicCoinView fresh_law declaration leaf for the migrated Schnorr Protocol",
+            "identity-bearing construction challenge_rules and their per-rule maximum_draws values",
+            "published property-profile ProviderDeclaration and ClosedProviderCarrier declarations",
+            "an exact property-profile OperationalCompletionHypothesis declaration reference",
         ],
-        "encoding_surfaces": [
-            "analysis schema descriptors and dispatch",
-            "Analysis exact-body dataclasses and encoders",
-            "hypothesis node/context premise-ID derivation",
-            "constructor-profile predecessor extraction",
-            "question, goal, support, and judgment helpers",
-        ],
-        "exact_binding_values_determined": False,
+    }
+
+
+def _lane_and_completion_review(pages: dict[str, str]) -> dict[str, Any]:
+    model = pages["docs-next/analysis/analysis-model.md"]
+    crypto = pages["docs-next/analysis/cryptographic-properties.md"]
+    pir = _read("docs-next/pir/interactive-core.md")
+    probe = _json("evaluation/analysis-premise-intake-probe/fixture.json")
+    probe_expected = _json("evaluation/analysis-premise-intake-probe/expected-findings.json")
+    migrated = _read("evaluation/k3-analysis-closure/reference_model.py")
+    migrated_tests = _read("evaluation/k3-analysis-closure/tests/test_reference_model.py")
+    lane_names = [
+        "Accepted",
+        "Rejected",
+        "Aborted",
+        "InterpretationFailed",
+        "StrategyStopped",
+        "OperationalNoncompletion",
+    ]
+    _require(
+        "exactly the constructor names of the PIR outcome" in model
+        and all(name in pir for name in lane_names)
+        and probe["protocol_outcome_lanes"] == lane_names
+        and all(f'= "{name}"' in migrated for name in lane_names),
+        "the six provider-lane names disagree",
+    )
+    _require(
+        "AnalysisProviderLaneImage<carrier> =\n    Image(CanonicalValue<carrier>)\n  | Unmodelled" in model
+        and "Image(_) exactly when" in model
+        and "provider lane image disagrees with modelled_lanes" in migrated
+        and "API-M-PROVIDER-LANE-IMAGE" in json.dumps(probe_expected),
+        "the Image/Unmodelled law is not shared by the reviewed surfaces",
+    )
+    _require(
+        "OperationalCompletionHypothesis =" in crypto
+        and "OperationalCompletionPremise(" in crypto
+        and "OPERATIONAL_COMPLETION = \"OperationalCompletion\"" in migrated,
+        "the tenth kind is absent from an owner or migrated surface",
+    )
+    property_catalog = _definition_block(
+        migrated,
+        "ANALYSIS_PROPERTY_DECLARATION_CATALOGS =",
+        "\n\nANALYSIS_TRANSPORT_DECLARATION_CATALOGS =",
+    )
+    exact_declaration_present = "operational-completion-hypothesis-v0" in property_catalog
+    arbitrary_test_law = 'k1.Symbol("operational-completion-hypothesis")' in migrated_tests
+    _require(not exact_declaration_present and arbitrary_test_law, "the frozen completion-law mismatch drifted")
+    return {
+        "lane_names": lane_names,
+        "lane_image_law_shared": True,
+        "tenth_kind_shared": True,
+        "migrated_exact_completion_declaration_present": exact_declaration_present,
+        "migrated_test_uses_arbitrary_completion_law_symbol": arbitrary_test_law,
+        "cross_surface_consistent": False,
     }
 
 
@@ -775,23 +1304,25 @@ def evaluate() -> dict[str, Any]:
         "intake": _intake_review(pages),
         "decision_fidelity": _decision_review(pages),
         "schnorr": _schnorr_review(pages),
+        "hypothesis_argument_schemas": _hypothesis_schema_review(pages),
         "publication": _publication_review(pages),
         "package_impact": _package_impact_review(),
+        "lane_and_completion": _lane_and_completion_review(pages),
         "predecessor_probe": _probe_review(),
     }
     review_findings = [
-        Finding("name-closure", "CannotAnswer", "F0V2D1-C-NAME-CLOSURE"),
+        Finding("name-closure", "Affirmative", "F0V2D1-A-NAME-CLOSURE"),
         Finding(
             "constructor-consistency",
-            "CannotAnswer",
-            "F0V2D1-C-CONSTRUCTOR-CONSISTENCY",
+            "Affirmative",
+            "F0V2D1-A-CONSTRUCTOR-CONSISTENCY",
         ),
         Finding("intake-soundness", "Affirmative", "F0V2D1-A-INTAKE-SOUNDNESS"),
         Finding("decision-fidelity", "Affirmative", "F0V2D1-A-DECISION-FIDELITY"),
         Finding(
             "schnorr-coordinate-formation",
-            "CannotAnswer",
-            "F0V2D1-C-SCHNORR-BINDINGS",
+            "Affirmative",
+            "F0V2D1-A-SCHNORR-BINDINGS",
         ),
         Finding(
             "profile-manifest-closure",
@@ -800,8 +1331,18 @@ def evaluate() -> dict[str, Any]:
         ),
         Finding(
             "existing-package-refreeze",
-            "CannotAnswer",
-            "F0V2D1-C-REFREEZE-INPUTS",
+            "Negative",
+            "F0V2D1-N-MIGRATED-IDENTITY-INPUTS",
+        ),
+        Finding(
+            "hypothesis-argument-schema-closure",
+            "Affirmative",
+            "F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS",
+        ),
+        Finding(
+            "provider-lane-and-completion-consistency",
+            "Negative",
+            "F0V2D1-N-MIGRATED-COMPLETION-LAW",
         ),
     ]
     supporting = [
@@ -859,7 +1400,8 @@ def evaluate() -> dict[str, Any]:
             "Static name and constructor checks are not an Analysis implementation or mechanized proof.",
             "Publication compiler agreement is not evidence that the owner text is semantically closed.",
             "The finite Schnorr coordinates establish no relation truth, Plan honesty, theorem, or cryptographic property.",
-            "The migration inventory does not implement or validate the required Analysis identity rotation.",
+            "Independent identity reconstruction checks canonical formation of the migrated bodies, not that their semantic inputs match the owner text.",
+            "The negative migration findings do not imply that an unformed provider premise is false.",
         ],
     }
 
