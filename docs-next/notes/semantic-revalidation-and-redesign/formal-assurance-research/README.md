@@ -104,6 +104,7 @@ F0  ideal assurance architecture and current-design falsification
   -> B2D2   Fresh completed-record schema               [complete, schema only]
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
+  -> F0-V2B2D3 six views for the integrated carriers    [complete, Affirmative]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -520,6 +521,13 @@ provider, extraction tool, or durable schema.
   (eleven profiles incremental to the common candidate, sixteen combined).
   The candidate packets are exact proposals, not owner text; the original
   obligations stay `CannotAnswer` until an owner adopts or rejects them.
+- [`f0v2b2d3-integrated-six-view-projections.md`](f0v2b2d3-integrated-six-view-projections.md)
+  derives all six normalized owner views for the five integrated carriers on
+  typed and cold paths: thirty bodies agree and round-trip over a complete
+  universe of 8,402 leaves, and rerunning the provider-observable checker
+  against the full six-view universe closes all forty operational owner-view
+  gaps (sourced observables 32 to 72), leaving sixteen operational semantic
+  and provider gaps and the five property premises; aggregate `Affirmative`.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
