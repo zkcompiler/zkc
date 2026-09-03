@@ -1142,3 +1142,233 @@ work.
 - The brief intentionally leaves the round-three manifest claim to Main; this
   lane did not edit it. The workflow's private-status append was also not made
   because the brief expressly forbids writes outside this clone.
+
+## Round five
+
+Round five re-runs the seven round-four questions and adds reference-leaf
+closure and static-view law-field selection. The frozen result is eight
+affirmative findings and one `CannotAnswer`:
+
+| Question | Round-five finding |
+|---|---|
+| decision fidelity | `Affirmative/F0V2C1-A-DECISION-FIDELITY` |
+| Terminal contract | `Affirmative/F0V2C1-A-TERMINAL-CONTRACT` |
+| public-coin graph | `Affirmative/F0V2C1-A-PCGRAPH-TRANSFER` |
+| owner-name closure | `Affirmative/F0V2C1-A-OWNER-CLOSURE` |
+| manifest closure | `Affirmative/F0V2C1-A-MANIFEST-CLOSURE` |
+| publication compilers | `Affirmative/F0V2C1-A-PUBLICATION-COMPILERS` |
+| family-body closure | `Affirmative/F0V2C1-A-FS-BODY-CLOSURE` |
+| reference-leaf closure | `CannotAnswer/F0V2C1-C-PIR-REFERENCE-CLOSURE` |
+| static-view law-field selection | `Affirmative/F0V2C1-A-STATIC-VIEW-LAW-SELECTION` |
+
+The aggregate is
+`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`, with only
+`pir-reference-closure` blocking. The round-four answers do not change.
+
+### Reference-leaf closure
+
+The common union at `docs-next/pir/interactive-core.md:2251-2256` contains all
+fourteen Core-local dense-ordinal reference types, `ValueRef`, and
+`ProtocolDeclarationRef<K>` only for the nine declaration kinds listed at
+lines 111-118. Its body at lines 2258-2262 delegates those three classes to
+the dense ordinal, `ValueRefBody`, and `ModuleDeclarationRefBody` encodings.
+`PIRProfileLawReference` and `AdmittedModuleEffect` have separate atomic arms,
+and a portable algorithm identity closes to its exact byte identity.
+
+One family-view leaf is outside that closed union. The canonical-framed page
+recognizes `ProtocolDeclarationRef<"pir.fs-application-domain">` at lines
+68-71 and uses it as `TranscriptDeclarationViewBody.application_domain` at
+line 1276. The kind is not among the nine Interaction Section 2 kinds, so the
+value is not a `PIRReference`; it is also neither a
+`PIRProfileLawReference` nor an `AdmittedModuleEffect`. It therefore falls
+outside every arm of `PIRViewAtomicBoundary` displayed at Interaction line
+2264-2267. `ModuleDeclarationRefBody` could encode the reference, but the
+declared boundary never reaches that delegation. No second uncovered leaf was
+found.
+
+### Static-view law-field selection
+
+All law-valued fields in the three profiles have exactly one table entry:
+
+| Profile | Displayed fields | Table entries | Imported entries | New declarations | Pre-existing ordinals checked |
+|---|---:|---:|---:|---:|---:|
+| Interaction | 5 | 5 | 0 | 3 | 10 |
+| canonical-framed Fiat--Shamir | 13 | 13 | 2 | 2 | 5 |
+| duplex-sponge Fiat--Shamir | 17 | 17 | 2 | 4 | 5 |
+| total | 35 | 35 | 4 | 9 | 20 |
+
+Every selected coordinate names one `pir.semantic-law` declaration at a
+determinate catalog ordinal. Each of the four imported Interaction laws has a
+matching declaration dependency on the consuming execution-view schema. No
+pre-existing law moved from its prior ordinal.
+
+The nine new selectors occur exactly once inside their selected fragments:
+
+| Owner page | Declaration selectors and lines |
+|---|---|
+| `interactive-core.md` | `VisibleHistory` 1232; `ProverView` 1274; `ReplayRun` 2102 |
+| `fiat-shamir.md` | protocol execution 998; replay 1023 |
+| `duplex-sponge-fiat-shamir.md` | protocol execution 644; replay 657; prover-required prefix 675; same-Core construction 729 |
+
+The three manifests are at profile revision 2. Their new law declarations
+remain at declaration revision 0; the schemas and schema-resolution law whose
+selected source changed are at declaration revision 1. Across all eight
+migrated manifests, 116 declarations and 55 subjects resolve, the two
+family-local declaration components remain twelve nodes and twenty internal
+edges, and the selected revision census is 21 transitions plus 49 new
+revision-zero declarations.
+
+### Holdout re-adjudication
+
+The holdout package is re-pinned to the three changed owner pages and the
+current migration record, and its owner-section citations are refreshed. All
+eight rows agree with both comparison sources: five fit, three break, none
+bend, and none disagree. The represented WHIR and WARPfold frontiers still
+produce no `Unknown` claim state and no verdict change. The aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED` because every row has a frozen
+verdict.
+
+The canonical family-view reference defect is also recorded in that package
+as `CannotAnswer/F0V2C2-C-FAMILY-VIEW-REFERENCE-BOUNDARY`. It limits complete
+family-view transport, but it neither supplies nor removes a protocol
+coordinate and therefore does not alter any holdout verdict. The four
+source-specialized fitting rows separately remain `CannotAnswer` for exact
+terminal carriers.
+
+### Publication reconstruction
+
+The reference and independent publication compilers both accept all eighteen
+profiles, including the three revision-2 manifests and their nine new law
+declarations, and reproduce the same identity table. Relative to the pinned
+migration base, the cone still rotates seventeen profiles:
+`interaction`, `canonical-framed-fiat-shamir`,
+`duplex-sponge-fiat-shamir`, `public-setup`, `commitment-opening`,
+`oracle-commitment`, `verifier-derived-query-plan`, `interface-plan`,
+`oir-endpoint-graph`, `endpoint-source-view`, `oir-projection-relation`,
+`relations`, `analysis-cryptographic-property`, `analysis-afk-transport`,
+`analysis-afk-theorem-source-validation`,
+`analysis-incremental-composition`, and
+`analysis-incremental-composition-source-validation`. `analysis-kernel` alone
+is stable, Foundation is unchanged, and no publication table is written.
+
+### Proposed delta
+
+- Owner page and section: `docs-next/pir/interactive-core.md`, Section 13.1,
+  lines 2251-2267.
+- Exact change: after the existing Section 2 declaration-kind arm in
+  `PIRReference`, add the disjoint arm
+  `ProtocolDeclarationRef<"pir.fs-application-domain">`. Leave
+  `PIRReferenceBody` unchanged because its `ModuleDeclarationRefBody`
+  delegation already covers the added reference body.
+- Identity effect: an in-memory candidate compiled by both publication
+  compilers rotates `interaction` and its fifteen current dependents. The
+  sixteen-profile cone is `interaction`, both Fiat--Shamir profiles,
+  `public-setup`, `commitment-opening`, `oracle-commitment`,
+  `verifier-derived-query-plan`, `interface-plan`, `endpoint-source-view`,
+  `oir-projection-relation`, `relations`, the four AFK/incremental Analysis
+  consumers, and `analysis-cryptographic-property`;
+  `oir-endpoint-graph` and `analysis-kernel` remain stable. This is the
+  incremental effect against the current head, not the seventeen-profile
+  migration-base cone above.
+- Evidence: `research.migration-text-review` isolates the uncovered leaf and
+  `research.profile-publication` supplies the two compiler implementations;
+  the candidate probe reports identical sixteen-profile cones.
+- Reversal condition: withdraw this delta if the canonical transcript view no
+  longer uses the application-domain declaration reference, or if an owner
+  defines another exact atomic arm and body delegation that carries this same
+  leaf without broadening consumer authority.
+- Nonclaims: the delta does not select application-domain semantics, prove any
+  Fiat--Shamir theorem or security property, publish an identity, establish
+  implementation correspondence, or authorize deployment.
+
+## Handoff
+
+Main should commit this working tree with subject:
+
+```text
+test: review the static-view law selection and re-pin the holdouts
+```
+
+### Files changed
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py`,
+  `expected-findings.json`, and `README.md` add the two round-five questions,
+  freeze the 35-field selection audit, and retain the reference defect as
+  `CannotAnswer`.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py`,
+  `adjudication.json`, `expected-findings.json`, and `README.md` re-pin the
+  sources, refresh line citations, retain all eight verdicts, and record the
+  bounded family-view reference limitation.
+- `checks/manifest.json` and `evaluation/README.md` update the two existing
+  package registrations without adding a package.
+- This note and `f0v2c2-holdout-readjudication.md` record round five and the
+  handoff.
+
+No owner page, profile manifest, directory README, lifecycle inventory,
+lifecycle count pin, publication table, real Git index, private ledger, or
+mechanization file was edited. No package was added.
+
+### Validation
+
+The lifecycle-sensitive commands used `.lane-index`, a clone-local writable
+object store, the read-only checkout objects as alternates, and a clone-local
+offline dependency cache.
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| pre-edit migration review | 1 | 0.27 s | stale manifest revision pin detected |
+| pre-edit holdout `--check` | 1 | 0.04 s | stale owner and support pins detected; verdict aggregate already unchanged |
+| `python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check` | 0 | 0.93 s | nine frozen findings reproduced; one blocking `CannotAnswer` |
+| `python3 -B evaluation/formal-source-holdout-readjudication-f0v2c2/run.py --check` | 0 | 0.04 s | twenty-six findings reproduced; five fits, three breaks, zero verdict changes |
+| `python3 -B evaluation/semantic-profile-publication/run.py --print-identities` | 0 | 0.36 s | both compilers accepted all eighteen manifests and emitted one identity table |
+| in-memory proposed-delta compilation with both publication compilers | 0 | 0.55 s | both measured the same sixteen-profile incremental cone |
+| `python3 -B checks/run.py validate` with the alternate index | 0 | 0.04 s | 76-check, 6-tier manifest valid |
+| first developer-tier attempt | 1 | 0.35 s | control-plane check exposed the temporarily overwritten holdout expected findings; later checks did not run |
+| `python3 -B checks/run.py run --tier developer` with the final alternate index and offline cache | 0 | 1.78 s | 9 of 9 developer checks passed, including lifecycle inventory |
+| `python3 -B checks/run.py run --check research.migration-text-review` with the same environment | 0 | 1.01 s | focused review wrapper passed |
+| `python3 -B checks/run.py run --check research.holdout-readjudication` with the same environment | 0 | 0.10 s | focused holdout wrapper passed |
+| `git diff --check` | 0 | 0.01 s | no whitespace errors |
+
+### Aggregate outcome
+
+- Migration review: `CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`; eight
+  questions are affirmative and only the application-domain reference leaf is
+  outside the atomic boundary.
+- Holdout readjudication:
+  `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`; all eight verdicts are frozen
+  and none changes.
+- Publication reconstruction: both compilers agree on all eighteen profiles;
+  the migration-base cone contains seventeen profiles and the current-head
+  proposed-delta cone contains sixteen.
+
+### Nonclaims
+
+These byte-pinned source checks do not repair or publish owner text, prove the
+owner laws for arbitrary values, establish implementation or backend
+correspondence, establish relation satisfaction or theorem truth, prove a
+cryptographic or protocol-security property, validate an endpoint or
+deployment, admit an exact holdout Core, or establish production readiness.
+An affirmative holdout aggregate says every row was re-adjudicated, not that
+every protocol fits or every family-view leaf closes.
+
+### Surprises and corrections to the brief
+
+- The two repair commits close all 35 law-field selections but do not close the
+  application-domain reference leaf introduced by the already normalized
+  canonical transcript view.
+- The proposed one-arm owner change has a sixteen-profile incremental cone;
+  `oir-endpoint-graph` is stable. The seventeen-profile cone in the brief is
+  the larger migration-base comparison, not this candidate's current-head
+  effect.
+- This clone does not contain `AGENTS.md` or `.claude/CLAUDE.md`; their
+  read-only primary-checkout copies supplied the required instructions.
+- The workflow's private status-ledger append conflicts with the express
+  outside-clone write prohibition and read-only mount, so no private ledger was
+  changed. The alternate index also needs a clone-local writable object store
+  because this clone's Git object directory is read-only.
+- A preliminary JSON-format validation accidentally supplied two input paths
+  to `json.tool`; the second path was treated as an output and temporarily
+  overwrote the holdout expected-findings file. It was regenerated through
+  `apply_patch` before the successful developer-tier run. Three transient JSON
+  and log files were also mistakenly written under `/tmp`; all three were
+  removed, and no outside-clone artifact remains.

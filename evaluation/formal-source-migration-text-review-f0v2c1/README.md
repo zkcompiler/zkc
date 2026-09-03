@@ -1,9 +1,10 @@
 # Migrated owner-text freeze review
 
 This package asks one exact question: does the migrated PIR owner text close
-the seven independent freeze-review questions for decision fidelity, the
+the nine independent freeze-review questions for decision fidelity, the
 Terminal contract, public-coin graph transfers and sinks, owner-view closure,
-manifest closure, publication reconstruction, and family-view body closure?
+manifest closure, publication reconstruction, family-view body closure,
+reference-leaf closure, and static-view law-field selection?
 
 Run from the repository root:
 
@@ -11,12 +12,16 @@ Run from the repository root:
 python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check
 ```
 
-The round-four frozen answer is
-`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`: all seven questions close.
-`BoundaryRegion` maps both scope-opening forms without adding an occurrence
-guard, `ClaimSourceRegion` maps an initial Claim through its binding's scope
-opening and a Reduction output through its `ApplyReduction` occurrence, and
-both `ClaimStatus` branches use that typed source region.
+The round-five frozen answer is
+`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`: eight questions close and
+the reference-leaf question does not. The canonical-framed transcript view
+uses `ProtocolDeclarationRef<"pir.fs-application-domain">` at
+`docs-next/pir/fiat-shamir.md:1276`. The `PIRReference` declaration arm at
+`docs-next/pir/interactive-core.md:2256` admits only declaration kinds listed
+in that page's Section 2, which does not list this family kind. The leaf
+therefore also falls outside every arm displayed by `PIRViewAtomicBoundary`
+at line 2264. `PIRReferenceBody` has the necessary generic declaration-body
+delegation, but its domain is not reached.
 
 The checker pins the six migrated owner pages, eight migrated manifests, and
 the two earlier candidate packet sources. It checks all sixteen
@@ -48,8 +53,18 @@ still lack exact carriers and are not silently filled in. Reusable claim 0 is
 `Live` at all fifteen integrated terminal frontiers, so the mechanization
 package's five-carrier refusal stands.
 
-A pass establishes only that the frozen seven affirmative answers reproduce
-for these pinned bytes and bounded checks. It does not publish or bless an identity,
+The round-five law-selection audit separately finds all 35 displayed
+`PIRProfileLawReference` fields and exactly 35 table entries: five in the
+Interaction profile, thirteen in the canonical-framed profile, and seventeen
+in the duplex-sponge profile. Every selected declaration exists at a
+determinate catalog ordinal, all four imported entries have consuming-schema
+dependencies, all nine new selectors occur exactly once in their source
+fragments, and none of the twenty pre-existing law ordinals moved.
+
+A passing `--check` reproduces this frozen eight-affirmative, one-
+`CannotAnswer` result. It does not convert the missing reference arm into an
+affirmative, repair owner text, or establish that another undocumented carrier
+implicitly covers the leaf. It also does not publish or bless an identity,
 prove the Terminal law for arbitrary Core values, validate a live
 compiler/runtime/backend, establish relation satisfaction or theorem truth, or
 make a Fiat--Shamir, random-oracle, concrete-sponge, QROM, protocol-security,

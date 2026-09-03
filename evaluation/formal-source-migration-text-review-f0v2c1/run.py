@@ -98,6 +98,28 @@ def _definition_count(text: str, symbol: str) -> int:
     )
 
 
+def _line_number(text: str, needle: str) -> int:
+    position = text.find(needle)
+    return 1 if position < 0 else text.count("\n", 0, position) + 1
+
+
+def _definition_block(text: str, symbol: str) -> tuple[str, int]:
+    match = re.search(rf"^{re.escape(symbol)} = \{{", text, flags=re.MULTILINE)
+    _require(match is not None, f"body {symbol} is absent")
+    assert match is not None
+    depth = 0
+    end = match.end()
+    for position in range(match.end() - 1, len(text)):
+        character = text[position]
+        depth += character == "{"
+        depth -= character == "}"
+        if depth == 0:
+            end = position + 1
+            break
+    _require(depth == 0, f"body {symbol} is not closed")
+    return text[match.start() : end], text.count("\n", 0, match.start()) + 1
+
+
 def _record_field_types(text: str, body: str) -> dict[str, str]:
     match = re.search(rf"^{re.escape(body)} = \{{\n", text, flags=re.MULTILINE)
     _require(match is not None, f"body {body} is absent")
@@ -140,6 +162,123 @@ VIEW_SCHEMAS: dict[str, tuple[tuple[str, str], ...]] = {
         ("DuplexFSConstructionView", "DuplexFSConstructionViewBody"),
         ("ExecutionView", "DuplexExecutionViewBody"),
     ),
+}
+
+
+CORE_LOCAL_REFERENCE_TYPES = (
+    "ScopeRef",
+    "OccurrenceRef",
+    "ProverDecisionPointRef",
+    "ChallengeRef",
+    "BindingRef",
+    "ClaimRef",
+    "ReductionRef",
+    "CheckRef",
+    "TerminalRef",
+    "OracleRef",
+    "PublicInputRef",
+    "VerifierPrivateInputRef",
+    "ConstantRef",
+    "DerivedValueRef",
+)
+
+LAW_SELECTION_CONFIG: dict[str, dict[str, Any]] = {
+    "interaction": {
+        "page": "docs-next/pir/interactive-core.md",
+        "manifest": "docs-next/pir/profiles/interaction.json",
+        "table": "PIRStaticViewLawFieldSelection(Interaction)",
+        "ordinal_base": "c32fec65^",
+        "new_laws": {
+            "visible-history-v0",
+            "prover-view-formation-v0",
+            "replay-qualification-v0",
+        },
+        "views": {
+            "PublicBindingView": ("PublicBindingViewBody", "public-binding-view-v0"),
+            "StrategyDecisionView": ("StrategyDecisionViewBody", "strategy-decision-view-v0"),
+            "PublicCoinView": ("PublicCoinViewBody", "public-coin-view-v0"),
+            "EffectView": ("EffectViewBody", "effect-view-v0"),
+            "ClaimReductionView": ("ClaimReductionViewBody", "claim-reduction-view-v0"),
+            "ExecutionView": ("ExecutionViewBody", "execution-view-v0"),
+        },
+        "fields": (
+            ("StrategyDecisionView", "prover_view_formation_law", "interaction", "prover-view-formation-v0"),
+            ("ExecutionView", "visible_history_law", "interaction", "visible-history-v0"),
+            ("ExecutionView", "generated_execution_law", "interaction", "execution-and-replay-v0"),
+            ("ExecutionView", "replay_qualification_law", "interaction", "replay-qualification-v0"),
+            ("ExecutionView", "relation_run_view_issuance_law", "interaction", "run-view-issuance-v0"),
+        ),
+    },
+    "canonical-framed-fiat-shamir": {
+        "page": "docs-next/pir/fiat-shamir.md",
+        "manifest": "docs-next/pir/profiles/canonical-framed-fiat-shamir.json",
+        "table": "PIRStaticViewLawFieldSelection(CanonicalFramedFiatShamir)",
+        "ordinal_base": "5105247d^",
+        "new_laws": {
+            "canonical-framed-protocol-execution-v0",
+            "canonical-framed-replay-v0",
+        },
+        "views": {
+            "TranscriptDeclarationView": ("TranscriptDeclarationViewBody", "transcript-declaration-view-v0"),
+            "RequiredInfluenceView": ("RequiredInfluenceViewBody", "required-influence-view-v0"),
+            "ChallengeTransitionView": ("ChallengeTransitionViewBody", "challenge-transition-view-v0"),
+            "FSConstructionView": ("FSConstructionViewBody", "fs-construction-view-v0"),
+            "ExecutionView": ("CanonicalFramedExecutionViewBody", "execution-view-v0"),
+        },
+        "fields": (
+            ("TranscriptDeclarationView", "initialization_schedule_law", "canonical-framed-fiat-shamir", "canonical-framed-body-grammar-v0"),
+            ("TranscriptDeclarationView", "frame_body_law", "canonical-framed-fiat-shamir", "canonical-framed-body-grammar-v0"),
+            ("RequiredInfluenceView", "exact_prefix_law", "canonical-framed-fiat-shamir", "canonical-framed-prefix-and-domain-v0"),
+            ("ChallengeTransitionView", "namespace_derivation_law", "canonical-framed-fiat-shamir", "canonical-framed-prefix-and-domain-v0"),
+            ("ChallengeTransitionView", "exact_length_law", "canonical-framed-fiat-shamir", "canonical-framed-body-grammar-v0"),
+            ("ChallengeTransitionView", "state_update_before_decode_law", "canonical-framed-fiat-shamir", "canonical-framed-admission-and-execution-v0"),
+            ("ChallengeTransitionView", "retry_law", "canonical-framed-fiat-shamir", "canonical-framed-admission-and-execution-v0"),
+            ("ChallengeTransitionView", "sampling_failure_law", "canonical-framed-fiat-shamir", "canonical-framed-admission-and-execution-v0"),
+            ("FSConstructionView", "structural_conclusion.law", "canonical-framed-fiat-shamir", "canonical-framed-same-core-construction-v0"),
+            ("ExecutionView", "visible_history_law", "interaction", "visible-history-v0"),
+            ("ExecutionView", "generated_execution_law", "canonical-framed-fiat-shamir", "canonical-framed-protocol-execution-v0"),
+            ("ExecutionView", "replay_qualification_law", "canonical-framed-fiat-shamir", "canonical-framed-replay-v0"),
+            ("ExecutionView", "relation_run_view_issuance_law", "interaction", "run-view-issuance-v0"),
+        ),
+    },
+    "duplex-sponge-fiat-shamir": {
+        "page": "docs-next/pir/duplex-sponge-fiat-shamir.md",
+        "manifest": "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json",
+        "table": "PIRStaticViewLawFieldSelection(DuplexSpongeFiatShamir)",
+        "ordinal_base": "5105247d^",
+        "new_laws": {
+            "duplex-sponge-prover-required-prefix-v0",
+            "duplex-sponge-same-core-construction-v0",
+            "duplex-sponge-protocol-execution-v0",
+            "duplex-sponge-replay-v0",
+        },
+        "views": {
+            "DuplexTranscriptDeclarationView": ("DuplexTranscriptDeclarationViewBody", "duplex-transcript-declaration-view-v0"),
+            "DuplexEncodedInputCoverageView": ("DuplexEncodedInputCoverageViewBody", "duplex-encoded-input-coverage-view-v0"),
+            "DuplexChallengeTransitionView": ("DuplexChallengeTransitionViewBody", "duplex-challenge-transition-view-v0"),
+            "DuplexFSConstructionView": ("DuplexFSConstructionViewBody", "duplex-fs-construction-view-v0"),
+            "ExecutionView": ("DuplexExecutionViewBody", "execution-view-v0"),
+        },
+        "fields": (
+            ("DuplexTranscriptDeclarationView", "state_carrier.invariant_law", "duplex-sponge-fiat-shamir", "duplex-sponge-state-transition-v0"),
+            ("DuplexTranscriptDeclarationView", "instance_carrier.bit_convention_law", "duplex-sponge-fiat-shamir", "duplex-sponge-body-grammar-v0"),
+            ("DuplexTranscriptDeclarationView", "instance_binding_projection.law", "duplex-sponge-fiat-shamir", "duplex-sponge-source-views-v0"),
+            ("DuplexTranscriptDeclarationView", "fixed_start_absorb_squeeze_law", "duplex-sponge-fiat-shamir", "duplex-sponge-state-transition-v0"),
+            ("DuplexTranscriptDeclarationView", "edge_case_law", "duplex-sponge-fiat-shamir", "duplex-sponge-state-transition-v0"),
+            ("DuplexEncodedInputCoverageView", "prover_required_prefix_law", "duplex-sponge-fiat-shamir", "duplex-sponge-prover-required-prefix-v0"),
+            ("DuplexEncodedInputCoverageView", "verifier_complete_schedule_law", "duplex-sponge-fiat-shamir", "duplex-sponge-state-transition-v0"),
+            ("DuplexChallengeTransitionView", "decoder_totality_law", "duplex-sponge-fiat-shamir", "duplex-sponge-admission-and-execution-v0"),
+            ("DuplexChallengeTransitionView", "decode_after_state_transition_law", "duplex-sponge-fiat-shamir", "duplex-sponge-state-transition-v0"),
+            ("DuplexFSConstructionView", "prover_schedule_correspondence.law", "duplex-sponge-fiat-shamir", "duplex-sponge-downstream-boundary-v0"),
+            ("DuplexFSConstructionView", "verifier_schedule_correspondence.law", "duplex-sponge-fiat-shamir", "duplex-sponge-downstream-boundary-v0"),
+            ("DuplexFSConstructionView", "instance_projection.law", "duplex-sponge-fiat-shamir", "duplex-sponge-same-core-construction-v0"),
+            ("DuplexFSConstructionView", "structural_conclusion.law", "duplex-sponge-fiat-shamir", "duplex-sponge-admission-and-execution-v0"),
+            ("ExecutionView", "visible_history_law", "interaction", "visible-history-v0"),
+            ("ExecutionView", "generated_execution_law", "duplex-sponge-fiat-shamir", "duplex-sponge-protocol-execution-v0"),
+            ("ExecutionView", "replay_qualification_law", "duplex-sponge-fiat-shamir", "duplex-sponge-replay-v0"),
+            ("ExecutionView", "relation_run_view_issuance_law", "interaction", "run-view-issuance-v0"),
+        ),
+    },
 }
 
 
@@ -293,6 +432,419 @@ def _packet_review(pages: dict[str, str]) -> dict[str, Any]:
     return {
         "body_field_counts": packet_counts,
         "deviations": deviations,
+    }
+
+
+def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
+    interaction_path = "docs-next/pir/interactive-core.md"
+    canonical_path = "docs-next/pir/fiat-shamir.md"
+    interaction = pages[interaction_path]
+    canonical = pages[canonical_path]
+    foundation = _read(FOUNDATION)
+
+    union = interaction.split("PIRReference =", 1)[1].split(
+        "PIRReferenceBody(x)", 1
+    )[0]
+    for reference in CORE_LOCAL_REFERENCE_TYPES:
+        _require(
+            union.count(reference) == 1,
+            f"{interaction_path}:{_line_number(interaction, 'PIRReference =')}: "
+            f"PIRReference does not contain {reference} exactly once",
+        )
+    _require(
+        len(re.findall(r"(?:^|\| )ValueRef(?:\n|$)", union, flags=re.MULTILINE)) == 1
+        and 'ProtocolDeclarationRef<K> for a declaration kind K that Section 2 lists'
+        in union,
+        f"{interaction_path}:{_line_number(interaction, 'PIRReference =')}: "
+        "PIRReference arm shape drifted",
+    )
+
+    section_two = interaction.split(
+        "Several Core fields need nominal semantic coordinates", 1
+    )[1].split("## 3. Subjects and identities", 1)[0]
+    section_two_kinds = sorted(set(re.findall(r'`"(pir\.[a-z0-9-]+)"`', section_two)))
+    _require(
+        section_two_kinds
+        == [
+            "pir.challenge-domain",
+            "pir.challenge-sharing-contract",
+            "pir.claim-contract",
+            "pir.coin-correlation-group",
+            "pir.message-channel",
+            "pir.oracle-binding-contract",
+            "pir.oracle-domain-law",
+            "pir.public-coin-law",
+            "pir.reduction-contract",
+        ],
+        f"{interaction_path}:{_line_number(interaction, 'The exact-used PIR owner-module closure')}: "
+        "Section 2 declaration-kind census drifted",
+    )
+
+    usage_markers = {
+        "pir.message-channel": "declaration: exact Message declaration",
+        "pir.challenge-domain": 'domain: ProtocolDeclarationRef<"pir.challenge-domain">',
+        "pir.public-coin-law": 'fresh_law: ProtocolDeclarationRef<"pir.public-coin-law">',
+        "pir.coin-correlation-group": "correlation: CoinCorrelation",
+        "pir.challenge-sharing-contract": "reduction_use: ReductionUsePolicy",
+        "pir.claim-contract": 'contract: ProtocolDeclarationRef<"pir.claim-contract">',
+        "pir.reduction-contract": 'contract: ProtocolDeclarationRef<"pir.reduction-contract">',
+        "pir.oracle-binding-contract": "declaration: exact Oracle declaration",
+        "pir.oracle-domain-law": "declaration: exact Oracle declaration",
+    }
+    for kind, marker in usage_markers.items():
+        _require(
+            marker in interaction,
+            f"{interaction_path}:1: no static-view path reaches {kind}",
+        )
+
+    direct_protocol_kinds: dict[str, int] = {}
+    for relative, rows in VIEW_SCHEMAS.items():
+        text = pages[relative]
+        for _view, body in rows:
+            block, start_line = _definition_block(text, body)
+            for match in re.finditer(r'ProtocolDeclarationRef<"([^"]+)">', block):
+                kind = match.group(1)
+                direct_protocol_kinds.setdefault(
+                    kind, start_line + block.count("\n", 0, match.start())
+                )
+    actual_protocol_kinds = sorted(set(section_two_kinds) | set(direct_protocol_kinds))
+    missing_protocol_kinds = sorted(set(actual_protocol_kinds) - set(section_two_kinds))
+    missing_references = [
+        {
+            "type": f'ProtocolDeclarationRef<"{kind}">',
+            "leaf_page": canonical_path,
+            "leaf_line": direct_protocol_kinds[kind],
+            "union_page": interaction_path,
+            "union_line": _line_number(
+                interaction,
+                "| ProtocolDeclarationRef<K> for a declaration kind K that Section 2 lists",
+            ),
+            "atomic_boundary_line": _line_number(
+                interaction, "PIRViewAtomicBoundary ="
+            ),
+        }
+        for kind in missing_protocol_kinds
+    ]
+
+    body_required = (
+        "N(ordinal) for a Core-local dense ordinal",
+        "ValueRefBody(x) for a ValueRef",
+        "ModuleDeclarationRefBody(x) for a ProtocolDeclarationRef",
+        "a ModuleEffectRef takes the AdmittedModuleEffect arm",
+    )
+    _require(
+        all(item in interaction for item in body_required),
+        f"{interaction_path}:{_line_number(interaction, 'PIRReferenceBody(x)')}: "
+        "PIRReferenceBody delegation drifted",
+    )
+    atomic_required = (
+        "Unit | Natural | MetaBoolean | MetaSymbol | Bytes",
+        "ValueType | CanonicalValue(ValueType)",
+        "PIRReference | PIRProfileLawReference | AdmittedModuleEffect",
+    )
+    _require(
+        all(item in interaction for item in atomic_required),
+        f"{interaction_path}:{_line_number(interaction, 'PIRViewAtomicBoundary =')}: "
+        "PIRViewAtomicBoundary arm census drifted",
+    )
+    _require(
+        "PortableAlgorithmRef := PortableAlgorithmId" in foundation
+        and "Foundation\nsemantic references" in interaction
+        and "algorithm, evaluation-contract, or module identity leaf closes to that\n  identity alone"
+        in interaction,
+        "the Foundation identity-leaf classification drifted",
+    )
+
+    return {
+        "interaction_core_local_reference_leaves": list(CORE_LOCAL_REFERENCE_TYPES),
+        "value_reference_leaf": "ValueRef",
+        "protocol_declaration_kind_leaves": actual_protocol_kinds,
+        "pir_reference_protocol_kind_arms": section_two_kinds,
+        "separate_atomic_reference_arms": {
+            "PIRProfileLawReference": "PIRProfileLawReference",
+            "ModuleEffectRef": "AdmittedModuleEffect",
+            "PortableAlgorithmRef": "Bytes through its exact ContentRefV0 body",
+        },
+        "pir_reference_body_delegations": 3,
+        "missing_pir_reference_leaves": missing_references,
+        "atomic_boundary_uncovered_leaves": missing_references,
+        "complete": not missing_references,
+    }
+
+
+def _table_entries(text: str, table_name: str) -> tuple[dict[tuple[str, str], tuple[str, str, bool, int]], int]:
+    header = f"{table_name} = CanonicalMap ["
+    _require(text.count(header) == 1, f"law selection table {table_name} is absent or ambiguous")
+    start = text.index(header)
+    end = text.find("\n]", start)
+    _require(end >= 0, f"law selection table {table_name} is not closed")
+    block = text[start : end + 2]
+    entries: dict[tuple[str, str], tuple[str, str, bool, int]] = {}
+    pattern = re.compile(
+        r"^  \(([^,\n]+), ([^)\n]+)\)\n      -> ([^\n]+)$", re.MULTILINE
+    )
+    for match in pattern.finditer(block):
+        key = (match.group(1), match.group(2))
+        rhs = match.group(3).strip().removesuffix(",")
+        imported = rhs.startswith("interaction ") and rhs.endswith(", imported")
+        if rhs.startswith("the profile's pir.semantic-law declaration "):
+            target_profile = "self"
+            target_name = rhs.removeprefix(
+                "the profile's pir.semantic-law declaration "
+            )
+        elif imported:
+            target_profile = "interaction"
+            target_name = rhs.removeprefix("interaction ").removesuffix(", imported")
+        else:
+            target_profile = "self"
+            target_name = rhs
+        line = text.count("\n", 0, start + match.start()) + 1
+        _require(key not in entries, f"law selection table {table_name} repeats {key}")
+        entries[key] = (target_profile, target_name, imported, line)
+    return entries, text.count("\n", 0, start) + 1
+
+
+def _law_path_line(text: str, body: str, path: str) -> int | None:
+    block, start_line = _definition_block(text, body)
+    parts = path.split(".")
+    if len(parts) == 1:
+        match = re.search(
+            rf"\b{re.escape(parts[0])}: PIRProfileLawReference\b", block
+        )
+    else:
+        parent, child = parts
+        inline = re.search(
+            rf"\b{re.escape(parent)}:\s*\{{(?:(?!\n  [a-z][a-z0-9_]*:).)*?"
+            rf"\b{re.escape(child)}: PIRProfileLawReference\b",
+            block,
+            flags=re.DOTALL,
+        )
+        if inline is not None:
+            match = inline
+        else:
+            parent_match = re.search(
+                rf"\b{re.escape(parent)}: ([A-Za-z][A-Za-z0-9_]*)", block
+            )
+            if parent_match is None:
+                return None
+            alias = parent_match.group(1)
+            try:
+                alias_fields = _record_field_types(text, alias)
+            except ReviewError:
+                return None
+            if alias_fields.get(child, "").removesuffix(",") != "PIRProfileLawReference":
+                return None
+            match = parent_match
+    if match is None:
+        return None
+    return start_line + block.count("\n", 0, match.start())
+
+
+def _source_fragment(text: str, manifest: dict[str, Any], name: str) -> tuple[str, int]:
+    fragment = next((item for item in manifest["fragments"] if item["name"] == name), None)
+    _require(fragment is not None, f"manifest fragment {name} is absent")
+    assert fragment is not None
+    start_token = f"<!-- {fragment['start']} -->"
+    end_token = f"<!-- {fragment['end']} -->"
+    _require(
+        text.count(start_token) == text.count(end_token) == 1,
+        f"manifest fragment {name} markers are absent or ambiguous",
+    )
+    start = text.index(start_token) + len(start_token)
+    end = text.index(end_token, start)
+    return text[start:end], text.count("\n", 0, start) + 1
+
+
+def _law_selection_review(pages: dict[str, str]) -> dict[str, Any]:
+    manifests = {
+        key: _json(config["manifest"])
+        for key, config in LAW_SELECTION_CONFIG.items()
+    }
+    catalogs = {
+        key: [
+            row
+            for row in manifest["definitions"]
+            if row["kind"] == "pir.semantic-law"
+        ]
+        for key, manifest in manifests.items()
+    }
+    ordinals = {
+        key: {row["name"]: ordinal for ordinal, row in enumerate(rows)}
+        for key, rows in catalogs.items()
+    }
+    mismatches: list[str] = []
+    profile_metrics: dict[str, Any] = {}
+    selected_coordinates: list[dict[str, Any]] = []
+
+    def mismatch(relative: str, line: int, message: str) -> None:
+        mismatches.append(f"{relative}:{line}: {message}")
+
+    for profile, config in LAW_SELECTION_CONFIG.items():
+        relative = config["page"]
+        text = pages[relative]
+        manifest_relative = config["manifest"]
+        manifest = manifests[profile]
+        expected = {
+            (view, path): (target_profile, name)
+            for view, path, target_profile, name in config["fields"]
+        }
+        entries, table_line = _table_entries(text, config["table"])
+        parsed = {
+            key: (
+                profile if value[0] == "self" else value[0],
+                value[1],
+            )
+            for key, value in entries.items()
+        }
+        for key in sorted(set(expected) - set(parsed)):
+            mismatch(relative, table_line, f"selection table omits {key[0]}.{key[1]}")
+        for key in sorted(set(parsed) - set(expected)):
+            mismatch(relative, entries[key][3], f"selection table has extra {key[0]}.{key[1]}")
+        for key in sorted(set(expected) & set(parsed)):
+            if parsed[key] != expected[key]:
+                mismatch(
+                    relative,
+                    entries[key][3],
+                    f"selection for {key[0]}.{key[1]} names {parsed[key]} instead of {expected[key]}",
+                )
+
+        displayed_count = 0
+        path_lines: dict[str, int] = {}
+        for view, (body, _schema_definition) in config["views"].items():
+            block, _start_line = _definition_block(text, body)
+            displayed_count += block.count("PIRProfileLawReference")
+            fields = _record_field_types(text, body)
+            for field_type in fields.values():
+                alias = field_type.removesuffix(",")
+                if alias == "ScheduleCorrespondence":
+                    alias_block, _alias_line = _definition_block(text, alias)
+                    displayed_count += alias_block.count("PIRProfileLawReference")
+        for view, path, target_profile, name in config["fields"]:
+            body = config["views"][view][0]
+            line = _law_path_line(text, body, path)
+            if line is None:
+                mismatch(relative, _line_number(text, f"{body} = {{"), f"{view}.{path} is not displayed as PIRProfileLawReference")
+                continue
+            path_lines[f"{view}.{path}"] = line
+            target_rows = [
+                row for row in catalogs[target_profile] if row["name"] == name
+            ]
+            table_line_for_entry = entries.get((view, path), ("", "", False, table_line))[3]
+            if len(target_rows) != 1:
+                mismatch(
+                    relative,
+                    table_line_for_entry,
+                    f"{view}.{path} names an absent or duplicate pir.semantic-law {target_profile}/{name}",
+                )
+                continue
+            selected_coordinates.append(
+                {
+                    "profile": profile,
+                    "field": f"{view}.{path}",
+                    "target_profile": target_profile,
+                    "declaration": name,
+                    "catalog_ordinal": ordinals[target_profile][name],
+                    "field_line": line,
+                    "table_line": table_line_for_entry,
+                }
+            )
+            imported = target_profile != profile
+            parsed_imported = entries.get((view, path), ("", "", False, 0))[2]
+            if imported != parsed_imported:
+                mismatch(relative, table_line_for_entry, f"{view}.{path} import marker disagrees with its target profile")
+            if imported:
+                schema_name = config["views"][view][1]
+                schemas = [
+                    row
+                    for row in manifest["definitions"]
+                    if row["kind"] == "pir.static-view-schema"
+                    and row["name"] == schema_name
+                ]
+                dependency = {
+                    "profile": target_profile,
+                    "kind": "pir.semantic-law",
+                    "name": name,
+                }
+                if len(schemas) != 1 or dependency not in schemas[0]["dependencies"]:
+                    manifest_text = _read(manifest_relative)
+                    mismatch(
+                        manifest_relative,
+                        _line_number(manifest_text, f'"name": "{schema_name}"'),
+                        f"{view}.{path} lacks its imported declaration dependency",
+                    )
+
+        if displayed_count != len(config["fields"]):
+            mismatch(
+                relative,
+                table_line,
+                f"displayed PIRProfileLawReference count is {displayed_count}, expected {len(config['fields'])}",
+            )
+
+        old = json.loads(_git_bytes(config["ordinal_base"], manifest_relative))
+        old_laws = [
+            row["name"]
+            for row in old["definitions"]
+            if row["kind"] == "pir.semantic-law"
+        ]
+        current_laws = [row["name"] for row in catalogs[profile]]
+        moved = [
+            name
+            for ordinal, name in enumerate(old_laws)
+            if ordinal >= len(current_laws) or current_laws[ordinal] != name
+        ]
+        if moved:
+            manifest_text = _read(manifest_relative)
+            for name in moved:
+                mismatch(
+                    manifest_relative,
+                    _line_number(manifest_text, f'"name": "{name}"'),
+                    f"pre-existing law {name} moved from its catalog ordinal",
+                )
+        new_laws = set(current_laws) - set(old_laws)
+        if new_laws != config["new_laws"]:
+            mismatch(
+                manifest_relative,
+                1,
+                f"new semantic-law set is {sorted(new_laws)}, expected {sorted(config['new_laws'])}",
+            )
+        selector_lines: dict[str, int] = {}
+        for row in catalogs[profile]:
+            if row["name"] not in new_laws:
+                continue
+            fragment, fragment_line = _source_fragment(text, manifest, row["fragment"])
+            count = fragment.count(row["selector"])
+            line = _line_number(text, row["selector"])
+            selector_lines[row["name"]] = line
+            if count != 1:
+                mismatch(
+                    relative,
+                    line if row["selector"] in text else fragment_line,
+                    f"selector for new declaration {row['name']} occurs {count} times in fragment {row['fragment']}",
+                )
+
+        profile_metrics[profile] = {
+            "displayed_law_fields": displayed_count,
+            "table_entries": len(entries),
+            "field_lines": path_lines,
+            "preexisting_law_ordinals_checked": len(old_laws),
+            "preexisting_laws_moved": moved,
+            "new_declarations": sorted(new_laws),
+            "new_declaration_selector_lines": selector_lines,
+        }
+
+    return {
+        "profiles": profile_metrics,
+        "displayed_law_fields": sum(
+            value["displayed_law_fields"] for value in profile_metrics.values()
+        ),
+        "table_entries": sum(value["table_entries"] for value in profile_metrics.values()),
+        "selected_coordinates": selected_coordinates,
+        "imported_entries": sum(
+            coordinate["target_profile"] != coordinate["profile"]
+            for coordinate in selected_coordinates
+        ),
+        "mismatches": mismatches,
+        "complete": not mismatches,
     }
 
 
@@ -1541,6 +2093,36 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
     }
     revision_bumps = 0
     new_definitions = 0
+    expected_profile_revisions = {
+        "docs-next/oir/profiles/endpoint-graph.json": 1,
+        "docs-next/oir/profiles/projection-relation.json": 1,
+        "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": 2,
+        "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": 2,
+        "docs-next/pir/profiles/endpoint-source-view.json": 1,
+        "docs-next/pir/profiles/interaction.json": 2,
+        "docs-next/pir/profiles/interface-plan.json": 1,
+        "docs-next/pir/profiles/public-setup.json": 1,
+    }
+    expected_post_creation_bumps = {
+        "docs-next/oir/profiles/endpoint-graph.json": set(),
+        "docs-next/oir/profiles/projection-relation.json": set(),
+        "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": {
+            ("pir.static-view-schema", "execution-view-v0"),
+        },
+        "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": {
+            ("pir.static-view-schema", "duplex-encoded-input-coverage-view-v0"),
+            ("pir.static-view-schema", "duplex-fs-construction-view-v0"),
+            ("pir.static-view-schema", "execution-view-v0"),
+        },
+        "docs-next/pir/profiles/endpoint-source-view.json": set(),
+        "docs-next/pir/profiles/interaction.json": {
+            ("pir.semantic-law", "static-view-schema-resolution-v0"),
+            ("pir.static-view-schema", "strategy-decision-view-v0"),
+            ("pir.static-view-schema", "execution-view-v0"),
+        },
+        "docs-next/pir/profiles/interface-plan.json": set(),
+        "docs-next/pir/profiles/public-setup.json": set(),
+    }
     for relative in MIGRATED_MANIFESTS:
         try:
             old_text = subprocess.run(
@@ -1554,14 +2136,26 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
         except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             raise ReviewError(f"cannot reconstruct the migration base for {relative}") from error
         current = _json(relative)
-        _require(old["revision"] == 0 and current["revision"] == 1, "a migrated profile revision differs")
+        _require(
+            old["revision"] == 0
+            and current["revision"] == expected_profile_revisions[relative],
+            "a migrated profile revision differs",
+        )
         old_rows = {(row["kind"], row["name"]): row for row in old["definitions"]}
         observed_bumps: set[tuple[str, str]] = set()
+        observed_post_creation_bumps: set[tuple[str, str]] = set()
         for row in current["definitions"]:
             key = (row["kind"], row["name"])
             if key not in old_rows:
-                _require(row["revision"] == 0, "a new declaration does not start at revision zero")
-                new_definitions += 1
+                expected_revision = int(key in expected_post_creation_bumps[relative])
+                _require(
+                    row["revision"] == expected_revision,
+                    "a post-migration declaration has another revision",
+                )
+                if expected_revision == 0:
+                    new_definitions += 1
+                else:
+                    observed_post_creation_bumps.add(key)
             elif row["revision"] != old_rows[key]["revision"]:
                 _require(
                     old_rows[key]["revision"] == 0 and row["revision"] == 1,
@@ -1569,7 +2163,11 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
                 )
                 observed_bumps.add(key)
         _require(observed_bumps == expected_bumps[relative], "the selected definition revision set drifted")
-        revision_bumps += len(observed_bumps)
+        _require(
+            observed_post_creation_bumps == expected_post_creation_bumps[relative],
+            "the post-creation definition revision set drifted",
+        )
+        revision_bumps += len(observed_bumps) + len(observed_post_creation_bumps)
 
     envelope_profiles = {
         "interaction": ("docs-next/pir/interactive-core.md", (2, 2, 1, 2)),
@@ -1642,7 +2240,10 @@ def _decision_review(
         and _pcgraph_review(interaction)["named_transfer_clauses"] == 5,
         view["fs_body_fields"] == view["fs_exact_fields"]
         and view["fs_unclosed_families"] == 0,
-        all(_json(path)["revision"] == 1 for path in MIGRATED_MANIFESTS),
+        [
+            _json(path)["revision"]
+            for path in MIGRATED_MANIFESTS
+        ] == [1, 1, 2, 2, 1, 2, 1, 1],
         not any(path.startswith("docs-next/analysis/") or path.startswith("docs-next/relations/") or path.startswith("docs-next/foundation/") for path in (*PAGES, *MIGRATED_MANIFESTS)),
     ]
     _require(applied == [True] * 8, "decision-fidelity census drifted")
@@ -1658,6 +2259,8 @@ def _decision_review(
 def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     pages = {relative: _read(relative) for relative in PAGES}
     view = _view_closure(pages)
+    references = _reference_closure_review(pages)
+    law_selection = _law_selection_review(pages)
     terminal = _terminal_review(pages["docs-next/pir/interactive-core.md"])
     pcgraph = _pcgraph_review(pages["docs-next/pir/interactive-core.md"])
     manifests = _manifest_review(pages)
@@ -1686,6 +2289,20 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         Finding("manifest-closure", "Affirmative", "F0V2C1-A-MANIFEST-CLOSURE"),
         Finding("publication-compilers", "Affirmative", "F0V2C1-A-PUBLICATION-COMPILERS"),
         Finding("family-body-closure", "Affirmative", "F0V2C1-A-FS-BODY-CLOSURE"),
+        Finding(
+            "pir-reference-closure",
+            "Affirmative" if references["complete"] else "CannotAnswer",
+            "F0V2C1-A-PIR-REFERENCE-CLOSURE"
+            if references["complete"]
+            else "F0V2C1-C-PIR-REFERENCE-CLOSURE",
+        ),
+        Finding(
+            "static-view-law-selection",
+            "Affirmative" if law_selection["complete"] else "CannotAnswer",
+            "F0V2C1-A-STATIC-VIEW-LAW-SELECTION"
+            if law_selection["complete"]
+            else "F0V2C1-C-STATIC-VIEW-LAW-SELECTION",
+        ),
     ]
     metrics = {
         "source_sha256": _source_hashes(),
@@ -1693,6 +2310,8 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         "terminal": terminal,
         "pcgraph": pcgraph,
         "views": view,
+        "references": references,
+        "law_selection": law_selection,
         "manifests": manifests,
         "publication": publication,
     }

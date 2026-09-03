@@ -30,6 +30,14 @@ The complete terminal, view, and outcome ledger is frozen in
 [`adjudication.json`](adjudication.json). The supporting note gives the
 field-by-field reading and exact owner-section citations.
 
+Round five re-pins the same eight verdict rows after the three static-view
+profiles acquired explicit law selections. No verdict changes. A separate
+`CannotAnswer/F0V2C2-C-FAMILY-VIEW-REFERENCE-BOUNDARY` finding records that
+the canonical-framed transcript view's application-domain declaration leaf is
+not admitted by the current `PIRReference` union. This owner-text gap limits
+family-view transport, but it does not supply or remove a holdout boundary and
+therefore does not change the verdict-only aggregate.
+
 ## Executable evidence
 
 Run from the repository root:
@@ -71,10 +79,11 @@ changes a holdout verdict.
 ## What a pass establishes
 
 A pass establishes only that these exact source bytes admit the frozen terminal
-shapes, view-coordinate mapping, outcome partition, and eight verdict
-comparisons. It also establishes that the selected accepting guard has the
-required positive literals and that the corrected WHIR carrier satisfies the
-owner's syntactic guard-identity rule over the bounded valuation census.
+shapes, six common-view coordinate mappings, bounded family-view readings,
+outcome partition, and eight verdict comparisons. It also establishes that the
+selected accepting guard has the required positive literals and that the
+corrected WHIR carrier satisfies the owner's syntactic guard-identity rule over
+the bounded valuation census.
 
 The four boundary analyses do not publish exact Core tables. Their finite or
 virtual fitting shapes therefore retain `CannotAnswer` for exact CheckRef,
@@ -86,6 +95,10 @@ The represented-shape check reconstructs the owner-authored initial
 binding-opening and Reduction-output source regions explicitly. It shows only
 that the repaired source map changes none of these frozen holdout verdicts; it
 does not prove `ClaimStatus` for arbitrary Core values.
+
+The pass does not establish complete family-view reference transport: the
+canonical application-domain leaf remains outside the displayed atomic
+boundary until the owner text changes or the family view stops using it.
 
 ## Nonclaims
 

@@ -1,7 +1,6 @@
 {
+  "adjudication_sha256": "3b089bbc1142d0e3bffacbadb0b5af5020723f24238ed641da878ecd7d3b921f",
   "aggregate": "F0V2C2-A-HOLDOUTS-READJUDICATED",
-  "adjudication_sha256": "c975b54f6d0cd88557a38c85e347e5ff91a688ce1510be7c71bb478c0771db81",
-  "findings_sha256": "37972806727fe9214802723dddec210d0d9351272c1a9f940215cff338731fb5",
   "finding_codes": [
     [
       "holdout-source-bytes",
@@ -124,14 +123,15 @@
       "F0V2C2-C-EXACT-TERMINAL-CARRIERS"
     ],
     [
-      "owner-page-reopening",
-      "Affirmative",
-      "F0V2C2-A-NO-OWNER-PAGE-REOPENING"
+      "canonical-family-view-reference-boundary",
+      "CannotAnswer",
+      "F0V2C2-C-FAMILY-VIEW-REFERENCE-BOUNDARY"
     ],
     [
       "holdout-readjudication",
       "Affirmative",
       "F0V2C2-A-HOLDOUTS-READJUDICATED"
     ]
-  ]
+  ],
+  "findings_sha256": "cc644bc55c985b7804280e6a440b7e87befa457c840749b4e54ea3b54efbbb61"
 }

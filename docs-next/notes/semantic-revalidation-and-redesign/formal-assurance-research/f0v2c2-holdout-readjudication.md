@@ -645,3 +645,26 @@ bend, and none disagree. The aggregate remains
 `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`. The exact-reference finding for
 the four source-specialized fitting rows remains `CannotAnswer`; this is still
 a source-profile carrier gap, not a target owner-page reopening.
+
+## Round five
+
+The five migrated owner pages and the migration record are re-pinned after the
+static-view law selections. The adjudication ledger's section ranges now point
+to the current owner text. All eight verdict rows were compared again with the
+adjudication record and structural-axes matrix: five still fit, three still
+break, none bend, and none disagree. The represented WHIR and WARPfold
+frontiers still produce zero `Unknown` claim states and zero verdict changes.
+The verdict-only aggregate therefore remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
+One owner-text limitation is now frozen separately as
+`CannotAnswer/F0V2C2-C-FAMILY-VIEW-REFERENCE-BOUNDARY`. The canonical-framed
+transcript view uses
+`ProtocolDeclarationRef<"pir.fs-application-domain">` at
+`docs-next/pir/fiat-shamir.md:1276`, while the `PIRReference` declaration arm
+at `docs-next/pir/interactive-core.md:2256` admits only the kinds listed by
+that page's Section 2. The leaf consequently has no displayed
+`PIRViewAtomicBoundary` arm at line 2264. This limits complete family-view
+transport but does not introduce, remove, or resolve any holdout boundary, so
+no verdict changes. The migration review note records the proposed owner-page
+delta; this note makes no independent owner selection.

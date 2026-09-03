@@ -34,15 +34,15 @@ SOURCE_PINS = {
 }
 
 OWNER_PINS = {
-    "docs-next/pir/interactive-core.md": "dd6d6711400e73feccf52f762de8b72e5790b256bd00feb86d8142e49934c3b4",
-    "docs-next/pir/fiat-shamir.md": "52682bd1e46f0579b7f6445cfa2866ab2bfce819aa1082d796ae216f451bf671",
-    "docs-next/pir/duplex-sponge-fiat-shamir.md": "60d66fb3636c85d0d4201de3962bdc19b3664469bc8808dfbe738ad57d248db4",
+    "docs-next/pir/interactive-core.md": "ca092e1808163c1659035f54e1cf31e6952b2e19ddec84628cce9a3f0d219d70",
+    "docs-next/pir/fiat-shamir.md": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef",
+    "docs-next/pir/duplex-sponge-fiat-shamir.md": "54822176a39852d07d72a084d0a56a04f22c1207e16bb2e0196c4f84fa4954c5",
     "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
     "docs-next/oir/projection-contract.md": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6",
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "7480bf11a8af0750b196bbb57ad8415072b8e5846df6b2a74860d9fceb663453",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "7016217a227d376050abccae2f3616c668b87a38b6e35ca1148d964d39db8f7e",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
     "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",
@@ -589,11 +589,23 @@ def evaluate() -> dict[str, Any]:
             else "F0V2C2-M-TERMINAL-CARRIER-CENSUS",
         )
     )
+    canonical_text = (ROOT / "docs-next/pir/fiat-shamir.md").read_text()
+    reference_union = owner_text.split("PIRReference =", 1)[1].split(
+        "PIRReferenceBody(x)", 1
+    )[0]
+    application_domain_leaf = (
+        'application_domain: ProtocolDeclarationRef<"pir.fs-application-domain">'
+        in canonical_text
+    )
+    application_domain_arm = '"pir.fs-application-domain"' in reference_union
+    reference_boundary_closed = application_domain_leaf and application_domain_arm
     findings.append(
         Finding(
-            "owner-page-reopening",
-            "Affirmative",
-            "F0V2C2-A-NO-OWNER-PAGE-REOPENING",
+            "canonical-family-view-reference-boundary",
+            "Affirmative" if reference_boundary_closed else "CannotAnswer",
+            "F0V2C2-A-FAMILY-VIEW-REFERENCE-BOUNDARY"
+            if reference_boundary_closed
+            else "F0V2C2-C-FAMILY-VIEW-REFERENCE-BOUNDARY",
         )
     )
 
@@ -630,6 +642,14 @@ def evaluate() -> dict[str, Any]:
             "owner_pins": len(OWNER_PINS),
             "whir_guard_valuation_counts": frontier_counts,
             "closed_forward_state": closed_forward_state,
+            "canonical_family_view_reference_boundary": {
+                "leaf_page": "docs-next/pir/fiat-shamir.md",
+                "leaf_line": 1276,
+                "union_page": "docs-next/pir/interactive-core.md",
+                "union_line": 2256,
+                "atomic_boundary_line": 2264,
+                "closed": reference_boundary_closed,
+            },
         },
     }
 
