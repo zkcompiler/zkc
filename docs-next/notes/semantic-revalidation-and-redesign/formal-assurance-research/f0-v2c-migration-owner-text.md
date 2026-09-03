@@ -239,8 +239,10 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   with three red: the publication hold, the provider interpretation, whose
   current round lives on the Analysis branch with the text it pins, and the
   terminal mechanization, re-pinned by Main whenever its inputs move.
-- Rerun the cold protocol holdouts against the migrated Terminal contract and
-  views.
+- The cold protocol holdouts were re-adjudicated at every review round
+  against the migrated Terminal contract and views: five fit, three break at
+  named boundaries, no verdict changed from the first re-adjudication to the
+  sixth round.
 - Two defects the refreeze rehearsal (`f0-v2c-refreeze-rehearsal.md`) reported
   against an earlier base were still present after round four and are now
   repaired: `PIRReference`, an arm of the static-view atomic boundary, had no
@@ -257,10 +259,12 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   checked same-Core construction); pre-existing catalog ordinals did not
   move; the profile revisions advanced. A fifth review round checks both
   repairs; both compilers accept the manifests.
-- The second review round is closed: all seven questions are affirmative on
-  the repaired text, every family-body field is exact, and the five
-  deviations from the candidate packets are upheld. No owner-page delta
-  remains from the review.
+- The independent review is closed at round six: the seven original
+  questions and the two added for the reference atom and the law-field
+  selection are affirmative on the current text
+  (`f0v2c1-migration-text-review.md`). Rounds three and five each found one
+  defect that the preceding round had not asked about; Section 6 records
+  them and their repairs.
 - Publish the identities. Only the user authorizes the identity-rotating
   publication.
 
