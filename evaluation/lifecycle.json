@@ -72,7 +72,8 @@
         "research.holdout-readjudication",
         "research.migration-text-review",
         "research.fs-runtime",
-        "research.formal-source-end-to-end-pressure"
+        "research.formal-source-end-to-end-pressure",
+        "research.analysis-premise-text-review"
       ]
     },
     {
