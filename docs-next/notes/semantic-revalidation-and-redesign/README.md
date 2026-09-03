@@ -109,6 +109,15 @@ below are reader cross-references rather than inventory edges.
   constructor, one reopening condition, or one boundary; 63 placed cases
   reproduce every recorded holdout and peer-review verdict, and thirteen
   not-yet-considered classes receive a predicted place.
+- [Protocol Families and Their Instances](family-and-instance/README.md)
+  compares three designs for families such as FRI folding and sumcheck rounds
+  against six bounded instances of the retained fixtures: parameters
+  elaborate to separately admitted finite Cores with distinct identities and
+  regular size changes, one family theorem source binds to every member
+  through pointwise Analysis correspondence, and the recommendation is to
+  keep the Core instance-only and place generation in a front end or a
+  Compiler transition; exact target graph counts and template necessity stay
+  `CannotAnswer`.
 - [Native FRI/IOR Final Classification and Retention](r2-protocol-witnesses/native-fri-ior-final-classification-and-retention.md)
   retains the two finite FRI/IOR lanes, classifies the case as a conservative
   extension, fixes the deterministic source-correspondence boundary, and
