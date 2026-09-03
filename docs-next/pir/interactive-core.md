@@ -1447,6 +1447,7 @@ GuardInputs(o) = inputs and GuardTerm(o) = the authenticated term of algorithm
   when Guard(o) is EvaluateBoolean { algorithm, evaluation_contract, inputs }
 
 InputMust(i) = { when_true: {Positive(i)}, when_false: {Negative(i)} }
+  when input i is Boolean, and { when_true: {}, when_false: {} } otherwise
 
 Must(term with n inputs) :=
   MustEnv(term, [InputMust(0), ..., InputMust(n - 1)])
@@ -1468,45 +1469,87 @@ MustEnv(if c then a else b, environment) =
                      C.when_false union B.when_false) }
 MustEnv(primitive call, environment) =
   { when_true: {}, when_false: {} }
-a union with Impossible is Impossible;
+MustEnv(any other term constructor, environment) =
+  { when_true: {}, when_false: {} }
+a union with Impossible is Impossible, and a union that contains both
+  Positive(i) and Negative(i) for one input i is Impossible;
 Meet(X, Y) = X when Y is Impossible, Y when X is Impossible,
              X intersect Y otherwise
 MustWhenTrue(term) := Must(term).when_true
 
+Region(o) := {
+  required_true: AttemptGuards(o),
+  required_false: { Guard(t') | t' a terminal occurrence earlier than o
+                                with Guard(t') not Always },
+  impossible: an earlier terminal occurrence has Guard Always, or one atom
+              occurs in both sets
+}
+
+Implies(A, B) :=
+  B.required_true subset A.required_true
+  and B.required_false subset A.required_false
+Disjoint(A, B) :=
+  A.required_true intersects B.required_false
+  or B.required_true intersects A.required_false
+
+ClaimStatus(c, o) :=
+    Live     when Implies(Region(o), Region(Source(c)))
+             and Disjoint(Region(o), Region(u)) for every earlier linear
+             consumer u of c
+  | Dead     when Disjoint(Region(o), Region(Source(c)))
+             or Implies(Region(o), Region(u)) for some earlier linear
+             consumer u of c
+  | Unknown  otherwise
+LiveClaims(o) := { c | ClaimStatus(c, o) = Live }
+
 TerminalContract(t), with o_t the occurrence of ReachTerminal(t) :=
+  Region(o_t) is not impossible, and GuardTerm(o_t) is None or
+    MustWhenTrue(GuardTerm(o_t)) is not Impossible;
   for every c in t.required_true_checks,
       with o_c the occurrence of InvokeCheck(c):
     AttemptedWhenever(o_t, o_c)
     and GuardTerm(o_t) is not None
-    and MustWhenTrue(GuardTerm(o_t)) is not Impossible
     and there is an input ordinal i of Guard(o_t) with
           GuardInputs(o_t)[i] = OccurrenceOutput(o_c, 0)
           and Positive(i) in MustWhenTrue(GuardTerm(o_t));
   for every r in t.required_applied_reductions,
       with o_r the occurrence of ApplyReduction(r):
     AttemptedWhenever(o_t, o_r);
-  on every schedule path on which o_t is active,
+  no claim has ClaimStatus Unknown at o_t, and
     LiveClaims(o_t) = t.terminal_claims
 ```
 
 The environment is the term's de Bruijn environment: the inputs occupy it in
 ordinal order and a `let` prepends the bound term's facts, so a variable that
-names a non-Boolean binding carries no literal. A literal in `when_true`
-holds on every evaluation on which the term returns true. The analysis drops
-information but never invents it, so it may refuse a valid implication and
-never admits an invalid one. An impossible `MustWhenTrue` region is refused
-rather than discharged vacuously: a terminal whose Guard can never return true
-does not satisfy the contract, and this strictness is not a claim that any
-authored terminal is reachable. The exact Check output must appear directly
+names a non-Boolean binding carries no literal, and every term constructor
+the calculus admits beyond the five named ones contributes no literal
+either. A literal in `when_true` holds on every evaluation on which the term
+returns true. The analysis drops information but never invents it, so it may
+refuse a valid implication and never admits an invalid one. An impossible
+region is refused rather than discharged vacuously, whether the terminal
+names a required Check or not: a terminal that no path reaches, or whose
+Guard can never return true, does not satisfy the contract, and this
+strictness is not a claim that any authored terminal is reachable.
+
+`Region`, `Implies`, `Disjoint`, and `ClaimStatus` are the forward abstract
+state of step 9 stated as closed set laws over structurally identified guard
+atoms, with no enumeration of valuations: an occurrence's region is its own
+guard together with the negations of every earlier terminal's guard, since
+scope openings are deterministic and a later occurrence is attempted only
+when no earlier terminal stopped the run. A claim is live at an occurrence
+when that occurrence's region implies its source's region and excludes every
+earlier linear consumer's region; it is dead when the region excludes its
+source or implies a consumer; `Unknown` is refused, because an authored
+terminal claim set cannot adapt to a path the algebra cannot decide. A
+reusable claim is never consumed, so it stays live for every later
+occurrence its source reaches and must appear in every terminal's claim set
+that its source reaches. The exact Check output must appear directly
 among the Guard inputs: no chain of derived values is followed, and a Guard
 that needs a Boolean combination expresses it in its own term. A primitive
 call contributes no literal, so an implication that holds only through a
 primitive's meaning is outside this regime exactly as a non-syntactic guard
 implication is. An `Always` Guard has no term and no inputs, so a terminal
-with an `Always` Guard cannot name a required Check. `LiveClaims(o_t)` is the
-live claim set of step 9's forward abstract state at `o_t`; a claim whose
-liveness that state leaves undetermined refuses admission, because an authored
-terminal claim set cannot adapt to a path on which its claim does not exist.
+with an `Always` Guard cannot name a required Check.
 
 Admission is deterministic and bounded by the K1 body limits plus linear scans,
 sorted-set operations, algorithm checks, and the finite abstract-state
