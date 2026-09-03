@@ -98,6 +98,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
+  -> F2-O2  provider interpretation, first attempt      [contract; after M3]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -548,6 +549,13 @@ provider, extraction tool, or durable schema.
   intake on two paths and refuses every named mutation (aggregate
   `Affirmative`), with one item `CannotAnswer` until the outcome partition is
   published.
+- [`f2o2-provider-interpretation-entry-contract.md`](f2o2-provider-interpretation-entry-contract.md)
+  fixes the first provider-interpretation attempt against the migrated formal
+  source: the generated VCVio artifact for the Schnorr subject, the five-clause
+  correspondence relation over schedule, values, checks, terminals, and
+  traces, the untrusted generator and independent checker, the residual trust
+  list, and the acceptance rule; it follows the Terminal-contract
+  mechanization and precedes applicability.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
