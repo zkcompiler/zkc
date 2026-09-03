@@ -80,17 +80,25 @@ its five dependents rotate, on top of the migration's seventeen.
   rule those premises would be refused. The two constructors now take the
   consuming question's scope, and the extractor question forms its own two
   premise identities over its own subjects.
-- The intake probe does not yet exercise the tenth kind or the
-  `Image`/`Unmodelled` lane image with `modelled_lanes`; that extension goes
-  with the package migration below.
+- The package migration (`f0v2d2-analysis-package-migration.md`) found a
+  second underdetermined identity: the Fresh premise's coordinate was "the
+  public-coin-law declaration named by `S.challenge_ref`" with no
+  authenticated projection behind the phrase. The PIR owner places
+  `fresh_law` on every challenge entry of the `PublicCoinView`, so the text
+  now reads it there: `AnalysisChallengeFreshLawCoordinate(S)` selects the
+  leaf and `SchnorrFreshLawRef(S)` is its value. The compact carrier index of
+  the model page now names the premise fields the exhaustive schemas carry.
+- The intake probe exercises the tenth kind and the `Image`/`Unmodelled`
+  lane image with `modelled_lanes` since the package migration.
 - Publication, with the migration: the Analysis profiles rotate through the
   kernel.
 - Migration of existing question, goal, context, proposition, support, and
   judgment bodies in the Analysis packages to the new fields: the review's
   round-two section states the exact plan for the closure package and its
   dependents (`evaluation/k3-analysis-closure`, the finite cover, the joined
-  boundary), and it starts now that the nonempty premise identities are
-  determined.
+  boundary); it is done, with the closure package at 213 of 213, and its
+  remaining `CannotAnswer` names the closure fixture, which does not publish
+  the migrated Protocol's declarations and is refrozen at publication.
 - The provider declaration for VCVio, item 3 of the decision packet: source
   pin, the closed carrier `Bool`, `modelled_lanes = [Accepted, Rejected]`, and
   the five-lane map for the Fresh Schnorr Protocol; a profile-level
