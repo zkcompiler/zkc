@@ -1368,6 +1368,28 @@
       }
     },
     {
+      "id": "research.fs-runtime",
+      "title": "Finite canonical-framed Fiat-Shamir runtime",
+      "subject": "One exact candidate TranscriptConstruction and same-Core Fiat-Shamir Protocol over the admitted finite Schnorr Core, including portable transition terms, exhaustive generation, independent replay, owner-view reproduction, the six-lane outcome partition, and a finite derivation table.",
+      "claim": "Under one explicit proposed application-domain declaration body, all 54 finite strategy and verifier cases execute and independently replay with exact completed-record fields; four construction views validate through both current schema compilers, the execution view is derived, the six lanes are measured, and nine transcript prefixes map to a value or exhaustion. Owner admission and the aggregate remain CannotAnswer because the companion owner page recognizes the application-domain declaration kind without defining its required nominal body.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-fs-runtime-f0v3c/run.py", "evaluation/formal-source-fs-runtime-f0v3c/model.py", "evaluation/formal-source-fs-runtime-f0v3c/executor.py", "evaluation/formal-source-fs-runtime-f0v3c/replay.py", "evaluation/formal-source-fs-runtime-f0v3c/views.py", "evaluation/formal-source-fs-runtime-f0v3c/README.md", "evaluation/formal-source-fs-runtime-f0v3c/expected-findings.json", "evaluation/formal-source-fs-runtime-f0v3c/expected-runs.json", "evaluation/formal-source-fs-runtime-f0v3c/derivation-vectors.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v3c-fs-runtime.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "long",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This finite candidate does not establish owner admission or publication, arbitrary-Core behavior, general evaluator correctness, compiler or backend correspondence, provider correspondence, theorem applicability, a protocol or cryptographic security property, duplex-sponge behavior, or production readiness."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-fs-runtime-f0v3c/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.provider-observable-audit",
       "title": "Provider observable audit",
       "subject": "Whether the exact admitted finite Schnorr Core and Fresh Protocol, as exposed by their six normalized owner views, carry every observable that a VCVio-shaped operational interpretation needs, and exactly which observables are missing.",

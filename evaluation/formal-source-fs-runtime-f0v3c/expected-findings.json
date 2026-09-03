@@ -1,0 +1,61 @@
+{
+  "aggregate": {
+    "code": "F0V3C-C-FS-RUNTIME",
+    "outcome": "CannotAnswer"
+  },
+  "cases": [
+    {"code": "F0V3C-C-APPLICATION-DOMAIN-BODY", "name": "admission", "outcome": "CannotAnswer"},
+    {"code": "F0V3C-A-FINITE-EXECUTION", "name": "execution", "outcome": "Affirmative"},
+    {"code": "F0V3C-A-INDEPENDENT-REPLAY", "name": "replay", "outcome": "Affirmative"},
+    {"code": "F0V3C-A-VIEW-REPRODUCTION", "name": "views", "outcome": "Affirmative"},
+    {"code": "F0V3C-A-SIX-LANE-PARTITION", "name": "outcome-partition", "outcome": "Affirmative"},
+    {"code": "F0V3C-A-DERIVATION-VECTORS", "name": "derivation-function", "outcome": "Affirmative"},
+    {"code": "F0V3C-C-FS-RUNTIME", "name": "aggregate", "outcome": "CannotAnswer"}
+  ],
+  "evidence_control": {
+    "application_module_id": "zkcidv0:foundation.semantic-module:520c2fa888946ea1a2217ab6f2c4aa837504296bb80d0d322d2215f328622360",
+    "candidate_fs_protocol_id": "zkcidv0:pir.protocol:83554765ae235514d1e77a72ca179315020c7d9efc320276a019ec6ce5827ae9",
+    "candidate_transcript_construction_id": "zkcidv0:pir.transcript-construction:84873ab6046a1ec005fed9b90cdabb9b6532ffbba890b00dadad53558b94f4ee",
+    "canonical_framed_profile_digest": "abda53a335ab143b97c15b3fc411425fc42ef815ac4aab2f920dade44d90c4df",
+    "challenge_map_count": 1,
+    "checked_conclusion": "StructurallyConstructed",
+    "construction_view_sha256": {
+      "CanonicalChallengeTransitionView": "2ec7461be88d8ea1f455b5a81052885895b0b24430eaa5d9ad6e3aecf0637605",
+      "CanonicalFSConstructionView": "834788fcb093fa257c8c1a8b62c72da9a9d28e38ecd8787bcb06e4968fdad3d4",
+      "CanonicalRequiredInfluenceView": "9049765588eb96eab63f894714b77ecb020a36665b631e7603f6aefc109ab775",
+      "CanonicalTranscriptDeclarationView": "6da5d167fc1e6b57759c1dfaa0697d2be3788cfcc25e600f2e30075dc431ffee"
+    },
+    "core_id": "zkcidv0:pir.interactive-core:dcb652fdca792d8664c51f2b98dca17d530607ff994c1eab15a59ed5c61cf2b8",
+    "derivation_vector_count": 9,
+    "derivation_vectors_sha256": "7de05a0abcd11be065ad80fa1fd761850778a6ce9a6698b234583e2c00729575",
+    "execution_view_sha256": "472665e2f7741c6fdf0fb56b24c9be04ec473cffba793926bb3198124b6ce44f",
+    "expected_runs_sha256": "8472118bdb27edf975cff6a0e559fd79a918bebc0f9c48d4bb80b3ab1524e06c",
+    "fiat_shamir_sha256": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef",
+    "fresh_protocol_id": "zkcidv0:pir.protocol:cc2fee36c903072621553a98fdb0d7bf3b84d13a18b0a51b04b7235367b7324f",
+    "honest_run_count": 27,
+    "interactive_core_sha256": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c",
+    "lane_counts": {
+      "Aborted": 0,
+      "Accepted": 24,
+      "InterpretationFailed": 6,
+      "OperationalNoncompletion": 0,
+      "Rejected": 24,
+      "StrategyStopped": 0
+    },
+    "occurrence_map_count": 6,
+    "portable_algorithms": {
+      "CanonicalFramedAbsorb": {"evaluation_contract": "zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63", "id": "zkcidv0:foundation.portable-algorithm:f40728a316473d8d0523c07bb39300d26cd3f27dbd04e5bcbf49d6b842479b41", "preimage_sha256": "654e9d118e4275d68b6537eeb3ca94130372c6fee73b8b1fdf0e9c376ba2de34"},
+      "CanonicalFramedAccept": {"evaluation_contract": "zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63", "id": "zkcidv0:foundation.portable-algorithm:d4ed2b9c66c0f8f1aae8e3905b88ea10a3ada2641647b9df136cbf0b19a755e4", "preimage_sha256": "5e36f0611cbb1b3a8e14a694304809884fe0d8a46f428763838059a0ef2a5146"},
+      "CanonicalFramedAdvanceState": {"evaluation_contract": "zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63", "id": "zkcidv0:foundation.portable-algorithm:82ba5b073d962293b21eee56d13fbde1be0e7fc0a0a5ea537517579e3eb1f674", "preimage_sha256": "600a6555173b5f422adc2a69c00f65228616e0546efc8e118ddf51d78ddd011e"},
+      "CanonicalFramedDecode": {"evaluation_contract": "zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63", "id": "zkcidv0:foundation.portable-algorithm:b0e894bcd4766c1caba493f0c31c9abbe3ce7e4b186d5bceea4bbf9133d70087", "preimage_sha256": "2583fb93d06a837a251ef476cdb27077937265cf4f05cdbc8d2491212b1adac2"},
+      "CanonicalFramedSqueezeBytes": {"evaluation_contract": "zkcidv0:foundation.evaluation-contract:55ca1ed251f0f1ff2dc97e7ffd61583ad422a78643741895e249405aa74dac63", "id": "zkcidv0:foundation.portable-algorithm:1812d2916d0a89d9fce75e28b499b3eceb9d60d7fafce4f9e4dd482ca74a9ec5", "preimage_sha256": "4d340b704ba15e10d17ee48418afbae132f4ca2dac6829595b0426028a2d3ff3"}
+    },
+    "replay_match_count": 54,
+    "replay_mutation_kills": 3,
+    "run_count": 54,
+    "sampling_exhaustions": 6,
+    "underdetermined_owner_coordinate": "docs-next/pir/fiat-shamir.md:68-71 and docs-next/pir/interactive-core.md:2256-2259",
+    "value_map_count": 5,
+    "verifier_input_count": 27
+  }
+}
