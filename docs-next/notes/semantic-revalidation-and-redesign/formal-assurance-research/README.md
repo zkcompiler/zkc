@@ -89,7 +89,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
   -> F0-V2C  migrated owner text                       [authored; publication gated]
-  -> F0-V2C1 freeze review of the migrated text         [round six complete, Affirmative]
+  -> F0-V2C1 freeze review of the migrated text         [round seven complete, Affirmative]
   -> B2D2   Fresh completed-record schema               [revalidated against migrated text]
   -> F0-V3  FS-family view determinacy                  [revalidated, Affirmative]
   -> F0-V3B FS-family view bodies and cone              [absorbed into owner text]
