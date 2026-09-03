@@ -2248,6 +2248,19 @@ PIRProfileLawReference =
 
 PIRProfileLawReferenceBody(x) = ProfileDeclarationRefBody(x)
 
+PIRReference =
+    ScopeRef | OccurrenceRef | ProverDecisionPointRef | ChallengeRef
+  | BindingRef | ClaimRef | ReductionRef | CheckRef | TerminalRef | OracleRef
+  | PublicInputRef | VerifierPrivateInputRef | ConstantRef | DerivedValueRef
+  | ValueRef
+  | ProtocolDeclarationRef<K> for a declaration kind K that Section 2 lists
+
+PIRReferenceBody(x) = the already defined exact body of x's reference type:
+  N(ordinal) for a Core-local dense ordinal, ValueRefBody(x) for a ValueRef,
+  and ModuleDeclarationRefBody(x) for a ProtocolDeclarationRef; the union is
+  closed, a ModuleEffectRef takes the AdmittedModuleEffect arm, and a leaf
+  of any other reference type is not a static-view leaf
+
 PIRViewAtomicBoundary =
     Unit | Natural | MetaBoolean | MetaSymbol | Bytes
   | ValueType | CanonicalValue(ValueType)
@@ -2662,7 +2675,38 @@ reference must resolve to. Substitution of another law reference is `Refused`,
 and a missing or wrong-kind declaration follows the ordinary
 `MissingDependency` or `KindMismatch` partition. The selected profile must
 list the declaration kind and ordinal in its exact catalog; a standalone
-profiled subject ID cannot substitute for the declaration reference. Closed
+profiled subject ID cannot substitute for the declaration reference. Which
+declaration each law-valued field names is fixed by the owner profile's
+selection table, never chosen by a compiler; for the Interaction profile it is:
+
+```text
+PIRStaticViewLawFieldSelection(Interaction) = CanonicalMap [
+  (StrategyDecisionView, prover_view_formation_law)
+      -> the profile's pir.semantic-law declaration prover-view-formation-v0,
+         whose selector is ProverView of Section 9.2,
+  (ExecutionView, visible_history_law)
+      -> the profile's pir.semantic-law declaration visible-history-v0,
+         whose selector is VisibleHistory of Section 9.1,
+  (ExecutionView, generated_execution_law)
+      -> the profile's pir.semantic-law declaration execution-and-replay-v0,
+         whose selector is Section 12,
+  (ExecutionView, replay_qualification_law)
+      -> the profile's pir.semantic-law declaration replay-qualification-v0,
+         whose selector is ReplayRun of Section 12.4,
+  (ExecutionView, relation_run_view_issuance_law)
+      -> the profile's pir.semantic-law declaration run-view-issuance-v0,
+         whose selector is Section 13.5
+]
+```
+
+The field resolver and `StaticViewBody` consume this table: the leaf of a
+law-valued field is exactly the `LocalProfileDeclarationRef` of the listed
+declaration at its catalog ordinal, a law-valued field absent from the table
+does not resolve, and a table entry naming an absent, duplicate, wrong-kind,
+or imported declaration without a declaration dependency is `Refused`. The
+two Fiat--Shamir profiles state the same table for the fields of their own
+views on their own pages, naming an Interaction declaration only through an
+imported declaration dependency. Closed
 names such as `IdentityOnEveryOccurrenceRef` are nullary variant tags unless the declaring
 page displays parameters or a record body explicitly.
 

@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "interaction",
   "profile_family": "pir.interaction",
-  "revision": 1,
+  "revision": 2,
   "owner_page": "docs-next/pir/interactive-core.md",
   "expected_imports": [],
   "supported_subject_kinds": [
@@ -261,7 +261,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "static-view-schema-resolution-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "PIRStaticViewFieldResolution :=",
       "dependencies": []
@@ -281,13 +281,14 @@
     {
       "kind": "pir.static-view-schema",
       "name": "strategy-decision-view-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "StaticViewSchema(StrategyDecisionView) = {",
       "dependencies": [
         {"profile": "self", "kind": "pir.body-compiler", "name": "static-view-body-v0"},
         {"profile": "self", "kind": "pir.semantic-law", "name": "static-view-schema-resolution-v0"},
-        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"}
+        {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "prover-view-formation-v0"}
       ]
     },
     {
@@ -330,7 +331,7 @@
     {
       "kind": "pir.static-view-schema",
       "name": "execution-view-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "StaticViewSchema(ExecutionView) = {",
       "dependencies": [
@@ -339,8 +340,34 @@
         {"profile": "self", "kind": "pir.semantic-law", "name": "core-admission-v0"},
         {"profile": "self", "kind": "pir.semantic-law", "name": "execution-and-replay-v0"},
         {"profile": "self", "kind": "pir.semantic-law", "name": "protocol-outcome-partition-v0"},
-        {"profile": "self", "kind": "pir.semantic-law", "name": "run-view-issuance-v0"}
+        {"profile": "self", "kind": "pir.semantic-law", "name": "run-view-issuance-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "visible-history-v0"},
+        {"profile": "self", "kind": "pir.semantic-law", "name": "replay-qualification-v0"}
       ]
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "visible-history-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "VisibleHistory(party, boundary)",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "prover-view-formation-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "ProverView = {",
+      "dependencies": []
+    },
+    {
+      "kind": "pir.semantic-law",
+      "name": "replay-qualification-v0",
+      "revision": 0,
+      "fragment": "interaction-kernel",
+      "selector": "ReplayRun(",
+      "dependencies": []
     }
   ],
   "subjects": [
