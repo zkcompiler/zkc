@@ -102,6 +102,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
   -> Analysis premise owner text                        [authored; publication gated]
   -> F0-V2D1 review of the Analysis premise text        [round two, CannotAnswer; repairs applied]
+  -> F0-V2D2 Analysis package migration                 [complete, CannotAnswer; checks green]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -763,6 +764,16 @@ provider, extraction tool, or durable schema.
   set, prose Schnorr bindings, refreeze inputs), each with exact locations
   and replacements, plus the migration plan for the closure package; the
   round-two repairs are on the pages and a third round follows.
+- [`f0v2d2-analysis-package-migration.md`](f0v2d2-analysis-package-migration.md)
+  migrates the closure package, the finite cover, the joined boundary, and
+  the intake probe to the named-premise fields the owner text now carries,
+  with the tenth kind and the lane image; all four checks are affirmative on
+  their own terms (the closure package at 213 of 213), while the exact
+  question stays `CannotAnswer/F0V2D2-C-OWNER-IDENTITIES-UNDERDETERMINED`
+  because two required identities were encodable only as documented
+  candidates: the fixed-extractor question's premise scope, which the owner
+  text has since repaired, and the Fresh premise's protocol-declaration
+  coordinate, which the closure fixture does not publish.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
