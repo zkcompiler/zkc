@@ -535,9 +535,10 @@ AFKFixedPublicSetupBody(S) = {
                          S.fixed_setup_static_sources],
   exact_public_invocation_sources: S.public_setup_invocation_views,
   derived_projection:
-    AnalysisLawTerm<AFKFixedPublicSetupProjection> that first requires the
-    Fresh and Fiat--Shamir `PublicSetupInvocationViewBody.entries` to be
-    byte-identical and then combines that common entry sequence with the
+    AnalysisLawTerm<AFKFixedPublicSetupProjection> that first requires both
+    views' `run_established` sequences to be empty, then the Fresh and
+    Fiat--Shamir `PublicSetupInvocationViewBody.entries` to be byte-identical,
+    and then combines that common entry sequence with the
     CoreHeader, ConstructionHeader,
     ApplicationDomainHeader, scope/opening frames, public-parameter frames,
     challenge-condition framing schema, prefix-construction function, and
