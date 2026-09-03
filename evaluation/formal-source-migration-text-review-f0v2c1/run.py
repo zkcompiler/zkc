@@ -88,6 +88,11 @@ def _source_hashes() -> dict[str, str]:
     }
 
 
+def _canonical_sha256(value: Any) -> str:
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
 def _definition_count(text: str, symbol: str) -> int:
     return len(
         re.findall(
@@ -438,13 +443,16 @@ def _packet_review(pages: dict[str, str]) -> dict[str, Any]:
 def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
     interaction_path = "docs-next/pir/interactive-core.md"
     canonical_path = "docs-next/pir/fiat-shamir.md"
+    duplex_path = "docs-next/pir/duplex-sponge-fiat-shamir.md"
     interaction = pages[interaction_path]
     canonical = pages[canonical_path]
+    duplex = pages[duplex_path]
     foundation = _read(FOUNDATION)
 
     union = interaction.split("PIRReference =", 1)[1].split(
         "PIRReferenceBody(x)", 1
     )[0]
+    compact_union = " ".join(union.split())
     for reference in CORE_LOCAL_REFERENCE_TYPES:
         _require(
             union.count(reference) == 1,
@@ -453,8 +461,11 @@ def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
         )
     _require(
         len(re.findall(r"(?:^|\| )ValueRef(?:\n|$)", union, flags=re.MULTILINE)) == 1
-        and 'ProtocolDeclarationRef<K> for a declaration kind K that Section 2 lists'
-        in union,
+        and "ProtocolDeclarationRef<K> for a declaration kind K that the exact-used owner-module"
+        in compact_union
+        and "closure of the selected profile recognizes" in compact_union
+        and 'the canonical-framed profile adds "pir.fs-application-domain"'
+        in compact_union,
         f"{interaction_path}:{_line_number(interaction, 'PIRReference =')}: "
         "PIRReference arm shape drifted",
     )
@@ -462,7 +473,13 @@ def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
     section_two = interaction.split(
         "Several Core fields need nominal semantic coordinates", 1
     )[1].split("## 3. Subjects and identities", 1)[0]
-    section_two_kinds = sorted(set(re.findall(r'`"(pir\.[a-z0-9-]+)"`', section_two)))
+    interaction_kind_lines = {
+        match.group(1): interaction.count("\n", 0, interaction.find(
+            match.group(0), interaction.find(section_two)
+        )) + 1
+        for match in re.finditer(r'`"(pir\.[a-z0-9-]+)"`', section_two)
+    }
+    section_two_kinds = sorted(interaction_kind_lines)
     _require(
         section_two_kinds
         == [
@@ -479,6 +496,319 @@ def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
         f"{interaction_path}:{_line_number(interaction, 'The exact-used PIR owner-module closure')}: "
         "Section 2 declaration-kind census drifted",
     )
+
+    family_addition_pattern = re.compile(
+        r"owner-module closure additionally recognizes\s+"
+        r"`ProtocolDeclarationRef<\"([^\"]+)\">`"
+    )
+    canonical_additions = {
+        match.group(1): canonical.count("\n", 0, match.start(1)) + 1
+        for match in family_addition_pattern.finditer(canonical)
+    }
+    duplex_additions = {
+        match.group(1): duplex.count("\n", 0, match.start(1)) + 1
+        for match in family_addition_pattern.finditer(duplex)
+    }
+    _require(
+        canonical_additions == {"pir.fs-application-domain": 69},
+        f"{canonical_path}:{_line_number(canonical, 'owner-module closure additionally recognizes')}: "
+        "canonical-framed declaration-kind additions drifted",
+    )
+    _require(
+        not duplex_additions,
+        f"{duplex_path}:{_line_number(duplex, 'owner-module closure additionally recognizes')}: "
+        "the duplex profile unexpectedly adds a declaration kind",
+    )
+
+    profile_import_lines = {
+        "interaction": None,
+        "canonical-framed-fiat-shamir": _line_number(canonical, "profile imports are"),
+        "duplex-sponge-fiat-shamir": _line_number(
+            duplex, "imports exactly `PIRInteractionProfile`"
+        ),
+    }
+    _require(
+        profile_import_lines["canonical-framed-fiat-shamir"] == 74
+        and profile_import_lines["duplex-sponge-fiat-shamir"] == 58,
+        "family profile-import lines drifted",
+    )
+    _require(
+        "The exact no-extra authenticated closure" in duplex
+        and "contains this profile and `PIRInteractionProfileId`, and no"
+        in duplex,
+        f"{duplex_path}:{_line_number(duplex, 'The exact no-extra authenticated closure')}: "
+        "the duplex profile's no-extra closure statement drifted",
+    )
+
+    recognized_kinds = {
+        "interaction": section_two_kinds,
+        "canonical-framed-fiat-shamir": sorted(
+            set(section_two_kinds) | set(canonical_additions)
+        ),
+        "duplex-sponge-fiat-shamir": section_two_kinds,
+    }
+    profile_pages = {
+        "interaction": interaction_path,
+        "canonical-framed-fiat-shamir": canonical_path,
+        "duplex-sponge-fiat-shamir": duplex_path,
+    }
+    profile_rows = {
+        "interaction": VIEW_SCHEMAS[interaction_path],
+        "canonical-framed-fiat-shamir": VIEW_SCHEMAS[canonical_path],
+        "duplex-sponge-fiat-shamir": VIEW_SCHEMAS[duplex_path],
+    }
+
+    @dataclass(frozen=True)
+    class TypeDefinition:
+        expression: str
+        line: int
+        page: str
+
+    def type_definitions(page: str, text: str) -> dict[str, TypeDefinition]:
+        definitions: dict[str, TypeDefinition] = {}
+        for fence in re.finditer(r"```text\n(.*?)\n```", text, flags=re.DOTALL):
+            block = fence.group(1)
+            starts = list(
+                re.finditer(
+                    r"^([A-Z][A-Za-z0-9_]*)\s*=\s*(.*)$",
+                    block,
+                    flags=re.MULTILINE,
+                )
+            )
+            for index, start in enumerate(starts):
+                end = starts[index + 1].start() if index + 1 < len(starts) else len(block)
+                blank = block.find("\n\n", start.end())
+                if blank >= 0:
+                    end = min(end, blank)
+                expression = start.group(2) + block[start.end() : end]
+                definitions[start.group(1)] = TypeDefinition(
+                    expression=expression,
+                    line=text.count("\n", 0, fence.start(1) + start.start()) + 1,
+                    page=page,
+                )
+        return definitions
+
+    interaction_definitions = type_definitions(interaction_path, interaction)
+    interaction_definitions["MessageDeclaration"] = TypeDefinition(
+        expression="ProverMessageDecl | VerifierMessageDecl",
+        line=_line_number(interaction, "declaration: exact Message declaration"),
+        page=interaction_path,
+    )
+
+    terminal_arms = {
+        **{reference: "PIRReference" for reference in CORE_LOCAL_REFERENCE_TYPES},
+        "ValueRef": "PIRReference",
+        "PIRProfileLawReference": "PIRProfileLawReference",
+        "ModuleEffectRef": "AdmittedModuleEffect",
+        "AdmittedModuleEffectAtom": "AdmittedModuleEffect",
+        "PortableAlgorithmRef": "Bytes",
+    }
+    ignored_continuation_prefixes = (
+        "exactly the description",
+        "FSChallengeReceipt",
+        "DuplexInitializationReceipt",
+    )
+
+    census: list[dict[str, Any]] = []
+    uncovered: list[dict[str, Any]] = []
+    cycles: list[str] = []
+
+    def normalized_expression(expression: str) -> str:
+        lines = [
+            line
+            for line in expression.splitlines()
+            if not line.strip().startswith(ignored_continuation_prefixes)
+        ]
+        value = "\n".join(lines)
+        value = value.replace("exact Message declaration", "MessageDeclaration")
+        value = value.replace("exact Oracle declaration", "OracleDecl")
+        value = value.replace(
+            ", with ModuleEffectRef one opaque admitted atom", ""
+        )
+        return value
+
+    token_pattern = re.compile(r"\b[A-Z][A-Za-z0-9_]*\b")
+    protocol_pattern = re.compile(r'ProtocolDeclarationRef<"([^"]+)">')
+
+    def inspect_definition(
+        *,
+        profile: str,
+        view: str,
+        name: str,
+        definitions: dict[str, TypeDefinition],
+        stack: tuple[str, ...],
+    ) -> None:
+        if name in stack:
+            cycles.append(" -> ".join((*stack, name)))
+            return
+        definition = definitions.get(name)
+        _require(
+            definition is not None,
+            f"{profile_pages[profile]}:1: static view body {name} is absent",
+        )
+        assert definition is not None
+        expression = normalized_expression(definition.expression)
+        masked = list(expression)
+        occurrence = 0
+
+        def record_leaf(
+            *, leaf_type: str, arm: str | None, offset: int, kind: str | None = None
+        ) -> None:
+            nonlocal occurrence
+            occurrence += 1
+            line = definition.line + expression.count("\n", 0, offset)
+            row = {
+                "profile": profile,
+                "view": view,
+                "path": " -> ".join((*stack, name)),
+                "type": leaf_type,
+                "page": definition.page,
+                "line": line,
+                "occurrence": occurrence,
+                "arms": [] if arm is None else [arm],
+            }
+            if kind is not None:
+                row["declaration_kind"] = kind
+            census.append(row)
+            if arm is None:
+                uncovered.append(row)
+
+        for match in protocol_pattern.finditer(expression):
+            kind = match.group(1)
+            arm = "PIRReference" if kind in recognized_kinds[profile] else None
+            record_leaf(
+                leaf_type=f'ProtocolDeclarationRef<"{kind}">',
+                arm=arm,
+                offset=match.start(),
+                kind=kind,
+            )
+            for position in range(match.start(), match.end()):
+                masked[position] = " "
+
+        for match in token_pattern.finditer("".join(masked)):
+            token = match.group(0)
+            if token in terminal_arms:
+                record_leaf(
+                    leaf_type=token,
+                    arm=terminal_arms[token],
+                    offset=match.start(),
+                )
+            elif token in definitions:
+                inspect_definition(
+                    profile=profile,
+                    view=view,
+                    name=token,
+                    definitions=definitions,
+                    stack=(*stack, name),
+                )
+            elif token.endswith("Ref"):
+                record_leaf(leaf_type=token, arm=None, offset=match.start())
+
+    for profile, rows in profile_rows.items():
+        local_definitions = type_definitions(
+            profile_pages[profile], pages[profile_pages[profile]]
+        )
+        definitions = {**interaction_definitions, **local_definitions}
+        definitions["MessageDeclaration"] = interaction_definitions["MessageDeclaration"]
+        for view, body in rows:
+            inspect_definition(
+                profile=profile,
+                view=view,
+                name=body,
+                definitions=definitions,
+                stack=(),
+            )
+
+    _require(not cycles, f"static-view reference walk encountered cycles: {cycles}")
+    for row in census:
+        _require(
+            len(row["arms"]) <= 1,
+            f"{row['page']}:{row['line']}: {row['type']} has overlapping atomic arms",
+        )
+
+    direct_protocol_kinds = sorted(
+        {
+            row["declaration_kind"]
+            for row in census
+            if "declaration_kind" in row
+        }
+    )
+    unrecognized_kinds = sorted(
+        {
+            row["declaration_kind"]
+            for row in uncovered
+            if "declaration_kind" in row
+        }
+    )
+    counts_by_profile: dict[str, int] = {}
+    counts_by_view: dict[str, int] = {}
+    counts_by_type: dict[str, int] = {}
+    counts_by_arm: dict[str, int] = {}
+    source_lines: dict[str, dict[str, list[int]]] = {}
+    for row in census:
+        counts_by_profile[row["profile"]] = counts_by_profile.get(row["profile"], 0) + 1
+        view_key = f"{row['profile']}:{row['view']}"
+        counts_by_view[view_key] = counts_by_view.get(view_key, 0) + 1
+        counts_by_type[row["type"]] = counts_by_type.get(row["type"], 0) + 1
+        for arm in row["arms"]:
+            counts_by_arm[arm] = counts_by_arm.get(arm, 0) + 1
+        type_pages = source_lines.setdefault(row["type"], {})
+        type_pages.setdefault(row["page"], []).append(row["line"])
+    source_lines = {
+        leaf_type: {
+            page: sorted(set(lines)) for page, lines in sorted(type_pages.items())
+        }
+        for leaf_type, type_pages in sorted(source_lines.items())
+    }
+    census_digest = hashlib.sha256(
+        json.dumps(census, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    recognition = {
+        "interaction": {
+            "page": interaction_path,
+            "import_line": None,
+            "recognized_kinds": [
+                {"kind": kind, "page": interaction_path, "line": interaction_kind_lines[kind]}
+                for kind in section_two_kinds
+            ],
+            "added_kinds": [],
+            "determinate": True,
+        },
+        "canonical-framed-fiat-shamir": {
+            "page": canonical_path,
+            "import_line": profile_import_lines["canonical-framed-fiat-shamir"],
+            "recognized_kinds": [
+                {
+                    "kind": kind,
+                    "page": canonical_path if kind in canonical_additions else interaction_path,
+                    "line": canonical_additions.get(kind, interaction_kind_lines.get(kind)),
+                }
+                for kind in recognized_kinds["canonical-framed-fiat-shamir"]
+            ],
+            "added_kinds": [
+                {"kind": kind, "page": canonical_path, "line": line}
+                for kind, line in sorted(canonical_additions.items())
+            ],
+            "determinate": True,
+        },
+        "duplex-sponge-fiat-shamir": {
+            "page": duplex_path,
+            "import_line": profile_import_lines["duplex-sponge-fiat-shamir"],
+            "declaration_catalog_line": _line_number(
+                duplex, "Its declaration catalog contains"
+            ),
+            "no_extra_closure_line": _line_number(
+                duplex, "The exact no-extra authenticated closure"
+            ),
+            "recognized_kinds": [
+                {"kind": kind, "page": interaction_path, "line": interaction_kind_lines[kind]}
+                for kind in section_two_kinds
+            ],
+            "added_kinds": [],
+            "determinate": True,
+        },
+    }
 
     usage_markers = {
         "pir.message-channel": "declaration: exact Message declaration",
@@ -497,43 +827,15 @@ def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
             f"{interaction_path}:1: no static-view path reaches {kind}",
         )
 
-    direct_protocol_kinds: dict[str, int] = {}
-    for relative, rows in VIEW_SCHEMAS.items():
-        text = pages[relative]
-        for _view, body in rows:
-            block, start_line = _definition_block(text, body)
-            for match in re.finditer(r'ProtocolDeclarationRef<"([^"]+)">', block):
-                kind = match.group(1)
-                direct_protocol_kinds.setdefault(
-                    kind, start_line + block.count("\n", 0, match.start())
-                )
-    actual_protocol_kinds = sorted(set(section_two_kinds) | set(direct_protocol_kinds))
-    missing_protocol_kinds = sorted(set(actual_protocol_kinds) - set(section_two_kinds))
-    missing_references = [
-        {
-            "type": f'ProtocolDeclarationRef<"{kind}">',
-            "leaf_page": canonical_path,
-            "leaf_line": direct_protocol_kinds[kind],
-            "union_page": interaction_path,
-            "union_line": _line_number(
-                interaction,
-                "| ProtocolDeclarationRef<K> for a declaration kind K that Section 2 lists",
-            ),
-            "atomic_boundary_line": _line_number(
-                interaction, "PIRViewAtomicBoundary ="
-            ),
-        }
-        for kind in missing_protocol_kinds
-    ]
-
     body_required = (
         "N(ordinal) for a Core-local dense ordinal",
         "ValueRefBody(x) for a ValueRef",
         "ModuleDeclarationRefBody(x) for a ProtocolDeclarationRef",
+        "the union is closed under the selected profile",
         "a ModuleEffectRef takes the AdmittedModuleEffect arm",
     )
     _require(
-        all(item in interaction for item in body_required),
+        all(item in " ".join(interaction.split()) for item in body_required),
         f"{interaction_path}:{_line_number(interaction, 'PIRReferenceBody(x)')}: "
         "PIRReferenceBody delegation drifted",
     )
@@ -550,25 +852,36 @@ def _reference_closure_review(pages: dict[str, str]) -> dict[str, Any]:
     _require(
         "PortableAlgorithmRef := PortableAlgorithmId" in foundation
         and "Foundation\nsemantic references" in interaction
-        and "algorithm, evaluation-contract, or module identity leaf closes to that\n  identity alone"
-        in interaction,
+        and "algorithm, evaluation-contract, or module identity leaf closes to that identity alone"
+        in " ".join(interaction.split()),
         "the Foundation identity-leaf classification drifted",
     )
 
     return {
         "interaction_core_local_reference_leaves": list(CORE_LOCAL_REFERENCE_TYPES),
         "value_reference_leaf": "ValueRef",
-        "protocol_declaration_kind_leaves": actual_protocol_kinds,
-        "pir_reference_protocol_kind_arms": section_two_kinds,
+        "static_view_bodies": sum(len(rows) for rows in profile_rows.values()),
+        "reference_leaf_occurrences": len(census),
+        "reference_leaf_census": census,
+        "reference_leaf_census_sha256": census_digest,
+        "reference_leaf_counts_by_profile": dict(sorted(counts_by_profile.items())),
+        "reference_leaf_counts_by_view": dict(sorted(counts_by_view.items())),
+        "reference_leaf_counts_by_type": dict(sorted(counts_by_type.items())),
+        "reference_leaf_counts_by_atomic_arm": dict(sorted(counts_by_arm.items())),
+        "reference_leaf_source_lines": source_lines,
+        "protocol_declaration_kind_leaves": direct_protocol_kinds,
+        "recognized_declaration_kinds_by_profile": recognition,
+        "unrecognized_declaration_kinds": unrecognized_kinds,
         "separate_atomic_reference_arms": {
             "PIRProfileLawReference": "PIRProfileLawReference",
             "ModuleEffectRef": "AdmittedModuleEffect",
             "PortableAlgorithmRef": "Bytes through its exact ContentRefV0 body",
         },
         "pir_reference_body_delegations": 3,
-        "missing_pir_reference_leaves": missing_references,
-        "atomic_boundary_uncovered_leaves": missing_references,
-        "complete": not missing_references,
+        "atomic_boundary_uncovered_leaves": uncovered,
+        "complete": not uncovered
+        and not unrecognized_kinds
+        and all(row["determinate"] for row in recognition.values()),
     }
 
 
@@ -2342,9 +2655,12 @@ def _expected() -> dict[str, Any]:
 def check() -> tuple[list[Finding], dict[str, Any]]:
     findings, metrics = evaluate()
     expected = _expected()
-    _require([item.value() for item in findings] == expected["finding_codes"], "finding classifications drifted")
-    _require(metrics == expected["metrics"], "review evidence metrics drifted")
-    _require(expected["aggregate"] == _aggregate(findings), "aggregate finding drifted")
+    actual = {
+        "aggregate": _aggregate(findings),
+        "finding_codes": [item.value() for item in findings],
+        "metrics_sha256": _canonical_sha256(metrics),
+    }
+    _require(expected == actual, "frozen finding or evidence projection drifted")
     return findings, metrics
 
 
@@ -2365,6 +2681,7 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "aggregate": aggregate,
                     "finding_codes": [item.value() for item in findings],
+                    "metrics_sha256": _canonical_sha256(metrics),
                     "metrics": metrics,
                 },
                 indent=2,

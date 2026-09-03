@@ -668,3 +668,34 @@ that page's Section 2. The leaf consequently has no displayed
 transport but does not introduce, remove, or resolve any holdout boundary, so
 no verdict changes. The migration review note records the proposed owner-page
 delta; this note makes no independent owner selection.
+
+## Round six
+
+The five migrated owner pages and the migration record are re-pinned at the
+current migration head. The Interaction owner pin is now
+`42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c`,
+and the refreshed adjudication ledger is frozen at
+`1c8d29db577dd189669dfe2e7e67760585a2943188b95342d2978f3b8b185b74`.
+Its view citations move with the four added owner lines.
+
+All eight verdict rows were re-adjudicated against both comparison sources.
+Five still fit, three still break at the same named boundaries, none bend, and
+none disagree. The represented WHIR and WARPfold frontiers still have zero
+`Unknown` claim states and zero verdict changes. The aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
+The canonical family-view reference-boundary finding changes from
+`CannotAnswer` to
+`Affirmative/F0V2C2-A-FAMILY-VIEW-REFERENCE-BOUNDARY`. The transcript view's
+application-domain leaf remains at `docs-next/pir/fiat-shamir.md:1276`; that
+page recognizes the declaration kind at line 69 and imports Interaction at
+line 74. The generic declaration-reference arm is at
+`docs-next/pir/interactive-core.md:2256`, its body remains closed under the
+selected profile at line 2264, and `PIRViewAtomicBoundary` admits
+`PIRReference` at line 2270.
+
+The four source-specialized fitting rows remain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS` because no exact source
+profile supplies their Check, Reduction, Claim, and failure-guard references.
+That bounded source gap does not alter a frozen holdout verdict and is not an
+owner-page defect.

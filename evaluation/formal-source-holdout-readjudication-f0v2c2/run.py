@@ -34,7 +34,7 @@ SOURCE_PINS = {
 }
 
 OWNER_PINS = {
-    "docs-next/pir/interactive-core.md": "ca092e1808163c1659035f54e1cf31e6952b2e19ddec84628cce9a3f0d219d70",
+    "docs-next/pir/interactive-core.md": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c",
     "docs-next/pir/fiat-shamir.md": "5a8b081ca908f7f1ed66e917ba9d5a96cd10fcde2b4979bb60055b8cb7adfdef",
     "docs-next/pir/duplex-sponge-fiat-shamir.md": "54822176a39852d07d72a084d0a56a04f22c1207e16bb2e0196c4f84fa4954c5",
     "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
@@ -42,7 +42,7 @@ OWNER_PINS = {
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "7016217a227d376050abccae2f3616c668b87a38b6e35ca1148d964d39db8f7e",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "2b5fd94fbc524c20c0353487810b81bb7c82aa4d9a646433ad80f6d256562fe4",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
     "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",
@@ -593,12 +593,40 @@ def evaluate() -> dict[str, Any]:
     reference_union = owner_text.split("PIRReference =", 1)[1].split(
         "PIRReferenceBody(x)", 1
     )[0]
+    compact_reference_union = " ".join(reference_union.split())
     application_domain_leaf = (
         'application_domain: ProtocolDeclarationRef<"pir.fs-application-domain">'
         in canonical_text
     )
-    application_domain_arm = '"pir.fs-application-domain"' in reference_union
-    reference_boundary_closed = application_domain_leaf and application_domain_arm
+    profile_recognizes_application_domain = (
+        "The exact-used PIR owner-module closure additionally recognizes"
+        in canonical_text
+        and '`ProtocolDeclarationRef<"pir.fs-application-domain">`'
+        in canonical_text
+        and "profile imports are `{PIRInteractionProfileId}`" in canonical_text
+    )
+    profile_closed_reference_arm = (
+        "ProtocolDeclarationRef<K> for a declaration kind K that the exact-used owner-module"
+        in compact_reference_union
+        and "closure of the selected profile recognizes" in compact_reference_union
+    )
+    body_closed_under_profile = (
+        "the union is closed under the selected profile"
+        in " ".join(owner_text.split())
+    )
+    atomic_boundary_admits_reference = (
+        "PIRReference | PIRProfileLawReference | AdmittedModuleEffect"
+        in owner_text
+    )
+    reference_boundary_closed = all(
+        (
+            application_domain_leaf,
+            profile_recognizes_application_domain,
+            profile_closed_reference_arm,
+            body_closed_under_profile,
+            atomic_boundary_admits_reference,
+        )
+    )
     findings.append(
         Finding(
             "canonical-family-view-reference-boundary",
@@ -645,9 +673,12 @@ def evaluate() -> dict[str, Any]:
             "canonical_family_view_reference_boundary": {
                 "leaf_page": "docs-next/pir/fiat-shamir.md",
                 "leaf_line": 1276,
+                "profile_recognition_line": 69,
+                "profile_import_line": 74,
                 "union_page": "docs-next/pir/interactive-core.md",
                 "union_line": 2256,
-                "atomic_boundary_line": 2264,
+                "body_closure_line": 2264,
+                "atomic_boundary_line": 2268,
                 "closed": reference_boundary_closed,
             },
         },

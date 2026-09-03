@@ -1,5 +1,5 @@
 {
-  "adjudication_sha256": "3b089bbc1142d0e3bffacbadb0b5af5020723f24238ed641da878ecd7d3b921f",
+  "adjudication_sha256": "1c8d29db577dd189669dfe2e7e67760585a2943188b95342d2978f3b8b185b74",
   "aggregate": "F0V2C2-A-HOLDOUTS-READJUDICATED",
   "finding_codes": [
     [
@@ -124,8 +124,8 @@
     ],
     [
       "canonical-family-view-reference-boundary",
-      "CannotAnswer",
-      "F0V2C2-C-FAMILY-VIEW-REFERENCE-BOUNDARY"
+      "Affirmative",
+      "F0V2C2-A-FAMILY-VIEW-REFERENCE-BOUNDARY"
     ],
     [
       "holdout-readjudication",
@@ -133,5 +133,5 @@
       "F0V2C2-A-HOLDOUTS-READJUDICATED"
     ]
   ],
-  "findings_sha256": "cc644bc55c985b7804280e6a440b7e87befa457c840749b4e54ea3b54efbbb61"
+  "findings_sha256": "7a0646a2e9298755cb3a4218e4ac67afa556d1261cd45ed7952343165e6b0cc3"
 }

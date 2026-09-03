@@ -1374,3 +1374,205 @@ every protocol fits or every family-view leaf closes.
   `apply_patch` before the successful developer-tier run. Three transient JSON
   and log files were also mistakenly written under `/tmp`; all three were
   removed, and no outside-clone artifact remains.
+
+## Round six
+
+### Exact question and result
+
+Does the migrated PIR owner text close the nine independent freeze-review
+questions for decision fidelity, the Terminal contract, public-coin graph
+transfers and sinks, owner-view closure, manifest closure, publication
+reconstruction, family-view body closure, reference-leaf closure, and
+static-view law-field selection?
+
+Yes, for the exact pinned pages and manifests. All nine findings are now
+affirmative, so the aggregate is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`.
+
+| Finding | Outcome and stable code |
+|---|---|
+| decision fidelity | `Affirmative/F0V2C1-A-DECISION-FIDELITY` |
+| Terminal contract | `Affirmative/F0V2C1-A-TERMINAL-CONTRACT` |
+| public-coin graph | `Affirmative/F0V2C1-A-PCGRAPH-TRANSFER` |
+| owner-name closure | `Affirmative/F0V2C1-A-OWNER-CLOSURE` |
+| manifest closure | `Affirmative/F0V2C1-A-MANIFEST-CLOSURE` |
+| publication compilers | `Affirmative/F0V2C1-A-PUBLICATION-COMPILERS` |
+| family-body closure | `Affirmative/F0V2C1-A-FS-BODY-CLOSURE` |
+| reference-leaf closure | `Affirmative/F0V2C1-A-PIR-REFERENCE-CLOSURE` |
+| static-view law selection | `Affirmative/F0V2C1-A-STATIC-VIEW-LAW-SELECTION` |
+
+### Profile-relative reference closure
+
+The repaired arm at `docs-next/pir/interactive-core.md:2256-2259` admits a
+`ProtocolDeclarationRef<K>` exactly when the selected profile's exact-used
+owner-module closure recognizes `K`. `PIRReferenceBody` remains closed under
+the selected profile at lines 2261-2266, and `PIRViewAtomicBoundary` displays
+the `PIRReference` arm at lines 2268-2271.
+
+The recognized declaration-kind set is determinate for each selected profile
+from the owner pages alone:
+
+| Profile | Recognized declaration kinds | Declaring page lines |
+|---|---|---|
+| Interaction | `pir.message-channel`, `pir.challenge-domain`, `pir.public-coin-law`, `pir.coin-correlation-group`, `pir.challenge-sharing-contract`, `pir.claim-contract`, `pir.reduction-contract`, `pir.oracle-binding-contract`, `pir.oracle-domain-law` | `docs-next/pir/interactive-core.md:111-118` |
+| canonical-framed Fiat--Shamir | the nine Interaction kinds plus `pir.fs-application-domain` | the family kind is declared at `docs-next/pir/fiat-shamir.md:68-71`; the exact Interaction import is at lines 73-74 |
+| duplex-sponge Fiat--Shamir | the nine Interaction kinds, with no family-added declaration kind | the exact Interaction import is at `docs-next/pir/duplex-sponge-fiat-shamir.md:58`; the declaration catalog is listed at lines 68-71 and the no-extra closure at lines 73-76 |
+
+The checker now parses the text-code definitions, recursively follows every
+owner-defined type alias reachable from all sixteen static-view bodies, and
+classifies every reference-typed leaf occurrence. Exact Message and Oracle
+declarations are expanded through their owner aliases; runtime-schema prose is
+kept atomic rather than mistaken for an embedded static-view value.
+
+| Profile | Static views | Reference-leaf occurrences | Uncovered or multi-arm leaves |
+|---|---:|---:|---:|
+| Interaction | 6 | 279 | 0 |
+| canonical-framed Fiat--Shamir | 5 | 36 | 0 |
+| duplex-sponge Fiat--Shamir | 5 | 71 | 0 |
+| total | 16 | 386 | 0 |
+
+The arm census is 332 `PIRReference` occurrences, 35
+`PIRProfileLawReference` occurrences, two `AdmittedModuleEffect` occurrences,
+and seventeen `Bytes` occurrences reached through exact portable-algorithm
+identity bodies. The ten declaration-reference kinds reached by the views are
+the nine Interaction kinds and the canonical family kind. Every such leaf is
+recognized by its selected profile and takes exactly the `PIRReference` arm.
+No declaration kind is used without a page-level recognition statement.
+
+The complete ordered census is frozen by SHA-256
+`58ea5d029502ca5c01d784dbb0cdfe1769129f928d49c089f4019195c891dd7e`;
+the complete review metrics, including the census preimage, source hashes, and
+all prior bounded experiments, are frozen by SHA-256
+`59a5c7fb539dfc8ea60c28e4e3a256002a9e0b8e9b43b1180cd6ed69cc43778b`.
+
+### Holdout re-adjudication
+
+The holdout package is re-pinned to the current owner pages and migration
+record, and its owner-section citations move with the four added lines. All
+eight rows agree again with the adjudication record and structural-axes
+matrix: five fit, three break, none bend, and none disagree. No verdict
+changes. The verdict aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
+The canonical family-view boundary changes from `CannotAnswer` to
+`Affirmative/F0V2C2-A-FAMILY-VIEW-REFERENCE-BOUNDARY`: the application-domain
+leaf at `docs-next/pir/fiat-shamir.md:1276` is recognized by that family page
+at line 69 and is carried by the repaired generic arm. The four
+source-specialized fitting rows separately remain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`; no exact source profile was
+invented for them, and that bounded source gap does not change a verdict.
+
+### Publication reconstruction
+
+The reference and independent publication compilers agree on all eighteen
+profiles and emit one identity table without writing the publication table.
+Relative to the pinned migration base, the exact rotation cone remains these
+seventeen profiles: `interaction`, `canonical-framed-fiat-shamir`,
+`duplex-sponge-fiat-shamir`, `public-setup`, `commitment-opening`,
+`oracle-commitment`, `verifier-derived-query-plan`, `interface-plan`,
+`oir-endpoint-graph`, `endpoint-source-view`, `oir-projection-relation`,
+`relations`, `analysis-cryptographic-property`, `analysis-afk-transport`,
+`analysis-afk-theorem-source-validation`,
+`analysis-incremental-composition`, and
+`analysis-incremental-composition-source-validation`. `analysis-kernel` alone
+is stable, and Foundation is unchanged.
+
+### Owner-page delta status
+
+The round-five proposed delta is satisfied by the current generic,
+profile-relative arm and is no longer a live proposal. This lane proposes no
+new owner-page change and edits no owner page.
+
+## Handoff
+
+Main should commit this working tree with subject:
+
+```text
+test: review the reference atom's profile closure and re-pin the holdouts
+```
+
+### Files changed
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py`,
+  `expected-findings.json`, and `README.md` replace the direct-leaf spot check
+  with a recursive sixteen-view census, freeze all nine affirmative findings,
+  and document the three determinate recognized-kind sets.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py`,
+  `adjudication.json`, `expected-findings.json`, and `README.md` re-pin the
+  current pages, refresh shifted citations, and change only the family-view
+  reference-boundary finding to affirmative. The eight verdicts do not change.
+- `evaluation/README.md` refreshes the two existing package rows.
+- This note and `f0v2c2-holdout-readjudication.md` record round six.
+
+No owner page, profile manifest, check manifest, directory README, lifecycle
+inventory, lifecycle count pin, publication table, real Git index, private
+ledger, or mechanization file was edited. No package was added. No commit,
+push, or pull request was attempted.
+
+### Validation
+
+The lifecycle-sensitive commands used `.lane-index`, a clone-local writable
+object store, the checkout objects as read-only alternates, and a clone-local
+offline dependency cache. The alternate index and temporary object/cache
+directories were removed after the checks.
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| required owner diff inspection | 0 | under 0.1 s | confirmed only the profile-relative declaration arm and its closure wording changed |
+| pre-edit migration review `--check` | 1 | 0.06 s | old arm-shape expectation refused the repaired owner text |
+| pre-edit holdout `--check` | 1 | 0.04 s | old owner/support pins and frozen boundary finding drifted |
+| `python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check` | 0 | 0.97 s | nine of nine findings affirmative; no blocker |
+| `python3 -B evaluation/formal-source-holdout-readjudication-f0v2c2/run.py --check` | 0 | 0.04 s | twenty-six findings reproduced; five fits, three breaks, zero verdict changes |
+| `python3 -B evaluation/semantic-profile-publication/run.py --print-identities` | 0 | 0.36 s | both compilers agreed on eighteen profiles and one table without writing it |
+| `python3 -B checks/run.py validate` with the alternate index | 0 | 0.05 s | 76-check, 6-tier manifest valid |
+| `python3 -B checks/run.py run --tier developer` with the final alternate index and offline cache | 0 | 1.81 s | 9 of 9 developer checks passed, including lifecycle inventory |
+| `python3 -B checks/run.py run --check research.migration-text-review` with the same environment | 0 | 1.04 s | focused review wrapper passed |
+| `python3 -B checks/run.py run --check research.holdout-readjudication` with the same environment | 0 | 0.10 s | focused holdout wrapper passed |
+| `git diff --check` | 0 | under 0.1 s | no whitespace errors |
+
+### Aggregate outcome
+
+- Migration review: `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`; all nine
+  questions close. All 386 recursively reached reference-leaf occurrences
+  take exactly one atomic-boundary arm.
+- Holdout readjudication:
+  `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`; all eight verdicts remain
+  frozen and none changes. The canonical family-view reference-boundary
+  finding is now affirmative. Four exact source-specialized terminal carriers
+  remain `CannotAnswer` without affecting the verdict aggregate.
+- Publication reconstruction: both compilers agree on all eighteen profiles;
+  the migration-base cone contains seventeen profiles and only
+  `analysis-kernel` is stable.
+
+### Nonclaims
+
+These byte-pinned source checks do not publish owner text or identities, prove
+the owner laws for arbitrary values, establish implementation or backend
+correspondence, establish relation satisfaction or theorem truth, prove a
+cryptographic or protocol-security property, validate an endpoint or
+deployment, admit an exact holdout Core, or establish production readiness.
+The reference result does not choose the semantics of a nominal declaration or
+cover an unlisted future profile. The affirmative holdout aggregate says every
+row was re-adjudicated with a frozen verdict, not that every protocol fits.
+
+### Surprises and corrections to the brief
+
+- This clone does not contain `AGENTS.md` or `.claude/CLAUDE.md`; their
+  read-only primary-checkout copies supplied the required instructions.
+- The general package discipline requests a manifest entry, while the
+  task-specific instruction forbids manifest edits. No package was added, so
+  the existing entries were retained. Their human-readable claims still state
+  the round-five result and must not be read as round-six metadata.
+- The workflow's private status-ledger append conflicts with the express
+  outside-clone write prohibition and read-only mount, so no private ledger was
+  changed.
+- Under this read-only Git mount, the example alternate-index command also
+  needs a clone-local writable object store. Because the index itself sits
+  inside the worktree, the first `git add -A` staged `.lane-index` and its
+  transient lock; an initial cached removal exited 1, and the explicit forced
+  cached removal succeeded without touching the real index or worktree files.
+- The command sandbox rejected the first explicit `rm -f` cleanup command
+  before execution. A nonrecursive `unlink` for the index and depth-first
+  deletion of the two exact temporary directories completed the cleanup.
+- The lifecycle count pins do not move: this round updates two existing
+  packages and adds none.

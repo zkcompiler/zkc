@@ -12,20 +12,30 @@ Run from the repository root:
 python3 -B evaluation/formal-source-migration-text-review-f0v2c1/run.py --check
 ```
 
-The round-five frozen answer is
-`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`: eight questions close and
-the reference-leaf question does not. The canonical-framed transcript view
-uses `ProtocolDeclarationRef<"pir.fs-application-domain">` at
-`docs-next/pir/fiat-shamir.md:1276`. The `PIRReference` declaration arm at
-`docs-next/pir/interactive-core.md:2256` admits only declaration kinds listed
-in that page's Section 2, which does not list this family kind. The leaf
-therefore also falls outside every arm displayed by `PIRViewAtomicBoundary`
-at line 2264. `PIRReferenceBody` has the necessary generic declaration-body
-delegation, but its domain is not reached.
+The round-six frozen answer is
+`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`: all nine questions close. The
+`PIRReference` declaration arm at `docs-next/pir/interactive-core.md:2256-2259`
+now ranges over the declaration kinds recognized by the selected profile's
+exact-used owner-module closure, and `PIRReferenceBody` remains closed under
+that profile at lines 2261-2266.
+
+The declaration-kind set is determinate from the three profile pages. The
+Interaction profile recognizes nine kinds at
+`docs-next/pir/interactive-core.md:111-118`. The canonical-framed profile
+imports Interaction at `docs-next/pir/fiat-shamir.md:73-74` and adds
+`pir.fs-application-domain` at lines 68-71, for ten kinds. The duplex profile
+imports exactly Interaction at `docs-next/pir/duplex-sponge-fiat-shamir.md:58`,
+lists its declaration catalog at lines 68-71, and states its no-extra closure
+at lines 73-76, so it recognizes the inherited nine and adds none.
 
 The checker pins the six migrated owner pages, eight migrated manifests, and
-the two earlier candidate packet sources. It checks all sixteen
-`StaticViewSchema` body references, the split source-envelope compilers and
+the two earlier candidate packet sources. It recursively walks all sixteen
+`StaticViewSchema` bodies and their owner-defined type aliases. The frozen
+census has 386 reference-leaf occurrences: 332 take `PIRReference`, 35 take
+`PIRProfileLawReference`, two take `AdmittedModuleEffect`, and seventeen
+portable algorithm references take `Bytes` through their exact identity body.
+Every occurrence takes exactly one displayed `PIRViewAtomicBoundary` arm and
+none is uncovered. The checker also covers the split source-envelope compilers and
 no-policy arm counts, every manifest declaration and subject reference, the
 dependency graph, selected revision transitions, and all 95 fields in the
 eight family bodies. Every field must be an exact identity, value, natural,
@@ -61,11 +71,11 @@ determinate catalog ordinal, all four imported entries have consuming-schema
 dependencies, all nine new selectors occur exactly once in their source
 fragments, and none of the twenty pre-existing law ordinals moved.
 
-A passing `--check` reproduces this frozen eight-affirmative, one-
-`CannotAnswer` result. It does not convert the missing reference arm into an
-affirmative, repair owner text, or establish that another undocumented carrier
-implicitly covers the leaf. It also does not publish or bless an identity,
-prove the Terminal law for arbitrary Core values, validate a live
+A passing `--check` reproduces the frozen nine-affirmative result and the
+digest of the complete evidence metrics. It does not choose the semantics of
+any nominal declaration, establish that the recognized-kind sets are complete
+for an unlisted future profile, or repair owner text. It also does not publish
+or bless an identity, prove the Terminal law for arbitrary Core values, validate a live
 compiler/runtime/backend, establish relation satisfaction or theorem truth, or
 make a Fiat--Shamir, random-oracle, concrete-sponge, QROM, protocol-security,
 endpoint-validity, deployment, or production-readiness claim.

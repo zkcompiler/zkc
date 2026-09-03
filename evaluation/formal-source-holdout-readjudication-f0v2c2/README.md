@@ -30,13 +30,12 @@ The complete terminal, view, and outcome ledger is frozen in
 [`adjudication.json`](adjudication.json). The supporting note gives the
 field-by-field reading and exact owner-section citations.
 
-Round five re-pins the same eight verdict rows after the three static-view
-profiles acquired explicit law selections. No verdict changes. A separate
-`CannotAnswer/F0V2C2-C-FAMILY-VIEW-REFERENCE-BOUNDARY` finding records that
-the canonical-framed transcript view's application-domain declaration leaf is
-not admitted by the current `PIRReference` union. This owner-text gap limits
-family-view transport, but it does not supply or remove a holdout boundary and
-therefore does not change the verdict-only aggregate.
+Round six re-pins the same eight verdict rows after the reference arm was made
+profile-relative. No verdict changes. The canonical-framed transcript view's
+application-domain declaration leaf at `docs-next/pir/fiat-shamir.md:1276` is
+now admitted by the profile-relative `PIRReference` arm at
+`docs-next/pir/interactive-core.md:2256-2259`; the separate family-view
+reference-boundary finding is therefore affirmative.
 
 ## Executable evidence
 
@@ -96,9 +95,11 @@ binding-opening and Reduction-output source regions explicitly. It shows only
 that the repaired source map changes none of these frozen holdout verdicts; it
 does not prove `ClaimStatus` for arbitrary Core values.
 
-The pass does not establish complete family-view reference transport: the
-canonical application-domain leaf remains outside the displayed atomic
-boundary until the owner text changes or the family view stops using it.
+The pass establishes only the bounded canonical application-domain reference
+transport: the family page recognizes that declaration kind, the generic
+reference body delegates its exact body, and the atomic boundary admits the
+result through `PIRReference`. It does not select application-domain semantics
+or generalize this result to an unlisted future profile or declaration kind.
 
 ## Nonclaims
 
