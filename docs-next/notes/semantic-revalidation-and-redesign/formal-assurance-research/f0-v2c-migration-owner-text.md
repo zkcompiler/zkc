@@ -205,7 +205,15 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   reachability checks pass on the new manifests.
   Research checks integrated after that measurement that pin the Interaction
   page, the structural-axes matrix and the family-instance probe, join the
-  set in the first class.
+  set in the first class. Measured again at the head closed by the fourth
+  review round, 27 of 57 research checks fail and 30 pass; the additions are
+  the two above, the provider interpretation, whose generator re-derives its
+  certificate from the current subject and must refreeze it, and the kernel
+  mechanization, which pins a sibling package's frozen findings and Section
+  10 before the claim-source repair. The publication check itself fails only
+  on the frozen upstream profile digests, which is the publication gate. The
+  classes are unchanged, and the publication compiler's uniqueness and
+  reachability checks still pass on the manifests.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
 - The second review round is closed: all seven questions are affirmative on
