@@ -1,10 +1,10 @@
-# Mechanized closed forward state of the Terminal contract
+# Mechanized claim-source regions of the Terminal contract
 
 This package asks one exact question: under the pinned Interactive Core text,
-does a core-Lean transcription prove the amended must-fact analysis and the
-closed `Region`, `Implies`, `Disjoint`, `ClaimStatus`, and `LiveClaims` laws
-sound for every schedule and valuation, and does its closed Terminal decision
-agree with an independent Python decision on every frozen representable
+does a core-Lean transcription prove the repaired `BoundaryRegion`,
+`ClaimSourceRegion`, `ClaimStatus`, and `LiveClaims` laws sound for every
+schedule and guard valuation, while retaining the previous Terminal decision
+and agreeing with an independent Python path on every frozen representable
 carrier without `sorry`?
 
 Run from the repository root:
@@ -14,93 +14,104 @@ ZKC_LAKE=$HOME/.elan/bin/lake \
   python3 -B evaluation/formal-kernel-mechanization-m0/run.py --check
 ```
 
-The frozen answer is `Affirmative/M4-A-FORWARD-STATE-SOUND`.
+The frozen answer is `Affirmative/M5-A-CLAIM-SOURCE-REGIONS-SOUND`.
 
 ## Authority and source boundary
 
 Nothing in this package is normative. The owner is
-`docs-next/pir/interactive-core.md`, particularly Sections 6.2--6.4 and 10;
-the portable term and evaluator owner remains
+`docs-next/pir/interactive-core.md`, particularly Sections 4.4 and 10; the
+portable term and evaluator owner remains
 `docs-next/foundation/executable-foundations.md`. The package changes no owner
 page and publishes no semantic identity.
 
 `source-pins.json` fixes migration head
-`76f49ec1df3d9b5a241768da2fed8f5d46bd0799`, the current owner text, the
-terminal projection and integrated graph findings, the refrozen holdout
-findings and adjudication, and retained graph vectors. The historical
-integrated exporter still collides with a live manifest definition, so its
-already-frozen graph vector is replayed only after digest authentication. That
-transport limitation remains an explicit `CannotAnswer` finding.
+`5105247d1b7aeebd67bb26a6dce2191cd4b9e034`, the two owner pages, and only the
+raw inputs needed to reconstruct the retained carriers. It does not pin any
+other package's `expected-findings.json` and does not pin a research note.
+Holdout outcomes and shapes are read from that package's adjudication input,
+not from its frozen findings. The historical integrated exporter still
+collides with a live manifest definition, so its already-frozen graph vector
+is replayed only after digest authentication. That transport limitation
+remains an explicit `CannotAnswer` finding.
 
 The project pins `leanprover/lean4:v4.33.1`. Kernel modules import only package
 modules and Lean core. There is no Mathlib, Batteries, Std, VCVio, ArkLib,
 Lake dependency, declared axiom, or `sorry`. JSON handling remains isolated in
 `Transport.lean` and the executable entry point.
 
-## Closed definitions and universal results
+## Repaired source-region model
 
-`Terminal.lean` transcribes all five owner closures:
+The mechanization resolves each source reference before applying the owner
+law:
 
-- every portable term constructor other than literal, variable, let,
-  conditional, and primitive call contributes no literal;
-- a non-Boolean input contributes no literal on either Boolean result branch;
-- fact union normalizes opposite polarities of one input to `Impossible`;
-- non-impossible occurrence region and guard facts form a standalone first
-  Terminal clause; and
-- the forward state is the closed region and claim-status algebra, with
-  `Unknown` refused.
+- `BoundaryRegion(Initially)` is possible and contains no literals;
+- `BoundaryRegion(BeforeOccurrence(o))` contains only the negative guards of
+  earlier terminal occurrences. It deliberately omits `o`'s own guard;
+- an `InitialClaim(binding)` uses the opening of the binding's scope; and
+- a `ReductionOutput(r, output)` uses `Region(o_r)`, where `o_r` is the
+  occurrence of `ApplyReduction(r)`.
 
-The retained fuel induction against `evalCore` re-proves true- and false-fact
-soundness for mixed Boolean and non-Boolean input environments. Both
-`Impossible` corollaries follow from those universal results.
+`ClaimStatus`, `LiveClaims`, and `TerminalContract` are restated over this
+`ClaimSourceRegion`. A separate diagnostic computes the rejected occurrence
+coercion for comparison only; it is not part of the contract or aggregate.
 
-For every finite schedule and every opaque-guard valuation,
-`attempted_iff_region_holds` proves that an occurrence is attempted exactly
-when its positive and negative region literals hold and the region is
-possible. `region_impossible_iff_unreachable` proves that `impossible` is
-equivalent to absence of any attempted valuation.
+For every schedule and valuation,
+`boundary_reached_iff_boundary_region_holds` proves exactness of both boundary
+forms, and `claimSourceRegion_holds_iff_exists` lifts that equivalence to both
+resolved claim-source forms. `claimStatus_live_sound` proves that a
+well-formed claim judged `Live`
+is live on every path reaching the target occurrence, and
+`claimStatus_dead_sound` proves that one judged `Dead` is live on none. A
+Reduction source must resolve to its earlier ApplyReduction occurrence. An
+initial source must resolve to the deterministic opening of its binding's
+scope. These are universal theorems, not fixture enumeration.
 
-For every well-formed claim binding and attempted occurrence,
-`claimStatus_live_sound` proves that `Live` means live on every such path, and
-`claimStatus_dead_sound` proves that `Dead` means live on none. These are
-schedule-parametric theorems, not fixture enumeration. The executable carrier
-comparison separately enumerates each finite carrier's guard valuations as an
-independent falsification oracle.
+The owner text permits only the root scope to open `Initially`. The direct
+carriers therefore cover the root initial boundary, child scopes opening
+before an unguarded occurrence and before a guarded occurrence, and Reduction
+outputs consumed at later guarded terminals. A child scope opening `Initially`
+would fail Core scope-tree admission and is not fabricated as a positive
+carrier.
 
-`terminalContractDecision_correct` proves the Boolean decision equivalent to
-the closed proposition: possible terminal region and guard facts, required
-Check and Reduction attemptedness, direct positive Check use, no `Unknown`
-claim, and exact `LiveClaims` equality. Sorted-unique lists, input-type arity,
-claim-source order, and source existence remain admission-wrapper checks rather
-than additions to `TerminalContract`.
+## Retained Terminal results
 
-## Frozen carrier results
+The retained must-fact proof is still against the M2 evaluator. Region
+exactness, first-active soundness, the closed Terminal decision, and its
+standard-axiom report remain checked. The Python path independently enumerates
+all guard valuations for each finite carrier and checks occurrence-region,
+boundary-region, source-region, `Live`, and `Dead` exactness or soundness before
+comparing its Terminal result with Lean.
 
-The exporter freezes 29 records. Twenty-seven are representable by the closed
-decision and two exact projection mutations intentionally remain outside this
-Terminal surface. Lean and the independently structured Python checker agree
-on every decision, region flag, claim status, and live-claim list.
+The exporter freezes 33 records: the previous 29 plus four direct
+claim-source-region discriminators. Thirty-one are representable by the closed
+decision; two exact projection mutations remain outside this Terminal surface.
 
 | Carrier family | Result |
 |---|---|
-| Exact Terminal projection | The positive carrier is admitted and all 15 representable mutations are refused, matching the pinned predecessor. Check ABI and claim-output SSA mutations remain `CannotAnswer` because they belong to earlier admission steps. |
-| Five integrated graph carriers | All are refused. Claim 0 is reusable, stays `Live`, and is omitted from the authored terminal sets; the predecessor graph check did not execute this closure. |
-| WARPfold finite shape | The one-Check, no-claim accepting shape and unconditional fallback are admitted. |
-| WHIR finite shape | The five direct Checks, two identically guarded linear reductions, accepting terminal with no live claim, and fallback with the initial claim are admitted. |
-| Four controls | Non-Boolean direct-use, contradictory guard, impossible occurrence region, and `Unknown` claim status each refuse at the intended closed clause. |
+| Exact Terminal projection | The positive carrier admits and all 15 representable mutations refuse, matching the pinned predecessor. Check ABI and claim-output SSA mutations remain `CannotAnswer` because they belong to earlier admission steps. |
+| Five integrated graph carriers | All remain refused. Claim 0 is reusable, stays `Live`, and is omitted from the authored terminal sets. |
+| WARPfold finite shape | The one-Check, no-claim accepting shape and unconditional fallback remain admitted. |
+| WHIR finite shape | The accepting and fallback terminals retain their previous statuses and remain admitted. |
+| Four closed-contract controls | Non-Boolean direct use, contradictory guard, impossible occurrence region, and `Unknown` claim status each refuse at the intended clause. |
+| Four source-region discriminators | Root `Initially`, child-before-unguarded, child-before-guarded, and consumed Reduction-output cases all admit. The guarded child claim is `Live` on both reaching paths under `ClaimSourceRegion`; the rejected occurrence coercion says `Unknown`. |
 
-The two holdout rows are normalized Terminal shapes from the refrozen
-adjudication, not complete admitted source Cores. Exact carrier comparison for
-Circle STARKs, virtual multiparty Sumcheck, interactive Galois-ring protocol,
-and broad cross-system WARPfold remains `CannotAnswer` because those exact
-coordinates are absent.
+No verdict among the previous 29 records changes. The guarded child-scope
+discriminator isolates the semantic repair: its source exists before the
+named occurrence's guard is evaluated, so the repaired law says `Live`, while
+the pre-repair occurrence coercion incorrectly imports that guard and says
+`Unknown`.
+
+The two holdout rows are normalized Terminal shapes, not complete admitted
+source Cores. Exact carrier comparison for Circle STARKs, virtual multiparty
+Sumcheck, interactive Galois-ring protocol, and broad cross-system WARPfold
+remains `CannotAnswer` because exact coordinates are absent.
 
 ## Frozen artifacts
 
 | File | Role |
 |---|---|
-| `vectors/terminal-contract.json` | Closed schedules, claim sources and linear consumers, Terminal declarations, controls, source hashes, and predecessor outcomes. |
-| `export_terminal_vectors.py` | Deterministic normalization from pinned predecessor and owner evidence. |
+| `vectors/terminal-contract.json` | Schedules, resolved claim sources, consumers, Terminal declarations, controls, source hashes, and predecessor outcomes. |
+| `export_terminal_vectors.py` | Deterministic normalization from pinned owner and raw package inputs. |
 | `terminal_checker.py` | Independent Python implementation plus exhaustive finite-valuation falsification. |
 | `lean/M0/Terminal.lean` | Core definitions, universal soundness proofs, and proved Terminal decision. |
 | `lean/Main.lean` | JSON transport and executable carrier reports. |
@@ -112,14 +123,17 @@ package and are rechecked unchanged.
 
 ## Axioms and cost
 
-The new region, claim-status, must-fact, and decision theorems use at most the
-package's existing standard Lean allowance: `propext`, `Classical.choice`, and
-`Quot.sound`. The emitted axiom inventory contains no `sorryAx` or native
-decision axiom.
+`boundary_reached_iff_boundary_region_holds`,
+`claimSourceRegion_holds_iff_exists`, `claimStatus_live_sound`, and
+`claimStatus_dead_sound` use only `propext` and `Quot.sound`. The complete
+inherited package remains within `propext`, `Classical.choice`, and
+`Quot.sound`; there is no `sorryAx` or native-decision axiom.
 
+The frozen result contains 78 findings: 62 `Affirmative`, 15 retained
+`CannotAnswer`, and one expected `Refused`. Its checksum is
+`f4a08f735b54ba9697f792be5be3c169921c0005e66c621efdfd935cd689b6ae`.
 Every run records wall times, Lean source line counts, and theorem axiom sets
-under `metrics`. These measurements characterize one local run only and are
-not stable performance claims.
+under `metrics`; these measurements characterize one local run only.
 
 ## Nonclaims
 

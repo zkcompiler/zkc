@@ -37,6 +37,13 @@ structure ScheduledOccurrence where
   isTerminal : Bool
   deriving Repr, DecidableEq
 
+/-- The two owner-authored scope-opening forms.  A `beforeOccurrence` boundary
+is processed before the named occurrence's guard is evaluated. -/
+inductive ScopeOpening where
+  | initially
+  | beforeOccurrence (occurrence : Nat)
+  deriving Repr, DecidableEq
+
 def AttemptGuards : AttemptGuard → List GuardAtom
   | .always => []
   | .evaluate atom => [atom]
@@ -392,6 +399,67 @@ theorem region_impossible_iff_unreachable
         have attempted :=
           (attempted_iff_region_holds schedule valuation index occurrence atIndex).mpr holds
         exact False.elim (unreachable valuation attempted)
+
+/-! ## Scope-boundary regions -/
+
+/-- The exact owner-authored region of a deterministic scope boundary.  In
+particular, `beforeOccurrence o` omits `o`'s own guard while retaining the
+negative guards of every earlier terminal. -/
+def BoundaryRegion (schedule : List ScheduledOccurrence) :
+    ScopeOpening → AttemptRegion
+  | .initially =>
+      { requiredTrue := [], requiredFalse := [], impossible := false }
+  | .beforeOccurrence occurrence =>
+      { requiredTrue := []
+        requiredFalse := earlierTerminalFalseAtoms schedule occurrence
+        impossible := hasEarlierAlways schedule occurrence }
+
+/-- A boundary is reached after all earlier terminal guards have failed.  The
+named occurrence's own guard is deliberately irrelevant. -/
+def BoundaryReached (schedule : List ScheduledOccurrence)
+    (valuation : GuardAtom → Bool) : ScopeOpening → Prop
+  | .initially => True
+  | .beforeOccurrence occurrence =>
+      EarlierTerminalsInactive schedule valuation occurrence
+
+/-- A source boundary is no later than a target occurrence exactly when it is
+initial or its named occurrence boundary is at or before the target. -/
+def ScopeOpening.AtOrBefore : ScopeOpening → Nat → Prop
+  | .initially, _ => True
+  | .beforeOccurrence boundary, target => boundary ≤ target
+
+/-- Exactness of the deterministic boundary region for every valuation. -/
+theorem boundary_reached_iff_boundary_region_holds
+    (schedule : List ScheduledOccurrence) (valuation : GuardAtom → Bool)
+    (opening : ScopeOpening) :
+    BoundaryReached schedule valuation opening ↔
+      (BoundaryRegion schedule opening).Holds valuation := by
+  cases opening with
+  | initially =>
+      simp [BoundaryReached, BoundaryRegion, AttemptRegion.Holds,
+        AttemptRegion.LiteralsHold]
+  | beforeOccurrence occurrence =>
+      change EarlierTerminalsInactive schedule valuation occurrence ↔ _
+      rw [earlierTerminalsInactive_iff schedule valuation occurrence]
+      simp [BoundaryRegion, AttemptRegion.Holds,
+        AttemptRegion.LiteralsHold]
+
+/-- Reaching a later attempted occurrence necessarily reaches every earlier
+deterministic scope boundary, including the boundary immediately before that
+same occurrence. -/
+theorem boundary_reached_of_later_attempted
+    (schedule : List ScheduledOccurrence) (valuation : GuardAtom → Bool)
+    (target : Nat)
+    (opening : ScopeOpening) (before : opening.AtOrBefore target)
+    (attempted : Attempted schedule valuation target) :
+    BoundaryReached schedule valuation opening := by
+  cases opening with
+  | initially => trivial
+  | beforeOccurrence boundary =>
+      rcases attempted with ⟨_actual, _actualAt, _holds, inactive⟩
+      intro priorIndex prior priorAt priorBefore terminal
+      exact inactive priorIndex prior priorAt
+        (Nat.lt_of_lt_of_le priorBefore before) terminal
 
 /-! ## Must-fact analysis -/
 
@@ -1044,8 +1112,12 @@ theorem disjoint_regions_cannot_both_be_attempted
   exact disjoint_literals_cannot_both_hold valuation disjoint leftHolds.2 rightHolds.2
 
 inductive AbstractClaimSource where
-  | initial
-  | occurrence (index : Nat)
+  /-- The binding and scope coordinates are retained alongside the resolved
+  opening selected by `PublicBindingDecl(binding).scope`. -/
+  | initialClaim (binding scope : Nat) (opening : ScopeOpening)
+  /-- The Reduction/output coordinates are retained alongside the resolved
+  occurrence of `ApplyReduction(reduction)`. -/
+  | reductionOutput (reduction outputOrdinal occurrence : Nat)
   deriving Repr, DecidableEq
 
 structure AbstractClaim where
@@ -1054,10 +1126,25 @@ structure AbstractClaim where
   linearConsumers : List Nat
   deriving Repr, DecidableEq
 
-def AbstractClaimSource.RegionOf (schedule : List ScheduledOccurrence) :
-    AbstractClaimSource → AttemptRegion
-  | .initial => { requiredTrue := [], requiredFalse := [], impossible := false }
-  | .occurrence index => Region schedule index
+/-- Exact transcription of `ClaimSourceRegion(c)` after ordinary binding,
+scope, Reduction, output, and occurrence references have been resolved. -/
+def ClaimSourceRegion (schedule : List ScheduledOccurrence)
+    (claim : AbstractClaim) : AttemptRegion :=
+  match claim.source with
+  | .initialClaim _binding _scope opening => BoundaryRegion schedule opening
+  | .reductionOutput _reduction _outputOrdinal occurrence =>
+      Region schedule occurrence
+
+/-- Diagnostic only: the coercion rejected by the owner repair, where an
+initial `BeforeOccurrence(o)` source incorrectly acquires `o`'s own guard. -/
+def OccurrenceCoercionClaimSourceRegion (schedule : List ScheduledOccurrence)
+    (claim : AbstractClaim) : AttemptRegion :=
+  match claim.source with
+  | .initialClaim _binding _scope .initially => BoundaryRegion schedule .initially
+  | .initialClaim _binding _scope (.beforeOccurrence occurrence) =>
+      Region schedule occurrence
+  | .reductionOutput _reduction _outputOrdinal occurrence =>
+      Region schedule occurrence
 
 def earlierLinearConsumers (claim : AbstractClaim) (occurrence : Nat) : List Nat :=
   claim.linearConsumers.filter fun consumer => decide (consumer < occurrence)
@@ -1070,13 +1157,13 @@ inductive ClaimJudgment where
 
 def claimLiveCondition (schedule : List ScheduledOccurrence)
     (claim : AbstractClaim) (occurrence : Nat) : Bool :=
-  Implies (Region schedule occurrence) (claim.source.RegionOf schedule) &&
+  Implies (Region schedule occurrence) (ClaimSourceRegion schedule claim) &&
     (earlierLinearConsumers claim occurrence).all fun consumer =>
       Disjoint (Region schedule occurrence) (Region schedule consumer)
 
 def claimDeadCondition (schedule : List ScheduledOccurrence)
     (claim : AbstractClaim) (occurrence : Nat) : Bool :=
-  Disjoint (Region schedule occurrence) (claim.source.RegionOf schedule) ||
+  Disjoint (Region schedule occurrence) (ClaimSourceRegion schedule claim) ||
     (earlierLinearConsumers claim occurrence).any fun consumer =>
       Implies (Region schedule occurrence) (Region schedule consumer)
 
@@ -1086,6 +1173,28 @@ def ClaimStatus (schedule : List ScheduledOccurrence)
   else if claimDeadCondition schedule claim occurrence then .dead
   else .unknown
 
+def occurrenceCoercionClaimLiveCondition (schedule : List ScheduledOccurrence)
+    (claim : AbstractClaim) (occurrence : Nat) : Bool :=
+  Implies (Region schedule occurrence)
+      (OccurrenceCoercionClaimSourceRegion schedule claim) &&
+    (earlierLinearConsumers claim occurrence).all fun consumer =>
+      Disjoint (Region schedule occurrence) (Region schedule consumer)
+
+def occurrenceCoercionClaimDeadCondition (schedule : List ScheduledOccurrence)
+    (claim : AbstractClaim) (occurrence : Nat) : Bool :=
+  Disjoint (Region schedule occurrence)
+      (OccurrenceCoercionClaimSourceRegion schedule claim) ||
+    (earlierLinearConsumers claim occurrence).any fun consumer =>
+      Implies (Region schedule occurrence) (Region schedule consumer)
+
+/-- Non-authoritative comparison result used only to expose the guarded-opening
+discriminator that motivated the repair. -/
+def OccurrenceCoercionClaimStatus (schedule : List ScheduledOccurrence)
+    (claim : AbstractClaim) (occurrence : Nat) : ClaimJudgment :=
+  if occurrenceCoercionClaimLiveCondition schedule claim occurrence then .live
+  else if occurrenceCoercionClaimDeadCondition schedule claim occurrence then .dead
+  else .unknown
+
 def LiveClaims (schedule : List ScheduledOccurrence)
     (claims : List AbstractClaim) (occurrence : Nat) : List Nat :=
   claims.filterMap fun claim =>
@@ -1093,8 +1202,10 @@ def LiveClaims (schedule : List ScheduledOccurrence)
 
 def AbstractClaimSource.ExistsOn (schedule : List ScheduledOccurrence)
     (valuation : GuardAtom → Bool) : AbstractClaimSource → Prop
-  | .initial => True
-  | .occurrence index => Attempted schedule valuation index
+  | .initialClaim _binding _scope opening =>
+      BoundaryReached schedule valuation opening
+  | .reductionOutput _reduction _outputOrdinal occurrence =>
+      Attempted schedule valuation occurrence
 
 def AbstractClaim.LiveAt (schedule : List ScheduledOccurrence)
     (valuation : GuardAtom → Bool) (claim : AbstractClaim) (occurrence : Nat) : Prop :=
@@ -1105,8 +1216,11 @@ def AbstractClaim.LiveAt (schedule : List ScheduledOccurrence)
 def AbstractClaim.WellFormedAt (schedule : List ScheduledOccurrence)
     (claim : AbstractClaim) (occurrence : Nat) : Prop :=
   (match claim.source with
-   | .initial => True
-   | .occurrence source => source < occurrence ∧ ∃ row, schedule[source]? = some row) ∧
+   | .initialClaim _binding scope .initially => scope = 0
+   | .initialClaim _binding scope (.beforeOccurrence boundary) =>
+       boundary ≤ occurrence ∧ OpeningBefore schedule boundary scope
+   | .reductionOutput _reduction _outputOrdinal source =>
+       source < occurrence ∧ ∃ row, schedule[source]? = some row) ∧
   ∀ consumer, consumer ∈ earlierLinearConsumers claim occurrence →
     ∃ row, schedule[consumer]? = some row
 
@@ -1132,6 +1246,34 @@ theorem claimStatus_dead_conditions
       | false => simp [ClaimStatus, live, dead] at status
       | true => exact ⟨rfl, rfl⟩
 
+/-- Concrete source existence is equivalent to the exact source region.  The
+Reduction arm uses the resolved `ApplyReduction` occurrence; the initial arm
+uses the deterministic binding-scope boundary. -/
+theorem claimSourceRegion_holds_iff_exists
+    (schedule : List ScheduledOccurrence) (claim : AbstractClaim)
+    (occurrence : Nat) (wellFormed : claim.WellFormedAt schedule occurrence)
+    (valuation : GuardAtom → Bool) :
+    claim.source.ExistsOn schedule valuation ↔
+      (ClaimSourceRegion schedule claim).Holds valuation := by
+  cases source : claim.source with
+  | initialClaim binding scope opening =>
+      simpa [AbstractClaimSource.ExistsOn, ClaimSourceRegion, source] using
+        boundary_reached_iff_boundary_region_holds schedule valuation opening
+  | reductionOutput reduction outputOrdinal sourceOccurrence =>
+      obtain ⟨_before, sourceRow, sourceAt⟩ := by
+        simpa [AbstractClaim.WellFormedAt, source] using wellFormed.1
+      simpa [AbstractClaimSource.ExistsOn, ClaimSourceRegion, source] using
+        attempted_iff_region_holds schedule valuation sourceOccurrence sourceRow sourceAt
+
+theorem claimSourceRegion_holds_of_exists
+    (schedule : List ScheduledOccurrence) (claim : AbstractClaim)
+    (occurrence : Nat) (wellFormed : claim.WellFormedAt schedule occurrence)
+    (valuation : GuardAtom → Bool)
+    (sourceExists : claim.source.ExistsOn schedule valuation) :
+    (ClaimSourceRegion schedule claim).Holds valuation :=
+  (claimSourceRegion_holds_iff_exists schedule claim occurrence wellFormed valuation).mp
+    sourceExists
+
 /-- A `live` result is universally sound for every attempted valuation. -/
 theorem claimStatus_live_sound
     (schedule : List ScheduledOccurrence) (claim : AbstractClaim) (occurrence : Nat)
@@ -1144,19 +1286,28 @@ theorem claimStatus_live_sound
     claim.LiveAt schedule valuation occurrence := by
   have live := claimStatus_live_conditions schedule claim occurrence status
   have parts :
-      Implies (Region schedule occurrence) (claim.source.RegionOf schedule) = true ∧
+      Implies (Region schedule occurrence) (ClaimSourceRegion schedule claim) = true ∧
       (earlierLinearConsumers claim occurrence).all (fun consumer =>
         Disjoint (Region schedule occurrence) (Region schedule consumer)) = true := by
     simpa [claimLiveCondition] using live
   constructor
   · cases source : claim.source with
-    | initial => trivial
-    | occurrence sourceIndex =>
+    | initialClaim binding scope opening =>
+        have before : opening.AtOrBefore occurrence := by
+          cases opening with
+          | initially => trivial
+          | beforeOccurrence boundary =>
+              have sourceWellFormed := wellFormed.1
+              rw [source] at sourceWellFormed
+              exact sourceWellFormed.1
+        exact boundary_reached_of_later_attempted schedule valuation occurrence
+          opening before attempted
+    | reductionOutput reduction outputOrdinal sourceIndex =>
         obtain ⟨before, sourceRow, sourceAt⟩ := by
           simpa [AbstractClaim.WellFormedAt, source] using wellFormed.1
         exact attempted_of_implies_region schedule valuation occurrence sourceIndex
           occurrenceRow sourceRow occurrenceAt sourceAt before
-          (by simpa [AbstractClaimSource.RegionOf, source] using parts.1) attempted
+          (by simpa [ClaimSourceRegion, source] using parts.1) attempted
   · intro consumer member consumerAttempted
     obtain ⟨consumerRow, consumerAt⟩ := wellFormed.2 consumer member
     have disjoint : Disjoint (Region schedule occurrence)
@@ -1178,25 +1329,20 @@ theorem claimStatus_dead_sound
     ¬ claim.LiveAt schedule valuation occurrence := by
   have conditions := claimStatus_dead_conditions schedule claim occurrence status
   have alternatives :
-      Disjoint (Region schedule occurrence) (claim.source.RegionOf schedule) = true ∨
+      Disjoint (Region schedule occurrence) (ClaimSourceRegion schedule claim) = true ∨
       (earlierLinearConsumers claim occurrence).any (fun consumer =>
         Implies (Region schedule occurrence) (Region schedule consumer)) = true := by
     simpa [claimDeadCondition] using conditions.2
   intro live
   cases alternatives with
   | inl sourceDisjoint =>
-      cases source : claim.source with
-      | initial =>
-          rw [source] at sourceDisjoint
-          simp [AbstractClaimSource.RegionOf, Disjoint, regionOverlap] at sourceDisjoint
-      | occurrence sourceIndex =>
-          obtain ⟨before, sourceRow, sourceAt⟩ := by
-            simpa [AbstractClaim.WellFormedAt, source] using wellFormed.1
-          exact disjoint_regions_cannot_both_be_attempted schedule valuation
-            occurrence sourceIndex occurrenceRow sourceRow occurrenceAt sourceAt
-            (by simpa [AbstractClaimSource.RegionOf, source] using sourceDisjoint)
-            attempted (by simpa [AbstractClaim.LiveAt,
-              AbstractClaimSource.ExistsOn, source] using live.1)
+      have targetHolds :=
+        (attempted_iff_region_holds schedule valuation occurrence
+          occurrenceRow occurrenceAt).mp attempted
+      have sourceHolds := claimSourceRegion_holds_of_exists schedule claim
+        occurrence wellFormed valuation live.1
+      exact disjoint_literals_cannot_both_hold valuation sourceDisjoint
+        targetHolds.2 sourceHolds.2
   | inr consumerImplied =>
       obtain ⟨consumer, member, implied⟩ := List.any_eq_true.mp consumerImplied
       obtain ⟨consumerRow, consumerAt⟩ := wellFormed.2 consumer member

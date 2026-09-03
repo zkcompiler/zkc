@@ -5,9 +5,9 @@ The exporter intentionally does not import the historical synthetic-profile
 models.  Those models collide with the real manifests on the migration branch.
 Instead it reconstructs only the finite coordinates consumed by Section 10:
 occurrence order, full structural guard identity, declaration backlinks,
-compact guard terms, closed claim sources and consumers, and terminal requirements.  Source files
-and predecessor findings are hash-pinned so this normalization cannot silently
-outlive its evidence.
+compact guard terms, closed claim sources and consumers, and terminal
+requirements.  Only owner pages and source-package inputs are hash-pinned;
+another package's frozen findings are never an input to this normalization.
 """
 
 from __future__ import annotations
@@ -23,30 +23,19 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "vectors" / "terminal-contract.json"
-BASE_HEAD = "76f49ec1df3d9b5a241768da2fed8f5d46bd0799"
-PROJECTION_EXPECTED = (
-    ROOT
-    / "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2"
-    / "expected-findings.json"
-)
-INTEGRATED_EXPECTED = (
-    ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1" / "expected-findings.json"
-)
+BASE_HEAD = "5105247d1b7aeebd67bb26a6dce2191cd4b9e034"
 HOLDOUT_ADJUDICATION = (
     ROOT / "evaluation/formal-source-holdout-readjudication-f0v2c2" / "adjudication.json"
 )
 
 SOURCES = (
+    "docs-next/foundation/executable-foundations.md",
     "docs-next/pir/interactive-core.md",
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/"
-    "f0-v2c-migration-owner-text.md",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py",
-    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/expected-findings.json",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/schema-delta.json",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py",
-    "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json",
     "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json",
 )
 
 
@@ -58,14 +47,34 @@ def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _predecessor_outcomes() -> tuple[dict[str, str], str, dict[str, str]]:
-    projection = _read_json(PROJECTION_EXPECTED)
-    projection_outcomes = {
-        name: outcome for name, outcome, _code in projection["finding_codes"]
-    }
-    integrated = _read_json(INTEGRATED_EXPECTED)
-    if integrated["aggregate"] != "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE":
-        raise ValueError("integrated predecessor is no longer affirmative")
+def _input_outcomes() -> tuple[dict[str, str], str, dict[str, str]]:
+    """Expected labels reconstructed from source inputs, never frozen findings."""
+
+    projection_outcomes = {"candidate-core-admission": "Affirmative"}
+    projection_outcomes.update(
+        {
+            name: "Refused"
+            for name in (
+                "required-check-reference",
+                "required-check-duplicate",
+                "required-reduction-reference",
+                "required-reduction-duplicate",
+                "required-reduction-unsorted",
+                "terminal-claim-omitted",
+                "terminal-claim-wrong",
+                "terminal-claim-duplicate",
+                "final-fallback-guarded",
+                "accept-guard-omits-check",
+                "check-not-guaranteed",
+                "required-reduction-after-terminal",
+                "linear-consumer-overlap",
+                "missing-terminal-backlink",
+                "duplicate-terminal-backlink",
+                "claim-output-ssa",
+            )
+        }
+    )
+    projection_outcomes["check-abi"] = "KindMismatch"
     holdout = _read_json(HOLDOUT_ADJUDICATION)
     wanted = {
         "WHIR Construction 5.1 with a closed finite query plan",
@@ -81,6 +90,29 @@ def _predecessor_outcomes() -> tuple[dict[str, str], str, dict[str, str]]:
 
 def _effect(kind: str, reference: int) -> dict[str, Any]:
     return {"kind": kind, "reference": reference}
+
+
+def _initially() -> dict[str, Any]:
+    return {"kind": "initially"}
+
+
+def _before_occurrence(occurrence: int) -> dict[str, Any]:
+    return {"kind": "before-occurrence", "occurrence": occurrence}
+
+
+def _initial_claim(
+    reference: int,
+    *,
+    binding: int = 0,
+    scope: int = 0,
+    opening: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "reference": reference,
+        "binding": binding,
+        "scope": scope,
+        "opening": deepcopy(opening if opening is not None else _initially()),
+    }
 
 
 def _occurrence(
@@ -119,21 +151,31 @@ def _positions(carrier: dict[str, Any], kind: str, reference: int) -> list[int]:
 
 def _claims(carrier: dict[str, Any]) -> list[dict[str, Any]]:
     claims: dict[int, dict[str, Any]] = {
-        reference: {
-            "reference": reference,
-            "source": {"kind": "initial"},
+        row["reference"]: {
+            "reference": row["reference"],
+            "source": {
+                "kind": "initial-claim",
+                "binding": row["binding"],
+                "scope": row["scope"],
+                "opening": deepcopy(row["opening"]),
+            },
             "linear_consumers": [],
         }
-        for reference in carrier.get("initial_claims", [])
+        for row in carrier.get("initial_claims", [])
     }
     reductions = carrier.get("reductions", [])
     for reference, reduction in enumerate(reductions):
         positions = _positions(carrier, "reduction", reference)
         source = positions[0] if len(positions) == 1 else len(carrier["schedule"]) + reference + 1
-        for output in reduction["outputs"]:
+        for output_ordinal, output in enumerate(reduction["outputs"]):
             claims[output] = {
                 "reference": output,
-                "source": {"kind": "occurrence", "occurrence": source},
+                "source": {
+                    "kind": "reduction-output",
+                    "reduction": reference,
+                    "output": output_ordinal,
+                    "occurrence": source,
+                },
                 "linear_consumers": [],
             }
     linear = set(carrier.get("linear_claims", []))
@@ -166,14 +208,14 @@ def _terminal_projection() -> dict[str, Any]:
         "source_precision": "exact normalized coordinates",
         "predecessor_outcome": "Affirmative",
         "representable": True,
-        "initial_claims": [0],
+        "initial_claims": [_initial_claim(0)],
         "linear_claims": [0],
         "reductions": [
             {"inputs": [0], "outputs": [1]},
             {"inputs": [0], "outputs": [2]},
         ],
         "schedule": [
-            _occurrence(_effect("check", 0), openings=(0,)),
+            _occurrence(_effect("check", 0)),
             _occurrence(_effect("reduction", 0), accept_atom),
             _occurrence(_effect("terminal", 0), accept_atom),
             _occurrence(_effect("reduction", 1)),
@@ -299,7 +341,7 @@ def _terminal_projection_mutations() -> list[dict[str, Any]]:
 
 def _integrated(name: str) -> dict[str, Any]:
     logical = name == "logical-reject-preemption"
-    schedule = [_occurrence(_effect("other", index), openings=(0, 1) if index == 0 else ())
+    schedule = [_occurrence(_effect("other", index), openings=(1,) if index == 0 else ())
                 for index in range(17)]
     schedule.extend(
         (
@@ -387,7 +429,7 @@ def _integrated(name: str) -> dict[str, Any]:
             "The integrated graph package admitted graph construction without running the repaired "
             "Terminal claim-closure law; reusable initial claim 0 remains live."
         ),
-        "initial_claims": [0],
+        "initial_claims": [_initial_claim(0)],
         "linear_claims": [],
         "reductions": [
             {"inputs": [0], "outputs": [1]},
@@ -410,7 +452,7 @@ def _warpfold_shape() -> dict[str, Any]:
         "linear_claims": [],
         "reductions": [],
         "schedule": [
-            _occurrence(_effect("check", 0), openings=(0,)),
+            _occurrence(_effect("check", 0)),
             _occurrence(_effect("terminal", 0), 900),
             _occurrence(_effect("terminal", 1)),
         ],
@@ -444,7 +486,7 @@ def _whir_shape() -> dict[str, Any]:
         "predecessor_outcome": "fits",
         "representable": True,
         "expected_terminal_outcome": "Affirmative",
-        "initial_claims": [0],
+        "initial_claims": [_initial_claim(0)],
         "linear_claims": [0, 1],
         "reductions": [
             {"inputs": [0], "outputs": [1]},
@@ -452,7 +494,7 @@ def _whir_shape() -> dict[str, Any]:
         ],
         "schedule": [
             *(
-                _occurrence(_effect("check", reference), openings=(0,) if reference == 0 else ())
+                _occurrence(_effect("check", reference))
                 for reference in range(5)
             ),
             _occurrence(_effect("reduction", 0), accepting_guard),
@@ -479,6 +521,146 @@ def _whir_shape() -> dict[str, Any]:
             },
         ],
     }
+
+
+def _claim_source_region_discriminators() -> list[dict[str, Any]]:
+    """Exercise both boundary forms and both ClaimSource arms directly."""
+
+    initially = {
+        "name": "claim-source-region/initially",
+        "family": "claim-source-region-control",
+        "source_precision": "package-authored direct owner-law discriminator",
+        "predecessor_outcome": "not-applicable",
+        "representable": True,
+        "expected_terminal_outcome": "Affirmative",
+        "initial_claims": [_initial_claim(0)],
+        "linear_claims": [],
+        "reductions": [],
+        "schedule": [
+            _occurrence(_effect("terminal", 0), 720),
+            _occurrence(_effect("terminal", 1)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": {"kind": "true"},
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [0],
+            },
+            {
+                "reference": 1,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [0],
+            },
+        ],
+    }
+    before_unguarded = {
+        "name": "claim-source-region/before-unguarded-occurrence",
+        "family": "claim-source-region-control",
+        "source_precision": "package-authored direct owner-law discriminator",
+        "predecessor_outcome": "not-applicable",
+        "representable": True,
+        "expected_terminal_outcome": "Affirmative",
+        "initial_claims": [
+            _initial_claim(0, scope=1, opening=_before_occurrence(0))
+        ],
+        "linear_claims": [],
+        "reductions": [],
+        "schedule": [
+            _occurrence(_effect("other", 0), openings=(1,)),
+            _occurrence(_effect("terminal", 0), 721),
+            _occurrence(_effect("terminal", 1)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": {"kind": "true"},
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [0],
+            },
+            {
+                "reference": 1,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [0],
+            },
+        ],
+    }
+    before_guarded = {
+        "name": "claim-source-region/before-guarded-occurrence",
+        "family": "claim-source-region-control",
+        "source_precision": "package-authored direct owner-law discriminator",
+        "predecessor_outcome": "occurrence-coercion Unknown",
+        "representable": True,
+        "expected_terminal_outcome": "Affirmative",
+        "initial_claims": [
+            _initial_claim(0, scope=1, opening=_before_occurrence(0))
+        ],
+        "linear_claims": [],
+        "reductions": [],
+        "schedule": [
+            _occurrence(_effect("other", 0), 722, openings=(1,)),
+            _occurrence(_effect("terminal", 0)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [0],
+            }
+        ],
+    }
+    reduction_output = {
+        "name": "claim-source-region/reduction-output-consumed",
+        "family": "claim-source-region-control",
+        "source_precision": "package-authored direct owner-law discriminator",
+        "predecessor_outcome": "not-applicable",
+        "representable": True,
+        "expected_terminal_outcome": "Affirmative",
+        "initial_claims": [],
+        "linear_claims": [0],
+        "reductions": [
+            {"inputs": [], "outputs": [0, 1]},
+            {"inputs": [0], "outputs": []},
+        ],
+        "schedule": [
+            _occurrence(_effect("reduction", 0), 723),
+            _occurrence(_effect("reduction", 1), 723),
+            _occurrence(_effect("terminal", 0), 723),
+            _occurrence(_effect("terminal", 1)),
+        ],
+        "terminals": [
+            {
+                "reference": 0,
+                "guard_term": {"kind": "true"},
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [0, 1],
+                "terminal_claims": [1],
+            },
+            {
+                "reference": 1,
+                "guard_term": None,
+                "guard_inputs": [],
+                "required_checks": [],
+                "required_reductions": [],
+                "terminal_claims": [],
+            },
+        ],
+    }
+    return [initially, before_unguarded, before_guarded, reduction_output]
 
 
 def _closed_contract_controls() -> list[dict[str, Any]]:
@@ -607,7 +789,7 @@ def _closed_contract_controls() -> list[dict[str, Any]]:
 
 
 def export() -> dict[str, Any]:
-    projection_outcomes, integrated_outcome, holdout_outcomes = _predecessor_outcomes()
+    projection_outcomes, integrated_outcome, holdout_outcomes = _input_outcomes()
     carriers = [_terminal_projection(), *_terminal_projection_mutations()]
     carriers.extend(
         _integrated(name)
@@ -619,7 +801,14 @@ def export() -> dict[str, Any]:
             "logical-reject-preemption",
         )
     )
-    carriers.extend((_warpfold_shape(), _whir_shape(), *_closed_contract_controls()))
+    carriers.extend(
+        (
+            _warpfold_shape(),
+            _whir_shape(),
+            *_claim_source_region_discriminators(),
+            *_closed_contract_controls(),
+        )
+    )
     for carrier in carriers:
         if carrier["family"] == "terminal-projection":
             finding = (
@@ -648,8 +837,9 @@ def export() -> dict[str, Any]:
         "owner_lines": {
             "attempt_guards": [1427, 1442],
             "must_env": [1444, 1478],
-            "forward_state": [1480, 1503],
-            "terminal_contract": [1505, 1519],
+            "occurrence_region": [1480, 1493],
+            "claim_source_region": [1495, 1520],
+            "terminal_contract": [1522, 1536],
         },
         "source_pins": {source: _sha256(ROOT / source) for source in SOURCES},
         "carriers": carriers,

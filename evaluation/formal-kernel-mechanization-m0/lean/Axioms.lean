@@ -35,6 +35,9 @@ and never on `sorryAx`.
 #print axioms M0.impossible_when_false_cannot_evaluate_false
 #print axioms M0.attempted_iff_region_holds
 #print axioms M0.region_impossible_iff_unreachable
+#print axioms M0.boundary_reached_iff_boundary_region_holds
+#print axioms M0.claimSourceRegion_holds_iff_exists
+#print axioms M0.claimSourceRegion_holds_of_exists
 #print axioms M0.claimStatus_live_sound
 #print axioms M0.claimStatus_dead_sound
 #print axioms M0.terminalContractDecision_correct

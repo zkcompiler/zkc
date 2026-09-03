@@ -125,6 +125,28 @@ def _region(carrier: dict[str, Any], occurrence: int) -> dict[str, Any]:
     }
 
 
+def _boundary_region(carrier: dict[str, Any], opening: dict[str, Any]) -> dict[str, Any]:
+    if opening["kind"] == "initially":
+        return {"required_true": set(), "required_false": set(), "impossible": False}
+    if opening["kind"] != "before-occurrence":
+        raise ValueError(f"unknown scope opening {opening!r}")
+    occurrence = int(opening["occurrence"])
+    required_false: set[int] = set()
+    earlier_always = False
+    for row in carrier["schedule"][:occurrence]:
+        if row["effect"]["kind"] != "terminal":
+            continue
+        if row["guard_atom"] is None:
+            earlier_always = True
+        else:
+            required_false.add(row["guard_atom"])
+    return {
+        "required_true": set(),
+        "required_false": required_false,
+        "impossible": earlier_always,
+    }
+
+
 def _implies(left: dict[str, Any], right: dict[str, Any]) -> bool:
     return right["required_true"] <= left["required_true"] and right["required_false"] <= left["required_false"]
 
@@ -137,44 +159,96 @@ def _disjoint(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 
 def _available_claims(carrier: dict[str, Any], occurrence: int) -> list[dict[str, Any]]:
-    return [
-        claim
-        for claim in carrier["claims"]
-        if claim["source"]["kind"] == "initial"
-        or claim["source"]["occurrence"] < occurrence
-    ]
+    def available(claim: dict[str, Any]) -> bool:
+        source = claim["source"]
+        if source["kind"] == "reduction-output":
+            return source["occurrence"] < occurrence
+        if source["kind"] != "initial-claim":
+            raise ValueError(f"unknown claim source {source!r}")
+        opening = source["opening"]
+        return opening["kind"] == "initially" or opening["occurrence"] <= occurrence
+
+    return [claim for claim in carrier["claims"] if available(claim)]
 
 
 def _source_region(carrier: dict[str, Any], claim: dict[str, Any]) -> dict[str, Any]:
-    if claim["source"]["kind"] == "initial":
-        return {"required_true": set(), "required_false": set(), "impossible": False}
-    return _region(carrier, claim["source"]["occurrence"])
+    source = claim["source"]
+    if source["kind"] == "initial-claim":
+        return _boundary_region(carrier, source["opening"])
+    if source["kind"] == "reduction-output":
+        return _region(carrier, source["occurrence"])
+    raise ValueError(f"unknown claim source {source!r}")
+
+
+def _occurrence_coercion_source_region(
+    carrier: dict[str, Any], claim: dict[str, Any]
+) -> dict[str, Any]:
+    source = claim["source"]
+    if source["kind"] == "initial-claim":
+        opening = source["opening"]
+        if opening["kind"] == "initially":
+            return _boundary_region(carrier, opening)
+        return _region(carrier, opening["occurrence"])
+    return _region(carrier, source["occurrence"])
 
 
 def _earlier_consumers(claim: dict[str, Any], occurrence: int) -> list[int]:
     return [consumer for consumer in claim["linear_consumers"] if consumer < occurrence]
 
 
-def _claim_status(carrier: dict[str, Any], claim: dict[str, Any], occurrence: int) -> str:
+def _claim_status_with_source(
+    carrier: dict[str, Any],
+    claim: dict[str, Any],
+    occurrence: int,
+    source_region: dict[str, Any],
+) -> str:
     target = _region(carrier, occurrence)
     consumers = [_region(carrier, row) for row in _earlier_consumers(claim, occurrence)]
-    live = _implies(target, _source_region(carrier, claim)) and all(
+    live = _implies(target, source_region) and all(
         _disjoint(target, consumer) for consumer in consumers
     )
     if live:
         return "Live"
-    dead = _disjoint(target, _source_region(carrier, claim)) or any(
+    dead = _disjoint(target, source_region) or any(
         _implies(target, consumer) for consumer in consumers
     )
     return "Dead" if dead else "Unknown"
 
 
+def _claim_status(carrier: dict[str, Any], claim: dict[str, Any], occurrence: int) -> str:
+    return _claim_status_with_source(
+        carrier, claim, occurrence, _source_region(carrier, claim)
+    )
+
+
+def _occurrence_coercion_claim_status(
+    carrier: dict[str, Any], claim: dict[str, Any], occurrence: int
+) -> str:
+    return _claim_status_with_source(
+        carrier, claim, occurrence, _occurrence_coercion_source_region(carrier, claim)
+    )
+
+
 def _claim_well_formed(carrier: dict[str, Any], claim: dict[str, Any], occurrence: int) -> bool:
     source = claim["source"]
-    source_ok = source["kind"] == "initial" or (
-        0 <= source["occurrence"] < occurrence
-        and source["occurrence"] < len(carrier["schedule"])
-    )
+    if source["kind"] == "reduction-output":
+        source_ok = (
+            0 <= source["occurrence"] < occurrence
+            and source["occurrence"] < len(carrier["schedule"])
+        )
+    elif source["kind"] == "initial-claim":
+        opening = source["opening"]
+        if opening["kind"] == "initially":
+            source_ok = source["scope"] == 0
+        else:
+            boundary = opening["occurrence"]
+            source_ok = (
+                0 <= boundary <= occurrence
+                and boundary < len(carrier["schedule"])
+                and source["scope"] in carrier["schedule"][boundary]["openings_before"]
+            )
+    else:
+        source_ok = False
     consumers_ok = all(
         0 <= consumer < len(carrier["schedule"])
         for consumer in _earlier_consumers(claim, occurrence)
@@ -215,12 +289,32 @@ def _region_holds(region: dict[str, Any], valuation: dict[int, bool]) -> bool:
     ) and all(not valuation[atom] for atom in region["required_false"])
 
 
+def _boundary_reached(
+    carrier: dict[str, Any], opening: dict[str, Any], valuation: dict[int, bool]
+) -> bool:
+    if opening["kind"] == "initially":
+        return True
+    occurrence = int(opening["occurrence"])
+    return not any(
+        prior["effect"]["kind"] == "terminal"
+        and _guard_holds(prior["guard_atom"], valuation)
+        for prior in carrier["schedule"][:occurrence]
+    )
+
+
+def _source_exists(
+    carrier: dict[str, Any], claim: dict[str, Any], valuation: dict[int, bool]
+) -> bool:
+    source = claim["source"]
+    if source["kind"] == "initial-claim":
+        return _boundary_reached(carrier, source["opening"], valuation)
+    return _attempted(carrier, source["occurrence"], valuation)
+
+
 def _claim_live_at(
     carrier: dict[str, Any], claim: dict[str, Any], occurrence: int, valuation: dict[int, bool]
 ) -> bool:
-    source = claim["source"]
-    exists = source["kind"] == "initial" or _attempted(carrier, source["occurrence"], valuation)
-    return exists and not any(
+    return _source_exists(carrier, claim, valuation) and not any(
         _attempted(carrier, consumer, valuation)
         for consumer in _earlier_consumers(claim, occurrence)
     )
@@ -238,7 +332,23 @@ def _finite_soundness(carrier: dict[str, Any]) -> dict[str, bool]:
             for attempted, valuation in zip(attempted_values, valuations, strict=True)
         )
         unreachable_exact &= region["impossible"] == (not any(attempted_values))
-    status_sound = True
+    boundary_exact = True
+    source_region_exact = True
+    live_sound = True
+    dead_sound = True
+    for claim in carrier["claims"]:
+        source = claim["source"]
+        if source["kind"] == "initial-claim":
+            boundary_exact &= all(
+                _boundary_reached(carrier, source["opening"], valuation)
+                == _region_holds(_boundary_region(carrier, source["opening"]), valuation)
+                for valuation in valuations
+            )
+        source_region_exact &= all(
+            _source_exists(carrier, claim, valuation)
+            == _region_holds(_source_region(carrier, claim), valuation)
+            for valuation in valuations
+        )
     terminal_positions = _positions(carrier, "terminal")
     for terminal in carrier["terminals"]:
         occurrence = _unique_position(terminal_positions, terminal["reference"])
@@ -250,19 +360,22 @@ def _finite_soundness(carrier: dict[str, Any]) -> dict[str, bool]:
                 valuation for valuation in valuations if _attempted(carrier, occurrence, valuation)
             ]
             if status == "Live":
-                status_sound &= all(
+                live_sound &= all(
                     _claim_live_at(carrier, claim, occurrence, valuation)
                     for valuation in attempted_valuations
                 )
             elif status == "Dead":
-                status_sound &= all(
+                dead_sound &= all(
                     not _claim_live_at(carrier, claim, occurrence, valuation)
                     for valuation in attempted_valuations
                 )
     return {
         "region_exact": region_exact,
         "unreachable_exact": unreachable_exact,
-        "claim_status_sound": status_sound,
+        "boundary_region_exact": boundary_exact,
+        "claim_source_region_exact": source_region_exact,
+        "claim_live_sound": live_sound,
+        "claim_dead_sound": dead_sound,
     }
 
 
@@ -331,8 +444,25 @@ def _terminal_contract(
                 f"required Reduction {reduction} is not attempted whenever the terminal is"
             )
 
+    valuations = list(_valuations(carrier))
+    reaching = [
+        valuation
+        for valuation in valuations
+        if _attempted(carrier, terminal_position, valuation)
+    ]
     statuses = [
-        {"reference": claim["reference"], "status": _claim_status(carrier, claim, terminal_position)}
+        {
+            "reference": claim["reference"],
+            "status": _claim_status(carrier, claim, terminal_position),
+            "occurrence_coercion_status": _occurrence_coercion_claim_status(
+                carrier, claim, terminal_position
+            ),
+            "reaching_paths": len(reaching),
+            "live_paths": sum(
+                _claim_live_at(carrier, claim, terminal_position, valuation)
+                for valuation in reaching
+            ),
+        }
         for claim in local_claims
     ]
     if any(row["status"] == "Unknown" for row in statuses):

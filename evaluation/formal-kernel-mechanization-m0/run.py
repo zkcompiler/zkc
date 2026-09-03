@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Run the mechanized portable-term and closed Terminal-contract gate.
+"""Run the mechanized portable-term and claim-source Terminal-contract gate.
 
 The gate answers one bounded question: can the K1 portable-term calculus and
-the finite Schnorr check denotation and the closed forward Terminal state be
+the finite Schnorr check denotation and the repaired forward Terminal state be
 mechanized in core Lean while retaining the predecessor goldens?  The
-extension proves must-fact, occurrence-region, and claim-status soundness for
-arbitrary schedules and valuations, then executes the closed Terminal decision
-through Lean and independent Python paths.  Nothing under `lean/` is normative.
+extension proves must-fact, occurrence-region, boundary-region, and
+claim-source-status soundness for arbitrary schedules and valuations, then
+executes the closed Terminal decision through Lean and independent Python
+paths.  Nothing under `lean/` is normative.
 
 When no Lean toolchain is available the Lean-dependent findings are classified
 `Unsupported/M0-U-LEAN-TOOLCHAIN` and the frozen comparison fails; the gate
@@ -44,19 +45,14 @@ TERMINAL_EXPORT = HERE / "export_terminal_vectors.py"
 TERMINAL_CHECKER = HERE / "terminal_checker.py"
 TERMINAL_VECTORS = VECTORS / "terminal-contract.json"
 SOURCE_PINS = HERE / "source-pins.json"
-D1_EXPECTED = (
-    ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json"
-)
 ORACLE_CASES = ROOT / "evaluation/k1-executable-foundations/oracle/cases"
 FOUNDATION = ROOT / "docs-next/foundation/executable-foundations.md"
 TARGET = ROOT / "docs-next/pir/interactive-core.md"
 
-AFFIRMATIVE_AGGREGATE = "M4-A-FORWARD-STATE-SOUND"
-CANNOT_ANSWER_AGGREGATE = "M4-C-FORWARD-STATE-INCOMPLETE"
+AFFIRMATIVE_AGGREGATE = "M5-A-CLAIM-SOURCE-REGIONS-SOUND"
+CANNOT_ANSWER_AGGREGATE = "M5-C-CLAIM-SOURCE-REGIONS-INCOMPLETE"
 TOOLCHAIN = "leanprover/lean4:v4.33.1"
 LEAN_VERSION = "4.33.1"
-D1_AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
-D1_FINDINGS_SHA256 = "6df7aa212836ddd9f4eb4f740167b9183a8e155c853cd3ee7e801f832e75e48a"
 ORACLE_REQUESTS_SHA256 = "43302085a81540e6d7aca57c2ec15338fd2082ddf0b5960517cedac5e6600b8e"
 ORACLE_EXPECTED_SHA256 = "c7c6f87c5cd591f25e604ed157134e5d113449d1fea0c48eaeb9e76a9e7eab42"
 ORACLE_BOUNDARY_SHA256 = "318b98c12f6a5a358885cff8e0dcbc13e7c0f38796a0dc2c036fe6eb6f334d41"
@@ -86,6 +82,9 @@ TERMINAL_THEOREMS = (
     "M0.impossible_when_false_cannot_evaluate_false",
     "M0.attempted_iff_region_holds",
     "M0.region_impossible_iff_unreachable",
+    "M0.boundary_reached_iff_boundary_region_holds",
+    "M0.claimSourceRegion_holds_iff_exists",
+    "M0.claimSourceRegion_holds_of_exists",
     "M0.claimStatus_live_sound",
     "M0.claimStatus_dead_sound",
     "M0.terminalContractDecision_correct",
@@ -353,13 +352,27 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         source_pins["base_head"] == terminal_export.BASE_HEAD,
         "source-pin cutoff and normalized-vector cutoff differ",
     )
-    for group in ("frozen_predecessors", "owner_and_reconstruction_sources"):
+    for group in ("owner_sources", "package_inputs"):
         for relative, expected_digest in source_pins[group].items():
             _require(_sha256(ROOT / relative) == expected_digest, f"source pin drifted: {relative}")
-    d1 = _read_json(D1_EXPECTED)
+    all_pins = {**source_pins["owner_sources"], **source_pins["package_inputs"]}
+    expected_owner_pins = {
+        FOUNDATION.relative_to(ROOT).as_posix(),
+        TARGET.relative_to(ROOT).as_posix(),
+    }
+    expected_package_inputs = (
+        set(terminal_export.SOURCES) - expected_owner_pins
+    ) | {
+        "evaluation/formal-kernel-mechanization-m0/vectors/body-digests.json",
+        "evaluation/formal-kernel-mechanization-m0/vectors/pcgraph-construction.json",
+    }
     _require(
-        d1["aggregate"] == D1_AGGREGATE and d1["findings_sha256"] == D1_FINDINGS_SHA256,
-        "D1 predecessor result drifted",
+        set(source_pins["owner_sources"]) == expected_owner_pins
+        and set(source_pins["package_inputs"]) == expected_package_inputs
+        and set(terminal_export.SOURCES) <= set(all_pins)
+        and not any("expected-findings.json" in path for path in all_pins)
+        and not any("/notes/" in path for path in all_pins),
+        "source pins must contain only owner pages and package inputs",
     )
     _require(
         _sha256(ORACLE_CASES / "requests.jsonl") == ORACLE_REQUESTS_SHA256
@@ -370,7 +383,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         _sha256(ORACLE_CASES / "natural-byte-bound.json") == ORACLE_BOUNDARY_SHA256,
         "K1 natural byte-bound vectors drifted",
     )
-    findings.append(_finding("predecessor-pin", "Affirmative", "M0-A-PREDECESSOR-PIN"))
+    findings.extend(
+        (
+            _finding("predecessor-pin", "Affirmative", "M0-A-PREDECESSOR-PIN"),
+            _finding("source-pins-owner-and-inputs-only", "Affirmative",
+                     "M5-A-SOURCE-PIN-BOUNDARY"),
+        )
+    )
 
     # Target law pins and nonpublication.
     foundation = FOUNDATION.read_text(encoding="utf-8")
@@ -390,7 +409,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         and "MustEnv(any other term constructor, environment)" in target
         and "names a non-Boolean binding carries no literal" in target
         and "Region(o) := {" in target
+        and "BoundaryRegion(Initially) := {" in target
+        and "BoundaryRegion(BeforeOccurrence(o)) := {" in target
+        and "ClaimSourceRegion(c) :=" in target
         and "ClaimStatus(c, o) :=" in target
+        and "Implies(Region(o), ClaimSourceRegion(c))" in target
+        and "Disjoint(Region(o), ClaimSourceRegion(c))" in target
+        and "Region(Source(c))" not in target
         and "TerminalContract(t), with o_t the occurrence of ReachTerminal(t)" in target,
         "Foundation, graph, or Terminal law text drifted",
     )
@@ -788,6 +813,11 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         "M0.attempted_iff_region_holds",
         "M0.region_impossible_iff_unreachable",
     ))
+    boundary_region_proofs_ok = proved((
+        "M0.boundary_reached_iff_boundary_region_holds",
+        "M0.claimSourceRegion_holds_iff_exists",
+        "M0.claimSourceRegion_holds_of_exists",
+    ))
     claim_status_proofs_ok = proved((
         "M0.claimStatus_live_sound",
         "M0.claimStatus_dead_sound",
@@ -818,7 +848,11 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                     terminal.get("claim_bindings_well_formed"),
                     tuple(terminal.get("live_claims", [])),
                     tuple(
-                        (status["reference"], status["status"])
+                        (
+                            status["reference"],
+                            status["status"],
+                            status.get("occurrence_coercion_status"),
+                        )
                         for status in terminal.get("claim_statuses", [])
                     ),
                 )
@@ -902,6 +936,48 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         len(control_rows) == 4 and unknown_refused and contradiction_refused
         and non_boolean_refused and impossible_region_refused
     )
+    claim_source_rows = {
+        row["name"]: row for row in lean_terminal_rows
+        if row["family"] == "claim-source-region-control"
+    }
+    initially_case = claim_source_rows.get("claim-source-region/initially", {})
+    before_unguarded_case = claim_source_rows.get(
+        "claim-source-region/before-unguarded-occurrence", {}
+    )
+    before_guarded_case = claim_source_rows.get(
+        "claim-source-region/before-guarded-occurrence", {}
+    )
+    reduction_output_case = claim_source_rows.get(
+        "claim-source-region/reduction-output-consumed", {}
+    )
+    guarded_statuses = before_guarded_case.get("terminals", [{}])[0].get(
+        "claim_statuses", []
+    )
+    reduction_statuses = reduction_output_case.get("terminals", [])
+    claim_source_discriminators_ok = (
+        len(claim_source_rows) == 4
+        and all(row.get("admitted") is True for row in claim_source_rows.values())
+        and all(
+            status["status"] == "Live"
+            for row in (initially_case, before_unguarded_case)
+            for terminal in row.get("terminals", [])
+            for status in terminal.get("claim_statuses", [])
+        )
+        and guarded_statuses == [
+            {
+                "reference": 0,
+                "status": "Live",
+                "occurrence_coercion_status": "Unknown",
+            }
+        ]
+        and len(reduction_statuses) == 2
+        and [(status["reference"], status["status"])
+             for status in reduction_statuses[0]["claim_statuses"]]
+            == [(0, "Dead"), (1, "Live")]
+        and [(status["reference"], status["status"])
+             for status in reduction_statuses[1]["claim_statuses"]]
+            == [(0, "Dead"), (1, "Dead")]
+    )
     finite_state_oracle_ok = all(
         all(row.get("soundness", {}).values())
         for row in python_terminal_rows if row.get("admitted") is not None
@@ -909,9 +985,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     closed_decisions_ok = all((
         decision_proof_ok, terminal_two_path_ok, projection_comparison_ok,
         integrated_claim_gap, holdout_shape_ok, controls_ok,
+        claim_source_discriminators_ok,
     ))
     forward_stage2_ok = must_sound_ok and closed_must_rules_ok
-    forward_stage3_ok = region_proofs_ok and claim_status_proofs_ok and finite_state_oracle_ok
+    forward_stage3_ok = (
+        region_proofs_ok and boundary_region_proofs_ok and claim_status_proofs_ok
+        and finite_state_oracle_ok
+    )
     forward_stage4_ok = closed_decisions_ok
     forward_incomplete_stages = [
         name for name, passed in (
@@ -927,17 +1007,20 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             lean_finding("must-facts-sound-against-m2-evaluator", must_sound_ok,
                          "TERMINAL-A-MUST-FACT-SOUND"),
             lean_finding("region-exact-for-attemptedness", region_proofs_ok,
-                         "M4-A-REGION-EXACT"),
+                         "M5-A-REGION-EXACT"),
+            lean_finding("boundary-and-source-regions-exact",
+                         boundary_region_proofs_ok,
+                         "M5-A-BOUNDARY-AND-SOURCE-REGIONS-EXACT"),
             lean_finding("claim-status-live-dead-sound", claim_status_proofs_ok,
-                         "M4-A-CLAIM-STATUS-SOUND"),
+                         "M5-A-CLAIM-STATUS-SOUND"),
             lean_finding("finite-forward-state-oracle", finite_state_oracle_ok,
-                         "M4-A-FINITE-STATE-ORACLE"),
+                         "M5-A-FINITE-STATE-ORACLE"),
             lean_finding("terminal-decision-procedure-correct", decision_proof_ok,
                          "TERMINAL-A-DECISION-CORRECT"),
             lean_finding("terminal-theorems-standard-axioms-only", terminal_proofs_ok,
                          "TERMINAL-A-STANDARD-AXIOMS-ONLY"),
             lean_finding("lean-python-terminal-decision-agreement", terminal_two_path_ok,
-                         "TERMINAL-A-TWO-PATH-AGREEMENT"),
+                         "M5-A-TWO-PATH-AGREEMENT"),
             lean_finding("terminal-projection-comparison", projection_comparison_ok,
                          "TERMINAL-A-PROJECTION-COMPARISON"),
             _finding("terminal-projection-adjacent-boundaries", "CannotAnswer",
@@ -951,7 +1034,10 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                 _finding("integrated-carriers-terminal-closure", "CannotAnswer",
                          "TERMINAL-C-INTEGRATED-COMPARISON-DIVERGED"),
             lean_finding("representable-holdout-terminal-shapes", holdout_shape_ok,
-                         "M4-A-HOLDOUT-SHAPES"),
+                         "M5-A-HOLDOUT-SHAPES"),
+            lean_finding("claim-source-region-discriminators",
+                         claim_source_discriminators_ok,
+                         "M5-A-CLAIM-SOURCE-REGION-DISCRIMINATORS"),
             lean_finding("closed-contract-controls", controls_ok,
                          "M4-A-CLOSED-CONTRACT-CONTROLS"),
             _finding("exact-holdout-terminal-carriers", "CannotAnswer",
@@ -975,7 +1061,7 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                          "M4-A-STANDALONE-IMPOSSIBLE-REGION"),
             lean_finding("closed-forward-claim-state",
                          forward_stage3_ok and unknown_refused,
-                         "M4-A-CLOSED-FORWARD-CLAIM-STATE"),
+                         "M5-A-CLOSED-FORWARD-CLAIM-STATE"),
         )
     )
 
@@ -1069,6 +1155,9 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                 "integrated_refused_by_claim_closure": len(integrated_rows)
                     if integrated_claim_gap else 0,
                 "holdout_shapes_decided": len(holdout_rows),
+                "claim_source_region_discriminators": len(claim_source_rows),
+                "claim_source_region_discriminators_passed":
+                    claim_source_discriminators_ok,
                 "controls_decided": len(control_rows),
                 "unrepresented_holdouts": regenerated_terminal["unrepresented_holdouts"],
                 "lean": lean_terminal_rows,

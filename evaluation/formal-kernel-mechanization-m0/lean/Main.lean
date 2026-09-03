@@ -430,10 +430,20 @@ def resolvePositions (effects : List RawTerminalEffect) (kind : String)
   references.map fun reference =>
     (uniquePosition? effects kind reference).getD (effects.length + reference + 1)
 
+def scopeOpeningOfJson (j : Json) : Except String ScopeOpening := do
+  match ← readString j "kind" with
+  | "initially" => pure .initially
+  | "before-occurrence" => pure (.beforeOccurrence (← readNat j "occurrence"))
+  | other => throw s!"unknown scope opening kind {other}"
+
 def claimSourceOfJson (j : Json) : Except String AbstractClaimSource := do
   match ← readString j "kind" with
-  | "initial" => pure .initial
-  | "occurrence" => pure (.occurrence (← readNat j "occurrence"))
+  | "initial-claim" =>
+      pure (.initialClaim (← readNat j "binding") (← readNat j "scope")
+        (← scopeOpeningOfJson (← readField j "opening")))
+  | "reduction-output" =>
+      pure (.reductionOutput (← readNat j "reduction") (← readNat j "output")
+        (← readNat j "occurrence"))
   | other => throw s!"unknown claim source kind {other}"
 
 def abstractClaimOfJson (j : Json) : Except String AbstractClaim := do
@@ -445,18 +455,29 @@ def abstractClaimOfJson (j : Json) : Except String AbstractClaim := do
 
 def claimAvailableBefore (occurrence : Nat) (claim : AbstractClaim) : Bool :=
   match claim.source with
-  | .initial => true
-  | .occurrence source => decide (source < occurrence)
+  | .initialClaim _binding _scope .initially => true
+  | .initialClaim _binding _scope (.beforeOccurrence boundary) =>
+      decide (boundary ≤ occurrence)
+  | .reductionOutput _reduction _outputOrdinal source => decide (source < occurrence)
 
 def availableClaims (claims : List AbstractClaim) (occurrence : Nat) :
     List AbstractClaim :=
   claims.filter (claimAvailableBefore occurrence)
 
+def openingBeforeDecision (schedule : List ScheduledOccurrence)
+    (boundary scope : Nat) : Bool :=
+  match schedule[boundary]? with
+  | some row => row.openingsBefore.contains scope
+  | none => false
+
 def claimWellFormedAtDecision (schedule : List ScheduledOccurrence)
     (claim : AbstractClaim) (occurrence : Nat) : Bool :=
   (match claim.source with
-   | .initial => true
-   | .occurrence source => decide (source < occurrence) && schedule[source]?.isSome) &&
+   | .initialClaim _binding scope .initially => scope == 0
+   | .initialClaim _binding scope (.beforeOccurrence boundary) =>
+       decide (boundary ≤ occurrence) && openingBeforeDecision schedule boundary scope
+   | .reductionOutput _reduction _outputOrdinal source =>
+       decide (source < occurrence) && schedule[source]?.isSome) &&
   (earlierLinearConsumers claim occurrence).all fun consumer =>
     schedule[consumer]?.isSome
 
@@ -507,7 +528,7 @@ structure TerminalRowReport where
   regionImpossible : Bool
   claimBindingsWellFormed : Bool
   liveClaims : List Nat
-  claimStatuses : List (Nat × ClaimJudgment)
+  claimStatuses : List (Nat × ClaimJudgment × ClaimJudgment)
 
 def TerminalRowReport.toJson (row : TerminalRowReport) : Json :=
   Json.mkObj [
@@ -519,7 +540,8 @@ def TerminalRowReport.toJson (row : TerminalRowReport) : Json :=
     ("claim_statuses", Json.arr (row.claimStatuses.toArray.map fun status =>
       Json.mkObj [
         ("reference", status.1),
-        ("status", claimJudgmentName status.2)
+        ("status", claimJudgmentName status.2.1),
+        ("occurrence_coercion_status", claimJudgmentName status.2.2)
       ]))
   ]
 
@@ -589,7 +611,8 @@ def runTerminalCarrier (j : Json) : Except String TerminalCarrierReport := do
         claimBindingsWellFormed := wellFormed
         liveClaims := LiveClaims schedule localClaims terminal.occurrence
         claimStatuses := localClaims.map fun claim =>
-          (claim.reference, ClaimStatus schedule claim terminal.occurrence)
+          (claim.reference, ClaimStatus schedule claim terminal.occurrence,
+            OccurrenceCoercionClaimStatus schedule claim terminal.occurrence)
       }
     let claimBindingsWellFormed := terminalRows.all (·.claimBindingsWellFormed)
     let admitted := backlinkExact && fallback && claimBindingsWellFormed &&

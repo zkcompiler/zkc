@@ -1,5 +1,5 @@
 {
-  "base_head": "76f49ec1df3d9b5a241768da2fed8f5d46bd0799",
+  "base_head": "5105247d1b7aeebd67bb26a6dce2191cd4b9e034",
   "carriers": [
     {
       "claims": [
@@ -10,29 +10,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -65,9 +81,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -193,29 +207,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -248,9 +278,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -376,29 +404,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -431,9 +475,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -560,29 +602,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -615,9 +673,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -743,29 +799,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -798,9 +870,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -927,29 +997,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -982,9 +1068,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -1111,29 +1195,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -1166,9 +1266,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -1292,29 +1390,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -1347,9 +1461,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -1475,29 +1587,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -1530,9 +1658,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -1659,29 +1785,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -1714,9 +1856,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -1852,29 +1992,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -1907,9 +2063,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -2026,29 +2180,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -2081,9 +2251,7 @@
             "reference": 0
           },
           "guard_atom": 50,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -2209,29 +2377,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 2
+            "kind": "reduction-output",
+            "occurrence": 2,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -2264,9 +2448,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -2392,29 +2574,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 2
+            "kind": "reduction-output",
+            "occurrence": 2,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -2447,9 +2645,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -2575,29 +2771,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -2630,9 +2842,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -2750,29 +2960,45 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "family": "terminal-projection",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -2805,9 +3031,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -2954,23 +3178,32 @@
           "linear_consumers": [],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 18
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 19
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
@@ -2978,7 +3211,14 @@
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [],
       "name": "integrated-baseline",
@@ -3010,7 +3250,6 @@
           },
           "guard_atom": null,
           "openings_before": [
-            0,
             1
           ]
         },
@@ -3273,23 +3512,32 @@
           "linear_consumers": [],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 18
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 19
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
@@ -3297,7 +3545,14 @@
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [],
       "name": "private-verifier-output-sink",
@@ -3329,7 +3584,6 @@
           },
           "guard_atom": null,
           "openings_before": [
-            0,
             1
           ]
         },
@@ -3592,23 +3846,32 @@
           "linear_consumers": [],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 18
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 19
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
@@ -3616,7 +3879,14 @@
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [],
       "name": "invalid-module-control-sink",
@@ -3648,7 +3918,6 @@
           },
           "guard_atom": null,
           "openings_before": [
-            0,
             1
           ]
         },
@@ -3911,23 +4180,32 @@
           "linear_consumers": [],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 18
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 19
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
@@ -3935,7 +4213,14 @@
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [],
       "name": "history-challenge-condition",
@@ -3967,7 +4252,6 @@
           },
           "guard_atom": null,
           "openings_before": [
-            0,
             1
           ]
         },
@@ -4230,23 +4514,32 @@
           "linear_consumers": [],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 18
+            "kind": "reduction-output",
+            "occurrence": 18,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 19
+            "kind": "reduction-output",
+            "occurrence": 19,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
@@ -4254,7 +4547,14 @@
       "expected_terminal_outcome": "Refused",
       "family": "integrated-graph",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [],
       "name": "logical-reject-preemption",
@@ -4286,7 +4586,6 @@
           },
           "guard_atom": null,
           "openings_before": [
-            0,
             1
           ]
         },
@@ -4546,9 +4845,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -4610,7 +4907,12 @@
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
           }
         },
         {
@@ -4619,15 +4921,24 @@
           ],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 5
+            "kind": "reduction-output",
+            "occurrence": 5,
+            "output": 0,
+            "reduction": 0
           }
         }
       ],
       "expected_terminal_outcome": "Affirmative",
       "family": "holdout-shape",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0,
@@ -4659,9 +4970,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -4805,36 +5114,401 @@
     {
       "claims": [
         {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
+      ],
+      "linear_claims": [],
+      "name": "claim-source-region/initially",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 720,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "before-occurrence",
+              "occurrence": 0
+            },
+            "scope": 1
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "before-occurrence",
+            "occurrence": 0
+          },
+          "reference": 0,
+          "scope": 1
+        }
+      ],
+      "linear_claims": [],
+      "name": "claim-source-region/before-unguarded-occurrence",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 721,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "before-occurrence",
+              "occurrence": 0
+            },
+            "scope": 1
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "before-occurrence",
+            "occurrence": 0
+          },
+          "reference": 0,
+          "scope": 1
+        }
+      ],
+      "linear_claims": [],
+      "name": "claim-source-region/before-guarded-occurrence",
+      "predecessor_outcome": "occurrence-coercion Unknown",
+      "reductions": [],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "other",
+            "reference": 0
+          },
+          "guard_atom": 722,
+          "openings_before": [
+            1
+          ]
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": [
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
           "linear_consumers": [
-            1,
-            3
+            1
           ],
           "reference": 0,
           "source": {
-            "kind": "initial"
+            "kind": "reduction-output",
+            "occurrence": 0,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 1,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 1
+            "kind": "reduction-output",
+            "occurrence": 0,
+            "output": 1,
+            "reduction": 0
+          }
+        }
+      ],
+      "expected_terminal_outcome": "Affirmative",
+      "family": "claim-source-region-control",
+      "initial_claims": [],
+      "linear_claims": [
+        0
+      ],
+      "name": "claim-source-region/reduction-output-consumed",
+      "predecessor_outcome": "not-applicable",
+      "reductions": [
+        {
+          "inputs": [],
+          "outputs": [
+            0,
+            1
+          ]
+        },
+        {
+          "inputs": [
+            0
+          ],
+          "outputs": []
+        }
+      ],
+      "representable": true,
+      "schedule": [
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 0
+          },
+          "guard_atom": 723,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "reduction",
+            "reference": 1
+          },
+          "guard_atom": 723,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 0
+          },
+          "guard_atom": 723,
+          "openings_before": []
+        },
+        {
+          "effect": {
+            "kind": "terminal",
+            "reference": 1
+          },
+          "guard_atom": null,
+          "openings_before": []
+        }
+      ],
+      "source_precision": "package-authored direct owner-law discriminator",
+      "terminals": [
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": {
+            "kind": "true"
+          },
+          "reference": 0,
+          "required_checks": [],
+          "required_reductions": [
+            0,
+            1
+          ],
+          "terminal_claims": [
+            1
+          ]
+        },
+        {
+          "guard_input_is_boolean": [],
+          "guard_inputs": [],
+          "guard_term": null,
+          "reference": 1,
+          "required_checks": [],
+          "required_reductions": [],
+          "terminal_claims": []
+        }
+      ]
+    },
+    {
+      "claims": [
+        {
+          "linear_consumers": [
+            1,
+            3
+          ],
+          "reference": 0,
+          "source": {
+            "binding": 0,
+            "kind": "initial-claim",
+            "opening": {
+              "kind": "initially"
+            },
+            "scope": 0
+          }
+        },
+        {
+          "linear_consumers": [],
+          "reference": 1,
+          "source": {
+            "kind": "reduction-output",
+            "occurrence": 1,
+            "output": 0,
+            "reduction": 0
           }
         },
         {
           "linear_consumers": [],
           "reference": 2,
           "source": {
-            "kind": "occurrence",
-            "occurrence": 3
+            "kind": "reduction-output",
+            "occurrence": 3,
+            "output": 0,
+            "reduction": 1
           }
         }
       ],
       "expected_terminal_outcome": "Refused",
       "family": "closed-contract-control",
       "initial_claims": [
-        0
+        {
+          "binding": 0,
+          "opening": {
+            "kind": "initially"
+          },
+          "reference": 0,
+          "scope": 0
+        }
       ],
       "linear_claims": [
         0
@@ -4867,9 +5541,7 @@
             "reference": 0
           },
           "guard_atom": null,
-          "openings_before": [
-            0
-          ]
+          "openings_before": []
         },
         {
           "effect": {
@@ -5194,29 +5866,31 @@
       1427,
       1442
     ],
-    "forward_state": [
-      1480,
-      1503
+    "claim_source_region": [
+      1495,
+      1520
     ],
     "must_env": [
       1444,
       1478
     ],
+    "occurrence_region": [
+      1480,
+      1493
+    ],
     "terminal_contract": [
-      1505,
-      1519
+      1522,
+      1536
     ]
   },
   "source_pins": {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "3a39d1597827804660534f9e118188c4db7b558023d0cc4a9a4bf638bc4eb379",
-    "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "db842dcba66f72d05f0ba7e97aefeb73b6cee210a6aff7f13923811159eaf1c0",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json": "66c74a522e39314b5482fc0cc9f14648c4e297646df96466ba65103e4c0d871d",
-    "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json": "e2226368695951dea1371f48951eefbac9b336a528590b0405f727be849449ee",
+    "docs-next/foundation/executable-foundations.md": "d89443b5cefe4959c7fd4f1f46d38058ce0470e983968870dc8511027f3b9b65",
+    "docs-next/pir/interactive-core.md": "ca092e1808163c1659035f54e1cf31e6952b2e19ddec84628cce9a3f0d219d70",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "c975b54f6d0cd88557a38c85e347e5ff91a688ce1510be7c71bb478c0771db81",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "73ad42c61259001797fa7039ce0858b16ad5f074b13476532986b3c669d2867e",
-    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/expected-findings.json": "65aabc261ad209239e0f9d9afbdd5f2c262e372e4c60e0d1e8f879c941769d69",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9cbe6d51fb1ff5e0c9a7585505a55fe4f34ec9685aa02ed7b1ee872092c3f6cc",
-    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "ab4f11eb8eafd7bbcd556be7252af2faaaae9cef06f8b2706174b7d1805eee38"
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "ab4f11eb8eafd7bbcd556be7252af2faaaae9cef06f8b2706174b7d1805eee38",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/schema-delta.json": "15515392167a9a1341b87dcdc778d4afcdcc901af3e75c7f75a4c62beab8dd2c"
   },
   "unrepresented_holdouts": [
     {

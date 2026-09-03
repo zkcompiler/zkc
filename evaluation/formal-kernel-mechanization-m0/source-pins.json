@@ -1,19 +1,17 @@
 {
   "base_branch": "docs/pir-migration-v2c",
-  "base_head": "76f49ec1df3d9b5a241768da2fed8f5d46bd0799",
-  "frozen_predecessors": {
+  "base_head": "5105247d1b7aeebd67bb26a6dce2191cd4b9e034",
+  "owner_sources": {
+    "docs-next/foundation/executable-foundations.md": "d89443b5cefe4959c7fd4f1f46d38058ce0470e983968870dc8511027f3b9b65",
+    "docs-next/pir/interactive-core.md": "ca092e1808163c1659035f54e1cf31e6952b2e19ddec84628cce9a3f0d219d70"
+  },
+  "package_inputs": {
     "evaluation/formal-kernel-mechanization-m0/vectors/body-digests.json": "dc96ea4cb4791acc6cbb911b56cd1d90d31caa83ace0e4070b8969b6076181f5",
     "evaluation/formal-kernel-mechanization-m0/vectors/pcgraph-construction.json": "4b120c65df1e5592ee5bfa6d65f324874214dc2ed3501990ba6ef0fa909eaf4e",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/expected-findings.json": "66c74a522e39314b5482fc0cc9f14648c4e297646df96466ba65103e4c0d871d",
-    "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json": "e2226368695951dea1371f48951eefbac9b336a528590b0405f727be849449ee",
-    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/expected-findings.json": "65aabc261ad209239e0f9d9afbdd5f2c262e372e4c60e0d1e8f879c941769d69"
-  },
-  "owner_and_reconstruction_sources": {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "3a39d1597827804660534f9e118188c4db7b558023d0cc4a9a4bf638bc4eb379",
-    "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "db842dcba66f72d05f0ba7e97aefeb73b6cee210a6aff7f13923811159eaf1c0",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "c975b54f6d0cd88557a38c85e347e5ff91a688ce1510be7c71bb478c0771db81",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "73ad42c61259001797fa7039ce0858b16ad5f074b13476532986b3c669d2867e",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9cbe6d51fb1ff5e0c9a7585505a55fe4f34ec9685aa02ed7b1ee872092c3f6cc",
-    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "ab4f11eb8eafd7bbcd556be7252af2faaaae9cef06f8b2706174b7d1805eee38"
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "ab4f11eb8eafd7bbcd556be7252af2faaaae9cef06f8b2706174b7d1805eee38",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/schema-delta.json": "15515392167a9a1341b87dcdc778d4afcdcc901af3e75c7f75a4c62beab8dd2c"
   }
 }
