@@ -1547,6 +1547,28 @@
       }
     },
     {
+      "id": "research.provider-interpretation-arklib",
+      "title": "Finite Schnorr ArkLib interpretation",
+      "subject": "Whether one generated ArkLib Reduction has a total, order-preserving operational correspondence to the admitted finite Schnorr Fresh Protocol under the schedule, value, computation, terminal, and trace clauses of the entry contract, and which source outcome lanes ArkLib's execution model realizes.",
+      "claim": "An independent cold-view checker authenticates the current subject, certificate, provider sources, and option-layer placement; executes the portable Check, mechanized first-active terminal, and pinned ArkLib artifact over their complete finite domains; and finds exact agreement for all five clauses across all 81 verifier inputs and all 81 honest-plan runs. ArkLib's Prover.run uses the failure-free base carrier, so Reduction.verdict has only verifier rejection as a producer of none for this generated reduction. The determinate package map models Accepted and Rejected; it remains an authenticated package input because Analysis has not published the ArkLib declaration and Option Unit carrier needed to form that premise.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "bounded-exhaustive", "static-analysis"],
+      "source_paths": ["evaluation/formal-provider-interpretation-arklib-f2o3/run.py", "evaluation/formal-provider-interpretation-arklib-f2o3/generator.py", "evaluation/formal-provider-interpretation-arklib-f2o3/checker.py", "evaluation/formal-provider-interpretation-arklib-f2o3/TermEvaluatorProbe.lean", "evaluation/formal-provider-interpretation-arklib-f2o3/README.md", "evaluation/formal-provider-interpretation-arklib-f2o3/expected-findings.json", "evaluation/formal-provider-interpretation-arklib-f2o3/generated/SchnorrArkLib.lean", "evaluation/formal-provider-interpretation-arklib-f2o3/generated/certificate.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o3-arklib-interpretation.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "pinned-external-checkout",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["The finite clause findings establish no formed Analysis provider-map premise, universal provider correspondence, protocol or cryptographic property, theorem applicability, Fresh distribution premise, general evaluator correctness, correspondence for another subject or provider, owner-page change, compiler or backend correctness, or production validity."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-provider-interpretation-arklib-f2o3/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.kernel-mechanization-feasibility",
       "title": "Mechanized claim-source regions and Terminal contract",
       "subject": "Core-only Lean 4 transcription of BoundaryRegion, ClaimSourceRegion, ClaimStatus, LiveClaims, and the retained closed Terminal laws, including universal soundness proofs and finite two-path carrier reconstruction.",
