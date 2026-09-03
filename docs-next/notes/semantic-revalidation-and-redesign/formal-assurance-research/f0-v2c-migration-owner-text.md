@@ -214,6 +214,11 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   on the frozen upstream profile digests, which is the publication gate. The
   classes are unchanged, and the publication compiler's uniqueness and
   reachability checks still pass on the manifests.
+  After the refreeze rehearsal was rebased and re-pinned to the closed text
+  (`f0-v2c-refreeze-rehearsal.md`), the checkpoint tier stands at 59 of 62
+  with three red: the publication hold, the provider interpretation, whose
+  current round lives on the Analysis branch with the text it pins, and the
+  terminal mechanization, re-pinned by Main whenever its inputs move.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
 - Two defects the refreeze rehearsal (`f0-v2c-refreeze-rehearsal.md`) reported
