@@ -74,6 +74,12 @@ its five dependents rotate, on top of the migration's seventeen.
   closure, constructor consistency, Schnorr bindings, and refreeze inputs,
   are answered in the text as Section 2 records. A third round checks the
   repaired text and the packet's additions.
+- The package migration found that the fixed-extractor question adds the
+  extractor to its exact subjects while it reused the relation and witness
+  premises scoped to the relation question; under the intake's exact-subject
+  rule those premises would be refused. The two constructors now take the
+  consuming question's scope, and the extractor question forms its own two
+  premise identities over its own subjects.
 - The intake probe does not yet exercise the tenth kind or the
   `Image`/`Unmodelled` lane image with `modelled_lanes`; that extension goes
   with the package migration below.

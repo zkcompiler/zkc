@@ -1286,7 +1286,7 @@ SchnorrFixedExtractorWorksGoal(
   S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) = AnalysisGoalBody {
   question_id: AnalysisQuestionId(
     B, SchnorrFixedExtractorWorksQuestion(S, Ext)),
-  named_premise_bindings: SchnorrExtractorPremiseBindings(S)
+  named_premise_bindings: SchnorrExtractorPremiseBindings(S, Ext)
 }
 
 EmptyAnalysisHypothesisContextBody = AnalysisHypothesisContextBody {
@@ -2349,8 +2349,12 @@ HonestRespondHypothesis =
 SchnorrPremiseScope(S: AnalysisSubjectTuple) =
   ExactSubjectsOnly(SchnorrSpecialSoundnessQuestion(S).exact_subjects)
 
+SchnorrExtractorPremiseScope(S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) =
+  ExactSubjectsOnly(SchnorrFixedExtractorWorksQuestion(S, Ext).exact_subjects)
+
 RelationPredicatePremise(
     S: AnalysisSubjectTuple,
+    scope: AnalysisPremiseModelScope,
     source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
     evidence_depth: AnalysisPremiseEvidenceDepth) =
   AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, RelationPredicate> {
@@ -2365,7 +2369,7 @@ RelationPredicatePremise(
       }),
     source,
     evidence_depth,
-    model_scope: SchnorrPremiseScope(S)
+    model_scope: scope
   }
 
 WitnessJoinCoordinate(S: AnalysisSubjectTuple) =
@@ -2375,6 +2379,7 @@ WitnessJoinCoordinate(S: AnalysisSubjectTuple) =
 
 WitnessTypePremise(
     S: AnalysisSubjectTuple,
+    scope: AnalysisPremiseModelScope,
     source: AnalysisNamedPremiseSource<AnalysisCryptographicPropertyLanguageProfileId>,
     evidence_depth: AnalysisPremiseEvidenceDepth) =
   AnalysisNamedPremiseBody<AnalysisCryptographicPropertyLanguageProfileId, WitnessType> {
@@ -2387,7 +2392,7 @@ WitnessTypePremise(
       }),
     source,
     evidence_depth,
-    model_scope: SchnorrPremiseScope(S)
+    model_scope: scope
   }
 
 ProverPrivateStatePremise(
@@ -2529,10 +2534,10 @@ SchnorrNamedPremiseBindings(S: AnalysisSubjectTuple) =
                         exact finite uniform model,
                         CandidateOwnerCoordinate(S.fresh_protocol_id),
                         SourceGroundedMapping),
-    "relation"     -> RelationPredicatePremise(S,
+    "relation"     -> RelationPredicatePremise(S, SchnorrPremiseScope(S),
                         CandidateOwnerCoordinate(S.relation_semantic_model_id),
                         FrozenExecutableFalsification),
-    "witness"      -> WitnessTypePremise(S,
+    "witness"      -> WitnessTypePremise(S, SchnorrPremiseScope(S),
                         CandidateOwnerCoordinate(S.relation_interface_id),
                         FrozenExecutableFalsification),
     "prover-state" -> ProverPrivateStatePremise(S,
@@ -2545,8 +2550,21 @@ SchnorrNamedPremiseBindings(S: AnalysisSubjectTuple) =
                         CandidateOwnerCoordinate(PlanOf(S)),
                         FrozenExecutableFalsification)
 
-SchnorrExtractorPremiseBindings(S) =
-  the "relation" and "witness" entries of SchnorrNamedPremiseBindings(S)
+SchnorrExtractorPremiseBindings(S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef) =
+  the binding map IntakeAnalysisNamedPremises(
+    SchnorrFixedExtractorWorksQuestion(S, Ext), supplied) forms, where
+  supplied binds each slot to PremiseIdOf of the exact body below; the
+  bodies differ from the relation question's only in their scope, because an
+  ExactSubjectsOnly premise admits exactly the question whose subjects it
+  names and the extractor question adds Ext to its subjects:
+    "relation"     -> RelationPredicatePremise(S,
+                        SchnorrExtractorPremiseScope(S, Ext),
+                        CandidateOwnerCoordinate(S.relation_semantic_model_id),
+                        FrozenExecutableFalsification),
+    "witness"      -> WitnessTypePremise(S,
+                        SchnorrExtractorPremiseScope(S, Ext),
+                        CandidateOwnerCoordinate(S.relation_interface_id),
+                        FrozenExecutableFalsification)
 
 FiatShamirConstructionPremiseBindings(
     S: AnalysisSubjectTuple,
