@@ -1,0 +1,30 @@
+{
+  "aggregate": {
+    "outcome": "Negative",
+    "code": "F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED",
+    "blocking_findings": [
+      "F0V2D1-N-NAME-CLOSURE",
+      "F0V2D1-N-CONSTRUCTOR-CONSISTENCY",
+      "F0V2D1-N-DECISION-FIDELITY",
+      "F0V2D1-N-SCHNORR-COORDINATES",
+      "F0V2D1-N-PROFILE-MANIFESTS",
+      "F0V2D1-N-PROBE-COVERAGE"
+    ],
+    "cannot_answer_findings": [
+      "F0V2D1-C-INTAKE-SCOPE-DISPOSITION",
+      "F0V2D1-C-REFREEZE-INPUTS"
+    ]
+  },
+  "finding_codes": [
+    ["name-closure", "Negative", "F0V2D1-N-NAME-CLOSURE"],
+    ["constructor-consistency", "Negative", "F0V2D1-N-CONSTRUCTOR-CONSISTENCY"],
+    ["intake-soundness", "CannotAnswer", "F0V2D1-C-INTAKE-SCOPE-DISPOSITION"],
+    ["decision-fidelity", "Negative", "F0V2D1-N-DECISION-FIDELITY"],
+    ["schnorr-coordinate-formation", "Negative", "F0V2D1-N-SCHNORR-COORDINATES"],
+    ["profile-manifest-closure", "Negative", "F0V2D1-N-PROFILE-MANIFESTS"],
+    ["existing-package-refreeze", "CannotAnswer", "F0V2D1-C-REFREEZE-INPUTS"],
+    ["publication-compiler-agreement", "Affirmative", "F0V2D1-A-PUBLICATION-COMPILERS"],
+    ["identity-rotation-cone", "Affirmative", "F0V2D1-A-ROTATION-CONE"],
+    ["predecessor-probe-coverage", "Negative", "F0V2D1-N-PROBE-COVERAGE"]
+  ]
+}

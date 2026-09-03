@@ -1280,6 +1280,28 @@
       }
     },
     {
+      "id": "research.analysis-premise-text-review",
+      "title": "Analysis named-premise owner-text review",
+      "subject": "The proposed Analysis named-premise grammar, concrete constructors, intake partition, Schnorr coordinates, profile manifests, identity cone, and existing-package migration surface.",
+      "claim": "A pinned independent source audit reproduces ten findings: publication compilers and the six-profile rotation cone agree, while unresolved law names, incomplete constructors, underdetermined scope disposition, unformable Plan coordinates, manifest defects, predecessor-probe gaps, and incomplete refreeze inputs prevent owner-text closure.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-analysis-premise-review-f0v2d1/run.py", "evaluation/formal-source-analysis-premise-review-f0v2d1/README.md", "evaluation/formal-source-analysis-premise-review-f0v2d1/expected-findings.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0v2d1-analysis-premise-text-review.md"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["This pinned source review does not repair or publish Analysis owner semantics, select a provider or premise binding, establish a relation or Plan fact, prove a theorem or cryptographic property, verify an implementation, or authorize deployment."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-analysis-premise-review-f0v2d1/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}", "git"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.holdout-readjudication",
       "title": "Cold protocol holdout readjudication",
       "subject": "The exact terminal-contract, normalized-view, family-view, and outcome-partition treatment of the five cold protocol holdouts under the migrated PIR owner text.",
