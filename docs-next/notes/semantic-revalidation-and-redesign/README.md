@@ -130,6 +130,11 @@ below are reader cross-references rather than inventory edges.
   committed ones as a checked Compiler transition, apply the canonical-framed
   construction, measure what rotates, and assign a coordinate to every premise
   of a BCS-style soundness statement under the named-premise intake.
+- [Compiler Transitions after the Migration](compiler-transitions/README.md)
+  fixes what a checked transition must carry, source and target identities,
+  an exact change record, a named transition relation, the property-relevant
+  claim, and a bounded decision, from the two probes that need one, and
+  names the two decisions the Compiler pass must take.
 - [Native FRI/IOR Final Classification and Retention](r2-protocol-witnesses/native-fri-ior-final-classification-and-retention.md)
   retains the two finite FRI/IOR lanes, classifies the case as a conservative
   extension, fixes the deterministic source-correspondence boundary, and
