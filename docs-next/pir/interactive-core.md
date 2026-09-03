@@ -1492,11 +1492,28 @@ Disjoint(A, B) :=
   A.required_true intersects B.required_false
   or B.required_true intersects A.required_false
 
+BoundaryRegion(Initially) := {
+  required_true: {}, required_false: {}, impossible: false
+}
+BoundaryRegion(BeforeOccurrence(o)) := {
+  required_true: {},
+  required_false: { Guard(t') | t' a terminal occurrence earlier than o
+                                with Guard(t') not Always },
+  impossible: an earlier terminal occurrence has Guard Always
+}
+
+ClaimSourceRegion(c) :=
+    BoundaryRegion(ScopeDecl(PublicBindingDecl(binding).scope).opening)
+      when c.source is InitialClaim(binding)
+  | Region(o_r)
+      when c.source is ReductionOutput(r, output_ordinal), with o_r the
+      occurrence of ApplyReduction(r)
+
 ClaimStatus(c, o) :=
-    Live     when Implies(Region(o), Region(Source(c)))
+    Live     when Implies(Region(o), ClaimSourceRegion(c))
              and Disjoint(Region(o), Region(u)) for every earlier linear
              consumer u of c
-  | Dead     when Disjoint(Region(o), Region(Source(c)))
+  | Dead     when Disjoint(Region(o), ClaimSourceRegion(c))
              or Implies(Region(o), Region(u)) for some earlier linear
              consumer u of c
   | Unknown  otherwise

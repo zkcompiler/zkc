@@ -1261,7 +1261,7 @@
       "id": "research.migration-text-review",
       "title": "Migrated owner-text freeze review",
       "subject": "The migrated PIR owner text and source manifests, reviewed for decision fidelity, Terminal contract closure, public-coin graph transfer and sinks, owner-view body closure, declaration-graph closure, publication reconstruction, and family-view body closure.",
-      "claim": "A pinned independent source audit reproduces seven affirmative freeze-review answers after the Terminal, owner-boundary, and family-body repairs, classifies all 95 family fields as exact finite forms, and reconstructs the seventeen-profile migration cone with two independent publication compilers.",
+      "claim": "A pinned independent source audit reproduces the round-three freeze-review answers, five affirmative and two CannotAnswer on the one claim-source region gap of the Terminal contract, classifies all 95 family fields as exact finite forms, and reconstructs the seventeen-profile migration cone with two independent publication compilers.",
       "classification": "research-falsifier",
       "methods": ["known-answer", "negative", "differential", "bounded-exhaustive", "static-analysis"],
       "source_paths": ["evaluation/formal-source-migration-text-review-f0v2c1/run.py", "evaluation/formal-source-migration-text-review-f0v2c1/README.md", "evaluation/formal-source-migration-text-review-f0v2c1/expected-findings.json"],
