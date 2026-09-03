@@ -2253,13 +2253,17 @@ PIRReference =
   | BindingRef | ClaimRef | ReductionRef | CheckRef | TerminalRef | OracleRef
   | PublicInputRef | VerifierPrivateInputRef | ConstantRef | DerivedValueRef
   | ValueRef
-  | ProtocolDeclarationRef<K> for a declaration kind K that Section 2 lists
+  | ProtocolDeclarationRef<K> for a declaration kind K that the exact-used
+    owner-module closure of the selected profile recognizes: Section 2 lists
+    the Interaction kinds, and a family page lists the kinds its profile adds
+    (the canonical-framed profile adds "pir.fs-application-domain")
 
 PIRReferenceBody(x) = the already defined exact body of x's reference type:
   N(ordinal) for a Core-local dense ordinal, ValueRefBody(x) for a ValueRef,
   and ModuleDeclarationRefBody(x) for a ProtocolDeclarationRef; the union is
-  closed, a ModuleEffectRef takes the AdmittedModuleEffect arm, and a leaf
-  of any other reference type is not a static-view leaf
+  closed under the selected profile, a ModuleEffectRef takes the
+  AdmittedModuleEffect arm, and a leaf of any other reference type is not a
+  static-view leaf
 
 PIRViewAtomicBoundary =
     Unit | Natural | MetaBoolean | MetaSymbol | Bytes
