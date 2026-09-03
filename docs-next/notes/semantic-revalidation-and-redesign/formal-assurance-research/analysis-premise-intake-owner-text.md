@@ -1,8 +1,10 @@
 # Analysis named-premise intake: the owner text
 
 > **Kind:** owner-text record (formal-assurance research, Analysis pass)
-> **State:** Authored 2026-09-03 on a branch stacked on the migration branch;
-> both publication compilers agree; publication remains the user's gate.
+> **State:** Authored 2026-09-03 on a branch stacked on the migration branch
+> and repaired after its first independent review; both publication compilers
+> agree; a second review round is in progress; publication remains the user's
+> gate.
 > **Inputs:** the migration decisions on the sampling law and the outcome
 > partition (`f0-v2c-decision-inputs.md`, Sections 4, 5, and 10) and the
 > intake design of `analysis-named-premise-intake.md`.
@@ -43,6 +45,16 @@ its five dependents rotate, on top of the migration's seventeen.
 
 ## 3. What remains
 
+- The first independent review found the grammar unparameterized, four law
+  families unsigned, prose where canonical law terms belong, a Plan identity
+  the subject tuple could not derive, and the displayed bodies without the
+  new fields. All of these are repaired: the grammar takes the profile
+  parameter and every law family has a signature, the hypothesis terms carry
+  canonical arguments, the subject tuple carries the Fresh Plan with an
+  adequacy clause and the Plan coordinates are typed, the provider map is a
+  separate requirement of provider judgments, and every displayed question,
+  goal, context, node, and support carries its premise fields under the
+  requirement law. A second review round checks the repaired text.
 - Publication, with the migration: the Analysis profiles rotate through the
   kernel.
 - Migration of existing question, goal, context, proposition, support, and
