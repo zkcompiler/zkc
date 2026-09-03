@@ -506,6 +506,17 @@ provider, extraction tool, or durable schema.
   the second round closes all seven questions: every family-body field is
   exact, the five deviations from the candidate packets are upheld, and the
   aggregate is `Affirmative`.
+- [`pre-freeze-deep-review-2026-09-04.md`](pre-freeze-deep-review-2026-09-04.md)
+  is the independent cross-contract review of the stacked tree before its
+  first freeze, written on the closed heads: eight findings, seven of them
+  producer/consumer composition defects or underdeterminations that the
+  page-local rounds never asked (an unformable Interface failure type, two
+  preimage equations for one source subject kind, singleton Fiat--Shamir
+  view fields over heterogeneous challenge rules, two meanings of
+  `InfluenceAtom`, Analysis reads naming fields no owner body declares, a
+  setup quotient asked to contain run values, and a family-premise source at
+  the wrong kind), plus a design disagreement on the prose-pin reversal
+  test; its verdict is not to publish before the repairs.
 - [`f0v2c2-holdout-readjudication.md`](f0v2c2-holdout-readjudication.md)
   re-adjudicates the five cold holdouts against the migrated Terminal
   contract, views, and outcome partition: five fits, three breaks at the

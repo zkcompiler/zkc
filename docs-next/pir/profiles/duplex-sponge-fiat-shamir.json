@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "duplex-sponge-fiat-shamir",
   "profile_family": "pir.duplex-sponge-fiat-shamir",
-  "revision": 2,
+  "revision": 3,
   "owner_page": "docs-next/pir/duplex-sponge-fiat-shamir.md",
   "expected_imports": ["interaction"],
   "supported_subject_kinds": [
@@ -127,7 +127,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-binding-payload-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "DuplexSourceBindingPayloadBody(x) =",
       "dependencies": [
@@ -138,7 +138,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-capability-requirement-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "DuplexSourceCapabilityRequirementBody(x) =",
       "dependencies": []
@@ -146,7 +146,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-no-policy-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "DuplexSourceNoPolicyBody(x) =",
       "dependencies": []
@@ -154,7 +154,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-policy-closure-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "duplex-sponge-fs-semantics",
       "selector": "DuplexSourcePolicyClosureBody(x) =",
       "dependencies": []

@@ -28,7 +28,7 @@ reader would have to show to reverse them.
 | D2's five owner choices | the Fresh run schema's receipts, fixation, and partial records | `research.owner-view-fresh-run-schema` | a receipt prefix or partial record the schema cannot express |
 | Section 11 wording by the D1 and M1 readings | transfer coordinates by node, lattice precedence, exact sinks | `research.owner-view-integrated-pcgraph`, M1 | a public-coin graph the transfer coordinates misplace |
 | F0-V3 family view catalogs in the same migration | the two Fiat--Shamir profiles own exact view bodies | `research.owner-view-fs-family-determinacy` (95 fields exact) | a family field that two compilers could fill differently |
-| P2 identity pin (prose fragment identity) | transcription discrepancies are named reopenings | both publication compilers | two compilers that disagree on a fragment digest |
+| P2 identity pin (prose fragment identity) | transcription discrepancies are named reopenings | both publication compilers | two compilers that disagree on a fragment digest; the pre-freeze deep review rejects this test as sufficient (Section 6, last item) |
 | Freeze scope: load-bearing kernel only | satellites are frozen as declared, unexercised | the migration record, Section 8 | a consumer that relies on a satellite as if exercised |
 
 ## 3. The Terminal contract (`terminal-contract-reopening-2026-09-03.md`)
@@ -65,6 +65,7 @@ reader would have to show to reverse them.
 | Family and instance | Core instance-only; the generator a Compiler transition; family theorems bound pointwise through per-member premises | `../family-and-instance/decision-inputs.md` |
 | Pull request 27 | keep the notes as an appendix and land after the migration | the private ledger |
 | VCVio declaration | publish item 3 as Section 4a of the carrier packet states it | `f2o2-provider-carrier-decision-2026-09-03.md` |
+| Prose-pin reversal test (the deep review's eighth finding) | keep P2, but replace its reversal test: compiler agreement shows which bytes are committed, not that they admit one meaning, so the review criterion becomes (1) one exact producer/consumer schema and body-dispatch contract per activated surface, (2) a two-implementer determinacy obligation with adversarial cross-field cases, (3) an explicit identity cone and revalidation policy separating editorial from semantic changes, and (4) stable versioned source artifacts with resolvable old preimages; no after-the-fact whitespace or comment normalization in the current format | `pre-freeze-deep-review-2026-09-04.md`, Section 10 |
 
 ## 7. Non-claims
 

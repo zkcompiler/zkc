@@ -2894,40 +2894,71 @@ PIRStaticViewPolicyClosureBody(x) = R {
   2: ContentRef(x.capability_requirement_id)
 }
 
+SourceSubjectBody(owner_profile, kind) =
+  the pir.body-compiler that owner_profile's catalog binds to the
+  pir.source-* subject kind `kind`: for the Interaction profile the four
+  compilers below, and for a dependent profile that profile's own compilers,
+  whose static-view arm carries that profile's static-view bodies
+
 PIRStaticViewBindingPayloadId(owner_profile, x) =
   ProfiledSemanticId<"pir.source-binding-payload">(
-    B, owner_profile, PIRSourceBindingPayloadBody(StaticView(x)))
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-binding-payload")(
+      StaticView(x)))
 PIRStaticViewCapabilityRequirementId(owner_profile, x) =
   ProfiledSemanticId<"pir.source-capability-requirement">(
-    B, owner_profile, PIRSourceCapabilityRequirementBody(StaticView(x)))
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-capability-requirement")(
+      StaticView(x)))
 PIRStaticViewNoPolicyId(owner_profile, x) =
   ProfiledSemanticId<"pir.source-no-policy">(
-    B, owner_profile, PIRSourceNoPolicyBody(StaticView(x)))
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-no-policy")(
+      StaticView(x)))
 PIRStaticViewPolicyClosureId(owner_profile, x) =
   ProfiledSemanticId<"pir.source-policy-closure">(
-    B, owner_profile, PIRSourcePolicyClosureBody(StaticView(x)))
+    B, owner_profile,
+    SourceSubjectBody(owner_profile, "pir.source-policy-closure")(
+      StaticView(x)))
 ```
+
+A static view owned by a dependent profile is therefore compiled by that
+profile: the constructor selects the owner profile's own bound compiler and
+applies it to the same tagged family value, so the Interaction compilers below
+never form another profile's subject.
 
 Each `pir.source-*` subject kind of the Interaction profile is compiled by one
 closed variant over exactly the source families this profile issues: arm 0 is
-the static-view family above and arm 1 is the confidential initial-Oracle
-family of Section 13.6, whose family-local bodies are in Appendix A. A family
-that a profile does not issue has no arm, so a payload of one family cannot be
-presented as another, and a dependent profile compiles its own subjects over
-its own families rather than importing these.
+the static-view family above, whose values are tagged `StaticView(y)`, and
+arm 1 is the confidential initial-Oracle family of Section 13.6, tagged
+`ConfidentialInitialOracle(y)`, whose family-local bodies are in Appendix A.
+Each compiler is a function of the tagged family value, and every identity
+constructor of a `pir.source-*` subject applies `ProfiledSemanticId` to the
+compiler's output and never to a family-local body, so one subject kind has
+exactly one preimage equation and the family tag is part of every such
+subject's body. A family that a profile does not issue has no arm, so a
+payload of one family cannot be presented as another, and a dependent profile
+compiles its own subjects over its own families rather than importing these.
 
 ```text
 PIRSourceBindingPayloadBody(x) =
-    V(0, PIRStaticViewBindingPayloadBody(x))
-  | V(1, ConfidentialInitialOracleBindingPayloadBody(x))
+    V(0, PIRStaticViewBindingPayloadBody(y))
+      if x = StaticView(y)
+  | V(1, ConfidentialInitialOracleBindingPayloadBody(y))
+      if x = ConfidentialInitialOracle(y)
 PIRSourceCapabilityRequirementBody(x) =
-    V(0, PIRStaticViewCapabilityRequirementBody(x))
-  | V(1, ConfidentialInitialOracleCapabilityRequirementBody(x))
+    V(0, PIRStaticViewCapabilityRequirementBody(y))
+      if x = StaticView(y)
+  | V(1, ConfidentialInitialOracleCapabilityRequirementBody(y))
+      if x = ConfidentialInitialOracle(y)
 PIRSourceNoPolicyBody(x) =
-    V(0, PIRStaticViewNoPolicyBody(x))
+    V(0, PIRStaticViewNoPolicyBody(y))
+      if x = StaticView(y)
 PIRSourcePolicyClosureBody(x) =
-    V(0, PIRStaticViewPolicyClosureBody(x))
-  | V(1, ConfidentialInitialOraclePolicyClosureBody(x))
+    V(0, PIRStaticViewPolicyClosureBody(y))
+      if x = StaticView(y)
+  | V(1, ConfidentialInitialOraclePolicyClosureBody(y))
+      if x = ConfidentialInitialOracle(y)
 ```
 
 `PIRStaticViewSourceBinding` is the `OwnerLocalSourceAuthorityBinding` formed
@@ -3006,11 +3037,40 @@ IssuePublicSetupInvocationView(
 ```
 
 The entries are every and only `SessionContext` and `PublicParameter` binding
-occurrence. The view contains no Statement, verifier-private input, unbound
-public input, prover output, full `CoreInvocationId`, or completed record. Its
-portable ID changes with any visible entry, type, binding coordinate,
-`ProtocolId`, or `CoreId`; changing only a Statement or verifier-private value
-does not change this quotient ID. This is the deliberate portable exception:
+occurrence. Issuance is a function of the admitted Protocol and the invocation
+alone: it runs no strategy and observes no occurrence. A public binding's
+value may nevertheless name an occurrence output (Section 4.2), and such a
+value is fixed only by a run, so the operation has an exact issuance domain:
+
+```text
+InvocationDetermined(P, PublicInput(_))         = true
+InvocationDetermined(P, Constant(_))            = true
+InvocationDetermined(P, Derived(d))             =
+  every input of P's DerivedValueDecl d is InvocationDetermined
+InvocationDetermined(P, OccurrenceOutput(_, _)) = false
+InvocationDetermined(P, VerifierPrivateInput(_)) = false
+
+PublicSetupIssuanceDomain(P) =
+  every SessionContext and PublicParameter binding b of P has
+  InvocationDetermined(P, b.value)
+```
+
+A Protocol outside `PublicSetupIssuanceDomain(P)` is admitted as before and
+its bindings keep their Section 4.3 meaning; issuance for it completes as
+`Unsupported`, naming the first offending binding in `BindingRef` order, and
+produces no view, binding, or capability. No entry is ever filled from a run,
+a strategy, a default, or an omitted binding; a run-established public binding
+is visible only through an execution-issued view under its own authority. The
+view contains no Statement, verifier-private input, unbound public input,
+prover output, full `CoreInvocationId`, or completed record. Its portable ID
+is a function of exactly the covered bindings' values, types, and coordinates
+together with `ProtocolId` and `CoreId`. A verifier-private value never enters
+it, and a public input enters it exactly when the value dependency closure of
+some covered binding reads that input: changing a public input that is bound
+only as a Statement and read by no covered binding leaves the quotient
+unchanged, whereas one public input bound as a Statement in one scope and as a
+`SessionContext` in another enters it through the latter occurrence. This is
+the deliberate portable exception:
 the K1 binding uses `PublicSetupInvocationViewId` as its portable source
 coordinate, owner `"pir"`, family `"public-setup-invocation-view"`, and a
 public-view-profiled payload, explicit no-policy declaration,
@@ -3022,9 +3082,12 @@ and invocation and rerun issuance; the portable body or binding alone grants
 nothing.
 
 The public-setup profile compiles its own source-authority subjects. It issues
-exactly one family, so each `pir.source-*` subject kind is a one-arm variant
-over that family; the consumer and purpose roles are the common Interaction
-role bodies applied with `PIRPublicSetupProfileId`.
+exactly one family, tagged `PublicSetupInvocationView(y)`, so each
+`pir.source-*` subject kind is a one-arm variant over that family, and its
+identities are formed by applying `ProfiledSemanticId` with
+`PIRPublicSetupProfileId` to a compiler's output over the tagged value; the
+consumer and purpose roles are the common Interaction role bodies applied with
+`PIRPublicSetupProfileId`.
 
 ```text
 PublicSetupInvocationBindingPayloadBody(x) = R{
@@ -3043,13 +3106,17 @@ PublicSetupInvocationPolicyClosureBody(x) = R{
 }
 
 PublicSetupSourceBindingPayloadBody(x) =
-  V(0, PublicSetupInvocationBindingPayloadBody(x))
+  V(0, PublicSetupInvocationBindingPayloadBody(y))
+    if x = PublicSetupInvocationView(y)
 PublicSetupSourceCapabilityRequirementBody(x) =
-  V(0, PublicSetupInvocationCapabilityRequirementBody(x))
+  V(0, PublicSetupInvocationCapabilityRequirementBody(y))
+    if x = PublicSetupInvocationView(y)
 PublicSetupSourceNoPolicyBody(x) =
-  V(0, PublicSetupInvocationNoPolicyBody(x))
+  V(0, PublicSetupInvocationNoPolicyBody(y))
+    if x = PublicSetupInvocationView(y)
 PublicSetupSourcePolicyClosureBody(x) =
-  V(0, PublicSetupInvocationPolicyClosureBody(x))
+  V(0, PublicSetupInvocationPolicyClosureBody(y))
+    if x = PublicSetupInvocationView(y)
 ```
 
 The payload commits to the exact portable view ID and the Protocol it was
@@ -3438,22 +3505,26 @@ ConfidentialInitialOraclePolicyClosure = {
 ConfidentialInitialOracleBindingPayloadId =
   ProfiledSemanticId<"pir.source-binding-payload">(
     B, PIRInteractionProfileId,
-    ConfidentialInitialOracleBindingPayloadBody(payload))
+    PIRSourceBindingPayloadBody(ConfidentialInitialOracle(payload)))
 ConfidentialInitialOracleCapabilityRequirementId =
   ProfiledSemanticId<"pir.source-capability-requirement">(
     B, PIRInteractionProfileId,
-    ConfidentialInitialOracleCapabilityRequirementBody(requirement))
+    PIRSourceCapabilityRequirementBody(
+      ConfidentialInitialOracle(requirement)))
 ConfidentialInitialOraclePolicyClosureId =
   ProfiledSemanticId<"pir.source-policy-closure">(
     B, PIRInteractionProfileId,
-    ConfidentialInitialOraclePolicyClosureBody(closure))
+    PIRSourcePolicyClosureBody(ConfidentialInitialOracle(closure)))
 ```
 
 The payload, requirement, and closure use the already selected
 `"pir.source-binding-payload"`,
 `"pir.source-capability-requirement"`, and
-`"pir.source-policy-closure"` profiled subject kinds. Their exact bodies are in
-Appendix A. Every repeated family, coordinate, consumer, purpose, policy, and
+`"pir.source-policy-closure"` profiled subject kinds through the Section 13.3
+compilers at arm 1, so each identity's preimage carries the family tag and
+the same subject kind never has a second, unwrapped preimage. Their
+family-local bodies are in Appendix A and are the arm payloads, never a
+preimage by themselves. Every repeated family, coordinate, consumer, purpose, policy, and
 payload reference must agree. The Foundation policy disposition is
 `BoundTo(ConfidentialInitialOracleDisclosurePolicyId)`, not
 `OwnerDefinesNoPolicy`.

@@ -1209,12 +1209,17 @@ and the body-safe coordinate below carries the identities it commits to.
 
 This profile compiles its own source-authority subjects over exactly the two
 families it issues: the static views of this section (arm 0, family
-`"static-view"`) and the checked duplex construction result of Section 10 (arm
-1, family `"checked-duplex-fs-construction"`), both under an explicit
-no-policy declaration. The consumer and purpose roles are the common
-Interaction role bodies applied with `PIRDuplexSpongeFSProfileId`; the
-path-step, atomic-boundary, and description bodies are those of the
-Interaction page.
+`"static-view"`, values tagged `StaticView(y)`) and the checked duplex
+construction result of Section 10 (arm 1, family
+`"checked-duplex-fs-construction"`, values tagged `CheckedConstruction(y)`),
+both under an explicit no-policy declaration. Each compiler is a function of
+the tagged family value; the identities of both families are formed by the
+Interaction page's `PIRStaticView*Id(PIRDuplexSpongeFSProfileId, x)`
+constructors, which select this profile's compilers and never apply
+`ProfiledSemanticId` to a family-local body. The consumer and purpose roles
+are the common Interaction role bodies applied with
+`PIRDuplexSpongeFSProfileId`; the path-step, atomic-boundary, and description
+bodies are those of the Interaction page.
 
 ```text
 DuplexConstructionViewKindBody = V(0,Unit) | V(1,Unit) | V(2,Unit)
@@ -1261,17 +1266,19 @@ DuplexClosureBody(x) = R {
 }
 
 DuplexSourceBindingPayloadBody(x) =
-    V(0, DuplexStaticViewBindingPayloadBody(x))
-  | V(1, CheckedDuplexFSConstructionBindingPayloadBody(x))
+    V(0, DuplexStaticViewBindingPayloadBody(y))
+      if x = StaticView(y)
+  | V(1, CheckedDuplexFSConstructionBindingPayloadBody(y))
+      if x = CheckedConstruction(y)
 DuplexSourceCapabilityRequirementBody(x) =
-    V(0, DuplexRequirementBody(x))
-  | V(1, DuplexRequirementBody(x))
+    V(0, DuplexRequirementBody(y)) if x = StaticView(y)
+  | V(1, DuplexRequirementBody(y)) if x = CheckedConstruction(y)
 DuplexSourceNoPolicyBody(x) =
-    V(0, DuplexNoPolicyBody(x))
-  | V(1, DuplexNoPolicyBody(x))
+    V(0, DuplexNoPolicyBody(y)) if x = StaticView(y)
+  | V(1, DuplexNoPolicyBody(y)) if x = CheckedConstruction(y)
 DuplexSourcePolicyClosureBody(x) =
-    V(0, DuplexClosureBody(x))
-  | V(1, DuplexClosureBody(x))
+    V(0, DuplexClosureBody(y)) if x = StaticView(y)
+  | V(1, DuplexClosureBody(y)) if x = CheckedConstruction(y)
 ```
 
 `DuplexStaticViewSourceBinding` and the checked-construction binding of

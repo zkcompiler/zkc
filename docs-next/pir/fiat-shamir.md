@@ -1290,20 +1290,18 @@ ScopeBindingRequirement = {
   opening: None | Some(OccurrenceRef)
 }
 
-InfluenceAtom = {
-  occurrence_ref: OccurrenceRef,
-  kinds: NonEmptyCanonicalSeq<OccurrenceKind>,
+InfluenceRequirementEntry = {
+  atom: InfluenceAtom,
   required: MetaBoolean
 }
 
 RequiredInfluenceViewBody = {
   transcript_construction_id: TranscriptConstructionId,
   core_id: CoreId,
-  influence_atom_kinds: CanonicalSortedUniqueSeq<OccurrenceKind>,
   scope_bindings: CanonicalSeq<ScopeBindingRequirement>,
   required_influence: CanonicalSeq<{
     challenge_ref: ChallengeRef,
-    atoms: CanonicalSeq<InfluenceAtom>
+    entries: CanonicalSeq<InfluenceRequirementEntry>
   }>,
   additions: CanonicalSeq<{
     challenge_ref: ChallengeRef,
@@ -1318,21 +1316,23 @@ ChallengeABI = {
   result_type: ValueType
 }
 
+ChallengeTransitionRule = {
+  challenge_ref: ChallengeRef,
+  position: Natural,
+  acceptance_abi: ChallengeABI,
+  decoder_abi: ChallengeABI,
+  draw_bounds: { squeeze_length: Natural, maximum_draws: Natural }
+}
+
 ChallengeTransitionViewBody = {
   transcript_construction_id: TranscriptConstructionId,
   core_id: CoreId,
   namespace_derivation_law: PIRProfileLawReference,
-  acceptance_abi: ChallengeABI,
-  decoder_abi: ChallengeABI,
-  draw_bounds: { squeeze_length: Natural, maximum_draws: Natural },
   exact_length_law: PIRProfileLawReference,
   state_update_before_decode_law: PIRProfileLawReference,
   retry_law: PIRProfileLawReference,
   sampling_failure_law: PIRProfileLawReference,
-  challenge_coordinates: CanonicalSeq<{
-    challenge_ref: ChallengeRef,
-    position: Natural
-  }>
+  challenge_rules: CanonicalSeq<ChallengeTransitionRule>
 }
 
 FSConstructionViewBody = {
@@ -1358,15 +1358,37 @@ declaration of this profile: `initialization_schedule_law`,
 law of Section 5; the state-update, retry, and sampling-failure laws name the
 admission-and-execution law of Section 8; the conclusion's law names the
 checked same-Core construction law of Section 10. `frame_schedule` lists every
-framed occurrence in prefix order with its position; `influence_atom_kinds` is
-the closed set of occurrence kinds that count as influence atoms;
-`required_influence` gives, per challenge and in prefix order, the atoms whose
-presence the construction requires (`required` true) or merely frames;
-`additions` are the Reduction and module values a challenge additionally
-absorbs; the three maps are identity maps written out entry by entry, so a
-consumer reads the correspondence rather than a slogan; `result_schema` is the
-description of the `CheckedFSConstruction` result, and the owner-local result
-reference is not a body field. The execution view's `visible_history_law` and
+framed occurrence in prefix order with its position. `required_influence`
+gives, per challenge `c` in ascending `ChallengeRef` order, one entry per
+static influence atom of `c`'s schedule universe: the atoms of variant tags 0
+through 12 of Section 5.1, in the exact total Core schedule's transition
+order, of every transition input that Section 4 frames before the first draw
+of `c`, namely the three header atoms, each scope opening due at or before
+`c`'s occurrence together with the binding atoms it emits in `BindingRef`
+order, the atoms under `InfluenceAtomOf` of every occurrence before `c` in
+the total schedule, every `ChallengeConditionAtom` of a challenge at or before
+`c`, and every module frame atom scheduled before `c`. An entry's `required`
+is true exactly when its atom's coordinate belongs to the symbolic requirement
+that Section 5.2's admission resolves for `c` from the base, Reduction, and
+module requirements, and false when the atom is only framed. On any admitted
+guard path, `RequiredInfluence(c)` of Section 5.2 is exactly the entries with
+`required` true whose transition inputs occur on that path, in transition
+order, followed by the run's draw atoms of variant tag 13 that items 9 and 10
+of Section 5.2 select; draw atoms depend on the run and are never enumerated
+statically. The entries carry the exact atom algebra rather than an
+occurrence-kind summary: two public bindings emitted at one opening are two
+`PublicBindingAtom` entries with distinct `BindingRef`s, and a header atom
+carries its identifier. `additions` are the Reduction and module values a
+challenge additionally absorbs; `challenge_rules` gives, per challenge in
+ascending `ChallengeRef` order, that challenge's own acceptance ABI, decoder
+ABI, and draw bounds together with its occurrence's `frame_schedule`
+position, projected entry by entry from the construction's `challenge_rules`,
+so a construction whose rules differ in ABI or bounds has one exact view and
+no singleton field that two producers could fill differently, while the laws
+shared by every rule appear once; the three maps are identity maps written
+out entry by entry, so a consumer reads the correspondence rather than a
+slogan; `result_schema` is the description of the `CheckedFSConstruction`
+result, and the owner-local result reference is not a body field. The execution view's `visible_history_law` and
 `relation_run_view_issuance_law` name the Interaction profile's visible-history
 and run-view-issuance laws through imported declaration dependencies,
 `generated_execution_law` names the protocol-execution law of Section 9.2, and
@@ -1517,10 +1539,10 @@ CanonicalFramedExecutionViewBody = {
     challenge_ref: ChallengeRef,
     occurrence_ref: OccurrenceRef,
     value_type: ValueType,
-    frame_schedule_coordinate: the challenge's entry of
-      exact_frame_schedule_coordinates,
-    decoding_coordinate: the challenge's entry of
-      challenge_decoding_coordinates
+    frame_schedule_coordinate: the challenge occurrence's entry of the
+      transcript declaration view's frame_schedule,
+    decoding_coordinate: the challenge's entry of the challenge-transition
+      view's challenge_rules
   }>,
   generated_execution_law: PIRProfileLawReference,
   run_record_schema: PIRRuntimeSchema,
@@ -1542,10 +1564,11 @@ failure receipt, and its outcome partition has the `InterpretationFailed`
 lane.
 
 The construction-view closure is likewise exact: a frame field closes to its
-algorithm/contract, source occurrence and prefix position; an influence field
-closes to the complete ordered requirement and every referenced Core
-coordinate; a challenge-transition field closes to namespace, draw, state,
-decoder, retry, and failure semantics. Thus a consumer cannot read an
+algorithm/contract, source occurrence and prefix position; an influence entry
+closes to the complete ordered requirement of its challenge and every Core
+coordinate its atom names; a challenge-transition rule closes to its own
+challenge's namespace, draw, state, decoder, retry, and failure semantics
+together with the laws shared by every rule. Thus a consumer cannot read an
 application-domain label, challenge sampler, or influence set while omitting
 the law that gives it meaning.
 
@@ -1562,9 +1585,14 @@ algorithm and construction IDs.
 
 This profile compiles its own source-authority subjects over exactly the two
 families it issues: the static views of this section (arm 0, family
-`"static-view"`, under an explicit no-policy declaration) and the checked
-construction result of Section 10 (arm 1, family `"checked-fs-construction"`,
-likewise under a no-policy declaration). The consumer and purpose roles are
+`"static-view"`, values tagged `StaticView(y)`, under an explicit no-policy
+declaration) and the checked construction result of Section 10 (arm 1,
+family `"checked-fs-construction"`, values tagged `CheckedConstruction(y)`,
+likewise under a no-policy declaration). Each compiler is a function of the
+tagged family value; the identities of both families are formed by the
+Interaction page's `PIRStaticView*Id(PIRCanonicalFramedFSProfileId, x)`
+constructors, which select this profile's compilers and never apply
+`ProfiledSemanticId` to a family-local body. The consumer and purpose roles are
 the common Interaction role bodies applied with `PIRCanonicalFramedFSProfileId`;
 the path-step, atomic-boundary, and description bodies are those of the
 Interaction page.
@@ -1614,17 +1642,19 @@ CanonicalFramedClosureBody(x) = R {
 }
 
 CanonicalFramedSourceBindingPayloadBody(x) =
-    V(0, CanonicalFramedStaticViewBindingPayloadBody(x))
-  | V(1, CheckedFSConstructionBindingPayloadBody(x))
+    V(0, CanonicalFramedStaticViewBindingPayloadBody(y))
+      if x = StaticView(y)
+  | V(1, CheckedFSConstructionBindingPayloadBody(y))
+      if x = CheckedConstruction(y)
 CanonicalFramedSourceCapabilityRequirementBody(x) =
-    V(0, CanonicalFramedRequirementBody(x))
-  | V(1, CanonicalFramedRequirementBody(x))
+    V(0, CanonicalFramedRequirementBody(y)) if x = StaticView(y)
+  | V(1, CanonicalFramedRequirementBody(y)) if x = CheckedConstruction(y)
 CanonicalFramedSourceNoPolicyBody(x) =
-    V(0, CanonicalFramedNoPolicyBody(x))
-  | V(1, CanonicalFramedNoPolicyBody(x))
+    V(0, CanonicalFramedNoPolicyBody(y)) if x = StaticView(y)
+  | V(1, CanonicalFramedNoPolicyBody(y)) if x = CheckedConstruction(y)
 CanonicalFramedSourcePolicyClosureBody(x) =
-    V(0, CanonicalFramedClosureBody(x))
-  | V(1, CanonicalFramedClosureBody(x))
+    V(0, CanonicalFramedClosureBody(y)) if x = StaticView(y)
+  | V(1, CanonicalFramedClosureBody(y)) if x = CheckedConstruction(y)
 ```
 
 The result-view coordinate is body-safe: arm 2 of

@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "interaction",
   "profile_family": "pir.interaction",
-  "revision": 2,
+  "revision": 3,
   "owner_page": "docs-next/pir/interactive-core.md",
   "expected_imports": [],
   "supported_subject_kinds": [
@@ -142,7 +142,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "static-view-issuance-v0",
-      "revision": 1,
+      "revision": 2,
       "fragment": "interaction-static-views",
       "selector": "### 13.3 Issuance, bindings, capabilities, and outcomes",
       "dependencies": [
@@ -189,7 +189,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-binding-payload-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "PIRSourceBindingPayloadBody(x) =",
       "dependencies": [
@@ -199,7 +199,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-capability-requirement-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "PIRSourceCapabilityRequirementBody(x) =",
       "dependencies": [
@@ -209,7 +209,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-no-policy-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "PIRSourceNoPolicyBody(x) =",
       "dependencies": []
@@ -217,7 +217,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "source-policy-closure-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "interaction-static-views",
       "selector": "PIRSourcePolicyClosureBody(x) =",
       "dependencies": [

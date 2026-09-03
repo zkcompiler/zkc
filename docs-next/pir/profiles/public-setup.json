@@ -2,7 +2,7 @@
   "format": "zkc.pir.semantic-profile-source.v0",
   "key": "public-setup",
   "profile_family": "pir.public-setup",
-  "revision": 1,
+  "revision": 2,
   "owner_page": "docs-next/pir/interactive-core.md",
   "expected_imports": ["interaction"],
   "supported_subject_kinds": [
@@ -35,7 +35,7 @@
     {
       "kind": "pir.semantic-law",
       "name": "public-setup-projection-and-issuance-v0",
-      "revision": 1,
+      "revision": 2,
       "fragment": "public-setup",
       "selector": "### 13.4 Invocation-issued public setup view",
       "dependencies": [

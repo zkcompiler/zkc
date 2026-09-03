@@ -193,16 +193,30 @@ P2 keeps the direction without holding the freeze hostage to mechanization.
 
 ## 8. Freeze scope
 
-The freeze claim should cover the load-bearing kernel only: Foundation values
-and identity, the Interaction Core and admission, PCGraph, Fresh execution and
-replay, the canonical-framed construction and same-Core check, the Relations
-four-role boundary, and the Analysis outcome and proposition discipline. The
-satellite surfaces the peer review listed as unexercised, the compiler
-trilogy, the Analysis family-transport lane, the lossy Relations lane, and
-the endpoint receipt catalogs, are frozen as declared but unexercised and are
-not part of the claim that later consumers rely on. This is the "deliberately
-smaller v0" of the peer review's Section 9.C, stated as scope rather than as
-deletion; consolidation can follow the freeze.
+The freeze claim covers a dependency-closed set of activated contracts, not a
+list of pages. A contract is activated when a frozen consumer reads it: the
+Foundation values and identity; the Interaction Core, its admission, PCGraph,
+Fresh execution and replay, and the static views a frozen Analysis question
+selects; the invocation-issued public setup view, whose issuance domain is the
+invocation-determined bindings of Section 13.4 of the Interaction page, because
+the kernel property source consumes it; the source-authority bodies of every
+profile that issues a view, since a frozen read holds their preimages; the
+canonical-framed construction, its four views, its execution and replay, and
+the same-Core check; the Relations four-role boundary; and the Analysis outcome
+and proposition discipline with the named-premise intake. Activation is
+transitive: a contract a frozen consumer's read closure reaches is inside the
+claim even when no page names it as a kernel, and the pre-freeze deep review
+(`pre-freeze-deep-review-2026-09-04.md`) is the control that the activated set
+has one well-typed, representable meaning end to end.
+
+The surfaces the peer review listed as unexercised, the compiler trilogy, the
+Analysis family-transport lane, the lossy Relations lane, the endpoint receipt
+catalogs, and the Interface completion presentation, are frozen as declared
+but unexercised and are not part of the claim that later consumers rely on;
+an unexercised surface is excluded by saying so, never by leaving a formable
+contract unstated. This is the "deliberately smaller v0" of the peer review's
+Section 9.C, stated as scope rather than as deletion; consolidation can follow
+the freeze.
 
 ## 10. Decisions requested (taken 2026-09-03, all as recommended)
 

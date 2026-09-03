@@ -207,6 +207,50 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
    profile now states a `PIRStaticViewLawFieldSelection` table, nine
    declarations were added for laws that had no selector of their own, and
    the fifth round confirmed all 35 fields with stable catalog ordinals.
+10. **Cross-contract defects found by the pre-freeze deep review.** The
+   independent review of the stacked tree
+   (`pre-freeze-deep-review-2026-09-04.md`) asked the composition question
+   the page-local rounds had not: whether every producer's output is formable
+   as its consumer's input. Six of its findings are repaired on these pages
+   and a seventh on the Analysis text:
+   - the Interface completion presentation bound the failure receipt's draws
+     at a K1 root sequence of capacity `2^20`, which the Foundation's
+     constitutional bounds cannot form; the draws are no longer a completion
+     coordinate, the five remaining coordinates are shown total for every
+     admitted construction, and the coordinate body has five failure arms;
+   - the confidential initial-Oracle, confidential Plan-witness, and endpoint
+     supplement identity constructors applied `ProfiledSemanticId` to
+     family-local bodies while the profile compilers wrap those bodies in a
+     family variant, two preimage equations for one subject kind; every
+     constructor now applies its profile's compiler to a tagged family value,
+     the compilers are written as functions of that tag, and the generic
+     static-view constructors dispatch to the compiler the owner profile's
+     catalog binds, so a family profile's static views are compiled by that
+     profile;
+   - the canonical-framed challenge-transition view carried one acceptance
+     ABI, one decoder ABI, and one draw bound for a construction whose
+     challenge rules may differ; it now carries one rule entry per challenge,
+     with the laws shared by every rule stated once;
+   - Section 13 of the canonical-framed page redefined `InfluenceAtom` as an
+     occurrence-kind record; the required-influence view now carries entries
+     over the Section 5.1 atom algebra under a stated static projection law,
+     with draw atoms excluded by statement;
+   - the Analysis read catalog selected `result_ref`, which the owner
+     excludes from the body, and eight further names no owner body declares;
+     every selection is re-authored to the owner's field names, and a
+     developer-tier control joins the catalog against the owner bodies;
+   - the invocation-issued public setup view promised every session and
+     parameter binding's value although a binding may name an occurrence
+     output; issuance now has an exact invocation-determined domain,
+     completes `Unsupported` outside it, and states the Statement-invariance
+     law exactly;
+   - the family-premise source constructor received an asymptotic-family
+     subject identity where a property-family declaration reference is
+     required; the Analysis text now passes the declaration reference.
+   The eighth finding, on the prose-pin reversal test, is the user's decision
+   and is carried in the decision packet. Every repair rotates its profile,
+   the re-pinning classes of Section 7 apply, and an eighth review round
+   checks the repaired text against the review's reversal conditions.
 
 ## 7. What remains before publication
 
@@ -265,6 +309,12 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   (`f0v2c1-migration-text-review.md`). Rounds three and five each found one
   defect that the preceding round had not asked about; Section 6 records
   them and their repairs.
+- The pre-freeze deep review (Section 6, item 10) reopened seven contracts
+  after round seven. Its repairs rotate sixteen of eighteen profiles again
+  and put the family field audit, the migration review's page pins, the
+  executor's view projection, and the Analysis review's Fiat--Shamir digest
+  into the first re-pinning class; an eighth review round checks the repaired
+  text against the review's reversal conditions.
 - Publish the identities. Only the user authorizes the identity-rotating
   publication.
 

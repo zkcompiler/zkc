@@ -478,34 +478,37 @@ EndpointSupplementPolicyClosureBody(x) = R{
 EndpointSupplementBindingPayloadId(x) =
   ProfiledSemanticId<"pir.source-binding-payload">(
     B,PirEndpointSourceViewProfileId,
-    EndpointSupplementBindingPayloadBody(x))
+    EndpointSourceBindingPayloadBody(Supplement(x)))
 EndpointSupplementCapabilityRequirementId(x) =
   ProfiledSemanticId<"pir.source-capability-requirement">(
     B,PirEndpointSourceViewProfileId,
-    EndpointSupplementCapabilityRequirementBody(x))
+    EndpointSourceCapabilityRequirementBody(Supplement(x)))
 EndpointSupplementNoPolicyId(x) =
   ProfiledSemanticId<"pir.source-no-policy">(
     B,PirEndpointSourceViewProfileId,
-    EndpointSupplementNoPolicyBody(x))
+    EndpointSourceNoPolicyBody(Supplement(x)))
 EndpointSupplementPolicyClosureId(x) =
   ProfiledSemanticId<"pir.source-policy-closure">(
     B,PirEndpointSourceViewProfileId,
-    EndpointSupplementPolicyClosureBody(x))
+    EndpointSourcePolicyClosureBody(Supplement(x)))
 
 EndpointSourceBindingPayloadBody(x) =
-  V(0, EndpointSupplementBindingPayloadBody(x))
+  V(0, EndpointSupplementBindingPayloadBody(y)) if x = Supplement(y)
 EndpointSourceCapabilityRequirementBody(x) =
-  V(0, EndpointSupplementCapabilityRequirementBody(x))
+  V(0, EndpointSupplementCapabilityRequirementBody(y)) if x = Supplement(y)
 EndpointSourceNoPolicyBody(x) =
-  V(0, EndpointSupplementNoPolicyBody(x))
+  V(0, EndpointSupplementNoPolicyBody(y)) if x = Supplement(y)
 EndpointSourcePolicyClosureBody(x) =
-  V(0, EndpointSupplementPolicyClosureBody(x))
+  V(0, EndpointSupplementPolicyClosureBody(y)) if x = Supplement(y)
 ```
 
 The four `EndpointSource*Body` compilers are this profile's `pir.source-*`
 subject bodies: one closed variant per kind over exactly the source families
-the profile issues, which today is the supplement family alone. A payload of
-another profile's family has no arm here.
+the profile issues, which today is the supplement family alone, tagged
+`Supplement(y)`. Each identity constructor above applies `ProfiledSemanticId`
+to a compiler's output, so the subject's body is the tagged variant and no
+family-local record is a preimage on its own. A payload of another profile's
+family has no arm here.
 
 The residual sequence is exactly the subset of Appendix B owner coordinates
 assigned to the supplement path set, with no overlap, omission, or additional
