@@ -187,6 +187,26 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
    reductions, under the syntactic guard-implication law that Section 10
    already names as this regime's boundary. The axes matrix's meaning of
    interpretation failure is stale against Section 12.4 and is corrected.
+7. **Region applied to a claim source.** The third review round found
+   `ClaimStatus` comparing an occurrence's `Region` against `Region(Source(c))`,
+   although a claim source is a binding or a reduction output, not an
+   occurrence; a child scope that opens before a guarded occurrence made a
+   live claim `Unknown`. Repaired with `BoundaryRegion` over scope openings and
+   `ClaimSourceRegion`; the fourth round and M5 confirmed it.
+8. **An undefined reference atom.** The refreeze rehearsal found
+   `PIRReference`, an arm of the static-view atomic boundary, with no
+   definition. It is now the closed union of the Core-local dense-ordinal
+   references, `ValueRef`, and the declaration references the selected
+   profile recognizes, with its body by delegation; the fifth round found the
+   arm too narrow for a family declaration kind and the sixth confirmed the
+   generalized arm over all 386 reference leaves.
+9. **Law-valued fields that named no declaration.** The same rehearsal
+   found the five law-valued fields of the Interaction static views typed as
+   exact law references with nothing selecting a declaration; the family
+   pages selected most of theirs in prose but not the execution views. Each
+   profile now states a `PIRStaticViewLawFieldSelection` table, nine
+   declarations were added for laws that had no selector of their own, and
+   the fifth round confirmed all 35 fields with stable catalog ordinals.
 
 ## 7. What remains before publication
 
