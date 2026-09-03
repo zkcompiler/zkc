@@ -1,0 +1,97 @@
+# Analysis named-premise intake probe
+
+This package asks one exact question:
+
+> Can a closed Analysis-owned named-premise catalog and intake operation make
+> every required assumption explicit and identity-bearing for the finite
+> Schnorr subject while failing closed on omission or coordinate substitution?
+
+The frozen answer is
+`Affirmative/API-A-FINITE-PREMISE-INTAKE` for the proposal-local finite model.
+
+Run the standard-library-only check from the repository root:
+
+```sh
+python3 -B evaluation/analysis-premise-intake-probe/run.py --check
+```
+
+## Closed finite model
+
+[`fixture.json`](fixture.json) contains ten named premises of nine closed kinds.
+Every premise has exactly these identity-bearing fields:
+
+```text
+kind
+coordinate
+bound_model_or_hypothesis
+source
+evidence_depth
+regime_transport
+```
+
+The evidence depths follow the existing research meanings: `T1` is a
+source-grounded boundary mapping, `T2` adds a complete typed constructive
+binding, and `T3` adds frozen executable falsification. A depth labels the
+available evidence for the premise record; it does not establish the premise's
+truth. Five proposal or source-mapping entries are `T1`; the five exact finite
+Schnorr relation and Plan coordinates have `T3` coordinate evidence. There is
+no `T2` entry in this fixture.
+
+The concrete catalog contains:
+
+- one Fresh distribution hypothesis bound to the subject's exact nominal
+  `pir.public-coin-law` declaration coordinate;
+- sampler-adequacy and exact classical oracle-process hypotheses bound to one
+  Analysis family coordinate;
+- two provider maps over the same five-lane Fresh outcome partition;
+- the relation predicate and witness-type coordinates; and
+- the Prover private-state, honest-commit, and honest-respond coordinates.
+
+The complete lane vocabulary has six cases. The selected Fresh Protocol's
+partition has five because `InterpretationFailed` is profile-qualified and is
+not available for this Fresh subject. The current PIR page lists the run
+branches but does not yet publish the named `ProtocolOutcomeLane` coordinate;
+the fixture therefore marks that coordinate proposal-local and the report
+retains `CannotAnswer/API-C-OUTCOME-PARTITION-UNPUBLISHED`.
+
+## Intake law exercised
+
+Each question declares slots by exact `(slot, kind, coordinate)`. Intake binds
+every slot to one catalog premise, authenticates its kind and coordinate, and
+places the complete sorted premise-ID set in both the hypothesis set and the
+judgment identity.
+
+The probe checks four complete intakes: the seven-premise Fresh Schnorr case,
+Fresh challenge intake, Fiat--Shamir challenge intake, and the same Fresh case
+with a second provider carrier map. It then establishes the intended failure
+partition:
+
+- deleting each of the seven Fresh Schnorr bindings separately returns
+  `CannotAnswer/API-C-MISSING-PREMISE`;
+- replacing the public-coin premise by one bound to declaration ordinal one
+  returns `Refused/API-R-PREMISE-COORDINATE`;
+- Fresh names one distribution premise while Fiat--Shamir names sampler and
+  oracle-process premises over the identical Core; and
+- the two provider maps over the same partition produce different premise and
+  judgment identities.
+
+[`model.py`](model.py) uses typed immutable premise records. The separately
+structured [`independent.py`](independent.py) validates raw dictionaries and
+reconstructs the same identities and outcomes without importing the typed
+path. [`run.py`](run.py) requires exact agreement before comparing the report
+with [`expected-findings.json`](expected-findings.json).
+
+## What a pass establishes
+
+A pass establishes only that this finite proposal is closed over its declared
+schema and enums, that both implementations reconstruct the same catalog and
+intake results, and that the named positive and negative controls have the
+frozen outcomes.
+
+## What a pass does not establish
+
+A pass proves no theorem and establishes no protocol or cryptographic
+property. It does not authenticate the proposal-local outcome-partition name,
+prove any named premise, transport a premise to another regime, validate a
+provider implementation, or publish/adopt any Analysis or PIR owner text or
+profile. The finite IDs are comparison keys, not owner authority.

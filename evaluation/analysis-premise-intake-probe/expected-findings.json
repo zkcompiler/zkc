@@ -1,0 +1,88 @@
+{
+  "aggregate": "Affirmative/API-A-FINITE-PREMISE-INTAKE",
+  "catalog": {
+    "catalog_digest": "a54f2c0f4ec6b806cf6b6aa5ec692215f6ceba8518043ffb7bc1171b20da72c3",
+    "evidence_depths": {
+      "T1": 5,
+      "T2": 0,
+      "T3": 5
+    },
+    "kinds": 9,
+    "outcome_lanes": 6,
+    "premise_ids": {
+      "fiat-shamir-oracle-process": "premisev0:84738e758d14a387f797d0d09c27ae048fd3cad1e1f0058e4a49f28d9f70ec4d",
+      "fiat-shamir-sampler-adequacy": "premisev0:06426d1a0892d6e84776cf168a26fe7cb44c31bb13b17defb1297c8488f5d2e8",
+      "fresh-public-coin-distribution": "premisev0:1be69e996b88cd6bb9d646556e8b13604041a8b60fe6b7c2e806e9dbc4e07a3e",
+      "honest-commit": "premisev0:1adb2bd02a171c936276d1f5ec27c2c008bea9cf8e53c94b646b003ab0c04bd9",
+      "honest-respond": "premisev0:9096e8abdf9a536a57e76617b88211a1168e48dd9ff6282764939de52ca3da1d",
+      "prover-private-state": "premisev0:a0b5dbae16e8e40080ae52eafe0fb41eaa623555fceace1bf2039aaf4a269695",
+      "provider-outcome-option-bool": "premisev0:1458585f4a06fda34b7acbe201dcb27a53924054b1d4e138e1cc0f873f02b657",
+      "provider-outcome-tagged": "premisev0:4ee0ca1f656f32d05a523bebb4b6a6c28c5fd179e4964dfe2d4f06ffbbd36cdb",
+      "relation-predicate": "premisev0:6904e7aec6bf793bbe569a76ab1e8ca0683a4584dfd0996b71af6f49bb3deaa6",
+      "witness-type": "premisev0:52db601bbdf2047c9deef2bc6d7c394f8922c5f100a0e95ede56a3af8846599e"
+    },
+    "premises": 10,
+    "subject_outcome_lanes": 5
+  },
+  "current_owner_gap": {
+    "code": "API-C-OUTCOME-PARTITION-UNPUBLISHED",
+    "coordinate": "docs-next/pir/interactive-core.md Section 12.3 lines 1688-1710",
+    "outcome": "CannotAnswer",
+    "reason": "the current page lists generated-run lanes but does not publish the named ProtocolOutcomeLane partition used by this proposal-local fixture"
+  },
+  "finding_codes": [
+    ["closed-named-premise-schema", "Affirmative", "API-A-CLOSED-SCHEMA"],
+    ["current-subject-premise-catalog", "Affirmative", "API-A-CATALOG"],
+    ["complete-schnorr-fresh-intake", "Affirmative", "API-A-COMPLETE-INTAKE"],
+    ["premises-retained-in-hypothesis-set", "Affirmative", "API-A-HYPOTHESIS-SET"],
+    ["every-single-premise-omission", "CannotAnswer", "API-C-MISSING-PREMISE"],
+    ["different-coordinate-substitution", "Refused", "API-R-PREMISE-COORDINATE"],
+    ["fresh-and-fiat-shamir-premise-separation", "Affirmative", "API-A-REGIME-SEPARATION"],
+    ["provider-map-identity-separation", "Affirmative", "API-A-PROVIDER-MAP-IDENTITY"],
+    ["independent-reconstruction", "Affirmative", "API-A-INDEPENDENT-RECONSTRUCTION"],
+    ["current-pir-outcome-partition-coordinate", "CannotAnswer", "API-C-OUTCOME-PARTITION-UNPUBLISHED"],
+    ["theorem-result", "CannotAnswer", "API-C-NO-THEOREM"],
+    ["property-result", "CannotAnswer", "API-C-NO-PROPERTY"],
+    ["owner-adoption", "CannotAnswer", "API-C-NO-OWNER-ADOPTION"]
+  ],
+  "findings_sha256": "a91f91a093e162d1859a0b412ca4552364d38b484d7d1cc8b89eff4d777ed4b4",
+  "intake": {
+    "alternate_provider_judgment_id": "judgmentv0:9a994afaa74b7de7afd652c1b96c1ace2eae91b63333ca44ca99262744ac597d",
+    "complete_judgment_id": "judgmentv0:38e987e47390b29b0ae0c2895ec1a0012dd84c10a43c06522316775c832bc00e",
+    "complete_premises": 7,
+    "fiat_shamir_premise_ids": [
+      "premisev0:06426d1a0892d6e84776cf168a26fe7cb44c31bb13b17defb1297c8488f5d2e8",
+      "premisev0:84738e758d14a387f797d0d09c27ae048fd3cad1e1f0058e4a49f28d9f70ec4d"
+    ],
+    "fresh_premise_ids": [
+      "premisev0:1be69e996b88cd6bb9d646556e8b13604041a8b60fe6b7c2e806e9dbc4e07a3e"
+    ],
+    "omission_outcomes": {
+      "challenge-law": "CannotAnswer/API-C-MISSING-PREMISE",
+      "honest-commit": "CannotAnswer/API-C-MISSING-PREMISE",
+      "honest-respond": "CannotAnswer/API-C-MISSING-PREMISE",
+      "outcome-carrier": "CannotAnswer/API-C-MISSING-PREMISE",
+      "prover-private-state": "CannotAnswer/API-C-MISSING-PREMISE",
+      "relation-predicate": "CannotAnswer/API-C-MISSING-PREMISE",
+      "witness-type": "CannotAnswer/API-C-MISSING-PREMISE"
+    },
+    "same_core": true,
+    "wrong_coordinate": {
+      "code": "API-R-PREMISE-COORDINATE",
+      "outcome": "Refused",
+      "slot": "challenge-law"
+    }
+  },
+  "measurements": {
+    "complete_intakes": 4,
+    "coordinate_substitutions": 1,
+    "distinct_provider_maps": 2,
+    "reconstruction_paths": 2,
+    "single_premise_omissions": 7
+  },
+  "nonclaims": [
+    "No theorem is proved.",
+    "No protocol or cryptographic property is established.",
+    "No Analysis or PIR owner text or profile is adopted or published."
+  ]
+}

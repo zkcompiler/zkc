@@ -20,7 +20,8 @@
         "research.schnorr-portfolio-witness",
         "research.fri-grinding-residual",
         "research.finite-cover",
-        "research.verifier-derived-query-plans"
+        "research.verifier-derived-query-plans",
+        "research.analysis-premise-intake"
       ]
     },
     {

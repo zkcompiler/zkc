@@ -1456,6 +1456,28 @@
       }
     },
     {
+      "id": "research.analysis-premise-intake",
+      "title": "Analysis named-premise intake probe",
+      "subject": "A closed finite Analysis premise catalog and exact intake operation for one Schnorr-shaped Fresh subject and its same-Core Fiat-Shamir challenge case.",
+      "claim": "Two independently structured evaluators agree that complete named-premise intake admits, every single premise omission returns CannotAnswer, a different-coordinate substitution refuses, Fresh and Fiat-Shamir challenge premise sets differ, and provider maps over one partition remain identity-distinct.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic", "static-analysis"],
+      "source_paths": ["evaluation/analysis-premise-intake-probe/run.py", "evaluation/analysis-premise-intake-probe/model.py", "evaluation/analysis-premise-intake-probe/independent.py", "evaluation/analysis-premise-intake-probe/fixture.json", "evaluation/analysis-premise-intake-probe/README.md", "evaluation/analysis-premise-intake-probe/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This finite proposal probe proves no theorem or property, authenticates no unpublished PIR outcome-partition coordinate, transports no premise to another regime, validates no provider implementation, and adopts or publishes no owner text or profile."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/analysis-premise-intake-probe/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",
