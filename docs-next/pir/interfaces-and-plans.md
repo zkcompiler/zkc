@@ -534,16 +534,21 @@ Protocol the failure coordinates select, without omission or reordering:
 4. `prefix_state` at `TranscriptStateType`; and
 5. `final_state` at `TranscriptStateType`.
 
-The receipt's `draws` sequence is not a completion coordinate. Its admitted
-length is the rule's `maximum_draws`, up to `2^20`, and every draw receipt
-carries two transcript byte strings and two transcript states, so no K1 root
-type can present it: the constitutional bounds of the Foundation's Appendix
-A.2 cap a sequence schema at `2^14` elements and one root datum at `2^20`
-octets, and a sequence of draw receipts exceeds both for admitted
-constructions. The draws remain owner runtime evidence inside the completed
-record's `FSSamplingFailureReceipt`, reachable through the Fiat--Shamir
-owner's run record and replay and never through this presentation, which
-does not claim to carry them. The five presented coordinates are total for
+The receipt's `draws` sequence is not a completion coordinate, because it is
+a derivation and not a fact of its own: every draw is the construction's
+squeeze, length check, state advancement, and acceptance evaluated from the
+transcript state before it, so the exact draw sequence and `final_state` are
+determined by the construction that `ProtocolId` fixes, the challenge,
+`prefix_receipt_count`, and `prefix_state`, and the Fiat--Shamir owner
+derives and replays every draw from exactly those under its execution and
+replay laws (its Sections 8 and 9). The presentation carries the determining
+coordinates and the derived boundary state; a consumer that needs the draws
+replays them under the owner's law instead of trusting a restatement. No K1
+root type could carry the sequence in any case: its admitted length is the
+rule's `maximum_draws`, up to `2^20`, each draw receipt holds two transcript
+byte strings and two transcript states, and the constitutional bounds of the
+Foundation's Appendix A.2 cap a sequence schema at `2^14` elements and one
+root datum at `2^20` octets. The five presented coordinates are total for
 every admitted construction: the domain payload is the construction's exact
 two-field natural record, the challenge and the count are root naturals, and
 each transcript state is one admitted `TranscriptStateType` value, which

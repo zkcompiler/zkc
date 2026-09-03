@@ -1290,8 +1290,12 @@ ScopeBindingRequirement = {
   opening: None | Some(OccurrenceRef)
 }
 
+StaticInfluenceAtom =
+    Atom(InfluenceAtom)
+  | EveryActualDrawOf(ChallengeRef)
+
 InfluenceRequirementEntry = {
-  atom: InfluenceAtom,
+  atom: StaticInfluenceAtom,
   required: MetaBoolean
 }
 
@@ -1367,15 +1371,20 @@ of `c`, namely the three header atoms, each scope opening due at or before
 `c`'s occurrence together with the binding atoms it emits in `BindingRef`
 order, the atoms under `InfluenceAtomOf` of every occurrence before `c` in
 the total schedule, every `ChallengeConditionAtom` of a challenge at or before
-`c`, and every module frame atom scheduled before `c`. An entry's `required`
-is true exactly when its atom's coordinate belongs to the symbolic requirement
-that Section 5.2's admission resolves for `c` from the base, Reduction, and
-module requirements, and false when the atom is only framed. On any admitted
-guard path, `RequiredInfluence(c)` of Section 5.2 is exactly the entries with
-`required` true whose transition inputs occur on that path, in transition
-order, followed by the run's draw atoms of variant tag 13 that items 9 and 10
-of Section 5.2 select; draw atoms depend on the run and are never enumerated
-statically. The entries carry the exact atom algebra rather than an
+`c`, every module frame atom scheduled before `c`, and, at the schedule
+position of each challenge `c'` whose first draw precedes the first draw of
+`c`, one symbolic entry `EveryActualDrawOf(c')` standing for every draw atom
+of variant tag 13 that the run actually produces for `c'`, whose count only
+the run fixes. An entry's `required` is true exactly when its atom's
+coordinate belongs to the symbolic requirement that Section 5.2's admission
+resolves for `c` from the base, Reduction, and module requirements, and false
+when the atom is only framed; a symbolic draw entry is required by items 9
+and 10 of Section 5.2. On any admitted guard path, `RequiredInfluence(c)` of
+Section 5.2 is exactly the entries with `required` true whose transition
+inputs occur on that path, in transition order, with each symbolic entry
+expanded to the run's actual draw atoms of its challenge in draw order. The
+body therefore states the complete requirement; the `exact_prefix_law`
+closure supplies the law's meaning, never missing entries. The entries carry the exact atom algebra rather than an
 occurrence-kind summary: two public bindings emitted at one opening are two
 `PublicBindingAtom` entries with distinct `BindingRef`s, and a header atom
 carries its identifier. `additions` are the Reduction and module values a

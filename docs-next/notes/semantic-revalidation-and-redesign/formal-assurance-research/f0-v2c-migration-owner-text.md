@@ -218,6 +218,9 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
      constitutional bounds cannot form; the draws are no longer a completion
      coordinate, the five remaining coordinates are shown total for every
      admitted construction, and the coordinate body has five failure arms;
+     the draws are a derivation of the presented coordinates under the
+     owner's execution and replay laws, not a fact of their own, which is
+     why the presentation omits them;
    - the confidential initial-Oracle, confidential Plan-witness, and endpoint
      supplement identity constructors applied `ProfiledSemanticId` to
      family-local bodies while the profile compilers wrap those bodies in a
@@ -234,16 +237,19 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
    - Section 13 of the canonical-framed page redefined `InfluenceAtom` as an
      occurrence-kind record; the required-influence view now carries entries
      over the Section 5.1 atom algebra under a stated static projection law,
-     with draw atoms excluded by statement;
+     with one symbolic entry per earlier challenge standing for the draw
+     atoms only the run counts, so the body states the complete requirement;
    - the Analysis read catalog selected `result_ref`, which the owner
      excludes from the body, and eight further names no owner body declares;
      every selection is re-authored to the owner's field names, and a
      developer-tier control joins the catalog against the owner bodies;
    - the invocation-issued public setup view promised every session and
      parameter binding's value although a binding may name an occurrence
-     output; issuance now has an exact invocation-determined domain,
-     completes `Unsupported` outside it, and states the Statement-invariance
-     law exactly;
+     output; the view's entries are now exactly the invocation-determined
+     bindings and its `run_established` sequence names the rest, so every
+     admitted Protocol has one setup view that says what it does not fix, a
+     consumer needing a fully fixed setup requires that sequence empty as its
+     own premise, and the Statement-invariance law is stated exactly;
    - the family-premise source constructor received an asymptotic-family
      subject identity where a property-family declaration reference is
      required; the Analysis text now passes the declaration reference.

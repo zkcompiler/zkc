@@ -197,9 +197,10 @@ The freeze claim covers a dependency-closed set of activated contracts, not a
 list of pages. A contract is activated when a frozen consumer reads it: the
 Foundation values and identity; the Interaction Core, its admission, PCGraph,
 Fresh execution and replay, and the static views a frozen Analysis question
-selects; the invocation-issued public setup view, whose issuance domain is the
-invocation-determined bindings of Section 13.4 of the Interaction page, because
-the kernel property source consumes it; the source-authority bodies of every
+selects; the invocation-issued public setup view, whose entries are the
+invocation-determined bindings of Section 13.4 of the Interaction page and
+whose `run_established` sequence names the rest, because the kernel property
+source consumes it; the source-authority bodies of every
 profile that issues a view, since a frozen read holds their preimages; the
 canonical-framed construction, its four views, its execution and replay, and
 the same-Core check; the Relations four-role boundary; and the Analysis outcome

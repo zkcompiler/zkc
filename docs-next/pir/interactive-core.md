@@ -2996,7 +2996,8 @@ PublicSetupInvocationViewBody = {
   protocol_id: ProtocolId,
   core_id: CoreId,
   entries:
-    CanonicalSeq<PublicSetupInvocationEntry in BindingRef order>
+    CanonicalSeq<PublicSetupInvocationEntry in BindingRef order>,
+  run_established: CanonicalSeq<BindingRef in ascending order>
 }
 
 PublicSetupInvocationViewId =
@@ -3017,7 +3018,8 @@ PublicSetupInvocationEntryBody(x) = R{
 PublicSetupInvocationViewBody(x) = R{
   0:ContentRef(x.protocol_id),
   1:ContentRef(x.core_id),
-  2:S[PublicSetupInvocationEntryBody(e)... in BindingRef order]
+  2:S[PublicSetupInvocationEntryBody(e)... in BindingRef order],
+  3:S[N(b)... for b in x.run_established, ascending]
 }
 
 IssuePublicSetupInvocationView(
@@ -3036,11 +3038,12 @@ IssuePublicSetupInvocationView(
        | DeterministicLimitExceeded | CheckerFailure
 ```
 
-The entries are every and only `SessionContext` and `PublicParameter` binding
-occurrence. Issuance is a function of the admitted Protocol and the invocation
-alone: it runs no strategy and observes no occurrence. A public binding's
-value may nevertheless name an occurrence output (Section 4.2), and such a
-value is fixed only by a run, so the operation has an exact issuance domain:
+The entries are every `SessionContext` and `PublicParameter` binding
+occurrence whose value the invocation determines, and `run_established` names
+every other binding of those two classes. Issuance is a function of the
+admitted Protocol and the invocation alone: it runs no strategy and observes
+no occurrence. A public binding's value may name an occurrence output
+(Section 4.2), and such a value is fixed only by a run, so it is not setup:
 
 ```text
 InvocationDetermined(P, PublicInput(_))         = true
@@ -3050,23 +3053,26 @@ InvocationDetermined(P, Derived(d))             =
 InvocationDetermined(P, OccurrenceOutput(_, _)) = false
 InvocationDetermined(P, VerifierPrivateInput(_)) = false
 
-PublicSetupIssuanceDomain(P) =
-  every SessionContext and PublicParameter binding b of P has
-  InvocationDetermined(P, b.value)
+entries         = every SessionContext or PublicParameter binding b of P
+                  with InvocationDetermined(P, b.value), with its value
+run_established = every SessionContext or PublicParameter binding b of P
+                  without it, by BindingRef
 ```
 
-A Protocol outside `PublicSetupIssuanceDomain(P)` is admitted as before and
-its bindings keep their Section 4.3 meaning; issuance for it completes as
-`Unsupported`, naming the first offending binding in `BindingRef` order, and
-produces no view, binding, or capability. No entry is ever filled from a run,
-a strategy, a default, or an omitted binding; a run-established public binding
-is visible only through an execution-issued view under its own authority. The
-view contains no Statement, verifier-private input, unbound public input,
-prover output, full `CoreInvocationId`, or completed record. Its portable ID
-is a function of exactly the covered bindings' values, types, and coordinates
-together with `ProtocolId` and `CoreId`. A verifier-private value never enters
-it, and a public input enters it exactly when the value dependency closure of
-some covered binding reads that input: changing a public input that is bound
+Both sequences are decided by the Protocol alone, so every admitted Protocol
+has exactly one setup view, and the view states what it does not fix: a
+run-established public binding keeps its Section 4.3 meaning and is visible
+only through an execution-issued view under its own authority (Section 13.5).
+No entry is ever filled from a run, a strategy, a default, or an omitted
+binding. A consumer that needs a setup fixed entirely before the run requires
+`run_established` to be empty as its own premise; this operation does not
+decide that for it. The view contains no Statement, verifier-private input,
+unbound public input, prover output, full `CoreInvocationId`, or completed
+record. Its portable ID is a function of exactly the covered bindings'
+values, types, and coordinates, the run-established binding references,
+`ProtocolId`, and `CoreId`. A verifier-private value never enters it, and a
+public input enters it exactly when the value dependency closure of some
+covered binding reads that input: changing a public input that is bound
 only as a Statement and read by no covered binding leaves the quotient
 unchanged, whereas one public input bound as a Statement in one scope and as a
 `SessionContext` in another enters it through the latter occurrence. This is

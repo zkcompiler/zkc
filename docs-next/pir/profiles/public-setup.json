@@ -25,7 +25,7 @@
     {
       "kind": "pir.body-compiler",
       "name": "public-setup-invocation-view-body-v0",
-      "revision": 0,
+      "revision": 1,
       "fragment": "public-setup",
       "selector": "PublicSetupInvocationViewBody(x) = R",
       "dependencies": [
