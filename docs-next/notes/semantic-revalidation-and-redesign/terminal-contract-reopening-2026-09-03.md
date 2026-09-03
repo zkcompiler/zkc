@@ -3,10 +3,13 @@
 > **Kind:** Temporary reopening record under the v0 design program's change
 > control (Section 14 of `../../project/v0-design-program.md`)
 > **State:** Opened 2026-09-03; candidate repair selected at bounded research
-> resolution; on the same day the user approved carrying the repair into
-> the F0-V2C migration text (decision packet, Section 10). Publication on
-> the research branch follows the migration; pushing and landing remain
-> the user's gates
+> resolution; the same day the user approved carrying the repair into the
+> F0-V2C migration text (decision packet, Section 10), and the repair is now
+> authored as owner text on the migration branch (Sections 6.4 and 10,
+> Appendix A, the endpoint and OIR pages) and has passed one independent
+> review round with its laws repaired. The identity-rotating publication and
+> the package refreeze remain the user's gates; the record closes when the
+> published identities and the refrozen packages carry the repair
 > **Authority:** None. Opening a reopening record changes no owner page,
 > profile identity, evaluator, or judgment. Only the decision gate named in
 > Section 6 may do that.
