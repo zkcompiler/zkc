@@ -46,6 +46,7 @@ jobs:
             --check checks.control-plane \
             --check checks.method-portfolio \
             --check checks.evaluation-lifecycle \
+            --check checks.open-items \
             --check policy.public-tree \
             --keep-going \
             --artifacts-dir target/checks/ci-control \

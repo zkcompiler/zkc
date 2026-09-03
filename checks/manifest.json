@@ -94,6 +94,28 @@
       }
     },
     {
+      "id": "checks.open-items",
+      "title": "Open items index",
+      "subject": "The complete set of publicly recorded open items: `CannotAnswer` findings in frozen research findings and reopening records under the design notes.",
+      "claim": "Every frozen findings file parses under strict JSON, every `CannotAnswer` finding carries a well-formed code (a code shared by two findings of one package is reported, not failed), every reopening record states its state, and the regenerated index is emitted.",
+      "classification": "control-plane",
+      "methods": ["unit", "policy", "static-analysis", "negative"],
+      "source_paths": ["checks/open_items.py", "checks/tests/test_open_items.py", "checks/manifest.json"],
+      "tiers": ["developer", "pr", "research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "instant",
+      "environment": "python-stdlib",
+      "shardability": "none",
+      "blocking": true,
+      "nonclaims": ["An index of open items grades nothing and closes nothing; an item leaves it only when its owning ledger changes, and private ledgers are outside its scope."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "-m", "checks.open_items", "--check", "--output", "{artifacts}/open-items.json"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": ["open-items.json", "open-items.md"]
+      }
+    },
+    {
       "id": "policy.public-tree",
       "title": "Public-tree boundary",
       "subject": "Repository paths forbidden from the public source tree.",

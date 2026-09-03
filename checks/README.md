@@ -73,6 +73,16 @@ timeout.
 The qualitative cost labels are routing hints, not performance promises. They
 must be corrected from measured results when the shape of a check changes.
 
+## Open items
+
+`checks.open-items` regenerates a read-only index of everything the public
+tree records as unanswered: every `CannotAnswer` finding in a research
+package's frozen findings and every reopening record under the design
+notes. The index is an artifact of the run, never a hand-edited file, and it
+closes nothing: an item leaves it only when its owning ledger changes. There
+is deliberately no TODO file; a discovered problem is classified and recorded
+in exactly one owning ledger, and this index shows the union.
+
 ## Tiers
 
 The tiers are named execution contexts, not an implicit monotone ladder:
