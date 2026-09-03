@@ -1522,6 +1522,28 @@
       }
     },
     {
+      "id": "research.bcs-compilation-probe",
+      "title": "Oracle-proof compilation composition probe",
+      "subject": "Whether one exact two-round logical-oracle Core composes through commitment-opening elaboration and canonical-framed Fiat-Shamir with every premise of a chosen soundness statement assigned an exact owner coordinate.",
+      "claim": "Typed and independently structured evaluators agree on source admission and six views, a new independently admitted commitment-opening target, exact transition maps, identity rotation, and public commitment influence; retained authoring and same-Core controls pass, while the executable checker cannot admit the exact migrated target carrier and five theorem-premise coordinates remain missing or provisional, so the aggregate fails closed.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "static-analysis"],
+      "source_paths": ["evaluation/bcs-compilation-probe/run.py", "evaluation/bcs-compilation-probe/model.py", "evaluation/bcs-compilation-probe/independent.py", "evaluation/bcs-compilation-probe/fixture.json", "evaluation/bcs-compilation-probe/README.md", "evaluation/bcs-compilation-probe/expected-findings.json"],
+      "tiers": ["developer", "research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This finite probe is not owner-issued admission or transition authority, Compiler activation, an implementation correspondence result, source or compiled-protocol soundness, commitment security, a random-oracle property, a Fiat-Shamir theorem or loss, or deployment evidence."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/bcs-compilation-probe/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.probe-commitment",
       "title": "Commitment and opening invariant probe",
       "subject": "Cross-cutting finite commitment and opening invariants.",

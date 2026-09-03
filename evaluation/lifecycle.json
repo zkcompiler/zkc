@@ -21,7 +21,8 @@
         "research.fri-grinding-residual",
         "research.finite-cover",
         "research.verifier-derived-query-plans",
-        "research.analysis-premise-intake"
+        "research.analysis-premise-intake",
+        "research.bcs-compilation-probe"
       ]
     },
     {

@@ -1,0 +1,191 @@
+{
+  "format": "zkc.bcs-compilation-probe.v0",
+  "question": "Do the current checked owners compose, for one exact two-round logical-oracle Core, into a concrete commitment-opening target followed by canonical-framed Fiat-Shamir with every premise of a chosen BCS-style soundness statement coordinated?",
+  "interaction_profile": "pir.interaction-migrated-terminal-and-six-views",
+  "source_core": {
+    "oracles": [
+      {
+        "element_type": "field-element",
+        "index_type": "natural-below-eight",
+        "maximum_entries": 8,
+        "mode": "LogicalAccess",
+        "origin": "ProverOracle",
+        "ref": "layer-zero",
+        "domain": [0, 1, 2, 3, 4, 5, 6, 7]
+      },
+      {
+        "element_type": "field-element",
+        "index_type": "natural-below-four",
+        "maximum_entries": 4,
+        "mode": "LogicalAccess",
+        "origin": "ProverOracle",
+        "ref": "layer-one",
+        "domain": [0, 1, 2, 3]
+      }
+    ],
+    "challenges": [
+      {
+        "domain_size": 8,
+        "interpretation": "Fresh",
+        "ref": "query-zero"
+      },
+      {
+        "domain_size": 4,
+        "interpretation": "Fresh",
+        "ref": "query-one"
+      }
+    ],
+    "occurrences": [
+      {
+        "dependencies": [],
+        "effect": "PublishOracle",
+        "oracle": "layer-zero",
+        "outputs": [],
+        "ref": "publish-zero"
+      },
+      {
+        "challenge": "query-zero",
+        "dependencies": ["publish-zero"],
+        "effect": "SampleChallenge",
+        "outputs": ["query-zero-value"],
+        "ref": "sample-zero"
+      },
+      {
+        "dependencies": ["sample-zero"],
+        "effect": "QueryOracle",
+        "index": {
+          "challenge": "query-zero",
+          "operation": "ChallengeModulo",
+          "modulus": 8
+        },
+        "oracle": "layer-zero",
+        "outputs": ["query-zero-index"],
+        "ref": "query-layer-zero"
+      },
+      {
+        "dependencies": ["query-layer-zero"],
+        "effect": "AnswerOracle",
+        "oracle": "layer-zero",
+        "outputs": ["answer-zero"],
+        "ref": "answer-layer-zero"
+      },
+      {
+        "dependencies": ["answer-layer-zero"],
+        "effect": "PublishOracle",
+        "oracle": "layer-one",
+        "outputs": [],
+        "ref": "publish-one"
+      },
+      {
+        "challenge": "query-one",
+        "dependencies": ["publish-one"],
+        "effect": "SampleChallenge",
+        "outputs": ["query-one-value"],
+        "ref": "sample-one"
+      },
+      {
+        "dependencies": ["sample-one"],
+        "effect": "QueryOracle",
+        "index": {
+          "challenge": "query-one",
+          "operation": "ChallengeModulo",
+          "modulus": 4
+        },
+        "oracle": "layer-one",
+        "outputs": ["query-one-index"],
+        "ref": "query-layer-one"
+      },
+      {
+        "dependencies": ["query-layer-one"],
+        "effect": "AnswerOracle",
+        "oracle": "layer-one",
+        "outputs": ["answer-one"],
+        "ref": "answer-layer-one"
+      },
+      {
+        "algorithm": "two-round-fold-consistency",
+        "dependencies": ["answer-layer-zero", "answer-layer-one"],
+        "effect": "InvokeCheck",
+        "outputs": ["fold-check-value"],
+        "ref": "fold-check"
+      },
+      {
+        "dependencies": ["fold-check"],
+        "effect": "ReachTerminal",
+        "guard": "fold-check-value-is-true",
+        "outputs": [],
+        "ref": "accept",
+        "terminal": {
+          "public_outputs": [],
+          "required_applied_reductions": [],
+          "required_true_checks": ["fold-check"],
+          "terminal_claims": [],
+          "verdict": "Accept"
+        }
+      },
+      {
+        "dependencies": ["fold-check"],
+        "effect": "ReachTerminal",
+        "guard": "Always",
+        "outputs": [],
+        "ref": "reject-fallback",
+        "terminal": {
+          "public_outputs": [],
+          "required_applied_reductions": [],
+          "required_true_checks": [],
+          "terminal_claims": [],
+          "verdict": "Reject"
+        }
+      }
+    ]
+  },
+  "commitment_profile": {
+    "family": "MerkleAuthenticatedOracleAnswer",
+    "binding_algorithm": "sha2-256-binary-tree",
+    "opening_evidence_type": "canonical-authentication-path",
+    "claim_count_per_opening": 1
+  },
+  "required_source_views": [
+    "PublicBindingView",
+    "StrategyDecisionView",
+    "PublicCoinView",
+    "EffectView",
+    "ClaimReductionView",
+    "ExecutionView"
+  ],
+  "chosen_soundness_statement": {
+    "text": "For this exact two-round public-coin oracle proof, a round-restoration soundness bound, commitment binding, and a classical random-oracle Fiat-Shamir theorem with its quantitative loss imply the corresponding bound for the compiled noninteractive protocol.",
+    "premises": [
+      {
+        "family_transport_owner": null,
+        "name": "source-round-restoration-soundness",
+        "owner_coordinate": null,
+        "step": "source-oracle-proof"
+      },
+      {
+        "family_transport_owner": null,
+        "name": "commitment-binding",
+        "owner_coordinate": null,
+        "step": "commitment-opening-transition"
+      },
+      {
+        "family_transport_owner": "analysis-fiat-shamir-family",
+        "name": "fiat-shamir-sampler-adequacy",
+        "owner_coordinate": "AnalysisFamilyPremiseCoordinate(exact-family,SamplerAdequacy)",
+        "step": "fiat-shamir"
+      },
+      {
+        "family_transport_owner": "analysis-fiat-shamir-family",
+        "name": "fiat-shamir-oracle-process",
+        "owner_coordinate": "AnalysisFamilyPremiseCoordinate(exact-family,OracleProcess)",
+        "step": "fiat-shamir"
+      },
+      {
+        "family_transport_owner": "analysis-fiat-shamir-family",
+        "name": "fiat-shamir-quantitative-loss",
+        "owner_coordinate": null,
+        "step": "fiat-shamir"
+      }
+    ]
+  }
+}
