@@ -2,11 +2,10 @@
 
 > **Kind:** Temporary main-lane synthesis of the F2-O0, M0, Q3-A, and
 > reconciliation results into the decisions F0-V2C must take
-> **State:** Options compared at equal resolution; recommendations recorded;
-> nothing selected. The five second-round lanes (gates-green, M1, F2-O1,
-> D2, F0-V3) and the migration-candidate and Relations--Plan lanes have
-> reported; their inputs are folded into Sections 6 and 10. This is the
-> decision packet for the design lane and the user
+> **State:** Decided. On 2026-09-03 the user took all eight decisions in
+> Section 10 as recommended. The migration may now be drafted as exact
+> owner text on the research branch under those decisions; pushing and
+> pull-request landing remain the user's gates
 > **Authority:** None. This note changes no owner page, profile, identity,
 > evaluator, or judgment.
 > **Inputs:** `f2o0-provider-observable-audit.md`,
@@ -205,7 +204,7 @@ not part of the claim that later consumers rely on. This is the "deliberately
 smaller v0" of the peer review's Section 9.C, stated as scope rather than as
 deletion; consolidation can follow the freeze.
 
-## 10. Decisions requested
+## 10. Decisions requested (taken 2026-09-03, all as recommended)
 
 1. Sub-decision A: adopt A2 (views keep identities; the closure obliges the
    consumer to hold the authenticated algorithm and module preimages).

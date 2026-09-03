@@ -3,7 +3,10 @@
 > **Kind:** Temporary reopening record under the v0 design program's change
 > control (Section 14 of `../../project/v0-design-program.md`)
 > **State:** Opened 2026-09-03; candidate repair selected at bounded research
-> resolution; publication decision pending
+> resolution; on the same day the user approved carrying the repair into
+> the F0-V2C migration text (decision packet, Section 10). Publication on
+> the research branch follows the migration; pushing and landing remain
+> the user's gates
 > **Authority:** None. Opening a reopening record changes no owner page,
 > profile identity, evaluator, or judgment. Only the decision gate named in
 > Section 6 may do that.
