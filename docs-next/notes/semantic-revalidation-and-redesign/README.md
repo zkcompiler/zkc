@@ -124,6 +124,12 @@ below are reader cross-references rather than inventory edges.
   Core instance-only with an untrusted generator as a Compiler transition
   and pointwise theorem binding through the transport profile, three
   decisions requested, and the reversal condition.
+- [BCS-Style Compilation of Oracle Proofs: Entry Contract](bcs-compilation/README.md)
+  fixes the lane that answers the other kernel-scope prerequisite: express one
+  finite oracle-proof-shaped Core, elaborate its logical Oracles into
+  committed ones as a checked Compiler transition, apply the canonical-framed
+  construction, measure what rotates, and assign a coordinate to every premise
+  of a BCS-style soundness statement under the named-premise intake.
 - [Native FRI/IOR Final Classification and Retention](r2-protocol-witnesses/native-fri-ior-final-classification-and-retention.md)
   retains the two finite FRI/IOR lanes, classifies the case as a conservative
   extension, fixes the deterministic source-correspondence boundary, and
