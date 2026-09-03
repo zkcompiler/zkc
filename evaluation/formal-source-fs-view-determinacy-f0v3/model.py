@@ -36,6 +36,10 @@ EXPECTED_OWNERS = {
     "DuplexChallengeTransitionView": "pir.transcript-construction",
     "DuplexFSConstructionView": "pir.checked-duplex-fs-construction",
 }
+VIEW_FAMILIES = {
+    name: ("canonical-framed" if name.startswith("Canonical") else "duplex-sponge")
+    for name in EXPECTED_OWNERS
+}
 
 
 class SchemaError(ValueError):
@@ -358,6 +362,22 @@ def validate(schema: dict[str, Any], value: Any, profiles: dict[str, Any]) -> No
             validate(schema["element"], item, profiles)
     else:
         raise SchemaError("validator reached an unknown compiled node")
+
+
+def validate_view(
+    family: str,
+    view: str,
+    schemas: dict[str, Any],
+    value: Any,
+    profiles: dict[str, Any],
+) -> None:
+    """Validate one value only under its exact family-local view kind."""
+
+    if family not in {"canonical-framed", "duplex-sponge"}:
+        raise SchemaError("unknown FS view family")
+    if view not in schemas or VIEW_FAMILIES.get(view) != family:
+        raise SchemaError("view kind belongs to another FS family")
+    validate(schemas[view], value, profiles)
 
 
 def schema_counts(schema: dict[str, Any]) -> tuple[int, int]:

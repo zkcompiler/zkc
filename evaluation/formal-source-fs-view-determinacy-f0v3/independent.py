@@ -36,6 +36,10 @@ EXPECTED_OWNERS = {
     "DuplexChallengeTransitionView": "pir.transcript-construction",
     "DuplexFSConstructionView": "pir.checked-duplex-fs-construction",
 }
+VIEW_FAMILIES = {
+    name: ("canonical-framed" if name.startswith("Canonical") else "duplex-sponge")
+    for name in EXPECTED_OWNERS
+}
 
 
 class IndependentError(ValueError):
@@ -429,6 +433,22 @@ def validate(schema: dict[str, Any], value: Any, profiles: dict[str, Any]) -> No
             work.extend((node["element"], item) for item in reversed(current))
         else:
             raise IndependentError("cold validator reached an unknown node")
+
+
+def validate_view(
+    family: str,
+    view: str,
+    schemas: dict[str, Any],
+    value: Any,
+    profiles: dict[str, Any],
+) -> None:
+    """Cold family discriminator before iterative value validation."""
+
+    if family not in {"canonical-framed", "duplex-sponge"}:
+        raise IndependentError("cold FS view family is unknown")
+    if view not in schemas or VIEW_FAMILIES.get(view) != family:
+        raise IndependentError("cold view kind belongs to another FS family")
+    validate(schemas[view], value, profiles)
 
 
 def compile_current() -> tuple[dict[str, Any], dict[str, str], dict[str, int]]:

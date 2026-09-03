@@ -1,7 +1,427 @@
 {
   "aggregate": {
-    "code": "F0V3-C-FS-VIEW-DETERMINACY",
-    "outcome": "CannotAnswer"
+    "code": "F0V3B-A-FS-VIEW-BODIES-AND-CONE",
+    "outcome": "Affirmative"
+  },
+  "evidence_control": {
+    "candidate_schema_counts": {
+      "CanonicalChallengeTransitionView": {
+        "leaf_count": 19,
+        "node_count": 29
+      },
+      "CanonicalFSConstructionView": {
+        "leaf_count": 12,
+        "node_count": 21
+      },
+      "CanonicalRequiredInfluenceView": {
+        "leaf_count": 15,
+        "node_count": 29
+      },
+      "CanonicalTranscriptDeclarationView": {
+        "leaf_count": 18,
+        "node_count": 24
+      },
+      "DuplexChallengeTransitionView": {
+        "leaf_count": 16,
+        "node_count": 27
+      },
+      "DuplexEncodedInputCoverageView": {
+        "leaf_count": 26,
+        "node_count": 42
+      },
+      "DuplexFSConstructionView": {
+        "leaf_count": 35,
+        "node_count": 63
+      },
+      "DuplexTranscriptDeclarationView": {
+        "leaf_count": 42,
+        "node_count": 66
+      }
+    },
+    "candidate_schema_sha256": "0afe8797203334dea54fec67e1c8706ea4af7fae6c4f1a189f66cb6e7b0b1f69",
+    "candidate_values": {
+      "duplex-finite": {
+        "DuplexChallengeTransitionView": {
+          "body_bytes": 2721,
+          "body_sha256": "aeb30cb40413fc53bee212d127b4816302f79153170edd5300b9b52c69b4d7d3",
+          "leaf_count": 34,
+          "typed_cold_byte_equal": true
+        },
+        "DuplexEncodedInputCoverageView": {
+          "body_bytes": 2477,
+          "body_sha256": "5faa0e0863682d525c47454271fb418cd989066d7108b98658fe3a97b08d801b",
+          "leaf_count": 31,
+          "typed_cold_byte_equal": true
+        },
+        "DuplexTranscriptDeclarationView": {
+          "body_bytes": 6130,
+          "body_sha256": "284df7759a92e3866892afde5b27b6853f7e38b584cda2bb74eb0f3652815836",
+          "leaf_count": 86,
+          "typed_cold_byte_equal": true
+        }
+      },
+      "k2-oracle": {
+        "CanonicalChallengeTransitionView": {
+          "body_bytes": 3549,
+          "body_sha256": "d1d365eab1343a6e25bf1346fa5601bfcf88c73b836a714d4e2b0f0f7b005c4e",
+          "leaf_count": 23,
+          "typed_cold_byte_equal": true
+        },
+        "CanonicalFSConstructionView": {
+          "body_bytes": 5873,
+          "body_sha256": "cbe51c5da8bdd8de3ad060f6f6114fc77c190aac0ed6f9c1578098a7c884436c",
+          "leaf_count": 38,
+          "typed_cold_byte_equal": true
+        },
+        "CanonicalRequiredInfluenceView": {
+          "body_bytes": 3298,
+          "body_sha256": "59f990e2445ec1e61cf12560b78e32ccf9344b68e69e1ffc73f71a084580611f",
+          "leaf_count": 26,
+          "typed_cold_byte_equal": true
+        },
+        "CanonicalTranscriptDeclarationView": {
+          "body_bytes": 4380,
+          "body_sha256": "cb2d7885f40c9280a8ce3f176a117fc889ede4f1d37f09ba34efdb22b5737419",
+          "leaf_count": 36,
+          "typed_cold_byte_equal": true
+        }
+      },
+      "k2-schnorr": {
+        "CanonicalChallengeTransitionView": {
+          "body_bytes": 3466,
+          "body_sha256": "4b4b02beac5d3d416ef5494a6df2b33db2d921063a7c63b01731bf5e3a36b0ef",
+          "leaf_count": 21,
+          "typed_cold_byte_equal": true
+        },
+        "CanonicalFSConstructionView": {
+          "body_bytes": 5609,
+          "body_sha256": "ad168e1242fd9a7246888252b88537c59734da48e963190abfa46afd7a2ad0d7",
+          "leaf_count": 36,
+          "typed_cold_byte_equal": true
+        },
+        "CanonicalRequiredInfluenceView": {
+          "body_bytes": 2498,
+          "body_sha256": "e58f016865e047b90f735ea9694af7f1093a5f8737f216c885504101349b3f77",
+          "leaf_count": 13,
+          "typed_cold_byte_equal": true
+        },
+        "CanonicalTranscriptDeclarationView": {
+          "body_bytes": 4066,
+          "body_sha256": "4f8da5c9547354bd21a10ab5c5bf8f66a5d2acdd5bd28e5e591cf1d4b3affa15",
+          "leaf_count": 30,
+          "typed_cold_byte_equal": true
+        }
+      }
+    },
+    "cold_candidate_schema_sha256": "0afe8797203334dea54fec67e1c8706ea4af7fae6c4f1a189f66cb6e7b0b1f69",
+    "compiled_schema_count": 8,
+    "duplex_checked_result_witnessed": false,
+    "field_count": 97,
+    "field_node_counts": {
+      "atomic": 44,
+      "structural": 53
+    },
+    "field_status_counts": {
+      "exact-body": 37,
+      "prose-placeholder": 40,
+      "undefined-symbol": 20
+    },
+    "iterative_metrics": {
+      "definition_count": 49,
+      "maximum_source_depth": 4,
+      "source_node_count": 271
+    },
+    "mutation_kills": {
+      "iterative-compiler-substitution": true,
+      "iterative-law-substitution": true,
+      "iterative-owner-substitution": true,
+      "iterative-result-ref-bytes": true,
+      "iterative-schema-ordinal": true,
+      "iterative-wrong-family-view-kind": true,
+      "recursive-compiler-substitution": true,
+      "recursive-law-substitution": true,
+      "recursive-owner-substitution": true,
+      "recursive-result-ref-bytes": true,
+      "recursive-schema-ordinal": true,
+      "recursive-wrong-family-view-kind": true
+    },
+    "owner_obligations": [
+      "F0V3-O-PUBLISHED-SCHEMAS",
+      "F0V3-O-CANONICAL-FRAME-SCHEDULE",
+      "F0V3-O-CANONICAL-INFLUENCE",
+      "F0V3-O-CANONICAL-TRANSITION-ABI",
+      "F0V3-O-CANONICAL-RESULT-BODY",
+      "F0V3-O-DUPLEX-STATE-INSTANCE",
+      "F0V3-O-DUPLEX-MATERIAL-SALT",
+      "F0V3-O-DUPLEX-CODEC-ARGUMENTS",
+      "F0V3-O-DUPLEX-SCHEDULE-COVERAGE",
+      "F0V3-O-DUPLEX-TRANSITION-ABI",
+      "F0V3-O-DUPLEX-RESULT-BODY"
+    ],
+    "proposal_packets": {
+      "canonical-framed": {
+        "manifest_overlay_sha256": "e2a0dfd4c8decdc62c18c2546a10b79b2ce701e2230b9e2c2dffecd1a93ac109",
+        "page_diff_sha256": "4e949f7bfd121b37a9ab7a3ce013e2f4079ad5b74a596ff9ed00e3d19bca6cf7",
+        "proposal_sha256": "53eeadb5fe8e6eb29dc7115001adbfde80a7565c212f3d2832b32cc5b68a1f17",
+        "views": [
+          "CanonicalTranscriptDeclarationView",
+          "CanonicalRequiredInfluenceView",
+          "CanonicalChallengeTransitionView",
+          "CanonicalFSConstructionView"
+        ]
+      },
+      "duplex-sponge": {
+        "manifest_overlay_sha256": "dd27765a078bf453b09a9f22571194386f2d2df9d9e91b85906c1953f15f967a",
+        "page_diff_sha256": "b2b89e1e05f9500c9ac93dfb76050a543d2aecfe842d157a435fd1a234dc95ef",
+        "proposal_sha256": "372460721e1176def0a0e17da5c4bc20f3bbfa1e12b6b9e77653f878575c6897",
+        "views": [
+          "DuplexTranscriptDeclarationView",
+          "DuplexEncodedInputCoverageView",
+          "DuplexChallengeTransitionView",
+          "DuplexFSConstructionView"
+        ]
+      }
+    },
+    "recursive_metrics": {
+      "definition_count": 49,
+      "maximum_source_depth": 12,
+      "source_node_count": 271
+    },
+    "rotation_cone": {
+      "candidate_profile_identities": {
+        "analysis-afk-theorem-source-validation": {
+          "body_sha256": "7e84ac3ac9c16794c7a27ae36fd605c4b8cd120acac74e1c4ca30b897343b4cb",
+          "profile_digest": "cb7e0917b1edc0fbf0a90cfdc8aa11711eb25e0f1991a5214574c477dcfc86cb",
+          "revision": 0
+        },
+        "analysis-afk-transport": {
+          "body_sha256": "e366f8fcf52d42173fb06d8297fbad0c83ad3344e3753d07484ca2048bf6052a",
+          "profile_digest": "e95265b440f5783a097cf906b07fb28eddce80cbd5456513686275d53bab9857",
+          "revision": 0
+        },
+        "analysis-cryptographic-property": {
+          "body_sha256": "c814883cca39a8946b471394f735ad0253462ab34f5917c4f468a65245b064cb",
+          "profile_digest": "521e4d64086fad57992e3857a7c5f51ca8a48f5780e7e8cf71822dad76164760",
+          "revision": 0
+        },
+        "analysis-incremental-composition": {
+          "body_sha256": "52cb79e702c1e14e43c11ceaf968565e46a0362b6d376fe806f7b69716df203a",
+          "profile_digest": "fa21ac85fa06788be4b95abdeb857baa029ac7c63b6e2c5727c8f181864dcecd",
+          "revision": 0
+        },
+        "analysis-incremental-composition-source-validation": {
+          "body_sha256": "2fc3ac04e1ab2992dd290dc84369a2436b02b401149328730e20af42ea7d80b5",
+          "profile_digest": "cf6d46d09402d2ca7ae621bded9029ad5ce34afa83454497293f43d46366f612",
+          "revision": 0
+        },
+        "canonical-framed-fiat-shamir": {
+          "body_sha256": "f7b47f840afee87298ed4c26af9bb4e4b3d359aeb9b978fcf941739e2796c6c5",
+          "profile_digest": "299c33c95c5a9cffdd3cac9dc4636575e6cdbd92f0903523241d28cbc9d2ecf8",
+          "revision": 1
+        },
+        "commitment-opening": {
+          "body_sha256": "a34dd4c201c6248893476766a3701d3bd8df65d64efe1672d4aa96d36a92c7ad",
+          "profile_digest": "3132476acca8f1d16720161b0f5de4299a69508736725491ff3998d7fb7ea4d4",
+          "revision": 0
+        },
+        "duplex-sponge-fiat-shamir": {
+          "body_sha256": "ef7a6466ccee5a0618069c7931816253319d1c416d790af536122b60c2ac7e6f",
+          "profile_digest": "85856b74b316436629122871d3c70e430a7775b4b1361180688f84b90696690e",
+          "revision": 1
+        },
+        "endpoint-source-view": {
+          "body_sha256": "ea156ba71eb1261d68ce76e03e9a76f9cf7952ac8c83a92b95987c95a0428730",
+          "profile_digest": "4daa76a6feb8ea5601c3cecadb052d646b2cb5c3aae2e4cb4b59a7d91a230ce4",
+          "revision": 1
+        },
+        "interaction": {
+          "body_sha256": "24c240c704ce6240416b117c562bb2ddbe14da8b5651c7f37e5e107f638a6fa9",
+          "profile_digest": "62464076d1ed690fa1acf93998cae4cdc3600649b5af028d4390d3046a3bb7a7",
+          "revision": 1
+        },
+        "interface-plan": {
+          "body_sha256": "67f45c16b7ac18a859c56b11539350797eec8a71cf29462749b53f68a288bd9d",
+          "profile_digest": "9ad1319368918a6d78a56ccd16495a4a49f579b293a394f1538b257c859f7f02",
+          "revision": 1
+        },
+        "oir-projection-relation": {
+          "body_sha256": "2b9690663cbf417c85a0ba1cf026f2d6676df66089778c7418fa25c0f82b3966",
+          "profile_digest": "4772c26383065e834eb31e310820b7e2a56c8cc23e48676587159a25f2768910",
+          "revision": 1
+        },
+        "oracle-commitment": {
+          "body_sha256": "89b4844591a519499450b49d3abd83eaef013a4e178872e383eb2454473bbe9f",
+          "profile_digest": "ce5e1ca682b95bfdbebfeb2e914d1e5a9a98cb9024687eafc29abe955474c291",
+          "revision": 0
+        },
+        "public-setup": {
+          "body_sha256": "05a78649788f1fbb06d5d4354e2a723e44a0ae2240b244d933784af3393c060e",
+          "profile_digest": "d26e94d0ae5e1bab4e1152c349e49de829c11a1e19913c7569251e8f9572a9b6",
+          "revision": 1
+        },
+        "relations": {
+          "body_sha256": "d74e70ddcb9120d31909d2f31b8eba884ad26af97145e34493cea28dc6a8b2ce",
+          "profile_digest": "4435605d4f0bacb6e5fa03f9875132c3de3ec9141be4f505495600dd048333cb",
+          "revision": 0
+        },
+        "verifier-derived-query-plan": {
+          "body_sha256": "e4095353b21e3dabfa518b5f877f3942c0d1fabdbbf67c7d10ddfec4c4ffc718",
+          "profile_digest": "09fab501d028686000c83ddc55612dcbf9a145d1a6f177f42cf077fb001f743a",
+          "revision": 0
+        }
+      },
+      "compiler_agreement": {
+        "baseline": true,
+        "common_candidate": true,
+        "fs_overlay_candidate": true
+      },
+      "exact_change_summary": {
+        "manifests": [
+          {
+            "after_revision": 1,
+            "after_sha256": "9356d76c94f48ca707a2630565d463245bd7869ca8ab1b49d1314fd9c7e7e00a",
+            "before_revision": 0,
+            "before_sha256": "2233314a0d40495b3425a0c882f82fad8a96ff727b4cf344a19b68f92b6a5baa",
+            "key": "canonical-framed-fiat-shamir"
+          },
+          {
+            "after_revision": 1,
+            "after_sha256": "8833c19571c073bdf0c77e1ef1eb38095d16b20d1e8e719a62cb3691104c9d95",
+            "before_revision": 0,
+            "before_sha256": "eebf884bbe8bbb339da21c30cd959c2c94a370eb09ea7a21304a5b321ebf46b7",
+            "key": "duplex-sponge-fiat-shamir"
+          },
+          {
+            "after_revision": 1,
+            "after_sha256": "6d0d0b45ddb264e0298fab66c4efd59aaa2f682677f39a045444d6a1b4699c20",
+            "before_revision": 0,
+            "before_sha256": "f7df49bffa706c8b589f70ef5fb2a6739a48767f0a49676783edd5c8ad2464d9",
+            "key": "endpoint-source-view"
+          },
+          {
+            "after_revision": 1,
+            "after_sha256": "565eac32a94ea01bc5bd53f5e14341d1ca67bfb253c772a6e24c4f7150d1afec",
+            "before_revision": 0,
+            "before_sha256": "0592740f7855b876849a850091e81f36d378e3e385c0171a7f96078b5170597e",
+            "key": "interaction"
+          },
+          {
+            "after_revision": 1,
+            "after_sha256": "404c75b3ed5cb0d26a80ba0f6da5e4a55113f138e39beefb11c3b592248399c5",
+            "before_revision": 0,
+            "before_sha256": "83782d0e04b0f3a2add942acaf82924584a1ac57901e7d15fb1b74cb19b5c443",
+            "key": "interface-plan"
+          },
+          {
+            "after_revision": 1,
+            "after_sha256": "2accd04a3079498cda18830ada1d2a514ee345a119da6cda0afa381c8f6398b8",
+            "before_revision": 0,
+            "before_sha256": "61961149f5a475191882c13174d3eb38aa404f20e5f8a7ec1de63a49ef7b86a0",
+            "key": "oir-projection-relation"
+          },
+          {
+            "after_revision": 1,
+            "after_sha256": "1d6ad1ed7ab39da2bc199b0267dbe68af1472689027f0655226e92cf1a2229c8",
+            "before_revision": 0,
+            "before_sha256": "ae00b37b746b8369859a19b5bf7ed9a758190840d0f9ff8c75ce6b6720f3278d",
+            "key": "public-setup"
+          }
+        ],
+        "pages": [
+          {
+            "after_bytes": 59795,
+            "after_sha256": "dd69357a90ab529de1e591dc33ddce9b9af20cdf25c6a2fac86b40353ba5c255",
+            "before_bytes": 58852,
+            "before_sha256": "1c124e79105d542c85d188f895f9e5f55e2f3acf654f46c969184e453911a758",
+            "path": "docs-next/oir/projection-contract.md"
+          },
+          {
+            "after_bytes": 70684,
+            "after_sha256": "27129875e1ce9f48f79cec2328275dd519974935187b753b7fe2f6419b9996ad",
+            "before_bytes": 44936,
+            "before_sha256": "7584767bde94693b77d42328884f889f394422596c0328783cc03188bfbd116d",
+            "path": "docs-next/pir/duplex-sponge-fiat-shamir.md"
+          },
+          {
+            "after_bytes": 95570,
+            "after_sha256": "d69a524f4d9f1ec2849b6f8ff4a48965708d04c0dffe9f6c64159d2a12f6e43b",
+            "before_bytes": 94043,
+            "before_sha256": "d5888dbd2dfe7fdd7e6ff48e8fbe611fbc231deb6e0cd5eec3edca6c94b74126",
+            "path": "docs-next/pir/endpoint-projection-views.md"
+          },
+          {
+            "after_bytes": 90136,
+            "after_sha256": "a79a59ade50e0972c29e579a794900773ff36829dfe192e1cbfb7018c6e9b615",
+            "before_bytes": 72018,
+            "before_sha256": "b7d26295bbf1d8f51ddf7b2ffd811ce4d2d819c5edf4d6f9b504317e1f5c0bd7",
+            "path": "docs-next/pir/fiat-shamir.md"
+          },
+          {
+            "after_bytes": 142472,
+            "after_sha256": "8bc73f00c0c4d37491e95c6b461dbaf30af0f107f245cc5cf87ba323ce66a062",
+            "before_bytes": 137985,
+            "before_sha256": "9c33e94db242e485789e8e32942a3c02dfaab97a3875654abd2d7525cbb860da",
+            "path": "docs-next/pir/interactive-core.md"
+          },
+          {
+            "after_bytes": 101878,
+            "after_sha256": "810855c6312d45b3a456acc7c2870bf9cc6bda86759d33bd27435ba65240966f",
+            "before_bytes": 101462,
+            "before_sha256": "bb359aa65a9037c8202a08bd8b62947566ce762a9708cf3cf7f6022953fea5a0",
+            "path": "docs-next/pir/interfaces-and-plans.md"
+          }
+        ]
+      },
+      "incremental_fs_profiles": [
+        "canonical-framed-fiat-shamir",
+        "duplex-sponge-fiat-shamir",
+        "interface-plan",
+        "endpoint-source-view",
+        "oir-projection-relation",
+        "relations",
+        "analysis-cryptographic-property",
+        "analysis-afk-transport",
+        "analysis-afk-theorem-source-validation",
+        "analysis-incremental-composition",
+        "analysis-incremental-composition-source-validation"
+      ],
+      "published_identity_sha256_after": "f9ae6791ffaad95ec0c965164bc03e156c9985050b9064684bfe0257780da30a",
+      "published_identity_sha256_before": "f9ae6791ffaad95ec0c965164bc03e156c9985050b9064684bfe0257780da30a",
+      "total_profiles": [
+        "interaction",
+        "canonical-framed-fiat-shamir",
+        "duplex-sponge-fiat-shamir",
+        "public-setup",
+        "commitment-opening",
+        "oracle-commitment",
+        "verifier-derived-query-plan",
+        "interface-plan",
+        "endpoint-source-view",
+        "oir-projection-relation",
+        "relations",
+        "analysis-cryptographic-property",
+        "analysis-afk-transport",
+        "analysis-afk-theorem-source-validation",
+        "analysis-incremental-composition",
+        "analysis-incremental-composition-source-validation"
+      ]
+    },
+    "source_sha256": {
+      "docs-next/pir/duplex-sponge-fiat-shamir.md": "7584767bde94693b77d42328884f889f394422596c0328783cc03188bfbd116d",
+      "docs-next/pir/fiat-shamir.md": "b7d26295bbf1d8f51ddf7b2ffd811ce4d2d819c5edf4d6f9b504317e1f5c0bd7",
+      "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "9470fee8cef49674d735a70f3bd7de78201fbef0cf44a195b0b6c33dc8f1c18b",
+      "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "448525f75d21d3f293d4298f76bed9570c2b6483de2719f3f2468368cfb0c4f4",
+      "docs-next/pir/profiles/published-identities.json": "f9ae6791ffaad95ec0c965164bc03e156c9985050b9064684bfe0257780da30a",
+      "evaluation/duplex-sponge-transcript/cases/construction.json": "e057df04559b277d70af6ca4009ac626fa1e56e9e2d1977d45275576111daf1f",
+      "evaluation/duplex-sponge-transcript/duplexmodel/construction.py": "edd9782270fa7e9030ca2389bea57c3a34d92ff73641d526c1df34cf5d766fc4",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json": "8214d1f14b8c18989846d1e544d39070f76d0c843971981b9e2c38ab6291eeb9",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/canonical-framed-manifest-overlay.json": "90614519c8d2b7c3227c4d536eea486eb27f7c64e9c8c1ba757dbff81f891722",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/duplex-section-11.md": "372460721e1176def0a0e17da5c4bc20f3bbfa1e12b6b9e77653f878575c6897",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/duplex-sponge-manifest-overlay.json": "5a7c375f2a4a598bd3f5b11962c649ce034d58c7e1864397a470163fc4e5685d",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/fiat-shamir-section-13.md": "53eeadb5fe8e6eb29dc7115001adbfde80a7565c212f3d2832b32cc5b68a1f17",
+      "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "c7883d1eb77ddf873cb762c7f791d4a4a7ec1aa4dc1356cb7712ed7dbfa94e1c",
+      "evaluation/k2-protocol-fiat-shamir/reference_model.py": "402bd72f24571828b3f76bc3fe7fd103798841e736d3bf672c025843c1b8071a"
+    }
   },
   "cases": [
     {
@@ -15,33 +435,43 @@
       "outcome": "Affirmative"
     },
     {
-      "code": "F0V3-A-FS-VIEW-GRAMMAR-BOUNDED",
+      "code": "F0V3B-A-EIGHT-PROPOSED-VIEW-SCHEMAS",
       "name": "normalized-finite-view-grammar",
       "outcome": "Affirmative"
     },
     {
-      "code": "F0V3-A-DUAL-SCHEMA-COMPILERS",
+      "code": "F0V3B-A-OWNER-TEXT-DIFFS",
+      "name": "proposal-owner-text-and-diffs",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3B-A-DUAL-SCHEMA-COMPILERS",
       "name": "recursive-iterative-schema-agreement",
       "outcome": "Affirmative"
     },
     {
-      "code": "F0V3-A-K2-TYPED-COLD",
+      "code": "F0V3B-A-K2-TYPED-COLD-BYTES",
       "name": "k2-typed-cold-candidate-values",
       "outcome": "Affirmative"
     },
     {
-      "code": "F0V3-A-DUPLEX-TYPED-COLD",
+      "code": "F0V3B-A-DUPLEX-TYPED-COLD-BYTES",
       "name": "duplex-typed-cold-candidate-values",
       "outcome": "Affirmative"
     },
     {
-      "code": "F0V3-A-DUPLEX-CARRIER-BOUNDARY",
+      "code": "F0V3B-A-DUPLEX-CARRIER-BOUNDARY",
       "name": "checked-duplex-carrier-boundary",
       "outcome": "Affirmative"
     },
     {
-      "code": "F0V3-A-MUTATION-KILLS",
+      "code": "F0V3B-A-MUTATION-KILLS",
       "name": "schema-law-owner-mutation-kills",
+      "outcome": "Affirmative"
+    },
+    {
+      "code": "F0V3B-A-FS-ROTATION-CONE",
+      "name": "fs-family-rotation-cone",
       "outcome": "Affirmative"
     },
     {
@@ -109,78 +539,5 @@
       "name": "interaction-body-by-label-substitution",
       "outcome": "Refused"
     }
-  ],
-  "evidence_control": {
-    "candidate_schema_counts": {
-      "CanonicalChallengeTransitionView": {"leaf_count": 19, "node_count": 29},
-      "CanonicalFSConstructionView": {"leaf_count": 12, "node_count": 21},
-      "CanonicalRequiredInfluenceView": {"leaf_count": 15, "node_count": 29},
-      "CanonicalTranscriptDeclarationView": {"leaf_count": 18, "node_count": 24},
-      "DuplexChallengeTransitionView": {"leaf_count": 16, "node_count": 27},
-      "DuplexEncodedInputCoverageView": {"leaf_count": 26, "node_count": 42},
-      "DuplexFSConstructionView": {"leaf_count": 35, "node_count": 63},
-      "DuplexTranscriptDeclarationView": {"leaf_count": 42, "node_count": 66}
-    },
-    "candidate_schema_sha256": "0afe8797203334dea54fec67e1c8706ea4af7fae6c4f1a189f66cb6e7b0b1f69",
-    "candidate_values": {
-      "duplex-finite": {
-        "DuplexChallengeTransitionView": {"body_sha256": "aeb30cb40413fc53bee212d127b4816302f79153170edd5300b9b52c69b4d7d3", "leaf_count": 34},
-        "DuplexEncodedInputCoverageView": {"body_sha256": "5faa0e0863682d525c47454271fb418cd989066d7108b98658fe3a97b08d801b", "leaf_count": 31},
-        "DuplexTranscriptDeclarationView": {"body_sha256": "284df7759a92e3866892afde5b27b6853f7e38b584cda2bb74eb0f3652815836", "leaf_count": 86}
-      },
-      "k2-oracle": {
-        "CanonicalChallengeTransitionView": {"body_sha256": "d1d365eab1343a6e25bf1346fa5601bfcf88c73b836a714d4e2b0f0f7b005c4e", "leaf_count": 23},
-        "CanonicalFSConstructionView": {"body_sha256": "cbe51c5da8bdd8de3ad060f6f6114fc77c190aac0ed6f9c1578098a7c884436c", "leaf_count": 38},
-        "CanonicalRequiredInfluenceView": {"body_sha256": "59f990e2445ec1e61cf12560b78e32ccf9344b68e69e1ffc73f71a084580611f", "leaf_count": 26},
-        "CanonicalTranscriptDeclarationView": {"body_sha256": "cb2d7885f40c9280a8ce3f176a117fc889ede4f1d37f09ba34efdb22b5737419", "leaf_count": 36}
-      },
-      "k2-schnorr": {
-        "CanonicalChallengeTransitionView": {"body_sha256": "4b4b02beac5d3d416ef5494a6df2b33db2d921063a7c63b01731bf5e3a36b0ef", "leaf_count": 21},
-        "CanonicalFSConstructionView": {"body_sha256": "ad168e1242fd9a7246888252b88537c59734da48e963190abfa46afd7a2ad0d7", "leaf_count": 36},
-        "CanonicalRequiredInfluenceView": {"body_sha256": "e58f016865e047b90f735ea9694af7f1093a5f8737f216c885504101349b3f77", "leaf_count": 13},
-        "CanonicalTranscriptDeclarationView": {"body_sha256": "4f8da5c9547354bd21a10ab5c5bf8f66a5d2acdd5bd28e5e591cf1d4b3affa15", "leaf_count": 30}
-      }
-    },
-    "duplex_checked_result_witnessed": false,
-    "field_count": 97,
-    "field_node_counts": {"atomic": 44, "structural": 53},
-    "field_status_counts": {"exact-body": 37, "prose-placeholder": 40, "undefined-symbol": 20},
-    "iterative_metrics": {"definition_count": 49, "maximum_source_depth": 4, "source_node_count": 271},
-    "mutation_kills": {
-      "iterative-compiler-substitution": true,
-      "iterative-law-substitution": true,
-      "iterative-owner-substitution": true,
-      "iterative-schema-ordinal": true,
-      "recursive-compiler-substitution": true,
-      "recursive-law-substitution": true,
-      "recursive-owner-substitution": true,
-      "recursive-schema-ordinal": true
-    },
-    "owner_obligations": [
-      "F0V3-O-PUBLISHED-SCHEMAS",
-      "F0V3-O-CANONICAL-FRAME-SCHEDULE",
-      "F0V3-O-CANONICAL-INFLUENCE",
-      "F0V3-O-CANONICAL-TRANSITION-ABI",
-      "F0V3-O-CANONICAL-RESULT-BODY",
-      "F0V3-O-DUPLEX-STATE-INSTANCE",
-      "F0V3-O-DUPLEX-MATERIAL-SALT",
-      "F0V3-O-DUPLEX-CODEC-ARGUMENTS",
-      "F0V3-O-DUPLEX-SCHEDULE-COVERAGE",
-      "F0V3-O-DUPLEX-TRANSITION-ABI",
-      "F0V3-O-DUPLEX-RESULT-BODY"
-    ],
-    "recursive_metrics": {"definition_count": 49, "maximum_source_depth": 12, "source_node_count": 271},
-    "source_sha256": {
-      "docs-next/pir/duplex-sponge-fiat-shamir.md": "7584767bde94693b77d42328884f889f394422596c0328783cc03188bfbd116d",
-      "docs-next/pir/fiat-shamir.md": "b7d26295bbf1d8f51ddf7b2ffd811ce4d2d819c5edf4d6f9b504317e1f5c0bd7",
-      "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "9470fee8cef49674d735a70f3bd7de78201fbef0cf44a195b0b6c33dc8f1c18b",
-      "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "448525f75d21d3f293d4298f76bed9570c2b6483de2719f3f2468368cfb0c4f4",
-      "docs-next/pir/profiles/published-identities.json": "f9ae6791ffaad95ec0c965164bc03e156c9985050b9064684bfe0257780da30a",
-      "evaluation/duplex-sponge-transcript/cases/construction.json": "e057df04559b277d70af6ca4009ac626fa1e56e9e2d1977d45275576111daf1f",
-      "evaluation/duplex-sponge-transcript/duplexmodel/construction.py": "edd9782270fa7e9030ca2389bea57c3a34d92ff73641d526c1df34cf5d766fc4",
-      "evaluation/formal-source-fs-view-determinacy-f0v3/field-audit.json": "8214d1f14b8c18989846d1e544d39070f76d0c843971981b9e2c38ab6291eeb9",
-      "evaluation/formal-source-fs-view-determinacy-f0v3/schema-source.json": "c7883d1eb77ddf873cb762c7f791d4a4a7ec1aa4dc1356cb7712ed7dbfa94e1c",
-      "evaluation/k2-protocol-fiat-shamir/reference_model.py": "402bd72f24571828b3f76bc3fe7fd103798841e736d3bf672c025843c1b8071a"
-    }
-  }
+  ]
 }

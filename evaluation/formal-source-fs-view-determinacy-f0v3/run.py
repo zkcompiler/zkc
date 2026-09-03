@@ -14,7 +14,9 @@ from typing import Any, Callable
 
 import cold_projection
 import independent
+import migration
 import model
+import proposal
 import typed_projection
 from support import law
 
@@ -193,6 +195,7 @@ def _mutations(
     schemas: dict[str, Any],
     cold_schemas: dict[str, Any],
     sample_value: dict[str, Any],
+    sample_result: dict[str, Any],
 ) -> dict[str, bool]:
     duplicate_ordinal = copy.deepcopy(source)
     duplicate_ordinal["definitions"]["CanonicalFrameCoordinate"]["record"][1][0] = 0
@@ -206,6 +209,8 @@ def _mutations(
     )
     compiler_substitution = copy.deepcopy(sample_value)
     compiler_substitution[0]["compiler"] = "core-id-body-v0"
+    result_ref_bytes = copy.deepcopy(sample_result)
+    result_ref_bytes[-1] = b"owner-local-result-ref"
     profiles = source["owner_profiles"]
     return {
         "recursive-schema-ordinal": _rejected(
@@ -254,6 +259,46 @@ def _mutations(
             ),
             (independent.IndependentError,),
         ),
+        "recursive-wrong-family-view-kind": _rejected(
+            lambda: model.validate_view(
+                "duplex-sponge",
+                "CanonicalChallengeTransitionView",
+                schemas,
+                sample_value,
+                profiles,
+            ),
+            (model.SchemaError,),
+        ),
+        "iterative-wrong-family-view-kind": _rejected(
+            lambda: independent.validate_view(
+                "duplex-sponge",
+                "CanonicalChallengeTransitionView",
+                cold_schemas,
+                sample_value,
+                profiles,
+            ),
+            (independent.IndependentError,),
+        ),
+        "recursive-result-ref-bytes": _rejected(
+            lambda: model.validate_view(
+                "canonical-framed",
+                "CanonicalFSConstructionView",
+                schemas,
+                result_ref_bytes,
+                profiles,
+            ),
+            (model.SchemaError,),
+        ),
+        "iterative-result-ref-bytes": _rejected(
+            lambda: independent.validate_view(
+                "canonical-framed",
+                "CanonicalFSConstructionView",
+                cold_schemas,
+                result_ref_bytes,
+                profiles,
+            ),
+            (independent.IndependentError,),
+        ),
     }
 
 
@@ -274,38 +319,50 @@ def _findings(audit: dict[str, Any]) -> list[Finding]:
         Finding(
             "normalized-finite-view-grammar",
             "Affirmative",
-            "F0V3-A-FS-VIEW-GRAMMAR-BOUNDED",
-            "eight candidate bodies compile in the finite Atom/Record/Variant/Sequence universe",
+            "F0V3B-A-EIGHT-PROPOSED-VIEW-SCHEMAS",
+            "eight proposed owner bodies compile in the finite Atom/Record/Variant/Sequence universe",
+        ),
+        Finding(
+            "proposal-owner-text-and-diffs",
+            "Affirmative",
+            "F0V3B-A-OWNER-TEXT-DIFFS",
+            "both proposal packets reconstruct the schema source and their exact current-page diffs",
         ),
         Finding(
             "recursive-iterative-schema-agreement",
             "Affirmative",
-            "F0V3-A-DUAL-SCHEMA-COMPILERS",
+            "F0V3B-A-DUAL-SCHEMA-COMPILERS",
             "recursive and iterative topological compilers produce equal expanded schemas",
         ),
         Finding(
             "k2-typed-cold-candidate-values",
             "Affirmative",
-            "F0V3-A-K2-TYPED-COLD",
-            "typed and cold paths agree on four candidate values for two checked K2 carriers",
+            "F0V3B-A-K2-TYPED-COLD-BYTES",
+            "typed and cold paths byte-agree on all four inhabitable values for both checked K2 carriers",
         ),
         Finding(
             "duplex-typed-cold-candidate-values",
             "Affirmative",
-            "F0V3-A-DUPLEX-TYPED-COLD",
-            "typed and cold paths agree on three construction-owned duplex candidate values",
+            "F0V3B-A-DUPLEX-TYPED-COLD-BYTES",
+            "typed and cold paths byte-agree on all three inhabitable construction-owned duplex values",
         ),
         Finding(
             "checked-duplex-carrier-boundary",
             "Affirmative",
-            "F0V3-A-DUPLEX-CARRIER-BOUNDARY",
+            "F0V3B-A-DUPLEX-CARRIER-BOUNDARY",
             "the duplex witness has no checked-result issuer, so no result value is claimed",
         ),
         Finding(
             "schema-law-owner-mutation-kills",
             "Affirmative",
-            "F0V3-A-MUTATION-KILLS",
-            "both paths reject schema ordinals, law atoms, body compilers, and owner substitutions",
+            "F0V3B-A-MUTATION-KILLS",
+            "both paths reject schema, law, compiler, owner, wrong-family, and byte result_ref substitutions",
+        ),
+        Finding(
+            "fs-family-rotation-cone",
+            "Affirmative",
+            "F0V3B-A-FS-ROTATION-CONE",
+            "both publication compilers reproduce the same total and incremental FS profile rotation",
         ),
     ]
     obligation_findings = {
@@ -382,56 +439,159 @@ def _findings(audit: dict[str, Any]) -> list[Finding]:
 
 def run_audit() -> dict[str, Any]:
     audit, statuses, node_classes = _field_inventory()
-    source = model.load_source()
-    _profile_inventory(source)
+    template = model.load_source()
+    _profile_inventory(template)
+    proposal_packets: dict[str, Any] = {}
+    for family, spec in proposal.FAMILIES.items():
+        proposal.verify_page_diff(family)
+        packet = proposal.read_packet(family)
+        overlay = proposal.read_overlay(family)
+        proposal_packets[family] = {
+            "proposal_sha256": packet["sha256"],
+            "page_diff_sha256": hashlib.sha256(
+                packet["page_diff"].encode("utf-8")
+            ).hexdigest(),
+            "manifest_overlay_sha256": model.digest(overlay),
+            "views": list(spec["views"]),
+        }
+    source = proposal.combined_schema_source(template)
+    if source != template:
+        raise AuditFailure("the two proposed owner bodies do not reconstruct the source")
     schemas, owners, recursive_metrics = model.compile_source(source)
-    cold_source = independent.load_source()
+    cold_source = copy.deepcopy(source)
     cold_schemas, cold_owners, iterative_metrics = independent.compile_source(cold_source)
-    if schemas != cold_schemas or owners != cold_owners:
+    if len(schemas) != 8 or schemas != cold_schemas or owners != cold_owners:
         raise AuditFailure("recursive and iterative candidate compilers disagree")
 
     projections: dict[str, dict[str, dict[str, Any]]] = {}
     first_transition: dict[str, Any] | None = None
+    first_result: dict[str, Any] | None = None
     for name, raw, typed_values in typed_projection.k2_cases():
         cold_values = cold_projection.k2_values(
             json.loads(json.dumps(raw, sort_keys=True, separators=(",", ":")))
         )
-        if typed_values != cold_values:
-            raise AuditFailure(f"typed and cold K2 {name} projections differ")
+        if tuple(typed_values) != tuple(cold_values):
+            raise AuditFailure(f"typed and cold K2 {name} view catalogs differ")
         projections["k2-" + name] = {}
-        for view, value in typed_values.items():
-            model.validate(schemas[view], value, source["owner_profiles"])
-            independent.validate(cold_schemas[view], value, source["owner_profiles"])
+        for view, typed_value in typed_values.items():
+            cold_value = cold_values[view]
+            model.validate_view(
+                "canonical-framed",
+                view,
+                schemas,
+                typed_value,
+                source["owner_profiles"],
+            )
+            independent.validate_view(
+                "canonical-framed",
+                view,
+                cold_schemas,
+                cold_value,
+                source["owner_profiles"],
+            )
+            typed_bytes = model.wire(typed_value)
+            cold_bytes = independent.wire(cold_value)
+            if typed_bytes != cold_bytes:
+                raise AuditFailure(f"typed and cold K2 {name}/{view} bytes differ")
             projections["k2-" + name][view] = {
-                "body_sha256": model.digest(value),
-                "leaf_count": model.value_leaf_count(schemas[view], value),
+                "body_sha256": hashlib.sha256(typed_bytes).hexdigest(),
+                "body_bytes": len(typed_bytes),
+                "typed_cold_byte_equal": True,
+                "leaf_count": model.value_leaf_count(schemas[view], typed_value),
             }
         if first_transition is None:
             first_transition = typed_values["CanonicalChallengeTransitionView"]
+            first_result = typed_values["CanonicalFSConstructionView"]
 
     duplex_raw, duplex_typed = typed_projection.duplex_case()
     duplex_cold = cold_projection.duplex_values(
         json.loads(json.dumps(duplex_raw, sort_keys=True, separators=(",", ":")))
     )
-    if duplex_typed != duplex_cold:
-        raise AuditFailure("typed and cold duplex projections differ")
+    if tuple(duplex_typed) != tuple(duplex_cold):
+        raise AuditFailure("typed and cold duplex view catalogs differ")
     if "CheckedDuplexFSConstruction" in _read(DUPLEX_MODEL):
         raise AuditFailure("duplex witness now appears to expose a checked-result carrier")
     projections["duplex-finite"] = {}
-    for view, value in duplex_typed.items():
-        model.validate(schemas[view], value, source["owner_profiles"])
-        independent.validate(cold_schemas[view], value, source["owner_profiles"])
+    for view, typed_value in duplex_typed.items():
+        cold_value = duplex_cold[view]
+        model.validate_view(
+            "duplex-sponge",
+            view,
+            schemas,
+            typed_value,
+            source["owner_profiles"],
+        )
+        independent.validate_view(
+            "duplex-sponge",
+            view,
+            cold_schemas,
+            cold_value,
+            source["owner_profiles"],
+        )
+        typed_bytes = model.wire(typed_value)
+        cold_bytes = independent.wire(cold_value)
+        if typed_bytes != cold_bytes:
+            raise AuditFailure(f"typed and cold duplex {view} bytes differ")
         projections["duplex-finite"][view] = {
-            "body_sha256": model.digest(value),
-            "leaf_count": model.value_leaf_count(schemas[view], value),
+            "body_sha256": hashlib.sha256(typed_bytes).hexdigest(),
+            "body_bytes": len(typed_bytes),
+            "typed_cold_byte_equal": True,
+            "leaf_count": model.value_leaf_count(schemas[view], typed_value),
         }
-    if first_transition is None:  # pragma: no cover - fixed K2 fixture set
-        raise AuditFailure("no canonical transition sample was derived")
+    if first_transition is None or first_result is None:  # pragma: no cover
+        raise AuditFailure("no canonical mutation samples were derived")
     mutation_kills = _mutations(
-        source, schemas, cold_schemas, first_transition
+        source, schemas, cold_schemas, first_transition, first_result
     )
     if not all(mutation_kills.values()):
         raise AuditFailure("one schema, law, compiler, or owner mutation survived")
+
+    identity_before = _sha256(PUBLISHED_IDENTITIES)
+    cone = migration.measure()
+    identity_after = _sha256(PUBLISHED_IDENTITIES)
+    if identity_before != identity_after or cone["published_identity_file_written"]:
+        raise AuditFailure("rotation measurement wrote the published identity table")
+    if not all(
+        cone[key]
+        for key in (
+            "baseline_compiler_agreement",
+            "common_compiler_agreement",
+            "candidate_compiler_agreement",
+        )
+    ):
+        raise AuditFailure("one publication compiler pair disagreed")
+    total_rotation = cone["total_rotation"]
+    incremental_rotation = cone["incremental_fs_rotation"]
+    if len(total_rotation) != 16 or len(incremental_rotation) != 11:
+        raise AuditFailure("the combined or incremental FS rotation cone drifted")
+    rotation = {
+        "total_profiles": total_rotation,
+        "incremental_fs_profiles": incremental_rotation,
+        "candidate_profile_identities": {
+            key: cone["candidate_profiles"][key] for key in total_rotation
+        },
+        "compiler_agreement": {
+            "baseline": cone["baseline_compiler_agreement"],
+            "common_candidate": cone["common_compiler_agreement"],
+            "fs_overlay_candidate": cone["candidate_compiler_agreement"],
+        },
+        "published_identity_sha256_before": identity_before,
+        "published_identity_sha256_after": identity_after,
+        "exact_change_summary": {
+            kind: [
+                {
+                    key: row[key]
+                    for key in (
+                        ("key", "before_revision", "after_revision", "before_sha256", "after_sha256")
+                        if kind == "manifests"
+                        else ("path", "before_bytes", "after_bytes", "before_sha256", "after_sha256")
+                    )
+                }
+                for row in cone["exact_changes"][kind]
+            ]
+            for kind in ("manifests", "pages")
+        },
+    }
 
     schema_counts = {
         view: {
@@ -451,6 +611,8 @@ def run_audit() -> dict[str, Any]:
         DUPLEX_CASE,
         AUDIT,
         SCHEMA,
+        *(spec["proposal"] for spec in proposal.FAMILIES.values()),
+        *(spec["overlay"] for spec in proposal.FAMILIES.values()),
     )
     evidence_control = {
         "source_sha256": {
@@ -460,18 +622,22 @@ def run_audit() -> dict[str, Any]:
         "field_status_counts": statuses,
         "field_node_counts": node_classes,
         "owner_obligations": audit["obligation_order"],
+        "proposal_packets": proposal_packets,
         "candidate_schema_sha256": model.digest(schemas),
+        "cold_candidate_schema_sha256": independent.digest(cold_schemas),
+        "compiled_schema_count": len(schemas),
         "candidate_schema_counts": schema_counts,
         "recursive_metrics": recursive_metrics,
         "iterative_metrics": iterative_metrics,
         "candidate_values": projections,
         "mutation_kills": mutation_kills,
         "duplex_checked_result_witnessed": False,
+        "rotation_cone": rotation,
     }
     findings = _findings(audit)
     aggregate = {
-        "outcome": "CannotAnswer",
-        "code": "F0V3-C-FS-VIEW-DETERMINACY",
+        "outcome": "Affirmative",
+        "code": "F0V3B-A-FS-VIEW-BODIES-AND-CONE",
     }
     projection = {
         "aggregate": aggregate,
