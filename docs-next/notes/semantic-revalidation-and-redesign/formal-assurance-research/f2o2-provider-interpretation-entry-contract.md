@@ -17,8 +17,12 @@
 > [`f2o2-provider-carrier-decision-2026-09-03.md`](f2o2-provider-carrier-decision-2026-09-03.md):
 > the declared carrier is the provider's exact carrier, the map is total with
 > an explicit `Unmodelled` marker, and the terminal clause is agreement with
-> the image of the source lane on every run. A second round runs under the
-> restated clause once the Analysis owner text carries the marker.
+> the image of the source lane on every run.
+> **Second round:** run 2026-09-03 against the Analysis owner text that
+> carries the marker; aggregate `Affirmative/F2O2-A-FINITE-CORRESPONDENCE`,
+> all five clauses on the complete finite domain, the terminal clause read
+> through the mechanized first-active definition. The provider-map premise
+> forms once the owner publishes the declaration of the packet's Section 4a.
 
 ## 1. The question
 

@@ -98,7 +98,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
-  -> F2-O2  provider interpretation, first attempt      [complete, CannotAnswer]
+  -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -605,7 +605,12 @@ provider, extraction tool, or durable schema.
   affirmative; the terminal clause is `CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4`
   because the contract asked for an image of every reachable lane and a
   Boolean has none for `OperationalNoncompletion` except one it already
-  uses. The package awaits a second round under the restated clause.
+  uses. A second round under the restated clause, run against the Analysis
+  owner text that adopts the packet, is affirmative on all five clauses
+  (`Affirmative/F2O2-A-FINITE-CORRESPONDENCE`), consumes the mechanized
+  first-active reading, and re-derives the certificate without sibling pins;
+  it is carried on the Analysis branch with the text it pins, and the
+  premise's formation waits on the declaration's publication.
 - [`f2o2-provider-carrier-decision-2026-09-03.md`](f2o2-provider-carrier-decision-2026-09-03.md)
   decides what the attempt exposed: VCVio's carrier is a bare Boolean, the
   owner page forbids relabeling a lane, and the Analysis premise cannot say
