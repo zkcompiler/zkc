@@ -753,13 +753,16 @@ provider, extraction tool, or durable schema.
   profile, and the family premises in the transport profile; both compilers
   agree, the six Analysis profiles rotate, and publication stays gated.
 - [`f0v2d1-analysis-premise-text-review.md`](f0v2d1-analysis-premise-text-review.md)
-  is the independent review of the Analysis named-premise text at its first
-  head: negative on six of seven questions (unparameterized law references,
+  is the independent review of the Analysis named-premise text: round one,
+  negative on six of seven questions (unparameterized law references,
   undefined law families, prose arguments in hypothesis bindings, a Plan
   identity the subject tuple could not derive, displays without the new
-  fields, catalog order and revisions), with exact proposed replacements; the
-  grammar-level repairs are applied on the page and the display completion
-  and second round follow.
+  fields, catalog order and revisions); round two on the repaired text, zero
+  negatives, three questions affirmative and four `CannotAnswer` (free
+  parameters in the law signatures, seven node displays without their premise
+  set, prose Schnorr bindings, refreeze inputs), each with exact locations
+  and replacements, plus the migration plan for the closure package; the
+  round-two repairs are on the pages and a third round follows.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
