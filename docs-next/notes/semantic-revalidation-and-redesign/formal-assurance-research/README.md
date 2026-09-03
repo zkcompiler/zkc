@@ -602,10 +602,17 @@ provider, extraction tool, or durable schema.
   independent checker evaluates the five clauses on the complete finite
   domain of 81 runs. Schedule, values, checks and guards, and traces are
   affirmative; the terminal clause is `CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4`
-  because a Boolean carrier gives only two of the three reachable outcome
-  lanes an image of their own. The proposed delta asks the Analysis owner to
-  declare VCVio's outer execution carrier rather than its completed payload;
-  the entry contract's carrier sentence was repaired on the same finding.
+  because the contract asked for an image of every reachable lane and a
+  Boolean has none for `OperationalNoncompletion` except one it already
+  uses. The package awaits a second round under the restated clause.
+- [`f2o2-provider-carrier-decision-2026-09-03.md`](f2o2-provider-carrier-decision-2026-09-03.md)
+  decides what the attempt exposed: VCVio's carrier is a bare Boolean, the
+  owner page forbids relabeling a lane, and the Analysis premise cannot say
+  that a provider lacks a lane. It restates the contract's terminal clause as
+  agreement with the image of the source lane, proposes an explicit
+  `Unmodelled` lane image and a completion premise kind for the Analysis
+  owner text, and drafts the VCVio provider declaration; three items await
+  the owner's decision.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
