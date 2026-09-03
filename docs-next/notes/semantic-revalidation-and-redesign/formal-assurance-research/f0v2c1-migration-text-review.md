@@ -1,8 +1,8 @@
 # Migration Text Freeze Review
 
-> **State:** `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED` after round six;
-> all nine questions close, the reference atom's profile closure classifying
-> every one of the 386 reference leaves under exactly one atomic arm
+> **State:** `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED` after round seven;
+> all ten questions close, the tenth resolving every recognized declaration
+> kind to exactly one body-owning page with its malformed-shape admission
 > **Authority:** None. This verification lane changes no owner page, source
 > profile manifest, or published identity.
 > **Executable evidence:**
