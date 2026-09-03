@@ -78,6 +78,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
   -> F2-O3  provider interpretation in ArkLib            [complete, Affirmative; premise unpublished]
   -> F0-V3C finite canonical-framed subject and executor [contract; lane running]
+  -> F2-O4  Fiat--Shamir provider interpretation         [contract; after F0-V3C]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -643,6 +644,12 @@ provider, extraction tool, or durable schema.
   and 9 over the whole finite domain with the six-lane partition and the
   receipts, the execution view reproduced, and the challenge derivation
   function exported as a table for the provider round that follows.
+- [`f2o4-fs-provider-interpretation-entry-contract.md`](f2o4-fs-provider-interpretation-entry-contract.md)
+  fixes the first Fiat--Shamir provider interpretation: ArkLib's transform of
+  the generated reduction with its abstract challenge oracle instantiated by
+  the migrated construction's derivation table, so that the claim is the
+  equality of oracle points, verdicts, and traces rather than of hash
+  outputs; it waits on the executor contract's table.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
