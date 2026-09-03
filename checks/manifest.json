@@ -422,6 +422,28 @@
       }
     },
     {
+      "id": "research.expressibility-axes",
+      "title": "Structural protocol expressibility axes",
+      "subject": "A closed structural-feature matrix that routes each value to one current constructor or profile, listed Core reopening condition, or explicit boundary without using protocol-family names as derivation rules.",
+      "claim": "All 63 frozen case vectors are total over 20 closed axes, derive their frozen fits, bends, or breaks verdict and exact obstruction set, and reproduce eight holdout-adjudication records and 22 split peer-review records with no disagreement.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "mutation", "static-analysis"],
+      "source_paths": ["evaluation/expressibility-axes/run.py", "evaluation/expressibility-axes/axes.json", "evaluation/expressibility-axes/cases.json", "evaluation/expressibility-axes/README.md", "evaluation/expressibility-axes/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This closed authored matrix is not a universal protocol taxonomy, machine-checked source correspondence, Core or profile implementation result, compiler-support claim, theorem, cryptographic property, or deployment evidence."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/expressibility-axes/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.executable-foundations",
       "title": "Executable foundations",
       "subject": "The constitutional value, identity, term, and outcome research surface.",
