@@ -102,7 +102,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F1-R1C  exact owner views/read closure              [complete, Affirmative]
   -> Analysis premise owner text                        [authored; publication gated]
   -> F0-V2D1 review of the Analysis premise text        [round three: owner text closed; two package negatives]
-  -> F0-V2D2 Analysis package migration                 [complete, CannotAnswer; checks green]
+  -> F0-V2D2 Analysis package migration                 [round two, Affirmative; provider declaration pending]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -776,9 +776,15 @@ provider, extraction tool, or durable schema.
   their own terms (the closure package at 213 of 213), while the exact
   question stays `CannotAnswer/F0V2D2-C-OWNER-IDENTITIES-UNDERDETERMINED`
   because two required identities were encodable only as documented
-  candidates: the fixed-extractor question's premise scope, which the owner
-  text has since repaired, and the Fresh premise's protocol-declaration
-  coordinate, which the closure fixture does not publish.
+  candidates: the fixed-extractor question's premise scope and the Fresh
+  premise's protocol-declaration coordinate, both since repaired in the owner
+  text; round two, on the repaired text, refreshes the imported view snapshot
+  so the challenge entries carry `fresh_law`, encodes the owner's hypothesis
+  declarations and the extractor pair, adds the two negative controls, and
+  reproduces every owner-determined premise-bearing identity
+  (`Affirmative/F0V2D2-A-OWNER-DETERMINED-PREMISE-IDENTITIES`); the closure
+  package passes 215 of 215 and the only remaining `CannotAnswer` is the
+  VCVio provider declaration the profile does not yet publish.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
