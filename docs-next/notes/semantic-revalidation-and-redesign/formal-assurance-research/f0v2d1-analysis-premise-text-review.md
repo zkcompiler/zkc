@@ -1068,3 +1068,272 @@ read-only primary-checkout copies named by the workflow were used. The private
 register was not appended because it is outside this clone and read-only to
 this lane. No lifecycle count pin moved because this round updates an existing
 package rather than adding one.
+
+## Round four
+
+### Exact question and source pin
+
+This round asks the package's same one exact question against the source at
+`9cba4404`: do the reviewed Analysis owner pages close all nine named-premise
+questions, including the profile-specific hypothesis argument schemas and the
+provider lane/completion law, and do the migrated evaluation packages now
+carry only owner-determined premise identities?
+
+The review inspected the four commits after `35f39345`, including the closure
+change at `0c456300` and its documentation registration. It freezes hashes for
+the Analysis owner pages and manifests, the PIR and Relations inputs used by
+the finite vectors, the Foundation identity former, the intake probe, the
+migrated model and direct consumers, the provider decision packet, and the
+provider package's frozen finding.
+
+The aggregate is
+`CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`. There are no
+negative findings. Eight of the nine review questions are affirmative; the
+ninth is underdetermined only by a concrete owner artifact that does not yet
+exist.
+
+| Review question | Outcome | Stable finding |
+|---|---|---|
+| Name closure | Affirmative | F0V2D1-A-NAME-CLOSURE |
+| Constructor consistency | Affirmative | F0V2D1-A-CONSTRUCTOR-CONSISTENCY |
+| Intake soundness | Affirmative | F0V2D1-A-INTAKE-SOUNDNESS |
+| Decision fidelity | Affirmative | F0V2D1-A-DECISION-FIDELITY |
+| Schnorr coordinate and binding formation | Affirmative | F0V2D1-A-SCHNORR-BINDINGS |
+| Profile and manifest closure | Affirmative | F0V2D1-A-PROFILE-MANIFESTS |
+| Existing-package refreeze | Affirmative | F0V2D1-A-MIGRATED-IDENTITY-INPUTS |
+| Hypothesis argument-schema closure | Affirmative | F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS |
+| Provider lane and completion consistency | CannotAnswer | F0V2D1-C-VCVIO-PROVIDER-DECLARATION |
+
+The three supporting findings remain affirmative:
+`F0V2D1-A-PUBLICATION-COMPILERS`, `F0V2D1-A-ROTATION-CONE`, and
+`F0V2D1-A-PROBE-COVERAGE`.
+
+### Decision on the two prior negatives
+
+`F0V2D1-A-MIGRATED-IDENTITY-INPUTS` replaces the prior identity-input
+negative. The imported `PublicCoinChallengeProjection` now carries
+`fresh_law_coordinate`, `fresh_law`, and the authenticated challenge entry.
+The migrated helper at
+`evaluation/k3-analysis-closure/reference_model.py:16013` forms
+`PIRPublicCoinLawCoordinate(projection.fresh_law)` and never converts the
+challenge occurrence coordinate into a declaration reference. The
+construction binding helper at the same file's line 16267 obtains the admitted
+challenge rules, uses `ExactTotal` exactly when every `maximum_draws` value is
+one, and otherwise uses the maximum per-rule value. The old aggregate
+`max_attempts` branch is absent.
+
+The prior completion-law negative is also closed. The property declaration
+catalog at `evaluation/k3-analysis-closure/reference_model.py:869` contains
+the exact `operational-completion-hypothesis-v0` declaration with the owner
+argument schema. The test at
+`evaluation/k3-analysis-closure/tests/test_reference_model.py:1023` resolves
+that declaration and separately verifies that `not-an-owner-declaration` is
+refused before premise formation. No arbitrary completion symbol remains.
+
+### Independent goal reconstruction
+
+The review's encoder is separate from the migrated Analysis body encoders and
+identity former. It encodes premise kind, coordinate, law term, bound value,
+source, evidence depth, scope, requirement, binding, question, and goal with
+the Foundation canonical identity primitive. The migrated constructors are
+used only to expose lazy comparison bodies. Before hashing, the checker also
+tests the exact owner-prescribed Fresh declaration, fixed-extractor scope,
+family coordinate, construction rule source, and completion declaration.
+
+For the relation-bound Fresh goal, the owner-derived vector is:
+
+- property profile
+  `255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259`;
+- question
+  `ccc93a33b3995ff86c4e5fdc2420cb9ce308b2871186b10634c1ce088030e176`;
+- goal
+  `e813415c366ec70eb24e98c1ece3de6303211b481f692abb1cc3b0fe08b67f6d`;
+- commit premise
+  `183762bd56b13dec770c93ebbb236a5880b503260139a58871f44e85e030d4a8`;
+- respond premise
+  `7ac97e0df5a47a47ae167e05e0dbe26c0070f3e63cde9e30e3a51c97e2c7c176`;
+- witness premise
+  `006444791732448fd55646bbe70d5e9b59532a1814d3ef2153456944b882b8d0`;
+- relation premise
+  `00cf7d5a0728e5d7620555dd924ba268131aed93b9598f9e0c228db4044cbb12`;
+- Fresh premise
+  `666a06156e8291f46ada3f997c5accacbfc8fedf2786ad9a000569a819cb0338`;
+  and
+- prover-state premise
+  `d43c88ab4171fbd90de76f198c48b4dfcdc421e6ce36e6a55933566ba0e6ad45`.
+
+For the fixed-extractor goal, the separately scoped owner-derived vector is:
+
+- property profile
+  `255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259`;
+- question
+  `c0ea2a71dcb45c532fe9e529a0284df962826be0a8db7af80147d7c7e5b445a3`;
+- goal
+  `925d5f664c0726675296928201c1b0bb086a37a8a11eddfdaa1d0f3eff69af3e`;
+- witness premise
+  `1eadaca819c8d95926f577d563b7abc0af8a081a574492d39b9f55ba69a4455c`;
+  and
+- relation premise
+  `e64b395b325596a0055e71fc67df89b0fb04670a551e67b4e34ba7522be84541`.
+
+These two premises use exactly the consuming question's five-subject scope:
+the Fresh protocol, relation definition, relation-to-protocol binding,
+challenge domain, and fixed extractor algorithm. They are not the shorter
+relation-question premise identities.
+
+For the selected family goal, the owner-derived vector is:
+
+- transport profile
+  `e7262be0f0d040b5f9bf69165c5d6458f88dbf63723941b1aa4e2e6a81d4f2d7`;
+- question
+  `c7c1e70be1b805cbfde1a028bdebb57e1f77877f1aabdfee5b11521a08b5d169`;
+- goal
+  `cedc9143445b45c483884ddc1d42b6fdd7e3221845a59beef91d652f549aebf0`;
+- sampler premise
+  `813aa76ca03821aeca72208621b0799abee8bf9e82764ff4350c8f13e7ae14d3`;
+  and
+- oracle-process premise
+  `4c229b9c2c9965ff1b8ec87f858ed575eaff08e46e8f76ae6d999cee9c7ba816`.
+
+Every reconstructed identity equals the corresponding frozen package vector.
+No proxy or placeholder remains in these three vectors.
+
+### CannotAnswer audit
+
+The review reports exactly one `CannotAnswer`,
+`F0V2D1-C-VCVIO-PROVIDER-DECLARATION`. It names an artifact that genuinely
+does not exist in the owner profile. The generic provider carrier and
+operational-completion schemas are present in
+`docs-next/analysis/cryptographic-properties.md` Section 3.2, beginning at
+line 2193. The concrete names `VCVioProviderDeclaration` and
+`VCVioBooleanCarrier` are absent from that page, and the manifest contains
+neither `vcvio-provider-declaration-v0` nor
+`vcvio-boolean-carrier-v0`. Section 4a of the provider/carrier decision packet,
+lines 100--139, is a proposal for those exact declarations and manifest rows,
+not an owner publication. The provider package independently freezes its
+provider-map premise as `CannotAnswer` for the same missing publication.
+
+No other package `CannotAnswer` is imported into this review. In particular,
+Fresh declaration selection, construction sampler form, fixed-extractor exact
+scope, family sampler/oracle arguments, operational completion, and all intake
+dispositions are already determined by owner text and are classified
+affirmatively here.
+
+### Proposed delta
+
+- **Owner page and section:**
+  `docs-next/analysis/cryptographic-properties.md`, Section 3.2, plus the
+  property profile manifest's semantic-law definitions and
+  `property-core-v0` dependency list.
+- **Exact change:** publish the packet Section 4a definitions
+  `VCVioProviderDeclaration`, `VCVioBooleanCarrier`, and
+  `VCVioSchnorrOutcomeMapPremise`. Add manifest semantic-law definitions named
+  `vcvio-provider-declaration-v0` and `vcvio-boolean-carrier-v0`, both at
+  revision zero; make `property-core-v0` depend on both and advance the profile
+  revision. The provider models only `Accepted` and `Rejected`; the other
+  three Fresh outcome lanes remain `Unmodelled`.
+- **Identity effect:** the property profile rotates, as do every provider-bound
+  premise, intake display, qualified judgment, and package expectation that
+  closes over it. The admitted PIR protocol and its six views do not rotate
+  solely because of this publication.
+- **Evidence with gate IDs:** `research.analysis-premise-text-review` freezes
+  the owner absence and fail-closed result;
+  `research.provider-interpretation` freezes the proposed provider's finite
+  outcome correspondence and the same publication absence.
+- **Reversal condition:** withdraw this proposal if the property owner rejects
+  this provider, selects a different carrier or modelled-lane set, or publishes
+  another exact provider declaration that supersedes the packet.
+- **Non-claims:** publication would make provider-bound premise formation
+  well-typed; it would not establish that premise, prove provider correctness,
+  prove theorem truth or applicability, validate a backend, or establish
+  cryptographic security.
+
+The exact remaining refreeze inputs are:
+
+1. the owner-page definitions `VCVioProviderDeclaration`,
+   `VCVioBooleanCarrier`, and `VCVioSchnorrOutcomeMapPremise` in the exact shape
+   stated by the provider/carrier decision packet's Section 4a;
+2. the manifest definitions `vcvio-provider-declaration-v0` and
+   `vcvio-boolean-carrier-v0`, both at revision zero, both reachable from
+   `property-core-v0`, plus the advanced property profile revision; and
+3. the resulting property-profile identity and every dependent provider
+   premise, intake display, qualified judgment, and frozen package vector.
+
+There are no remaining refreeze inputs for the relation-bound Fresh,
+fixed-extractor, family sampler/oracle, construction sampler, or operational
+completion identities reviewed in this round. This verification lane did not
+edit an owner page, profile manifest, migrated package, or provider package.
+
+## Handoff
+
+Files changed:
+
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/run.py` now freezes
+  current source hashes, forms the relation-bound Fresh, fixed-extractor, and
+  family goal vectors through both an owner-field encoder and a separate
+  package-body encoder, compares both paths with the package fixtures, closes
+  the two prior negatives, and admits only the genuine provider-publication
+  absence.
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/expected-findings.json`
+  freezes twelve findings, the source hashes, and the `CannotAnswer` aggregate.
+- `evaluation/formal-source-analysis-premise-review-f0v2d1/README.md` states the
+  exact question, eight affirmative questions, one absent owner artifact,
+  exact remaining refreeze inputs, and pass/non-claim boundary.
+- `checks/manifest.json` and `evaluation/README.md` describe the fourth-round
+  result for the existing package.
+- This note adds `Round four`, the proposed owner delta, and this handoff.
+
+Commands run, with observed exit status and wall time:
+
+- The pre-change package check exited 1 in 13.82 s because the prior relation
+  goal digest was absent after the source rotation. This was the expected stale
+  pin that triggered the refreeze.
+- The standalone owner-field reconstruction probe exited 0 in less than
+  0.01 s and reproduced all three goals and their ten premise identities.
+- `python3 -B evaluation/formal-source-analysis-premise-review-f0v2d1/run.py --check`
+  exited 0 in 16.04 s: 12/12 findings reproduced, with zero negative and one
+  `CannotAnswer`.
+- Python AST parsing of the executable and JSON decoding of the findings,
+  manifest, and lifecycle file exited 0 in less than 0.01 s.
+- `git diff --check` exited 0 in 0.02 s.
+- Alternate-index initialization used a writable temporary object directory
+  with the checkout's objects as alternates. `git read-tree HEAD` exited 0 in
+  0.00 s; `git add -A` with only the temporary index/cache exclusions exited 0
+  in 0.48 s. The index, object directory, and clone-local uv cache were removed
+  after validation.
+- `python3 -B checks/run.py validate` under that alternate index exited 0 in
+  0.04 s: 77 checks and 6 tiers validated.
+- `UV_NO_SYNC=1 UV_OFFLINE=1` with a clone-local `UV_CACHE_DIR`, followed by
+  `python3 -B checks/run.py run --tier developer`, exited 0 in 1.84 s: 9/9
+  checks passed.
+- Under the same alternate index and uv environment,
+  `python3 -B checks/run.py run --check research.analysis-premise-text-review`
+  exited 0 in 15.98 s: 1/1 check passed.
+
+Aggregate outcome:
+`CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`. The two prior
+package negatives are closed. Eight review questions are affirmative. The
+only remaining `CannotAnswer` is
+`F0V2D1-C-VCVIO-PROVIDER-DECLARATION`, tied to the concrete provider and
+closed Boolean carrier declarations that the decision packet proposes but the
+property owner has not published. No missing evidence was converted into an
+affirmative.
+
+Non-claims: the review does not edit or publish owner semantics, form or
+establish the provider premise, prove any relation or Plan fact, prove theorem
+truth or applicability, validate a compiler or backend, establish
+cryptographic security, or authorize deployment. Matching finite identities
+and passing checks establish only the frozen source-review result.
+
+Surprises and corrections to the brief: the closure description was accurate;
+the authenticated Fresh declaration, challenge-rule sampler form, exact
+fixed-extractor scope, and operational-completion declaration are all present.
+The requested affirmative aggregate nevertheless cannot issue because the
+ninth question still depends on the unpublished concrete provider artifacts.
+This checkout contains neither `AGENTS.md` nor `.claude/CLAUDE.md`; the lane
+therefore could not read those two requested clone-local files and did not
+leave the clone to substitute primary-checkout copies. The private lane
+register and delta ledger are likewise absent from this clone and were not
+written elsewhere. No lifecycle object or count pin changed because this round
+updates an existing tracked package. The branch remains uncommitted for Main
+to commit with the requested subject.

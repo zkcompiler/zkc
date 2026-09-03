@@ -1,7 +1,8 @@
 # Analysis named-premise owner-text review
 
-This package runs the third verification review over `27871e7..e950263`. Its
-one exact question is:
+This package runs the fourth verification review over the current Analysis
+owner text and the reproduced premise-bearing packages. Its one exact question
+is:
 
 > Do the reviewed Analysis owner pages close all nine named-premise questions,
 > including the profile-specific hypothesis argument schemas and the provider
@@ -13,8 +14,10 @@ Run from the repository root:
     python3 -B evaluation/formal-source-analysis-premise-review-f0v2d1/run.py --check
 
 The frozen aggregate is
-`Negative/F0V2D1-N-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`. Seven review questions
-are affirmative and two are negative:
+`CannotAnswer/F0V2D1-C-ANALYSIS-PREMISE-TEXT-NOT-CLOSED`. Eight review
+questions are affirmative. The ninth remains `CannotAnswer` only because the
+property owner has not published the provider and closed Boolean carrier
+declarations proposed by the provider/carrier decision packet.
 
 | Review question | Outcome | Stable finding |
 |---|---|---|
@@ -24,69 +27,58 @@ are affirmative and two are negative:
 | Decision fidelity | Affirmative | F0V2D1-A-DECISION-FIDELITY |
 | Schnorr coordinate and binding formation | Affirmative | F0V2D1-A-SCHNORR-BINDINGS |
 | Profile and manifest closure | Affirmative | F0V2D1-A-PROFILE-MANIFESTS |
-| Existing-package refreeze | Negative | F0V2D1-N-MIGRATED-IDENTITY-INPUTS |
+| Existing-package refreeze | Affirmative | F0V2D1-A-MIGRATED-IDENTITY-INPUTS |
 | Hypothesis argument-schema closure | Affirmative | F0V2D1-A-HYPOTHESIS-ARGUMENT-SCHEMAS |
-| Provider lane and completion consistency | Negative | F0V2D1-N-MIGRATED-COMPLETION-LAW |
+| Provider lane and completion consistency | CannotAnswer | F0V2D1-C-VCVIO-PROVIDER-DECLARATION |
 
 ## What the check covers
 
-The checker pins the owner pages, profile manifests, intake probe, migrated
-Analysis closure model, and its direct migrated consumers. It verifies:
+The checker freezes the hashes of the owner pages, profile manifests, intake
+probe, migrated Analysis closure model, direct migrated consumers, Foundation
+identity former, provider decision packet, and provider package finding that it
+uses. It verifies:
 
-- every reviewed law family has one closed definition; the direct profile,
-  kind, provider Protocol, goal binding, construction length, and fresh-law
-  leaf binders are explicit;
-- all eleven question, twelve goal, six context, five support, one judgment,
-  twelve premise-body, and thirty-one anonymous node displays carry their
-  required fields;
-- all twelve intake branches remain explicit and fail closed;
-- the property profile's five argument-schema rows close six hypothesis
-  declarations, while the transport profile's two rows close two declarations,
-  with the admitted coordinate first and no free or extra argument;
-- all six Schnorr premise constructors, the extractor question's separately
-  scoped pair, both construction premises, and both family premises are exact;
-- both publication compilers agree on the current and review-base sources and
-  reproduce the six-profile rotation cone; and
-- an encoder implemented in this review, without the migrated model's body
-  encoders or identity former, reproduces the migrated relation-bound goal
-  digest `79dcc80f...ccb4` and family goal digest `9c49308e...b2f2`.
+- every reviewed law family has one closed definition and every constructor,
+  intake branch, profile declaration, and argument schema required by the nine
+  questions remains explicit;
+- the authenticated public-coin projection carries the Fresh declaration and
+  the Fresh premise consumes that declaration rather than an occurrence proxy;
+- construction sampler form is derived from admitted challenge rules and each
+  rule's maximum draw count rather than the legacy aggregate attempt field;
+- the exact operational-completion declaration is published and an unknown
+  declaration reference is refused;
+- an independent encoder, using the owner-prescribed fields but neither the
+  migrated premise-body encoders nor its identity former, reproduces the
+  relation-bound Fresh goal `e813415c...7f6d`, the fixed-extractor goal
+  `925d5f66...af3e`, and the selected family goal `cedc9143...ebf0`, together
+  with every premise identity in those three frozen vectors; and
+- the only remaining `CannotAnswer` is the absent
+  `VCVioProviderDeclaration` and `VCVioBooleanCarrier` owner publication named
+  by Section 4a of the provider/carrier decision packet. The review finds no
+  `CannotAnswer` for an artifact already determined by the owner text.
 
-The independently reproduced family goal is owner-determined. The migrated
-relation-bound goal is not: its Fresh premise uses the challenge occurrence
-coordinate as a proxy, while the owner now requires the authenticated
-`fresh_law` declaration leaf. The imported public-coin projection exposes no
-such field. The construction premise similarly reads one legacy
-`max_attempts` field rather than identity-bearing challenge rules and their
-per-rule `maximum_draws` values.
+The exact remaining refreeze inputs are:
 
-The provider lane vocabulary and `Image | Unmodelled` law agree across the PIR
-partition, Analysis owner pages, intake probe, and migrated model. The tenth
-kind is also present everywhere, but the migrated property declaration catalog
-has no exact operational-completion hypothesis declaration; its test uses an
-arbitrary symbol instead. Provider-bound premises additionally remain
-unformable until the property profile publishes exact provider and carrier
-declarations.
-
-The exact remaining refreeze inputs are therefore:
-
-- the authenticated public-coin-view `fresh_law` declaration leaf for the
-  migrated Schnorr Protocol;
-- identity-bearing construction challenge rules and each rule's
-  `maximum_draws` value;
-- published property-profile provider and closed-carrier declarations; and
-- an exact property-profile operational-completion hypothesis declaration
-  reference.
+- a new owner block in `docs-next/analysis/cryptographic-properties.md`,
+  Section 3.2, defining `VCVioProviderDeclaration`,
+  `VCVioBooleanCarrier`, and the provider outcome-map premise in the exact
+  shape stated by the decision packet's Section 4a;
+- manifest definitions `vcvio-provider-declaration-v0` and
+  `vcvio-boolean-carrier-v0`, both at revision zero, with `property-core-v0`
+  depending on both definitions and the property profile revision advanced;
+  and
+- the resulting property-profile identity and every dependent provider
+  premise, intake display, qualified judgment, and frozen package vector.
 
 ## What a pass establishes
 
 A pass establishes only that the nine review classifications, three supporting
-findings, two independent finite identity reconstructions, and the two concrete
-migration defects are reproduced from the pinned checkout. It does not turn a
-proxy identity into an owner-determined one.
+findings, three independent finite identity reconstructions, and one genuine
+owner-publication absence are reproduced from the pinned checkout.
 
 ## What a pass does not establish
 
 This source and finite-identity review does not edit or publish Analysis
-semantics, form a provider premise, establish any premise, prove relation
-satisfaction or Plan honesty, prove theorem truth or applicability, validate a
-compiler or backend, establish cryptographic security, or authorize deployment.
+semantics, form or establish a provider premise, prove relation satisfaction or
+Plan honesty, prove theorem truth or applicability, validate a compiler or
+backend, establish cryptographic security, or authorize deployment.

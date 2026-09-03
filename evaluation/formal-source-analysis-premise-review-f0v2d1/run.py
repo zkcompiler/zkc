@@ -60,12 +60,15 @@ SOURCE_PINS = (
     "evaluation/analysis-premise-intake-probe/independent.py",
     "evaluation/analysis-premise-intake-probe/fixture.json",
     "evaluation/analysis-premise-intake-probe/expected-findings.json",
+    "evaluation/k1-executable-foundations/reference_model.py",
     "evaluation/k3-analysis-closure/reference_model.py",
     "evaluation/k3-analysis-closure/tests/test_reference_model.py",
     "evaluation/k3-analysis-closure/README.md",
     "evaluation/k2-protocol-fiat-shamir/reference_model.py",
     "evaluation/finite-cover-analysis/tests/test_finite_cover.py",
     "evaluation/k3-integrated-closure/tests/test_reference_model.py",
+    "evaluation/formal-provider-interpretation-f2o2/expected-findings.json",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-carrier-decision-2026-09-03.md",
 )
 
 LAW_FAMILY_NAMES = (
@@ -792,8 +795,359 @@ def _class_fields(tree: ast.Module, selected: Iterable[str]) -> dict[str, list[s
     return result
 
 
-RELATION_GOAL_DIGEST = "79dcc80fff8307a7d2ab79ba523220ce0e17337bef2af0f6ba19fbe6cb17ccb4"
-FAMILY_GOAL_DIGEST = "9c49308e1e89c5da7f01b783dd323428fb71470fe3acfd9a31d021d47ca1b2f2"
+RELATION_GOAL_DIGEST = "e813415c366ec70eb24e98c1ece3de6303211b481f692abb1cc3b0fe08b67f6d"
+FIXED_EXTRACTOR_GOAL_DIGEST = "925d5f664c0726675296928201c1b0bb086a37a8a11eddfdaa1d0f3eff69af3e"
+FAMILY_GOAL_DIGEST = "cedc9143445b45c483884ddc1d42b6fdd7e3221845a59beef91d652f549aebf0"
+
+FROZEN_OWNER_VECTORS = {
+    "relation": {
+        "profile": "255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259",
+        "question": "ccc93a33b3995ff86c4e5fdc2420cb9ce308b2871186b10634c1ce088030e176",
+        "goal": RELATION_GOAL_DIGEST,
+        "premises": {
+            "commit": "183762bd56b13dec770c93ebbb236a5880b503260139a58871f44e85e030d4a8",
+            "respond": "7ac97e0df5a47a47ae167e05e0dbe26c0070f3e63cde9e30e3a51c97e2c7c176",
+            "witness": "006444791732448fd55646bbe70d5e9b59532a1814d3ef2153456944b882b8d0",
+            "relation": "00cf7d5a0728e5d7620555dd924ba268131aed93b9598f9e0c228db4044cbb12",
+            "fresh-coin": "666a06156e8291f46ada3f997c5accacbfc8fedf2786ad9a000569a819cb0338",
+            "prover-state": "d43c88ab4171fbd90de76f198c48b4dfcdc421e6ce36e6a55933566ba0e6ad45",
+        },
+    },
+    "fixed-extractor": {
+        "profile": "255d79b87ae298bcbcd3456b92b6834bf69c8a99b49bf48c3080be3a3b37e259",
+        "question": "c0ea2a71dcb45c532fe9e529a0284df962826be0a8db7af80147d7c7e5b445a3",
+        "goal": FIXED_EXTRACTOR_GOAL_DIGEST,
+        "premises": {
+            "witness": "1eadaca819c8d95926f577d563b7abc0af8a081a574492d39b9f55ba69a4455c",
+            "relation": "e64b395b325596a0055e71fc67df89b0fb04670a551e67b4e34ba7522be84541",
+        },
+    },
+    "family": {
+        "profile": "e7262be0f0d040b5f9bf69165c5d6458f88dbf63723941b1aa4e2e6a81d4f2d7",
+        "question": "c7c1e70be1b805cbfde1a028bdebb57e1f77877f1aabdfee5b11521a08b5d169",
+        "goal": FAMILY_GOAL_DIGEST,
+        "premises": {
+            "sampler": "813aa76ca03821aeca72208621b0799abee8bf9e82764ff4350c8f13e7ae14d3",
+            "oracle-process": "4c229b9c2c9965ff1b8ec87f858ed575eaff08e46e8f76ae6d999cee9c7ba816",
+        },
+    },
+}
+
+
+def _owner_text_goal_reconstructions() -> dict[str, dict[str, Any]]:
+    """Form three goal vectors from owner fields without importing package code."""
+
+    k1 = _load_module(
+        "_analysis_premise_round4_foundation",
+        ROOT / "evaluation/k1-executable-foundations/reference_model.py",
+    )
+
+    def identifier(subject_kind: str, digest: str) -> Any:
+        return k1.TypedContentId(
+            k1.FOUNDATION_PROFILE,
+            k1.IDENTITY_PROFILE_ID,
+            k1.HASH_SUITE_ID,
+            subject_kind,
+            k1.SEMANTIC_REGIME_ID,
+            bytes.fromhex(digest),
+        )
+
+    def id_datum(value: Any) -> Any:
+        return k1.BytesValue(value.internal_reference())
+
+    def profile_id(digest: str) -> Any:
+        return identifier("foundation.semantic-language-profile", digest)
+
+    def local_law(ordinal: int) -> Any:
+        return k1.profile_declaration_ref_datum(
+            k1.ProfileLocalDeclarationRef("analysis.semantic-law", ordinal)
+        )
+
+    def process(ordinal: int) -> Any:
+        return k1.DatumVariant(ordinal, k1.UNIT)
+
+    def coordinate(arm: int, fields: tuple[tuple[int, Any], ...]) -> Any:
+        return k1.DatumVariant(arm, k1.DatumRecord(fields))
+
+    protocol = identifier(
+        "pir.protocol",
+        "9a1e7e5de6f11ed64911d498cfc415d39a51c4f9e807a3fdf2b72c3414e31af9",
+    )
+    relation_binding = identifier(
+        "relations.protocol-binding",
+        "9591054578e663e7a26cfd2e93e918a8fbe1d5950555e21297d976f1c39d147d",
+    )
+    relation_definition = identifier(
+        "relations.definition",
+        "6e059628e334553ae8405f80506da2add6e2de12b6d550f65e9d33e8525137d6",
+    )
+    challenge_domain = identifier(
+        "analysis.challenge-domain",
+        "7641d9ad6d5b2b69451bb60f41a275890cdefb78f45174f9ba320cdd4ef0d5f5",
+    )
+    extractor = identifier(
+        "foundation.portable-algorithm",
+        "cadb2ba807b5d7146faa9b50bd99802ebb6755322e4bc9f6e4a2136d79ee3440",
+    )
+    relation_model = identifier(
+        "relations.semantic-model",
+        "902c01ac78b2864e76205f9479f1abf0eacec44c92d983ae65d322d843e3c6ac",
+    )
+    relation_interface = identifier(
+        "relations.interface",
+        "c547a1a115c712bafd765f9b833060344ded5d533f9b20265b047b0a8082b79f",
+    )
+    witness_binding = identifier(
+        "relations.plan-witness-binding",
+        "1f5e3abaec72044c7b9fcfa09fdc63c049da9d59d3b1af81e036768eb033296e",
+    )
+    prover_plan = identifier(
+        "pir.prover-plan",
+        "1f1d64667d85db047042a2fe3b6ef2fe74355be6af9e0a1cfdecd46d81306a78",
+    )
+    fresh_distribution = identifier(
+        "analysis.distribution-profile",
+        "f1008a47b4aa0d1c3a554f70dfa1c216bb0ded26388379bc43807ddb03157f9d",
+    )
+    family = identifier(
+        "analysis.asymptotic-protocol-family",
+        "f5ea554b92aa0919b768792446528153785e62f7c90260d8aec8eb0c7a0a54b8",
+    )
+    family_distribution = identifier(
+        "analysis.distribution-profile",
+        "b758421d12dbe557f0252ba7e738584c62ed0417920e50d168315e3be4dd05f3",
+    )
+
+    fresh_declaration = k1.DatumRecord(
+        (
+            (0, k1.Symbol("pir.public-coin-law")),
+            (1, k1.Symbol("bounded-independent-fresh-resolution")),
+        )
+    )
+    coordinates = {
+        "fresh-coin": coordinate(0, ((0, fresh_declaration),)),
+        "relation": coordinate(4, ((0, id_datum(relation_model)),)),
+        "witness": coordinate(
+            5,
+            (
+                (0, id_datum(relation_interface)),
+                (1, k1.Nat(0)),
+                (2, id_datum(witness_binding)),
+                (3, k1.Nat(0)),
+            ),
+        ),
+        "prover-state": coordinate(
+            6, ((0, id_datum(prover_plan)), (1, k1.Nat(0)))
+        ),
+        "commit": coordinate(
+            7,
+            ((0, id_datum(prover_plan)), (1, k1.Nat(0)), (2, k1.Nat(0))),
+        ),
+        "respond": coordinate(
+            7,
+            ((0, id_datum(prover_plan)), (1, k1.Nat(2)), (2, k1.Nat(0))),
+        ),
+        "sampler": coordinate(
+            1, ((0, id_datum(family)), (1, process(0)))
+        ),
+        "oracle-process": coordinate(
+            1, ((0, id_datum(family)), (1, process(1)))
+        ),
+    }
+    kind_ordinals = {
+        "fresh-coin": 0,
+        "sampler": 1,
+        "oracle-process": 2,
+        "relation": 5,
+        "witness": 6,
+        "prover-state": 7,
+        "commit": 8,
+        "respond": 9,
+    }
+    property_laws = {
+        "fresh-coin": 6,
+        "relation": 8,
+        "witness": 9,
+        "prover-state": 10,
+        "commit": 11,
+        "respond": 12,
+    }
+    source_ids = {
+        "fresh-coin": protocol,
+        "relation": relation_model,
+        "witness": relation_interface,
+        "prover-state": prover_plan,
+        "commit": prover_plan,
+        "respond": prover_plan,
+    }
+    model_ids = {
+        "relation": relation_model,
+        "witness": relation_interface,
+        "prover-state": prover_plan,
+    }
+    law_extras = {
+        "fresh-coin": (id_datum(fresh_distribution),),
+        "relation": (id_datum(relation_model),),
+        "witness": (id_datum(relation_interface),),
+        "prover-state": (id_datum(prover_plan),),
+        "commit": (),
+        "respond": (),
+    }
+
+    def kind_body(slot: str) -> Any:
+        return k1.DatumVariant(kind_ordinals[slot], k1.UNIT)
+
+    def requirement(slot: str) -> Any:
+        return k1.DatumRecord(
+            (
+                (0, k1.Symbol(slot)),
+                (1, kind_body(slot)),
+                (2, coordinates[slot]),
+            )
+        )
+
+    def schnorr_premise(slot: str, exact_subjects: tuple[Any, ...]) -> Any:
+        law_term = k1.DatumRecord(
+            (
+                (0, local_law(property_laws[slot])),
+                (1, k1.DatumSeq((coordinates[slot], *law_extras[slot]))),
+            )
+        )
+        bound = (
+            k1.DatumVariant(
+                0,
+                k1.DatumRecord(
+                    ((0, id_datum(model_ids[slot])), (1, law_term))
+                ),
+            )
+            if slot in model_ids
+            else k1.DatumVariant(1, law_term)
+        )
+        scope = (
+            k1.DatumVariant(0, k1.UNIT)
+            if slot == "fresh-coin"
+            else k1.DatumVariant(
+                2, k1.DatumSeq(tuple(id_datum(item) for item in exact_subjects))
+            )
+        )
+        evidence = 0 if slot == "fresh-coin" else 2
+        return k1.DatumRecord(
+            (
+                (0, kind_body(slot)),
+                (1, coordinates[slot]),
+                (2, bound),
+                (3, k1.DatumVariant(1, id_datum(source_ids[slot]))),
+                (4, k1.DatumVariant(evidence, k1.UNIT)),
+                (5, scope),
+            )
+        )
+
+    def family_premise(slot: str) -> Any:
+        form = (k1.DatumVariant(0, k1.UNIT),) if slot == "sampler" else ()
+        law_term = k1.DatumRecord(
+            (
+                (0, local_law(0 if slot == "sampler" else 1)),
+                (
+                    1,
+                    k1.DatumSeq(
+                        (coordinates[slot], id_datum(family_distribution), *form)
+                    ),
+                ),
+            )
+        )
+        return k1.DatumRecord(
+            (
+                (0, kind_body(slot)),
+                (1, coordinates[slot]),
+                (2, k1.DatumVariant(1, law_term)),
+                (3, k1.DatumVariant(2, id_datum(family))),
+                (4, k1.DatumVariant(0, k1.UNIT)),
+                (5, k1.DatumVariant(1, id_datum(family_distribution))),
+            )
+        )
+
+    def form_goal(
+        name: str,
+        slots: tuple[str, ...],
+        exact_subjects: tuple[Any, ...] | None,
+    ) -> dict[str, Any]:
+        frozen = FROZEN_OWNER_VECTORS[name]
+        selected_profile = profile_id(frozen["profile"])
+        premise_bodies = {
+            slot: (
+                family_premise(slot)
+                if name == "family"
+                else schnorr_premise(slot, exact_subjects or ())
+            )
+            for slot in slots
+        }
+        premise_ids = {
+            slot: k1.profiled_content_id(
+                "analysis.named-premise",
+                selected_profile,
+                body,
+                semantic_regime=k1.SEMANTIC_REGIME_ID,
+            )
+            for slot, body in premise_bodies.items()
+        }
+        ordered_slots = tuple(
+            sorted(slots, key=lambda slot: k1.encode_datum(requirement(slot)))
+        )
+        question_id = identifier("analysis.question", frozen["question"])
+        goal_body = k1.DatumRecord(
+            (
+                (0, id_datum(question_id)),
+                (
+                    1,
+                    k1.DatumSeq(
+                        tuple(
+                            k1.DatumRecord(
+                                (
+                                    (0, requirement(slot)),
+                                    (1, id_datum(premise_ids[slot])),
+                                )
+                            )
+                            for slot in ordered_slots
+                        )
+                    ),
+                ),
+            )
+        )
+        goal_id = k1.profiled_content_id(
+            "analysis.goal",
+            selected_profile,
+            goal_body,
+            semantic_regime=k1.SEMANTIC_REGIME_ID,
+        )
+        return {
+            "question_digest": question_id.digest.hex(),
+            "goal_digest": goal_id.digest.hex(),
+            "premise_digests": {
+                slot: premise_ids[slot].digest.hex() for slot in ordered_slots
+            },
+            "used_migrated_package_code": False,
+            "frozen_question_identity_is_input": True,
+        }
+
+    relation_scope = (protocol, relation_binding)
+    fixed_scope = (
+        protocol,
+        relation_definition,
+        challenge_domain,
+        relation_binding,
+        extractor,
+    )
+    return {
+        "relation": form_goal(
+            "relation",
+            ("fresh-coin", "relation", "witness", "prover-state", "commit", "respond"),
+            relation_scope,
+        ),
+        "fixed-extractor": form_goal(
+            "fixed-extractor", ("relation", "witness"), fixed_scope
+        ),
+        "family": form_goal("family", ("sampler", "oracle-process"), None),
+    }
 
 
 def _load_migrated_analysis() -> Any:
@@ -1127,10 +1481,17 @@ def _package_impact_review() -> dict[str, Any]:
 
     module = _load_migrated_analysis()
     relation_goal = _registry_identifier(module, "analysis.goal", RELATION_GOAL_DIGEST)
-    # The family goal is lazy in the migrated instrument.  Invoke its public
-    # constructor only to obtain the observed comparison value and populate
-    # the body registry; the reconstruction below uses neither that constructor
-    # nor the migrated body encoders or identity former.
+    # The fixed-extractor and family goals are lazy in the migrated instrument.
+    # Invoke their public constructors only to obtain comparison values and
+    # populate the body registry.  The reconstruction below uses neither those
+    # constructors nor the migrated body encoders or identity former.
+    fixed_extractor_goal = module.fixed_extractor_goal_id(
+        module._SCHNORR_PINNED_SOURCE, module._SCHNORR_PINNED_PROFILE
+    )
+    _require(
+        fixed_extractor_goal.digest.hex() == FIXED_EXTRACTOR_GOAL_DIGEST,
+        "the frozen migrated fixed-extractor goal identity drifted",
+    )
     family_goal = module.family_goal_id(
         module.SELECTED_AFK_FAMILY, "target-adaptive-knowledge-q-lt-N"
     )
@@ -1141,9 +1502,49 @@ def _package_impact_review() -> dict[str, Any]:
     relation_reconstruction = _independent_goal_reconstruction(
         module, relation_goal, module.ANALYSIS_PROPERTY_PROFILE_ID
     )
+    fixed_extractor_reconstruction = _independent_goal_reconstruction(
+        module, fixed_extractor_goal, module.ANALYSIS_PROPERTY_PROFILE_ID
+    )
     family_reconstruction = _independent_goal_reconstruction(
         module, family_goal, module.ANALYSIS_TRANSPORT_PROFILE_ID
     )
+    package_reconstructions = {
+        "relation": relation_reconstruction,
+        "fixed-extractor": fixed_extractor_reconstruction,
+        "family": family_reconstruction,
+    }
+    owner_reconstructions = _owner_text_goal_reconstructions()
+    for name, frozen in FROZEN_OWNER_VECTORS.items():
+        for source, rebuilt in (
+            ("package-body", package_reconstructions[name]),
+            ("owner-text", owner_reconstructions[name]),
+        ):
+            _require(
+                rebuilt["question_digest"] == frozen["question"]
+                and rebuilt["goal_digest"] == frozen["goal"]
+                and rebuilt["premise_digests"] == frozen["premises"],
+                f"the {source} reconstruction of {name} disagrees with the frozen package vector",
+            )
+        package_vectors = [
+            ("analysis.goal", frozen["goal"]),
+            *(("analysis.named-premise", item) for item in frozen["premises"].values()),
+        ]
+        if name != "fixed-extractor":
+            package_vectors.insert(0, ("analysis.question", frozen["question"]))
+        vector_surface = (
+            _read("evaluation/finite-cover-analysis/tests/test_finite_cover.py")
+            if name == "fixed-extractor"
+            else tests_text
+        )
+        for subject_kind, digest in package_vectors:
+            _require(
+                (
+                    digest in vector_surface
+                    if name == "fixed-extractor"
+                    else f"zkcidv0:{subject_kind}:{digest}" in vector_surface
+                ),
+                f"the package test no longer freezes the {name} {subject_kind} vector",
+            )
 
     k2_tree = ast.parse(_read("evaluation/k2-protocol-fiat-shamir/reference_model.py"))
     k2_fields = _class_fields(
@@ -1151,7 +1552,15 @@ def _package_impact_review() -> dict[str, Any]:
     )
     _require(
         k2_fields["PublicCoinChallengeProjection"]
-        == ["challenge_coordinate", "domain_coordinate", "challenge_domain"],
+        == [
+            "challenge_coordinate",
+            "domain_coordinate",
+            "fresh_law_coordinate",
+            "challenge_domain",
+            "domain",
+            "fresh_law",
+            "challenge_entry",
+        ],
         "the imported public-coin projection field set drifted",
     )
     fresh_helper = _definition_block(
@@ -1160,15 +1569,17 @@ def _package_impact_review() -> dict[str, Any]:
         "\n\ndef schnorr_named_premise_requirements",
     )
     _require(
-        "projection.challenge_coordinate" in fresh_helper
-        and "fresh_law" not in fresh_helper,
-        "the frozen Fresh coordinate proxy drifted",
+        "PIRPublicCoinLawCoordinate(projection.fresh_law)" in fresh_helper
+        and "projection.challenge_coordinate" not in fresh_helper,
+        "the Fresh premise does not consume the authenticated fresh-law declaration",
     )
     _require(
         "max_attempts" in k2_fields["TranscriptConstruction"]
-        and "challenge_rules" not in k2_fields["TranscriptConstruction"]
-        and "construction.max_attempts == 1" in model_text,
-        "the frozen construction sampler-form proxy drifted",
+        and "challenge_rules" in k2_fields["TranscriptConstruction"]
+        and "challenge_rules = k2.admitted_challenge_rules" in model_text
+        and "all(rule.maximum_draws == 1 for rule in challenge_rules)" in model_text
+        and "construction.max_attempts == 1" not in model_text,
+        "the construction sampler form is not derived from admitted challenge rules",
     )
 
     property_catalog = _definition_block(
@@ -1177,9 +1588,43 @@ def _package_impact_review() -> dict[str, Any]:
         "\n\nANALYSIS_TRANSPORT_DECLARATION_CATALOGS =",
     )
     _require(
-        "operational-completion-hypothesis-v0" not in property_catalog
-        and 'k1.Symbol("operational-completion-hypothesis")' in tests_text,
-        "the frozen operational-completion declaration gap drifted",
+        "operational-completion-hypothesis-v0" in property_catalog
+        and 'k1.Symbol("not-an-owner-declaration")' in tests_text
+        and "no owner declaration" in tests_text,
+        "the exact completion declaration or unknown-reference refusal drifted",
+    )
+
+    crypto = _read("docs-next/analysis/cryptographic-properties.md")
+    manifest = _read("docs-next/analysis/profiles/cryptographic-property.json")
+    decision_packet = _read(
+        "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-carrier-decision-2026-09-03.md"
+    )
+    provider_findings = _json(
+        "evaluation/formal-provider-interpretation-f2o2/expected-findings.json"
+    )["finding_codes"]
+    _require(
+        "SchnorrFixedExtractorWorksQuestion(S, Ext).exact_subjects" in crypto
+        and "SchnorrExtractorPremiseBindings(S: AnalysisSubjectTuple, Ext: PortableAlgorithmRef)" in crypto,
+        "the fixed-extractor owner scope is not explicit",
+    )
+    _require(
+        "VCVioProviderDeclaration" not in crypto
+        and "VCVioBooleanCarrier" not in crypto
+        and "vcvio-provider-declaration-v0" not in manifest
+        and "vcvio-boolean-carrier-v0" not in manifest,
+        "the allegedly absent provider artifact is already published by the owner",
+    )
+    _require(
+        "## 4a. The declaration, in the shape the profile publishes" in decision_packet
+        and "VCVioProviderDeclaration = ProviderDeclaration {" in decision_packet
+        and "VCVioBooleanCarrier = ClosedProviderCarrier {" in decision_packet
+        and [
+            "analysis-provider-map-premise",
+            "CannotAnswer",
+            "F2O2-C-PROVIDER-MAP-PREMISE-UNPUBLISHED",
+        ]
+        in provider_findings,
+        "the remaining provider CannotAnswer is not tied to the decision packet and provider package",
     )
 
     finite = _read("evaluation/finite-cover-analysis/tests/test_finite_cover.py")
@@ -1195,16 +1640,24 @@ def _package_impact_review() -> dict[str, Any]:
     return {
         "reference_body_classes_missing_fields": missing,
         "affected_reference_constructor_calls": combined,
-        "independent_relation_goal": relation_reconstruction,
-        "independent_family_goal": family_reconstruction,
-        "owner_determined_premise_identities": False,
+        "owner_text_relation_goal": owner_reconstructions["relation"],
+        "owner_text_fixed_extractor_goal": owner_reconstructions["fixed-extractor"],
+        "owner_text_family_goal": owner_reconstructions["family"],
+        "independent_package_body_reconstructions": package_reconstructions,
+        "frozen_owner_vectors": FROZEN_OWNER_VECTORS,
+        "owner_determined_premise_identities": True,
         "owner_determined_family_goal": True,
-        "owner_determined_relation_fresh_goal": False,
+        "owner_determined_relation_fresh_goal": True,
+        "owner_determined_fixed_extractor_goal": True,
+        "remaining_cannot_answer": {
+            "artifact": "VCVio provider declaration and closed Boolean carrier",
+            "owner_page": "docs-next/analysis/cryptographic-properties.md Section 3.2",
+            "proposal": "provider/carrier decision packet Section 4a",
+        },
         "remaining_refreeze_inputs": [
-            "the authenticated PublicCoinView fresh_law declaration leaf for the migrated Schnorr Protocol",
-            "identity-bearing construction challenge_rules and their per-rule maximum_draws values",
             "published property-profile ProviderDeclaration and ClosedProviderCarrier declarations",
-            "an exact property-profile OperationalCompletionHypothesis declaration reference",
+            "the property-profile manifest definitions that publish those declarations",
+            "the resulting property-profile identity and every dependent premise, goal, and judgment identity",
         ],
     }
 
@@ -1251,15 +1704,34 @@ def _lane_and_completion_review(pages: dict[str, str]) -> dict[str, Any]:
         "\n\nANALYSIS_TRANSPORT_DECLARATION_CATALOGS =",
     )
     exact_declaration_present = "operational-completion-hypothesis-v0" in property_catalog
-    arbitrary_test_law = 'k1.Symbol("operational-completion-hypothesis")' in migrated_tests
-    _require(not exact_declaration_present and arbitrary_test_law, "the frozen completion-law mismatch drifted")
+    unknown_declaration_refused = (
+        'k1.Symbol("not-an-owner-declaration")' in migrated_tests
+        and "no owner declaration" in migrated_tests
+    )
+    property_manifest = _read("docs-next/analysis/profiles/cryptographic-property.json")
+    provider_declaration_present = (
+        "VCVioProviderDeclaration" in crypto
+        and "VCVioBooleanCarrier" in crypto
+        and "vcvio-provider-declaration-v0" in property_manifest
+        and "vcvio-boolean-carrier-v0" in property_manifest
+    )
+    _require(
+        exact_declaration_present and unknown_declaration_refused,
+        "the exact completion declaration or unknown-reference refusal drifted",
+    )
+    _require(
+        not provider_declaration_present,
+        "the frozen provider-publication absence drifted",
+    )
     return {
         "lane_names": lane_names,
         "lane_image_law_shared": True,
         "tenth_kind_shared": True,
         "migrated_exact_completion_declaration_present": exact_declaration_present,
-        "migrated_test_uses_arbitrary_completion_law_symbol": arbitrary_test_law,
-        "cross_surface_consistent": False,
+        "migrated_test_refuses_unknown_completion_declaration": unknown_declaration_refused,
+        "owner_determined_surfaces_consistent": True,
+        "provider_declaration_published": provider_declaration_present,
+        "cross_surface_consistent": None,
     }
 
 
@@ -1331,8 +1803,8 @@ def evaluate() -> dict[str, Any]:
         ),
         Finding(
             "existing-package-refreeze",
-            "Negative",
-            "F0V2D1-N-MIGRATED-IDENTITY-INPUTS",
+            "Affirmative",
+            "F0V2D1-A-MIGRATED-IDENTITY-INPUTS",
         ),
         Finding(
             "hypothesis-argument-schema-closure",
@@ -1341,8 +1813,8 @@ def evaluate() -> dict[str, Any]:
         ),
         Finding(
             "provider-lane-and-completion-consistency",
-            "Negative",
-            "F0V2D1-N-MIGRATED-COMPLETION-LAW",
+            "CannotAnswer",
+            "F0V2D1-C-VCVIO-PROVIDER-DECLARATION",
         ),
     ]
     supporting = [
@@ -1400,8 +1872,8 @@ def evaluate() -> dict[str, Any]:
             "Static name and constructor checks are not an Analysis implementation or mechanized proof.",
             "Publication compiler agreement is not evidence that the owner text is semantically closed.",
             "The finite Schnorr coordinates establish no relation truth, Plan honesty, theorem, or cryptographic property.",
-            "Independent identity reconstruction checks canonical formation of the migrated bodies, not that their semantic inputs match the owner text.",
-            "The negative migration findings do not imply that an unformed provider premise is false.",
+            "Independent identity reconstruction checks canonical formation and owner-text agreement of three finite vectors, not premise truth.",
+            "The remaining CannotAnswer does not imply that an unformed provider premise is false.",
         ],
     }
 
@@ -1416,6 +1888,10 @@ def check() -> dict[str, Any]:
     _require(
         observed["finding_codes"] == expected["finding_codes"],
         "the frozen Analysis premise finding classifications drifted",
+    )
+    _require(
+        observed["metrics"]["source_sha256"] == expected["source_sha256"],
+        "a frozen Analysis premise review source drifted",
     )
     return observed
 
