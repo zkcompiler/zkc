@@ -103,6 +103,12 @@ below are reader cross-references rather than inventory edges.
   selects canonical families, recent variants, holdout cases, differentiated
   T1--T3 evidence strength, work order, promotion rules, and the bounded R2
   convergence gate.
+- [Protocol Expressibility by Structural Axes](expressibility-axes/README.md)
+  classifies expressibility by closed structural axes instead of family
+  names: twenty axes with 125 values, each mapped to one Core or profile
+  constructor, one reopening condition, or one boundary; 63 placed cases
+  reproduce every recorded holdout and peer-review verdict, and thirteen
+  not-yet-considered classes receive a predicted place.
 - [Native FRI/IOR Final Classification and Retention](r2-protocol-witnesses/native-fri-ior-final-classification-and-retention.md)
   retains the two finite FRI/IOR lanes, classifies the case as a conservative
   extension, fixes the deterministic source-correspondence boundary, and

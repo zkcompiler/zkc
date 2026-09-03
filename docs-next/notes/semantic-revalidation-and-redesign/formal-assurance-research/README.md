@@ -97,11 +97,13 @@ F0  ideal assurance architecture and current-design falsification
        B2D2 Fresh runtime and Oracle receipt replay       [open]
   -> F2-O0  provider-observable audit, Schnorr slice     [complete, CannotAnswer]
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
+  -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
   -> B2D2   Fresh completed-record schema               [complete, schema only]
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
+  -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -457,6 +459,14 @@ provider, extraction tool, or durable schema.
   operands. Typed-forward and cold-view/countermodel paths agree; two
   incompatible finite completions both make every honest target trace accept.
   The aggregate remains `CannotAnswer`, and no owner-page change is proposed.
+- [`f2p1-schnorr-relations-plan-candidates.md`](f2p1-schnorr-relations-plan-candidates.md)
+  authors exact relation definition, model, instance, and Plan candidates for
+  the finite additive Schnorr subject and binds them on two independent paths:
+  fifteen identities, all five property premises given coordinates, 27/27
+  honest accepts and 27/27 plus-one rejects, five mutations refused. The
+  aggregate stays `CannotAnswer` on one blocker: the admitted F1-R1B Protocol
+  declares no claims, so an initial-claim meaning cannot be bound without
+  changing the Protocol identity.
 - [`m0-mechanized-kernel-feasibility.md`](m0-mechanized-kernel-feasibility.md)
   records the 34-finding measurement: core-Lean transcriptions of the
   constitutional datum encoder and decoder and of the PublicCoin lattice
@@ -502,6 +512,14 @@ provider, extraction tool, or durable schema.
   exact, 40 prose, 20 undefined; a bounded normalized grammar compiles
   through two paths and eleven owner obligations are named; aggregate
   `CannotAnswer` for determinacy.
+- [`f0v3b-fs-family-view-bodies-and-cone.md`](f0v3b-fs-family-view-bodies-and-cone.md)
+  supplies the eleven obligations' candidate bodies as migration input: eight
+  family-local schemas compile identically through both schema compilers, the
+  K2 and duplex inhabitable values agree byte for byte on typed and cold paths,
+  twelve mutations refuse, and both publication compilers reproduce the cone
+  (eleven profiles incremental to the common candidate, sixteen combined).
+  The candidate packets are exact proposals, not owner text; the original
+  obligations stay `CannotAnswer` until an owner adopts or rejects them.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
