@@ -145,6 +145,30 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
    claim-free binding; this is decided with the fixture refreeze.
 3. **OIR endpoint-graph rotation.** The Terminal repair reaches the OIR body
    grammar, so the cone is seventeen profiles, not sixteen.
+4. **First freeze-review round.** The independent review of the first
+   migration head found the Section 10 laws not executable as written: it
+   named guards for scope openings that Section 4.4 makes deterministic and
+   unguarded, used undefined guard accessors, specified `let` by prose
+   substitution, and described the liveness argument in the wrong direction;
+   it also found `AdmittedModuleEffectAtom` used without an owner definition.
+   All of these are repaired in the page (`AttemptGuards` is the occurrence's
+   own guard, `GuardInputs` and `GuardTerm` are defined, `Must` runs over the
+   de Bruijn environment, an impossible `MustWhenTrue` region is refused, and
+   the module-effect atom is defined with boundary arm 9). The review's finite
+   oracle found no counterexample to `AttemptedWhenever` over the opaque-guard
+   abstraction and confirmed that dropping the impossible-region exemption
+   refuses none of the frozen positive carriers. Its family-body finding
+   described the first head, before the eight bodies were normalized; the
+   second round re-checks closure of the normalized bodies.
+5. **Holdout re-adjudication.** Against the migrated text the five cold
+   holdouts give five fits and three breaks at the recorded boundaries, with
+   no verdict disagreement with the earlier record or the structural-axes
+   matrix. The earlier WHIR two-terminal schedule is refused by the exact
+   terminal-claim rule; the lane's replacement carrier assumed guarded scope
+   openings and is re-authored in the second round with unconditional
+   reductions, under the syntactic guard-implication law that Section 10
+   already names as this regime's boundary. The axes matrix's meaning of
+   interpretation failure is stale against Section 12.4 and is corrected.
 
 ## 7. What remains before publication
 
@@ -166,8 +190,10 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   set in the first class.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
-- Take the independent freeze review's findings (a verification lane is
-  reviewing the exact diff) into this text.
+- Close the second review round: confirm that the repaired Section 10 laws,
+  the module-effect atom, and the normalized family bodies satisfy the
+  review's name-closure and decision-fidelity checks, and take any remaining
+  finding into this text.
 - Publish the identities. Only the user authorizes the identity-rotating
   publication.
 
