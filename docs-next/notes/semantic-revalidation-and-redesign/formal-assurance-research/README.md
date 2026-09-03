@@ -76,6 +76,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-P0  Relations--Plan coupling, Schnorr slice      [complete, CannotAnswer]
   -> F2-P1  Schnorr relation and Plan candidates         [complete, CannotAnswer]
   -> F2-O2  provider interpretation, first attempt      [round two, Affirmative; premise unpublished]
+  -> F2-O3  provider interpretation in ArkLib            [contract; lane running]
   -> M0     mechanized kernel definition feasibility    [complete, bounded]
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
@@ -614,6 +615,13 @@ provider, extraction tool, or durable schema.
   branches with the evidence it rests on and the counterexample that would
   reverse it, grouped for an adversarial human pass, and restates the five
   open decisions with their recommended answers.
+- [`f2o3-arklib-interpretation-entry-contract.md`](f2o3-arklib-interpretation-entry-contract.md)
+  fixes the second provider interpretation, in ArkLib at the revision the
+  receipt audit pins: the same five clauses against ArkLib's reduction
+  types, and the question the VCVio round never faced, which lanes a
+  provider models when its verdict is an option whose empty case two
+  producers reach; the lane derives the declaration from the execution
+  model and proposes it in the carrier packet's shape.
 - [`guard-implication-boundary.md`](guard-implication-boundary.md)
   states the closed guard-implication boundary of Core admission, what it
   costs fold-then-check protocols (nothing in the portfolio once Reductions
