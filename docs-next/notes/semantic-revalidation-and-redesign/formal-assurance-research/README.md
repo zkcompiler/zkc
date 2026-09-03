@@ -556,6 +556,12 @@ provider, extraction tool, or durable schema.
   traces, the untrusted generator and independent checker, the residual trust
   list, and the acceptance rule; it follows the Terminal-contract
   mechanization and precedes applicability.
+- [`guard-implication-boundary.md`](guard-implication-boundary.md)
+  states the closed guard-implication boundary of Core admission, what it
+  costs fold-then-check protocols (nothing in the portfolio once Reductions
+  are authored unconditionally), and a sound linear extension through
+  must-fact exactness, to be adopted only when a selected protocol needs a
+  conditional required Reduction.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
