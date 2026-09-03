@@ -8,7 +8,7 @@
   "package_inputs": {
     "evaluation/formal-kernel-mechanization-m0/vectors/body-digests.json": "dc96ea4cb4791acc6cbb911b56cd1d90d31caa83ace0e4070b8969b6076181f5",
     "evaluation/formal-kernel-mechanization-m0/vectors/pcgraph-construction.json": "4b120c65df1e5592ee5bfa6d65f324874214dc2ed3501990ba6ef0fa909eaf4e",
-    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "1c8d29db577dd189669dfe2e7e67760585a2943188b95342d2978f3b8b185b74",
+    "evaluation/formal-source-holdout-readjudication-f0v2c2/adjudication.json": "e81d667765ce5f2eb18a96e8bfe19bc3c184df0f651c901fba818764bff2862f",
     "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "73ad42c61259001797fa7039ce0858b16ad5f074b13476532986b3c669d2867e",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "91af1399ace370f69493b80a519077a95e9fbeeb79cac1b8d5c8d7f7e9e1e124",
     "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/run.py": "7bee89221ab35377f54f33709783106d7dc03571a632916c0e44d579ade454ef",
