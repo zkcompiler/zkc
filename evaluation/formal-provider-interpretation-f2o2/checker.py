@@ -4,9 +4,8 @@
 This program does not import the generator.  It re-derives the six views by
 the cold canonical-byte path, checks the three certificate maps, executes the
 portable-term evaluator and the pinned provider with Lean, and compares every
-finite input and generated trace.  Its Python terminal projection is the
-temporary reading required while the separate terminal mechanization is
-absent.
+finite input and generated trace.  The completed-run terminal choice is read
+from the mechanized first-active definition rather than reimplemented here.
 """
 
 from __future__ import annotations
@@ -32,20 +31,51 @@ TERM_PROBE = HERE / "TermEvaluatorProbe.lean"
 SCHNORR_COLD_VIEWS = (
     ROOT / "evaluation/formal-source-view-bodies-f0v2b1/independent.py"
 )
+SCHNORR_VIEW_SCHEMA = (
+    ROOT / "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json"
+)
+SCHNORR_CORE_MODEL = ROOT / "evaluation/formal-source-target-core-f1r1b/reference_model.py"
+RELATION_PLAN_MODEL = ROOT / "evaluation/formal-schnorr-relations-plan-f2p1/model.py"
 TERM_KERNEL = ROOT / "evaluation/formal-kernel-mechanization-m0/lean"
 TERM_VECTORS = (
     ROOT / "evaluation/formal-kernel-mechanization-m0/vectors/m2-term-calculus.json"
 )
-INTEGRATED_VIEW_FINDINGS = (
-    ROOT
-    / "evaluation/formal-source-integrated-views-f0v2b2d3/expected-findings.json"
-)
-PREMISE_NOTE = (
+TERMINAL_MECHANIZATION = TERM_KERNEL / "M0/Terminal.lean"
+ENTRY_CONTRACT = (
     ROOT
     / "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research"
-    / "analysis-named-premise-intake.md"
+    / "f2o2-provider-interpretation-entry-contract.md"
+)
+DECISION_PACKET = (
+    ROOT
+    / "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research"
+    / "f2o2-provider-carrier-decision-2026-09-03.md"
 )
 INTERACTIVE_CORE = ROOT / "docs-next/pir/interactive-core.md"
+ANALYSIS_MODEL = ROOT / "docs-next/analysis/analysis-model.md"
+CRYPTOGRAPHIC_PROPERTIES = ROOT / "docs-next/analysis/cryptographic-properties.md"
+CRYPTOGRAPHIC_PROPERTY_MANIFEST = (
+    ROOT / "docs-next/analysis/profiles/cryptographic-property.json"
+)
+OWNER_PAGES = (
+    INTERACTIVE_CORE,
+    ANALYSIS_MODEL,
+    CRYPTOGRAPHIC_PROPERTIES,
+)
+PROFILE_MANIFESTS = (
+    ROOT / "docs-next/foundation/semantic-profile-manifests.json",
+    ROOT / "docs-next/pir/profiles/interaction.json",
+    ROOT / "docs-next/analysis/profiles/kernel.json",
+    CRYPTOGRAPHIC_PROPERTY_MANIFEST,
+)
+PACKAGE_INPUTS = (
+    SCHNORR_VIEW_SCHEMA,
+    TERM_VECTORS,
+    TERMINAL_MECHANIZATION,
+    TERM_PROBE,
+    ENTRY_CONTRACT,
+    DECISION_PACKET,
+)
 
 CERTIFICATE_FORMAT = "zkc.formal-provider-interpretation.certificate.v0"
 PROVIDER_REVISION = "de0a3108140e3e04a7ebf0075aa110b459ee6e8a"
@@ -81,6 +111,10 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _file_pins(paths: tuple[Path, ...]) -> dict[str, str]:
+    return {path.relative_to(ROOT).as_posix(): _sha256(path) for path in paths}
+
+
 def _run(
     argv: list[str], cwd: Path, *, env: dict[str, str] | None = None
 ) -> tuple[subprocess.CompletedProcess[str], float]:
@@ -103,6 +137,7 @@ def _cold_source() -> dict[str, Any]:
     candidate = cold.build_candidate(core, protocol)
     views = candidate["values"]
     manifests = candidate["requested_manifests"]
+    fixture = cold.owner.make_fixture()
     return {
         "cold": cold,
         "core": core,
@@ -114,6 +149,23 @@ def _cold_source() -> dict[str, Any]:
             for name, body in views.items()
         },
         "active_leaf_counts": {name: len(manifests[name]) for name in views},
+        "carriers": {
+            "core_profiled_body_sha256": hashlib.sha256(
+                cold.owner.core_profiled_body(
+                    fixture.core_candidate.core, fixture.environment.profile_id
+                )
+            ).hexdigest(),
+            "protocol_profiled_body_sha256": hashlib.sha256(
+                cold.owner.protocol_profiled_body(
+                    fixture.protocol_candidate.core_id, fixture.environment.profile_id
+                )
+            ).hexdigest(),
+            "view_schema_source_sha256": _sha256(SCHNORR_VIEW_SCHEMA),
+            "active_view_manifest_sha256": {
+                name: hashlib.sha256(_canonical(manifests[name])).hexdigest()
+                for name in views
+            },
+        },
     }
 
 
@@ -147,6 +199,8 @@ def _check_certificate(certificate: dict[str, Any], source: dict[str, Any]) -> d
             "toolchain": "leanprover/lean4:v4.33.1",
             "module": "Examples.Schnorr.SigmaProtocol",
             "definition": "Schnorr.sigma",
+            "closed_carrier": "Bool",
+            "modelled_lanes": ["Accepted", "Rejected"],
         },
         "certificate provider pin drifted",
     )
@@ -155,23 +209,35 @@ def _check_certificate(certificate: dict[str, Any], source: dict[str, Any]) -> d
         "certificate does not bind the provider module",
     )
 
-    integrated_digest = _sha256(INTEGRATED_VIEW_FINDINGS)
+    inputs = certificate.get("inputs")
+    _require(type(inputs) is dict, "certificate inputs are absent")
     _require(
-        certificate["inputs"]["integrated_six_view_findings_sha256"]
-        == integrated_digest,
-        "integrated six-view input drifted",
+        inputs.get("owner_pages") == _file_pins(OWNER_PAGES),
+        "owner-page input pin drifted",
+    )
+    _require(
+        inputs.get("profile_manifests") == _file_pins(PROFILE_MANIFESTS),
+        "profile-manifest input pin drifted",
+    )
+    _require(
+        inputs.get("package_inputs") == _file_pins(PACKAGE_INPUTS),
+        "package input pin drifted",
+    )
+    _require(
+        inputs.get("carriers") == source["carriers"],
+        "admitted Core, Protocol, schema, or six-view manifest input drifted",
     )
     vectors = json.loads(TERM_VECTORS.read_text(encoding="utf-8"))
     for name in ("check", "guard"):
         expected = vectors["algorithms"][name]
-        observed = certificate["inputs"]["algorithms"][name]
+        observed = inputs["algorithms"][name]
         _require(
             observed["preimage_sha256"] == expected["preimage_sha256"]
             and observed["preimage_length"] == expected["preimage_length"],
             f"{name} algorithm preimage drifted",
         )
 
-    candidate = certificate["inputs"]["candidates"]
+    candidate = inputs["candidates"]
     _require(candidate["protocol_id"] == subject["protocol_id"], "candidate binds another Protocol")
     _require(
         candidate["algebra"]["scalar_modulus"] == 3
@@ -197,6 +263,64 @@ def _check_certificate(certificate: dict[str, Any], source: dict[str, Any]) -> d
             },
         },
         "Plan candidate has another recipe or order",
+    )
+
+    source_core = _load("_provider_checker_source_core", SCHNORR_CORE_MODEL)
+    relation_plan = _load("_provider_checker_relation_plan", RELATION_PLAN_MODEL)
+    candidate_artifacts = relation_plan._build_artifacts(
+        source_core, source_core.make_fixture()
+    )
+    candidate_bodies = relation_plan._body_catalog(candidate_artifacts)
+    _require(
+        candidate["published_candidate_bodies_sha256"]
+        == hashlib.sha256(_canonical(candidate_bodies)).hexdigest(),
+        "published relation or Plan candidate body drifted",
+    )
+
+    analysis_model = ANALYSIS_MODEL.read_text(encoding="utf-8")
+    property_text = CRYPTOGRAPHIC_PROPERTIES.read_text(encoding="utf-8")
+    contract_text = ENTRY_CONTRACT.read_text(encoding="utf-8")
+    packet_text = DECISION_PACKET.read_text(encoding="utf-8")
+    terminal_text = TERMINAL_MECHANIZATION.read_text(encoding="utf-8")
+    _require(
+        "modelled_lanes: CanonicalSortedUniqueSeq<AnalysisOutcomeLaneName>"
+        in analysis_model
+        and "AnalysisProviderLaneImage<carrier> =" in analysis_model
+        and "| OperationalCompletion" in analysis_model,
+        "Analysis lane-image or completion-premise owner text drifted",
+    )
+    _require(
+        "until one is published no provider-map\npremise can be formed"
+        in property_text,
+        "Analysis provider-declaration publication boundary drifted",
+    )
+    _require(
+        "provider's\n   outcome equals the image" in contract_text
+        and "## 4a. The declaration, in the shape the profile publishes"
+        in packet_text
+        and "Accepted -> Image(true)" in packet_text
+        and "Rejected -> Image(false)" in packet_text
+        and "Aborted -> Unmodelled" in packet_text
+        and "StrategyStopped -> Unmodelled" in packet_text
+        and "OperationalNoncompletion -> Unmodelled" in packet_text,
+        "restated terminal contract or provider declaration packet drifted",
+    )
+    _require(
+        "def Attempted (schedule : List ScheduledOccurrence)" in terminal_text
+        and "theorem attempted_iff_region_holds" in terminal_text
+        and "theorem attemptedWhenever_sound" in terminal_text,
+        "mechanized first-active interface drifted",
+    )
+    property_manifest = json.loads(
+        CRYPTOGRAPHIC_PROPERTY_MANIFEST.read_text(encoding="utf-8")
+    )
+    definition_names = {
+        row.get("name") for row in property_manifest.get("definitions", [])
+    }
+    _require(
+        "vcvio-provider-declaration-v0" not in definition_names
+        and "vcvio-boolean-carrier-v0" not in definition_names,
+        "the VCVio declaration was published; reform the provider premise and refreeze",
     )
     return vectors
 
@@ -297,26 +421,46 @@ def _check_maps(certificate: dict[str, Any], source: dict[str, Any]) -> dict[str
     ):
         _require(fragment in provider_text, f"provider artifact omits {fragment!r}")
 
+    modelled_lanes = set(certificate["provider"]["modelled_lanes"])
     lane_map = certificate.get("lane_map")
+    lane_names = [
+        "Accepted",
+        "Rejected",
+        "Aborted",
+        "StrategyStopped",
+        "OperationalNoncompletion",
+    ]
     _require(
         type(lane_map) is list
         and [row.get("lane") for row in lane_map]
-        == ["Accepted", "Rejected", "OperationalNoncompletion"],
-        "reachable lane map is not total in source order",
+        == lane_names,
+        "declared five-lane map is not total in source order",
     )
-    _require(
-        lane_map[0].get("image") == "true"
-        and lane_map[1].get("image") == "false"
-        and lane_map[2].get("image") is None,
-        "lane-map evidence has another Boolean boundary",
-    )
-    premise_text = PREMISE_NOTE.read_text(encoding="utf-8")
+    lane_images: dict[str, dict[str, Any]] = {}
+    carrier_cannot_answer: list[str] = []
+    for row in lane_map:
+        lane = row["lane"]
+        image = row.get("provider_lane_image")
+        _require(type(image) is dict, f"provider lane image is absent for {lane}")
+        if image.get("case") == "Image":
+            _require(
+                set(image) == {"case", "value"} and type(image["value"]) is bool,
+                f"provider Image is malformed for {lane}",
+            )
+            if lane not in modelled_lanes:
+                carrier_cannot_answer.append(
+                    f"{lane} has an Image outside provider.modelled_lanes"
+                )
+        elif image.get("case") == "Unmodelled":
+            _require(set(image) == {"case"}, f"Unmodelled image is malformed for {lane}")
+            if lane in modelled_lanes:
+                carrier_cannot_answer.append(
+                    f"{lane} is modelled but has no provider Image"
+                )
+        else:
+            raise CheckerError(f"provider lane image has another case for {lane}")
+        lane_images[lane] = image
     owner_text = INTERACTIVE_CORE.read_text(encoding="utf-8")
-    _require(
-        "Missing provider images\nare `CannotAnswer`, not collapse to `false`, `None`, or `Rejected`."
-        in premise_text,
-        "named-premise non-collapse rule drifted",
-    )
     _require(
         "no lane is\nrelabeled as another" in owner_text,
         "PIR outcome-carrier non-collapse rule drifted",
@@ -328,8 +472,16 @@ def _check_maps(certificate: dict[str, Any], source: dict[str, Any]) -> dict[str
             occurrence for occurrence, arity in execution_outputs if arity
         ],
         "execution_terminals": execution_terminals,
-        "mapped_lanes": sum(row.get("image") is not None for row in lane_map),
-        "reachable_lanes": len(lane_map),
+        "lane_images": lane_images,
+        "modelled_lanes": sorted(modelled_lanes),
+        "declared_lanes": len(lane_map),
+        "image_lanes": sum(
+            row["provider_lane_image"]["case"] == "Image" for row in lane_map
+        ),
+        "unmodelled_lanes": sum(
+            row["provider_lane_image"]["case"] == "Unmodelled" for row in lane_map
+        ),
+        "terminal_map_cannot_answer": carrier_cannot_answer,
     }
 
 
@@ -349,7 +501,9 @@ def _parse_rows(
     return rows
 
 
-def _run_term_evaluator() -> tuple[dict[tuple[int, ...], int], dict[int, int], dict[str, float]]:
+def _run_term_evaluator() -> tuple[
+    dict[tuple[int, ...], int], dict[int, int], dict[int, int], dict[str, float]
+]:
     lake = str(Path.home() / ".elan/bin/lake")
     build, build_seconds = _run([lake, "build", "M0"], TERM_KERNEL)
     _require(build.returncode == 0, f"term-kernel build failed: {build.stdout}{build.stderr}")
@@ -357,11 +511,27 @@ def _run_term_evaluator() -> tuple[dict[tuple[int, ...], int], dict[int, int], d
     _require(probe.returncode == 0, f"term-evaluator probe failed: {probe.stdout}{probe.stderr}")
     terms = _parse_rows(probe.stdout, "TERM", 5)
     guards = _parse_rows(probe.stdout, "GUARD", 2)
+    terminals = _parse_rows(probe.stdout, "TERMINAL", 4, key_fields=1)
     _require(len(terms) == 81, "term evaluator did not cover all 81 inputs")
     _require(len(guards) == 2, "term evaluator did not cover both guard inputs")
+    _require(set(terminals) == {(0,), (1,)}, "first-active probe omitted a guard value")
+    selected_terminals: dict[int, int] = {}
+    for (verdict,), row in terminals.items():
+        accept_attempted, reject_attempted, selected = row[1:]
+        _require(
+            accept_attempted + reject_attempted == 1,
+            f"mechanized first-active reading selected another cardinality for {verdict}",
+        )
+        _require(
+            selected in (4, 5)
+            and (accept_attempted if selected == 4 else reject_attempted) == 1,
+            f"mechanized first-active reading selected an inactive terminal for {verdict}",
+        )
+        selected_terminals[verdict] = selected
     return (
         {key: row[-1] for key, row in terms.items()},
         {key[0]: row[-1] for key, row in guards.items()},
+        selected_terminals,
         {"term_build_seconds": build_seconds, "term_probe_seconds": probe_seconds},
     )
 
@@ -458,6 +628,7 @@ def _run_provider() -> tuple[dict[tuple[int, ...], int], dict[tuple[int, ...], t
 def _compare(
     terms: dict[tuple[int, ...], int],
     guards: dict[int, int],
+    mechanized_terminals: dict[int, int],
     provider_checks: dict[tuple[int, ...], int],
     provider_runs: dict[tuple[int, ...], tuple[int, ...]],
     certificate: dict[str, Any],
@@ -489,9 +660,22 @@ def _compare(
     }
     _require(record_occurrences == [0, 1, 2, 3], "completed-record order drifted")
     _require(terminal_occurrence == {0: 4, 1: 5}, "terminal case map drifted")
+    _require(
+        mechanized_terminals
+        == {0: terminal_occurrence[1], 1: terminal_occurrence[0]},
+        "mechanized first-active reading differs from the owner terminal cases",
+    )
+    lane_for_terminal = {
+        terminal_occurrence[0]: "Accepted",
+        terminal_occurrence[1]: "Rejected",
+    }
+    lane_images = maps["lane_images"]
+    terminal_cannot_answer = list(maps["terminal_map_cannot_answer"])
+    domain_lanes: set[str] = set()
     accepted = 0
     rejected = 0
     traces = 0
+    terminal_comparisons = 0
     for key, row in sorted(provider_runs.items()):
         _require(len(key) == 4, "provider run key has another shape")
         statement, witness, nonce, challenge = key
@@ -502,7 +686,23 @@ def _compare(
         expected_verdict = int(
             expected_response == (expected_commitment + challenge * statement) % 3
         )
-        expected_terminal = terminal_occurrence[0 if expected_verdict else 1]
+        expected_terminal = mechanized_terminals[expected_verdict]
+        source_lane = lane_for_terminal[expected_terminal]
+        domain_lanes.add(source_lane)
+        provider_lane_image = lane_images.get(source_lane)
+        if (
+            provider_lane_image is None
+            or provider_lane_image.get("case") != "Image"
+        ):
+            terminal_cannot_answer.append(
+                f"{source_lane} occurs on the domain without a provider image"
+            )
+        else:
+            _require(
+                provider_lane_image["value"] == bool(verdict),
+                f"provider outcome differs from the image of {source_lane}",
+            )
+        terminal_comparisons += 1
         _require(
             commitment == expected_commitment
             and response == expected_response
@@ -548,6 +748,9 @@ def _compare(
         "accepted_runs": accepted,
         "rejected_runs": rejected,
         "trace_comparisons": traces,
+        "terminal_comparisons": terminal_comparisons,
+        "domain_lanes": sorted(domain_lanes),
+        "terminal_cannot_answer": sorted(set(terminal_cannot_answer)),
     }
 
 
@@ -556,10 +759,16 @@ def check() -> dict[str, Any]:
     source = _cold_source()
     vectors = _check_certificate(certificate, source)
     maps = _check_maps(certificate, source)
-    terms, guards, term_timings = _run_term_evaluator()
+    terms, guards, mechanized_terminals, term_timings = _run_term_evaluator()
     provider_checks, provider_runs, provider = _run_provider()
     comparisons = _compare(
-        terms, guards, provider_checks, provider_runs, certificate, maps
+        terms,
+        guards,
+        mechanized_terminals,
+        provider_checks,
+        provider_runs,
+        certificate,
+        maps,
     )
     vector_closed = {
         tuple(int(part) for part in row["name"].split("/")[1].split("-")): int(row["closed_form"])
@@ -567,37 +776,66 @@ def check() -> dict[str, Any]:
     }
     _require(vector_closed == terms, "term probe differs from the frozen finite vectors")
 
-    terminal_mechanizations = list(ROOT.glob("evaluation/*terminal*mechanization*"))
-    _require(not terminal_mechanizations, "a terminal mechanization landed; replace the pending reading")
+    terminal_blockers = comparisons["terminal_cannot_answer"]
+    terminal_outcome = "CannotAnswer" if terminal_blockers else "Affirmative"
+    terminal_code = (
+        "F2O2-C-TERMINALS-CLAUSE-4"
+        if terminal_blockers
+        else "F2O2-A-TERMINALS"
+    )
+    aggregate = (
+        "CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4"
+        if terminal_blockers
+        else "Affirmative/F2O2-A-FINITE-CORRESPONDENCE"
+    )
 
     findings = [
         ["schedule-clause", "Affirmative", "F2O2-A-SCHEDULE"],
         ["values-clause", "Affirmative", "F2O2-A-VALUES"],
         ["checks-and-guards-clause", "Affirmative", "F2O2-A-CHECKS-GUARDS"],
-        ["terminals-clause", "CannotAnswer", "F2O2-C-TERMINALS-CLAUSE-4"],
+        ["terminals-clause", terminal_outcome, terminal_code],
         ["traces-clause", "Affirmative", "F2O2-A-TRACES"],
-        ["terminal-mechanized-reading", "CannotAnswer", "F2O2-C-TERMINAL-MECHANIZATION-PENDING"],
+        ["terminal-mechanized-reading", "Affirmative", "F2O2-A-TERMINAL-MECHANIZED-READING"],
+        [
+            "analysis-provider-map-premise",
+            "CannotAnswer",
+            "F2O2-C-PROVIDER-MAP-PREMISE-UNPUBLISHED",
+        ],
         ["residual-provider-trust-listed", "Affirmative", "F2O2-A-RESIDUAL-PROVIDER-TRUST"],
         ["residual-evaluator-differential-listed", "Affirmative", "F2O2-A-RESIDUAL-DIFFERENTIAL"],
         ["residual-premises-listed", "Affirmative", "F2O2-A-RESIDUAL-PREMISES"],
         ["residual-checker-adapter-listed", "Affirmative", "F2O2-A-RESIDUAL-ADAPTER"],
-        ["complete-schnorr-correspondence", "CannotAnswer", "F2O2-C-TERMINALS-CLAUSE-4"],
+        [
+            "finite-schnorr-provider-correspondence",
+            "Affirmative" if not terminal_blockers else "CannotAnswer",
+            (
+                "F2O2-A-FINITE-CORRESPONDENCE"
+                if not terminal_blockers
+                else "F2O2-C-TERMINALS-CLAUSE-4"
+            ),
+        ],
     ]
     return {
-        "aggregate": "CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4",
+        "aggregate": aggregate,
         "finding_codes": findings,
-        "blocker": {
-            "clause": "entry contract Section 4 clause 4, lines 71-75",
+        "premise_publication": {
+            "subject": "the package-local five-lane VCVio Boolean map",
             "outcome": "CannotAnswer",
-            "code": "F2O2-C-TERMINALS-CLAUSE-4",
-            "reason": "OperationalNoncompletion is reachable but the specified Boolean verifier carrier has no non-collapsing image.",
-            "owner_basis": "docs-next/pir/interactive-core.md lines 1990-2003 and analysis named-premise text lines 2246-2253 on the inspected branch; the tracked research note mirrors the rule at lines 425-430",
+            "code": "F2O2-C-PROVIDER-MAP-PREMISE-UNPUBLISHED",
+            "reason": "The Analysis profile has not published the VCVio provider declaration and Boolean carrier, so this map is a checked package input rather than a formed provider-map premise.",
+            "owner_action": [
+                "Publish VCVioProviderDeclaration with the provider source content digest, pinned toolchain, and modelled lanes Accepted and Rejected.",
+                "Publish VCVioBooleanCarrier with closed Bool schema and canonical true and false values.",
+                "Publish the five-lane Schnorr provider outcome map as ProviderOutcomeCarrierPremise at FrozenExecutableFalsification evidence depth.",
+                "Add the two semantic-law definitions and dependencies to the cryptographic-property profile manifest and advance that profile revision.",
+            ],
         },
         "subject": certificate["subject"],
         "provider": provider,
         "measurements": {
             "views": len(source["views"]),
             "active_view_leaves": sum(source["active_leaf_counts"].values()),
+            "mechanized_terminal_inputs": len(mechanized_terminals),
             **maps,
             **comparisons,
         },

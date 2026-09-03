@@ -1,5 +1,5 @@
 {
-  "aggregate": "CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4",
+  "aggregate": "Affirmative/F2O2-A-FINITE-CORRESPONDENCE",
   "finding_codes": [
     [
       "schedule-clause",
@@ -18,8 +18,8 @@
     ],
     [
       "terminals-clause",
-      "CannotAnswer",
-      "F2O2-C-TERMINALS-CLAUSE-4"
+      "Affirmative",
+      "F2O2-A-TERMINALS"
     ],
     [
       "traces-clause",
@@ -28,8 +28,13 @@
     ],
     [
       "terminal-mechanized-reading",
+      "Affirmative",
+      "F2O2-A-TERMINAL-MECHANIZED-READING"
+    ],
+    [
+      "analysis-provider-map-premise",
       "CannotAnswer",
-      "F2O2-C-TERMINAL-MECHANIZATION-PENDING"
+      "F2O2-C-PROVIDER-MAP-PREMISE-UNPUBLISHED"
     ],
     [
       "residual-provider-trust-listed",
@@ -52,10 +57,10 @@
       "F2O2-A-RESIDUAL-ADAPTER"
     ],
     [
-      "complete-schnorr-correspondence",
-      "CannotAnswer",
-      "F2O2-C-TERMINALS-CLAUSE-4"
+      "finite-schnorr-provider-correspondence",
+      "Affirmative",
+      "F2O2-A-FINITE-CORRESPONDENCE"
     ]
   ],
-  "findings_sha256": "2df90efc9bd07dd7e26cf062477d87922997c452c586b9e4e9f82bfb696eda9f"
+  "findings_sha256": "a99c202fba9b41a4f73206e1762784b1c65ec4e8567456eec27d52dab01fa858"
 }

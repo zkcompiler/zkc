@@ -3,7 +3,8 @@
 This package asks one exact question:
 
 > Does the generated VCVio artifact operationally correspond to the admitted
-> finite Schnorr Fresh Protocol under all five clauses of the entry contract?
+> finite Schnorr Fresh Protocol under all five clauses of the restated entry
+> contract?
 
 Run from the repository root with the pinned VCVio checkout available at the
 path named by `ZKC_VCVIO_ROOT`, or at the package default:
@@ -13,65 +14,74 @@ python3 -B evaluation/formal-provider-interpretation-f2o2/run.py --check
 ```
 
 The frozen aggregate is
-`CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4`. Schedule, values, Check and guard
-denotations, and completed traces agree across the entire finite domain. The
-entry contract nevertheless requires an image for every reachable outcome
-lane, and the specified VCVio verifier carrier is `Bool`. It has distinct
-images for `Accepted` and `Rejected`, but no third, non-collapsing image for
-`OperationalNoncompletion`.
+`Affirmative/F2O2-A-FINITE-CORRESPONDENCE`. All five clauses agree over
+their complete finite domains. The finding inventory has eleven affirmative
+findings and one `CannotAnswer`: Analysis has not published the provider
+declaration that would turn the package's five-lane map into a formed premise.
 
-## Artifact and certificate
+## Round two
 
-`generator.py` is untrusted. It reads the admitted subject's six normalized
-views, the exact Check and guard algorithm preimages, and the package-local
-relation and prover-plan candidates. It deterministically emits:
+The terminal clause now checks the restated contract on every run. The
+declared provider is VCVio at revision
+`de0a3108140e3e04a7ebf0075aa110b459ee6e8a` under
+`leanprover/lean4:v4.33.1`, with closed carrier `Bool`, modelled lanes
+`Accepted` and `Rejected`, and this total map:
 
-- `generated/SchnorrProvider.lean`, which instantiates the pinned
-  `Schnorr.sigma` over `ZMod 3`, exposes the Fresh challenge draw, and defines
-  the candidate commitment and response operations, with kernel-checked
-  equations tying both operations to the provider's actual protocol fields;
-  and
-- `generated/certificate.json`, which binds the current source identities and
-  all six view bodies, the algorithm preimages, the candidate bodies, the
-  provider revision and Lean toolchain, and the occurrence, type, and outcome
-  maps.
+| Source lane | Provider lane image |
+|---|---|
+| `Accepted` | `Image(true)` |
+| `Rejected` | `Image(false)` |
+| `Aborted` | `Unmodelled` |
+| `StrategyStopped` | `Unmodelled` |
+| `OperationalNoncompletion` | `Unmodelled` |
 
-Generation has no authority. `generator.py --check` only says that these two
-committed artifacts are the deterministic output for the inputs it reads.
+For each of the 81 source runs, the checker obtains the source terminal from
+the mechanized first-active reading and requires the provider Boolean to equal
+the image of that source lane. A lane occurring on the domain without an
+image, or an `Image` outside `modelled_lanes`, remains `CannotAnswer`.
+Only `Accepted` and `Rejected` occur on this domain.
+
+The mechanization dependency is now consumed. `TermEvaluatorProbe.lean`
+imports the mechanized Terminal module, evaluates the package's closed
+`Region` reading for both guard values, and emits the unique attempted
+terminal. The checker binds
+those two results to the owner-derived terminal cases and uses them in every
+completed-run and trace comparison. The pinned module also contains the
+universal `attempted_iff_region_holds` and `attemptedWhenever_sound`
+theorems. The former pending-mechanization finding is therefore retired.
+
+The admitted Core, Protocol, all six view bodies, and the published relation
+and Plan candidate bodies changed after round one. The certificate has been
+re-derived from the current tree. It pins current PIR and Analysis owner
+pages, the relevant profile manifests, the restated contract and decision
+packet, the admitted Core and Protocol bodies, all six active view manifests,
+the portable-term vectors, and the mechanized Terminal source. It does not pin
+another package's frozen findings.
+
+The generated VCVio module did not require a semantic change. Its digest is
+unchanged, and Lean still kernel-checks the equations tying the provider's
+commit and respond fields to the selected Plan recipes.
 
 ## Independent checker
 
-`checker.py` does not import the generator. It independently performs these
-checks:
+`generator.py` is untrusted. It deterministically emits the provider module
+and source-bound certificate. `checker.py` does not import the generator. It:
 
-1. It uses the cold canonical-byte path to admit the Core and Protocol and
-   rederive all six views. It then checks the certificate's source identities,
-   view hashes and leaf counts, algorithm preimages, candidate formulas, and
-   provider pin.
-2. It derives the six-occurrence schedule, the two prover decisions, the
-   public-coin challenge site, the completed-record output schema, and the two
-   ordered terminal cases from the views. It checks totality, injectivity, and
-   order of the occurrence and type maps.
-3. It builds and runs `TermEvaluatorProbe.lean`, which invokes the portable
-   term evaluator for all 81 verifier inputs and both guard inputs. Those rows
-   must also equal the frozen term vectors and the closed Schnorr equation.
-4. It verifies the VCVio revision and Lean version, builds the one absent
-   `ZMod` support object in a temporary directory inside this package, and
-   elaborates and executes the generated module against the read-only provider
-   tree. Lean checks the commit/response field equations, and the provider
-   emits all 81 verifier rows and all 81 honest-plan runs.
-5. It compares each provider result with the portable-term result and closed
-   form, then compares every completed provider transcript with the
-   `ExecutionView` record schema and first-active terminal order.
-6. It checks the three-lane carrier certificate against the owner's
-   non-collapse rule. A missing outcome image remains `CannotAnswer`.
+1. cold-admits the current Core and Protocol and re-derives all six views;
+2. authenticates the certificate's owner-page, manifest, carrier, algorithm,
+   candidate-body, provider, occurrence, type, and five-lane pins;
+3. builds the mechanized term and Terminal source and evaluates all 81 Check
+   inputs, both guard inputs, and both first-active terminal choices;
+4. checks the provider revision and toolchain, builds the one absent `ZMod`
+   support object in a temporary package-local overlay, and executes the
+   generated module;
+5. compares all 81 provider checks, all 81 honest-plan runs, all 81 terminal
+   images, and all 81 completed traces; and
+6. records the still-unpublished Analysis declaration separately from the
+   operational correspondence result.
 
-The separate terminal mechanization is absent at this branch head. In
-accordance with the entry brief, completed runs use the Python first-active
-terminal semantics already exercised by the terminal-projection and integrated
-graph packages. The missing mechanized reading is frozen separately as
-`CannotAnswer/F2O2-C-TERMINAL-MECHANIZATION-PENDING`; it is not converted into
-positive evidence.
+The 81 plan runs contain 45 accepting and 36 rejecting executions. The six
+view bodies contain 329 active leaves.
 
 ## Clause results
 
@@ -80,37 +90,44 @@ positive evidence.
 | Schedule | `Affirmative/F2O2-A-SCHEDULE` | Six source occurrences and six distinct provider steps are total and order-preserving; prover decisions are exactly occurrences 0 and 2. |
 | Values | `Affirmative/F2O2-A-VALUES` | Statement, witness, commitment, private state, challenge, response, and verifier-result carriers agree with their mapped source types. |
 | Checks and guards | `Affirmative/F2O2-A-CHECKS-GUARDS` | Portable-term, provider, frozen-vector, and closed-form results agree on 81 verifier inputs; both Boolean guards agree. |
-| Terminals | `CannotAnswer/F2O2-C-TERMINALS-CLAUSE-4` | All 81 completed runs select the same Accept or Reject terminal, but only two of three required reachable lanes have provider images. |
-| Traces | `Affirmative/F2O2-A-TRACES` | All 81 completed records and provider transcripts agree step by step under the certified map. |
+| Terminals | `Affirmative/F2O2-A-TERMINALS` | The mechanized first-active reading and provider image agree on every run; the domain reaches 45 `Accepted` and 36 `Rejected` lanes. |
+| Traces | `Affirmative/F2O2-A-TRACES` | All 81 completed records and provider transcripts agree step by step under the certified maps. |
 
-The 81 honest-plan runs contain 45 accepting and 36 rejecting executions.
-The six view bodies contain 329 active leaves in total.
+## Analysis publication still required
 
-## Residual trust
+The five-lane map above is an authenticated package input, not yet an
+`AnalysisNamedPremise`. To form that premise, the Analysis owner must publish
+the declaration described by the provider-carrier decision packet:
 
-The frozen findings retain four explicit residuals:
+- `VCVioProviderDeclaration`, naming system `vcvio`, the content digest of
+  the checkout at the pinned revision computed under the Foundation digest
+  rule, toolchain `leanprover/lean4:v4.33.1`, and
+  `modelled_lanes = [Accepted, Rejected]`;
+- `VCVioBooleanCarrier`, declaring the closed `Bool` schema with canonical
+  values `true` and `false`;
+- `VCVioSchnorrOutcomeMapPremise` for the admitted Protocol and the exact
+  five-lane map above, sourced from the provider declaration at
+  `FrozenExecutableFalsification` evidence depth; and
+- two `analysis.semantic-law` manifest definitions for the provider
+  declaration and Boolean carrier, dependencies from the property core to
+  both, and the corresponding profile revision advance.
 
-- the Lean kernel and VCVio's `OracleComp` semantics;
-- finite differential evidence between the portable-term evaluator and the
-  Python evaluator;
-- the Fresh distribution and provider outcome-carrier premises; and
-- the unproved checker adapter.
-
-The generated provider module reports only Lean's standard `propext`,
-`Classical.choice`, and `Quot.sound` axioms for the measured declarations and
-contains no `sorryAx` dependency. That is an elaboration observation, not a
-proof of source correspondence by itself.
+Until those owner-page and manifest changes are published, the frozen result
+is `CannotAnswer/F2O2-C-PROVIDER-MAP-PREMISE-UNPUBLISHED` for premise
+formation. The operational five-clause aggregate does not convert that absence
+into an affirmative premise claim.
 
 ## What a gate pass does and does not establish
 
-A gate pass establishes that the frozen `CannotAnswer` result is reproducible:
-the generated artifacts still match their named inputs, both checker paths
-cover the complete finite domains, the first four affirmative clause findings
-remain supported, and the missing noncompletion image remains explicit rather
-than being relabeled.
+A pass establishes reproducibility for one admitted finite subject and one
+pinned provider: current generated artifacts, five contract clauses over the
+complete finite domains, the mechanized completed-run terminal reading, and
+the explicit boundary between the package map and a formed Analysis premise.
 
-It does not establish complete operational correspondence, any protocol or
-cryptographic property, theorem applicability, the Fresh sampling premise,
-the provider outcome-carrier premise, general evaluator correctness, compiler
-or backend correctness, production validity, or correspondence for another
-subject or provider.
+It does not establish that the provider map is a published premise, the Fresh
+sampling premise, a protocol or cryptographic property, theorem applicability,
+general evaluator correctness, correspondence for another subject or provider,
+compiler or backend correctness, deployment validity, or production
+readiness. The residual trust list still names the Lean kernel and VCVio
+`OracleComp` semantics, the finite evaluator differential, the distribution
+and provider-map premises, and the unproved checker adapter.

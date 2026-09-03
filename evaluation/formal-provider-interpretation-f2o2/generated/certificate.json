@@ -50,33 +50,76 @@
         }
       },
       "private_state": "nonce r, initialized to 0 and replaced by the decision-0 randomness value",
-      "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
-      "published_candidate_bodies_sha256": "cd9935dfa7d97266a3ffb0bf24765064fb449e8ef51e12b53a404127d9620a63",
+      "protocol_id": "zkcidv0:pir.protocol:2197ce0ee3833d646613084b26bbffca139e4faeddba2b8b79ec6f700c206dc3",
+      "published_candidate_bodies_sha256": "0a9470b45b084fbae4f1d9e5b8a26e969673481ad0b5d3eef8d3b01ee316953c",
       "relation": "Y = x . G in (Z/3Z,+), G=1; phase c and z do not alter relation truth",
       "witness": "x in Z/3Z supplied by Plan WitnessIngress key x"
     },
-    "integrated_six_view_findings_sha256": "7da20a8dbeb2c200731f7fa8f3e4a74746d3669ee8fceefc26cca146df12fa77"
+    "carriers": {
+      "active_view_manifest_sha256": {
+        "ClaimReductionView": "26fbaf90268be4c85122c25ea127260a1ccd5dcc69a3618207ef96eea5aab3ea",
+        "EffectView": "30a625ebc9386a57739273a9fbf6104c7416c8fbc308b4ac1197b13e71f56e17",
+        "ExecutionView": "4efcb4e5ab900e77e91b73e99861b40e56d2393de3d9314c058ac4078b8451da",
+        "PublicBindingView": "571b5571550576ad112ac2b96abdf5901c6bd6be90392f3e16d4cc5bdcc01a08",
+        "PublicCoinView": "337744a4db26cfb36cdb354b38df312bba8deb73bc090a53a4ba7030bc7cd5ba",
+        "StrategyDecisionView": "69923cb847884fb7589501f07b04fc1ab251a261ee6316963b441008ed2d1785"
+      },
+      "core_profiled_body_sha256": "ff5d498caecf9f0b729aba9d5a1f3ce98202f95794e6a439a81b6b5558fa8d7f",
+      "protocol_profiled_body_sha256": "4317ee79263493cf05d3cda52662d5a6ae52c1596fe3fdfd6dca6363a524916a",
+      "view_schema_source_sha256": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
+    },
+    "owner_pages": {
+      "docs-next/analysis/analysis-model.md": "a91429579c155b39c28e0c55484f48db2a8509fc05f53713951661290f76d3a9",
+      "docs-next/analysis/cryptographic-properties.md": "e865eb5aa6f749d773c56ed3aac899b06c9a26d19d6a20642657a9569d0629c5",
+      "docs-next/pir/interactive-core.md": "dd6d6711400e73feccf52f762de8b72e5790b256bd00feb86d8142e49934c3b4"
+    },
+    "package_inputs": {
+      "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-carrier-decision-2026-09-03.md": "73dd3a2f7817817a78fbc5fa18c3fc87b1c42e054c5f52fa9f62ed279774e33b",
+      "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-interpretation-entry-contract.md": "2a0634517b6252a4b24d7fe1ed5caf352db0c66b03f2ca34c1fa5f96d5215ad7",
+      "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean": "c385b0613682a9e5a6b8b2ce9c6d96b2ce7a764f68986cfda30dde01820657cf",
+      "evaluation/formal-kernel-mechanization-m0/vectors/m2-term-calculus.json": "bafdabbf36df10d09df478cbaa524ce88e0f6e6f0ffd0843c169a3eab4154b62",
+      "evaluation/formal-provider-interpretation-f2o2/TermEvaluatorProbe.lean": "b726117edae432b86ddde9b3270416791d4e253f85424a4f99c6615d5c3feb80",
+      "evaluation/formal-source-view-bodies-f0v2b1/normalized-schema.json": "a143a23c60350d258a9255ebf294111ae4e6ab4ce83c31b25d8162d95b8fd686"
+    },
+    "profile_manifests": {
+      "docs-next/analysis/profiles/cryptographic-property.json": "68bc442056849e2ef7af3cbcc031146675e6e5c85d375fabb0fac9cb60578c17",
+      "docs-next/analysis/profiles/kernel.json": "a386f331b61f29ff9ab434571422b926f7de76edf537c5ede557e6882a65a676",
+      "docs-next/foundation/semantic-profile-manifests.json": "48e487f34c24317690dd221c066db1a0a09316dfb45f1d06934c5dfe74b058d0",
+      "docs-next/pir/profiles/interaction.json": "598c23a9beb9aec8d1521e2fff0996a289dbc0c0fd77c93b6178a13fec1b5f7a"
+    }
   },
   "lane_map": [
     {
-      "image": "true",
       "lane": "Accepted",
-      "provider_carrier": "Bool",
-      "reachable": true
+      "provider_lane_image": {
+        "case": "Image",
+        "value": true
+      }
     },
     {
-      "image": "false",
       "lane": "Rejected",
-      "provider_carrier": "Bool",
-      "reachable": true
+      "provider_lane_image": {
+        "case": "Image",
+        "value": false
+      }
     },
     {
-      "image": null,
+      "lane": "Aborted",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
+      "lane": "StrategyStopped",
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
+    },
+    {
       "lane": "OperationalNoncompletion",
-      "outcome": "CannotAnswer",
-      "provider_carrier": "Bool",
-      "reachable": true,
-      "reason": "the verifier Boolean has no non-collapsing image for operational noncompletion"
+      "provider_lane_image": {
+        "case": "Unmodelled"
+      }
     }
   ],
   "lean_sha256": "210fd0ae846ad96d6535dc629bff1a9d11bc2a6e808d5e1689609407e5857726",
@@ -119,7 +162,12 @@
     }
   ],
   "provider": {
+    "closed_carrier": "Bool",
     "definition": "Schnorr.sigma",
+    "modelled_lanes": [
+      "Accepted",
+      "Rejected"
+    ],
     "module": "Examples.Schnorr.SigmaProtocol",
     "name": "VCVio",
     "revision": "de0a3108140e3e04a7ebf0075aa110b459ee6e8a",
@@ -136,15 +184,15 @@
       "StrategyDecisionView": 38
     },
     "body_sha256": {
-      "ClaimReductionView": "edc9e9d0ef0c4c9b80cfd5149124420c631728345d60e1e34f031dbe236797ee",
-      "EffectView": "239e6fbd9d4304eb5eef4c17327bb024bbe39cc842e00a076332db75231e5c49",
-      "ExecutionView": "3ff579a58ea436941981f9ea94ba925a48e0ecbe2b573c10fd32eec15f03e8ff",
-      "PublicBindingView": "08c8bd418857c23dfa51f1d9087ab0a2a386e38a73c6251f1f39906112501b7f",
-      "PublicCoinView": "8185f8906053dc9c18d03a5415440169bdb5ca958fae685da2856d6edd8c4f91",
-      "StrategyDecisionView": "4e5e7615aae3c31aea434bce89d125d26ed22b983bbb8c1e8e8482492a4e4cef"
+      "ClaimReductionView": "ea01398d66affa1ade088a57aa0b6197b7447f29e2843e732dc91c793cecd847",
+      "EffectView": "6b80af1f9bd3b516ad961d0d5df4ab8d963800d71d93a45d49b45a5fb454f82f",
+      "ExecutionView": "3a011eb0169d512ffc3fd76b9c79bb09ee463043ade8efae0e1ff7405726326e",
+      "PublicBindingView": "0fb36dee5ddff8e3efc8ad32fcc3d3cdb395af9e1e4ecaf82ed08db4ba6b5ca8",
+      "PublicCoinView": "c70e0f94e4ca48e47880aea28a10a63f5e7634bf3a814a1f58159db89a01369e",
+      "StrategyDecisionView": "e7d19c16c829d9ce28fe6ea43e77bd2f170114eb45ef30d1a5bd44e367c6c18d"
     },
-    "core_id": "zkcidv0:pir.interactive-core:b1f9e272e88b994475911a42fb016f7ac6bf8acf039c69d094907801c24fcca6",
-    "protocol_id": "zkcidv0:pir.protocol:7c80f2a4cddb51626acec79d26e0ec873f15fb673896e0b3c0a91c87e926113b",
+    "core_id": "zkcidv0:pir.interactive-core:abf5b7564a387b4c798886c43a190af8436f20b0013a0d0f815936b8ebf0a0e1",
+    "protocol_id": "zkcidv0:pir.protocol:2197ce0ee3833d646613084b26bbffca139e4faeddba2b8b79ec6f700c206dc3",
     "source_digest": "c03b6e9b53871a95605310a3c89288dff95ff1d99c725faf4995ccbdd1e3d84a"
   },
   "type_map": [

@@ -1528,7 +1528,7 @@
       "id": "research.provider-interpretation",
       "title": "Finite Schnorr VCVio interpretation",
       "subject": "Whether one generated VCVio artifact has a total, order-preserving operational correspondence to the admitted finite Schnorr Fresh Protocol under the schedule, value, computation, terminal, and trace clauses of the entry contract.",
-      "claim": "An independent cold-view checker authenticates the subject and certificate, executes the portable Check and guard terms and the pinned VCVio artifact over their complete finite domains, and finds exact agreement for schedule, values, computations, completed terminals, and traces; the aggregate remains CannotAnswer because the Boolean provider carrier has no non-collapsing image for operational noncompletion.",
+      "claim": "An independent cold-view checker authenticates the current subject and certificate, executes the portable Check and guard terms and the pinned VCVio artifact over their complete finite domains, consumes the mechanized first-active terminal reading, and finds exact agreement for schedule, values, computations, terminals, and traces across all 81 verifier inputs and all 81 honest-plan runs. All five clauses are affirmative; the five-lane provider map remains an authenticated package input because Analysis has not published the provider declaration and Boolean carrier needed to form that premise.",
       "classification": "research-falsifier",
       "methods": ["known-answer", "negative", "differential", "bounded-exhaustive", "static-analysis"],
       "source_paths": ["evaluation/formal-provider-interpretation-f2o2/run.py", "evaluation/formal-provider-interpretation-f2o2/generator.py", "evaluation/formal-provider-interpretation-f2o2/checker.py", "evaluation/formal-provider-interpretation-f2o2/TermEvaluatorProbe.lean", "evaluation/formal-provider-interpretation-f2o2/README.md", "evaluation/formal-provider-interpretation-f2o2/expected-findings.json", "evaluation/formal-provider-interpretation-f2o2/generated/SchnorrProvider.lean", "evaluation/formal-provider-interpretation-f2o2/generated/certificate.json", "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-interpretation.md"],
@@ -1537,7 +1537,7 @@
       "environment": "pinned-external-checkout",
       "shardability": "none",
       "blocking": true,
-      "nonclaims": ["The finite clause findings establish no complete provider correspondence, protocol or cryptographic property, theorem applicability, Fresh distribution premise, provider carrier premise, general evaluator correctness, correspondence for another subject or provider, owner-page change, compiler or backend correctness, or production validity."],
+      "nonclaims": ["The finite clause findings establish no formed Analysis provider-map premise, universal provider correspondence, protocol or cryptographic property, theorem applicability, Fresh distribution premise, general evaluator correctness, correspondence for another subject or provider, owner-page change, compiler or backend correctness, or production validity."],
       "execution": {
         "kind": "command",
         "argv": ["{python}", "-B", "evaluation/formal-provider-interpretation-f2o2/run.py", "--check"],

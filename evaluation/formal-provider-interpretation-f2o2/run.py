@@ -95,8 +95,9 @@ def main() -> int:
             f"{outcomes.get('CannotAnswer', 0)} cannot-answer)"
         )
         print(
-            "all finite checks and completed traces agree; the Boolean carrier "
-            "has no non-collapsing operational-noncompletion image"
+            "all five correspondence clauses agree on their complete finite "
+            "domains; the provider map remains a package input until Analysis "
+            "publishes its declaration"
         )
     return 0
 
