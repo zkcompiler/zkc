@@ -34,15 +34,15 @@ SOURCE_PINS = {
 }
 
 OWNER_PINS = {
-    "docs-next/pir/interactive-core.md": "42abeae662ebd982598009607bb7887ef4ddb12c525a62350fd4529c26375a4c",
-    "docs-next/pir/fiat-shamir.md": "a93525b20c0e9cf77fae9091d263cdf6320181b3313c6ecda3dd84e71890ad7b",
-    "docs-next/pir/duplex-sponge-fiat-shamir.md": "54822176a39852d07d72a084d0a56a04f22c1207e16bb2e0196c4f84fa4954c5",
-    "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
+    "docs-next/pir/interactive-core.md": "9ef8181f88c3145319c4608c599f51b409157cfe9fdab7c1821fbb57f9da4bce",
+    "docs-next/pir/fiat-shamir.md": "f3a8b2a13f16528101cf4894262c187bcb89ace695f9ca290b29bab63c7f3c0f",
+    "docs-next/pir/duplex-sponge-fiat-shamir.md": "323ddf9b7bc3d0cc3837f05adf8034e9a8db5965d5c452a5fde246b875f11640",
+    "docs-next/pir/endpoint-projection-views.md": "d9a89afe089a802554b889622f9b4cb8521d8b588ca263005010a419430b7378",
     "docs-next/oir/projection-contract.md": "235846997438e33de1d9ad49d501e0937c032b9de102e6da928033729a1855c6",
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "8a52e02cc679473f428978be049eab94a42f09968065730fd449eb3802e8e70b",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "cb3d3c27a1fb33602c028aa1402eabefbbad7076cb660c5de311dd31dfd73139",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
     "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",

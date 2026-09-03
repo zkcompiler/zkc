@@ -38,6 +38,15 @@ and is admitted by the profile-relative `PIRReference` arm at
 `docs-next/pir/interactive-core.md:2251-2259`; the separate family-view
 reference-boundary finding remains affirmative.
 
+Round eight re-pins the five migrated owner pages and migration record after
+the cross-contract repairs. The family-view ranges move, but all eight rows
+retain their frozen verdicts: five fit, three break, none bend, none disagree,
+and none change. The four source-specialized fitting rows still retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`; the migration review's
+separate completion, executable-preimage, and public-setup blockers neither
+supply nor remove those source carriers. The verdict aggregate therefore
+remains `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
 ## Executable evidence
 
 Run from the repository root:

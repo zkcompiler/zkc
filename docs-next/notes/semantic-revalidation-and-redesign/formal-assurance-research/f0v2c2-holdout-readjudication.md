@@ -728,3 +728,31 @@ The four source-specialized fitting rows still retain
 `CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`. The declaration-body repair
 does not supply their source-specific Check, Reduction, Claim, or failure-guard
 coordinates and changes no verdict.
+
+## Round eight
+
+The five migrated owner pages and the migration record are re-pinned after the
+cross-contract repairs. The Interaction, canonical-framed, duplex, and endpoint
+page pins are now respectively
+`9ef8181f88c3145319c4608c599f51b409157cfe9fdab7c1821fbb57f9da4bce`,
+`f3a8b2a13f16528101cf4894262c187bcb89ace695f9ca290b29bab63c7f3c0f`,
+`323ddf9b7bc3d0cc3837f05adf8034e9a8db5965d5c452a5fde246b875f11640`,
+and `d9a89afe089a802554b889622f9b4cb8521d8b588ca263005010a419430b7378`.
+The refreshed adjudication ledger is frozen at
+`dc610e14675fccac31f416bbcb3b12355f866ed1d99ba4ece6253ed4f0406e7e`;
+its canonical, duplex, and endpoint citations move to lines 1240-1676,
+839-1289, and 892-1144.
+
+All eight rows were re-adjudicated against both comparison sources. Five still
+fit and three still break at the same named boundaries; none bend, disagree,
+or change verdict. The represented WHIR and WARPfold frontiers still have zero
+`Unknown` claim states and zero verdict changes. The verdict aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`.
+
+The canonical family-view reference boundary remains affirmative at its moved
+coordinates. The four source-specialized fitting rows retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`: no repaired owner paragraph
+supplies their exact Check, Reduction, Claim, or failure-guard references. The
+migration review's completion-derivation, executable-preimage, and public-setup
+findings are separate cross-contract blockers and do not change any frozen
+holdout verdict.

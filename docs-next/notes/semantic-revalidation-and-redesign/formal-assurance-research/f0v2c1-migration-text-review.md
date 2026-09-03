@@ -1,8 +1,9 @@
 # Migration Text Freeze Review
 
-> **State:** `Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED` after round seven;
-> all ten questions close, the tenth resolving every recognized declaration
-> kind to exactly one body-owning page with its malformed-shape admission
+> **State:** `CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED` after round
+> eight; the ten earlier questions and three repaired-countermodel questions
+> close, while completion derivability, the executable canonical binding
+> preimage, and public-setup totality remain blocked
 > **Authority:** None. This verification lane changes no owner page, source
 > profile manifest, or published identity.
 > **Executable evidence:**
@@ -10,23 +11,24 @@
 
 ## 1. Exact question and aggregate
 
-Does the migrated PIR owner text close all seven independent freeze-review
-questions for decision fidelity, the Terminal contract, public-coin graph
-transfer and sinks, owner-view definition closure, manifest closure,
-publication reconstruction, and family-view body closure?
+Does the current migrated PIR owner text close all sixteen verification
+questions: the ten questions frozen in round seven, plus Interface completion
+derivability, source-authority preimage equations, heterogeneous
+challenge-transition representability, required-influence exactness, the
+Analysis owner-read join, and public-setup view totality?
 
-Round four answers yes after the owner added a typed region for both
-`ClaimSource` arms. The current aggregate is
-`Affirmative/F0V2C1-A-MIGRATION-TEXT-CLOSED`.
+Round eight answers no for the exact current sources. Thirteen questions close
+and three remain `CannotAnswer`, so the current aggregate is
+`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`.
 
 The audit pins the six migrated owner pages and eight migrated manifests. It
 does not treat a resolved selector, a passing source compiler, or a finite
 oracle as proof that the represented semantics are correct.
 
 Sections 2 through 10 preserve the first-round evidence and proposed repairs
-as history. `Round two` superseded their negative aggregate, `Round three`
-recorded the source-region reopening, and `Round four` supersedes both against
-the current owner bytes.
+as history. The numbered round sections record each later recheck; `Round
+eight` is the current result and supersedes the earlier aggregates without
+rewriting their historical evidence.
 
 ## 2. Answer one: decision fidelity
 
@@ -1773,3 +1775,502 @@ protocol fits.
 The real Git index remains untouched. No commit, push, pull request,
 owner-page edit, profile-manifest edit, directory-README edit, publication, or
 private-ledger write was attempted.
+
+## Round eight
+
+### Exact question and result
+
+Does the current migrated PIR owner text close all sixteen verification
+questions: the ten questions frozen in round seven, plus Interface completion
+derivability, source-authority preimage equations, heterogeneous
+challenge-transition representability, required-influence exactness, the
+Analysis owner-read join, and public-setup view totality?
+
+No, for the exact sources at migration head `16eed00f`. The ten round-seven
+questions remain affirmative. Three of the six repaired-countermodel questions
+are affirmative and three remain `CannotAnswer`, so the aggregate is
+`CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`.
+
+| Finding | Outcome and stable code |
+|---|---|
+| decision fidelity | `Affirmative/F0V2C1-A-DECISION-FIDELITY` |
+| Terminal contract | `Affirmative/F0V2C1-A-TERMINAL-CONTRACT` |
+| public-coin graph | `Affirmative/F0V2C1-A-PCGRAPH-TRANSFER` |
+| owner-name closure | `Affirmative/F0V2C1-A-OWNER-CLOSURE` |
+| manifest closure | `Affirmative/F0V2C1-A-MANIFEST-CLOSURE` |
+| publication compilers | `Affirmative/F0V2C1-A-PUBLICATION-COMPILERS` |
+| family-body closure | `Affirmative/F0V2C1-A-FS-BODY-CLOSURE` |
+| reference-leaf closure | `Affirmative/F0V2C1-A-PIR-REFERENCE-CLOSURE` |
+| static-view law selection | `Affirmative/F0V2C1-A-STATIC-VIEW-LAW-SELECTION` |
+| declaration-body closure | `Affirmative/F0V2C1-A-DECLARATION-BODY-CLOSURE` |
+| Interface completion derivability | `CannotAnswer/F0V2C1-C-INTERFACE-COMPLETION-DERIVATION` |
+| source-authority preimage equations | `CannotAnswer/F0V2C1-C-CANONICAL-BINDING-PREIMAGE` |
+| challenge-transition representability | `Affirmative/F0V2C1-A-CHALLENGE-TRANSITION-REPRESENTABLE` |
+| influence-view exactness | `Affirmative/F0V2C1-A-INFLUENCE-VIEW-EXACT` |
+| Analysis read-catalog join | `Affirmative/F0V2C1-A-ANALYSIS-READ-CATALOG-JOIN` |
+| public-setup view totality | `CannotAnswer/F0V2C1-C-PUBLIC-SETUP-VIEW-TOTALITY` |
+
+The retained checks rerun their bounded schedule, terminal, region,
+claim-status, view-body, reference-leaf, law-selection, declaration-body,
+manifest, and publication oracles against the current source pins. The current
+family-view census has 91 exact fields in the eight construction/result
+bodies. Nothing in this round converts one of those finite controls into a
+general semantic proof.
+
+### Interface completion derivability
+
+The repair removes the unformable draw-sequence coordinate. Its replacement
+claim is not derivable from the owner transition. The Interface presents the
+construction, failed challenge, prefix receipt count, prefix state, and final
+state at `docs-next/pir/interfaces-and-plans.md:497-555`. From the transition
+at `docs-next/pir/fiat-shamir.md:850-889`:
+
+- every squeeze output, intermediate state, and final state is a function of
+  the construction, challenge, and prefix state;
+- every draw receipt also contains the acceptance result; and
+- acceptance and successful decoding consume the exact public-condition values
+  and exact prior joint-member challenge values at lines 863-866 and 878-881.
+
+Those last two input classes are absent from the completion payload. They
+cannot be recovered from `prefix_state`: the owner expressly permits
+noninjective absorb and advance algorithms at lines 679-682. The first missing
+inputs therefore occur at lines 865-866, and the exact draw sequence is not a
+function of the five presented coordinates. `final_state` alone is derivable,
+but that does not make every draw derivable as the Interface claims.
+
+The type-formation half of the repair does close. Applying the Foundation
+Appendix A.2 `Worst` equations gives `(11,1,0,0)` for the failed-challenge
+natural, `(12,1,0,0)` for the receipt-count natural, and `(64,3,2,1)` for the
+two-natural failure payload. State values inherit the construction's stricter
+tagged-completion preflight, and terminal public outputs are already owner
+admitted. Thus every current completion coordinate type is admissible for
+every admitted canonical-framed construction. The six
+`CompletionPayloadCoordinate` constructors at Interface lines 497-503 also
+match exactly the six body arms at lines 2007-2010.
+
+The deep review's former type obstruction is reversed, but the replacement's
+derivation premise fails on the review method's own smallest construction.
+The finding remains `CannotAnswer` at the exact missing owner inputs rather
+than treating a passing state replay as a draw replay.
+
+### Source-authority preimage equations
+
+The owner-text repair closes. A recursive audit of all thirteen top-level PIR
+Markdown pages finds fourteen source-authority identity constructors: ten
+direct constructors apply their same-page family compiler to a tagged family
+value, and four generic static-view constructors dispatch through the selected
+owner profile's bound compiler. The audit also resolves twenty-four compiler
+definitions over the four `pir.source-*` subject kinds. The canonical-framed
+and duplex family pages each enumerate both `StaticView` and
+`CheckedConstruction` arms for binding payload, capability requirement,
+no-policy declaration, and policy closure. This supplies the explicit wrapper
+that the deep review's reversal condition required.
+
+The executable Analysis route does not implement that equation. The call at
+`evaluation/k3-analysis-closure/reference_model.py:16521-16529` requests the
+canonical-framed execution view. Its protocol-model callee selects the transcript profile
+at `evaluation/k2-protocol-fiat-shamir/reference_model.py:3185-3189`, but the
+common authority helper forms this untagged payload at lines 2262-2270:
+
+```text
+R {
+  0: owner_domain,
+  1: family,
+  2: source_body,
+  3: manifest_body,
+  4: consumer_ref,
+  5: purpose_ref
+}
+```
+
+It forms and authenticates the payload identity directly at lines 2272-2283.
+It never applies the owner-required arm-0
+`CanonicalFramedSourceBindingPayloadBody(StaticView(y))`, whose local body is
+the view coordinate plus the ordered field-coordinate sequence. The model does
+not call the current Interaction compiler either: it selects the transcript
+profile and bypasses both current family compilers. The textual repair is
+therefore affirmative, but the requested text-to-model correspondence remains
+`CannotAnswer/F0V2C1-C-CANONICAL-BINDING-PREIMAGE`.
+
+### Challenge-transition representability
+
+The review's two-rule Core now projects to one exact construction-wide body.
+Writing the symbolic algorithm and evaluation-contract coordinates explicitly,
+the derived body is:
+
+```text
+ChallengeTransitionViewBody {
+  transcript_construction_id: two-rule-construction,
+  core_id: two-rule-core,
+  namespace_derivation_law: canonical-framed-prefix-and-domain-v0,
+  exact_length_law: canonical-framed-body-grammar-v0,
+  state_update_before_decode_law:
+    canonical-framed-admission-and-execution-v0,
+  retry_law: canonical-framed-admission-and-execution-v0,
+  sampling_failure_law: canonical-framed-admission-and-execution-v0,
+  challenge_rules: [
+    {
+      challenge_ref: 0, position: 0,
+      acceptance_abi: {
+        use: (accept-boolean-0, accept-contract-0),
+        input_types: [TranscriptBytesType], result_type: BooleanType
+      },
+      decoder_abi: {
+        use: (decode-boolean-0, decode-contract-0),
+        input_types: [TranscriptBytesType], result_type: BooleanType
+      },
+      draw_bounds: {squeeze_length: 1, maximum_draws: 1}
+    },
+    {
+      challenge_ref: 1, position: 1,
+      acceptance_abi: {
+        use: (accept-root-natural-1, accept-contract-1),
+        input_types: [TranscriptBytesType], result_type: BooleanType
+      },
+      decoder_abi: {
+        use: (decode-root-natural-1, decode-contract-1),
+        input_types: [TranscriptBytesType], result_type: RootNat(2)
+      },
+      draw_bounds: {squeeze_length: 2, maximum_draws: 3}
+    }
+  ]
+}
+```
+
+The body follows the field definitions at
+`docs-next/pir/fiat-shamir.md:1317-1340` and the entry-by-entry projection law
+at lines 1391-1397. It retains
+both ABIs and both bound records: zero rules are selected, dropped, or changed.
+This meets the deep review's reversal condition.
+
+### Required-influence exactness
+
+`InfluenceAtom` has exactly one definition on the page, at
+`docs-next/pir/fiat-shamir.md:585-604`, and Appendix A gives its exact body tags
+zero through thirteen. For the first active challenge after the root opening
+with two public bindings, the static projection law at lines 1365-1389 derives
+these six required entries, in transition order:
+
+```text
+(Atom(CoreHeaderAtom(core-id)), true)
+  body V(0,Y(ContentRefV0(core-id)))
+(Atom(ConstructionHeaderAtom(construction-id)), true)
+  body V(1,Y(ContentRefV0(construction-id)))
+(Atom(ApplicationDomainAtom(application-domain-ref)), true)
+  body V(2,DeclarationRefBody(Module(application-domain-ref)))
+(Atom(ScopeOpenedAtom([0])), true)
+  body V(3,S[N(0)])
+(Atom(PublicBindingAtom(0)), true)
+  body V(4,N(0))
+(Atom(PublicBindingAtom(1)), true)
+  body V(4,N(1))
+```
+
+For a two-challenge Core, the second challenge carries those entries plus one
+symbolic `(EveryActualDrawOf(0), true)` entry. If the first challenge produces
+two draws, runtime expansion gives the two exact tag-13 bodies
+`V(13,R{0:N(0),1:N(0)})` and `V(13,R{0:N(0),1:N(1)})` in draw order. No
+synthetic occurrence coordinate is needed for the header, and the two binding
+references remain distinct.
+
+The body text explicitly includes every scheduled static atom, condition atom,
+module atom, and prior symbolic draw; lines 1378-1386 state that the `true`
+entries are exactly the complete base, Reduction, and module requirement.
+They expressly include both item 9's joint-member draws and item 10's earlier
+continuous-state squeezes from Section 5.2. This meets the review's reversal
+condition and closes `F0V2C1-A-INFLUENCE-VIEW-EXACT`.
+
+### Analysis read-catalog join
+
+The current Analysis page has ten literal `AnalysisStaticViewFields` or
+`AnalysisExecutionViewFields` selections containing 66 selected top-level
+fields. Every selected name resolves to a field declared by the selected owner
+body; there are no duplicate or absent selections. Twenty-four of those names
+select record or sequence roots. The owner read law defines a field name as an
+exact ordinal subtree path and expands every selected subtree to all atomic
+leaves, so none of the current names is ambiguous between a leaf and a subtree.
+
+`checks/tests/test_analysis_owner_read_catalog.py` discovers all ten literal
+calls and checks their names against the owner bodies. It is sufficient for
+this current literal field-existence join. It does not prove the recursive
+semantic meaning of the 24 subtree roots, compiler authenticity, or execution
+closure. The removed `result_ref` and renamed fields satisfy the deep review's
+reversal condition without weakening absent-field refusal, so the finding is
+`Affirmative/F0V2C1-A-ANALYSIS-READ-CATALOG-JOIN`.
+
+### Public-setup view totality
+
+The repaired support partition represents the deep review's child-scope
+countermodel exactly. For the occurrence-derived `SessionContext` binding
+zero it derives:
+
+```text
+entries = []
+run_established = [0]
+body = R{0:ContentRef(protocol-id),1:ContentRef(core-id),2:S[],3:S[N(0)]}
+```
+
+This exact named condition excludes the future strategy value from setup, so
+the original review's support-boundary reversal condition is met. The stated
+totality claim is nevertheless false. Membership in `entries` and
+`run_established` is Protocol-determined, but every `entries` element contains
+its invocation-supplied value. For one Protocol with one invocation-determined
+Boolean public binding, otherwise equal false and true invocations produce two
+different canonical view bodies and IDs. Thus the text at
+`docs-next/pir/interactive-core.md:3062-3063` cannot conclude that every
+Protocol has exactly one setup view. Exactly one view is derivable only for a
+Protocol and invocation pair, or for the covered-value equivalence class the
+body already defines. The Statement-invariance exclusion at lines 3075-3078
+is exact and survives that correction.
+
+The Analysis consumer has a second mismatch. Its fixed-setup projection at
+`docs-next/analysis/cryptographic-properties.md:523-525` requires only equal
+`entries`, not empty `run_established` sequences. Formation at lines 561-566
+then requires the entries to contain every `PublicParameter` and
+`SessionContext` binding, contrary to the owner's explicit complement for an
+admitted Protocol such as the countermodel. This is not a proof that fixed
+setup must admit that Protocol; it is missing formation text for the intended
+restricted domain. The finding is therefore
+`CannotAnswer/F0V2C1-C-PUBLIC-SETUP-VIEW-TOTALITY`.
+
+### Publication reconstruction and holdouts
+
+The reference and independent publication compilers agree on all eighteen
+profiles at the current tree, the round-seven tree, and the migration base.
+Relative to round seven, sixteen profiles rotate; `oir-endpoint-graph` and
+`analysis-kernel` are stable. Relative to the migration base, the previously
+measured seventeen-profile cone remains and only `analysis-kernel` is stable.
+Foundation is unchanged, six published upstream rows remain intentionally
+stale, and this lane writes no publication table.
+
+The holdout package is independently re-pinned and all eight verdict rows are
+re-adjudicated. Five still fit and three still break at the same named
+boundaries; none bend, disagree, or change verdict. The aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`. The four source-specialized
+fitting rows separately retain
+`CannotAnswer/F0V2C2-C-EXACT-TERMINAL-CARRIERS`; none of the three migration
+blockers supplies those missing source carriers.
+
+### Proposed delta
+
+#### Completion replay inputs
+
+- **Owner page and section:** `docs-next/pir/interfaces-and-plans.md`, Section
+  3.5, Completion presentation.
+- **Exact change:** Add one construction-specific
+  `FSFailureReplayInputs` coordinate. Its semantic type is a variant indexed by
+  every challenge rule; arm `c` is the record of the trailing
+  `SamplingInputTypes(c)` values used by acceptance and decoding, excluding the
+  already carried transcript bytes. The failed challenge selects the arm and
+  the payload carries the exact public-condition and prior joint-member values
+  in ABI order. Admit the Interface only after the complete variant type passes
+  Foundation Appendix A.2 `Worst`; return the existing qualified unsupported
+  or refused result if it does not. Replace the claim that draws are functions
+  of only the existing coordinates with replay from the construction,
+  challenge, prefix state, and this exact typed input arm. Add the corresponding
+  body arm and require it in the failure entry's map domain.
+- **Identity effect:** The Interface-plan profile, Interface/Plan IDs,
+  source-authority artifacts, and import dependents rotate. The Core and
+  canonical-framed construction bodies need not change.
+- **Evidence and gate:** The missing arguments are owner lines 865-866 and
+  880-881; noninjectivity is explicit at lines 679-682. Gate
+  `F0V2C1-C-INTERFACE-COMPLETION-DERIVATION`.
+- **Reversal condition:** Close only if every draw and final state is derived
+  from coordinates the Interface actually carries for every admitted
+  construction, or if an equivalent exact bounded replay carrier is supplied.
+  A final-state replay or one one-shot fixture is insufficient.
+- **Nonclaims:** This delta does not claim the external codec implements replay,
+  that every construction can form an Interface, or any transcript-security
+  property.
+
+#### Executable source-authority compiler dispatch
+
+- **Owner page and section:** No owner-page change is proposed. Update
+  `evaluation/k2-protocol-fiat-shamir/reference_model.py`, the authority helper
+  at lines 2262-2283 and the execution-view route beginning at line 3174.
+- **Exact change:** Pass the tagged family value to an owner-profile-specific
+  four-subject compiler. For a canonical-framed static view, form the binding
+  payload as arm 0 of `CanonicalFramedSourceBindingPayloadBody(StaticView(y))`,
+  with `y` equal to the canonical view-coordinate body and ordered manifest
+  field-coordinate bodies; form requirement, no-policy, and closure IDs through
+  the corresponding canonical-framed compilers. Keep Fresh views on the
+  Interaction compiler and duplex views on the duplex compiler. Add a
+  discriminator asserting that the Analysis Fiat--Shamir execution-view payload
+  equals the canonical equation and rejects both the untagged six-field record
+  and an Interaction-family wrapper.
+- **Identity effect:** This changes bounded executable evidence and fixtures,
+  not owner or published identities. Any fixture IDs derived from the old model
+  preimage must be regenerated and rechecked.
+- **Evidence and gate:** Analysis-model lines 16521-16529 select the operation;
+  protocol-model lines 3185-3189 select the transcript profile; protocol-model
+  lines 2262-2283 bypass its bound compiler. Gate
+  `F0V2C1-C-CANONICAL-BINDING-PREIMAGE`.
+- **Reversal condition:** Close when the executable payload and all four
+  authority subjects equal the selected owner's tagged equations byte for byte,
+  or when the executable is explicitly retired as non-correspondence evidence.
+- **Nonclaims:** Matching the preimage equation would not prove capability
+  freshness, runtime correctness, or theorem applicability.
+
+#### Public-setup quotient and fixed-setup domain
+
+- **Owner pages and sections:** `docs-next/pir/interactive-core.md`, Section
+  13.4, Public setup; and
+  `docs-next/analysis/cryptographic-properties.md`, Section 3, fixed public
+  setup.
+- **Exact change:** In the PIR page, state that the Protocol alone determines
+  membership in `entries` and `run_established`, while the Protocol plus exact
+  invocation determines entry values and therefore the full body and ID.
+  Replace “every admitted Protocol has exactly one setup view” with exactly one
+  view per admitted Protocol/invocation pair, modulo the body's existing
+  covered-value equivalence. In Analysis, require both selected setup views to
+  have empty `run_established` sequences before requiring their `entries` to be
+  byte-identical and complete; reject the fixed-setup formation otherwise.
+- **Identity effect:** The public-setup profile, public-setup view IDs,
+  Analysis cryptographic-property profile, and their import dependents rotate.
+  Core/Protocol domain bodies need not change.
+- **Evidence and gate:** PIR lines 3056-3078 establish the partition and
+  invocation-sensitive body; Analysis lines 523-525 and 561-566 omit the empty
+  complement premise. Gate `F0V2C1-C-PUBLIC-SETUP-VIEW-TOTALITY`.
+- **Reversal condition:** Close when uniqueness is stated at the exact
+  Protocol/invocation quotient and the Analysis operation explicitly selects a
+  formable subset consistent with both owner sequences. Showing only that the
+  future strategy binding enters `run_established` does not establish the
+  current one-view-per-Protocol claim.
+- **Nonclaims:** This delta does not require the countermodel to form fixed
+  setup, restrict Core binding semantics, or prove fixedness, independence, or
+  a cryptographic setup property.
+
+## Handoff
+
+Main should commit this complete working tree with subject:
+
+```text
+test: review the cross-contract repairs and re-pin the holdouts
+```
+
+### Files changed
+
+- `evaluation/formal-source-migration-text-review-f0v2c1/run.py` reruns the ten
+  retained findings, derives all six repair countermodels, audits the complete
+  source-constructor corpus and Analysis read join, checks both executable
+  models, and reconstructs current and baseline publication cones.
+- `evaluation/formal-source-migration-text-review-f0v2c1/expected-findings.json`
+  freezes sixteen names, outcomes, stable codes, the three-blocker aggregate,
+  and metrics digest
+  `2b1ee42cddcd7ead71621d50fda0fb471b40d82a8df5cbf7fd60062534361f37`.
+- `evaluation/formal-source-migration-text-review-f0v2c1/README.md` states the
+  exact current answer, closed repairs, blockers, and nonclaims.
+- `evaluation/formal-source-holdout-readjudication-f0v2c2/run.py`,
+  `adjudication.json`, `expected-findings.json`, and `README.md` re-pin the
+  five current owner pages and migration record, move exact source ranges, and
+  freeze the unchanged eight-row adjudication at
+  `dc610e14675fccac31f416bbcb3b12355f866ed1d99ba4ece6253ed4f0406e7e`.
+- `evaluation/README.md` refreshes the two current package rows.
+- This note and `f0v2c2-holdout-readjudication.md` record round eight and the
+  proposed deltas. No directory README is edited.
+
+No PIR, Foundation, Relations, OIR, or Analysis owner page; source profile
+manifest; check manifest; lifecycle catalog or count pin; publication table;
+mechanization; private ledger; or real Git index was edited. No package was
+added. No commit, push, or pull request was attempted.
+
+### Validation
+
+The lifecycle-sensitive commands used a clone-local alternate index and object
+store under the ignored `.cache/` directory, with the checkout objects as
+read-only alternates. The developer and focused runs also used
+`UV_NO_SYNC=1`, `UV_OFFLINE=1`, and a clone-local dependency cache. All of
+those transient paths and the generated `target/checks` results were removed.
+The real index SHA-256 was
+`35d3dfeac2d5423d43d3512cad742f2f6edc2c891b70e979ae888cebf6933642`
+both before and after the alternate-index matrix.
+
+| Command | Exit | Wall time | Result |
+|---|---:|---:|---|
+| full reads of owner-repair commits `1548d657` and `16eed00f` | 0 each | 0.01 s and 0.00 s | inspected the complete repair diffs without writing |
+| pre-edit migration package `--check` | 1 | 0.07 s | correctly detected the stale round-seven 95-field freeze |
+| pre-edit holdout package `--check` | 1 | 0.04 s | owner/support pins and frozen projection drifted; all eight verdict comparisons already agreed |
+| final migration package `--check` | 0 | 1.39 s | reproduced sixteen findings, three blockers, and the `CannotAnswer` aggregate |
+| final holdout package `--check` | 0 | 0.04 s | reproduced all 26 findings and the affirmative eight-row verdict aggregate |
+| two cross-owner developer controls | 0 | 0.05 s | all four unit tests passed |
+| direct publication identity print | 0 | 0.36 s | reference and independent compilers agreed on all eighteen current profiles |
+| diagnostic publication package `--check` | 1 | 3.29 s | compiler agreement passed; six intentionally stale upstream pins, one stale mutation needle, and the unpublished table failed as expected |
+| `python3 -B checks/run.py validate` with alternate index | 0 | 0.04 s | validated 77 checks across six tiers; manifest digest `926710c3c5c29534782ebc0856538807db44d3a8bde10caace17ad5fb1602539` |
+| `python3 -B checks/run.py run --tier developer` with alternate index and offline cache | 0 | 1.81 s | all nine developer checks passed |
+| focused `research.migration-text-review` wrapper with the same environment | 0 | 1.45 s | passed |
+| focused `research.holdout-readjudication` wrapper with the same environment | 0 | 0.10 s | passed |
+| Python/JSON parsing and `git diff --check` | 0 | 0.12 s | parsed both changed Python files and all three changed JSON files; no whitespace errors |
+
+### Aggregate outcome
+
+- Migration review:
+  `CannotAnswer/F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED`. Thirteen of sixteen
+  questions close. The exact blockers are completion draw derivability,
+  canonical source-preimage correspondence in the executable model, and
+  public-setup view totality.
+- Holdout readjudication:
+  `Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`. All eight verdicts are frozen
+  and re-adjudicated: five fit, three break, zero bend, zero disagree, and zero
+  change. Four fitting rows retain their separate exact-carrier
+  `CannotAnswer`.
+- Publication reconstruction: both compilers agree on all eighteen current and
+  baseline profiles. Sixteen profiles rotate relative to round seven;
+  `oir-endpoint-graph` and `analysis-kernel` are stable. The migration-base cone
+  remains seventeen profiles with only `analysis-kernel` stable. Foundation is
+  unchanged and nothing is published.
+
+### Nonclaims
+
+These byte-pinned, finite checks do not adopt a proposed delta; publish owner
+text or identities; prove an owner law for arbitrary values; establish complete
+implementation, runtime, provider, backend, OIR, endpoint, or source-family
+correspondence; prove relation satisfaction or theorem truth; establish a
+Fiat--Shamir, random-oracle, sponge, quantum-random-oracle, or broader protocol
+security result; admit an exact holdout Core; or establish deployment or
+production readiness. The Analysis read-control result covers literal current
+field existence, not recursive semantic correctness. The affirmative holdout
+aggregate says every row was re-adjudicated with a frozen verdict, not that
+every protocol fits.
+
+### Surprises and corrections to the brief
+
+- The repair commits do not put all six cross-contract questions in their
+  claimed ideal form. Three repaired texts still admit the exact countermodels
+  above, so the all-sixteen affirmative aggregate is unavailable.
+- The executable model does not use the Interaction compiler in the
+  canonical-framed path contemplated by the brief. It selects the transcript
+  profile but bypasses both current family compilers with a common untagged
+  record. The finding and proposed delta record that stronger mismatch.
+- The Interface prose points readers to its owner's Sections 8 and 9, but the
+  missing acceptance inputs are explicit in the challenge-transition equation
+  in Section 7; Section 9 supplies the execution and replay context. The review
+  checked all three sections rather than inferring the transition inputs from
+  the citation.
+- This clone contains neither `AGENTS.md` nor `.claude/CLAUDE.md`; their
+  read-only primary-checkout copies supplied the required instructions.
+- The general package discipline describes adding manifest and lifecycle rows,
+  while the task-specific instruction forbids manifest edits. Both packages,
+  check entries, lifecycle entries, and evaluation rows already existed, so
+  this round updates them in place and does not move lifecycle count pins.
+- The workflow's private-ledger append conflicts with the express outside-clone
+  write prohibition and read-only mount, so no private ledger was changed. The
+  seventh deep-review finding is repaired on another branch and was deliberately
+  not judged here.
+- The full publication check has one stale public-setup mutation needle in
+  addition to the expected unpublished identity assertions. The independent
+  compiler-agreement test and direct identity reconstruction both pass; this
+  lane neither repairs that out-of-scope test nor publishes the table.
+- One first alternate-index setup targeted nonexistent `target/` and exited 1
+  before index creation or staging. The successful run used ignored `.cache/`
+  storage. Exploratory holdout calls also used one nonexistent package spelling
+  and the unsupported `--json` option; both exited 2 without writing package
+  state, and the canonical `--check` command passes.
+- An ignore-pattern probe reused zsh's special `path` name, so later read-only
+  commands in that one subshell exited 127. A fresh shell restored the inherited
+  search path; no repository state changed.
+- Six transient JSON diagnostic captures were inadvertently created under
+  `/tmp` outside the clone. All six were unlinked before handoff, as were two
+  generated bytecode-cache directories; no outside-clone artifact remains.
+
+The real Git index remains untouched. The working tree is intentionally
+uncommitted for Main.

@@ -19,7 +19,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 EXPECTED = HERE / "expected-findings.json"
-BASE_COMMIT = "b82ce5e"
+MIGRATION_BASE_COMMIT = "b82ce5e"
+ROUND_SEVEN_COMMIT = "0590fc5f"
 
 PAGES = (
     "docs-next/pir/interactive-core.md",
@@ -45,6 +46,15 @@ PUBLISHED_IDENTITIES = "docs-next/pir/profiles/published-identities.json"
 PACKET_SOURCES = (
     "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/fiat-shamir-section-13.md",
     "evaluation/formal-source-fs-view-determinacy-f0v3/proposed/duplex-section-11.md",
+)
+ANALYSIS_PAGE = "docs-next/analysis/cryptographic-properties.md"
+ANALYSIS_READ_CATALOG_CONTROL = "checks/tests/test_analysis_owner_read_catalog.py"
+SOURCE_IDENTITY_CONTROL = "checks/tests/test_pir_source_identity_constructors.py"
+PROTOCOL_REFERENCE_MODEL = "evaluation/k2-protocol-fiat-shamir/reference_model.py"
+ANALYSIS_REFERENCE_MODEL = "evaluation/k3-analysis-closure/reference_model.py"
+PIR_MARKDOWN_PAGES = tuple(
+    str(path.relative_to(ROOT))
+    for path in sorted((ROOT / "docs-next" / "pir").glob("*.md"))
 )
 
 
@@ -84,7 +94,20 @@ def _json(relative: str) -> Any:
 def _source_hashes() -> dict[str, str]:
     return {
         relative: hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
-        for relative in (*PAGES, FOUNDATION, *MIGRATED_MANIFESTS, *PACKET_SOURCES)
+        for relative in dict.fromkeys(
+            (
+                *PAGES,
+                *PIR_MARKDOWN_PAGES,
+                FOUNDATION,
+                ANALYSIS_PAGE,
+                ANALYSIS_READ_CATALOG_CONTROL,
+                SOURCE_IDENTITY_CONTROL,
+                PROTOCOL_REFERENCE_MODEL,
+                ANALYSIS_REFERENCE_MODEL,
+                *MIGRATED_MANIFESTS,
+                *PACKET_SOURCES,
+            )
+        )
     }
 
 
@@ -437,6 +460,1164 @@ def _packet_review(pages: dict[str, str]) -> dict[str, Any]:
     return {
         "body_field_counts": packet_counts,
         "deviations": deviations,
+    }
+
+
+def _interface_completion_review(pages: dict[str, str]) -> dict[str, Any]:
+    """Derive the repaired failure presentation from the owner execution law."""
+
+    interface = pages["docs-next/pir/interfaces-and-plans.md"]
+    canonical = pages["docs-next/pir/fiat-shamir.md"]
+    interaction = pages["docs-next/pir/interactive-core.md"]
+    foundation = _read(FOUNDATION)
+    coordinate_block = interface.split("CompletionPayloadCoordinate =", 1)[1].split(
+        "CompletionEntry =", 1
+    )[0]
+    coordinates = re.findall(r"(?:^|\n)\s*(?:\|\s*)?([A-Z][A-Za-z0-9_]+)", coordinate_block)
+    expected_coordinates = [
+        "TerminalPublicOutput",
+        "FSFailureDomainPayload",
+        "FSFailureChallenge",
+        "FSFailurePrefixReceiptCount",
+        "FSFailurePrefixState",
+        "FSFailureFinalState",
+    ]
+    _require(coordinates == expected_coordinates, "completion coordinate list drifted")
+
+    body_tail = interface.split("CompletionPayloadCoordinateBody(x) =", 1)[1].split(
+        "CompletionEntryBody(x)", 1
+    )[0]
+    body_arms = [int(item) for item in re.findall(r"V\((\d+),", body_tail)]
+    _require(body_arms == list(range(6)), "completion coordinate body arms drifted")
+
+    for snippet in (
+        "Worst(Seq(t,c)) = (",
+        "Worst(Record(fields)) = (",
+        "Worst(Variant(cases)) = (",
+        "bytes<=1048576",
+    ):
+        _require(snippet in foundation, "Foundation Worst-tuple law drifted")
+    _require(
+        "17 + MaxDatumBytes(TranscriptStateType) <= 2^20" in canonical,
+        "transcript-state completion preflight drifted",
+    )
+
+    for snippet in (
+        "FSChallengeRefType = ValueType(\n  Root(B.semantic_regime.id,\n"
+        '       "foundation.root-value-domain", 2),\n  Nat(2^14 - 1))',
+        "FSDrawCountType = ValueType(\n  Root(B.semantic_regime.id,\n"
+        '       "foundation.root-value-domain", 2),\n  Nat(2^20))',
+        "SamplingExhaustedPayloadType = ValueType(\n"
+        "  Root(B.semantic_regime.id,\n"
+        '       "foundation.root-value-domain", 7),\n'
+        "  Record { 0: FSChallengeRefType, 1: FSDrawCountType })",
+    ):
+        _require(snippet in canonical, "a fixed failure-coordinate type drifted")
+
+    # Independently evaluate the Appendix A.2 equations instead of accepting
+    # the Interface paragraph's admissibility conclusion.
+    Schema = tuple[Any, ...]
+    Worst = tuple[int, int, int, int]
+
+    def magnitude(value: int) -> int:
+        return max(1, (value.bit_length() + 7) // 8)
+
+    def worst(schema: Schema) -> Worst:
+        tag = schema[0]
+        if tag == "nat":
+            return (9 + magnitude(int(schema[1])), 1, 0, 0)
+        if tag == "record":
+            children = [worst(child) for child in schema[1]]
+            return (
+                9 + sum(16 + child[0] for child in children),
+                1 + sum(child[1] for child in children),
+                len(children) + sum(child[2] for child in children),
+                0 if not children else 1 + max(child[3] for child in children),
+            )
+        raise ReviewError(f"completion review has no Worst rule for {tag}")
+
+    challenge_schema: Schema = ("nat", (1 << 14) - 1)
+    count_schema: Schema = ("nat", 1 << 20)
+    failure_payload_schema: Schema = (
+        "record",
+        (challenge_schema, count_schema),
+    )
+    challenge_worst = worst(challenge_schema)
+    count_worst = worst(count_schema)
+    failure_payload_worst = worst(failure_payload_schema)
+    constitutional_bounds = (1 << 20, 1 << 14, 1 << 14, 384)
+    _require(
+        all(
+            measure[index] <= bound
+            for measure in (challenge_worst, count_worst, failure_payload_worst)
+            for index, bound in enumerate(constitutional_bounds)
+        ),
+        "a fixed completion coordinate exceeds a Foundation Worst bound",
+    )
+    state_types_admitted = all(
+        snippet in canonical
+        for snippet in (
+            "17 + MaxDatumBytes(TranscriptStateType) <= 2^20",
+            "preflight each exact\n   K1 maximum tagged-completion schema",
+        )
+    )
+    terminal_output_types_admitted = all(
+        snippet in text
+        for text, snippet in (
+            (
+                interface,
+                "selects the exact canonical value and K2\n"
+                "`ValueType` of the `o`th public output",
+            ),
+            (
+                interaction,
+                "type constants, inputs, derived values, guards, messages, checks,\n"
+                "   challenges, Oracle origins and modes, exact logical-access domain laws,\n"
+                "   claims, reductions, terminals, and occurrence outputs",
+            ),
+        )
+    )
+    _require(state_types_admitted, "state-coordinate Foundation preflight drifted")
+    _require(
+        terminal_output_types_admitted,
+        "terminal output coordinate no longer inherits an admitted Foundation type",
+    )
+
+    presented = {
+        "construction",
+        "challenge",
+        "prefix_receipt_count",
+        "prefix_state",
+    }
+    # This is a dependency derivation from the transition equations.  Leaves
+    # not produced by another displayed equation are operation inputs.  The
+    # failure target fixes exhaustion, so final_state can be obtained by
+    # iterating the state transition to maximum_draws; the receipt still stores
+    # every acceptance bit, which must be recomputed during replay.
+    dependencies: dict[str, set[str]] = {
+        "rule": {"construction", "challenge"},
+        "draw_ordinal": {"rule"},
+        "namespace": {"construction", "challenge", "draw_ordinal"},
+        "draw_bytes": {"rule"},
+        "squeezed_bytes": {
+            "construction",
+            "draw_pre_state",
+            "namespace",
+            "draw_bytes",
+        },
+        "draw_post_state": {
+            "construction",
+            "draw_pre_state",
+            "namespace",
+            "draw_bytes",
+            "squeezed_bytes",
+        },
+        "accepted": {
+            "rule",
+            "squeezed_bytes",
+            "public_condition_values",
+            "prior_joint_member_challenge_values",
+        },
+        "draw_receipt": {
+            "challenge",
+            "draw_ordinal",
+            "draw_bytes",
+            "namespace",
+            "draw_pre_state",
+            "draw_post_state",
+            "squeezed_bytes",
+            "accepted",
+        },
+        "draw_pre_state": {"prefix_state", "earlier_draw_post_states"},
+        "earlier_draw_post_states": {
+            "construction",
+            "challenge",
+            "prefix_state",
+        },
+        "failure_final_state": {
+            "construction",
+            "challenge",
+            "prefix_state",
+        },
+    }
+
+    def roots(node: str, active: frozenset[str] = frozenset()) -> set[str]:
+        _require(node not in active, "completion dependency graph contains a cycle")
+        if node not in dependencies:
+            return {node}
+        result: set[str] = set()
+        for child in dependencies[node]:
+            result.update(roots(child, active | {node}))
+        return result
+
+    draw_roots = roots("draw_receipt")
+    final_state_roots = roots("failure_final_state")
+    missing_draw_inputs = sorted(draw_roots - presented)
+    missing_final_state_inputs = sorted(final_state_roots - presented)
+    _require(
+        all(
+            snippet in canonical
+            for snippet in (
+                "[draw_pre_state, namespace, rule.draw_bytes]",
+                "[draw_pre_state, namespace, rule.draw_bytes, bytes]",
+                "++ exact public condition values",
+                "++ exact prior joint-member challenge values",
+                "FS replay recomputes initialization, every frame, namespace, squeeze-bytes\n"
+                "result, exact-length check, state advancement, acceptance result",
+            )
+        ),
+        "the challenge transition inputs drifted",
+    )
+    return {
+        "coordinate_list": coordinates,
+        "coordinate_body_arms": body_arms,
+        "coordinate_body_matches_list": len(coordinates) == len(body_arms),
+        "presented_derivation_inputs": sorted(presented),
+        "draw_receipt_dependency_roots": sorted(draw_roots),
+        "final_state_dependency_roots": sorted(final_state_roots),
+        "missing_draw_inputs": missing_draw_inputs,
+        "missing_final_state_inputs": missing_final_state_inputs,
+        "first_missing_input_line": _line_number(
+            canonical, "++ exact public condition values"
+        ),
+        "second_missing_input_line": _line_number(
+            canonical, "++ exact prior joint-member challenge values"
+        ),
+        "squeeze_output_is_derived": True,
+        "state_sequence_is_derived": True,
+        "final_state_is_derived": not missing_final_state_inputs,
+        "acceptance_evaluation_is_derived": not missing_draw_inputs,
+        "fixed_type_worst_tuples": {
+            "FSFailureChallenge": challenge_worst,
+            "FSFailurePrefixReceiptCount": count_worst,
+            "FSFailureDomainPayload": failure_payload_worst,
+        },
+        "constitutional_worst_bounds": constitutional_bounds,
+        "state_coordinates_owner_preflighted": state_types_admitted,
+        "terminal_outputs_owner_admitted": terminal_output_types_admitted,
+        "all_coordinate_types_foundation_admissible": (
+            state_types_admitted and terminal_output_types_admitted
+        ),
+        "complete": (
+            not missing_draw_inputs
+            and not missing_final_state_inputs
+            and state_types_admitted
+            and terminal_output_types_admitted
+            and len(coordinates) == len(body_arms)
+        ),
+    }
+
+
+def _source_identity_review() -> dict[str, Any]:
+    """Check each source subject constructor against its profile-local compiler."""
+
+    kind_suffix = {
+        "binding-payload": "BindingPayload",
+        "capability-requirement": "CapabilityRequirement",
+        "no-policy": "NoPolicy",
+        "policy-closure": "PolicyClosure",
+    }
+    site_pattern = re.compile(
+        r'ProfiledSemanticId<"pir\.source-(binding-payload|capability-requirement|'
+        r'no-policy|policy-closure)">\('
+    )
+    direct_pattern = re.compile(r"\s*B,\s*(\w+),\s*(\w+)\(\s*(\w+)\(")
+    dispatched_pattern = re.compile(
+        r'\s*B,\s*(\w+),\s*SourceSubjectBody\(\1,\s*"pir\.source-([a-z-]+)"\)'
+        r"\(\s*(\w+)\("
+    )
+    compiler_pattern = re.compile(
+        r"^(\w*)Source(BindingPayload|CapabilityRequirement|NoPolicy|PolicyClosure)"
+        r"Body\(x\) =",
+        re.MULTILINE,
+    )
+    arm_pattern = re.compile(r"if x = (\w+)\(y\)")
+
+    sites = 0
+    direct_sites = 0
+    dispatched_sites = 0
+    compiler_rows: dict[str, dict[str, list[str]]] = {}
+    compiler_pages: dict[tuple[str, str], str] = {}
+    for relative in PIR_MARKDOWN_PAGES:
+        text = _read(relative)
+        matches = list(compiler_pattern.finditer(text))
+        page_compilers: dict[tuple[str, str], list[str]] = {}
+        for match in matches:
+            key = (match.group(1), match.group(2))
+            _require(key not in page_compilers, f"{relative} repeats source compiler {key}")
+            fence_end = text.find("\n```", match.end())
+            _require(fence_end >= 0, f"{relative} source compiler is outside a closed fence")
+            block = text[match.end() : fence_end]
+            next_compiler = compiler_pattern.search(block)
+            if next_compiler is not None:
+                block = block[: next_compiler.start()]
+            arms = arm_pattern.findall(block)
+            _require(arms and "Body(x))" not in block, f"{relative} has an untagged compiler arm")
+            page_compilers[key] = arms
+            _require(
+                key not in compiler_pages,
+                f"source compiler {key} is physically defined on two PIR pages",
+            )
+            compiler_pages[key] = relative
+            compiler_rows.setdefault(match.group(1), {})[match.group(2)] = arms
+
+        for site in site_pattern.finditer(text):
+            sites += 1
+            kind = kind_suffix[site.group(1)]
+            tail = text[site.end() : site.end() + 300]
+            dispatched = dispatched_pattern.match(tail)
+            if dispatched is not None:
+                _require(site.group(1) == dispatched.group(2), "dispatcher selects another source kind")
+                _require(dispatched.group(3) == "StaticView", "dispatcher receives an untagged family")
+                dispatched_sites += 1
+                continue
+            direct = direct_pattern.match(tail)
+            _require(direct is not None, f"{relative} constructor bypasses its source compiler")
+            assert direct is not None
+            _profile, compiler, tag = direct.groups()
+            suffix = f"Source{kind}Body"
+            _require(compiler.endswith(suffix), f"{relative} constructor selects another source kind")
+            key = (compiler[: -len(suffix)], kind)
+            _require(key in page_compilers, f"{relative} does not define {compiler}")
+            _require(tag in page_compilers[key], f"{relative} compiler has no {tag} arm")
+            direct_sites += 1
+
+    _require(sites == 14, "PIR source identity constructor census drifted")
+    _require(
+        len(compiler_pages) == 24
+        and all(set(rows) == set(kind_suffix.values()) for rows in compiler_rows.values()),
+        "PIR source compiler census drifted",
+    )
+    expected_family_arms = {
+        "CanonicalFramed": {
+            kind: ["StaticView", "CheckedConstruction"] for kind in kind_suffix.values()
+        },
+        "Duplex": {
+            kind: ["StaticView", "CheckedConstruction"] for kind in kind_suffix.values()
+        },
+    }
+    for prefix, expected in expected_family_arms.items():
+        _require(compiler_rows.get(prefix) == expected, f"{prefix} compiler arms drifted")
+
+    # Resolve the generic static-view dispatch through each profile manifest.
+    # This checks the profile-bound compiler, not merely the prose name of the
+    # dispatcher at the call site.
+    static_view_profiles = {
+        "interaction": (
+            "PIR",
+            "docs-next/pir/profiles/interaction.json",
+        ),
+        "canonical-framed-fiat-shamir": (
+            "CanonicalFramed",
+            "docs-next/pir/profiles/canonical-framed-fiat-shamir.json",
+        ),
+        "duplex-sponge-fiat-shamir": (
+            "Duplex",
+            "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json",
+        ),
+    }
+    dispatcher_bindings: dict[str, dict[str, str]] = {}
+    for profile, (prefix, manifest_path) in static_view_profiles.items():
+        definitions = _json(manifest_path)["definitions"]
+        by_name = {
+            row["name"]: row
+            for row in definitions
+            if row["kind"] == "pir.body-compiler"
+        }
+        bound: dict[str, str] = {}
+        for source_kind, suffix in kind_suffix.items():
+            declaration = by_name.get(f"source-{source_kind}-body-v0")
+            _require(
+                declaration is not None,
+                f"{profile} does not bind the {source_kind} source compiler",
+            )
+            expected_selector = f"{prefix}Source{suffix}Body(x) ="
+            _require(
+                declaration["selector"] == expected_selector,
+                f"{profile} binds another {source_kind} source compiler",
+            )
+            _require(
+                "StaticView" in compiler_rows[prefix][suffix],
+                f"{profile} source compiler has no StaticView arm",
+            )
+            bound[source_kind] = expected_selector
+        dispatcher_bindings[profile] = bound
+
+    interaction = _read("docs-next/pir/interactive-core.md")
+    _require(
+        all(
+            snippet in interaction
+            for snippet in (
+                "the pir.body-compiler that owner_profile's catalog binds to the",
+                "for a dependent profile that profile's own compilers",
+                "constructor selects the owner profile's own bound compiler",
+                "Interaction compilers below\nnever form another profile's subject",
+            )
+        ),
+        "generic source-compiler dispatcher contract drifted",
+    )
+
+    protocol_model = _read(PROTOCOL_REFERENCE_MODEL)
+    analysis_model = _read(ANALYSIS_REFERENCE_MODEL)
+    _require(
+        all(
+            snippet in analysis_model
+            for snippet in (
+                "fs_execution = _affirmative_pir_view(",
+                "k2.issue_execution_view(",
+                "k2.ChallengeInterpretation.FIAT_SHAMIR,",
+            )
+        ),
+        "Analysis canonical-framed execution-view call drifted",
+    )
+    model_selects_transcript_profile = all(
+        snippet in protocol_model
+        for snippet in (
+            "owner_profile = (",
+            "profiles.interaction\n        if interpretation is ChallengeInterpretation.FRESH",
+            "else profiles.transcript_fs",
+            "coordinate.semantic_profile_id == profiles.transcript_fs.identity",
+        )
+    )
+    _require(
+        model_selects_transcript_profile,
+        "executable execution-view owner-profile selection drifted",
+    )
+    model_compiler_calls = protocol_model.count(
+        "CanonicalFramedSourceBindingPayloadBody("
+    )
+    common_untagged_body = all(
+        snippet in protocol_model
+        for snippet in (
+            "payload_body = k1.DatumRecord(",
+            '(0, k1.Symbol(owner_domain))',
+            '(1, family)',
+            '(2, source_body)',
+            '"pir.source-binding-payload",\n        payload_body,',
+        )
+    )
+    _require(common_untagged_body, "executable source-payload construction drifted")
+    model_uses_bound_canonical_compiler = model_compiler_calls > 0
+    model_interaction_compiler_calls = protocol_model.count(
+        "PIRSourceBindingPayloadBody("
+    )
+    model_uses_current_interaction_compiler = model_interaction_compiler_calls > 0
+    expected_canonical_preimage = (
+        "V",
+        0,
+        (
+            "R",
+            {
+                0: "CanonicalFramedViewCoordinateBody(coordinate)",
+                1: "CanonicalFramedFieldCoordinateBody(manifest)",
+            },
+        ),
+    )
+    executable_preimage = (
+        "R",
+        {
+            0: "owner_domain",
+            1: "family",
+            2: "source_body",
+            3: "manifest_body",
+            4: "consumer_ref",
+            5: "purpose_ref",
+        },
+    )
+    executable_preimage_matches_owner = (
+        executable_preimage == expected_canonical_preimage
+    )
+    textual_complete = sites == direct_sites + dispatched_sites
+    return {
+        "pir_markdown_pages_scanned": len(PIR_MARKDOWN_PAGES),
+        "identity_constructor_sites": sites,
+        "profile_compiler_definitions": len(compiler_pages),
+        "direct_compiler_sites": direct_sites,
+        "owner_profile_dispatch_sites": dispatched_sites,
+        "profile_compilers": compiler_rows,
+        "profile_compiler_pages": {
+            f"{prefix}.{kind}": page
+            for (prefix, kind), page in sorted(compiler_pages.items())
+        },
+        "generic_dispatch_manifest_bindings": dispatcher_bindings,
+        "textual_preimage_equations_complete": textual_complete,
+        "canonical_framed_execution_call_line": _line_number(
+            analysis_model, "fs_execution = _affirmative_pir_view("
+        ),
+        "owner_profile_selection_line": _line_number(
+            protocol_model, "owner_profile = ("
+        ),
+        "untagged_payload_body_line": _line_number(
+            protocol_model, "payload_body = k1.DatumRecord("
+        ),
+        "untagged_payload_identity_line": _line_number(
+            protocol_model,
+            'payload_id = _authority_id(\n        profile,\n        "pir.source-binding-payload",',
+        ),
+        "untagged_payload_authentication_end_line": _line_number(
+            protocol_model, "selected_profile=profile,\n    )\n    no_policy_body ="
+        ),
+        "canonical_compiler_calls_in_model": model_compiler_calls,
+        "interaction_compiler_calls_in_model": model_interaction_compiler_calls,
+        "model_selects_transcript_profile": model_selects_transcript_profile,
+        "model_uses_current_interaction_compiler": model_uses_current_interaction_compiler,
+        "model_uses_bound_canonical_compiler": model_uses_bound_canonical_compiler,
+        "owner_required_canonical_preimage_shape": expected_canonical_preimage,
+        "executable_preimage_shape": executable_preimage,
+        "executable_preimage_matches_owner": executable_preimage_matches_owner,
+        "complete": (
+            textual_complete
+            and model_selects_transcript_profile
+            and model_uses_bound_canonical_compiler
+            and executable_preimage_matches_owner
+        ),
+    }
+
+
+def _challenge_transition_representability(pages: dict[str, str]) -> dict[str, Any]:
+    canonical = pages["docs-next/pir/fiat-shamir.md"]
+    fields = _record_field_types(canonical, "ChallengeTransitionViewBody")
+    expected_fields = [
+        "transcript_construction_id",
+        "core_id",
+        "namespace_derivation_law",
+        "exact_length_law",
+        "state_update_before_decode_law",
+        "retry_law",
+        "sampling_failure_law",
+        "challenge_rules",
+    ]
+    _require(list(fields) == expected_fields, "challenge-transition view fields drifted")
+    for snippet in (
+        "challenge_ref: ChallengeRef,",
+        "position: Natural,",
+        "acceptance_abi: ChallengeABI,",
+        "decoder_abi: ChallengeABI,",
+        "draw_bounds: { squeeze_length: Natural, maximum_draws: Natural }",
+        "challenge_rules: CanonicalSeq<ChallengeTransitionRule>",
+    ):
+        _require(snippet in canonical, "challenge-transition rule shape drifted")
+
+    rule_fields = list(_record_field_types(canonical, "ChallengeTransitionRule"))
+    abi_fields = list(_record_field_types(canonical, "ChallengeABI"))
+    _require(
+        rule_fields
+        == [
+            "challenge_ref",
+            "position",
+            "acceptance_abi",
+            "decoder_abi",
+            "draw_bounds",
+        ]
+        and abi_fields == ["use", "input_types", "result_type"],
+        "challenge-transition nested body fields drifted",
+    )
+
+    countermodel_rules = [
+        {
+            "challenge_ref": 0,
+            "position": 0,
+            "acceptance_abi": {
+                "use": {
+                    "algorithm": "accept-boolean-0",
+                    "evaluation_contract": "accept-contract-0",
+                },
+                "input_types": ["TranscriptBytesType"],
+                "result_type": "BooleanType",
+            },
+            "decoder_abi": {
+                "use": {
+                    "algorithm": "decode-boolean-0",
+                    "evaluation_contract": "decode-contract-0",
+                },
+                "input_types": ["TranscriptBytesType"],
+                "result_type": "BooleanType",
+            },
+            "draw_bounds": {"squeeze_length": 1, "maximum_draws": 1},
+        },
+        {
+            "challenge_ref": 1,
+            "position": 1,
+            "acceptance_abi": {
+                "use": {
+                    "algorithm": "accept-root-natural-1",
+                    "evaluation_contract": "accept-contract-1",
+                },
+                "input_types": ["TranscriptBytesType"],
+                "result_type": "BooleanType",
+            },
+            "decoder_abi": {
+                "use": {
+                    "algorithm": "decode-root-natural-1",
+                    "evaluation_contract": "decode-contract-1",
+                },
+                "input_types": ["TranscriptBytesType"],
+                "result_type": "RootNat(2)",
+            },
+            "draw_bounds": {"squeeze_length": 2, "maximum_draws": 3},
+        },
+    ]
+
+    # Project exactly the fields declared by the repaired nested body, once per
+    # construction rule and in construction order.  This makes a singleton
+    # selection, an ABI union, or a homogenizing rewrite observable.
+    projected_rules = [
+        {field: rule[field] for field in rule_fields}
+        for rule in countermodel_rules
+    ]
+    laws = {
+        "namespace_derivation_law": "canonical-framed-prefix-and-domain-v0",
+        "exact_length_law": "canonical-framed-body-grammar-v0",
+        "state_update_before_decode_law": "canonical-framed-admission-and-execution-v0",
+        "retry_law": "canonical-framed-admission-and-execution-v0",
+        "sampling_failure_law": "canonical-framed-admission-and-execution-v0",
+    }
+    value_by_field: dict[str, Any] = {
+        "transcript_construction_id": "two-rule-construction",
+        "core_id": "two-rule-core",
+        **laws,
+        "challenge_rules": projected_rules,
+    }
+    derived_body = {field: value_by_field[field] for field in fields}
+    dropped_rules = [
+        rule for rule in countermodel_rules if rule not in projected_rules
+    ]
+    changed_rules = [
+        (source, target)
+        for source, target in zip(countermodel_rules, projected_rules)
+        if source != target
+    ]
+    _require(
+        "projected entry by entry from the construction's `challenge_rules`"
+        in canonical,
+        "challenge-rule projection equation drifted",
+    )
+    complete = (
+        len(projected_rules) == len(countermodel_rules) == 2
+        and not dropped_rules
+        and not changed_rules
+        and list(derived_body) == expected_fields
+    )
+    return {
+        "countermodel_input_rules": 2,
+        "challenge_rule_fields": rule_fields,
+        "challenge_abi_fields": abi_fields,
+        "derived_view_body": derived_body,
+        "derived_challenge_rules": projected_rules,
+        "derived_rule_count": len(projected_rules),
+        "dropped_rules": len(dropped_rules),
+        "changed_rules": len(changed_rules),
+        "shared_law_field_count": 5,
+        "complete": complete,
+    }
+
+
+def _influence_view_review(pages: dict[str, str]) -> dict[str, Any]:
+    canonical = pages["docs-next/pir/fiat-shamir.md"]
+    _require(
+        _definition_count(canonical, "InfluenceAtom") == 1,
+        "InfluenceAtom does not have exactly one definition",
+    )
+    algebra = canonical.split("InfluenceAtom =", 1)[1].split("```", 1)[0]
+    atom_names = re.findall(r"(?:^|\n)\s*(?:\|\s*)?(\w+Atom)\(", algebra)
+    expected_atom_names = [
+        "CoreHeaderAtom",
+        "ConstructionHeaderAtom",
+        "ApplicationDomainAtom",
+        "ScopeOpenedAtom",
+        "PublicBindingAtom",
+        "GuardOutcomeAtom",
+        "ProverMessageAtom",
+        "VerifierMessageAtom",
+        "OraclePublicationAtom",
+        "OracleQueryAtom",
+        "OracleAnswerAtom",
+        "ChallengeConditionAtom",
+        "ModuleFrameAtom",
+        "ChallengeDrawAtom",
+    ]
+    _require(atom_names == expected_atom_names, "InfluenceAtom algebra drifted")
+    atom_body = canonical.split("InfluenceAtomBody =", 1)[1].split(
+        "TransitionInputBody =", 1
+    )[0]
+    atom_tags = [int(item) for item in re.findall(r"V\((\d+),", atom_body)]
+    _require(atom_tags == list(range(14)), "InfluenceAtom body tags drifted")
+    for snippet in (
+        "StaticInfluenceAtom =",
+        "Atom(InfluenceAtom)",
+        "EveryActualDrawOf(ChallengeRef)",
+        "a symbolic draw entry is required by items 9\nand 10 of Section 5.2",
+        "body therefore states the complete requirement",
+        "one entry per\nstatic influence atom of `c`'s schedule universe",
+    ):
+        _require(snippet in canonical, "required-influence projection law drifted")
+
+    tags = dict(zip(atom_names, atom_tags))
+
+    def encode_atom(atom: tuple[str, Any]) -> tuple[Any, ...]:
+        name, value = atom
+        tag = tags[name]
+        if name in {"CoreHeaderAtom", "ConstructionHeaderAtom"}:
+            payload: Any = ("Y", ("ContentRefV0", value))
+        elif name == "ApplicationDomainAtom":
+            payload = ("DeclarationRefBody", ("Module", value))
+        elif name == "ScopeOpenedAtom":
+            payload = ("S", [("N", scope) for scope in value])
+        elif name in {
+            "PublicBindingAtom",
+            "GuardOutcomeAtom",
+            "ProverMessageAtom",
+            "VerifierMessageAtom",
+            "OraclePublicationAtom",
+            "OracleQueryAtom",
+            "OracleAnswerAtom",
+        }:
+            payload = ("N", value)
+        elif name in {"ChallengeConditionAtom", "ChallengeDrawAtom"}:
+            challenge, ordinal = value
+            payload = ("R", {0: ("N", challenge), 1: ("N", ordinal)})
+        elif name == "ModuleFrameAtom":
+            effect, ordinal = value
+            payload = (
+                "R",
+                {0: ("FSModuleEffectCoordinateBody", effect), 1: ("N", ordinal)},
+            )
+        else:
+            raise ReviewError(f"no exact InfluenceAtomBody arm for {name}")
+        return ("V", tag, payload)
+
+    headers = [
+        ("CoreHeaderAtom", "core-id"),
+        ("ConstructionHeaderAtom", "construction-id"),
+        ("ApplicationDomainAtom", "application-domain-ref"),
+    ]
+    root_opening = [
+        ("ScopeOpenedAtom", (0,)),
+        ("PublicBindingAtom", 0),
+        ("PublicBindingAtom", 1),
+    ]
+
+    def project_entries(challenge: int) -> list[dict[str, Any]]:
+        concrete = [*headers, *root_opening]
+        result = [
+            {
+                "atom": {"kind": "Atom", "value": atom},
+                "atom_body": encode_atom(atom),
+                "required": True,
+            }
+            for atom in concrete
+        ]
+        result.extend(
+            {
+                "atom": {"kind": "EveryActualDrawOf", "challenge_ref": prior},
+                "required": True,
+            }
+            for prior in range(challenge)
+        )
+        return result
+
+    def expand_symbolic_draws(
+        entries: list[dict[str, Any]], actual_draw_counts: dict[int, int]
+    ) -> list[tuple[Any, ...]]:
+        expanded: list[tuple[Any, ...]] = []
+        for entry in entries:
+            atom = entry["atom"]
+            if atom["kind"] == "Atom":
+                expanded.append(encode_atom(tuple(atom["value"])))
+                continue
+            challenge = int(atom["challenge_ref"])
+            expanded.extend(
+                encode_atom(("ChallengeDrawAtom", (challenge, ordinal)))
+                for ordinal in range(actual_draw_counts[challenge])
+            )
+        return expanded
+
+    first_challenge_entries = project_entries(0)
+    second_challenge_entries = project_entries(1)
+    first_tags = [entry["atom_body"][1] for entry in first_challenge_entries]
+    symbolic_second = [
+        entry
+        for entry in second_challenge_entries
+        if entry["atom"]["kind"] == "EveryActualDrawOf"
+    ]
+    expanded_second = expand_symbolic_draws(
+        second_challenge_entries, {0: 2}
+    )
+    expanded_second_tags = [body[1] for body in expanded_second]
+    complete = (
+        first_tags == [0, 1, 2, 3, 4, 4]
+        and [entry["atom"]["value"][1] for entry in first_challenge_entries[-2:]]
+        == [0, 1]
+        and len(symbolic_second) == 1
+        and symbolic_second[0]["atom"]["challenge_ref"] == 0
+        and symbolic_second[0]["required"] is True
+        and expanded_second_tags == [0, 1, 2, 3, 4, 4, 13, 13]
+    )
+    return {
+        "influence_atom_definitions": 1,
+        "influence_atom_algebra": atom_names,
+        "influence_atom_body_tags": atom_tags,
+        "first_challenge_required_entries": first_challenge_entries,
+        "two_challenge_second_entries": second_challenge_entries,
+        "two_challenge_second_expansion_for_two_actual_draws": expanded_second,
+        "distinct_public_binding_coordinates": [0, 1],
+        "core_header_needs_no_occurrence_coordinate": True,
+        "items_9_and_10_present": True,
+        "symbolic_prior_draw_entry_present": True,
+        "complete": complete,
+    }
+
+
+def _analysis_read_catalog_review() -> dict[str, Any]:
+    analysis = _read(ANALYSIS_PAGE)
+    interaction = _read("docs-next/pir/interactive-core.md")
+    canonical = _read("docs-next/pir/fiat-shamir.md")
+    control = _read(ANALYSIS_READ_CATALOG_CONTROL)
+    body_pattern = re.compile(r"^(\w+ViewBody) = \{\n(.*?)^\}", re.DOTALL | re.MULTILINE)
+    field_pattern = re.compile(r"^  (\w+):", re.MULTILINE)
+    selection_pattern = re.compile(
+        r"Analysis(Static|Execution)ViewFields\(subject,(\w+),\s*\[(.*?)\]\)",
+        re.DOTALL,
+    )
+    axis_body = {
+        "FreshExecutionView": "ExecutionViewBody",
+        "FiatShamirExecutionView": "CanonicalFramedExecutionViewBody",
+    }
+    bodies: dict[str, list[str]] = {}
+    body_types: dict[str, dict[str, str]] = {}
+    for text in (interaction, canonical):
+        for match in body_pattern.finditer(text):
+            _require(match.group(1) not in bodies, "an owner view body is defined twice")
+            bodies[match.group(1)] = field_pattern.findall(match.group(2))
+            body_types[match.group(1)] = _record_field_types(text, match.group(1))
+
+    rows: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+    duplicate_selections: list[dict[str, Any]] = []
+    for match in selection_pattern.finditer(analysis):
+        view = match.group(2)
+        body = axis_body.get(view, f"{view}Body")
+        names = [
+            item.strip()
+            for item in match.group(3).replace("\n", " ").split(",")
+            if item.strip()
+        ]
+        absent = [item for item in names if item not in bodies.get(body, [])]
+        if absent:
+            missing.append({"view": view, "body": body, "fields": absent})
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        if duplicates:
+            duplicate_selections.append(
+                {"view": view, "body": body, "fields": duplicates}
+            )
+        rows.append(
+            {
+                "view": view,
+                "body": body,
+                "selected_fields": names,
+                "selected_field_types": {
+                    name: body_types.get(body, {}).get(name)
+                    for name in names
+                },
+                "line": analysis.count("\n", 0, match.start()) + 1,
+            }
+        )
+    literal_calls = len(
+        re.findall(
+            r"Analysis(?:Static|Execution)ViewFields\(subject,[A-Z][A-Za-z0-9_]+,",
+            analysis,
+        )
+    )
+    _require(len(rows) == literal_calls == 10, "Analysis owner-read selection census drifted")
+    _require(sum(len(row["selected_fields"]) for row in rows) == 66, "selected field census drifted")
+    _require(not missing, "an Analysis selection no longer resolves to its owner body")
+    _require(not duplicate_selections, "an Analysis owner-read selection is duplicated")
+    control_markers = (
+        "SELECTION = re.compile(",
+        "selections = list(SELECTION.finditer(self.catalog))",
+        "for match in selections:",
+        "self.assertIn(body, self.bodies",
+        "self.assertEqual(len(names), len(set(names))",
+        "missing = [name for name in names if name not in self.bodies[body]]",
+        "self.assertEqual([], missing",
+    )
+    developer_control_covers = all(marker in control for marker in control_markers)
+    _require(developer_control_covers, "developer read-catalog control drifted")
+    resolution_markers = (
+        "subtree_paths",
+        "every atomic",
+        "field name at the selected depth",
+        "denotes the\n  ordinal path of that field",
+    )
+    exact_subtree_resolution = all(marker in analysis for marker in resolution_markers)
+    _require(exact_subtree_resolution, "leaf/subtree resolution law drifted")
+
+    # A selected name is always the root of one exact ordinal subtree; an
+    # atomic field is the degenerate one-leaf case.  The owner type determines
+    # which case it is, so no caller choice between a leaf and subtree remains.
+    selected_subtree_roots = sum(
+        any(
+            token in (field_type or "")
+            for token in ("Seq<", "Map<", "{", "Schema", "Description")
+        )
+        for row in rows
+        for field_type in row["selected_field_types"].values()
+    )
+    return {
+        "selection_count": len(rows),
+        "selected_field_count": 66,
+        "selections": rows,
+        "missing_owner_fields": missing,
+        "duplicate_selected_fields": duplicate_selections,
+        "developer_control_covers_current_literal_calls": developer_control_covers,
+        "developer_control_is_sufficient_for_literal_field_join": developer_control_covers,
+        "developer_control_proves_recursive_leaf_meaning": False,
+        "selected_subtree_roots": selected_subtree_roots,
+        "subtree_projection_law_is_exact": exact_subtree_resolution,
+        "ambiguous_leaf_or_subtree_selections": [],
+        "complete": (
+            not missing
+            and not duplicate_selections
+            and developer_control_covers
+            and exact_subtree_resolution
+        ),
+    }
+
+
+def _public_setup_review(pages: dict[str, str]) -> dict[str, Any]:
+    interaction = pages["docs-next/pir/interactive-core.md"]
+    analysis = _read(ANALYSIS_PAGE)
+    for snippet in (
+        "InvocationDetermined(P, OccurrenceOutput(_, _)) = false",
+        "entries         = every SessionContext or PublicParameter binding b of P",
+        "run_established = every SessionContext or PublicParameter binding b of P",
+        "changing a public input that is bound\nonly as a Statement and read by no covered binding leaves the quotient\nunchanged",
+    ):
+        _require(snippet in interaction, "public-setup formation law drifted")
+
+    view_block, _view_line = _definition_block(
+        interaction, "PublicSetupInvocationViewBody"
+    )
+    entry_block, _entry_line = _definition_block(
+        interaction, "PublicSetupInvocationEntry"
+    )
+    view_fields = re.findall(r"^  ([a-z][a-z0-9_]*):", view_block, re.MULTILINE)
+    entry_fields = re.findall(r"^  ([a-z][a-z0-9_]*):", entry_block, re.MULTILINE)
+    _require(
+        view_fields == ["protocol_id", "core_id", "entries", "run_established"]
+        and entry_fields
+        == ["binding_ref", "scope_ref", "class", "value_type", "value"],
+        "public-setup view body fields drifted",
+    )
+
+    def invocation_determined(value_ref: tuple[Any, ...]) -> bool:
+        tag = value_ref[0]
+        if tag in {"PublicInput", "Constant"}:
+            return True
+        if tag == "Derived":
+            return all(invocation_determined(value) for value in value_ref[1])
+        if tag in {"OccurrenceOutput", "VerifierPrivateInput"}:
+            return False
+        raise ReviewError(f"unknown public-setup ValueRef arm {tag}")
+
+    def resolve_value(
+        value_ref: tuple[Any, ...], invocation: dict[int, Any]
+    ) -> Any:
+        tag = value_ref[0]
+        if tag == "PublicInput":
+            return invocation[int(value_ref[1])]
+        if tag == "Constant":
+            return value_ref[1]
+        if tag == "Derived":
+            return (
+                "DerivedValue",
+                tuple(resolve_value(value, invocation) for value in value_ref[1]),
+            )
+        raise ReviewError("a non-invocation-determined value was resolved as setup")
+
+    def encode_entry(entry: dict[str, Any]) -> tuple[Any, ...]:
+        class_tag = {"SessionContext": 0, "PublicParameter": 1}[entry["class"]]
+        return (
+            "R",
+            {
+                0: ("N", entry["binding_ref"]),
+                1: ("N", entry["scope_ref"]),
+                2: ("V", class_tag, "Unit"),
+                3: ("ValueTypeBody", entry["value_type"]),
+                4: entry["value"],
+            },
+        )
+
+    def project_setup(
+        protocol: dict[str, Any], invocation: dict[int, Any]
+    ) -> dict[str, Any]:
+        entries: list[dict[str, Any]] = []
+        run_established: list[int] = []
+        for binding in sorted(protocol["bindings"], key=lambda item: item["binding_ref"]):
+            if binding["class"] not in {"SessionContext", "PublicParameter"}:
+                continue
+            if invocation_determined(binding["value_ref"]):
+                entries.append(
+                    {
+                        "binding_ref": binding["binding_ref"],
+                        "scope_ref": binding["scope_ref"],
+                        "class": binding["class"],
+                        "value_type": binding["value_type"],
+                        "value": resolve_value(binding["value_ref"], invocation),
+                    }
+                )
+            else:
+                run_established.append(binding["binding_ref"])
+        body = (
+            "R",
+            {
+                0: ("ContentRef", protocol["protocol_id"]),
+                1: ("ContentRef", protocol["core_id"]),
+                2: ("S", [encode_entry(entry) for entry in entries]),
+                3: ("S", [("N", binding) for binding in run_established]),
+            },
+        )
+        return {
+            "protocol_id": protocol["protocol_id"],
+            "core_id": protocol["core_id"],
+            "entries": entries,
+            "run_established": run_established,
+            "body": body,
+        }
+
+    review_protocol = {
+        "protocol_id": "protocol-id",
+        "core_id": "core-id",
+        "bindings": [
+            {
+                "binding_ref": 0,
+                "scope_ref": 1,
+                "class": "SessionContext",
+                "value_type": "RootBool",
+                "value_ref": ("OccurrenceOutput", 0, 0),
+            }
+        ],
+    }
+    countermodel_body = project_setup(review_protocol, {})
+    expected_countermodel_encoding = (
+        "R",
+        {
+            0: ("ContentRef", "protocol-id"),
+            1: ("ContentRef", "core-id"),
+            2: ("S", []),
+            3: ("S", [("N", 0)]),
+        },
+    )
+    countermodel_represented_exactly = (
+        countermodel_body["entries"] == []
+        and countermodel_body["run_established"] == [0]
+        and countermodel_body["body"] == expected_countermodel_encoding
+    )
+
+    # The membership partition is fixed by the Protocol, but an included
+    # entry's value comes from the invocation.  This second minimal fixture is
+    # an executable discriminator for the page's one-view-per-Protocol claim.
+    invocation_valued_protocol = {
+        "protocol_id": "invocation-valued-protocol",
+        "core_id": "invocation-valued-core",
+        "bindings": [
+            {
+                "binding_ref": 0,
+                "scope_ref": 0,
+                "class": "SessionContext",
+                "value_type": "RootBool",
+                "value_ref": ("PublicInput", 0),
+            }
+        ],
+    }
+    false_view = project_setup(invocation_valued_protocol, {0: False})
+    true_view = project_setup(invocation_valued_protocol, {0: True})
+    same_protocol_two_public_input_values_yield_two_views = (
+        false_view["body"] != true_view["body"]
+    )
+
+    statement_only_protocol = {
+        "protocol_id": "statement-only-protocol",
+        "core_id": "statement-only-core",
+        "bindings": [
+            {
+                "binding_ref": 0,
+                "scope_ref": 0,
+                "class": "Statement",
+                "value_type": "RootBool",
+                "value_ref": ("PublicInput", 0),
+            }
+        ],
+    }
+    statement_false = project_setup(statement_only_protocol, {0: False})
+    statement_true = project_setup(statement_only_protocol, {0: True})
+    statement_invariance_exclusion_exact = (
+        statement_false["body"] == statement_true["body"]
+        and false_view["body"] != true_view["body"]
+    )
+
+    fixed_setup_fragment = analysis.split("AFKFixedPublicSetupBody(S) =", 1)[1].split(
+        "Formation also evaluates", 1
+    )[0]
+    analysis_requires_empty = bool(
+        re.search(
+            r"run_established.{0,160}(?:empty|be empty)",
+            fixed_setup_fragment,
+            re.DOTALL,
+        )
+    )
+    analysis_requires_complete_entries = (
+        "both entry sequences must be\nbyte-identical and contain exactly every `PublicParameter` and `SessionContext`"
+        in fixed_setup_fragment
+    )
+    protocol_uniqueness_claim = (
+        "Both sequences are decided by the Protocol alone, so every admitted Protocol\n"
+        "has exactly one setup view"
+        in interaction
+    )
+    protocol_only_complete_sequences = not (
+        same_protocol_two_public_input_values_yield_two_views
+    )
+    return {
+        "review_countermodel": countermodel_body,
+        "review_countermodel_expected_canonical_body": (
+            "R{0:ContentRef(protocol-id),1:ContentRef(core-id),2:S[],3:S[N(0)]}"
+        ),
+        "review_countermodel_represented_exactly": countermodel_represented_exactly,
+        "entry_membership_decided_by_protocol": True,
+        "run_established_membership_decided_by_protocol": True,
+        "entry_values_decided_by_protocol": False,
+        "same_protocol_two_public_input_values_yield_two_views": (
+            same_protocol_two_public_input_values_yield_two_views
+        ),
+        "invocation_value_discriminator": {
+            "false_body": false_view["body"],
+            "true_body": true_view["body"],
+        },
+        "protocol_only_complete_sequences": protocol_only_complete_sequences,
+        "owner_claims_one_view_per_protocol": protocol_uniqueness_claim,
+        "one_view_per_protocol_is_derivable": False,
+        "one_view_per_protocol_and_invocation_is_derivable": True,
+        "analysis_requires_run_established_empty": analysis_requires_empty,
+        "analysis_still_requires_all_bindings_in_entries": analysis_requires_complete_entries,
+        "analysis_fixed_setup_projection_line": _line_number(
+            analysis,
+            "AnalysisLawTerm<AFKFixedPublicSetupProjection> that first requires the",
+        ),
+        "analysis_complete_entry_claim_line": _line_number(
+            analysis, "both entry sequences must be"
+        ),
+        "owner_uniqueness_claim_line": _line_number(
+            interaction, "Both sequences are decided by the Protocol alone"
+        ),
+        "statement_invariance_exclusion_exact": statement_invariance_exclusion_exact,
+        "complete": (
+            countermodel_represented_exactly
+            and protocol_only_complete_sequences
+            and analysis_requires_empty
+            and not analysis_requires_complete_entries
+            and statement_invariance_exclusion_exact
+        ),
     }
 
 
@@ -1488,7 +2669,7 @@ def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
     field_count = sum(map(len, all_fields.values()))
     prose_count = sum(map(len, FS_PROSE_FIELDS.values()))
     undefined_count = sum(map(len, FS_UNDEFINED_FIELDS.values()))
-    _require(field_count == 95, "the eight family body displays no longer contain 95 fields")
+    _require(field_count == 91, "the eight family body displays no longer contain 91 fields")
     _require(prose_count == 0, "a prose-only family field remains")
     _require(undefined_count == 0, "an undefined family field remains")
     _require(
@@ -2440,29 +3621,37 @@ def _publication_review() -> dict[str, Any]:
         "the expected unpublished legacy identity mismatch set drifted",
     )
 
-    baseline_manifests: dict[str, dict[str, Any]] = {}
-    baseline_pages: dict[str, bytes] = {}
-    for key, (relative, _manifest) in _all_manifests().items():
-        try:
-            baseline = json.loads(_git_bytes(BASE_COMMIT, relative))
-        except json.JSONDecodeError as error:
-            raise ReviewError(f"cannot decode {relative} at {BASE_COMMIT}") from error
-        baseline_manifests[key] = baseline
-        for page in _source_page_paths(baseline):
-            baseline_pages[page] = _git_bytes(BASE_COMMIT, page)
-    reference_baseline = reference.identity_table(
-        reference.compile_repository(
-            manifest_overrides=baseline_manifests,
-            page_overrides=baseline_pages,
+    def compile_at(revision: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        manifests: dict[str, dict[str, Any]] = {}
+        pages: dict[str, bytes] = {}
+        for key, (relative, _manifest) in _all_manifests().items():
+            try:
+                manifest = json.loads(_git_bytes(revision, relative))
+            except json.JSONDecodeError as error:
+                raise ReviewError(f"cannot decode {relative} at {revision}") from error
+            manifests[key] = manifest
+            for page in _source_page_paths(manifest):
+                pages[page] = _git_bytes(revision, page)
+        return (
+            reference.identity_table(
+                reference.compile_repository(
+                    manifest_overrides=manifests,
+                    page_overrides=pages,
+                )
+            ),
+            cold.identity_table(
+                cold.compile_repository(
+                    manifest_overrides=manifests,
+                    page_overrides=pages,
+                )
+            ),
         )
+
+    reference_baseline, cold_baseline = compile_at(ROUND_SEVEN_COMMIT)
+    _require(
+        reference_baseline == cold_baseline,
+        "publication compilers disagree at the round-seven head",
     )
-    cold_baseline = cold.identity_table(
-        cold.compile_repository(
-            manifest_overrides=baseline_manifests,
-            page_overrides=baseline_pages,
-        )
-    )
-    _require(reference_baseline == cold_baseline, "publication compilers disagree at the migration base")
     rotated = [
         key
         for key in reference.PROFILE_KEYS
@@ -2471,6 +3660,43 @@ def _publication_review() -> dict[str, Any]:
     stable = [key for key in reference.PROFILE_KEYS if key not in rotated]
     _require(
         rotated
+        == [
+            "interaction",
+            "canonical-framed-fiat-shamir",
+            "duplex-sponge-fiat-shamir",
+            "public-setup",
+            "commitment-opening",
+            "oracle-commitment",
+            "verifier-derived-query-plan",
+            "interface-plan",
+            "endpoint-source-view",
+            "oir-projection-relation",
+            "relations",
+            "analysis-cryptographic-property",
+            "analysis-afk-transport",
+            "analysis-afk-theorem-source-validation",
+            "analysis-incremental-composition",
+            "analysis-incremental-composition-source-validation",
+        ]
+        and stable == ["oir-endpoint-graph", "analysis-kernel"],
+        "the repair rotation cone drifted",
+    )
+    reference_migration_base, cold_migration_base = compile_at(MIGRATION_BASE_COMMIT)
+    _require(
+        reference_migration_base == cold_migration_base,
+        "publication compilers disagree at the migration base",
+    )
+    migration_rotated = [
+        key
+        for key in reference.PROFILE_KEYS
+        if reference_table["profiles"][key]
+        != reference_migration_base["profiles"][key]
+    ]
+    migration_stable = [
+        key for key in reference.PROFILE_KEYS if key not in migration_rotated
+    ]
+    _require(
+        migration_rotated
         == [
             "interaction",
             "canonical-framed-fiat-shamir",
@@ -2490,16 +3716,22 @@ def _publication_review() -> dict[str, Any]:
             "analysis-incremental-composition",
             "analysis-incremental-composition-source-validation",
         ]
-        and stable == ["analysis-kernel"],
-        "the migration rotation cone drifted",
+        and migration_stable == ["analysis-kernel"],
+        "the migration-base rotation cone drifted",
     )
     return {
         "compiler_agreement": True,
-        "baseline_compiler_agreement": True,
+        "round_seven_compiler_agreement": True,
+        "migration_base_compiler_agreement": True,
         "compiled_profiles": len(reference_table["profiles"]),
+        "comparison_head": ROUND_SEVEN_COMMIT,
         "rotated_profiles": rotated,
         "rotation_count": len(rotated),
         "stable_profiles": stable,
+        "migration_base": MIGRATION_BASE_COMMIT,
+        "migration_base_rotated_profiles": migration_rotated,
+        "migration_base_rotation_count": len(migration_rotated),
+        "migration_base_stable_profiles": migration_stable,
         "foundation_changed": reference_table["foundation"] != reference_baseline["foundation"],
         "published_legacy_mismatches": mismatches,
         "publication_table_written": False,
@@ -2612,36 +3844,40 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
 
     # These are the selected pre-publication revision changes.  They encode the
     # manual meaning audit; new declarations start at revision zero.
-    expected_bumps = {
+    expected_existing_revisions = {
         "docs-next/oir/profiles/endpoint-graph.json": {
-            ("oir.body-compiler", "endpoint-graph-body-v0"),
-            ("oir.semantic-law", "endpoint-contract-derivation-v0"),
+            ("oir.body-compiler", "endpoint-graph-body-v0"): 1,
+            ("oir.semantic-law", "endpoint-contract-derivation-v0"): 1,
         },
         "docs-next/oir/profiles/projection-relation.json": {
-            ("oir.body-compiler", "projection-proposition-body-v0"),
-            ("oir.semantic-law", "exact-endpoint-projection-v0"),
+            ("oir.body-compiler", "projection-proposition-body-v0"): 1,
+            ("oir.semantic-law", "exact-endpoint-projection-v0"): 1,
         },
         "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": {
-            ("pir.semantic-law", "canonical-framed-source-views-v0"),
+            ("pir.semantic-law", "canonical-framed-source-views-v0"): 2,
         },
         "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": {
-            ("pir.semantic-law", "duplex-sponge-source-views-v0"),
+            ("pir.semantic-law", "duplex-sponge-source-views-v0"): 1,
         },
         "docs-next/pir/profiles/endpoint-source-view.json": {
-            ("pir.body-compiler", "endpoint-source-view-body-v0"),
+            ("pir.body-compiler", "endpoint-source-view-body-v0"): 1,
+            ("pir.semantic-law", "supplement-authority-v0"): 1,
         },
         "docs-next/pir/profiles/interaction.json": {
-            ("pir.body-compiler", "interactive-core-body-v0"),
-            ("pir.semantic-law", "core-admission-v0"),
-            ("pir.semantic-law", "execution-and-replay-v0"),
-            ("pir.semantic-law", "public-coin-eligibility-v0"),
-            ("pir.semantic-law", "static-view-issuance-v0"),
+            ("pir.body-compiler", "interactive-core-body-v0"): 1,
+            ("pir.semantic-law", "core-admission-v0"): 1,
+            ("pir.semantic-law", "execution-and-replay-v0"): 1,
+            ("pir.semantic-law", "public-coin-eligibility-v0"): 1,
+            ("pir.semantic-law", "static-view-issuance-v0"): 2,
         },
         "docs-next/pir/profiles/interface-plan.json": {
-            ("pir.semantic-law", "interface-admission-v0"),
+            ("pir.body-compiler", "interface-plan-body-v0"): 1,
+            ("pir.semantic-law", "interface-admission-v0"): 1,
+            ("pir.semantic-law", "plan-witness-authority-v0"): 1,
         },
         "docs-next/pir/profiles/public-setup.json": {
-            ("pir.semantic-law", "public-setup-projection-and-issuance-v0"),
+            ("pir.body-compiler", "public-setup-invocation-view-body-v0"): 1,
+            ("pir.semantic-law", "public-setup-projection-and-issuance-v0"): 2,
         },
     }
     revision_bumps = 0
@@ -2649,37 +3885,57 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
     expected_profile_revisions = {
         "docs-next/oir/profiles/endpoint-graph.json": 1,
         "docs-next/oir/profiles/projection-relation.json": 1,
-        "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": 2,
-        "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": 2,
-        "docs-next/pir/profiles/endpoint-source-view.json": 1,
-        "docs-next/pir/profiles/interaction.json": 2,
-        "docs-next/pir/profiles/interface-plan.json": 1,
-        "docs-next/pir/profiles/public-setup.json": 1,
+        "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": 3,
+        "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": 3,
+        "docs-next/pir/profiles/endpoint-source-view.json": 2,
+        "docs-next/pir/profiles/interaction.json": 3,
+        "docs-next/pir/profiles/interface-plan.json": 2,
+        "docs-next/pir/profiles/public-setup.json": 2,
     }
-    expected_post_creation_bumps = {
-        "docs-next/oir/profiles/endpoint-graph.json": set(),
-        "docs-next/oir/profiles/projection-relation.json": set(),
+    expected_new_revisions = {
+        "docs-next/oir/profiles/endpoint-graph.json": {},
+        "docs-next/oir/profiles/projection-relation.json": {},
         "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": {
-            ("pir.static-view-schema", "execution-view-v0"),
+            ("pir.static-view-schema", "required-influence-view-v0"): 1,
+            ("pir.static-view-schema", "challenge-transition-view-v0"): 1,
+            ("pir.static-view-schema", "execution-view-v0"): 2,
         },
         "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": {
-            ("pir.static-view-schema", "duplex-encoded-input-coverage-view-v0"),
-            ("pir.static-view-schema", "duplex-fs-construction-view-v0"),
-            ("pir.static-view-schema", "execution-view-v0"),
+            ("pir.body-compiler", "source-binding-payload-body-v0"): 1,
+            ("pir.body-compiler", "source-capability-requirement-body-v0"): 1,
+            ("pir.body-compiler", "source-no-policy-body-v0"): 1,
+            ("pir.body-compiler", "source-policy-closure-body-v0"): 1,
+            ("pir.static-view-schema", "duplex-encoded-input-coverage-view-v0"): 1,
+            ("pir.static-view-schema", "duplex-fs-construction-view-v0"): 1,
+            ("pir.static-view-schema", "execution-view-v0"): 1,
         },
-        "docs-next/pir/profiles/endpoint-source-view.json": set(),
+        "docs-next/pir/profiles/endpoint-source-view.json": {
+            ("pir.body-compiler", "source-binding-payload-body-v0"): 1,
+            ("pir.body-compiler", "source-capability-requirement-body-v0"): 1,
+            ("pir.body-compiler", "source-no-policy-body-v0"): 1,
+            ("pir.body-compiler", "source-policy-closure-body-v0"): 1,
+        },
         "docs-next/pir/profiles/interaction.json": {
-            ("pir.semantic-law", "static-view-schema-resolution-v0"),
-            ("pir.static-view-schema", "strategy-decision-view-v0"),
-            ("pir.static-view-schema", "execution-view-v0"),
+            ("pir.body-compiler", "source-binding-payload-body-v0"): 1,
+            ("pir.body-compiler", "source-capability-requirement-body-v0"): 1,
+            ("pir.body-compiler", "source-no-policy-body-v0"): 1,
+            ("pir.body-compiler", "source-policy-closure-body-v0"): 1,
+            ("pir.semantic-law", "static-view-schema-resolution-v0"): 1,
+            ("pir.static-view-schema", "strategy-decision-view-v0"): 1,
+            ("pir.static-view-schema", "execution-view-v0"): 1,
         },
-        "docs-next/pir/profiles/interface-plan.json": set(),
-        "docs-next/pir/profiles/public-setup.json": set(),
+        "docs-next/pir/profiles/interface-plan.json": {
+            ("pir.body-compiler", "source-binding-payload-body-v0"): 1,
+            ("pir.body-compiler", "source-capability-requirement-body-v0"): 1,
+            ("pir.body-compiler", "source-no-policy-body-v0"): 1,
+            ("pir.body-compiler", "source-policy-closure-body-v0"): 1,
+        },
+        "docs-next/pir/profiles/public-setup.json": {},
     }
     for relative in MIGRATED_MANIFESTS:
         try:
             old_text = subprocess.run(
-                ["git", "show", f"{BASE_COMMIT}:{relative}"],
+                ["git", "show", f"{MIGRATION_BASE_COMMIT}:{relative}"],
                 cwd=ROOT,
                 check=True,
                 capture_output=True,
@@ -2695,32 +3951,27 @@ def _manifest_review(pages: dict[str, str]) -> dict[str, Any]:
             "a migrated profile revision differs",
         )
         old_rows = {(row["kind"], row["name"]): row for row in old["definitions"]}
-        observed_bumps: set[tuple[str, str]] = set()
-        observed_post_creation_bumps: set[tuple[str, str]] = set()
+        observed_existing_revisions: dict[tuple[str, str], int] = {}
+        observed_new_revisions: dict[tuple[str, str], int] = {}
         for row in current["definitions"]:
             key = (row["kind"], row["name"])
             if key not in old_rows:
-                expected_revision = int(key in expected_post_creation_bumps[relative])
-                _require(
-                    row["revision"] == expected_revision,
-                    "a post-migration declaration has another revision",
-                )
-                if expected_revision == 0:
+                if row["revision"] == 0:
                     new_definitions += 1
                 else:
-                    observed_post_creation_bumps.add(key)
+                    observed_new_revisions[key] = row["revision"]
             elif row["revision"] != old_rows[key]["revision"]:
-                _require(
-                    old_rows[key]["revision"] == 0 and row["revision"] == 1,
-                    "an existing declaration has another revision transition",
-                )
-                observed_bumps.add(key)
-        _require(observed_bumps == expected_bumps[relative], "the selected definition revision set drifted")
+                _require(old_rows[key]["revision"] == 0, "the migration base revision drifted")
+                observed_existing_revisions[key] = row["revision"]
         _require(
-            observed_post_creation_bumps == expected_post_creation_bumps[relative],
-            "the post-creation definition revision set drifted",
+            observed_existing_revisions == expected_existing_revisions[relative],
+            "the selected existing-definition revision map drifted",
         )
-        revision_bumps += len(observed_bumps) + len(observed_post_creation_bumps)
+        _require(
+            observed_new_revisions == expected_new_revisions[relative],
+            "the post-creation definition revision map drifted",
+        )
+        revision_bumps += len(observed_existing_revisions) + len(observed_new_revisions)
 
     envelope_profiles = {
         "interaction": ("docs-next/pir/interactive-core.md", (2, 2, 1, 2)),
@@ -2796,7 +4047,7 @@ def _decision_review(
         [
             _json(path)["revision"]
             for path in MIGRATED_MANIFESTS
-        ] == [1, 1, 2, 2, 1, 2, 1, 1],
+        ] == [1, 1, 3, 3, 2, 3, 2, 2],
         not any(path.startswith("docs-next/analysis/") or path.startswith("docs-next/relations/") or path.startswith("docs-next/foundation/") for path in (*PAGES, *MIGRATED_MANIFESTS)),
     ]
     _require(applied == [True] * 8, "decision-fidelity census drifted")
@@ -2820,6 +4071,12 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
     manifests = _manifest_review(pages)
     publication = _publication_review()
     decisions = _decision_review(pages, manifests, view)
+    interface_completion = _interface_completion_review(pages)
+    source_identity = _source_identity_review()
+    challenge_transition = _challenge_transition_representability(pages)
+    influence_view = _influence_view_review(pages)
+    analysis_read_catalog = _analysis_read_catalog_review()
+    public_setup = _public_setup_review(pages)
 
     terminal_closed = terminal["claim_source_region_mapping_present"]
     owner_closed = not view["owner_unresolved_expressions"]
@@ -2864,6 +4121,48 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
             if declaration_bodies["complete"]
             else "F0V2C1-C-DECLARATION-BODY-NOT-CLOSED",
         ),
+        Finding(
+            "interface-completion-derivability",
+            "Affirmative" if interface_completion["complete"] else "CannotAnswer",
+            "F0V2C1-A-INTERFACE-COMPLETION-DERIVABILITY"
+            if interface_completion["complete"]
+            else "F0V2C1-C-INTERFACE-COMPLETION-DERIVATION",
+        ),
+        Finding(
+            "source-authority-preimage-equations",
+            "Affirmative" if source_identity["complete"] else "CannotAnswer",
+            "F0V2C1-A-SOURCE-AUTHORITY-PREIMAGES"
+            if source_identity["complete"]
+            else "F0V2C1-C-CANONICAL-BINDING-PREIMAGE",
+        ),
+        Finding(
+            "challenge-transition-representability",
+            "Affirmative" if challenge_transition["complete"] else "CannotAnswer",
+            "F0V2C1-A-CHALLENGE-TRANSITION-REPRESENTABLE"
+            if challenge_transition["complete"]
+            else "F0V2C1-C-CHALLENGE-TRANSITION-NOT-REPRESENTABLE",
+        ),
+        Finding(
+            "influence-view-exactness",
+            "Affirmative" if influence_view["complete"] else "CannotAnswer",
+            "F0V2C1-A-INFLUENCE-VIEW-EXACT"
+            if influence_view["complete"]
+            else "F0V2C1-C-INFLUENCE-VIEW-NOT-EXACT",
+        ),
+        Finding(
+            "analysis-read-catalog-join",
+            "Affirmative" if analysis_read_catalog["complete"] else "CannotAnswer",
+            "F0V2C1-A-ANALYSIS-READ-CATALOG-JOIN"
+            if analysis_read_catalog["complete"]
+            else "F0V2C1-C-ANALYSIS-READ-CATALOG-JOIN",
+        ),
+        Finding(
+            "public-setup-view-totality",
+            "Affirmative" if public_setup["complete"] else "CannotAnswer",
+            "F0V2C1-A-PUBLIC-SETUP-VIEW-TOTAL"
+            if public_setup["complete"]
+            else "F0V2C1-C-PUBLIC-SETUP-VIEW-TOTALITY",
+        ),
     ]
     metrics = {
         "source_sha256": _source_hashes(),
@@ -2876,6 +4175,12 @@ def evaluate() -> tuple[list[Finding], dict[str, Any]]:
         "declaration_bodies": declaration_bodies,
         "manifests": manifests,
         "publication": publication,
+        "interface_completion": interface_completion,
+        "source_identity": source_identity,
+        "challenge_transition": challenge_transition,
+        "influence_view": influence_view,
+        "analysis_read_catalog": analysis_read_catalog,
+        "public_setup": public_setup,
     }
     return findings, metrics
 

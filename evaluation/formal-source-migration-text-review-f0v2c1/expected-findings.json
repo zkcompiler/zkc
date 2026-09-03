@@ -1,8 +1,12 @@
 {
   "aggregate": {
-    "blocking_findings": [],
-    "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
-    "outcome": "Affirmative"
+    "blocking_findings": [
+      "interface-completion-derivability",
+      "source-authority-preimage-equations",
+      "public-setup-view-totality"
+    ],
+    "code": "F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED",
+    "outcome": "CannotAnswer"
   },
   "finding_codes": [
     [
@@ -54,7 +58,37 @@
       "declaration-body-closure",
       "Affirmative",
       "F0V2C1-A-DECLARATION-BODY-CLOSURE"
+    ],
+    [
+      "interface-completion-derivability",
+      "CannotAnswer",
+      "F0V2C1-C-INTERFACE-COMPLETION-DERIVATION"
+    ],
+    [
+      "source-authority-preimage-equations",
+      "CannotAnswer",
+      "F0V2C1-C-CANONICAL-BINDING-PREIMAGE"
+    ],
+    [
+      "challenge-transition-representability",
+      "Affirmative",
+      "F0V2C1-A-CHALLENGE-TRANSITION-REPRESENTABLE"
+    ],
+    [
+      "influence-view-exactness",
+      "Affirmative",
+      "F0V2C1-A-INFLUENCE-VIEW-EXACT"
+    ],
+    [
+      "analysis-read-catalog-join",
+      "Affirmative",
+      "F0V2C1-A-ANALYSIS-READ-CATALOG-JOIN"
+    ],
+    [
+      "public-setup-view-totality",
+      "CannotAnswer",
+      "F0V2C1-C-PUBLIC-SETUP-VIEW-TOTALITY"
     ]
   ],
-  "metrics_sha256": "6c432a5a75c25556aded439aa70acb853da0735d2a890705e18ec8b06de3c817"
+  "metrics_sha256": "2b1ee42cddcd7ead71621d50fda0fb471b40d82a8df5cbf7fd60062534361f37"
 }
