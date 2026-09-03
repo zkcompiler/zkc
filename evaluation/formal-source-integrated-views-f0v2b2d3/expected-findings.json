@@ -1,0 +1,326 @@
+{
+  "aggregate": "F0V2B2D3-A-INTEGRATED-SIX-VIEWS",
+  "body_matrix": {
+    "history-challenge-condition": {
+      "ClaimReductionView": {
+        "bytes": 7781,
+        "leaves": 93,
+        "sha256": "1d7eb70c819fa72046fdbe44e224ccfb84bc019e1b60a37f4320b3661c5f3f8d"
+      },
+      "EffectView": {
+        "bytes": 47448,
+        "leaves": 280,
+        "sha256": "7718628bf43333c57babc19ed75514af6a45e1080cab91a52e94d45cf9df66af"
+      },
+      "ExecutionView": {
+        "bytes": 22775,
+        "leaves": 117,
+        "sha256": "bd574d3728db425d88299921a3905aa2ceefe85b97f9f9a7e666ebb6e484aea0"
+      },
+      "PublicBindingView": {
+        "bytes": 3079,
+        "leaves": 35,
+        "sha256": "4aea095076a24a01eb576c35ee37e295a3a58656787b1585447c50d109292bac"
+      },
+      "PublicCoinView": {
+        "bytes": 47696,
+        "leaves": 912,
+        "sha256": "a3813a65383f9b6a0b5c755e411f404b2ca7c429488bedfd14a2f8a84ea28963"
+      },
+      "StrategyDecisionView": {
+        "bytes": 39370,
+        "leaves": 250,
+        "sha256": "00c69a1098e0ed7e5f93769ffa4f8f683d68b856fc4ea261aa3667646bcd9b34"
+      }
+    },
+    "integrated-baseline": {
+      "ClaimReductionView": {
+        "bytes": 7781,
+        "leaves": 93,
+        "sha256": "763b26052514cd414ee1aace00e8281b3fa27ddce805cc84658fedfdbcf81206"
+      },
+      "EffectView": {
+        "bytes": 47397,
+        "leaves": 280,
+        "sha256": "060ac4f10b904850d58c263261992cf29391a6722430870990675d7681dda152"
+      },
+      "ExecutionView": {
+        "bytes": 22724,
+        "leaves": 117,
+        "sha256": "2ab1a1dda91cb473d64cf325f54863480e74e50ee0f1663247d9e4022d2da7e6"
+      },
+      "PublicBindingView": {
+        "bytes": 3079,
+        "leaves": 35,
+        "sha256": "48707b9b9df168aa5df9c01e6e3be8a1524d77029ab4aa4d27d01c5f5d5620ae"
+      },
+      "PublicCoinView": {
+        "bytes": 47403,
+        "leaves": 906,
+        "sha256": "fd976460b00869c5b0b0b7da0e90b7b76bf708299486972da582f0dabda82752"
+      },
+      "StrategyDecisionView": {
+        "bytes": 39370,
+        "leaves": 250,
+        "sha256": "64618f00bf9df4ed06a4e55ffaf983b2b99c7a728679bf540bd92275c700ed34"
+      }
+    },
+    "invalid-module-control-sink": {
+      "ClaimReductionView": {
+        "bytes": 7781,
+        "leaves": 93,
+        "sha256": "99927f9dc8f2060b8cde87440e1d071f46380ce155029293543e945c8c60ea5c"
+      },
+      "EffectView": {
+        "bytes": 47397,
+        "leaves": 280,
+        "sha256": "aa1eaa0eaf64dd7b26e2db74642049aa43190b55f2b5eb2c3cabb221cbb93a8f"
+      },
+      "ExecutionView": {
+        "bytes": 22724,
+        "leaves": 117,
+        "sha256": "829ab1eb6eace14be9d773465473f46c2d561bf49e395ff5b30561d43146843b"
+      },
+      "PublicBindingView": {
+        "bytes": 3079,
+        "leaves": 35,
+        "sha256": "80bb8afe8d02be91e9f34097da05ffeb234e3139fcac55c491cde9b37391b63e"
+      },
+      "PublicCoinView": {
+        "bytes": 47610,
+        "leaves": 911,
+        "sha256": "7e38535cb0f0260b2c8a89f94c2e8b2dd33c5793519c14542a59c9a66e9a7120"
+      },
+      "StrategyDecisionView": {
+        "bytes": 39370,
+        "leaves": 250,
+        "sha256": "48dfd6a67337545064db3d8618028ce6195237ef9695b64734ec4ba8a7cc5226"
+      }
+    },
+    "logical-reject-preemption": {
+      "ClaimReductionView": {
+        "bytes": 7522,
+        "leaves": 85,
+        "sha256": "276321a839dd3a1fb8c44f13b0cb3112d83cc5376fe390e3681a101fa6b0645e"
+      },
+      "EffectView": {
+        "bytes": 47273,
+        "leaves": 276,
+        "sha256": "5c0441f18178f4a5d61d26da43883e8c89ac746e86a7691f2a9b68aea803a212"
+      },
+      "ExecutionView": {
+        "bytes": 22422,
+        "leaves": 116,
+        "sha256": "c20260ee8ad7eee73d12eb6ee861ccb2222858329bb2fc2efe98f1d323c06e17"
+      },
+      "PublicBindingView": {
+        "bytes": 3079,
+        "leaves": 35,
+        "sha256": "ee4d075361d43f20ff2793f16f8b2337417cf91520a3d3ae7f4f081b342aba8e"
+      },
+      "PublicCoinView": {
+        "bytes": 47152,
+        "leaves": 904,
+        "sha256": "3c1b1fc3312972c1014732c61ec70782f2be3509a333a8199f7c80c49557f950"
+      },
+      "StrategyDecisionView": {
+        "bytes": 39370,
+        "leaves": 250,
+        "sha256": "580437d3cf2ee3802bec804046e6a85547a99dfcae00c791e3a19fd815d8db2e"
+      }
+    },
+    "private-verifier-output-sink": {
+      "ClaimReductionView": {
+        "bytes": 7781,
+        "leaves": 93,
+        "sha256": "9682c0dbb2cdcab5fe29ee65c44ce06b541f4971a39e5235207fe2e96c44c53a"
+      },
+      "EffectView": {
+        "bytes": 47397,
+        "leaves": 280,
+        "sha256": "78621ffc30ef1182faf55c9f4b00a2d89ace78b9d1bf0b28fa3db8d278f5c6ea"
+      },
+      "ExecutionView": {
+        "bytes": 22724,
+        "leaves": 117,
+        "sha256": "6907c27d48270eeb8aa744d020fdabd3b7b77ff251c1fbdfead9fbdf4c5d0e38"
+      },
+      "PublicBindingView": {
+        "bytes": 3079,
+        "leaves": 35,
+        "sha256": "1d5ef3a83197a2ec1cff4d0995f5e02aa1a8826d325e09f50f28949d7d4a245d"
+      },
+      "PublicCoinView": {
+        "bytes": 47438,
+        "leaves": 907,
+        "sha256": "468b340e53a7d1aaf76cd396db7bed87104ea80c4b69c0b08709fcf2eeb3ceb7"
+      },
+      "StrategyDecisionView": {
+        "bytes": 39370,
+        "leaves": 250,
+        "sha256": "af30c6d3a1d2c03792c2a396e4cb77e4af6ae0be4a310ccd5c242c2773bb194a"
+      }
+    }
+  },
+  "f2o1_gap_counts": {
+    "after": {
+      "module-effect-denotation": 3,
+      "operational-denotation": 6,
+      "operational-distribution": 3,
+      "operational-outcome-map": 1,
+      "operational-owner-view": 0,
+      "oracle-carrier-representation": 3,
+      "property-premise": 5
+    },
+    "before": {
+      "module-effect-denotation": 3,
+      "operational-denotation": 6,
+      "operational-distribution": 3,
+      "operational-outcome-map": 1,
+      "operational-owner-view": 40,
+      "oracle-carrier-representation": 3,
+      "property-premise": 5
+    }
+  },
+  "f2o1_ledger_sha256": "39f454079fecb95daf8fda7d9166421c323ddfa2242c5c23b53361f6268c5a9a",
+  "finding_codes": [
+    [
+      "predecessor-source-pins",
+      "Affirmative",
+      "F0V2B2D3-A-PREDECESSOR-PINS"
+    ],
+    [
+      "candidate-profile-and-schema",
+      "Affirmative",
+      "F0V2B2D3-A-PROFILE-SCHEMA"
+    ],
+    [
+      "five-d1-core-and-protocol-admissions",
+      "Affirmative",
+      "F0V2B2D3-A-FIVE-CARRIERS"
+    ],
+    [
+      "thirty-typed-projections",
+      "Affirmative",
+      "F0V2B2D3-A-THIRTY-TYPED"
+    ],
+    [
+      "thirty-cold-byte-agreements",
+      "Affirmative",
+      "F0V2B2D3-A-THIRTY-COLD"
+    ],
+    [
+      "thirty-canonical-round-trips",
+      "Affirmative",
+      "F0V2B2D3-A-THIRTY-ROUNDTRIP"
+    ],
+    [
+      "oracle-module-challenge-terminal-coverage",
+      "Affirmative",
+      "F0V2B2D3-A-CONSTRUCTOR-COVERAGE"
+    ],
+    [
+      "four-d1-neighbour-controls",
+      "Refused",
+      "F0V2B2D3-R-D1-CONTROLS"
+    ],
+    [
+      "six-schema-valid-owner-substitutions",
+      "Refused",
+      "F0V2B2D3-R-SIX-OWNER-SUBSTITUTIONS"
+    ],
+    [
+      "unchanged-f2o1-generator-and-checker",
+      "Affirmative",
+      "F0V2B2D3-A-F2O1-UNCHANGED"
+    ],
+    [
+      "five-carrier-six-view-leaf-universe",
+      "Affirmative",
+      "F0V2B2D3-A-COMPLETE-LEAF-UNIVERSE"
+    ],
+    [
+      "f2o1-owner-view-gaps-40-to-0",
+      "Affirmative",
+      "F0V2B2D3-A-F2O1-OWNER-VIEW-40-TO-0"
+    ],
+    [
+      "f2o1-gap-module-effect-denotation-3-to-3",
+      "CannotAnswer",
+      "F0V2B2D3-C-GAP-MODULE-DENOTATION-3-TO-3"
+    ],
+    [
+      "f2o1-gap-operational-denotation-6-to-6",
+      "CannotAnswer",
+      "F0V2B2D3-C-GAP-DENOTATION-6-TO-6"
+    ],
+    [
+      "f2o1-gap-operational-distribution-3-to-3",
+      "CannotAnswer",
+      "F0V2B2D3-C-GAP-DISTRIBUTION-3-TO-3"
+    ],
+    [
+      "f2o1-gap-operational-outcome-map-1-to-1",
+      "CannotAnswer",
+      "F0V2B2D3-C-GAP-OUTCOME-MAP-1-TO-1"
+    ],
+    [
+      "f2o1-gap-operational-owner-view-40-to-0",
+      "Affirmative",
+      "F0V2B2D3-A-GAP-OWNER-VIEW-40-TO-0"
+    ],
+    [
+      "f2o1-gap-oracle-carrier-representation-3-to-3",
+      "CannotAnswer",
+      "F0V2B2D3-C-GAP-ORACLE-CARRIER-3-TO-3"
+    ],
+    [
+      "f2o1-gap-property-premise-5-to-5",
+      "CannotAnswer",
+      "F0V2B2D3-C-GAP-PREMISE-5-TO-5"
+    ],
+    [
+      "remaining-sixteen-operational-semantic-gaps",
+      "CannotAnswer",
+      "F0V2B2D3-C-REMAINING-OPERATIONAL-SEMANTICS"
+    ],
+    [
+      "remaining-five-property-premises",
+      "CannotAnswer",
+      "F0V2B2D3-C-REMAINING-PREMISES"
+    ],
+    [
+      "target-owner-authority-untouched",
+      "Affirmative",
+      "F0V2B2D3-A-NONPUBLICATION"
+    ],
+    [
+      "proof-security-and-provider-correspondence",
+      "CannotAnswer",
+      "F0V2B2D3-C-NONCLAIMS"
+    ],
+    [
+      "integrated-six-view-closure",
+      "Affirmative",
+      "F0V2B2D3-A-INTEGRATED-SIX-VIEWS"
+    ]
+  ],
+  "findings_sha256": "28050d15395e35a4acb7d0240ebd03a0f94fd8f7e1530c94b62d9f41ddf9199d",
+  "source_pins": {
+    "evaluation/formal-provider-observables-f2o1/checker.py": "64c67753eb8d65eeba4bcf4b5f88df23e9278947d1833878bdba36b108fca500",
+    "evaluation/formal-provider-observables-f2o1/expected-findings.json": "e60494a72e2c6c0d95a727138b099400698471a9b31275cdeaab15c806bc8f8c",
+    "evaluation/formal-provider-observables-f2o1/generator.py": "fb7aa86689a6a20a6bfccab528e8fdec3b16dcea305c47ff86ff6c2c93834f98",
+    "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/independent.py": "352aa9e15ac3d3734156bc71227fce533bdc871bc4103e84b8df6cac50eb7b17",
+    "evaluation/formal-source-claim-reduction-owner-projections-f0v2b2c1b3/model.py": "9879afcc2a19d9f933cccb204b8cef4102cff1ceb3c7c1f14baa888343e3859a",
+    "evaluation/formal-source-integrated-graph-f0v2b2d1/independent.py": "fb2354d5f33720c868dcf8e9cde7af43edeff28a13b31b9c2b31a02455bd4136",
+    "evaluation/formal-source-integrated-graph-f0v2b2d1/model.py": "73ad42c61259001797fa7039ce0858b16ad5f074b13476532986b3c669d2867e",
+    "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/independent.py": "a3b0860349ae55844b9f0afbd73737ad4598bdfcaa07dd89b7979deaecd08a60",
+    "evaluation/formal-source-module-owner-projections-f0v2b2c1b4/model.py": "4fc9e093d8a3a4621ae447af799bbfa98337f463504fe717182e725fa8e5eb8d",
+    "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/independent.py": "76a72086b9d47858c9be8e7ab3d8f69641404ff8b15d7ec515817959a9800de8",
+    "evaluation/formal-source-oracle-owner-projections-f0v2b2c1b2/model.py": "3e91a24fb2ed1a57052aa8b7818569752df9a257f10c834229ad16378b1148e3",
+    "evaluation/formal-source-owner-projections-f0v2b2c1b1/independent.py": "cd1a176bfa64d74c72ca1ecf4fb69a744968adacd92520a8da53345c3d071127",
+    "evaluation/formal-source-owner-projections-f0v2b2c1b1/model.py": "a0aa623a1bf84b638bb86cd728ae132f99b081b548b106a80e5ba0669a2c49b7",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/independent.py": "77948f411ec0ad6a90ad33cb784f3d67d8d4c5e0a594ea57094dc9eda1882dfa",
+    "evaluation/formal-source-terminal-owner-projections-f0v2b2c1b5b2/model.py": "9cbe6d51fb1ff5e0c9a7585505a55fe4f34ec9685aa02ed7b1ee872092c3f6cc"
+  }
+}

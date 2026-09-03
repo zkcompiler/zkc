@@ -64,6 +64,7 @@
         "research.owner-view-integrated-pcgraph",
         "research.owner-view-fs-family-determinacy",
         "research.owner-view-fresh-run-schema",
+        "research.owner-view-integrated-projections",
         "research.semantic-migration-candidate"
       ]
     },

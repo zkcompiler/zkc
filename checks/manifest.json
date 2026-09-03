@@ -1258,6 +1258,28 @@
       }
     },
     {
+      "id": "research.owner-view-integrated-projections",
+      "title": "Integrated six-owner-view projections",
+      "subject": "All six normalized owner-view bodies for each of the five exact D1 integrated carriers, plus the F2-O1 operational-owner-view gap delta when its unchanged generator and checker are rerun over the complete six-view leaf universe.",
+      "claim": "Typed owner and independent canonical-byte paths agree and round-trip on all thirty carrier/view bodies with frozen digests and leaf counts; all Oracle modes and visibilities, module decision classes, Challenge relationships, Claims, Reductions, and first-active Terminals are inhabited; six schema-valid owner substitutions and four D1 controls discriminate; and exactly forty F2-O1 operational-owner-view gaps close while sixteen operational semantic gaps and five property premises remain CannotAnswer.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "differential", "mutation", "metamorphic", "static-analysis"],
+      "source_paths": ["evaluation/formal-source-integrated-views-f0v2b2d3/run.py", "evaluation/formal-source-integrated-views-f0v2b2d3/model.py", "evaluation/formal-source-integrated-views-f0v2b2d3/independent.py", "evaluation/formal-source-integrated-views-f0v2b2d3/README.md", "evaluation/formal-source-integrated-views-f0v2b2d3/expected-findings.json", "evaluation/formal-source-integrated-views-f0v2b2d3/f2o1-six-view-ledger.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["This bounded projection and structural ledger result is not target publication or owner authority, arbitrary-Core projection correctness, provider correspondence, runtime execution or replay, semantic-module or Oracle denotation, Claim or Reduction truth, a mechanized refinement or security theorem, live compiler/backend correspondence, or production evidence."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/formal-source-integrated-views-f0v2b2d3/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.owner-view-fs-family-determinacy",
       "title": "Fiat-Shamir family view bodies and rotation cone",
       "subject": "Exact proposed finite bodies for the eight canonical-framed and duplex-sponge PIR family views, all inhabitable typed/cold witness values, and their overlay on the common semantic migration candidate.",
