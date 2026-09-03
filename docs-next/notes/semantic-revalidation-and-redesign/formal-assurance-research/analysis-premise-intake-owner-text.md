@@ -109,6 +109,19 @@ its five dependents rotate, on top of the migration's seventeen.
   that refers to an exact prior qualified Analysis judgment; the probe's
   record (`../bcs-compilation/README.md`, Section 11) states the delta, and
   it is taken after the second review round of this text.
+- The pre-freeze deep review (`pre-freeze-deep-review-2026-09-04.md`)
+  found the family-premise source constructor receiving the asymptotic
+  family's subject identity where `FamilyHypothesisSource` requires a
+  property-family declaration reference; the two Fiat--Shamir family bindings
+  now pass the transport profile's own declarations of
+  `TotalUniformChallengeSamplerAdequacy` and
+  `ExactClassicalRandomOracleProcess` through
+  `AFKTransportPropertyFamilyRef`, and `F` stays the premise coordinate's
+  subject. The same review narrowed the public-setup issuance to
+  invocation-determined bindings; the Schnorr fixed-setup formation now
+  states that both issued views exist only inside that domain. The review's
+  catalog repair (owner field names, `result_ref` removed) landed with the
+  migration text. A fifth review round checks these changes.
 - An independent review of this text, as for the migration.
 
 ## 4. Non-claims

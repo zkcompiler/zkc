@@ -574,7 +574,11 @@ static owner coordinates and the two PIR-issued
 assignments, derived headers, or owner facts. Ordinary
 applicability hypotheses establish its visibility, fixedness, and independence.
 Formation authenticates both entries of `S.public_setup_invocation_views`
-against their exact `PublicSetupInvocationViewBody` values. Their Protocol IDs
+against their exact `PublicSetupInvocationViewBody` values. Both views exist
+only for a Protocol inside the public-setup issuance domain of the Interaction
+page's Section 13.4, every `SessionContext` and `PublicParameter` binding
+invocation-determined; a Protocol outside it has no issued view, the slot is a
+missing dependency, and no assignment is copied in its place. Their Protocol IDs
 must equal `S.fresh_protocol_id` and `S.fiat_shamir_protocol_id` respectively;
 both Core IDs must equal `S.shared_core_id`; and both entry sequences must be
 byte-identical and contain exactly every `PublicParameter` and `SessionContext`
@@ -5918,6 +5922,12 @@ FiatShamirFamilyOracleProcessPremise(
     model_scope: OracleModelOnly(oracle_model)
   }
 
+AFKTransportPropertyFamilyRef(family) =
+  AnalysisProfileDeclarationRef<AnalysisAFKTransportLanguageProfileId,
+                                "analysis.property-family">
+  naming the transport profile's own declaration of family, a member of
+  AnalysisAFKTransportFamilyCoordinates (Section 2.1)
+
 FiatShamirNamedPremiseRequirements(F, oracle_model) =
   CanonicalSortedUniqueSeq [
     { slot: "sampler", kind: FiatShamirSamplerAdequacy,
@@ -5933,11 +5943,23 @@ FiatShamirFamilyPremiseBindings(F) =
     "sampler"        -> PremiseIdOf(FiatShamirFamilySamplerPremise(F,
                           AFKFamilyRandomOracleProfileId(F),
                           SamplerAdequacyFormOf(F),
-                          FamilyHypothesisSource(F), SourceGroundedMapping)),
+                          FamilyHypothesisSource(
+                            AFKTransportPropertyFamilyRef(
+                              TotalUniformChallengeSamplerAdequacy)),
+                          SourceGroundedMapping)),
     "oracle-process" -> PremiseIdOf(FiatShamirFamilyOracleProcessPremise(F,
                           AFKFamilyRandomOracleProfileId(F),
-                          FamilyHypothesisSource(F), SourceGroundedMapping))
+                          FamilyHypothesisSource(
+                            AFKTransportPropertyFamilyRef(
+                              ExactClassicalRandomOracleProcess)),
+                          SourceGroundedMapping))
 ```
+
+The source of a family hypothesis is the property family that declares the
+hypothesis, an `AnalysisFamilyCoordinate` of the transport profile; the
+asymptotic family `F` is already the subject of the premise coordinate and is
+a semantic subject identity, not a declaration reference, so it is never
+passed where the source constructor requires one.
 
 For the classical adaptive experiment of Section 4 the oracle model is
 `AFKClassicalRandomOracleProfileId(S)`, and a question about a Fiat--Shamir

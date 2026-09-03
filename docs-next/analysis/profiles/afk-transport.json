@@ -3,7 +3,7 @@
   "key": "analysis-afk-transport",
   "catalog_namespace": "analysis",
   "profile_family": "analysis.afk-transport",
-  "revision": 1,
+  "revision": 2,
   "expected_imports": [
     "analysis-cryptographic-property"
   ],
@@ -74,7 +74,7 @@
     {
       "kind": "analysis.semantic-law",
       "name": "afk-application-v0",
-      "revision": 1,
+      "revision": 2,
       "fragment": "transport-application-semantics",
       "selector": "## 7. Exact AFK applicability and family transport",
       "dependencies": []
