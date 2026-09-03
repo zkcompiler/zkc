@@ -61,6 +61,12 @@ its five dependents rotate, on top of the migration's seventeen.
   judgment bodies in the Analysis packages to the new fields, at the refreeze.
 - A provider declaration for the first external formal system, which the
   provider-interpretation work supplies.
+- Two premise kinds the oracle-proof compilation probe found missing for a
+  BCS-style soundness statement, round-restoration soundness of the source
+  oracle proof and binding of the commitment, together with a coordinate arm
+  that refers to an exact prior qualified Analysis judgment; the probe's
+  record (`../bcs-compilation/README.md`, Section 11) states the delta, and
+  it is taken after the second review round of this text.
 - An independent review of this text, as for the migration.
 
 ## 4. Non-claims
