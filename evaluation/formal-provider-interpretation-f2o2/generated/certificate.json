@@ -74,8 +74,6 @@
       "docs-next/pir/interactive-core.md": "dd6d6711400e73feccf52f762de8b72e5790b256bd00feb86d8142e49934c3b4"
     },
     "package_inputs": {
-      "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-carrier-decision-2026-09-03.md": "73dd3a2f7817817a78fbc5fa18c3fc87b1c42e054c5f52fa9f62ed279774e33b",
-      "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f2o2-provider-interpretation-entry-contract.md": "2a0634517b6252a4b24d7fe1ed5caf352db0c66b03f2ca34c1fa5f96d5215ad7",
       "evaluation/formal-kernel-mechanization-m0/lean/M0/Terminal.lean": "c385b0613682a9e5a6b8b2ce9c6d96b2ce7a764f68986cfda30dde01820657cf",
       "evaluation/formal-kernel-mechanization-m0/vectors/m2-term-calculus.json": "bafdabbf36df10d09df478cbaa524ce88e0f6e6f0ffd0843c169a3eab4154b62",
       "evaluation/formal-provider-interpretation-f2o2/TermEvaluatorProbe.lean": "b726117edae432b86ddde9b3270416791d4e253f85424a4f99c6615d5c3feb80",

@@ -53,8 +53,8 @@ theorems. The former pending-mechanization finding is therefore retired.
 The admitted Core, Protocol, all six view bodies, and the published relation
 and Plan candidate bodies changed after round one. The certificate has been
 re-derived from the current tree. It pins current PIR and Analysis owner
-pages, the relevant profile manifests, the restated contract and decision
-packet, the admitted Core and Protocol bodies, all six active view manifests,
+pages, the relevant profile manifests, the admitted Core and Protocol bodies,
+all six active view manifests,
 the portable-term vectors, and the mechanized Terminal source. It does not pin
 another package's frozen findings.
 

@@ -73,8 +73,6 @@ PACKAGE_INPUTS = (
     TERM_VECTORS,
     TERMINAL_MECHANIZATION,
     TERM_PROBE,
-    ENTRY_CONTRACT,
-    DECISION_PACKET,
 )
 
 CERTIFICATE_FORMAT = "zkc.formal-provider-interpretation.certificate.v0"
