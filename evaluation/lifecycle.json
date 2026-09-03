@@ -68,6 +68,7 @@
         "research.owner-view-fresh-run-schema",
         "research.owner-view-integrated-projections",
         "research.semantic-migration-candidate",
+        "research.holdout-readjudication",
         "research.migration-text-review"
       ]
     },
