@@ -103,6 +103,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F2-O1  provider-observable audit, integrated carrier [complete, CannotAnswer]
   -> M1     kernel edges, decoder canonicity, byte bound [complete, bounded]
   -> M2     term calculus and Schnorr denotation         [complete, CannotAnswer]
+  -> Terminal contract and must-fact mechanization       [complete, CannotAnswer]
   -> B2D2   Fresh completed-record schema               [complete, schema only]
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
@@ -538,6 +539,14 @@ provider, extraction tool, or durable schema.
   denotation is proved equal to its closed form; aggregate `CannotAnswer` only
   because the K1 oracle publishes no term-evaluation vectors (41 Affirmative,
   13 CannotAnswer findings).
+- [`m3-mechanized-terminal-contract.md`](m3-mechanized-terminal-contract.md)
+  proves universal first-active and portable-term must-fact soundness in core
+  Lean, proves the executable Terminal decision correct, and agrees with an
+  independent Python path on 24 normalized records. The exact projection
+  matches its predecessor, the WARPfold shape is admitted, and all five
+  integrated carriers expose a reusable-claim closure refusal; five exact
+  owner-text choices remain `CannotAnswer` (49 Affirmative, 21 CannotAnswer,
+  one Refused finding).
 - [`f2o1-integrated-provider-observable-audit.md`](f2o1-integrated-provider-observable-audit.md)
   repeats the provider-observable audit on the D1 integrated baseline:
   93 constructs, 32 sourced, 56 operational gaps and five premise gaps,

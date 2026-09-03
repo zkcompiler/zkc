@@ -1,152 +1,174 @@
-# M2 mechanized portable-term calculus and Schnorr denotation
+# Mechanized Terminal contract over portable terms
 
-This package extends M0 and M1 in place and answers one exact question:
+This package extends the retained datum, graph, and portable-term
+mechanizations with the Terminal admission contract from
+`docs-next/pir/interactive-core.md` Section 10. It asks four bounded questions:
 
-> Can core-only Lean 4 transcribe the K1 portable-term carrier, typing and
-> deterministic evaluation boundary; strictly decode and exactly elaborate
-> the R1B finite-Schnorr check and Boolean guard preimages; reproduce every
-> available independent K1 term-evaluation oracle vector plus the Python K1
-> evaluator's 81 check and two guard results byte-for-byte; and prove
-> evaluation determinism, completion monotonicity, and equality of the decoded
-> check denotation with `z = a + c*y (mod 3)`?
+1. does the structural `AttemptedWhenever` rule imply earlier attemptedness for
+   every valuation of opaque guard atoms;
+2. are the facts computed by `MustEnv` sound against the existing evaluator for
+   every term in the portable calculus;
+3. can the written Terminal contract be decided and independently reconstructed
+   on the frozen finite carriers; and
+4. what remains undecidable from the owner text without adding semantics?
 
 Run from the repository root:
 
 ```sh
-python3 -B evaluation/formal-kernel-mechanization-m0/run.py --check
+ZKC_LAKE=$HOME/.elan/bin/lake \
+  python3 -B evaluation/formal-kernel-mechanization-m0/run.py --check
 ```
 
 The frozen aggregate is
-`CannotAnswer/M2-C-TERM-EVALUATION-ORACLE-ABSENT`. Stages 1, 3, 4, and 5 pass,
-but Stage 2 cannot pass: the K1 independent oracle's 24 requests have only
-`content_id`, `decode`, `encode`, `prior_meta_id`, and `verify_id` operations.
-There is no `evaluate` or `evaluate_encoded` vector to reproduce. K1's own
-README also states that term evaluation has one Python implementation. Missing
-independent evidence is not converted into an affirmative aggregate.
+`CannotAnswer/TERMINAL-C-OWNER-TEXT-UNDERDETERMINED`. The universal proof
+obligations and the two executable decision paths pass. The aggregate remains
+fail-closed because five owner-text choices are not specified, exact holdout
+carriers are absent, and retained portable-term evidence still lacks an
+independent evaluation oracle.
 
 ## Authority and toolchain
 
-Nothing in this package is normative. The owner text is
-`docs-next/foundation/executable-foundations.md` Sections 5, 7, 8 and Appendix
-A.3. The R1B source term comes from
-`evaluation/formal-source-target-core-f1r1b/reference_model.py`. No owner page
-is edited by M2.
+Nothing in this package is normative. The Terminal owner text is
+`docs-next/pir/interactive-core.md` Sections 6.2--6.4 and 10. The portable term
+and evaluator owners remain `docs-next/foundation/executable-foundations.md`.
+The package records but does not repair underdetermination, and it edits no
+owner page.
 
-`lean/lean-toolchain` pins `leanprover/lean4:v4.33.1`. Kernel modules import
-only package modules and Lean core; there is no Mathlib, Batteries, Std,
-VCVio, ArkLib, `sorry`, declared axiom, or Lake dependency. JSON transport is
-isolated in `Transport.lean`. If that installed toolchain is unavailable,
-Lean-dependent findings become `Unsupported/M0-U-LEAN-TOOLCHAIN` and the
-frozen gate fails.
+The branch cutoff is `975d1e98a61880b800f92efe9c115dd728260113` from
+`docs/pir-migration-v2c`. `source-pins.json` authenticates that cutoff and the
+owner and predecessor files consumed by the Terminal exporter. The older graph
+vector is replayed as a hash-pinned transport because its synthetic profile
+overlay now collides with the migrated live manifest; the runner reports that
+collision as `CannotAnswer` instead of presenting a stale regeneration as live
+evidence.
 
-## M2 stages
+`lean/lean-toolchain` pins `leanprover/lean4:v4.33.1`. Kernel modules import only
+package modules and Lean core. There is no Mathlib, Batteries, Std, VCVio,
+ArkLib, `sorry`, declared axiom, or Lake dependency. JSON transport remains
+isolated in `Transport.lean`.
 
-| Stage | Frozen result |
+## Mechanized statements
+
+`M0/Terminal.lean` adds the following definitions and proofs.
+
+- A finite occurrence schedule records deterministic unguarded scope openings,
+  one `Always` or structurally identified opaque guard atom per occurrence, and
+  whether an occurrence is terminal. An active terminal stops the path.
+  `attemptedWhenever_sound` proves, for an arbitrary schedule, arbitrary guard
+  valuation, and arbitrary earlier and later positions, that a later attempted
+  occurrence plus the written subset law implies that the earlier occurrence
+  was attempted. No truth-table enumeration appears in the statement or proof.
+- `MustEnv` is defined on the complete fifteen-constructor portable `Term`
+  datatype. It transcribes the authored literal, variable, let, conditional,
+  and primitive-call clauses; the ten constructors without an owner clause
+  conservatively yield no facts. `mustEnv_sound_evalCore` proves soundness
+  against the existing evaluator for every fuel, term, primitive denotation,
+  abstract and concrete environment, and successful result. The true and false
+  corollaries quantify over every Boolean input assignment, and the impossible
+  true region is proved unable to evaluate to true.
+- `terminalContractDecision_correct` proves equivalence between an executable
+  Boolean decision and the package's direct transcription of the displayed
+  required-Check, required-Reduction, and active-path claim clauses.
+- A forward abstract claim state splits only at previously unseen guard atoms,
+  reuses the value of structurally identical atoms, stops a path at the first
+  active terminal, consumes linear reduction inputs, preserves reusable inputs,
+  creates outputs, and records the live claims at each terminal.
+
+The forward claim transfer is an experimental finite-carrier interpretation,
+not a claimed owner definition. Section 10 names step 9's forward state but does
+not define its transfer algorithm locally.
+
+## Frozen carrier results
+
+The exporter normalizes 24 records. Twenty-two are representable by the exact
+Terminal decision surface, while two deliberately exercise adjacent admission
+boundaries. Lean and an independently structured Python checker agree on all 24
+records, including the two `CannotAnswer` classifications.
+
+| Carrier family | Frozen result |
 |---|---|
-| 1. Term and typing | `Term.lean` carries all fifteen Appendix A.3 tags, exact value-type/domain carriers, typed failures, algorithm bodies, all nine K1 fixture primitive ABI families, and a relational success/failure typing judgment. |
-| 2. Evaluation and K1 oracle | `Eval.lean` carries strict deterministic evaluation, four limits/charges, result preflight, completed ABI envelopes, and all eight noncompletion classes. `CannotAnswer`: the independent oracle has zero term-evaluation vectors, and Section 8 defines no universal noncompletion byte encoding. |
-| 3. R1B terms and finite inputs | The M0 decoder accepts the 179,147-byte check preimage and guard preimage; re-encoding is exact. Independently built Lean terms equal both decoded terms. Completion bytes and all four charge coordinates equal the Python evaluator on 81 check and two guard inputs. |
-| 4. Proofs | `evaluation_deterministic` proves functional uniqueness. `evaluation_completed_mono` proves that a completion under limits `L` is unchanged under any componentwise larger limits. Both are `sorry`-free. |
-| 5. Schnorr equation | `schnorrDenotation` evaluates the finite term. Exhaustion of the four `Fin 3` inputs proves it equals `response = (commitment + challenge*y) % 3`. |
-| 6. Cost and underdetermination | The runner records export, build, executable, axiom-report, and total wall time plus line counts. Section 8 lines 1615--1619 deliberately leave domain result payloads and diagnostics to their owners, so refusal bytes cannot be invented here. |
+| Exact terminal projection | The positive carrier is admitted and all 15 representable mutations are refused, matching the predecessor package. The `check-abi` and `claim-output-ssa` mutations remain `CannotAnswer` because those laws belong to earlier admission steps, not `TerminalContract`. |
+| Five integrated graph carriers | Refused by the newly executed live-claim clause. Claim 0 is reusable, both reductions preserve it while creating claims 1 and 2, and every terminal therefore sees `[0, 1, 2]`; the authored terminal sets omit claim 0. The predecessor graph package reported affirmative without executing this repaired Terminal closure. |
+| WARPfold finite-fold shape | The minimal one-check, no-claim shape is admitted by both decision paths. It is shape evidence only because the holdout note does not select exact references, terms, types, or failure guards. |
+| Other holdouts | `CannotAnswer`: no exact admitted carrier exists for direct mechanized comparison. The WHIR note relies on a guarded fold-scope opening; the migration record says to replace that sketch with unconditional reductions, but supplies no exact re-authored occurrence, reference, or term carrier. |
 
-## Exact R1B transport
+The integrated refusal follows the owner rules that reusable claims remain live
+through reduction use and must appear in a terminal's exact live-claim set. It
+is routed as a predecessor-instrument gap, not as a proposed owner-page change.
 
-`export_m2_vectors.py` imports the F1R1B source model and regenerates:
+## Owner-text underdetermination
 
-- the complete check and guard `PortableAlgorithmBody` bytes and digests;
-- the check's exact `nat.lt` `SemanticPrimitiveRef` carrier;
-- 81 check inputs and two guard inputs;
-- each Python K1 completion in JSON datum transport and canonical hexadecimal;
-- each exact `steps`, `iteration_items`, `primitive_work`, and `result_bytes`
-  record; and
-- the independent-oracle request inventory proving the absence of term
-  evaluation vectors.
+The decision package does not fill these points:
 
-The committed `vectors/m2-term-calculus.json` is compared byte-for-byte with a
-fresh export on every run. Lean starts from each complete preimage's exact
-octets, invokes the retained M0 strict decoder, elaborates the resulting datum
-as `Algorithm`/`Term`, and re-encodes it. The source algorithm's diagnostic
-name is never used to select denotation.
+- Section 10 lines 1454--1470 supplies transfer clauses for only five of the
+  fifteen term constructors. The conservative result for the other ten is
+  package-local.
+- Lines 1449 and 1492--1494 do not define the initial abstract fact for a
+  non-Boolean input; they only say that a non-Boolean binding carries no
+  literal.
+- Lines 1471--1473 do not say whether a union containing both `Positive(i)` and
+  `Negative(i)` normalizes to `Impossible`.
+- Lines 1476--1484 place the non-impossible guard test inside the loop over
+  required Checks, while lines 1497--1499 say every impossible terminal guard
+  is refused. The zero-required-Check case has no unique transcription.
+- Lines 1488--1489 and 1506--1509 refer to step 9's forward live-claim state but
+  do not close its transfer algorithm in Section 10.
 
-## Mechanized boundary
+These findings control the aggregate. No default is promoted to owner law.
 
-`Term.lean` retains exact domain coordinates while exposing the nine finite
-schema constructors. `HasType` is parameterized by an exact-reference
-primitive ABI relation. This reflects the Foundation split: primitive names
-and versions are diagnostic; an authenticated exact reference selects its
-type rule and denotation.
+## Retained evidence
 
-`Eval.lean` takes an exact-reference-qualified deterministic primitive
-function. M2 instantiates only `nat.lt`, the sole primitive reachable from the
-R1B term. This is enough to evaluate the check without pretending that core
-Lean supplies SHA-256 or every module-owned primitive provider. The theorem
-about larger limits is over a fixed admitted term, environment, primitive
-denotation, failure-ordinal map, completion bound, and fuel.
-
-The exact theorem closures printed by `Axioms.lean` are:
-
-- `evaluation_deterministic`: `propext`;
-- `evaluation_completed_mono`: `propext`; and
-- `schnorr_denotation_eq_closed_form`: `propext`, `Quot.sound`.
-
-These are within the package's pre-existing standard Lean allowance of
-`propext`, `Classical.choice`, and `Quot.sound`; there is no `sorryAx` or
-native-decision axiom.
+The runner also preserves the prior package layers: canonical encoding and
+decoding, graph construction on five integrated carriers, the complete
+portable-term carrier and evaluator, exact Schnorr preimage elaboration, 81
+finite check results and two guard results, evaluator determinism, completion
+monotonicity, and the finite closed Schnorr equation. Their prior
+`CannotAnswer` findings remain frozen, including the absence of independent K1
+term-evaluation vectors and universal noncompletion result bytes.
 
 ## Frozen vectors
 
 | File | Role |
 |---|---|
-| `m2-term-calculus.json` | Exact R1B preimages, direct primitive carrier, 83 Python K1 evaluation rows, charge records, and K1 oracle inventory. |
-| `k1-encoding-vectors.json` | Retained M0 canonical K1 oracle bodies and malformed cases. |
-| `structural-negatives.json` | Retained M0 malformed encodings. |
-| `body-digests.json` | Retained M1 D1 body digests. |
-| `pcgraph-construction.json` | Retained M1 Core/module inputs and finite graph outputs. |
+| `terminal-contract.json` | Normalized terminal-projection, integrated, and WARPfold shape records, with source coordinates and predecessor outcomes. |
+| `m2-term-calculus.json` | Exact Schnorr preimages, finite evaluator rows, charges, and oracle inventory. |
+| `k1-encoding-vectors.json` | Retained canonical K1 oracle bodies and malformed cases. |
+| `structural-negatives.json` | Retained malformed encodings. |
+| `body-digests.json` | Retained integrated-carrier body digests. |
+| `pcgraph-construction.json` | Hash-pinned predecessor graph inputs and finite products. |
 
-## CannotAnswer findings
+## Axioms report
 
-- `M2-C-S2-K1-TERM-EVALUATION-ORACLE-ABSENT`: there are zero independent K1
-  term-evaluation requests. The 83 R1B rows are exported from the same Python
-  K1 implementation whose result is being compared, so they are bounded
-  cross-language differential evidence, not independent oracle evidence.
-- `M2-C-S2-NONCOMPLETION-BYTES-UNDEFINED` and
-  `M2-C-S6-SECTION8-NO-UNIVERSAL-RESULT-BYTES`: Foundation Section 8 lines
-  1615--1619 explicitly declines to define one universal Result payload,
-  diagnostic vocabulary, or domain-wide precedence. M2 represents all eight
-  classes but does not invent canonical refusal bytes.
-- `M2-C-NO-GENERAL-K1-EVALUATOR-CONFORMANCE`: the R1B term uses only variables,
-  literals, conditionals, and `nat.lt`. Its 83 rows do not validate all term
-  constructors, primitive formulas, typed failures, or limit-refusal charge
-  prefixes.
+`Axioms.lean` prints every theorem used by the gate. The new closures are:
 
-The retained five M1 Section 11 wording findings and three M0 non-claims remain
-frozen. M2 found no basis for a Foundation owner-page change, so it proposes no
-owner delta.
+- `attemptedWhenever_sound`: `propext`;
+- `mustEnv_sound_evalCore`: `propext`, `Quot.sound`;
+- `must_when_true_sound`: `propext`, `Quot.sound`;
+- `must_when_false_sound`: `propext`, `Quot.sound`;
+- `impossible_when_true_cannot_evaluate_true`: `propext`, `Quot.sound`;
+- `impossible_when_false_cannot_evaluate_false`: `propext`, `Quot.sound`; and
+- `terminalContractDecision_correct`: `propext`, `Quot.sound`.
+
+There is no `sorryAx` or native-decision axiom. These are within the package's
+pre-existing standard Lean allowance of `propext`, `Classical.choice`, and
+`Quot.sound`.
 
 ## Cost ledger
 
 Every run emits machine-readable values under `metrics.timings`,
-`metrics.lean_line_counts`, `metrics.axioms`, and `metrics.m2`. In the first
-warm M2 run, the complete gate took 83.656 seconds: 74.305 seconds regenerated
-the 83 Python rows, 0.412 seconds built Lean, 4.948 seconds ran the compiled
-executable, and 0.506 seconds printed axioms. These are measurements from that
-run, not stable performance claims.
+`metrics.lean_line_counts`, and `metrics.axioms`. One warm measured run took
+80.096 seconds: 74.297 seconds regenerated the portable-term and Terminal
+vectors, 0.411 seconds built Lean, 4.762 seconds ran the executable, and 0.507
+seconds printed the axiom report. These are observations from one run, not
+stable performance claims.
 
-## What the frozen check does and does not establish
+## Nonclaims
 
-The frozen check establishes only that, under the pinned toolchain:
-
-- all retained M0/M1 checks still pass;
-- the exact R1B preimages decode, elaborate, and re-encode in Lean;
-- the 83 exact R1B rows agree with the current Python K1 evaluator in
-  completion bytes and abstract charges; and
-- the three named M2 statements elaborate without `sorry` and with only the
-  reported standard axioms.
-
-It does not establish the affirmative M2 aggregate, independent K1
-term-evaluation conformance, universal evaluator correctness, owner-page
-normativity, compiler/backend correspondence, arbitrary primitive-provider
-conformance, constant-time behavior, protocol soundness, Fiat--Shamir or
-random-oracle security, QROM applicability, production readiness, or a
-decision to adopt Lean as a durable reference twin.
+This package does not establish normative semantics, a complete Core admission
+checker, exact admission of any cold holdout, general evaluator conformance,
+compiler or backend correspondence, runtime correspondence, relation
+satisfaction, theorem applicability, protocol soundness, Fiat--Shamir or
+random-oracle security, QROM applicability, constant-time behavior, production
+readiness, or a decision to adopt Lean as a durable reference twin. The finite
+decisions and universal local lemmas are evidence for their stated abstractions
+only.

@@ -336,6 +336,216 @@ def runM2 (j : Json) : Except String M2Report := do
     guardCasesAgree := guarded.all id
   }
 
+/-! Terminal-contract transport.  JSON remains outside the kernel module; the
+runner normalizes predecessor carriers into only the Section 10 coordinates. -/
+
+def jsonBoolField (j : Json) (name : String) : Except String Bool := do
+  match ← readField j name with
+  | .bool value => pure value
+  | _ => throw s!"field {name} is not a Boolean"
+
+def jsonNatList (j : Json) : Except String (List Nat) := do
+  match j with
+  | .arr values => values.toList.mapM fun value =>
+      value.getNat?.mapError toString
+  | _ => throw "expected an array of naturals"
+
+def compactConjunction (boolean : ValueType) : List Nat → M0.Term
+  | [] => boolLiteral boolean true
+  | [input] => .variable input boolean
+  | input :: rest =>
+      .conditional (.variable input boolean) (compactConjunction boolean rest)
+        (boolLiteral boolean false)
+
+def compactTermOfJson (boolean : ValueType) (j : Json) : Except String (Option M0.Term) := do
+  match j with
+  | .null => pure none
+  | _ =>
+      match ← readString j "kind" with
+      | "identity" => pure (some (.variable (← readNat j "input") boolean))
+      | "conjunction" =>
+          pure (some (compactConjunction boolean (← jsonNatList (← readField j "inputs"))))
+      | "true" => pure (some (boolLiteral boolean true))
+      | "false" => pure (some (boolLiteral boolean false))
+      | other => throw s!"unknown compact guard term {other}"
+
+def guardInputOfJson (j : Json) : Except String GuardInput := do
+  match ← readString j "kind" with
+  | "occurrence-output" =>
+      pure (.occurrenceOutput (← readNat j "occurrence") (← readNat j "output"))
+  | "other" => pure (.other (← readNat j "coordinate"))
+  | other => throw s!"unknown Guard input kind {other}"
+
+structure RawTerminalEffect where
+  kind : String
+  reference : Nat
+
+def rawTerminalEffectOfJson (j : Json) : Except String RawTerminalEffect := do
+  pure { kind := ← readString j "kind", reference := ← readNat j "reference" }
+
+def optionalGuardAtomOfJson (j : Json) : Except String AttemptGuard := do
+  match ← readField j "guard_atom" with
+  | .null => pure .always
+  | value => pure (.evaluate (← value.getNat?.mapError toString))
+
+def scheduledOccurrenceOfJson (j : Json) : Except String ScheduledOccurrence := do
+  let effect ← rawTerminalEffectOfJson (← readField j "effect")
+  pure {
+    openingsBefore := ← jsonNatList (← readField j "openings_before")
+    guard := ← optionalGuardAtomOfJson j
+    isTerminal := effect.kind == "terminal"
+  }
+
+def claimTransferOfJson (j : Json) : Except String ClaimTransfer := do
+  pure {
+    inputs := ← jsonNatList (← readField j "inputs")
+    outputs := ← jsonNatList (← readField j "outputs")
+  }
+
+def rawEffectToClaimEffect (reductions : List ClaimTransfer)
+    (effect : RawTerminalEffect) : ClaimEffect :=
+  if effect.kind == "terminal" then .terminal effect.reference
+  else if effect.kind == "reduction" then
+    match reductions[effect.reference]? with
+    | some transfer => .reduction transfer
+    | none => .reduction { inputs := [Nat.succ reductions.length], outputs := [] }
+  else .other
+
+def positionsOfKind (effects : List RawTerminalEffect) (kind : String)
+    (reference : Nat) : List Nat :=
+  (List.range effects.length).filter fun index =>
+    match effects[index]? with
+    | some effect => effect.kind == kind && effect.reference == reference
+    | none => false
+
+def uniquePosition? (effects : List RawTerminalEffect) (kind : String)
+    (reference : Nat) : Option Nat :=
+  match positionsOfKind effects kind reference with
+  | [position] => some position
+  | _ => none
+
+def resolvePositions (effects : List RawTerminalEffect) (kind : String)
+    (references : List Nat) : List Nat :=
+  references.map fun reference =>
+    (uniquePosition? effects kind reference).getD (effects.length + reference + 1)
+
+def terminalViewOfJson (boolean : ValueType) (effects : List RawTerminalEffect)
+    (forward : ForwardClaimState) (j : Json) : Except String TerminalView := do
+  let terminal ← readNat j "reference"
+  let guardInputs ← (← readArray j "guard_inputs").toList.mapM guardInputOfJson
+  pure {
+    terminal
+    occurrence := (uniquePosition? effects "terminal" terminal).getD
+      (effects.length + terminal + 1)
+    guardTerm := ← compactTermOfJson boolean (← readField j "guard_term")
+    guardInputs
+    requiredChecks := resolvePositions effects "check"
+      (← jsonNatList (← readField j "required_checks"))
+    requiredReductions := resolvePositions effects "reduction"
+      (← jsonNatList (← readField j "required_reductions"))
+    terminalClaims := ← jsonNatList (← readField j "terminal_claims")
+    activePathLiveClaims := forward.claimsAt terminal
+  }
+
+def exactTerminalBacklinks (effects : List RawTerminalEffect)
+    (terminalReferences : List Nat) : Bool :=
+  let occurred := effects.filterMap fun effect =>
+    if effect.kind == "terminal" then some effect.reference else none
+  occurred.length == terminalReferences.length &&
+    terminalReferences.all fun reference =>
+      (positionsOfKind effects "terminal" reference).length == 1
+
+def finalFallback (schedule : List ScheduledOccurrence)
+    (effects : List RawTerminalEffect) : Bool :=
+  match schedule.getLast?, effects.getLast? with
+  | some occurrence, some effect =>
+      effect.kind == "terminal" && occurrence.guard == .always
+  | _, _ => false
+
+def nestedNatListsJson (rows : List (List Nat)) : Json :=
+  Json.arr (rows.toArray.map fun row =>
+    Json.arr (row.toArray.map fun value => Json.num (JsonNumber.fromNat value)))
+
+structure TerminalCarrierReport where
+  name : String
+  family : String
+  predecessorOutcome : String
+  representable : Bool
+  admitted : Option Bool
+  backlinkExact : Bool
+  finalFallback : Bool
+  forwardValid : Bool
+  terminalRows : List (Nat × Bool × List (List Nat))
+
+def TerminalCarrierReport.toJson (report : TerminalCarrierReport) : Json :=
+  Json.mkObj [
+    ("name", report.name), ("family", report.family),
+    ("predecessor_outcome", report.predecessorOutcome),
+    ("representable", report.representable),
+    ("admitted", match report.admitted with
+      | some value => Json.bool value
+      | none => Json.null),
+    ("backlink_exact", report.backlinkExact),
+    ("final_fallback", report.finalFallback),
+    ("forward_valid", report.forwardValid),
+    ("terminals", Json.arr (report.terminalRows.toArray.map fun row => Json.mkObj [
+      ("reference", row.1), ("decision", row.2.1),
+      ("active_live_claims", nestedNatListsJson row.2.2)
+    ]))
+  ]
+
+def runTerminalCarrier (j : Json) : Except String TerminalCarrierReport := do
+  let name ← readString j "name"
+  let family ← readString j "family"
+  let predecessorOutcome ← readString j "predecessor_outcome"
+  let representable ← jsonBoolField j "representable"
+  if !representable then
+    pure {
+      name := name
+      family := family
+      predecessorOutcome := predecessorOutcome
+      representable := false
+      admitted := none
+      backlinkExact := false
+      finalFallback := false
+      forwardValid := false
+      terminalRows := []
+    }
+  else
+    let reductionRows ← readArray j "reductions"
+    let reductions ← reductionRows.toList.mapM claimTransferOfJson
+    let occurrenceRows ← readArray j "schedule"
+    let schedule ← occurrenceRows.toList.mapM scheduledOccurrenceOfJson
+    let effects ← occurrenceRows.toList.mapM fun row => do
+      rawTerminalEffectOfJson (← readField row "effect")
+    let claimEffects := effects.map (rawEffectToClaimEffect reductions)
+    let initialClaims ← jsonNatList (← readField j "initial_claims")
+    let linearClaims ← jsonNatList (← readField j "linear_claims")
+    let forward := forwardClaims schedule claimEffects initialClaims linearClaims
+    let terminalJson ← readArray j "terminals"
+    let boolean : ValueType := .mk .unit .bool
+    let terminals ← terminalJson.toList.mapM (terminalViewOfJson boolean effects forward)
+    let terminalReferences := terminals.map (·.terminal)
+    let backlinkExact := exactTerminalBacklinks effects terminalReferences
+    let fallback := finalFallback schedule effects
+    let forwardValid := forward.allValid
+    let terminalRows := terminals.map fun terminal =>
+      (terminal.terminal, terminalAdmissionDecision schedule terminal,
+        terminal.activePathLiveClaims)
+    let admitted := backlinkExact && fallback && forwardValid &&
+      terminalRows.all fun row => row.2.1
+    pure {
+      name := name
+      family := family
+      predecessorOutcome := predecessorOutcome
+      representable := true
+      admitted := some admitted
+      backlinkExact := backlinkExact
+      finalFallback := fallback
+      forwardValid := forwardValid
+      terminalRows := terminalRows
+    }
+
 def main (args : List String) : IO UInt32 := do
   let some path := args.head? | do
     IO.eprintln "usage: m0 <input.json>"
@@ -361,13 +571,15 @@ def main (args : List String) : IO UInt32 := do
       | .error e => throw (IO.userError e)) with
     | .ok report => pure report
     | .error e => throw (IO.userError s!"m2: {e}")
+  let terminalRows ← run "terminal" runTerminalCarrier TerminalCarrierReport.toJson
   let report := Json.mkObj [
     ("lean_version", Json.str Lean.versionString),
     ("natural_boundary", naturalBoundaryReport),
     ("encode", Json.arr encodeRows),
     ("reject", Json.arr rejectRows),
     ("pcgraph_construction", Json.arr constructionRows),
-    ("m2", m2.toJson)
+    ("m2", m2.toJson),
+    ("terminal", Json.arr terminalRows)
   ]
   IO.println report.compress
   return 0

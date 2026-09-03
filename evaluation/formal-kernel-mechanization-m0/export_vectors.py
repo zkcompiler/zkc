@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Export the golden vectors the M0 mechanized kernel definition spike compares.
 
-Three sources feed the vectors:
+Two live sources feed the regenerated vectors:
 
 - the frozen K1 oracle JSONL cases under
   ``evaluation/k1-executable-foundations/oracle/cases`` (every case whose
@@ -10,12 +10,14 @@ Three sources feed the vectors:
 - crafted noncanonical octet strings, one per malformation the Foundation page
   names (``docs-next/foundation/executable-foundations.md`` Section 2.1), each
   confirmed refused by the K1 Python decoder at export time; and
-- the five D1 carriers of
-  ``evaluation/formal-source-integrated-graph-f0v2b2d1``: their profiled Core
-  bodies and ``PublicCoinView`` bodies (pinned by digest and regenerated at
-  check time because they total about 430 KiB), plus canonical admitted-Core
-  and used semantic-module declaration bytes as construction inputs. Every
-  graph table is a frozen expected output, never a Lean construction input.
+- crafted noncanonical octet strings confirmed against the current K1 decoder.
+
+The committed D1 graph-construction vectors are now a frozen predecessor
+transport.  Their historical producer imports a synthetic profile overlay
+that collides with the real manifests on the migration branch, so this
+exporter no longer imports that model or claims a live D1 refreeze.  The gate
+hash-pins and replays those committed vectors and reports live regeneration as
+unavailable instead of silently accepting the collision.
 
 The export is deterministic. ``run.py`` regenerates it into a scratch
 directory and compares the result with the committed files, so a drift in
@@ -465,12 +467,8 @@ def regenerate_bodies(model: ModuleType, k1: ModuleType) -> dict[str, dict[str, 
 
 def export() -> dict[str, Any]:
     k1 = _load("_zkc_m0_k1", K1_MODEL)
-    model = _load("_zkc_m0_d1_model", D1_MODEL)
     oracle = k1_oracle_vectors(k1)
     negatives = structural_negatives(k1)
-    bodies, _ = d1_carriers(model, k1)
-    d1_export = _load("_zkc_d1_m1_export", D1_M1_EXPORT)
-    construction = d1_export.export()
     return {
         "k1-encoding-vectors.json": {
             "source": "evaluation/k1-executable-foundations/oracle/cases",
@@ -483,12 +481,6 @@ def export() -> dict[str, Any]:
             "source": "docs-next/foundation/executable-foundations.md Section 2.1 malformation list",
             "reject": negatives,
         },
-        "body-digests.json": {
-            "source": "evaluation/formal-source-integrated-graph-f0v2b2d1",
-            "note": "Regenerated at check time from the D1 typed model and compared with these digests before use.",
-            "bodies": bodies,
-        },
-        "pcgraph-construction.json": construction,
     }
 
 

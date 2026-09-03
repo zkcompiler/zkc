@@ -1,11 +1,13 @@
 {
-  "aggregate": "M2-C-TERM-EVALUATION-ORACLE-ABSENT",
-  "findings_sha256": "db8ae92f1ba74c9383cc4b6425355fc74670e69873b03a3fe8d3edb7440beb16",
+  "aggregate": "TERMINAL-C-OWNER-TEXT-UNDERDETERMINED",
+  "findings_sha256": "1b96a582d3e8436395a5e9cb33df0d44dd6d888347ce3ac5381f9779ed8ca438",
   "finding_codes": [
     ["predecessor-pin", "Affirmative", "M0-A-PREDECESSOR-PIN"],
     ["target-law-pin", "Affirmative", "M0-A-TARGET-LAW-PIN"],
     ["target-authority-untouched", "Affirmative", "M0-A-NONPUBLICATION"],
     ["vector-export-stable", "Affirmative", "M0-A-VECTOR-EXPORT-STABLE"],
+    ["terminal-vector-reconstruction-stable", "Affirmative", "TERMINAL-A-VECTOR-RECONSTRUCTION-STABLE"],
+    ["live-integrated-vector-regeneration", "CannotAnswer", "TERMINAL-C-SYNTHETIC-PROFILE-OVERLAY-COLLISION"],
     ["core-lean-only", "Affirmative", "M0-A-CORE-LEAN-ONLY"],
     ["lean-build", "Affirmative", "M1-A-LEAN-BUILD"],
     ["retained-m0-encoding-goldens", "Affirmative", "M1-A-RETAINED-ENCODING-GOLDENS"],
@@ -48,6 +50,21 @@
     ["m2-theorems-standard-axioms-only", "Affirmative", "M2-A-S4-STANDARD-AXIOMS-ONLY"],
     ["m2-schnorr-term-denotation-defined", "Affirmative", "M2-A-S5-SCHNORR-DENOTATION"],
     ["m2-schnorr-closed-form-equation", "Affirmative", "M2-A-S5-SCHNORR-CLOSED-FORM"],
+    ["first-active-sound-for-every-valuation", "Affirmative", "TERMINAL-A-FIRST-ACTIVE-UNIVERSAL"],
+    ["must-facts-sound-against-m2-evaluator", "Affirmative", "TERMINAL-A-MUST-FACT-SOUND"],
+    ["terminal-decision-procedure-correct", "Affirmative", "TERMINAL-A-DECISION-CORRECT"],
+    ["terminal-theorems-standard-axioms-only", "Affirmative", "TERMINAL-A-STANDARD-AXIOMS-ONLY"],
+    ["lean-python-terminal-decision-agreement", "Affirmative", "TERMINAL-A-TWO-PATH-AGREEMENT"],
+    ["terminal-projection-comparison", "Affirmative", "TERMINAL-A-PROJECTION-COMPARISON"],
+    ["terminal-projection-adjacent-boundaries", "CannotAnswer", "TERMINAL-C-CHECK-ABI-AND-CLAIM-SSA-OUTSIDE-SURFACE"],
+    ["integrated-carriers-terminal-closure", "Refused", "TERMINAL-R-INTEGRATED-REUSABLE-CLAIM-LIVE"],
+    ["warpfold-finite-terminal-shape", "Affirmative", "TERMINAL-A-WARPFOLD-SHAPE"],
+    ["exact-holdout-terminal-carriers", "CannotAnswer", "TERMINAL-C-HOLDOUT-COORDINATES-ABSENT"],
+    ["must-env-clauses-for-ten-term-constructors", "CannotAnswer", "TERMINAL-C-MUST-ENV-CONSTRUCTORS-UNDEFINED"],
+    ["non-boolean-input-must-initialization", "CannotAnswer", "TERMINAL-C-NONBOOLEAN-INPUT-MUST-UNDEFINED"],
+    ["contradictory-fact-normalization", "CannotAnswer", "TERMINAL-C-CONTRADICTION-NORMALIZATION-UNDEFINED"],
+    ["impossible-guard-global-placement", "CannotAnswer", "TERMINAL-C-IMPOSSIBLE-GUARD-PLACEMENT"],
+    ["forward-claim-state-owner-algorithm", "CannotAnswer", "TERMINAL-C-FORWARD-STATE-TRANSFER-NOT-CLOSED-HERE"],
     ["m2-section-8-no-universal-result-bytes", "CannotAnswer", "M2-C-S6-SECTION8-NO-UNIVERSAL-RESULT-BYTES"],
     ["axiom-closure-standard-only", "Affirmative", "M1-A-S6-STANDARD-AXIOMS-ONLY"],
     ["cost-ledger-recorded", "Affirmative", "M1-A-S6-COST-LEDGER-RECORDED"],
@@ -55,6 +72,6 @@
     ["implementation-correspondence", "CannotAnswer", "M0-C-NO-IMPLEMENTATION-CORRESPONDENCE"],
     ["security-and-applicability", "CannotAnswer", "M0-C-NO-SECURITY-OR-APPLICABILITY-CLAIM"],
     ["general-k1-evaluator-conformance", "CannotAnswer", "M2-C-NO-GENERAL-K1-EVALUATOR-CONFORMANCE"],
-    ["mechanized-kernel-definitions", "CannotAnswer", "M2-C-TERM-EVALUATION-ORACLE-ABSENT"]
+    ["mechanized-kernel-definitions", "CannotAnswer", "TERMINAL-C-OWNER-TEXT-UNDERDETERMINED"]
   ]
 }

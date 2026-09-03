@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Run the M2 mechanized portable-term and Schnorr-denotation gate.
+"""Run the mechanized portable-term and Terminal-contract gate.
 
 The gate answers one bounded question: can the K1 portable-term calculus and
 the R1B finite Schnorr check denotation be mechanized in core Lean, while
 retaining M0/M1 and reproducing every available predecessor golden?  The K1
 independent oracle currently contains no term-evaluation operation, so that
 required evidence remains CannotAnswer even when the Lean/R1B comparisons
-pass.  Nothing under `lean/` is normative.
+pass.  The extension proves first-active and must-fact soundness, executes the
+Terminal decision on frozen carriers through Lean and independent Python
+paths, and fails closed on owner-text underdetermination.  Nothing under
+`lean/` is normative.
 
 When no Lean toolchain is available the Lean-dependent findings are classified
 `Unsupported/M0-U-LEAN-TOOLCHAIN` and the frozen comparison fails; the gate
@@ -40,6 +43,10 @@ EXPECTED = HERE / "expected-findings.json"
 EXPORT = HERE / "export_vectors.py"
 M2_EXPORT = HERE / "export_m2_vectors.py"
 M2_VECTORS = VECTORS / "m2-term-calculus.json"
+TERMINAL_EXPORT = HERE / "export_terminal_vectors.py"
+TERMINAL_CHECKER = HERE / "terminal_checker.py"
+TERMINAL_VECTORS = VECTORS / "terminal-contract.json"
+SOURCE_PINS = HERE / "source-pins.json"
 D1_EXPECTED = (
     ROOT / "evaluation/formal-source-integrated-graph-f0v2b2d1/expected-findings.json"
 )
@@ -47,8 +54,8 @@ ORACLE_CASES = ROOT / "evaluation/k1-executable-foundations/oracle/cases"
 FOUNDATION = ROOT / "docs-next/foundation/executable-foundations.md"
 TARGET = ROOT / "docs-next/pir/interactive-core.md"
 
-AFFIRMATIVE_AGGREGATE = "M2-A-TERM-CALCULUS-REPRODUCES-GOLDENS"
-CANNOT_ANSWER_AGGREGATE = "M2-C-TERM-EVALUATION-ORACLE-ABSENT"
+AFFIRMATIVE_AGGREGATE = "TERMINAL-A-MECHANIZED-CONTRACT"
+CANNOT_ANSWER_AGGREGATE = "TERMINAL-C-OWNER-TEXT-UNDERDETERMINED"
 TOOLCHAIN = "leanprover/lean4:v4.33.1"
 LEAN_VERSION = "4.33.1"
 D1_AGGREGATE = "F0V2B2D1-A-INTEGRATED-PCGRAPH-CLOSURE"
@@ -58,7 +65,8 @@ ORACLE_EXPECTED_SHA256 = "c7c6f87c5cd591f25e604ed157134e5d113449d1fea0c48eaeb9e7
 ORACLE_BOUNDARY_SHA256 = "318b98c12f6a5a358885cff8e0dcbc13e7c0f38796a0dc2c036fe6eb6f334d41"
 STANDARD_AXIOMS = frozenset(("propext", "Classical.choice", "Quot.sound"))
 KERNEL_MODULES = (
-    "Datum", "Encode", "Decode", "Core", "PCGraph", "Theorems", "Term", "Eval"
+    "Datum", "Encode", "Decode", "Core", "PCGraph", "Theorems", "Term", "Eval",
+    "Terminal",
 )
 TRANSPORT_MODULES = ("Transport",)
 PRIMARY_THEOREMS = (
@@ -71,6 +79,15 @@ M2_THEOREMS = (
     "M0.evaluation_deterministic",
     "M0.evaluation_completed_mono",
     "M0.schnorr_denotation_eq_closed_form",
+)
+TERMINAL_THEOREMS = (
+    "M0.attemptedWhenever_sound",
+    "M0.mustEnv_sound_evalCore",
+    "M0.must_when_true_sound",
+    "M0.must_when_false_sound",
+    "M0.impossible_when_true_cannot_evaluate_true",
+    "M0.impossible_when_false_cannot_evaluate_false",
+    "M0.terminalContractDecision_correct",
 )
 LATTICE_THEOREMS = (
     "M0.Join_cons",
@@ -325,9 +342,19 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     findings: list[Finding] = []
     export = _load("_zkc_m0_export", EXPORT)
     m2_export = _load("_zkc_m2_export", M2_EXPORT)
+    terminal_export = _load("_zkc_terminal_export", TERMINAL_EXPORT)
+    terminal_checker = _load("_zkc_terminal_checker", TERMINAL_CHECKER)
     k1 = export._load("_zkc_m0_k1", export.K1_MODEL)
 
     # Predecessor pins.
+    source_pins = _read_json(SOURCE_PINS)
+    _require(
+        source_pins["base_head"] == terminal_export.BASE_HEAD,
+        "source-pin cutoff and normalized-vector cutoff differ",
+    )
+    for group in ("frozen_predecessors", "owner_and_reconstruction_sources"):
+        for relative, expected_digest in source_pins[group].items():
+            _require(_sha256(ROOT / relative) == expected_digest, f"source pin drifted: {relative}")
     d1 = _read_json(D1_EXPECTED)
     _require(
         d1["aggregate"] == D1_AGGREGATE and d1["findings_sha256"] == D1_FINDINGS_SHA256,
@@ -356,8 +383,11 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         and "PCClass = StaticPublic | PublicHistory | VerifierPrivate | Invalid" in target
         and "least `M(PCNodeBody(node))`" in target
         and "Publish(x) = PublicHistory" in target
-        and "V(13,R{0:N(occurrence_ref),1:N(output_ordinal)})" in target,
-        "Foundation or Section 11 law text drifted",
+        and "V(13,R{0:N(occurrence_ref),1:N(output_ordinal)})" in target
+        and "AttemptedWhenever(o_later, o_earlier)" in target
+        and "MustEnv(if c then a else b, environment)" in target
+        and "TerminalContract(t), with o_t the occurrence of ReachTerminal(t)" in target,
+        "Foundation, graph, or Terminal law text drifted",
     )
     _require(
         "formal-kernel-mechanization" not in foundation
@@ -373,11 +403,13 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         )
     )
 
-    # The committed vectors are exactly what the predecessors export today.
+    # Live vectors regenerate; incompatible historical D1 vectors remain an
+    # explicit hash-pinned predecessor transport.
     t0 = time.perf_counter()
     regenerated = export.export()
     t1 = time.perf_counter()
     regenerated_m2 = m2_export.export()
+    regenerated_terminal = terminal_export.export()
     timings["m2_vector_export_seconds"] = round(time.perf_counter() - t1, 3)
     timings["vector_export_seconds"] = round(time.perf_counter() - t0, 3)
     committed = {name: (VECTORS / name).read_text(encoding="utf-8") for name in regenerated}
@@ -389,7 +421,21 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         M2_VECTORS.read_text(encoding="utf-8") == m2_export._dump(regenerated_m2),
         "committed M2 vectors differ from the regenerated export",
     )
+    _require(
+        TERMINAL_VECTORS.read_text(encoding="utf-8")
+        == terminal_export._dump(regenerated_terminal),
+        "committed Terminal vectors differ from the normalized reconstruction",
+    )
+    frozen_pcgraph = _read_json(VECTORS / "pcgraph-construction.json")
     findings.append(_finding("vector-export-stable", "Affirmative", "M0-A-VECTOR-EXPORT-STABLE"))
+    findings.extend(
+        (
+            _finding("terminal-vector-reconstruction-stable", "Affirmative",
+                     "TERMINAL-A-VECTOR-RECONSTRUCTION-STABLE"),
+            _finding("live-integrated-vector-regeneration", "CannotAnswer",
+                     "TERMINAL-C-SYNTHETIC-PROFILE-OVERLAY-COLLISION"),
+        )
+    )
 
     # The Lean text depends on the core library only.
     boundary = _lean_boundary()
@@ -430,28 +476,19 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
         (artifacts / "lake-build.log").write_text(build.stdout + build.stderr, encoding="utf-8")
         _require(build_ok, f"lake build failed:\n{build.stdout}\n{build.stderr}")
 
-        # Assemble the Lean input: committed vectors plus digest-checked regenerated bodies.
+        # Assemble the Lean input from live K1/M2/Terminal vectors and the
+        # explicitly pinned frozen graph-construction transport.
         t0 = time.perf_counter()
-        d1_model = export._load("_zkc_m0_d1_model", export.D1_MODEL)
-        bodies = export.regenerate_bodies(d1_model, k1)
-        digests = {row["name"]: row for row in regenerated["body-digests.json"]["bodies"]}
-        _require(set(bodies) == set(digests), "regenerated body names differ from the pinned digests")
-        _require(
-            all(bodies[name]["sha256"] == digests[name]["sha256"] for name in bodies),
-            "regenerated D1 bodies differ from the pinned digests",
-        )
-        encode_rows = list(regenerated["k1-encoding-vectors.json"]["encode"]) + [
-            {"name": row["name"], "source": row["source"], "value": row["value"], "hex": row["hex"]}
-            for row in bodies.values()
-        ]
+        encode_rows = list(regenerated["k1-encoding-vectors.json"]["encode"])
         reject_rows = list(regenerated["k1-encoding-vectors.json"]["reject"]) + list(
             regenerated["structural-negatives.json"]["reject"]
         )
         lean_input = {
             "encode": encode_rows,
             "reject": reject_rows,
-            "pcgraph_construction": regenerated["pcgraph-construction.json"]["carriers"],
+            "pcgraph_construction": frozen_pcgraph["carriers"],
             "m2": regenerated_m2,
+            "terminal": regenerated_terminal["carriers"],
         }
         input_path = artifacts / "m0-input.json"
         input_path.write_text(json.dumps(lean_input, separators=(",", ":")), encoding="utf-8")
@@ -482,9 +519,7 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
             for row in rows
         )
 
-    encoding_ok = all(all_encode(source) for source in (
-        "k1-oracle", "d1-core-body", "d1-public-coin-body"
-    ))
+    encoding_ok = all_encode("k1-oracle")
     rows = report.get("encode", [])
     roundtrip_ok = bool(rows) and all(row["decode_roundtrips"] and row["decoded_equals_value"] for row in rows)
     rejects = {row["name"]: row["rejected"] for row in report.get("reject", [])}
@@ -734,6 +769,121 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     )
     m2_stage4_ok = all((m2_determinism_ok, m2_monotonicity_ok, m2_axioms_ok))
 
+    # Universal Terminal proofs and the two executable reconstruction paths.
+    terminal_proofs_ok = proved(TERMINAL_THEOREMS)
+    first_active_ok = proved(("M0.attemptedWhenever_sound",))
+    must_sound_ok = proved((
+        "M0.mustEnv_sound_evalCore",
+        "M0.must_when_true_sound",
+        "M0.must_when_false_sound",
+        "M0.impossible_when_true_cannot_evaluate_true",
+        "M0.impossible_when_false_cannot_evaluate_false",
+    ))
+    decision_proof_ok = proved(("M0.terminalContractDecision_correct",))
+    lean_terminal_rows = report.get("terminal", [])
+    python_terminal_rows = terminal_checker.evaluate(regenerated_terminal)
+    lean_terminal_by_name = {row["name"]: row for row in lean_terminal_rows}
+    python_terminal_by_name = {row["name"]: row for row in python_terminal_rows}
+
+    def terminal_signature(row: dict[str, Any], python: bool) -> tuple[Any, ...]:
+        terminal_rows = row.get("terminals", [])
+        return (
+            row.get("representable", row.get("admitted") is not None),
+            row.get("admitted"),
+            tuple(
+                (
+                    terminal["reference"],
+                    terminal["passed"] if python else terminal["decision"],
+                    tuple(tuple(claims) for claims in terminal.get("active_live_claims", [])),
+                )
+                for terminal in terminal_rows
+            ),
+        )
+
+    terminal_two_path_ok = (
+        set(lean_terminal_by_name) == set(python_terminal_by_name)
+        and len(lean_terminal_by_name) == len(regenerated_terminal["carriers"])
+        and all(
+            terminal_signature(lean_terminal_by_name[name], False)
+            == terminal_signature(python_terminal_by_name[name], True)
+            for name in lean_terminal_by_name
+        )
+    )
+    projection_rows = [
+        row for row in lean_terminal_rows
+        if row["family"] == "terminal-projection" and row["representable"]
+    ]
+    projection_comparison_ok = len(projection_rows) == 16 and all(
+        row["admitted"] is (row["predecessor_outcome"] == "Affirmative")
+        for row in projection_rows
+    )
+    projection_outside_surface = [
+        row for row in lean_terminal_rows
+        if row["family"] == "terminal-projection" and not row["representable"]
+    ]
+    integrated_rows = [row for row in lean_terminal_rows if row["family"] == "integrated-graph"]
+    integrated_claim_gap = (
+        len(integrated_rows) == 5
+        and all(row["admitted"] is False and row["predecessor_outcome"] == "Affirmative"
+                for row in integrated_rows)
+        and all(
+            terminal["active_live_claims"] == [[0, 1, 2]]
+            for row in integrated_rows for terminal in row["terminals"]
+        )
+    )
+    holdout_rows = [row for row in lean_terminal_rows if row["family"] == "holdout-shape"]
+    holdout_shape_ok = (
+        len(holdout_rows) == 1 and holdout_rows[0]["admitted"] is True
+        and holdout_rows[0]["predecessor_outcome"] == "fits"
+    )
+    findings.extend(
+        (
+            lean_finding("first-active-sound-for-every-valuation", first_active_ok,
+                         "TERMINAL-A-FIRST-ACTIVE-UNIVERSAL"),
+            lean_finding("must-facts-sound-against-m2-evaluator", must_sound_ok,
+                         "TERMINAL-A-MUST-FACT-SOUND"),
+            lean_finding("terminal-decision-procedure-correct", decision_proof_ok,
+                         "TERMINAL-A-DECISION-CORRECT"),
+            lean_finding("terminal-theorems-standard-axioms-only", terminal_proofs_ok,
+                         "TERMINAL-A-STANDARD-AXIOMS-ONLY"),
+            lean_finding("lean-python-terminal-decision-agreement", terminal_two_path_ok,
+                         "TERMINAL-A-TWO-PATH-AGREEMENT"),
+            lean_finding("terminal-projection-comparison", projection_comparison_ok,
+                         "TERMINAL-A-PROJECTION-COMPARISON"),
+            _finding("terminal-projection-adjacent-boundaries", "CannotAnswer",
+                     "TERMINAL-C-CHECK-ABI-AND-CLAIM-SSA-OUTSIDE-SURFACE")
+                if len(projection_outside_surface) == 2 else
+                _finding("terminal-projection-adjacent-boundaries", "Refused",
+                         "TERMINAL-R-OUTSIDE-SURFACE-INVENTORY"),
+            _finding("integrated-carriers-terminal-closure", "Refused",
+                     "TERMINAL-R-INTEGRATED-REUSABLE-CLAIM-LIVE")
+                if integrated_claim_gap else
+                _finding("integrated-carriers-terminal-closure", "CannotAnswer",
+                         "TERMINAL-C-INTEGRATED-COMPARISON-DIVERGED"),
+            lean_finding("warpfold-finite-terminal-shape", holdout_shape_ok,
+                         "TERMINAL-A-WARPFOLD-SHAPE"),
+            _finding("exact-holdout-terminal-carriers", "CannotAnswer",
+                     "TERMINAL-C-HOLDOUT-COORDINATES-ABSENT"),
+        )
+    )
+
+    # Exact owner-text underdetermination.  The line ranges are frozen in the
+    # note and vector; the executable never fills these as owner law.
+    findings.extend(
+        (
+            _finding("must-env-clauses-for-ten-term-constructors", "CannotAnswer",
+                     "TERMINAL-C-MUST-ENV-CONSTRUCTORS-UNDEFINED"),
+            _finding("non-boolean-input-must-initialization", "CannotAnswer",
+                     "TERMINAL-C-NONBOOLEAN-INPUT-MUST-UNDEFINED"),
+            _finding("contradictory-fact-normalization", "CannotAnswer",
+                     "TERMINAL-C-CONTRADICTION-NORMALIZATION-UNDEFINED"),
+            _finding("impossible-guard-global-placement", "CannotAnswer",
+                     "TERMINAL-C-IMPOSSIBLE-GUARD-PLACEMENT"),
+            _finding("forward-claim-state-owner-algorithm", "CannotAnswer",
+                     "TERMINAL-C-FORWARD-STATE-TRANSFER-NOT-CLOSED-HERE"),
+        )
+    )
+
     # M2 Stage 6: bounded cost and exact owner-text underdetermination.
     findings.append(
         _finding("m2-section-8-no-universal-result-bytes", "CannotAnswer",
@@ -763,7 +913,8 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
     elif all((retained_ok, stage1_ok, decoder_canonicity_ok, order_independence_ok,
               magnitude_equivalence_ok, lean_boundary_ok, k1_boundary_ok,
               primary_ok, lattice_ok, axioms_ok, m2_stage1_ok, m2_stage2_ok,
-              m2_stage3_ok, m2_stage4_ok, m2_equation_ok)):
+              m2_stage3_ok, m2_stage4_ok, m2_equation_ok, terminal_proofs_ok,
+              terminal_two_path_ok, projection_comparison_ok, holdout_shape_ok)):
         findings.append(_finding("mechanized-kernel-definitions", "Affirmative",
                                  AFFIRMATIVE_AGGREGATE))
     else:
@@ -813,6 +964,18 @@ def evaluate(artifacts: Path) -> tuple[list[Finding], dict[str, Any]]:
                 "stage_4_passed": m2_stage4_ok,
                 "k1_term_evaluation_oracle_vectors": oracle_term_rows,
                 "lean_report": m2_report,
+            },
+            "terminal": {
+                "proofs_standard_axioms_only": terminal_proofs_ok,
+                "lean_python_agreement": terminal_two_path_ok,
+                "projection_representable": len(projection_rows),
+                "projection_outside_surface": len(projection_outside_surface),
+                "integrated_refused_by_claim_closure": len(integrated_rows)
+                    if integrated_claim_gap else 0,
+                "holdout_shapes_decided": len(holdout_rows),
+                "unrepresented_holdouts": regenerated_terminal["unrepresented_holdouts"],
+                "lean": lean_terminal_rows,
+                "python": python_terminal_rows,
             },
         }
     )
