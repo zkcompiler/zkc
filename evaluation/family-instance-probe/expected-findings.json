@@ -1,0 +1,173 @@
+{
+  "admission_repetitions_per_instance": 21,
+  "admission_wall_time_limit_ns": 250000000,
+  "aggregate": "FAMILYINSTANCE-A-INSTANCES-OUTSIDE-CORE",
+  "finding_codes": [
+    ["six-finite-core-admissions", "Affirmative", "FAMILYINSTANCE-A-SIX-CORES"],
+    ["parameter-rotates-core-identity", "Affirmative", "FAMILYINSTANCE-A-CORE-ROTATION"],
+    ["fri-instance-measurements", "Affirmative", "FAMILYINSTANCE-A-FRI-MEASUREMENTS"],
+    ["sumcheck-instance-measurements", "Affirmative", "FAMILYINSTANCE-A-SUMCHECK-MEASUREMENTS"],
+    ["regular-finite-variation", "Affirmative", "FAMILYINSTANCE-A-REGULAR-VARIATION"],
+    ["bounded-admission-time", "Affirmative", "FAMILYINSTANCE-A-ADMISSION-TIME"],
+    ["adjacent-identity-substitution", "Refused", "FAMILYINSTANCE-R-ADJACENT-IDENTITY"],
+    ["fixture-graph-measurements", "Affirmative", "FAMILYINSTANCE-A-FIXTURE-GRAPH"],
+    ["target-pcgraph-equivalence", "CannotAnswer", "FAMILYINSTANCE-C-TARGET-PCGRAPH"],
+    ["family-theorem-source-reuse", "Affirmative", "FAMILYINSTANCE-A-THEOREM-REUSE"],
+    ["internal-template-necessity", "CannotAnswer", "FAMILYINSTANCE-C-TEMPLATE-NECESSITY"],
+    ["family-profile-attachment", "CannotAnswer", "FAMILYINSTANCE-C-PROFILE-ATTACHMENT"],
+    ["theorem-proof-or-soundness", "CannotAnswer", "FAMILYINSTANCE-C-THEOREM-OR-SOUNDNESS"],
+    ["target-design-adoption", "CannotAnswer", "FAMILYINSTANCE-C-DESIGN-ADOPTION"],
+    ["family-instance-recommendation", "Affirmative", "FAMILYINSTANCE-A-INSTANCES-OUTSIDE-CORE"]
+  ],
+  "findings_sha256": "1294103d9eb884f02435b7acc3b547ff9b4d45eabc9111366251525af2ca8950",
+  "measurements": {
+    "fri-like-folding": [
+      {
+        "body_bytes": 7625,
+        "core_id": "pir.interactive-core@8c158862bb8e61e9c0e4b12acd92a5c5a2f4a8aa5231b5241707f7dd0a138d0c",
+        "admission_wall_time_class": "at-most-250000000-ns",
+        "declarations": 19,
+        "declarations_different_from_previous": 0,
+        "family": "fri-like-folding",
+        "parameter": 2,
+        "parameter_name": "fold_count",
+        "pcgraph_edges": 58,
+        "pcgraph_nodes": 42,
+        "varying_body_fields_from_previous": []
+      },
+      {
+        "body_bytes": 8815,
+        "core_id": "pir.interactive-core@298ea61f2db12301645bccbbdabf7a8c5390dc1cdaec2b24316310df0c09be61",
+        "admission_wall_time_class": "at-most-250000000-ns",
+        "declarations": 21,
+        "declarations_different_from_previous": 5,
+        "family": "fri-like-folding",
+        "parameter": 3,
+        "parameter_name": "fold_count",
+        "pcgraph_edges": 67,
+        "pcgraph_nodes": 48,
+        "varying_body_fields_from_previous": ["schedule", "reductions"]
+      },
+      {
+        "body_bytes": 10005,
+        "core_id": "pir.interactive-core@332a7b9cb17f805fa0b19b2640987f3724671bfde3b1c1201d5a9f021773f269",
+        "admission_wall_time_class": "at-most-250000000-ns",
+        "declarations": 23,
+        "declarations_different_from_previous": 5,
+        "family": "fri-like-folding",
+        "parameter": 4,
+        "parameter_name": "fold_count",
+        "pcgraph_edges": 76,
+        "pcgraph_nodes": 54,
+        "varying_body_fields_from_previous": ["schedule", "reductions"]
+      }
+    ],
+    "sumcheck-like-rounds": [
+      {
+        "body_bytes": 4190,
+        "core_id": "pir.interactive-core@aef62014b432f7913ba475a17a31d95b8abe12fc6568ba6d468c281552b3cfef",
+        "admission_wall_time_class": "at-most-250000000-ns",
+        "declarations": 12,
+        "declarations_different_from_previous": 0,
+        "family": "sumcheck-like-rounds",
+        "parameter": 1,
+        "parameter_name": "variable_count",
+        "pcgraph_edges": 31,
+        "pcgraph_nodes": 24,
+        "varying_body_fields_from_previous": []
+      },
+      {
+        "body_bytes": 7003,
+        "core_id": "pir.interactive-core@7820272d0c8d0e31e24cf35e9f5f6204b777b4519dc146876c6600be3ce0c9c7",
+        "admission_wall_time_class": "at-most-250000000-ns",
+        "declarations": 17,
+        "declarations_different_from_previous": 6,
+        "family": "sumcheck-like-rounds",
+        "parameter": 2,
+        "parameter_name": "variable_count",
+        "pcgraph_edges": 51,
+        "pcgraph_nodes": 35,
+        "varying_body_fields_from_previous": ["schedule", "reductions", "claim_uses"]
+      },
+      {
+        "body_bytes": 12629,
+        "core_id": "pir.interactive-core@79ed21123a33b59b1bf0ba129c7a6f138e4ac04991998dc5d26c9dda468ffffd",
+        "admission_wall_time_class": "at-most-250000000-ns",
+        "declarations": 27,
+        "declarations_different_from_previous": 11,
+        "family": "sumcheck-like-rounds",
+        "parameter": 4,
+        "parameter_name": "variable_count",
+        "pcgraph_edges": 91,
+        "pcgraph_nodes": 57,
+        "varying_body_fields_from_previous": ["schedule", "reductions", "claim_uses"]
+      }
+    ]
+  },
+  "regularity": [
+    {"family": "fri-like-folding", "intercept": 5245, "metric": "body_bytes", "slope": 1190},
+    {"family": "fri-like-folding", "intercept": 30, "metric": "pcgraph_nodes", "slope": 6},
+    {"family": "fri-like-folding", "intercept": 40, "metric": "pcgraph_edges", "slope": 9},
+    {"family": "fri-like-folding", "intercept": 15, "metric": "declarations", "slope": 2},
+    {"family": "sumcheck-like-rounds", "intercept": 1377, "metric": "body_bytes", "slope": 2813},
+    {"family": "sumcheck-like-rounds", "intercept": 13, "metric": "pcgraph_nodes", "slope": 11},
+    {"family": "sumcheck-like-rounds", "intercept": 11, "metric": "pcgraph_edges", "slope": 20},
+    {"family": "sumcheck-like-rounds", "intercept": 7, "metric": "declarations", "slope": 5}
+  ],
+  "source_sha256": {
+    "docs-next/analysis/cryptographic-properties.md": "df29e7c025f1841da88f4c52f2468c25aeecf712ab247506c9a3ba5318716cfe",
+    "docs-next/pir/fiat-shamir.md": "b7d26295bbf1d8f51ddf7b2ffd811ce4d2d819c5edf4d6f9b504317e1f5c0bd7",
+    "docs-next/pir/interactive-core.md": "9c33e94db242e485789e8e32942a3c02dfaab97a3875654abd2d7525cbb860da",
+    "docs-next/relations/relation-model.md": "82183b87edeec0b98740bd53624ebf475c23c85b6583070f5626567bf612408f",
+    "evaluation/indexed-core-elaboration/reference_model.py": "dc7eeb0e3736e16e35e1faca926c32f7bde2b1cfadfd2b15a75801bed1d42abc",
+    "evaluation/k2-protocol-fiat-shamir/reference_model.py": "402bd72f24571828b3f76bc3fe7fd103798841e736d3bf672c025843c1b8071a"
+  },
+  "theorem_binding": {
+    "applicability_coordinates": [
+      "theorem_schema_id",
+      "family_definition_id",
+      "family_read_manifest_schema_ids",
+      "family_experiment_profile_ids",
+      "source_and_target_subject_roles",
+      "exact_role_and_parameter_substitution",
+      "side_condition_schemas",
+      "typed_bound_transform",
+      "hypothesis_context_id",
+      "support_and_validation_basis_ids"
+    ],
+    "bound": "degree_bound * variable_count / field_cardinality",
+    "design_evidence": {
+      "family-semantic-profile": [
+        "one family applicability judgment",
+        "one family-profile publication and parameter-fixing import per member",
+        "one unfolding equality and concrete Core admission per member",
+        "one pointwise correspondence and specialization per concrete Core"
+      ],
+      "instances-only": [
+        "one family applicability judgment",
+        "one pointwise correspondence and specialization per concrete Core"
+      ],
+      "template-core": [
+        "one family applicability judgment",
+        "one admitted template identity and total bounded unfolding law",
+        "one unfolding equality and concrete Core admission per member",
+        "one pointwise correspondence and specialization per concrete Core"
+      ]
+    },
+    "pointwise_coordinates": [
+      "family_definition_id",
+      "logical_variable_count_literal_id",
+      "concrete_core_id",
+      "concrete_protocol_id",
+      "relation_instance_and_binding_ids",
+      "statement_and_witness_role_coordinates",
+      "challenge_model_coordinate",
+      "round_count_equals_variable_count",
+      "degree_bound_coordinate",
+      "field_cardinality_coordinate",
+      "family_instance_correspondence_judgment_id"
+    ],
+    "quantifiers": ["variable_count", "degree_bound", "field_cardinality"],
+    "theorem_source": "sumcheck-soundness-family-source"
+  }
+}

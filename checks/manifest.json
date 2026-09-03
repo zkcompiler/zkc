@@ -554,6 +554,28 @@
       }
     },
     {
+      "id": "research.family-instance-probe",
+      "title": "Protocol family and finite instance probe",
+      "subject": "Two bounded family-shaped generators, six admitted concrete Core instances, their identities and fixture graph measurements, and one family-theorem binding ledger.",
+      "claim": "The selected finite parameter changes elaborate regularly to separately admitted and identified Cores, while one family theorem source can be reused through exact pointwise Analysis correspondence without adding a PIR family constructor.",
+      "classification": "research-falsifier",
+      "methods": ["known-answer", "negative", "mutation", "property", "static-analysis"],
+      "source_paths": ["evaluation/family-instance-probe/run.py", "evaluation/family-instance-probe/model.py", "evaluation/family-instance-probe/README.md", "evaluation/family-instance-probe/expected-findings.json"],
+      "tiers": ["research-checkpoint", "scheduled", "release-freeze"],
+      "cost": "short",
+      "environment": "python-stdlib",
+      "shardability": "case",
+      "blocking": true,
+      "nonclaims": ["The bounded measurements are not a family theorem, soundness result, target PCGraph correspondence, family-wide generator proof, implementation result, or design adoption."],
+      "execution": {
+        "kind": "command",
+        "argv": ["{python}", "-B", "evaluation/family-instance-probe/run.py", "--check"],
+        "cwd": "{repo}",
+        "requires": ["{python}"],
+        "artifacts": []
+      }
+    },
+    {
       "id": "research.plan-continuation",
       "title": "Plan continuation semantics",
       "subject": "Finite accumulation, folding, and recursion continuation shapes.",
