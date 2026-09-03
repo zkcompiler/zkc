@@ -106,6 +106,7 @@ F0  ideal assurance architecture and current-design falsification
   -> F0-V3  FS-family view determinacy                  [complete, CannotAnswer]
   -> F0-V3B FS-family view bodies and cone              [complete, Affirmative]
   -> F0-V2B2D3 six views for the integrated carriers    [complete, Affirmative]
+  -> R-E    Analysis intake for named premises          [complete, Affirmative; proposal]
   -> F0-V2C  target publication and migration            [candidate modeled; decision pending]
   -> F1-R1C  exact owner views/read closure              [waiting on F0-V2C]
   -> F1-R1D exact integrated target package             [open]
@@ -537,6 +538,16 @@ provider, extraction tool, or durable schema.
   against the full six-view universe closes all forty operational owner-view
   gaps (sourced observables 32 to 72), leaving sixteen operational semantic
   and provider gaps and the five property premises; aggregate `Affirmative`.
+- [`analysis-named-premise-intake.md`](analysis-named-premise-intake.md)
+  designs, as an exact proposed delta to the Analysis pages, the catalog of
+  named premises (the Fresh public-coin distribution per nominal law
+  coordinate, the family sampler-adequacy and oracle-process premises, the
+  provider outcome-carrier map over the abstract outcome partition, and the
+  five property premises with their Schnorr coordinates) and the intake that
+  makes a missing premise `CannotAnswer`; a finite probe reconstructs the
+  intake on two paths and refuses every named mutation (aggregate
+  `Affirmative`), with one item `CannotAnswer` until the outcome partition is
+  published.
 
 The first pass provisionally favors exact owner-derived Analysis source views
 plus a stable question-relative neutral source package and untrusted,
