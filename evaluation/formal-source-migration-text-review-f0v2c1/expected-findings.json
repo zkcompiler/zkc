@@ -1,11 +1,8 @@
 {
   "aggregate": {
-    "code": "F0V2C1-C-MIGRATION-TEXT-NOT-CLOSED",
-    "outcome": "CannotAnswer",
-    "blocking_findings": [
-      "terminal-contract",
-      "owner-name-closure"
-    ]
+    "code": "F0V2C1-A-MIGRATION-TEXT-CLOSED",
+    "outcome": "Affirmative",
+    "blocking_findings": []
   },
   "finding_codes": [
     [
@@ -15,8 +12,8 @@
     ],
     [
       "terminal-contract",
-      "CannotAnswer",
-      "F0V2C1-C-TERMINAL-CLAIM-SOURCE-REGION"
+      "Affirmative",
+      "F0V2C1-A-TERMINAL-CONTRACT"
     ],
     [
       "public-coin-graph",
@@ -25,8 +22,8 @@
     ],
     [
       "owner-name-closure",
-      "CannotAnswer",
-      "F0V2C1-C-OWNER-CLAIM-SOURCE-REGION"
+      "Affirmative",
+      "F0V2C1-A-OWNER-CLOSURE"
     ],
     [
       "manifest-closure",
@@ -156,7 +153,7 @@
       "docs-next/pir/duplex-sponge-fiat-shamir.md": "60d66fb3636c85d0d4201de3962bdc19b3664469bc8808dfbe738ad57d248db4",
       "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
       "docs-next/pir/fiat-shamir.md": "52682bd1e46f0579b7f6445cfa2866ab2bfce819aa1082d796ae216f451bf671",
-      "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
+      "docs-next/pir/interactive-core.md": "dd6d6711400e73feccf52f762de8b72e5790b256bd00feb86d8142e49934c3b4",
       "docs-next/pir/interfaces-and-plans.md": "fb5256442bf0f9c73f2ffe71dd904eb39724fcea6c1ae16154291cf0dc827c6d",
       "docs-next/pir/profiles/canonical-framed-fiat-shamir.json": "1bc99ab9c78d11cf3c49009bec501e526acdc429a41b35a21814035a63ba8511",
       "docs-next/pir/profiles/duplex-sponge-fiat-shamir.json": "b42fa85df8f3222646c253b2174cc9f80c763e8525e4abc5e0d25d202664d4b5",
@@ -173,13 +170,40 @@
         3,
         3
       ],
-      "claim_source_region_mapping_present": false,
+      "claim_source_region_mapping_present": true,
       "corrected_guard_inclusion_cases": 16,
       "corrected_guard_inclusion_counterexamples": 0,
       "frozen_carriers": {
-        "claim_source_boundary_discriminator": {
-          "occurrence_region_coercion": "Unknown",
-          "reference": "Live"
+        "claim_source_discriminators": {
+          "initial-claim-at-initial-boundary": {
+            "dead_counterexamples": 0,
+            "live_counterexamples": 0,
+            "paths_with_live_claim": 1,
+            "reaching_paths": 1,
+            "status": "Live"
+          },
+          "initial-claim-before-guarded-occurrence": {
+            "dead_counterexamples": 0,
+            "live_counterexamples": 0,
+            "paths_with_live_claim": 2,
+            "pre-repair-occurrence-coercion": "Unknown",
+            "reaching_paths": 2,
+            "status": "Live"
+          },
+          "initial-claim-before-unguarded-occurrence": {
+            "dead_counterexamples": 0,
+            "live_counterexamples": 0,
+            "paths_with_live_claim": 1,
+            "reaching_paths": 1,
+            "status": "Live"
+          },
+          "reduction-output-at-later-guarded-terminal": {
+            "dead_counterexamples": 0,
+            "live_counterexamples": 0,
+            "paths_with_live_claim": 1,
+            "reaching_paths": 1,
+            "status": "Live"
+          }
         },
         "holdouts": {
           "represented_carriers": 2,
@@ -291,6 +315,18 @@
           },
           "unknown": 0
         },
+        "path_reference": {
+          "claim_status_cases": 58,
+          "claim_status_counterexamples": {
+            "Dead": 0,
+            "Live": 0
+          },
+          "claim_status_verdicts": {
+            "Dead": 9,
+            "Live": 49,
+            "Unknown": 0
+          }
+        },
         "terminal_projection": {
           "carriers": 1,
           "terminal_live_claims": [
@@ -358,7 +394,7 @@
       }
     },
     "views": {
-      "claim_source_region_closed": false,
+      "claim_source_region_closed": true,
       "fs_body_fields": 95,
       "fs_exact_fields": 95,
       "fs_field_form_counts": {
@@ -418,9 +454,7 @@
       "fs_undefined_fields": 0,
       "owner_atomic_boundary_arms": 10,
       "owner_module_effect_body_arm": 9,
-      "owner_unresolved_expressions": [
-        "Region(Source(c)) has no region mapping for InitialClaim(BindingRef) or ReductionOutput(ReductionRef, output_ordinal)"
-      ],
+      "owner_unresolved_expressions": [],
       "packet_review": {
         "body_field_counts": {
           "ChallengeTransitionViewBody": 11,

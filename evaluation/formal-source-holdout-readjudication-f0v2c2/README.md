@@ -49,9 +49,10 @@ The checker:
 - evaluates the migrated structural `Must` rule on the accepting nested guard,
   proving all five positive WHIR literals, and exhausts all 32 Check valuations
   for the identically guarded Reduction schedule and two terminal frontiers;
-- evaluates the closed `ClaimStatus` set law on the represented WHIR and
-  WARPfold shapes: no `Unknown` arises, WHIR Accept has no live Claim, its
-  fallback has only the initial Claim, and no verdict changes;
+- evaluates the repaired `BoundaryRegion`, `ClaimSourceRegion`, and
+  `ClaimStatus` laws on the represented WHIR and WARPfold shapes: no `Unknown`
+  arises, WHIR Accept has no live Claim, its fallback has only the initial
+  Claim, and no verdict changes;
 - requires every fitting row to map its Analysis observables through all six
   normalized views with no missing PIR coordinate;
 - requires every breaking row to name both a boundary and an observable or
@@ -81,9 +82,10 @@ ReductionRef, ClaimRef, and failure-guard selection until a concrete source
 profile is authored. This missing source evidence does not become a target
 owner-page defect.
 
-The represented-shape check reconstructs initial binding-opening and Reduction-
-output source regions explicitly. It does not close the migrated owner text's
-separate missing definition of the region of `ClaimSource`.
+The represented-shape check reconstructs the owner-authored initial
+binding-opening and Reduction-output source regions explicitly. It shows only
+that the repaired source map changes none of these frozen holdout verdicts; it
+does not prove `ClaimStatus` for arbitrary Core values.
 
 ## Nonclaims
 

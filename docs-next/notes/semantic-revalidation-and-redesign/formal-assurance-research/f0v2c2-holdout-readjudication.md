@@ -19,12 +19,13 @@ finite or virtual subcase distinct from a broader source claim. The migrated
 owner text leaves five rows fitting and three breaking at already named
 boundaries. No row bends and no verdict changes.
 
-The current refreeze also applies the closed `Region` and `ClaimStatus` laws
-to the two represented holdout shapes. Neither produces `Unknown`: WHIR's
-accepting frontier has no live Claim and its fallback has only the initial
-Claim, while both WARPfold frontiers have empty Claim sets. The other four
-fitting boundary-analysis rows still lack exact carrier coordinates, so their
-existing `CannotAnswer` is retained rather than filled with an invented Core.
+The current refreeze also applies the closed `BoundaryRegion`,
+`ClaimSourceRegion`, `Region`, and `ClaimStatus` laws to the two represented
+holdout shapes. Neither produces `Unknown`: WHIR's accepting frontier has no
+live Claim and its fallback has only the initial Claim, while both WARPfold
+frontiers have empty Claim sets. The other four fitting boundary-analysis rows
+still lack exact carrier coordinates, so their existing `CannotAnswer` is
+retained rather than filled with an invented Core.
 
 The migration does change one concrete carrier shape. WHIR's earlier schedule
 guarded the fold by a proper subset of the accepting Checks. Scope openings are
@@ -622,3 +623,25 @@ boundary and a Reduction output to its `ApplyReduction` occurrence. That is
 enough to re-adjudicate the represented holdout shapes, but it does not repair
 the owner page's missing general `ClaimSource`-to-region map identified by the
 migration-text review.
+
+## Round four
+
+The owner-page pin now authenticates `docs-next/pir/interactive-core.md` at
+SHA-256
+`dd6d6711400e73feccf52f762de8b72e5790b256bd00feb86d8142e49934c3b4`.
+The migration-record support pin moves with the current page record, and the
+adjudication ledger is re-pinned after refreshing its exact owner-section line
+coordinates.
+
+The represented WHIR and WARPfold reconstruction now requires the authored
+`BoundaryRegion` and `ClaimSourceRegion` helpers and the absence of the old
+`Region(Source(c))` expression. It still produces zero `Unknown` results:
+WHIR Accept has no live Claim, WHIR fallback has only the initial Claim, and
+WARPfold has no live Claim at either frontier.
+
+No holdout verdict changes under `ClaimSourceRegion`. All eight rows remain
+frozen and agree with both comparison sources: five fit, three break, none
+bend, and none disagree. The aggregate remains
+`Affirmative/F0V2C2-A-HOLDOUTS-READJUDICATED`. The exact-reference finding for
+the four source-specialized fitting rows remains `CannotAnswer`; this is still
+a source-profile carrier gap, not a target owner-page reopening.

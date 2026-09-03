@@ -296,6 +296,30 @@ def _packet_review(pages: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def _claim_source_region_text_closed(interaction: str) -> bool:
+    required = (
+        "BoundaryRegion(Initially) := {",
+        "required_true: {}, required_false: {}, impossible: false",
+        "BoundaryRegion(BeforeOccurrence(o)) := {",
+        "required_false: { Guard(t') | t' a terminal occurrence earlier than o",
+        "impossible: an earlier terminal occurrence has Guard Always",
+        "ClaimSourceRegion(c) :=",
+        "BoundaryRegion(ScopeDecl(PublicBindingDecl(binding).scope).opening)",
+        "when c.source is InitialClaim(binding)",
+        "when c.source is ReductionOutput(r, output_ordinal), with o_r the",
+        "occurrence of ApplyReduction(r)",
+        "Implies(Region(o), ClaimSourceRegion(c))",
+        "Disjoint(Region(o), ClaimSourceRegion(c))",
+    )
+    return (
+        all(snippet in interaction for snippet in required)
+        and interaction.count("BoundaryRegion(Initially) :=") == 1
+        and interaction.count("BoundaryRegion(BeforeOccurrence(o)) :=") == 1
+        and interaction.count("ClaimSourceRegion(c) :=") == 1
+        and "Region(Source(c))" not in interaction
+    )
+
+
 def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
     schema_count = 0
     body_count = 0
@@ -346,11 +370,7 @@ def _view_closure(pages: dict[str, str]) -> dict[str, Any]:
         and "V(9,AdmittedModuleEffectAtom(effect))" in interaction,
         "the module-effect atomic boundary closure drifted",
     )
-    claim_source_region_closed = (
-        interaction.count("ClaimSourceRegion(c) :=") == 1
-        and "Implies(Region(o), ClaimSourceRegion(c))" in interaction
-        and "Disjoint(Region(o), ClaimSourceRegion(c))" in interaction
-    )
+    claim_source_region_closed = _claim_source_region_text_closed(interaction)
 
     all_fields: dict[str, dict[str, str]] = {}
     forms: dict[str, dict[str, int]] = {}
@@ -501,6 +521,146 @@ def _claim_status(
         "ClaimStatus produced overlapping Live and Dead verdicts",
     )
     return "Live" if live else "Dead" if dead else "Unknown"
+
+
+def _claim_source_region(
+    schedule: tuple[_Occurrence, ...], source_kind: str, source_position: int | None
+) -> _Region:
+    if source_kind == "initially":
+        _require(source_position is None, "Initially source has an occurrence position")
+        return _boundary_region(schedule, 0)
+    if source_kind == "before-occurrence":
+        _require(source_position is not None, "boundary source has no occurrence position")
+        return _boundary_region(schedule, source_position)
+    if source_kind == "reduction-output":
+        _require(source_position is not None, "Reduction output has no occurrence position")
+        return _region(schedule, source_position)
+    raise ReviewError(f"unknown claim source kind: {source_kind}")
+
+
+def _claim_source_present(
+    path: tuple[tuple[bool, ...], frozenset[int]],
+    source_kind: str,
+    source_position: int | None,
+    opening: int | None,
+) -> bool:
+    attempts, opened = path
+    if source_kind == "initially":
+        return True
+    if source_kind == "before-occurrence":
+        _require(opening is not None, "boundary source has no opening coordinate")
+        return opening in opened
+    if source_kind == "reduction-output":
+        _require(source_position is not None, "Reduction output has no occurrence position")
+        return attempts[source_position]
+    raise ReviewError(f"unknown claim source kind: {source_kind}")
+
+
+def _path_referenced_claim_status(
+    schedule: tuple[_Occurrence, ...],
+    target_position: int,
+    source_kind: str,
+    source_position: int | None,
+    opening: int | None = None,
+    consumers: tuple[int, ...] = (),
+) -> dict[str, Any]:
+    atoms = sorted(
+        {occurrence.guard for occurrence in schedule if occurrence.guard is not None}
+    )
+    _require(atoms == list(range(len(atoms))), "claim fixture guard atoms are not dense")
+    valuations = tuple(product((False, True), repeat=len(atoms)))
+    paths = tuple(_path_attempts(schedule, valuation) for valuation in valuations)
+    reaching = tuple(path for path in paths if path[0][target_position])
+    _require(reaching, "claim fixture target has no reaching path")
+    source_region = _claim_source_region(schedule, source_kind, source_position)
+    consumer_regions = tuple(_region(schedule, position) for position in consumers)
+    status = _claim_status(_region(schedule, target_position), source_region, consumer_regions)
+    actual = tuple(
+        _claim_source_present(path, source_kind, source_position, opening)
+        and not any(path[0][position] for position in consumers)
+        for path in reaching
+    )
+    live_counterexample = status == "Live" and not all(actual)
+    dead_counterexample = status == "Dead" and any(actual)
+    _require(
+        not live_counterexample and not dead_counterexample,
+        "ClaimStatus disagrees with the path reference",
+    )
+    return {
+        "status": status,
+        "reaching_paths": len(reaching),
+        "paths_with_live_claim": sum(actual),
+        "live_counterexamples": int(live_counterexample),
+        "dead_counterexamples": int(dead_counterexample),
+    }
+
+
+def _claim_source_discriminators() -> dict[str, Any]:
+    fixtures = {
+        "initial-claim-at-initial-boundary": (
+            (_Occurrence(False, None), _Occurrence(True, None)),
+            1,
+            "initially",
+            None,
+            None,
+        ),
+        "initial-claim-before-unguarded-occurrence": (
+            (_Occurrence(False, None, (0,)), _Occurrence(True, None)),
+            1,
+            "before-occurrence",
+            0,
+            0,
+        ),
+        "initial-claim-before-guarded-occurrence": (
+            (_Occurrence(False, 0, (0,)), _Occurrence(True, None)),
+            1,
+            "before-occurrence",
+            0,
+            0,
+        ),
+        "reduction-output-at-later-guarded-terminal": (
+            (_Occurrence(False, 0), _Occurrence(True, 0)),
+            1,
+            "reduction-output",
+            0,
+            None,
+        ),
+    }
+    results = {
+        name: _path_referenced_claim_status(
+            schedule,
+            target,
+            source_kind,
+            source_position,
+            opening,
+        )
+        for name, (
+            schedule,
+            target,
+            source_kind,
+            source_position,
+            opening,
+        ) in fixtures.items()
+    }
+    _require(
+        all(result["status"] == "Live" for result in results.values()),
+        "a ClaimSource arm discriminator is not Live",
+    )
+
+    guarded_schedule = fixtures["initial-claim-before-guarded-occurrence"][0]
+    occurrence_coercion = _claim_status(
+        _region(guarded_schedule, 1),
+        _region(guarded_schedule, 0),
+        (),
+    )
+    _require(
+        occurrence_coercion == "Unknown",
+        "guarded binding-opening discriminator no longer distinguishes the repair",
+    )
+    results["initial-claim-before-guarded-occurrence"][
+        "pre-repair-occurrence-coercion"
+    ] = occurrence_coercion
+    return results
 
 
 def _region_and_claim_oracle() -> dict[str, Any]:
@@ -856,34 +1016,46 @@ def _must_env_oracle() -> dict[str, Any]:
 def _carrier_claim_status_review() -> dict[str, Any]:
     projection = (
         _Occurrence(False, None),
-        _Occurrence(False, 10),
-        _Occurrence(True, 10),
+        _Occurrence(False, 0),
+        _Occurrence(True, 0),
         _Occurrence(False, None),
-        _Occurrence(True, 11),
+        _Occurrence(True, 1),
         _Occurrence(True, None),
     )
     projection_claims = (
-        (_boundary_region(projection, 0), (1, 3)),
-        (_region(projection, 1), ()),
-        (_region(projection, 3), ()),
+        ("initially", None, None, (1, 3)),
+        ("reduction-output", 1, None, ()),
+        ("reduction-output", 3, None, ()),
     )
+
+    path_cases = 0
+    path_verdicts = {"Live": 0, "Dead": 0, "Unknown": 0}
+    path_counterexamples = {"Live": 0, "Dead": 0}
 
     def statuses(
         schedule: tuple[_Occurrence, ...],
-        claims: tuple[tuple[_Region, tuple[int, ...]], ...],
+        claims: tuple[tuple[str, int | None, int | None, tuple[int, ...]], ...],
         terminal_positions: tuple[int, ...],
     ) -> tuple[list[list[int]], int]:
+        nonlocal path_cases
         live_sets: list[list[int]] = []
         unknown = 0
         for terminal in terminal_positions:
-            target = _region(schedule, terminal)
             current: list[int] = []
-            for claim, (source, consumers) in enumerate(claims):
-                status = _claim_status(
-                    target,
-                    source,
-                    tuple(_region(schedule, consumer) for consumer in consumers if consumer < terminal),
+            for claim, (source_kind, source_position, opening, consumers) in enumerate(claims):
+                result = _path_referenced_claim_status(
+                    schedule,
+                    terminal,
+                    source_kind,
+                    source_position,
+                    opening,
+                    tuple(consumer for consumer in consumers if consumer < terminal),
                 )
+                status = result["status"]
+                path_cases += 1
+                path_verdicts[status] += 1
+                path_counterexamples["Live"] += result["live_counterexamples"]
+                path_counterexamples["Dead"] += result["dead_counterexamples"]
                 unknown += int(status == "Unknown")
                 if status == "Live":
                     current.append(claim)
@@ -899,19 +1071,19 @@ def _carrier_claim_status_review() -> dict[str, Any]:
     integrated_unknown = 0
     integrated_reusable_claim_live = 0
     for name, terminal_guards in (
-        ("integrated-baseline", (200, 201, None)),
-        ("private-verifier-output-sink", (200, 201, None)),
-        ("invalid-module-control-sink", (200, 201, None)),
-        ("history-challenge-condition", (200, 201, None)),
-        ("logical-reject-preemption", (300, 201, None)),
+        ("integrated-baseline", (0, 1, None)),
+        ("private-verifier-output-sink", (0, 1, None)),
+        ("invalid-module-control-sink", (0, 1, None)),
+        ("history-challenge-condition", (0, 1, None)),
+        ("logical-reject-preemption", (0, 1, None)),
     ):
         schedule = tuple(_Occurrence(False, None) for _ in range(20)) + tuple(
             _Occurrence(True, guard) for guard in terminal_guards
         )
         claims = (
-            (_boundary_region(schedule, 0), ()),
-            (_region(schedule, 18), ()),
-            (_region(schedule, 19), ()),
+            ("initially", None, None, ()),
+            ("reduction-output", 18, None, ()),
+            ("reduction-output", 19, None, ()),
         )
         live_sets, unknown = statuses(schedule, claims, (20, 21, 22))
         _require(
@@ -923,14 +1095,14 @@ def _carrier_claim_status_review() -> dict[str, Any]:
         integrated_reusable_claim_live += sum(0 in row for row in live_sets)
 
     whir = (
-        _Occurrence(False, 50),
-        _Occurrence(False, 50),
-        _Occurrence(True, 50),
+        _Occurrence(False, 0),
+        _Occurrence(False, 0),
+        _Occurrence(True, 0),
         _Occurrence(True, None),
     )
     whir_claims = (
-        (_boundary_region(whir, 0), (0,)),
-        (_region(whir, 0), (1,)),
+        ("initially", None, None, (0,)),
+        ("reduction-output", 0, None, (1,)),
     )
     whir_live, whir_unknown = statuses(whir, whir_claims, (2, 3))
     _require(whir_live == [[], [0]], "WHIR closed-state live sets drifted")
@@ -945,28 +1117,9 @@ def _carrier_claim_status_review() -> dict[str, Any]:
         projection_unknown + integrated_unknown + whir_unknown + warpfold_unknown == 0,
         "a frozen represented carrier produced ClaimStatus Unknown",
     )
-
-    # InitialClaim names a binding opening, not an occurrence.  If a child
-    # scope opens before a guarded occurrence, the source exists even when that
-    # occurrence is inactive.  Region(occurrence) would therefore produce an
-    # erroneous Unknown instead of Live at the following fallback.
-    source_discriminator = (
-        _Occurrence(False, 0, (1,)),
-        _Occurrence(True, None),
-    )
-    correct = _claim_status(
-        _region(source_discriminator, 1),
-        _boundary_region(source_discriminator, 0),
-        (),
-    )
-    occurrence_coercion = _claim_status(
-        _region(source_discriminator, 1),
-        _region(source_discriminator, 0),
-        (),
-    )
     _require(
-        correct == "Live" and occurrence_coercion == "Unknown",
-        "claim-source boundary discriminator drifted",
+        path_counterexamples == {"Live": 0, "Dead": 0},
+        "a frozen carrier ClaimStatus verdict is unsound against the path reference",
     )
     return {
         "terminal_projection": {
@@ -990,10 +1143,12 @@ def _carrier_claim_status_review() -> dict[str, Any]:
             "unknown": whir_unknown + warpfold_unknown,
             "source_specialized_rows_without_exact_carriers": 4,
         },
-        "claim_source_boundary_discriminator": {
-            "reference": correct,
-            "occurrence_region_coercion": occurrence_coercion,
+        "path_reference": {
+            "claim_status_cases": path_cases,
+            "claim_status_verdicts": path_verdicts,
+            "claim_status_counterexamples": path_counterexamples,
         },
+        "claim_source_discriminators": _claim_source_discriminators(),
     }
 
 
@@ -1007,6 +1162,9 @@ def _terminal_review(interaction: str) -> dict[str, Any]:
         "MustEnv(any other term constructor, environment) =",
         "Positive(i) and Negative(i) for one input i is Impossible",
         "Region(o) := {",
+        "BoundaryRegion(Initially) := {",
+        "BoundaryRegion(BeforeOccurrence(o)) := {",
+        "ClaimSourceRegion(c) :=",
         "ClaimStatus(c, o) :=",
         "no claim has ClaimStatus Unknown at o_t",
         "Positive(i) in MustWhenTrue(GuardTerm(o_t))",
@@ -1064,6 +1222,10 @@ def _terminal_review(interaction: str) -> dict[str, Any]:
     oracle = _region_and_claim_oracle()
     must_env = _must_env_oracle()
     carriers = _carrier_claim_status_review()
+    _require(
+        _claim_source_region_text_closed(interaction),
+        "the ClaimSourceRegion owner law is not closed",
+    )
     mechanization_findings_closed = [
         "TERMINAL-C-MUST-ENV-CONSTRUCTORS-UNDEFINED",
         "TERMINAL-C-NONBOOLEAN-INPUT-MUST-UNDEFINED",
@@ -1085,7 +1247,7 @@ def _terminal_review(interaction: str) -> dict[str, Any]:
             mechanization_findings_closed
         ),
         "mechanization_underdetermination_findings_remaining": [],
-        "claim_source_region_mapping_present": "ClaimSourceRegion(c) :=" in interaction,
+        "claim_source_region_mapping_present": True,
     }
 
 

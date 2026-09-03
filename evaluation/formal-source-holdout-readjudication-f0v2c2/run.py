@@ -34,7 +34,7 @@ SOURCE_PINS = {
 }
 
 OWNER_PINS = {
-    "docs-next/pir/interactive-core.md": "47e91fe7938be05c45e70420ea6861a3c402fe7bfd7c918b9b000f1b7450f02f",
+    "docs-next/pir/interactive-core.md": "dd6d6711400e73feccf52f762de8b72e5790b256bd00feb86d8142e49934c3b4",
     "docs-next/pir/fiat-shamir.md": "52682bd1e46f0579b7f6445cfa2866ab2bfce819aa1082d796ae216f451bf671",
     "docs-next/pir/duplex-sponge-fiat-shamir.md": "60d66fb3636c85d0d4201de3962bdc19b3664469bc8808dfbe738ad57d248db4",
     "docs-next/pir/endpoint-projection-views.md": "65edfbaf3a378894c56042f68d671c906377ba97c7e6e936dc2a39df260ff2c4",
@@ -42,7 +42,7 @@ OWNER_PINS = {
 }
 
 SUPPORT_PINS = {
-    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "3a39d1597827804660534f9e118188c4db7b558023d0cc4a9a4bf638bc4eb379",
+    "docs-next/notes/semantic-revalidation-and-redesign/formal-assurance-research/f0-v2c-migration-owner-text.md": "7480bf11a8af0750b196bbb57ad8415072b8e5846df6b2a74860d9fceb663453",
     "docs-next/notes/semantic-revalidation-and-redesign/expressibility-axes/README.md": "846eb057888021274059d06517f2c62f3d83b8f5c15f02c58ede66a2781d20e3",
     "evaluation/expressibility-axes/axes.json": "140362b5afe815f16434956e076d0178911a1dbda14a16cab66e05750447c23c",
     "evaluation/expressibility-axes/cases.json": "eb191fa7d01b5ddb2a0fc758ff9094a74a988e8f596105e102c023470b1e7003",
@@ -278,6 +278,11 @@ def evaluate() -> dict[str, Any]:
         "required_applied_reductions: CanonicalSortedUniqueSeq<ReductionRef>",
         "LiveClaims(o_t) = t.terminal_claims",
         "Region(o) := {",
+        "BoundaryRegion(Initially) := {",
+        "BoundaryRegion(BeforeOccurrence(o)) := {",
+        "ClaimSourceRegion(c) :=",
+        "Implies(Region(o), ClaimSourceRegion(c))",
+        "Disjoint(Region(o), ClaimSourceRegion(c))",
         "ClaimStatus(c, o) :=",
         "no claim has ClaimStatus Unknown at o_t",
         "GuardImplies(use_guard, source_guard) :=",
@@ -285,7 +290,9 @@ def evaluate() -> dict[str, Any]:
         "ProtocolOutcomeLane(P) =",
         "PIRViewSchemaCatalog = {",
     ]
-    owner_laws_present = all(marker in owner_text for marker in owner_markers)
+    owner_laws_present = all(marker in owner_text for marker in owner_markers) and (
+        "Region(Source(c))" not in owner_text
+    )
     findings.append(
         Finding(
             "migrated-terminal-view-and-outcome-laws",
