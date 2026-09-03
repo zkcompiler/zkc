@@ -161,6 +161,9 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
   must be updated to the authored text. None of the failures indicates a
   defect in the text: the publication compiler's own uniqueness and
   reachability checks pass on the new manifests.
+  Research checks integrated after that measurement that pin the Interaction
+  page, the structural-axes matrix and the family-instance probe, join the
+  set in the first class.
 - Rerun the cold protocol holdouts against the migrated Terminal contract and
   views.
 - Take the independent freeze review's findings (a verification lane is
