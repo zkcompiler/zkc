@@ -94,6 +94,53 @@ already designed, rather than silently true.
    not copied from the certificate, which records the revision and the
    generated module's digest only.
 
+## 4a. The declaration, in the shape the profile publishes
+
+Items 1 and 2 are in the Analysis owner text since the round-two repair of
+the named-premise pass. Item 3, once accepted, is one text block in
+`docs-next/analysis/cryptographic-properties.md`, Section 3.2, and two
+manifest definitions, because a profile law reference is a declaration of the
+semantic-law kind and the publication compilers reach a definition only
+through a subject's laws or a law's dependencies.
+
+```text
+VCVioProviderDeclaration = ProviderDeclaration {
+  system: "vcvio",
+  source_pin: the content digest of the VCVio checkout at revision
+              de0a3108140e3e04a7ebf0075aa110b459ee6e8a, computed at
+              publication under the Foundation digest rule,
+  toolchain: "leanprover/lean4:v4.33.1",
+  modelled_lanes: [Accepted, Rejected]
+}
+
+VCVioBooleanCarrier = ClosedProviderCarrier {
+  schema: Bool, with canonical values true and false
+}
+
+VCVioSchnorrOutcomeMapPremise(P: ProtocolId, evidence_depth) =
+  ProviderOutcomeCarrierPremise(
+    P,
+    the profile's VCVioProviderDeclaration,
+    the profile's VCVioBooleanCarrier,
+    { Accepted -> Image(true), Rejected -> Image(false),
+      Aborted -> Unmodelled, StrategyStopped -> Unmodelled,
+      OperationalNoncompletion -> Unmodelled },
+    ProviderDeclarationSource(the profile's VCVioProviderDeclaration),
+    evidence_depth)
+```
+
+The manifest `docs-next/analysis/profiles/cryptographic-property.json` gains
+two definitions of kind `analysis.semantic-law` in fragment
+`property-semantics`, named `vcvio-provider-declaration-v0` with selector
+`VCVioProviderDeclaration = ProviderDeclaration {` and
+`vcvio-boolean-carrier-v0` with selector `VCVioBooleanCarrier =
+ClosedProviderCarrier {`, both at revision 0; `property-core-v0` lists both
+as dependencies so the cone reaches them; the profile's revision advances with
+the change. The evidence depth of the first premise formed from the
+declaration is `FrozenExecutableFalsification`, carried by the second round of
+the provider-interpretation package, whose completed-domain checks are the
+falsification instrument; the map itself remains a premise.
+
 ## 5. Identity effect and sequencing
 
 Items 1 and 2 change the Analysis kernel and property profiles and therefore
