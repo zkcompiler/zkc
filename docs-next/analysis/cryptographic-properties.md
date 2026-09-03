@@ -474,11 +474,22 @@ AnalysisChallengeNominalDomainCoordinate(S) =
     AnalysisOwnerViewCoordinate(S,PublicCoinView),
     [challenges[S.challenge_ref].domain])
 
+AnalysisChallengeFreshLawCoordinate(S) =
+  the unique element of ExactPIRAtomicLeavesUnder(
+    AnalysisOwnerViewCoordinate(S,PublicCoinView),
+    [challenges[S.challenge_ref].fresh_law])
+
+SchnorrFreshLawRef(S) =
+  the value of the leaf AnalysisChallengeFreshLawCoordinate(S) selects in
+  the authenticated PublicCoinView, an exact
+  ProtocolDeclarationRef<"pir.public-coin-law"> that the PIR owner placed on
+  the challenge entry; no other projection or inference supplies it
+
 The displayed paths above are aliases for the profile-fixed ordinal paths.
-Both results are exact `PIRStaticViewFieldCoordinate` values and therefore
-carry the owning `CoreId` through the `PublicCoinView` coordinate. Formation
-also requires both leaves to belong to the same challenge entry selected by
-`S.challenge_ref`.
+All three results are exact `PIRStaticViewFieldCoordinate` values and
+therefore carry the owning `CoreId` through the `PublicCoinView` coordinate.
+Formation also requires the three leaves to belong to the same challenge
+entry selected by `S.challenge_ref`.
 
 AnalysisChallengeDomainBody(S) = {
   source_challenge_coordinate: AnalysisChallengeRefCoordinate(S),
@@ -2293,8 +2304,7 @@ PlanOf(S: AnalysisSubjectTuple) = S.fresh_prover_plan_id
 SchnorrNamedPremiseRequirements(S: AnalysisSubjectTuple) =
   CanonicalSortedUniqueSeq [
     { slot: "fresh-coin", kind: FreshPublicCoinDistribution,
-      coordinate: PIRPublicCoinLawCoordinate(
-        the pir.public-coin-law declaration named by S.challenge_ref) },
+      coordinate: PIRPublicCoinLawCoordinate(SchnorrFreshLawRef(S)) },
     { slot: "relation", kind: RelationPredicate,
       coordinate:
         RelationsModelEvaluatorCoordinate(S.relation_semantic_model_id) },
@@ -2529,8 +2539,7 @@ SchnorrNamedPremiseBindings(S: AnalysisSubjectTuple) =
     SchnorrSpecialSoundnessQuestion(S), supplied) forms, where supplied
   binds each slot to PremiseIdOf of the exact body below:
     "fresh-coin"   -> FreshPublicCoinDistributionPremise(
-                        the pir.public-coin-law declaration named by
-                        S.challenge_ref, AnalysisChallengeDomainId(S)'s
+                        SchnorrFreshLawRef(S), AnalysisChallengeDomainId(S)'s
                         exact finite uniform model,
                         CandidateOwnerCoordinate(S.fresh_protocol_id),
                         SourceGroundedMapping),

@@ -1980,15 +1980,23 @@ analysis.use-purpose = {
 
 analysis.question = {
   family, exact subjects, source-free or semantic-experiment context,
-  family-owned question payload
+  family-owned question payload,
+  exact named-premise requirements
 }
 
 analysis.goal = {
-  question ID only; family and hypothesis-free conclusion are derived
+  question ID only; family and hypothesis-free conclusion are derived,
+  exact named-premise bindings
+}
+
+analysis.named-premise = {
+  kind, admitted coordinate, bound model or hypothesis, source, evidence
+  depth, model scope
 }
 
 analysis.hypothesis-context = {
-  canonical proposition DAG and exact root set
+  canonical proposition DAG and exact root set,
+  exact derived premise IDs per node and for the context
 }
 
 analysis.proposition = {
@@ -2021,7 +2029,8 @@ analysis.loss-semantic-import = {
 analysis.support-instantiation = {
   semantic-basis ID, proposition ID, exact non-hypothesis premise bindings,
   exact established and assumed hypothesis-node bindings,
-  exact manifest-to-source-support bindings
+  exact manifest-to-source-support bindings,
+  exact derived premise IDs
 }
 
 analysis.validation-basis = {
@@ -2038,7 +2047,8 @@ analysis.operation-policy = {
 analysis.judgment-record = {
   proposition ID, polarity, exact conclusion, inherited hypotheses,
   quantitative result, semantic-basis ID, support ID,
-  validation-basis ID, qualification and derived policy closure
+  validation-basis ID, qualification and derived policy closure,
+  exact derived premise IDs
 }
 ```
 
