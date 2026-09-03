@@ -2,9 +2,11 @@
 
 > **Kind:** migration record (formal-assurance research, owner-text pass)
 > **State:** Authored 2026-09-03 on the migration branch and closed by two
-> independent review rounds; both publication compilers agree on the migrated
-> tree; the identity-rotating publication and the package refreeze remain the
-> user's gate.
+> independent review rounds; Section 10 then closed the five choices the
+> Terminal-contract mechanization found open, and a third round reviews those
+> laws; both publication compilers agree on the migrated tree; the
+> identity-rotating publication and the package refreeze remain the user's
+> gate.
 > **Inputs:** the decision packet `f0-v2c-decision-inputs.md` (eight decisions
 > taken as recommended), the Terminal contract reopening record, and the
 > package records named per section below.
@@ -161,7 +163,22 @@ reachable, the OIR profiles bump the revisions of the changed body and law.
    refuses none of the frozen positive carriers. Its family-body finding
    described the first head, before the eight bodies were normalized; the
    second round re-checks closure of the normalized bodies.
-5. **Holdout re-adjudication.** Against the migrated text the five cold
+5. **Mechanization of the Terminal contract.** The core-Lean transcription
+   proved `AttemptedWhenever` sound for every valuation of opaque guard atoms
+   and the must-fact analysis sound against the term evaluator for every
+   term, and decided the contract on the frozen carriers in agreement with an
+   independent Python checker. It found five choices Section 10 left without
+   a unique mechanized reading, all now closed in the page: the unnamed term
+   constructors contribute no literal, non-Boolean inputs carry no literal,
+   a fact set with both polarities is impossible, the impossible-region test
+   is a standalone clause, and step 9's forward abstract state is stated as
+   closed set laws (`Region`, `Implies`, `Disjoint`, `ClaimStatus`,
+   `LiveClaims`). Its one refusal is a fixture consequence: the five
+   integrated carriers omit their reusable claim from every terminal claim
+   set and are refused by the authored rule, so the carriers change at the
+   refreeze. A third review round and a fourth mechanization increment check
+   the closed laws.
+6. **Holdout re-adjudication.** Against the migrated text the five cold
    holdouts give five fits and three breaks at the recorded boundaries, with
    no verdict disagreement with the earlier record or the structural-axes
    matrix. The earlier WHIR two-terminal schedule is refused by the exact
